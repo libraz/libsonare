@@ -63,6 +63,20 @@ Bank Select LSB is decoded as the tone-map select the larger modules use, and it
 
 **Behaviour change, drum kits.** The rhythm-part program selects from all twenty-six GS drum sets rather than the nine the SC-55 map defines. Standard 2 and 3, Hip Hop, Jungle, Techno, Dance, Ethnic, Kick & Snare, Asia, Cymbal & Claps, Rhythm FX and Rhythm FX 2 join the set, along with the drum-machine kits — CR-78, TR-606, TR-707 and TR-909 — each voiced from the same Standard kit table rather than from a table of its own, so a kit is a re-voicing of the shared percussion model and not a second copy of it. A program that selected no kit previously played Standard silently; the ones listed here now play their own. Kit indices are append-only, so adding a set cannot renumber the sets already voiced.
 
+### Meter estimation
+
+`estimateMeter` / `estimate_meter` / `sonare_estimate_meter_json` score a meter over a caller-supplied beat series. They read only the per-beat times and accent values, so neither audio nor a frame-level onset envelope is needed and an existing analysis can be re-scored — over a different candidate set, or over an arbitrary span of its beats — without running the pipeline again. `AnalysisResult.beatObservations.onsetStrength`, also new on all three facades, is the intended accent source: it is the windowed value the library's own downbeat pass scores, where the per-beat `strength` is a single unwindowed envelope frame.
+
+**An odd meter is reported only if its numerator was asked for.** The default candidate set is `{3, 4, 6}`, so a 5, 7 or 11 needs `candidateNumerators` widened to reach it; widening the set does not force a wider meter, and the default reproduces the previous result. Both command-line interfaces gain `--meter-candidates` and `--meter-denominator` for the same reason — a widened set was previously unreachable from a CLI at all.
+
+The result says how a bar divides, not just how many beats it has. `grouping` reports the accent groups of two and three beats, so a seven comes back as `[3, 2, 2]` rather than as a bare seven, and a six accented 3+3 is distinguishable from one accented 2+2+2.
+
+Three properties of the result are worth reading before it is used as a measurement:
+
+- `searched` is false when the beat series was too short to score any candidate — under eight beats — and every other field then carries a fixed fallback rather than a result, including the confidence. A caller scoring many spans needs the fallback to be recognizable as one.
+- The beat unit comes back as requested. Whether a beat divides into three is measured from energy *between* the beats, which a per-beat accent series does not carry, so a compound meter is not resolvable on this path: a six accented 3+3 keeps the requested denominator and says how its bar divides through `grouping`. `analyze()`, which has the audio, does resolve it and reports 8 on its own. `compoundSubdivisionThreshold` is consulted only where there is a subdivision to measure and so has no effect here.
+- `candidateScores` is comparable only within one result. A score grows with the square root of how many beats were scored, so the same meter over twice the beats scores about 1.41 times as high; a segmentation search comparing spans of different lengths has to normalize for length first.
+
 ### Fixes
 
 - **Behaviour change, WASM.** Errors raised inside the mixing and project C-ABI entry points now arrive as the code those entry points document, instead of as the raw C++ exception. The exception flag was on the module's link line but not its compile line, and emscripten drops landing pads while compiling, so every `catch` in the module had been deleted — including the guards that turn a throw into an error code. A `Mixer.fromSceneJson` on a scene naming an unknown insert reported `InvalidParameter` with the inner message and now reports `InvalidState` with the facade's wrapped message; malformed scene JSON reported an unknown-error code and now reports `InvalidState`. Callers matching on the previous codes or messages need updating; callers that only branch on success are unaffected. The other three surfaces always behaved this way.
