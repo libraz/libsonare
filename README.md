@@ -171,6 +171,17 @@ as a compatibility alias for `mix-strip`.
 
 ### C++
 
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+cmake --install build --prefix ~/.local
+```
+
+```cmake
+find_package(sonare REQUIRED)
+target_link_libraries(app PRIVATE sonare::sonare)
+```
+
 ```cpp
 #include "sonare.h"            // analysis + features + effects
 #include "mastering/master.h"  // mastering chain & processors
@@ -180,6 +191,12 @@ auto result = sonare::MusicAnalyzer(audio).analyze();
 std::cout << "BPM: " << result.bpm
           << ", Key: " << result.key.to_string() << std::endl;
 ```
+
+`sonare::sonare` links every subsystem the installation was built with; the
+individual archives are exported as `sonare::core`, `sonare::mastering`,
+`sonare::engine` and so on for a narrower link line. `add_subdirectory()` on a
+checkout defines the same target names, so either way of obtaining the library
+takes the same `target_link_libraries`.
 
 → [C++ API](https://libsonare.libraz.net/docs/cpp-api)
 

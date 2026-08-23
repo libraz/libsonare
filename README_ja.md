@@ -165,6 +165,17 @@ CLI のコマンド名は、動作モデルが異なるところをあえて分�
 
 ### C++
 
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+cmake --install build --prefix ~/.local
+```
+
+```cmake
+find_package(sonare REQUIRED)
+target_link_libraries(app PRIVATE sonare::sonare)
+```
+
 ```cpp
 #include "sonare.h"            // 解析 + 特徴量 + エフェクト
 #include "mastering/master.h"  // マスタリングチェイン & プロセッサ
@@ -174,6 +185,8 @@ auto result = sonare::MusicAnalyzer(audio).analyze();
 std::cout << "BPM: " << result.bpm
           << ", Key: " << result.key.to_string() << std::endl;
 ```
+
+`sonare::sonare` はそのインストールに含まれる全サブシステムをリンクします。リンク行を絞りたい場合は `sonare::core` / `sonare::mastering` / `sonare::engine` のように個別アーカイブも公開されています。チェックアウトに対する `add_subdirectory()` でも同じターゲット名が定義されるので、入手方法が変わっても `target_link_libraries` はそのまま使えます。
 
 → [C++ API](https://libsonare.libraz.net/ja/docs/cpp-api)
 
