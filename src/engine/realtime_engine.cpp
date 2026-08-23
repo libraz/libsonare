@@ -555,7 +555,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     if (!instrument_rack_.empty() &&
         (transport_rolling || midi_sequencer_.active_note_count() > 0)) {
       // Per-block transport snapshot pushed to each instrument before it renders
-      // (H-4): a tempo-synced delay / arpeggiator / LFO follows the host
+      // A tempo-synced delay / arpeggiator / LFO follows the host
       // transport instead of free-running. Each instrument renders into the
       // shared scratch (zero, set_transport, process) and is summed into the
       // sub-block, so multitrack MIDI routed to distinct destinations mixes here.

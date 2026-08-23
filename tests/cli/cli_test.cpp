@@ -2844,7 +2844,7 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
 }
 
 TEST_CASE("CLI voice-change compensates realtime chain latency", "[cli][voice-change]") {
-  // Regression for H-7: the native voice-change realtime branch used to write
+  // Regression: the native voice-change realtime branch used to write
   // process_block() output directly into an audio.size()-length buffer with no
   // pre-roll/drop compensation, so the tail of the true signal was never
   // flushed and a file shorter than the chain latency came out entirely
@@ -2879,7 +2879,7 @@ TEST_CASE("CLI voice-change compensates realtime chain latency", "[cli][voice-ch
 
 TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown field",
           "[cli][voice-change][argument-contract]") {
-  // Regression for H-8: the native voice-change realtime branch parsed the
+  // Regression: the native voice-change realtime branch parsed the
   // resolved config through the tolerant realtime_voice_changer_config_from_json
   // instead of the strict validator, so a mistyped section name silently
   // rendered with unrelated defaults and exited 0. voice-preset-validate

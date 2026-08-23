@@ -158,13 +158,13 @@ describe('WASM mixStereo input guards', () => {
 });
 
 describe('detectKey / detectKeyCandidates reject unknown enum spellings and out-of-range ordinals', () => {
-  // Input-validation consolidation (P2-2): keyProfileValue/keyModeValues used
+  // keyProfileValue/keyModeValues used
   // to resolve an unmapped spelling to `undefined` (silently reaching the
   // WASM boundary as a mistyped argument, e.g. a typo like "edm" silently
   // selecting a different profile, and an unknown mode name silently
   // becoming Major) and passed a raw numeric ordinal through unvalidated.
   // Both now reject through resolveEnumOrdinal, the same primitive
-  // panModeCode already used (H-18).
+  // panModeCode already used.
   const samples = new Float32Array(4096).fill(0.05);
 
   it("rejects a typo'd key profile name instead of silently selecting a different profile", () => {

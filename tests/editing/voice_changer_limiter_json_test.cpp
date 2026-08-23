@@ -219,7 +219,7 @@ TEST_CASE(
     "RealtimeVoiceChanger race with process_block never permanently drops the final set_config",
     "[voice_changer][snapshot][concurrency]") {
   // Regression coverage for a correctness hole the RtPublisher -> SeqlockCell
-  // rewrite (H-9, realtime-safety on the WASM AudioWorklet render thread)
+  // rewrite (realtime-safety on the WASM AudioWorklet render thread)
   // introduced and then had to close: SeqlockCell::try_load() silently falls
   // back to its last torn-free cached value on a conflicting read, with no
   // way for the caller to tell that happened. A naive adopt_snapshot_for_block()

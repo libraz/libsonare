@@ -1,7 +1,7 @@
 /// @file realtime_engine_midi_test.cpp
 /// @brief Engine-level MIDI integration: hang-note safety across seek / stop and
 ///        the stopped-transport gate (a stopped playhead dispatches nothing and
-///        renders no instrument audio). Covers brush-up findings H-1, H-2.
+///        renders no instrument audio).
 
 #include <algorithm>
 #include <array>
@@ -165,7 +165,7 @@ class LatencyImpulseInstrument final : public MidiInstrument {
 
 // Reports a fractional (sub-sample) latency via latency_samples_q8() while
 // rendering no audio. Used to verify the engine threads Q8 latency into PDC and
-// applies a fractional delay to the clip bus (M-45).
+// applies a fractional delay to the clip bus.
 class FractionalLatencyInstrument final : public MidiInstrument {
  public:
   explicit FractionalLatencyInstrument(int latency_q8) : latency_q8_(latency_q8) {}
@@ -904,7 +904,7 @@ TEST_CASE("seek resets controllers on held channels (no stuck sustain/bend)", "[
   REQUIRE(engine.midi_sequencer().active_note_count() == 1);
 
   // Seek away: the discontinuity must lift the damper, reset controllers, send
-  // all-notes-off and recenter pitch bend on the held channel (M-4).
+  // all-notes-off and recenter pitch bend on the held channel.
   sonare::rt::Command seek{};
   seek.type = sonare::rt::CommandType::kTransportSeekSample;
   seek.arg.i = 1 << 16;

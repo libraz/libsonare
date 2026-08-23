@@ -564,7 +564,7 @@ TEST_CASE("MonoCompatCheck reports log-band phase correlation", "[mastering][ste
 
 TEST_CASE("MonoCompatCheck log bands have frequency-dependent side energy", "[mastering][stereo]") {
   // A side component confined to a single low band must not smear into a flat,
-  // broadband side_rms profile across every band (M-3 regression guard).
+  // broadband side_rms profile across every band.
   constexpr int kSampleRate = 48000;
   constexpr int kSamples = 12000;  // 0.25 s
   constexpr float kSideFreqHz = 350.0f;

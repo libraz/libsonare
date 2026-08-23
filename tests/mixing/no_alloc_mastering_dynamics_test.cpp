@@ -210,7 +210,7 @@ TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safet
 }
 
 // ============================================================================
-// H-1 regression: realtime automation of dynamics inserts must not allocate on
+// Regression: realtime automation of dynamics inserts must not allocate on
 // the audio thread, and parameter_is_realtime_safe() must honestly report which
 // parameters the mixing automation path may apply from the audio callback.
 // ============================================================================

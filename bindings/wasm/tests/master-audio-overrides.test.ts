@@ -9,7 +9,7 @@ const samples = Float32Array.from(
 
 beforeAll(async () => init());
 
-describe('WASM masterAudio nested overrides (H-1)', () => {
+describe('WASM masterAudio nested overrides', () => {
   it('rejects non-numeric and non-boolean overrides instead of silently dropping them', () => {
     expect(() =>
       masterAudio(samples, sampleRate, 'pop', {
@@ -62,7 +62,7 @@ describe('WASM masterAudio nested overrides (H-1)', () => {
   });
 });
 
-describe('WASM canonical mastering-chain config (H-1)', () => {
+describe('WASM canonical mastering-chain config', () => {
   it('routes nested tilt and all repair stages through the core flat parser', async () => {
     const { masteringChain } = await import('../src/index');
     const input = Float32Array.from(
@@ -93,7 +93,7 @@ describe('WASM canonical mastering-chain config (H-1)', () => {
     expect(result.stages).not.toContain('eq.tilt');
   });
 
-  it('reports output true-peak, LRA, and per-stage gain reductions (M-1)', async () => {
+  it('reports output true-peak, LRA, and per-stage gain reductions', async () => {
     const { masteringChain } = await import('../src/index');
     const input = Float32Array.from(
       { length: 8192 },
@@ -123,7 +123,7 @@ describe('WASM canonical mastering-chain config (H-1)', () => {
   });
 });
 
-describe('WASM masterAudio / masteringChain progress wiring (M-1)', () => {
+describe('WASM masterAudio / masteringChain progress wiring', () => {
   it('invokes onProgress from the positional masterAudio form', () => {
     let calls = 0;
     masterAudio(samples, sampleRate, 'pop', { loudness: { targetLufs: -14 } }, () => {

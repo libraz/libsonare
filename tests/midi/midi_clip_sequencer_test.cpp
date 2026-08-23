@@ -779,7 +779,7 @@ TEST_CASE("MidiSequencer all_notes_off releases sounding notes (hang-note safety
   seq.all_notes_off(/*render_frame=*/128);
   REQUIRE(seq.active_note_count() == 0);
   // 3 note-offs plus the 4-message controller-reset sequence (damper / reset-all
-  // / all-notes-off / pitch-bend) on each of the 3 distinct channels (M-4).
+  // / all-notes-off / pitch-bend) on each of the 3 distinct channels.
   size_t note_offs = 0;
   for (const auto& cap : sink.events) {
     REQUIRE(cap.destination == 3);
@@ -992,7 +992,7 @@ TEST_CASE("MidiSequencer note-off is keyed by destination", "[midi]") {
 
   sink.events.clear();
   seq.all_notes_off(128);
-  // 1 note-off (dest 10) plus its channel's 4-message controller reset (M-4).
+  // 1 note-off (dest 10) plus its channel's 4-message controller reset.
   REQUIRE(sink.events.size() == 1 + 4);
   size_t note_offs = 0;
   for (const auto& cap : sink.events) {

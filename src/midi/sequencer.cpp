@@ -554,7 +554,7 @@ void MidiSequencer::all_notes_off(int64_t render_frame) noexcept {
     dispatch(note.destination_id, off);
   }
   // Controller reset AFTER the note-offs (so a note under a held damper is first
-  // told to stop, then the damper is lifted). Table is still intact here. (M-4)
+  // told to stop, then the damper is lifted). Table is still intact here.
   emit_active_controller_resets(/*single_destination=*/false, 0, render_frame);
   active_count_ = 0;
   pending_fx_count_ = 0;
@@ -567,7 +567,7 @@ void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
   // other destinations untouched). Swap-remove keeps the table compact; iterate
   // by index and re-check the same slot after a swap. No allocation.
   // Reset this destination's channels first while the table is still intact,
-  // then release its notes (lift damper / recenter bend before the offs) (M-4).
+  // then release its notes (lift damper / recenter bend before the offs).
   emit_active_controller_resets(/*single_destination=*/true, destination_id, render_frame);
   size_t i = 0;
   while (i < active_count_) {

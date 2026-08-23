@@ -1117,7 +1117,7 @@ TEST_CASE("host provider instrument drives engine via host-instrument wiring", "
 }
 
 // ===========================================================================
-// H-3: opaque instance-state save / restore seam.
+// Opaque instance-state save / restore seam.
 // ===========================================================================
 
 namespace {
@@ -1189,7 +1189,7 @@ TEST_CASE("instrument opaque state round-trips through the host save/restore sea
 }
 
 // ===========================================================================
-// H-4: per-block transport sync pushed to the hosted instrument.
+// Per-block transport sync pushed to the hosted instrument.
 // ===========================================================================
 
 namespace {
@@ -1237,7 +1237,7 @@ TEST_CASE("engine pushes per-block transport to the hosted instrument", "[host]"
 }
 
 // ===========================================================================
-// M-29: per-destination multi-instrument routing through the engine rack.
+// Per-destination multi-instrument routing through the engine rack.
 // ===========================================================================
 
 TEST_CASE("engine routes MIDI to the instrument bound to each destination", "[host]") {
@@ -1289,7 +1289,7 @@ TEST_CASE("engine routes MIDI to the instrument bound to each destination", "[ho
 }
 
 // ===========================================================================
-// M-1: swapping/clearing an instrument releases its sounding notes (no hang).
+// Swapping/clearing an instrument releases its sounding notes (no hang).
 // ===========================================================================
 
 TEST_CASE("clearing a bound instrument flushes its sounding notes", "[host]") {

@@ -90,7 +90,7 @@ TEST_CASE("bin_to_hz does not overflow at high sample rates", "[convert]") {
 }
 
 TEST_CASE("bin_to_hz rejects a non-positive sr or n_fft instead of dividing by zero", "[convert]") {
-  // Unlike the integer division in stft_with_window (H-10), a double division
+  // Unlike the integer division in stft_with_window, a double division
   // by zero here does not trap (it produces inf/nan), so the failure mode is a
   // silently wrong frequency rather than a crash. Guard it the same way its
   // sibling hz_to_bin already does, for the same reason: n_fft == 0 is never a

@@ -869,7 +869,7 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
   REQUIRE(grain == 2232);
   REQUIRE(latency == grain);
 
-  // The same M-1 contract the core carries, through the C surface: a grain
+  // The same contract the core carries, through the C surface: a grain
   // requested after prepare survives until the prepare() that applies it, and
   // config() keeps reporting the effective one in the meantime.
   REQUIRE(sonare_streaming_retune_set_config(retune, 3.0f, 0.5f, 512) == SONARE_OK);

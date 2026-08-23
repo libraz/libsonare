@@ -508,7 +508,7 @@ struct AuCallSpyState {
   unsigned uninitialize_calls = 0;
   unsigned render_calls = 0;
 
-  // --- effect input-callback probe (H-24 regression) ---
+  // --- effect input-callback probe ---
   // spy_set_property captures the AURenderCallbackStruct the effect installs on
   // kAudioUnitScope_Input. When probe_input_frames is non-zero, spy_render then
   // invokes that captured callback directly, requesting probe_input_frames

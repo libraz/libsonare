@@ -207,7 +207,7 @@ class MidiSequencer {
   // Emit the standard reset sequence (damper off, reset-all-controllers,
   // all-notes-off, pitch-bend center) for one channel at render_frame. Used on a
   // playback discontinuity so a note released under a held sustain pedal does not
-  // keep ringing and stale pitch-bend / CC state does not carry across (M-4).
+  // keep ringing and stale pitch-bend / CC state does not carry across.
   void emit_controller_reset(uint32_t destination_id, uint8_t group, uint8_t channel,
                              int64_t render_frame) noexcept;
   // Emit emit_controller_reset() once per distinct (destination, group, channel)

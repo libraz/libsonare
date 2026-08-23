@@ -240,7 +240,7 @@ def test_normalize_cli_reports_target_db_end_to_end() -> None:
 
 
 def test_hpss_cli_writes_harmonic_and_percussive_stems() -> None:
-    """HPSS output paths produce the two documented stem WAVs (M-4)."""
+    """HPSS output paths produce the two documented stem WAVs."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "tone.wav")
         output_path = os.path.join(tmpdir, "separated.wav")
@@ -257,7 +257,7 @@ def test_hpss_cli_writes_harmonic_and_percussive_stems() -> None:
 
 
 def test_analysis_only_cli_rejects_output_path() -> None:
-    """Analysis commands must not silently accept an output path (M-4)."""
+    """Analysis commands must not silently accept an output path."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "tone.wav")
         output_path = os.path.join(tmpdir, "ignored.wav")
@@ -271,7 +271,7 @@ def test_analysis_only_cli_rejects_output_path() -> None:
 
 
 def test_lufs_cli_emits_strict_json_for_silence() -> None:
-    """Non-finite loudness measurements are JSON null, never NaN/-Infinity (M-1)."""
+    """Non-finite loudness measurements are JSON null, never NaN/-Infinity."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "silence.wav")
         _write_test_wav(wav_path, [0.0] * 4096, 22050)
@@ -286,7 +286,7 @@ def test_lufs_cli_emits_strict_json_for_silence() -> None:
 
 
 def test_project_cli_preserves_common_options_before_subcommand() -> None:
-    """Project-level --json/-o survive parsing a project child command (M-3)."""
+    """Project-level --json/-o survive parsing a project child command."""
     with tempfile.TemporaryDirectory() as tmpdir:
         output_path = os.path.join(tmpdir, "empty-project.json")
         created = _run_cli(["project", "--json", "-o", output_path, "new"])
@@ -344,7 +344,7 @@ def test_effect_cli_commands_appear_in_help() -> None:
 
 
 def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
-    """cmd_mix resamples each input to the mixer rate before mixing (M-8)."""
+    """cmd_mix resamples each input to the mixer rate before mixing."""
     import libsonare
     from libsonare import cli
 

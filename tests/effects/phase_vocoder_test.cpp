@@ -1,5 +1,5 @@
 /// @file phase_vocoder_test.cpp
-/// @brief Phase vocoder precision and regression tests (P1-1).
+/// @brief Phase vocoder precision and regression tests.
 /// @details Targets the synthesis-phase accumulator, which was promoted from
 ///          float to double in src/effects/phase_vocoder.cpp to keep long
 ///          pitch-shift / time-stretch runs free of monotonic phase drift.

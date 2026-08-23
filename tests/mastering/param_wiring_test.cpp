@@ -332,7 +332,7 @@ TEST_CASE("multiband custom cutoff count builds and processes",
   }
 }
 
-// --- M-1: standalone loudnessOptimize honored only a subset of its params -----
+// --- standalone loudnessOptimize reads its whole parameter set ---------------
 //
 // The per-processor maximizer.loudnessOptimize branch (mono and stereo) dropped
 // releaseMs / applyGainAtInputRate, so the standalone optimizer limited with the

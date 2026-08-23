@@ -274,7 +274,7 @@ TEST_CASE("pyin - pitch sweep", "[pitch]") {
 }
 
 TEST_CASE("pyin - 5 second 440Hz tone (flat-vector Viterbi regression)", "[pitch]") {
-  // P1-13 regression test: ensure the flat-vector Viterbi implementation still
+  // Regression test: ensure the flat-vector Viterbi implementation still
   // tracks a long stationary tone correctly. Five seconds at hop=512, sr=22050
   // yields >200 frames, exercising the row-major observation/viterbi/backtrack
   // layout across many transitions.
@@ -310,7 +310,7 @@ TEST_CASE("pyin - 5 second 440Hz tone (flat-vector Viterbi regression)", "[pitch
 }
 
 TEST_CASE("pyin - stepped pitch tracking (Viterbi follows discontinuities)", "[pitch]") {
-  // P1-13 regression test: a synthetic signal with two abrupt pitch steps
+  // Regression test: a synthetic signal with two abrupt pitch steps
   // (220 Hz -> 330 Hz -> 440 Hz, ~1 second each). The Viterbi pass must
   // follow each step within a small transition window. This stresses the
   // backtrack traversal across the flat backtrack[n_frames * n_states] array.
