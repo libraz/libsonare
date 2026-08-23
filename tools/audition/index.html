@@ -13,13 +13,14 @@
 
 <header>
   <div class="titles">
+    <div id="sets" class="sets" role="group" aria-label="sets" hidden></div>
     <h1 id="title">audition</h1>
     <p id="notes"></p>
   </div>
   <div class="toggles">
-    <label><input type="checkbox" id="matchRms"> match loudness <kbd>M</kbd></label>
-    <label><input type="checkbox" id="restartOnSwitch" checked> switch restarts <kbd>S</kbd></label>
-    <label><input type="checkbox" id="blind"> blind <kbd>B</kbd></label>
+    <label class="compare-only"><input type="checkbox" id="matchRms"> match loudness <kbd>M</kbd></label>
+    <label class="compare-only"><input type="checkbox" id="restartOnSwitch" checked> switch restarts <kbd>S</kbd></label>
+    <label class="compare-only"><input type="checkbox" id="blind"> blind <kbd>B</kbd></label>
     <button id="exportBtn" type="button">export notes</button>
   </div>
 </header>
@@ -28,11 +29,11 @@
   <nav id="takes" aria-label="takes"></nav>
 
   <section id="stage">
-    <div id="versions" class="segmented" role="group" aria-label="versions"></div>
+    <div id="versions" class="segmented compare-only" role="group" aria-label="versions"></div>
 
     <figure class="pane">
       <canvas id="wave" height="150"></canvas>
-      <figcaption>waveform — all versions overlaid, active one solid</figcaption>
+      <figcaption id="waveCaption">waveform — all versions overlaid, active one solid</figcaption>
     </figure>
 
     <figure class="pane">
@@ -55,12 +56,12 @@
 
 <footer>
   <span><kbd>space</kbd> play</span>
-  <span><kbd>1</kbd>…<kbd>9</kbd> / <kbd>←</kbd><kbd>→</kbd> version</span>
+  <span class="compare-only"><kbd>1</kbd>…<kbd>9</kbd> / <kbd>←</kbd><kbd>→</kbd> version</span>
   <span><kbd>↑</kbd><kbd>↓</kbd> take</span>
   <span><kbd>L</kbd> loop</span>
-  <span><kbd>M</kbd> match loudness</span>
-  <span><kbd>B</kbd> blind</span>
-  <span><kbd>R</kbd> reveal / reshuffle</span>
+  <span class="compare-only"><kbd>M</kbd> match loudness</span>
+  <span class="compare-only"><kbd>B</kbd> blind</span>
+  <span class="compare-only"><kbd>R</kbd> reveal / reshuffle</span>
   <span>drag the waveform to set a loop region</span>
 </footer>
 

@@ -268,3 +268,41 @@ kbd {
 }
 
 .loading { color: var(--warn); }
+
+/* --------------------------------------------------------------- set picker */
+
+/* One server serves every set of renders on the machine; this moves between
+   them. Hidden when there is only one, since the title already names it. */
+.sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sets button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sets button[aria-pressed="true"] {
+  border-color: var(--accent, #6ea8fe);
+  color: var(--fg, #e8e8e8);
+}
+
+.sets .tag {
+  font-size: 11px;
+  opacity: 0.65;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* A set holding one version of each take has nothing to switch between: the
+   comparison controls come off rather than sitting there inert. That is the
+   ordinary state for anyone without the commercial plugin the reference side
+   is captured from, so it is a supported layout and not a degraded one. */
+body.no-compare .compare-only {
+  display: none;
+}

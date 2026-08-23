@@ -21,6 +21,10 @@
 const $ = (id) => document.getElementById(id);
 
 const state = {
+  sets: [],            // [{ id, title, takes, compare }]
+  setId: null,         // the one being listened to
+  base: '',            // URL prefix its audio is under
+  compare: true,       // false once a set turns out to hold one version per take
   manifest: null,
   items: [],
   itemIndex: 0,
@@ -66,8 +70,9 @@ async function loadTake(item) {
   const buffers = {};
   const rms = {};
   await Promise.all(keys.map(async (k) => {
-    const res = await fetch(item.tracks[k]);
-    if (!res.ok) throw new Error(`${item.tracks[k]}: ${res.status}`);
+    const url = state.base + item.tracks[k];
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url}: ${res.status}`);
     const buf = await ctx.decodeAudioData(await res.arrayBuffer());
     buffers[k] = buf;
     rms[k] = bufferRms(buf);
@@ -180,22 +185,91 @@ function togglePlay() {
 
 /* ------------------------------------------------------------------- data */
 
-const notesKey = () => `audition:notes:${(state.manifest && state.manifest.title) || 'untitled'}`;
-const picksKey = () => `audition:picks:${(state.manifest && state.manifest.title) || 'untitled'}`;
+const notesKey = () => `audition:notes:${state.setId || 'untitled'}`;
+const picksKey = () => `audition:picks:${state.setId || 'untitled'}`;
+
+const SET_KEY = 'audition:set';
 
 async function boot() {
-  const res = await fetch('manifest.json');
-  const m = await res.json();
+  state.sets = await (await fetch('sets.json')).json();
+  if (!state.sets.length) {
+    $('title').textContent = 'audition';
+    $('notes').textContent =
+      'No renders found. Generate a set with tools/voicematch/make_audition.py — '
+      + '--model-only needs no plugin — then reload.';
+    return;
+  }
+  buildSetPicker();
+  const remembered = localStorage.getItem(SET_KEY);
+  const start = state.sets.some((s) => s.id === remembered) ? remembered : state.sets[0].id;
+  wire();
+  await loadSet(start);
+}
+
+const specCaptionText = () => state.compare
+  ? 'spectrogram — active version, log frequency'
+  : 'spectrogram — log frequency';
+
+/// Switch to a set: its manifest, its takes, and whether it can compare at all.
+async function loadSet(id) {
+  const entry = state.sets.find((s) => s.id === id) || state.sets[0];
+  stopSources();
+  state.playing = false;
+  $('playBtn').textContent = 'play';
+  state.setId = entry.id;
+  state.base = `s/${entry.id}/`;
+  localStorage.setItem(SET_KEY, entry.id);
+
+  const m = await (await fetch(`${state.base}manifest.json`)).json();
   state.manifest = m;
   state.items = m.items || [];
+  // A set whose takes hold one version each has nothing to switch between, so
+  // the comparison controls come off rather than sitting there doing nothing.
+  // That is the ordinary case for anyone without the reference plugin.
+  state.compare = state.items.some((it) => Object.keys(it.tracks || {}).length > 1);
+  document.body.classList.toggle('no-compare', !state.compare);
+  if (!state.compare) {
+    state.blind = false;
+    $('blind').checked = false;
+  }
+  $('waveCaption').textContent = state.compare
+    ? 'waveform — all versions overlaid, active one solid'
+    : 'waveform';
+  $('specCaption').textContent = specCaptionText();
+
   $('title').textContent = m.title || 'audition';
   $('notes').textContent = m.notes || '';
   document.title = m.title ? `${m.title} — audition` : 'audition';
+  // Keyed on the set, so notes taken on one instrument do not surface on another.
   state.notes = JSON.parse(localStorage.getItem(notesKey()) || '{}');
   state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');
+  [...$('sets').children].forEach((b) =>
+    b.setAttribute('aria-pressed', String(b.dataset.set === state.setId)));
+
+  state.itemIndex = 0;
+  state.versionIndex = 0;
   buildTakeList();
-  wire();
   if (state.items.length) await selectTake(0);
+}
+
+function buildSetPicker() {
+  const box = $('sets');
+  box.replaceChildren();
+  // One set needs no picker; the title already says which it is.
+  box.hidden = state.sets.length < 2;
+  if (box.hidden) return;
+  state.sets.forEach((s) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.set = s.id;
+    b.textContent = s.title || s.id;
+    if (!s.compare) {
+      b.appendChild(Object.assign(document.createElement('span'),
+        { className: 'tag', textContent: 'no reference' }));
+    }
+    b.addEventListener('click', () => loadSet(s.id));
+    box.appendChild(b);
+  });
 }
 
 function buildTakeList() {
@@ -255,7 +329,7 @@ async function selectTake(i) {
     return;
   }
   $('specCaption').className = '';
-  $('specCaption').textContent = 'spectrogram — active version, log frequency';
+  $('specCaption').textContent = specCaptionText();
   reshuffleBlind();
   state.versionIndex = Math.min(state.versionIndex, state.take.keys.length - 1);
   buildVersionButtons();
@@ -723,5 +797,5 @@ function exportNotes() {
 }
 
 boot().catch((err) => {
-  $('notes').textContent = `could not load manifest.json: ${err.message}`;
+  $('notes').textContent = `could not load the renders: ${err.message}`;
 });

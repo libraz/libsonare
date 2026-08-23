@@ -1,7 +1,7 @@
 # audition — an A/B listening page for a directory of renders
 
 ```sh
-python tools/audition/serve.py <audition-dir>
+python tools/audition/serve.py [<audition-dir> ...]
 ```
 
 Opens a browser on a page that plays every version of a take from one
@@ -16,6 +16,24 @@ way to compare a sustain or a decay.
 
 Standard library only, no build step, nothing specific to this repository.
 Point it at any directory of renders.
+
+## Several sets, one server
+
+Name more than one directory and the page gets a control to move between them.
+Each is a separate instrument or a separate experiment — a piano set and a
+harpsichord set have different takes and different references — so they stay
+separate sets rather than one long list, and one server serves them all.
+
+Name none and they are discovered under the scratch root the rest of the
+harness renders into — `.cache/voicematch/` here, or wherever
+`SONARE_VOICEMATCH_ROOT` points. None of it is committed. **A fresh clone has
+nothing there, and that is a supported state:** the reference side of a
+comparison is captured from a commercial plugin and cannot be redistributed, so
+anyone can render the model side and nobody can render the reference side
+without owning the plugin. A set holding one version of each take is therefore
+expected rather than broken — the page drops the comparison controls for it and
+plays instead. With no renders at all the page opens and says where to put
+some. Nothing here requires a reference to exist.
 
 ## What it shows
 
@@ -49,9 +67,8 @@ selected when you move on is recorded as the pick, and the running tally is in
 the transport bar. `export notes` writes the picks and the per-take notes to a
 JSON file.
 
-Notes and picks live in this browser's local storage, keyed by the manifest
-title. Two different manifests do not share them; re-rendering the same
-manifest keeps them.
+Notes and picks live in this browser's local storage, keyed by the set. Two
+sets do not share them; re-rendering a set keeps them.
 
 ## The manifest
 
@@ -59,11 +76,11 @@ manifest keeps them.
 
 ```json
 {
-  "title": "libsonare piano vs The Grand 3",
+  "title": "libsonare piano vs the sampled reference",
   "notes": "shown under the title",
   "sources": {
-    "model":    { "label": "libsonare NativeSynth" },
-    "c7-close": { "label": "The Grand 3 — Yamaha C7, close" }
+    "model":     { "label": "libsonare NativeSynth" },
+    "grand-227": { "label": "227 cm concert grand, close" }
   },
   "items": [
     {
@@ -71,7 +88,7 @@ manifest keeps them.
       "label": "Single note — C4, mf",
       "sub": "attack, free decay, damper",
       "group": "one note at a time",
-      "tracks": { "model": "single-c4/model.wav", "c7-close": "single-c4/c7-close.wav" }
+      "tracks": { "model": "single-c4/model.wav", "grand-227": "single-c4/grand-227.wav" }
     }
   ]
 }
@@ -92,5 +109,20 @@ render tools write by default, is decoded by some browsers and not others.
 ## In this repository
 
 `tools/voicematch/make_audition.py` writes a manifest of this shape: the same
-piano phrases rendered through libsonare and through a reference plugin, with
-one shared gain per take.
+phrases rendered through libsonare and through a reference plugin, with one
+shared gain per take. Which instrument it renders comes from the capture
+definition it is given, which names the phrase set and the GM program:
+
+```sh
+rye run --pyproject bindings/python/pyproject.toml python \
+    tools/voicematch/make_audition.py \
+    --config tools/voicematch/capture/harpsichord.json \
+    --out .cache/voicematch/audition/harpsichord
+```
+
+Writing it under the scratch root is what lets `serve.py` find it with no
+argument.
+
+Add `--model-only` to skip the reference renders. That needs no plugin, so it
+is the form that works from a plain clone; the result plays rather than
+compares.
