@@ -227,6 +227,54 @@ def test_a_silent_render_does_not_win_the_harmonic_term():
     assert loss_terms([sounding], [sounding], n_harm=12) is not None
 
 
+def skeleton(bands, n=6):
+    """A skeleton block whose three decay bands all carry `bands`."""
+    return {"init_db": list(bands) + [None] * (12 - len(bands)),
+            "early_db_s": list(bands), "late_db_s": list(bands),
+            "tail_db_s": list(bands)}
+
+
+def sounding_row(**over):
+    row = {"harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9, "f0_cents_err": 0.0,
+           "tnr_db": 30.0, "sustain_slope_db_s": -3.0, "release_ms": 80.0,
+           "attack_ms": 5.0, "skeleton": skeleton([-2.0] * 6),
+           "held_rms_dbfs": -20.0, "held_crest_db": 12.0}
+    return row | over
+
+
+def test_a_voice_that_stopped_sounding_does_not_win_the_decay_terms():
+    """The same defect as the harmonic ladder's, one layer down.
+
+    Comparing only the bands present on both sides means a model with no bands
+    at all contributes nothing, and the decay terms average to 0.0 - their best
+    value. Taking the amplitude envelope's sustain to zero reaches it: the note
+    dies, every band goes unfitted at once, and three terms report a perfect
+    match for a voice that makes no sound after its attack.
+    """
+    oracle = sounding_row()
+    dead = sounding_row(skeleton=skeleton([None] * 6), held_crest_db=None)
+    alive_but_wrong = sounding_row(skeleton=skeleton([-9.0] * 6))
+
+    dead_terms = loss_terms([dead], [oracle], n_harm=12)
+    wrong_terms = loss_terms([alive_but_wrong], [oracle], n_harm=12)
+    for term in ("slope", "tail", "init"):
+        assert dead_terms[term] > wrong_terms[term], term
+    assert dead_terms["crest"] > 0.0
+
+
+def test_a_band_the_reference_has_nothing_in_is_still_skipped():
+    """The asymmetry is the point: an absent ORACLE value is a short probe.
+
+    The aftersound band has no frames on a two-second probe, and charging the
+    model for the reference's own silence would make every short probe score as
+    a broken voice.
+    """
+    oracle = sounding_row(skeleton=skeleton([None] * 6))
+    model = sounding_row(skeleton=skeleton([-2.0] * 6))
+    terms = loss_terms([model], [oracle], n_harm=12)
+    assert terms["slope"] == 0.0 and terms["tail"] == 0.0
+
+
 def test_a_render_that_lost_only_its_top_partials_is_still_scored():
     """The guard is about having no partials at all, not about having few.
 

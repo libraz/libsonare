@@ -276,13 +276,21 @@ def _level_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[floa
     """
     offsets: list[float] = []
     crests: list[float] = []
+    # A note the oracle holds and the model does not is charged the cap rather
+    # than dropped, for the reason `_absent_or` gives: dropping it lets a voice
+    # that stopped sounding score better than one that sounds slightly wrong.
+    # The level residual is measured around the grid's median offset, so an
+    # absent row cannot join `offsets` without inventing a level for it; it is
+    # counted in `crests`, which is where an envelope that never falls is
+    # already the defect being caught.
     for m, o in zip(model_rows, oracle_rows_):
         mo, oo = m.get("held_rms_dbfs"), o.get("held_rms_dbfs")
         if mo is not None and oo is not None:
             offsets.append(mo - oo)
         mc, oc = m.get("held_crest_db"), o.get("held_crest_db")
-        if mc is not None and oc is not None:
-            crests.append(min(abs(mc - oc), LEVEL_DELTA_CAP_DB))
+        if oc is not None:
+            crests.append(LEVEL_DELTA_CAP_DB if mc is None
+                          else min(abs(mc - oc), LEVEL_DELTA_CAP_DB))
     if not offsets:
         return 0.0, (sum(crests) / len(crests) if crests else 0.0), 0.0
     median = sorted(offsets)[len(offsets) // 2]
@@ -303,6 +311,27 @@ def _rows_comparable(model_rows: list[dict], oracle_rows_: list[dict]) -> bool |
     if len(model_rows) != len(oracle_rows_):
         return None
     return bool(model_rows)
+
+
+def _absent_or(model, oracle, cap: float) -> float:
+    """Compare one measured value with its reference, charging for an absence.
+
+    A band the *model* has nothing in, where the oracle has something, is the
+    model failing to sound — and skipping it, which is what comparing only the
+    pairs that are both present does, scores that failure at zero. Silence the
+    voice completely and every band goes that way at once, so the decay terms
+    come out at exactly 0.0, their best value. It is the same shape as the
+    harmonic ladder's floor guard and it survived that fix: a metric that skips
+    unusable points and averages the rest scores an empty set as perfect.
+
+    So an absent model value costs the cap. An absent *oracle* value is a
+    different thing and still skipped: it means the reference has nothing there
+    to match, which on a short probe is most of the aftersound band and is a
+    property of the probe rather than of the voice.
+    """
+    if oracle is None:
+        return 0.0
+    return cap if model is None else min(abs(model - oracle), cap)
 
 
 def loss_terms(
@@ -365,18 +394,14 @@ def loss_terms(
         if "skeleton" in m and "skeleton" in o:
             sm, so = m["skeleton"], o["skeleton"]
             for a, b in zip(sm["init_db"], so["init_db"]):
-                if a is not None and b is not None:
-                    totals["init"] += min(abs(a - b), 12.0)
+                totals["init"] += _absent_or(a, b, 12.0)
             for key in ("early_db_s", "late_db_s"):
                 for a, b in zip(sm[key][:6], so[key][:6]):
-                    if a is not None and b is not None:
-                        totals["slope"] += min(abs(a - b), 30.0) / 10.0
+                    totals["slope"] += _absent_or(a, b, 30.0) / 10.0
             for a, b in zip(sm.get("tail_db_s", [])[:6], so.get("tail_db_s", [])[:6]):
-                if a is not None and b is not None:
-                    totals["tail"] += min(abs(a - b), TAIL_DELTA_CAP_DB_S) / 10.0
+                totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S) / 10.0
         for a, b in zip(m.get("attack_hf_db", []), o.get("attack_hf_db", [])):
-            if a is not None and b is not None:
-                totals["hf"] += min(abs(a - b), HF_DELTA_CAP_DB)
+            totals["hf"] += _absent_or(a, b, HF_DELTA_CAP_DB)
     if available and not compared:
         # The rows carry partials above the fundamental and not one of them
         # survived on both sides anywhere in the probe. There is no timbre here
