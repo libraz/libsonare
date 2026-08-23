@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <numeric>
 
@@ -22,6 +23,14 @@ using Biquad = rt::BiquadCoeffsD;
 // keep the full double dynamic range when the input is genuinely quiet.
 constexpr double kEnergyFloor = 1e-15;
 
+// Frames de-interleaved and K-weighted per pass by the streaming block
+// accumulator. The window is compacted once per chunk, so the chunk has to be
+// large relative to the retained window for that move to disappear against the
+// filtering; at 128 k frames the whole buffer is still only a couple of
+// megabytes, against the gigabyte a whole-signal pass would hold for an hour of
+// audio.
+constexpr size_t kChunkFrames = 1u << 17;
+
 // Silence sentinel rationale: unlike the level-in-dB meters (true_peak /
 // spectrum / dynamic_range), which report the finite kFloorDb (-120 dB) for
 // silence, LUFS deliberately keeps -inf. -inf ("below the measurement floor") is
@@ -40,34 +49,30 @@ std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
   return {coeffs.pre, coeffs.rlb};
 }
 
+/// Biquad state carried across calls, so a signal can be filtered in chunks and
+/// still produce the sample-for-sample result of one pass over the whole buffer.
+struct BiquadState {
+  double z1 = 0.0;
+  double z2 = 0.0;
+};
+
 // Keep the K-weighted intermediate signal in `double` for the duration of the
 // two-stage filter. Narrowing to `float` between stages introduces ~0.01 dB
 // rounding on quiet signals and contradicts the project's "double for
 // K-weighting" precision contract.
-std::vector<double> apply_biquad_double(const double* input, size_t size, const Biquad& coeffs) {
-  std::vector<double> output(size);
-  double z1 = 0.0;
-  double z2 = 0.0;
+void apply_biquad_double_in_place(double* samples, size_t size, const Biquad& coeffs,
+                                  BiquadState* state) {
+  double z1 = state->z1;
+  double z2 = state->z2;
   for (size_t i = 0; i < size; ++i) {
-    const double x = input[i];
+    const double x = samples[i];
     const double y = coeffs.b0 * x + z1;
     z1 = coeffs.b1 * x - coeffs.a1 * y + z2;
     z2 = coeffs.b2 * x - coeffs.a2 * y;
-    output[i] = y;
+    samples[i] = y;
   }
-  return output;
-}
-
-void apply_biquad_double_in_place(std::vector<double>* samples, const Biquad& coeffs) {
-  double z1 = 0.0;
-  double z2 = 0.0;
-  for (double& sample : *samples) {
-    const double x = sample;
-    const double y = coeffs.b0 * x + z1;
-    z1 = coeffs.b1 * x - coeffs.a1 * y + z2;
-    z2 = coeffs.b2 * x - coeffs.a2 * y;
-    sample = y;
-  }
+  state->z1 = z1;
+  state->z2 = z2;
 }
 
 std::vector<double> to_double(const float* input, size_t size) {
@@ -83,9 +88,15 @@ std::vector<double> k_weighted(const Audio& audio) {
 
   const auto [pre, rlb] = k_weighting_filters(audio.sample_rate());
 
-  const std::vector<double> input_d = to_double(audio.data(), audio.size());
-  std::vector<double> filtered = apply_biquad_double(input_d.data(), input_d.size(), pre);
-  return apply_biquad_double(filtered.data(), filtered.size(), rlb);
+  // Filtered in place: both stages are causal recurrences, so reusing the one
+  // buffer costs nothing and keeps the peak footprint at one `double` per sample
+  // instead of the three that a copy per stage would hold live at once.
+  std::vector<double> filtered = to_double(audio.data(), audio.size());
+  BiquadState pre_state;
+  BiquadState rlb_state;
+  apply_biquad_double_in_place(filtered.data(), filtered.size(), pre, &pre_state);
+  apply_biquad_double_in_place(filtered.data(), filtered.size(), rlb, &rlb_state);
+  return filtered;
 }
 
 double mean_square(const double* data, size_t start, size_t length) {
@@ -128,9 +139,15 @@ std::vector<double> block_energies(const std::vector<double>& samples, int sampl
   return energies;
 }
 
+/// Per-block K-weighted energy, summed across channels.
+///
+/// `next_block` makes the accumulator streamable: the blocks are emitted in
+/// order as the signal arrives, so `k_weighted_block_energies` never has to hold
+/// more of the filtered signal than the longest window still owes a sum.
 struct BlockEnergyAccumulator {
   size_t window = 0;
   size_t hop = 0;
+  size_t next_block = 0;
   std::vector<double> energies;
 };
 
@@ -151,15 +168,29 @@ BlockEnergyAccumulator make_block_accumulator(size_t frames, int sample_rate, fl
   return accumulator;
 }
 
-void accumulate_channel_blocks(const std::vector<double>& weighted, double channel_weight,
-                               BlockEnergyAccumulator* accumulator) {
-  if (accumulator->window == 0 || accumulator->energies.empty()) return;
-  size_t block = 0;
-  for (size_t start = 0; start + accumulator->window <= weighted.size();
-       start += accumulator->hop, ++block) {
-    accumulator->energies[block] +=
-        channel_weight * mean_square(weighted.data(), start, accumulator->window);
+/// Sums every block whose window is now fully covered.
+///
+/// @param buffer  K-weighted samples for absolute frame indices
+///                `[origin, origin + available)`.
+/// Each block is summed over its window in one pass, in index order, exactly as
+/// a whole-signal pass would, so chunking does not perturb the result.
+void accumulate_ready_blocks(const double* buffer, size_t origin, size_t available,
+                             double channel_weight, BlockEnergyAccumulator* accumulator) {
+  if (accumulator->window == 0) return;
+  while (accumulator->next_block < accumulator->energies.size()) {
+    const size_t start = accumulator->next_block * accumulator->hop;
+    if (start + accumulator->window > origin + available) break;
+    accumulator->energies[accumulator->next_block] +=
+        channel_weight * mean_square(buffer, start - origin, accumulator->window);
+    ++accumulator->next_block;
   }
+}
+
+/// First absolute frame index @p accumulator still needs, or `frames` once it
+/// has emitted every block it will.
+size_t retain_from(const BlockEnergyAccumulator& accumulator, size_t frames) {
+  if (accumulator.next_block >= accumulator.energies.size()) return frames;
+  return accumulator.next_block * accumulator.hop;
 }
 
 struct WeightedBlockEnergies {
@@ -171,7 +202,6 @@ struct WeightedBlockEnergies {
 WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t frames,
                                                 int channels, int sample_rate,
                                                 const LufsConfig& config) {
-  std::vector<double> scratch(frames);
   const auto [pre, rlb] = k_weighting_filters(sample_rate);
   BlockEnergyAccumulator integrated =
       make_block_accumulator(frames, sample_rate, config.block_duration_sec, config.block_overlap,
@@ -183,17 +213,57 @@ WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t
       make_block_accumulator(frames, sample_rate, config.short_term_duration_sec,
                              short_term_overlap_for(sample_rate, config.short_term_duration_sec),
                              /*allow_partial_window=*/false);
+
+  // The K-weighted signal is held in a sliding window rather than materialized
+  // per channel: an hour of 48 kHz audio is 1.4 GB of `double` scratch for a
+  // measurement that never reaches further back than the longest gating window
+  // (3 s for short-term). The window keeps whatever the earliest unfinished
+  // block still needs, so the footprint is bounded by that window plus one
+  // chunk, independent of the clip length.
+  BlockEnergyAccumulator* const accumulators[] = {&integrated, &momentary, &short_term};
+  size_t longest_window = 0;
+  for (const BlockEnergyAccumulator* accumulator : accumulators) {
+    longest_window = std::max(longest_window, accumulator->window);
+  }
+  std::vector<double> scratch;
+  scratch.reserve(std::min(frames, longest_window) + kChunkFrames);
+
   for (int channel = 0; channel < channels; ++channel) {
-    for (size_t frame = 0; frame < frames; ++frame) {
-      scratch[frame] = static_cast<double>(
-          interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)]);
-    }
-    apply_biquad_double_in_place(&scratch, pre);
-    apply_biquad_double_in_place(&scratch, rlb);
     const double weight = bs1770_channel_weight(channel, channels);
-    accumulate_channel_blocks(scratch, weight, &integrated);
-    accumulate_channel_blocks(scratch, weight, &momentary);
-    accumulate_channel_blocks(scratch, weight, &short_term);
+    for (BlockEnergyAccumulator* accumulator : accumulators) {
+      accumulator->next_block = 0;
+    }
+    scratch.clear();
+    BiquadState pre_state;
+    BiquadState rlb_state;
+    size_t origin = 0;    // absolute frame index of scratch[0]
+    size_t produced = 0;  // frames de-interleaved and filtered so far
+    while (produced < frames) {
+      const size_t take = std::min(kChunkFrames, frames - produced);
+      const size_t tail = scratch.size();
+      scratch.resize(tail + take);
+      for (size_t i = 0; i < take; ++i) {
+        scratch[tail + i] =
+            static_cast<double>(interleaved[(produced + i) * static_cast<size_t>(channels) +
+                                            static_cast<size_t>(channel)]);
+      }
+      // Both stages run over the new chunk only, carrying their state, which is
+      // the same recurrence a whole-signal pass evaluates.
+      apply_biquad_double_in_place(scratch.data() + tail, take, pre, &pre_state);
+      apply_biquad_double_in_place(scratch.data() + tail, take, rlb, &rlb_state);
+      produced += take;
+
+      size_t keep = frames;
+      for (BlockEnergyAccumulator* accumulator : accumulators) {
+        accumulate_ready_blocks(scratch.data(), origin, scratch.size(), weight, accumulator);
+        keep = std::min(keep, retain_from(*accumulator, frames));
+      }
+      if (keep > origin) {
+        const size_t drop = std::min(keep - origin, scratch.size());
+        scratch.erase(scratch.begin(), scratch.begin() + static_cast<std::ptrdiff_t>(drop));
+        origin += drop;
+      }
+    }
   }
   return {std::move(integrated.energies), std::move(momentary.energies),
           std::move(short_term.energies)};
