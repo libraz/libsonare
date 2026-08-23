@@ -4,10 +4,11 @@
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        surface-coverage surface-coverage-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
-       build-feature-matrix
+       build-feature-matrix accuracy-report
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
+ACCURACY_REPORT_JSON ?= $(CURDIR)/build-optional-fixtures/accuracy-report.json
 INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
 RYE ?= rye
 CMAKE ?= cmake
@@ -92,6 +93,19 @@ test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
 	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) -j
 	ctest --test-dir $(OPTIONAL_FIXTURE_BUILD_DIR) --output-on-failure -R "optional|fixture|EBU R128" --parallel
+
+# Measures musical accuracy against whatever corpus the music_eval manifests
+# point at and rolls it up into a publishable table. Distinct from
+# test-optional-fixtures, which gates: only report_only manifest rows produce
+# the observations this reads. Reports "unmeasured" rather than a score for a
+# dimension with no rows. See tools/eval/README.md.
+accuracy-report:
+	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
+	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) -j
+	python3 tests/fixtures/run_optional_fixture_report.py --suite music \
+	        --sonare-tests $(OPTIONAL_FIXTURE_BUILD_DIR)/bin/sonare_tests \
+	        --output $(ACCURACY_REPORT_JSON)
+	python3 tools/eval/summarize_accuracy.py $(ACCURACY_REPORT_JSON) --markdown
 
 test-librosa-live: build
 	$(RYE) sync --pyproject tests/librosa/pyproject.toml
@@ -276,6 +290,7 @@ conformance:
 	python3 tools/parity/test_ts_reexport.py
 	python3 tools/parity/test_surface_coverage.py
 	python3 tools/parity/test_allowlist_audit.py
+	python3 tools/eval/test_summarize_accuracy.py
 	python3 tools/parity/surface_coverage.py --check
 	python3 tools/parity/check_parity.py --audit-allowlist
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \

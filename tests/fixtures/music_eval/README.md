@@ -4,6 +4,8 @@ The six manifests in this directory gate the analyzers' accuracy against real re
 
 Until a manifest has rows, the dimension it covers is unmeasured — not merely ungated. A change to key detection, beat tracking or chord recognition currently has nothing to fail against.
 
+These manifests serve two different jobs, and a row does one or the other. A **gating** row asserts and prints nothing, which is what CI needs. A **measurement** row is marked `report_only`, which turns the assertion into a printed figure the accuracy roll-up can read; a row that gates contributes no observation and is invisible to it. A manifest can hold both. For turning measurement rows into publishable numbers, see [`tools/eval/README.md`](../../../tools/eval/README.md) and `make accuracy-report`.
+
 ## What each manifest gates
 
 | manifest | analyzer | pass condition |
