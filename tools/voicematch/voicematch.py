@@ -39,7 +39,13 @@ from metrics import (
     normalize_rms,
     to_mono,
 )
-from patterns import PATTERN_BUILDERS, analysis_window_end, build_pattern, pattern_length
+from patterns import (
+    DRUM_GATE_HELP,
+    PATTERN_BUILDERS,
+    analysis_window_end,
+    build_pattern,
+    pattern_length,
+)
 from render_model import ensure_lib_path, render_model
 from render_oracle import add_oracle_args, obtain_oracle, oracle_may_carry_room
 from room import apply_room, estimate_room, fit_room_ir, match_sends
@@ -106,6 +112,8 @@ def probe_kwargs(args) -> dict:
     kwargs: dict = {}
     if getattr(args, "drum_note", None) is not None:
         kwargs["notes"] = (args.drum_note,)
+        if getattr(args, "drum_gate_ms", 0):
+            kwargs["dur"] = args.drum_gate_ms / 1000.0
     if getattr(args, "notes", ""):
         kwargs["notes"] = tuple(int(n) for n in args.notes.split(","))
     if getattr(args, "velocities", ""):
@@ -499,6 +507,8 @@ def main() -> int:
                             "channel, where this note selects the instrument and --programs "
                             "selects the kit, and the report switches to the percussion "
                             "metric set (band profile, per-band decay, attack)")
+    cmp_p.add_argument("--drum-gate-ms", type=int, default=0, dest="drum_gate_ms",
+                       help=DRUM_GATE_HELP)
     add_oracle_args(cmp_p)
     cmp_p.add_argument(
         "--room", default="auto", choices=("auto", "none"),
@@ -536,6 +546,8 @@ def main() -> int:
     exp_p.add_argument("--drum-note", type=int, default=None, dest="drum_note",
                        help="export a drum-channel probe of this percussion instrument "
                             "instead of a melodic one")
+    exp_p.add_argument("--drum-gate-ms", type=int, default=0, dest="drum_gate_ms",
+                       help=DRUM_GATE_HELP)
     exp_p.set_defaults(func=run_export_probe)
 
     args = parser.parse_args()

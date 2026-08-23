@@ -187,6 +187,26 @@ DEFAULT_DRUM_NOTE = 38  # Acoustic Snare
 DRUM_VELOCITIES = (64, 100, 127)
 DRUM_HOLDOUT_VELOCITIES = (48, 88, 112)
 
+# How long a drum note is held, in seconds.
+#
+# Short because on a drum channel the note-off carries no information — which is
+# true of a kit's percussion and not of everything a kit maps. Measured across a
+# a sampled GM kit at gates from 50 ms to 1600 ms: 58 of its 61 notes render bit
+# for bit identically at every gate, and the scratch push and the two whistles
+# do not, because that kit voices them as held instruments whose length is
+# whatever the gate was. libsonare voices all three as fixed one-shots, so
+# against such a reference their length is the probe's own setting on one side
+# and the model's constant on the other, and a fit of their envelope is reading
+# this number. Raise it (`--drum-gate-ms`) when that is the note being fitted.
+DRUM_GATE = 0.05
+
+DRUM_GATE_HELP = (
+    f"how long a drum note is held, in milliseconds (default {int(DRUM_GATE * 1000)}). "
+    "Only the notes a kit voices as held instruments — typically the whistles and the "
+    "record scratches — hear the difference; the rest of a kit renders identically at "
+    "any gate"
+)
+
 
 def _drum_pattern(
     name: str,
@@ -212,7 +232,7 @@ def drum_pattern(
     *,
     notes: tuple[int, ...] | None = None,
     velocities: tuple[int, ...] = DRUM_VELOCITIES,
-    dur: float = 0.05,
+    dur: float = DRUM_GATE,
     gap: float = 2.0,
 ) -> Pattern:
     """Isolated one-shot hits of one drum note at increasing velocities.
@@ -222,11 +242,17 @@ def drum_pattern(
     hi-hat. `program` selects the drum kit (0 is the standard kit) rather than a
     melodic instrument.
 
-    A drum is a one-shot: the note-off carries no information, so the note is as
-    short as the score can make it and the two seconds between hits are what the
-    analysis actually reads. That gap is what the longest instrument in the kit
-    needs — an open cymbal or a gong rings for most of it — and it also keeps
-    each hit's window clear of the next one's onset.
+    A drum is a one-shot, so the note is as short as the score can make it (see
+    `DRUM_GATE`) and the two seconds between hits are what the analysis actually
+    reads. That gap is shorter than the ring of the loudest things in a kit — on
+    a a sampled GM kit eight notes are still above -60 dB after four and a half
+    seconds — but it is not what decides whether one hit contaminates the next.
+    Velocity ascends, so the hit that bleeds is always the quieter one, and both
+    are the same instrument decaying at the same rate, which holds the ratio
+    roughly constant across the window rather than letting it grow. Measured
+    across that kit, 57 of its 58 sounding notes leave the previous hit at or
+    below -20 dB under the next onset; the belltree, the quietest instrument in
+    the kit and one of the longest, is the single exception at -15 dB.
     """
     return _drum_pattern(
         "drum", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=2.0
@@ -238,7 +264,7 @@ def drum_holdout_pattern(
     *,
     notes: tuple[int, ...] | None = None,
     velocities: tuple[int, ...] = DRUM_HOLDOUT_VELOCITIES,
-    dur: float = 0.05,
+    dur: float = DRUM_GATE,
     gap: float = 2.0,
 ) -> Pattern:
     """`drum` at velocities the fit never saw — the generalisation check.
