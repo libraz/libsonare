@@ -401,6 +401,30 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // is unused by one-shot voices in normal play, so this stays bit-identical
   // there — it only governs how fast a closed/pedal strike cuts the open hat).
   t[42].percussion.exclusive_class = 1;
+  // Closed Hi-Hat, voiced against the measured kit. The archetype's noise is
+  // high-passed at 7.5 kHz, which puts the whole piece above where the
+  // reference's energy ends: its band profile peaks at 4 kHz and is 57 dB down
+  // by 12.5 kHz, while the model's peaked at 12.5 kHz and was at the -60 dB
+  // floor below 630 Hz. The fitted band is a low corner under the voice's own
+  // filter rather than a ceiling over it, which is what moves the peak rather
+  // than only attenuating past it. The open and pedal hats are not fitted: both
+  // of their runs bought a better profile with 13 and 31 dB of level, which
+  // nothing in the objective charges for.
+  t[42].amp_env.attack_ms = 0.581237f;
+  t[42].amp_env.decay_ms = 11.25f;
+  t[42].cutoff_hz = 2556.94f;
+  t[42].drive = 0.772644f;
+  t[42].percussion.noise_cutoff_hz = 937.5f;
+  t[42].percussion.noise_decay_ms = 77.8093f;
+  t[42].percussion.noise_gain = 2.54656f;
+  t[42].percussion.noise_q = 0.6347f;
+  t[42].resonance_q = 0.5f;
+  t[42].stereo_spread = 0.875561f;
+  // Re-gain, in the same change and for the same reason as the ceilings above:
+  // the fit is not offered the output gain, because no term it minimises can
+  // see one, so the values it chose left the peak 10 dB down and nothing in its
+  // report was entitled to notice. Measured across three velocities.
+  t[42].gain = 1.5631f;
   t[44].percussion.exclusive_class = 1;
   t[46].percussion.exclusive_class = 1;
   t[46].amp_env.release_ms = 40.0f;
@@ -465,10 +489,16 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // have in the same change - every metric in the comparison is normalised, so a
   // level left 5 dB down reads as correct everywhere and is only audible.
   //
-  // The hi-hats are absent on purpose. The ceiling does not reach them: taking
-  // their corner down to 200 Hz still leaves the top band filled while costing
-  // 60 dB of level, which says their brightness arrives by a path this filter is
-  // not in. Same for the shakers and scrapers, where it moves nothing at all.
+  // The hi-hats are absent on purpose, and for a different reason than they
+  // first appeared to have. The filter is on their path; what defeats it is
+  // that their noise is high-passed at 7.5 kHz, so a ceiling can only attenuate
+  // a band that starts above where the reference's energy ends, and taking the
+  // corner to 200 Hz costs 60 dB of level while leaving the top band filled.
+  // Their answer is the band itself, below.
+  //
+  // The shakers and scrapers are absent because the ceiling genuinely does not
+  // reach them: the PhISEM particle stream is summed into the mix unfiltered,
+  // so the knob moves nothing at all there.
   t[38].percussion.noise_air_hz = 2032.0f;
   t[38].gain = 2.931f;  // Acoustic Snare
   t[39].percussion.noise_air_hz = 3125.0f;
