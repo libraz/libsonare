@@ -124,12 +124,17 @@ class CommaDecimalPunct : public std::numpunct<char> {
 
 /// Installs a comma-decimal locale for the lifetime of the object.
 ///
-/// Both the global C++ locale and LC_NUMERIC are switched, and only the first
-/// of them reaches this header: `std::istringstream` / `std::ostringstream`
-/// carry the global C++ locale, not the C one, so a test that calls only
-/// `std::setlocale` cannot fail no matter how the number is formatted.
-/// LC_NUMERIC is switched alongside it so any C-library formatting a caller
-/// mixes in is covered too, and it only moves when a named locale is available.
+/// A hostile host has two independent halves and they move separately:
+/// `std::setlocale(LC_NUMERIC, ...)` moves the C library's decimal point, and
+/// `std::locale::global` moves the C++ one. util/json reads the C half -- it
+/// formats through snprintf and parses through strtod, folding the separator
+/// back onto "." itself -- so only a named locale makes this test load-bearing.
+/// The synthetic facet moves the C++ half alone, which covers stream-based
+/// formatting a caller mixes in but no longer reaches this header at all.
+///
+/// @ref c_locale_moved therefore reports whether the run had real coverage, so
+/// an image with no comma-decimal locale generated says so instead of passing
+/// on assertions that nothing stressed.
 class CommaDecimalLocaleGuard {
  public:
   CommaDecimalLocaleGuard() : saved_global_(std::locale()) {
@@ -142,7 +147,11 @@ class CommaDecimalLocaleGuard {
       try {
         std::locale::global(std::locale(tag));
         std::setlocale(LC_NUMERIC, tag);
-        return;
+        // setlocale can succeed for a name whose numeric data still points at
+        // "."; ask the C library what it ended up with rather than assuming.
+        const char* point = std::localeconv()->decimal_point;
+        c_locale_moved_ = point != nullptr && point[0] != '\0' && point[0] != '.';
+        if (c_locale_moved_) return;
       } catch (const std::runtime_error&) {
         continue;
       }
@@ -158,20 +167,31 @@ class CommaDecimalLocaleGuard {
   CommaDecimalLocaleGuard(const CommaDecimalLocaleGuard&) = delete;
   CommaDecimalLocaleGuard& operator=(const CommaDecimalLocaleGuard&) = delete;
 
+  /// Whether the C library's decimal point actually became something other
+  /// than "." -- the condition util/json is sensitive to.
+  bool c_locale_moved() const { return c_locale_moved_; }
+
  private:
   std::locale saved_global_;
   std::string saved_numeric_;
+  bool c_locale_moved_ = false;
 };
 
 }  // namespace
 
 TEST_CASE("util json parse and dump are locale-independent", "[json][locale]") {
-  // DAW plugin hosts sometimes run under a comma-decimal locale. Both the
-  // parser and dump() build a stream and imbue the classic locale so "." stays
-  // the decimal separator either way; the guard below makes that load-bearing.
-  // Without the imbue, parse reads {"a":1.5} as 15 and dump writes 1.5 as
-  // "1,5" -- which is not a parse error downstream, just a different document.
+  // DAW plugin hosts sometimes run under a comma-decimal locale. The parser and
+  // dump() reconcile the token with LC_NUMERIC themselves so "." stays the
+  // decimal separator either way; the guard below makes that load-bearing.
+  // Without the fold, parse reads {"a":1.5} as 1 and dump writes 1.5 as "1,5"
+  // -- which is not a parse error downstream, just a different document.
   CommaDecimalLocaleGuard hostile_locale;
+  if (!hostile_locale.c_locale_moved()) {
+    WARN(
+        "no comma-decimal locale is installed, so LC_NUMERIC stayed at \".\": the assertions "
+        "below still hold but exercise nothing this test exists to cover. Generate de_DE.UTF-8 "
+        "to restore it.");
+  }
 
   const auto value = sonare::util::json::parse("{\"a\":1.5,\"b\":-3.25e-2,\"c\":[0.125,2.5]}");
   REQUIRE(value["a"].as_number() == 1.5);
