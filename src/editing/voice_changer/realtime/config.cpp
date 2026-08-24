@@ -2,16 +2,14 @@
 #include <array>
 #include <cctype>
 #include <cmath>
-#include <iomanip>
 #include <limits>
-#include <locale>
-#include <sstream>
 
 #include "editing/voice_changer/formant_bounds.h"
 #include "editing/voice_changer/realtime.h"
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"
+#include "util/number_format.h"
 
 namespace sonare::editing::voice_changer {
 namespace {
@@ -45,76 +43,85 @@ bool object_bool(const sonare::util::json::Value& object, const char* key, bool 
   return value->as_bool();
 }
 
-void dump_number(std::ostringstream& out, float value) {
+void dump_number(std::string& out, float value) {
   // max_digits10 (17 for IEEE-754 double) ensures lossless roundtrip — matches
-  // util/json::dump_value. Stream's locale is classic (imbued by the callers),
-  // so the decimal separator is always "." regardless of LC_NUMERIC.
-  out << std::setprecision(std::numeric_limits<double>::max_digits10) << static_cast<double>(value);
+  // util/json::dump_value. The formatting is locale-independent, so the decimal
+  // separator is always "." regardless of LC_NUMERIC.
+  out += sonare::util::format_general(static_cast<double>(value),
+                                      std::numeric_limits<double>::max_digits10);
 }
 
-void dump_field(std::ostringstream& out, const char* key, float value, bool last = false) {
-  out << '"' << key << "\":";
+void dump_field(std::string& out, const char* key, float value, bool last = false) {
+  out += '"';
+  out += key;
+  out += "\":";
   dump_number(out, value);
-  if (!last) out << ',';
+  if (!last) out += ',';
 }
 
-void dump_int_field(std::ostringstream& out, const char* key, int value, bool last = false) {
-  out << '"' << key << "\":" << value;
-  if (!last) out << ',';
+void dump_int_field(std::string& out, const char* key, int value, bool last = false) {
+  out += '"';
+  out += key;
+  out += "\":";
+  out += std::to_string(value);
+  if (!last) out += ',';
 }
 
-void dump_bool_field(std::ostringstream& out, const char* key, bool value, bool last = false) {
-  out << '"' << key << "\":" << (value ? "true" : "false");
-  if (!last) out << ',';
+void dump_bool_field(std::string& out, const char* key, bool value, bool last = false) {
+  out += '"';
+  out += key;
+  out += "\":";
+  out += (value ? "true" : "false");
+  if (!last) out += ',';
 }
 
-void dump_dsp_section(std::ostringstream& out, const RealtimeVoiceChangerConfig& c) {
-  out << "\"dsp\":{";
+void dump_dsp_section(std::string& out, const RealtimeVoiceChangerConfig& c) {
+  out += "\"dsp\":{";
   dump_field(out, "inputGainDb", c.input_gain_db);
   dump_field(out, "outputGainDb", c.output_gain_db);
   dump_field(out, "wetMix", c.wet_mix);
-  out << "\"retune\":{";
+  out += "\"retune\":{";
   dump_field(out, "semitones", c.retune.semitones);
   dump_field(out, "mix", c.retune.mix);
   dump_int_field(out, "grainSize", c.retune.grain_size, true);
-  out << "},\"formant\":{";
+  out += "},\"formant\":{";
   dump_field(out, "factor", c.formant.factor);
   dump_field(out, "amount", c.formant.amount);
   dump_field(out, "body", c.formant.body);
   dump_field(out, "brightness", c.formant.brightness);
   dump_field(out, "nasal", c.formant.nasal, true);
-  out << "},\"eq\":{";
+  out += "},\"eq\":{";
   dump_field(out, "highpassHz", c.eq.highpass_hz);
   dump_field(out, "bodyDb", c.eq.body_db);
   dump_field(out, "presenceDb", c.eq.presence_db);
   dump_field(out, "airDb", c.eq.air_db, true);
-  out << "},\"gate\":{";
+  out += "},\"gate\":{";
   dump_field(out, "thresholdDb", c.gate.threshold_db);
   dump_field(out, "attackMs", c.gate.attack_ms);
   dump_field(out, "releaseMs", c.gate.release_ms);
   dump_field(out, "rangeDb", c.gate.range_db, true);
-  out << "},\"compressor\":{";
+  out += "},\"compressor\":{";
   dump_field(out, "thresholdDb", c.compressor.threshold_db);
   dump_field(out, "ratio", c.compressor.ratio);
   dump_field(out, "attackMs", c.compressor.attack_ms);
   dump_field(out, "releaseMs", c.compressor.release_ms);
   dump_field(out, "makeupGainDb", c.compressor.makeup_gain_db, true);
-  out << "},\"deesser\":{";
+  out += "},\"deesser\":{";
   dump_field(out, "frequencyHz", c.deesser.frequency_hz);
   dump_field(out, "thresholdDb", c.deesser.threshold_db);
   dump_field(out, "ratio", c.deesser.ratio);
   dump_field(out, "rangeDb", c.deesser.range_db, true);
-  out << "},\"reverb\":{";
+  out += "},\"reverb\":{";
   dump_field(out, "mix", c.reverb.mix);
   dump_field(out, "timeMs", c.reverb.time_ms);
   dump_field(out, "damping", c.reverb.damping);
   dump_int_field(out, "seed", c.reverb.seed, true);
-  out << "},\"limiter\":{";
+  out += "},\"limiter\":{";
   dump_field(out, "ceilingDb", c.limiter.ceiling_db);
   dump_field(out, "releaseMs", c.limiter.release_ms);
   dump_bool_field(out, "enableIspLimiter", c.limiter.enable_isp_limiter);
   dump_field(out, "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp, true);
-  out << "}}";
+  out += "}}";
 }
 
 std::string trim_copy(std::string_view text) {
@@ -751,31 +758,33 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
 
 std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConfig& config) {
   const auto c = normalize_realtime_voice_changer_config(config);
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
+  std::string out;
   // A normalized config is also a valid, saveable custom preset. Include the
   // metadata required by the strict preset validator so callers can validate
   // its output again without reconstructing an envelope around the DSP object.
-  out << "{\"schemaVersion\":" << kVoiceChangerPresetSchemaVersion
-      << ",\"id\":\"custom\",\"name\":\"Custom\",\"category\":\"custom\",";
+  out += "{\"schemaVersion\":";
+  out += std::to_string(kVoiceChangerPresetSchemaVersion);
+  out += ",\"id\":\"custom\",\"name\":\"Custom\",\"category\":\"custom\",";
   dump_dsp_section(out, c);
-  out << "}";
-  return out.str();
+  out += "}";
+  return out;
 }
 
 std::string realtime_voice_changer_preset_json(VoiceCharacterPreset preset) {
   const auto c = realtime_voice_changer_preset(preset);
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
-  out << "{\"schemaVersion\":" << kVoiceChangerPresetSchemaVersion << ",\"id\":\""
-      << sonare::util::json::escape_string(realtime_voice_changer_preset_id(preset))
-      << "\",\"name\":\""
-      << sonare::util::json::escape_string(realtime_voice_changer_preset_display_name(preset))
-      << "\",\"category\":\""
-      << sonare::util::json::escape_string(std::string(preset_metadata(preset).category)) << "\",";
+  std::string out;
+  out += "{\"schemaVersion\":";
+  out += std::to_string(kVoiceChangerPresetSchemaVersion);
+  out += ",\"id\":\"";
+  out += sonare::util::json::escape_string(realtime_voice_changer_preset_id(preset));
+  out += "\",\"name\":\"";
+  out += sonare::util::json::escape_string(realtime_voice_changer_preset_display_name(preset));
+  out += "\",\"category\":\"";
+  out += sonare::util::json::escape_string(std::string(preset_metadata(preset).category));
+  out += "\",";
   dump_dsp_section(out, c);
-  out << "}";
-  return out.str();
+  out += "}";
+  return out;
 }
 
 bool validate_realtime_voice_changer_preset_json(std::string_view json,
@@ -856,23 +865,28 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
       // points that never had a preset identity to begin with. Losing the real
       // id here breaks find_voice_preset_in_pack lookups and a pack's own
       // id-uniqueness contract on every round trip through this validator.
-      std::ostringstream out;
-      out.imbue(std::locale::classic());
-      out << "{\"schemaVersion\":" << kVoiceChangerPresetSchemaVersion << ",\"id\":\""
-          << sonare::util::json::escape_string(root.find("id")->as_string()) << "\",\"name\":\""
-          << sonare::util::json::escape_string(root.find("name")->as_string()) << "\"";
+      std::string out;
+      out += "{\"schemaVersion\":";
+      out += std::to_string(kVoiceChangerPresetSchemaVersion);
+      out += ",\"id\":\"";
+      out += sonare::util::json::escape_string(root.find("id")->as_string());
+      out += "\",\"name\":\"";
+      out += sonare::util::json::escape_string(root.find("name")->as_string());
+      out += "\"";
       if (const auto* description = root.find("description")) {
-        out << ",\"description\":\"" << sonare::util::json::escape_string(description->as_string())
-            << "\"";
+        out += ",\"description\":\"";
+        out += sonare::util::json::escape_string(description->as_string());
+        out += "\"";
       }
       if (const auto* category = root.find("category")) {
-        out << ",\"category\":\"" << sonare::util::json::escape_string(category->as_string())
-            << "\"";
+        out += ",\"category\":\"";
+        out += sonare::util::json::escape_string(category->as_string());
+        out += "\"";
       }
-      out << ",";
+      out += ",";
       dump_dsp_section(out, config);
-      out << "}";
-      *normalized_json = out.str();
+      out += "}";
+      *normalized_json = out;
     }
     return true;
   } catch (const std::exception& ex) {

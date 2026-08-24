@@ -3,10 +3,10 @@
 /// @file exception.h
 /// @brief Exception classes for libsonare.
 
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
+#include "util/number_format.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -51,19 +51,19 @@ class SonareException : public std::runtime_error {
 
 /// @def SONARE_CHECK_RANGE
 /// @brief Throws InvalidParameter with a detailed inclusive range message.
-#define SONARE_CHECK_RANGE(name, value, min_value, max_value)                                  \
-  do {                                                                                         \
-    const auto sonare_check_range_value = (value);                                             \
-    const auto sonare_check_range_min = (min_value);                                           \
-    const auto sonare_check_range_max = (max_value);                                           \
-    if (!(sonare_check_range_value >= sonare_check_range_min &&                                \
-          sonare_check_range_value <= sonare_check_range_max)) {                               \
-      std::ostringstream sonare_check_range_stream;                                            \
-      sonare_check_range_stream << (name) << " must be in [" << sonare_check_range_min << ", " \
-                                << sonare_check_range_max << "], got "                         \
-                                << sonare_check_range_value;                                   \
-      throw SonareException(ErrorCode::InvalidParameter, sonare_check_range_stream.str());     \
-    }                                                                                          \
+#define SONARE_CHECK_RANGE(name, value, min_value, max_value)                                 \
+  do {                                                                                        \
+    const auto sonare_check_range_value = (value);                                            \
+    const auto sonare_check_range_min = (min_value);                                          \
+    const auto sonare_check_range_max = (max_value);                                          \
+    if (!(sonare_check_range_value >= sonare_check_range_min &&                               \
+          sonare_check_range_value <= sonare_check_range_max)) {                              \
+      throw SonareException(ErrorCode::InvalidParameter,                                      \
+                            ::sonare::util::to_text(name) + " must be in [" +                 \
+                                ::sonare::util::to_text(sonare_check_range_min) + ", " +      \
+                                ::sonare::util::to_text(sonare_check_range_max) + "], got " + \
+                                ::sonare::util::to_text(sonare_check_range_value));           \
+    }                                                                                         \
   } while (0)
 
 }  // namespace sonare

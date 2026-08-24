@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <sstream>
 
 #include "core/resample.h"
 #include "core/spectrum.h"
@@ -574,11 +573,12 @@ void SectionAnalyzer::classify_sections() {
 }
 
 std::string SectionAnalyzer::form() const {
-  std::ostringstream oss;
+  std::string out;
+  out.reserve(sections_.size());
   for (const auto& section : sections_) {
-    oss << section_type_to_char(section.type);
+    out += section_type_to_char(section.type);
   }
-  return oss.str();
+  return out;
 }
 
 Section SectionAnalyzer::section_at(float time) const {

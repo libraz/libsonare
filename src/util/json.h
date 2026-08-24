@@ -6,17 +6,15 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
-#include <iomanip>
-#include <ios>
 #include <limits>
-#include <locale>
 #include <map>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include "util/number_format.h"
 
 #ifndef SONARE_JSON_NAMESPACE
 #define SONARE_JSON_NAMESPACE sonare::util::json
@@ -327,17 +325,17 @@ class Parser {
       if (pos_ >= text_.size() || !is_digit(text_[pos_])) fail("expected exponent digits");
       while (pos_ < text_.size() && is_digit(text_[pos_])) ++pos_;
     }
-    // Locale-independent parse. std::stod honors LC_NUMERIC; DAW plugin hosts
-    // sometimes override that to e.g. de_DE which interprets "," as the decimal
-    // separator and would break "1.5". std::from_chars<double> has spotty
-    // toolchain support (libc++ < LLVM 20, older Emscripten), so we imbue an
-    // istringstream with the classic locale: guaranteed by C++17, portable to
-    // every compiler we target.
-    std::istringstream ss(text_.substr(start, pos_ - start));
-    ss.imbue(std::locale::classic());
+    // Locale-independent parse. std::stod and a bare strtod honor LC_NUMERIC;
+    // DAW plugin hosts sometimes override that to e.g. de_DE which interprets
+    // "," as the decimal separator and would break "1.5". std::from_chars<double>
+    // has spotty toolchain support (libc++ < LLVM 20, older Emscripten), and an
+    // istringstream imbued with the classic locale instantiates the whole
+    // std::locale facet set. util::parse_double reconciles the token with
+    // LC_NUMERIC instead, which is what the stream did and costs nothing.
     double value = 0.0;
-    ss >> value;
-    if (!ss || ss.peek() != std::char_traits<char>::eof()) fail("invalid JSON number");
+    if (!::sonare::util::parse_double(text_.data() + start, text_.data() + pos_, &value)) {
+      fail("invalid JSON number");
+    }
     return value;
   }
 
@@ -446,101 +444,104 @@ inline Value parse_with_limits(const std::string& text, std::size_t max_depth,
   return Parser(text, max_depth, /*reject_duplicate_keys=*/false, resource_limits).parse_document();
 }
 
-inline void dump_value(const Value& value, std::ostringstream& out) {
+inline void dump_value(const Value& value, std::string& out) {
   if (value.is_null()) {
-    out << "null";
+    out += "null";
   } else if (value.is_bool()) {
-    out << (value.as_bool() ? "true" : "false");
+    out += (value.as_bool() ? "true" : "false");
   } else if (value.is_number()) {
-    // RFC 8259 forbids NaN/Infinity as JSON numbers; std::ostringstream would
-    // emit "nan"/"inf" which no spec-compliant parser accepts (including the one
-    // in this header). Emit `null` instead -- a valid JSON token that round-trips
-    // cleanly through parse(). This lets callers serialize legitimately
-    // non-finite values (e.g. a -inf LUFS / true-peak reading for a fully silent
-    // input, the EBU R128 "below measurement floor" sentinel) into a JSON sidecar
-    // without dump() throwing. The information that the field was non-finite is
-    // preserved as JSON null rather than a misleading finite number.
+    // RFC 8259 forbids NaN/Infinity as JSON numbers; the default formatting
+    // would emit "nan"/"inf" which no spec-compliant parser accepts (including
+    // the one in this header). Emit `null` instead -- a valid JSON token that
+    // round-trips cleanly through parse(). This lets callers serialize
+    // legitimately non-finite values (e.g. a -inf LUFS / true-peak reading for a
+    // fully silent input, the EBU R128 "below measurement floor" sentinel) into
+    // a JSON sidecar without dump() throwing. The information that the field was
+    // non-finite is preserved as JSON null rather than a misleading finite
+    // number.
     const double number = value.as_number();
     if (!std::isfinite(number)) {
-      out << "null";
+      out += "null";
       return;
     }
     // max_digits10 (17 for IEEE-754 double) is the minimum precision that
     // guarantees a lossless roundtrip via decimal text. setprecision(15) was
     // exact only for ≤15 significant digits and corrupted full-precision
     // coefficients (e.g. filter design values) on dump→parse cycles.
-    out << std::setprecision(std::numeric_limits<double>::max_digits10) << number;
+    out += ::sonare::util::format_general(number, std::numeric_limits<double>::max_digits10);
   } else if (value.is_string()) {
-    out << '"' << escape_string(value.as_string()) << '"';
+    out += '"';
+    out += escape_string(value.as_string());
+    out += '"';
   } else if (value.is_array()) {
-    out << '[';
+    out += '[';
     const auto& array = value.as_array();
     for (std::size_t i = 0; i < array.size(); ++i) {
-      if (i) out << ',';
+      if (i) out += ',';
       dump_value(array[i], out);
     }
-    out << ']';
+    out += ']';
   } else {
-    out << '{';
+    out += '{';
     bool first = true;
     for (const auto& [key, child] : value.as_object()) {
-      if (!first) out << ',';
+      if (!first) out += ',';
       first = false;
-      out << '"' << escape_string(key) << "\":";
+      out += '"';
+      out += escape_string(key);
+      out += "\":";
       dump_value(child, out);
     }
-    out << '}';
+    out += '}';
   }
 }
 
 inline std::string dump(const Value& value) {
-  std::ostringstream out;
-  // Imbue classic locale so number formatting uses "." as the decimal separator
-  // regardless of the process LC_NUMERIC (matches the parser's behavior).
-  out.imbue(std::locale::classic());
+  std::string out;
   dump_value(value, out);
-  return out.str();
+  return out;
 }
 
-inline void dump_value_pretty(const Value& value, std::ostringstream& out, int indent,
-                              int current_depth) {
+inline void dump_value_pretty(const Value& value, std::string& out, int indent, int current_depth) {
   const auto write_indent = [&](int depth) {
-    for (int i = 0; i < depth * indent; ++i) out << ' ';
+    out.append(static_cast<std::size_t>(depth * indent), ' ');
   };
   if (value.is_array()) {
     const auto& array = value.as_array();
     if (array.empty()) {
-      out << "[]";
+      out += "[]";
       return;
     }
-    out << "[\n";
+    out += "[\n";
     for (std::size_t i = 0; i < array.size(); ++i) {
       write_indent(current_depth + 1);
       dump_value_pretty(array[i], out, indent, current_depth + 1);
-      if (i + 1 != array.size()) out << ',';
-      out << '\n';
+      if (i + 1 != array.size()) out += ',';
+      out += '\n';
     }
     write_indent(current_depth);
-    out << ']';
+    out += ']';
     return;
   }
   if (value.is_object()) {
     const auto& object = value.as_object();
     if (object.empty()) {
-      out << "{}";
+      out += "{}";
       return;
     }
-    out << "{\n";
+    out += "{\n";
     std::size_t emitted = 0;
     for (const auto& [key, child] : object) {
       write_indent(current_depth + 1);
-      out << '"' << escape_string(key) << "\": ";
+      out += '"';
+      out += escape_string(key);
+      out += "\": ";
       dump_value_pretty(child, out, indent, current_depth + 1);
-      if (++emitted != object.size()) out << ',';
-      out << '\n';
+      if (++emitted != object.size()) out += ',';
+      out += '\n';
     }
     write_indent(current_depth);
-    out << '}';
+    out += '}';
     return;
   }
   dump_value(value, out);
@@ -550,10 +551,9 @@ inline void dump_value_pretty(const Value& value, std::ostringstream& out, int i
 /// @details Convenient for human-readable schemas/example files. Reuses the
 ///          same NaN/Inf rejection as @ref dump.
 inline std::string dump_pretty(const Value& value, int indent = 2) {
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
+  std::string out;
   dump_value_pretty(value, out, indent, 0);
-  return out.str();
+  return out;
 }
 
 }  // namespace SONARE_JSON_NAMESPACE

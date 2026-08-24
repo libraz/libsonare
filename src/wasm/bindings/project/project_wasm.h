@@ -15,7 +15,6 @@
 
 #include <cstring>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -43,10 +42,11 @@ inline val projectCompileResultToVal(const SonareProjectCompileResult& result) {
   const std::string messages(result.messages != nullptr ? result.messages : "");
   out.set("messages", messages);
   std::vector<std::string> diagnostic_messages;
-  std::stringstream message_stream(messages);
-  std::string line;
-  while (std::getline(message_stream, line)) {
-    diagnostic_messages.push_back(line);
+  for (size_t start = 0; start < messages.size();) {
+    size_t end = messages.find('\n', start);
+    if (end == std::string::npos) end = messages.size();
+    diagnostic_messages.emplace_back(messages, start, end - start);
+    start = end + 1;
   }
   val diagnostics = val::array();
   for (size_t i = 0; i < result.diagnostic_count; ++i) {

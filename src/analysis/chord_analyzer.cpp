@@ -6,7 +6,6 @@
 #include <cmath>
 #include <limits>
 #include <map>
-#include <sstream>
 
 #include "core/convert.h"
 #include "feature/nnls_chroma.h"
@@ -832,18 +831,18 @@ void ChordAnalyzer::merge_short_segments() {
 std::string ChordAnalyzer::progression_pattern() const {
   if (chords_.empty()) return "";
 
-  std::ostringstream oss;
+  std::string out;
   bool first = true;
 
   for (const auto& chord : chords_) {
     if (!first) {
-      oss << " - ";
+      out += " - ";
     }
-    oss << chord.to_string();
+    out += chord.to_string();
     first = false;
   }
 
-  return oss.str();
+  return out;
 }
 
 std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass key_root,

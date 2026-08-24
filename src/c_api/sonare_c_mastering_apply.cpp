@@ -2,7 +2,6 @@
 
 #include <cstring>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -24,10 +23,11 @@ sonare::util::json::Array newline_name_array(const char* names) {
   sonare::util::json::Array values;
   if (names == nullptr) return values;
 
-  std::istringstream input(names);
-  std::string name;
-  while (std::getline(input, name)) {
-    if (!name.empty()) values.emplace_back(std::move(name));
+  for (const char* line = names; *line != '\0';) {
+    const char* end = line;
+    while (*end != '\0' && *end != '\n') ++end;
+    if (end != line) values.emplace_back(std::string(line, static_cast<size_t>(end - line)));
+    line = (*end == '\0') ? end : end + 1;
   }
   return values;
 }
@@ -271,12 +271,10 @@ const char* sonare_mastering_insert_param_names(const char* name) {
     return names.c_str();
   }
   const auto list = sonare::mastering::api::insert_param_names(name);
-  std::ostringstream stream;
   for (size_t index = 0; index < list.size(); ++index) {
-    if (index > 0) stream << '\n';
-    stream << list[index];
+    if (index > 0) names += '\n';
+    names += list[index];
   }
-  names = stream.str();
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }

@@ -10,7 +10,6 @@
 #include <limits>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -166,19 +165,19 @@ void fill_compile_result_from_diagnostics(const std::vector<arr::Diagnostic>& di
   if (diagnostics.empty()) return;
 
   out->diagnostics = new SonareProjectDiagnostic[diagnostics.size()];
-  std::ostringstream stream;
+  std::string joined;
   for (size_t i = 0; i < diagnostics.size(); ++i) {
     const arr::Diagnostic& d = diagnostics[i];
     out->diagnostics[i].code = static_cast<uint32_t>(d.code);
     out->diagnostics[i].severity = static_cast<uint32_t>(d.severity);
     out->diagnostics[i].target_id = d.target_id;
-    if (i > 0) stream << '\n';
+    if (i > 0) joined += '\n';
     std::string message = d.message;
     std::replace(message.begin(), message.end(), '\n', ' ');
     std::replace(message.begin(), message.end(), '\r', ' ');
-    stream << message;
+    joined += message;
   }
-  out->messages = copy_string(stream.str());
+  out->messages = copy_string(joined);
 }
 
 bool valid_midi_event_pod(const SonareMidiEventPod& event) noexcept {

@@ -4,7 +4,6 @@
 #include <deque>
 #include <limits>
 #include <memory>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -205,12 +204,11 @@ inline SonareError copy_audio_result(const Audio& result, float** out, size_t* o
 /// @brief Joins @p values with '\n' into @p storage and returns a borrowed
 ///        pointer to the stored string's buffer (valid while @p storage lives).
 inline const char* join_names(const std::vector<std::string>& values, std::string& storage) {
-  std::ostringstream stream;
+  storage.clear();
   for (size_t index = 0; index < values.size(); ++index) {
-    if (index > 0) stream << '\n';
-    stream << values[index];
+    if (index > 0) storage += '\n';
+    storage += values[index];
   }
-  storage = stream.str();
   return storage.c_str();
 }
 

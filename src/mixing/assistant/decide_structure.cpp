@@ -17,12 +17,10 @@
 // to propose an effect bus therefore lives behind the same switch, including
 // the headers it needs.
 #if defined(SONARE_BUILD_FX) && SONARE_BUILD_FX
-#include <iomanip>
-#include <locale>
-#include <sstream>
 
 #include "util/constants.h"
 #include "util/json.h"
+#include "util/number_format.h"
 #endif
 
 namespace sonare::mixing::assistant {
@@ -252,13 +250,10 @@ constexpr int kReasonDecimals = 1;
 std::string format_db(float value) {
   // Negative zero would print as "-0.0" and read as a real downward move.
   if (value == 0.0f) value = 0.0f;
-  std::ostringstream out;
-  // Classic locale, so the decimal point is a point wherever the host runs. A
-  // reason string is read by a person and parsed by nobody, but a comma in the
-  // middle of a number reads as a second number.
-  out.imbue(std::locale::classic());
-  out << std::fixed << std::setprecision(kReasonDecimals) << value;
-  return out.str();
+  // The decimal point is a point wherever the host runs. A reason string is read
+  // by a person and parsed by nobody, but a comma in the middle of a number
+  // reads as a second number.
+  return sonare::util::format_fixed(static_cast<double>(value), kReasonDecimals);
 }
 
 // Not a level: the sentinel says the class is not fed to that effect at all. A

@@ -7,12 +7,11 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <iomanip>
-#include <locale>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "util/number_format.h"
 
 namespace sonare::mixing::assistant {
 namespace {
@@ -153,20 +152,15 @@ constexpr std::array<GenreTableEntry, 0> kGenreTableMap{};
 std::string format_signed_db(float value) {
   // Negative zero would print as "-0.0" and read as a real downward move.
   if (value == 0.0f) value = 0.0f;
-  std::ostringstream out;
-  // Classic locale, so the decimal point is a point wherever the host runs. A
-  // reason string is read by a person and parsed by nobody, but a comma in the
-  // middle of a number reads as a second number.
-  out.imbue(std::locale::classic());
-  out << std::fixed << std::showpos << std::setprecision(kReasonDecimals) << value;
-  return out.str();
+  // The decimal point is a point wherever the host runs. A reason string is read
+  // by a person and parsed by nobody, but a comma in the middle of a number
+  // reads as a second number.
+  return sonare::util::format_fixed(static_cast<double>(value), kReasonDecimals,
+                                    /*force_sign=*/true);
 }
 
 std::string format_confidence(float value) {
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
-  out << std::fixed << std::setprecision(kConfidenceDecimals) << value;
-  return out.str();
+  return sonare::util::format_fixed(static_cast<double>(value), kConfidenceDecimals);
 }
 
 float offset_for(const BalanceTable& table, SourceClass source) noexcept {

@@ -71,12 +71,14 @@ namespace {
 #if defined(SONARE_WITH_ARRANGEMENT)
 std::string serialize_deserialize_diagnostics(
     const std::vector<sonare::serialize::Diagnostic>& diagnostics) {
-  std::ostringstream stream;
+  std::string joined;
   for (size_t i = 0; i < diagnostics.size(); ++i) {
-    if (i > 0) stream << '\n';
-    stream << diagnostics[i].code << ": " << diagnostics[i].message;
+    if (i > 0) joined += '\n';
+    joined += diagnostics[i].code;
+    joined += ": ";
+    joined += diagnostics[i].message;
   }
-  return stream.str();
+  return joined;
 }
 #endif
 

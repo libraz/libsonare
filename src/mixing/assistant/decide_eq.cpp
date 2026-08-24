@@ -7,9 +7,6 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <iomanip>
-#include <locale>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +17,7 @@
 #include "mixing/api/scene.h"
 #include "util/constants.h"
 #include "util/json.h"
+#include "util/number_format.h"
 
 namespace sonare::mixing::assistant {
 
@@ -297,25 +295,16 @@ constexpr int kReasonDecimals = 1;
 std::string format_db(float value) {
   // Negative zero would print as "-0.0" and read as a real move.
   if (value == 0.0f) value = 0.0f;
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
-  out << std::fixed << std::setprecision(kReasonDecimals) << value;
-  return out.str();
+  return sonare::util::format_fixed(static_cast<double>(value), kReasonDecimals);
 }
 
 std::string format_hz(float value) {
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
-  out << std::fixed << std::setprecision(0) << value;
-  return out.str();
+  return sonare::util::format_fixed(static_cast<double>(value), 0);
 }
 
 // A share in [0, 1] read back as the percentage a mixer would say out loud.
 std::string format_percent(float share) {
-  std::ostringstream out;
-  out.imbue(std::locale::classic());
-  out << std::fixed << std::setprecision(kReasonDecimals) << share * 100.0f;
-  return out.str() + "%";
+  return sonare::util::format_fixed(static_cast<double>(share * 100.0f), kReasonDecimals) + "%";
 }
 
 int source_priority(SourceClass source) {

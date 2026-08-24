@@ -16,6 +16,7 @@ add_executable(sonare_tests
   util/types_test.cpp
   util/lru_cache_test.cpp
   util/json_test.cpp
+  util/number_format_test.cpp
   util/frame_test.cpp
   util/padding_test.cpp
   util/peak_test.cpp
@@ -268,6 +269,7 @@ if(BUILD_MIXING)
     mixing/surround_panner_test.cpp
     mixing/no_alloc_mastering_eq_test.cpp
     mixing/no_alloc_mastering_dynamics_test.cpp
+    mixing/no_alloc_insert_factory_test.cpp
     mixing/no_alloc_voice_reverb_test.cpp
     mixing/routing_latency_test.cpp
     mixing/routing_scene_test.cpp

@@ -4,11 +4,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <iomanip>
 #include <limits>
-#include <locale>
 #include <memory>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -98,6 +95,7 @@
 #include "acoustic/rir_synthesizer.h"
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/room_reverb.h"
+#include "util/number_format.h"
 #include "util/zero_is_default.h"
 #endif
 #endif
@@ -1259,7 +1257,7 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
 // Renders a catalog number as JSON text. The precision is the shortest that
 // round-trips through `float` — the storage nearly every mastering config field
 // uses — widened so a value with an integer part never comes out in exponent
-// form. Formatting goes through the classic locale because a host that switched
+// form. Formatting is locale-independent because a host that switched
 // LC_NUMERIC would otherwise emit a decimal comma into a JSON document.
 std::string format_catalog_number(double value) {
   if (!std::isfinite(value)) return "null";
@@ -1270,15 +1268,11 @@ std::string format_catalog_number(double value) {
   }
   std::string widest;
   for (int precision = 1; precision <= std::numeric_limits<double>::max_digits10; ++precision) {
-    std::ostringstream rendered;
-    rendered.imbue(std::locale::classic());
-    rendered << std::defaultfloat << std::setprecision(std::max(precision, integer_digits))
-             << value;
-    widest = rendered.str();
-    std::istringstream parsed(widest);
-    parsed.imbue(std::locale::classic());
+    widest = sonare::util::format_general(value, std::max(precision, integer_digits));
     double round_trip = 0.0;
-    parsed >> round_trip;
+    if (!sonare::util::parse_double(widest.data(), widest.data() + widest.size(), &round_trip)) {
+      continue;
+    }
     if (static_cast<float>(round_trip) == static_cast<float>(value)) return widest;
   }
   return widest;
