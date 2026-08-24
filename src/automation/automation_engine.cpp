@@ -41,8 +41,7 @@ void AutomationEngine::set_parameter_metadata(std::vector<ParameterInfo> paramet
     info.name = "";
     info.unit = "";
   }
-  std::sort(parameters.begin(), parameters.end(),
-            [](const ParameterInfo& a, const ParameterInfo& b) { return a.id < b.id; });
+  std::sort(parameters.begin(), parameters.end(), parameter_info_id_before);
   parameter_metadata_.publish(
       std::make_shared<const std::vector<ParameterInfo>>(std::move(parameters)));
 }

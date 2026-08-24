@@ -364,10 +364,21 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   // standard deviations and is divided by the scale at which that gap counts as
   // certainty. A single candidate was never compared against anything, so it
   // reports no margin rather than treating its own score as one.
-  std::vector<float> sorted_scores = result_.candidate_scores;
-  std::sort(sorted_scores.begin(), sorted_scores.end(), std::greater<float>());
+  // Only the top two scores are read, so this is a linear scan rather than a
+  // descending sort -- which would also be a second std::sort instantiation over
+  // float, for the sake of two elements.
+  float top_score = -std::numeric_limits<float>::infinity();
+  float second_score = -std::numeric_limits<float>::infinity();
+  for (const float score : result_.candidate_scores) {
+    if (score > top_score) {
+      second_score = top_score;
+      top_score = score;
+    } else if (score > second_score) {
+      second_score = score;
+    }
+  }
   const float margin =
-      sorted_scores.size() > 1 ? std::max(0.0f, sorted_scores[0] - sorted_scores[1]) : 0.0f;
+      result_.candidate_scores.size() > 1 ? std::max(0.0f, top_score - second_score) : 0.0f;
   float confidence = std::clamp(0.45f + margin / kConfidenceMarginScale, 0.0f, 1.0f);
 
   int denominator = config_.denominator;

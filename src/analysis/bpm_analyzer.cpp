@@ -233,6 +233,13 @@ float three_peak_octave_correction(const std::vector<BpmCandidate>& candidates, 
 
 namespace {
 
+// One comparator rather than an equivalent lambda per call site: a lambda has
+// its own closure type, so each one instantiates std::sort's machinery again for
+// the same element type.
+bool bpm_candidate_more_confident(const BpmCandidate& a, const BpmCandidate& b) {
+  return a.confidence > b.confidence;
+}
+
 /// @brief Computes autocorrelation of a signal using shared FFT-based implementation.
 std::vector<float> compute_autocorrelation_local(const std::vector<float>& signal, int max_lag) {
   std::vector<float> autocorr(max_lag, 0.0f);
@@ -303,9 +310,7 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
   }
 
   /// Sort by confidence (descending)
-  std::sort(candidates.begin(), candidates.end(), [](const BpmCandidate& a, const BpmCandidate& b) {
-    return a.confidence > b.confidence;
-  });
+  std::sort(candidates.begin(), candidates.end(), bpm_candidate_more_confident);
 
   return candidates;
 }
@@ -367,9 +372,7 @@ std::vector<float> extract_fourier_local_bpm_curve(const std::vector<float>& ons
       frame_candidates.push_back({bpm, value});
     }
 
-    std::sort(
-        frame_candidates.begin(), frame_candidates.end(),
-        [](const BpmCandidate& a, const BpmCandidate& b) { return a.confidence > b.confidence; });
+    std::sort(frame_candidates.begin(), frame_candidates.end(), bpm_candidate_more_confident);
     if (!frame_candidates.empty() && frame_candidates.front().confidence > 0.0f) {
       curve[static_cast<size_t>(frame)] =
           three_peak_octave_correction(frame_candidates, bpm_min, bpm_max);

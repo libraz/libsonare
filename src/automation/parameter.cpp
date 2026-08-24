@@ -19,8 +19,7 @@ bool ParameterRegistry::add(ParameterInfo info) {
     return false;
   }
   parameters_.push_back(info);
-  std::sort(parameters_.begin(), parameters_.end(),
-            [](const ParameterInfo& a, const ParameterInfo& b) { return a.id < b.id; });
+  std::sort(parameters_.begin(), parameters_.end(), parameter_info_id_before);
   return true;
 }
 

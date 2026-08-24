@@ -7,6 +7,16 @@
 #include "util/db.h"
 
 namespace sonare::acoustic_detail {
+namespace {
+
+// One comparator rather than an equivalent lambda per call site: a lambda has
+// its own closure type, so each one instantiates std::sort's machinery again for
+// the same element type.
+bool decay_region_before(const DecayRegion& a, const DecayRegion& b) {
+  return a.first < b.first || (a.first == b.first && a.last < b.last);
+}
+
+}  // namespace
 
 std::vector<DecayRegion> detect_free_decay_regions(const FrameEnergy& frames, float min_decay_db,
                                                    float noise_floor_margin_db) {
@@ -165,9 +175,7 @@ std::vector<DecayRegion> map_sample_regions_to_frames(const std::vector<SampleDe
       mapped.push_back({first_index, last_index});
     }
   }
-  std::sort(mapped.begin(), mapped.end(), [](const DecayRegion& a, const DecayRegion& b) {
-    return a.first < b.first || (a.first == b.first && a.last < b.last);
-  });
+  std::sort(mapped.begin(), mapped.end(), decay_region_before);
   return mapped;
 }
 
@@ -351,10 +359,7 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
   auto lollmann_regions = map_sample_regions_to_frames(
       detect_lollmann_subframe_regions(analysis_samples, size, sample_rate), frames, sample_rate);
   decay_regions.insert(decay_regions.end(), lollmann_regions.begin(), lollmann_regions.end());
-  std::sort(decay_regions.begin(), decay_regions.end(),
-            [](const DecayRegion& a, const DecayRegion& b) {
-              return a.first < b.first || (a.first == b.first && a.last < b.last);
-            });
+  std::sort(decay_regions.begin(), decay_regions.end(), decay_region_before);
   float best_score = -1.0f;
   BlindRt60Estimate best;
   std::vector<DecayEstimateCandidate> candidates;

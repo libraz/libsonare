@@ -38,6 +38,14 @@ struct ParameterInfo {
   CurveType default_curve = CurveType::Linear;
 };
 
+/// @brief Orders parameter metadata by id.
+/// @details Shared rather than written as an equivalent lambda at each call
+///          site: a lambda has its own closure type, so every site instantiates
+///          std::sort's machinery again for the same element type.
+inline bool parameter_info_id_before(const ParameterInfo& a, const ParameterInfo& b) {
+  return a.id < b.id;
+}
+
 class ParameterRegistry {
  public:
   void clear();
