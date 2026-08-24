@@ -1307,12 +1307,12 @@ TEST_CASE("analyze_named_pair serializes a silent source as valid JSON",
 }
 
 TEST_CASE("named analysis JSON is locale-independent", "[mastering][chain][json][locale]") {
-  // A DAW plugin host may run with a comma-decimal locale. Setting LC_NUMERIC
-  // alone is not enough to reproduce the failure: a std::ostringstream carries
-  // the global C++ locale, not the C one, and writes "-21,7539" only once
-  // std::locale::global has been moved. Both are switched here so the test
-  // covers the stream path and any C-library formatting alike -- what an
-  // unimbued writer produces is `{"sourceLufs":-21,7539}`, a document that
+  // A DAW plugin host may run with a comma-decimal locale. LC_NUMERIC is the
+  // half that reaches the serializer -- util::json formats through snprintf and
+  // folds the separator back onto "." itself -- so it is the one that has to
+  // move for this to mean anything. std::locale::global is switched alongside
+  // it to cover any stream-based formatting a caller mixes in. What a writer
+  // without the fold produces is `{"sourceLufs":-21,7539}`, a document that
   // parses into a different shape rather than failing outright.
   struct LocaleSwitch {
     std::locale saved_global;

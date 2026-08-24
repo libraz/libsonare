@@ -366,8 +366,9 @@ std::vector<Connection> connections_from_value(const JsonValue& array) {
 
 // ---------------------------------------------------------------------------
 // Tree builders. util::json::dump emits numbers with max_digits10 precision
-// in the classic locale, which matches the format the walkers above expect
-// and survives a dump -> parse round-trip without coefficient drift.
+// and a "." decimal separator whatever LC_NUMERIC says, which matches the
+// format the walkers above expect and survives a dump -> parse round-trip
+// without coefficient drift.
 // ---------------------------------------------------------------------------
 
 JsonValue insert_to_value(const Insert& insert) {

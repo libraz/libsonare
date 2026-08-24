@@ -929,11 +929,12 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
   auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
-  // Built as a util::json tree rather than a hand-rolled ostringstream: these
-  // analyses legitimately return non-finite values (reference_loudness yields
-  // -inf LUFS for a silent source), and only util::json::dump maps those to
-  // `null` and pins the decimal separator to the classic locale. A raw stream
-  // would emit "-inf" and a comma decimal mark, neither of which parses.
+  // Built as a util::json tree rather than hand-rolled text: these analyses
+  // legitimately return non-finite values (reference_loudness yields -inf LUFS
+  // for a silent source), and only util::json::dump maps those to `null` and
+  // pins the decimal separator to "." whatever LC_NUMERIC says. Hand-rolled
+  // formatting would emit "-inf" and, on a comma-decimal host, a comma decimal
+  // mark -- neither of which parses.
   namespace json_ns = sonare::util::json;
   json_ns::Object root;
   if (name == "match.referenceLoudness") {
