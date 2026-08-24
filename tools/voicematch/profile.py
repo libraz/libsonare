@@ -352,6 +352,44 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
 # measure
 
 
+def committed_capture(cfg: dict, tracked: dict, manifest: dict) -> dict:
+    """The capture block a reference profile records: the method, never the identity.
+
+    The manifest is written from the merged configuration, so it carries the
+    untracked overlay's half — the plugin's component triple, and the preset
+    each slot was loaded from. Copying it through would put a product name into
+    a committed file, which is the one thing the split of a capture definition
+    into a tracked half and a `.local.json` half exists to prevent.
+
+    So the descriptive fields come from the tracked definition and only the
+    grid comes from the manifest — which is also what makes the manifest worth
+    reading here at all: it records what was *rendered*, and a resumed capture
+    can have covered less than the definition asks for.
+
+    Intersecting the two also drops the model's own grid. `render-grid` adds it
+    to the corpus as one more timbre on purpose, so that every tool reading a
+    corpus reads the model with no special case; a profile of the *reference*
+    is the one place that is wrong, since it would describe the thing being
+    measured as one of the measurements.
+    """
+    by_id = {t["id"]: t for t in tracked.get("timbres", [])}
+    manifest_timbres = [t for t in manifest["timbres"] if t["id"] in by_id]
+    return {
+        # The GM program the model answers this reference with. Recorded here
+        # rather than taken from whichever config a later `compare` is handed,
+        # so a profile cannot be diffed against a different instrument.
+        "program": int(cfg.get("program", 0)),
+        "params": manifest["params"],
+        "sample_rate": manifest["sample_rate"],
+        "gate_ms": manifest["gate_ms"],
+        "tail": manifest["tail"],
+        "preroll_ms": manifest["preroll_ms"],
+        "timbres": [by_id[t["id"]] for t in manifest_timbres],
+        "notes": manifest["notes"],
+        "velocities": manifest["velocities"],
+    }
+
+
 def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     manifest_path = corpus_dir / "manifest.json"
     if not manifest_path.exists():
@@ -376,25 +414,12 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         if i % 20 == 0:
             print(f"  {i}/{len(manifest['renders'])}", file=sys.stderr)
 
+    tracked = json.loads(Path(cfg["_path"]).read_text())
     profile = {
         "id": cfg["id"],
-        "label": cfg["label"],
+        "label": tracked["label"],
         "measured_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "capture": {
-            "plugin": manifest["plugin"],
-            # The GM program the model answers this reference with. Recorded here
-            # rather than taken from whichever config a later `compare` is handed,
-            # so a profile cannot be diffed against a different instrument.
-            "program": int(cfg.get("program", 0)),
-            "params": manifest["params"],
-            "sample_rate": manifest["sample_rate"],
-            "gate_ms": manifest["gate_ms"],
-            "tail": manifest["tail"],
-            "preroll_ms": manifest["preroll_ms"],
-            "timbres": manifest["timbres"],
-            "notes": manifest["notes"],
-            "velocities": manifest["velocities"],
-        },
+        "capture": committed_capture(cfg, tracked, manifest),
         "rows": rows,
         "summary": summarize(rows),
     }

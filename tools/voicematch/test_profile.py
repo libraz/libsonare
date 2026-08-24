@@ -274,6 +274,36 @@ def test_the_identity_guard_fails_on_a_capture_that_does_name_a_product(tmp_path
         assert_names_no_product("x", capture_dir=capture, reference_dir=reference)
 
 
+def test_measure_records_the_method_and_not_the_captured_product(tmp_path):
+    """The guard above checks the committed files; this checks what writes them.
+
+    A corpus manifest is written from the *merged* configuration, so it holds
+    the untracked overlay's half — the plugin triple, and the preset each slot
+    was loaded from. Copying that block through is how a product name reaches a
+    committed reference, and the file guard only sees it once someone has
+    already measured and staged one.
+    """
+    tracked = {
+        "id": "x",
+        "label": "A method, stated without naming a product",
+        "timbres": [{"id": "t", "label": "The registration, described"}],
+    }
+    manifest = {
+        "plugin": "aumu:xxxx:Yyyy",
+        "params": [], "sample_rate": 48000, "gate_ms": 1000, "tail": "2s",
+        "preroll_ms": 100, "notes": [60], "velocities": [100],
+        "timbres": [
+            {"id": "t", "label": "Product Name 9 Concert", "preset": "Product/Close.vstpreset"},
+            {"id": "model", "label": "libsonare, GM program 19"},
+        ],
+    }
+    block = profile_module.committed_capture({"program": 19}, tracked, manifest)
+
+    assert "plugin" not in block
+    assert block["timbres"] == [{"id": "t", "label": "The registration, described"}]
+    assert block["notes"] == [60] and block["gate_ms"] == 1000
+
+
 def test_the_two_captures_with_references_name_their_program_and_phrase_set():
     """These two fields are what stop an instrument being measured as another.
 
