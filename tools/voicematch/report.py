@@ -23,6 +23,42 @@ from writeback import (
 )
 
 
+#: How far a fit may move the voice's whole-grid level before the report says so
+#: rather than leaving it to be noticed by ear. Generous, because a voicing
+#: change legitimately moves the level a little; anything past this is the fit
+#: having bought its shape with loudness.
+LEVEL_DRIFT_WARN_DB = 4.0
+
+
+def print_level_drift(evaluator) -> None:
+    """How far the winner moved the voice's overall level, which nothing charges for.
+
+    Every loss term is either normalised by the note's own level or measured
+    around the grid's median offset — deliberately, so that a fit does not spend
+    its budget on an output gain. The cost is that the offset itself is free: a
+    candidate that halves the voice and gets a slightly better spectrum wins,
+    and the report otherwise reads as an unqualified improvement.
+
+    Measured on a hi-hat fit that came back 31 dB down with its band profile
+    bit-identical to the same values at the original gain. So this is printed
+    always and not only past the threshold: a fit that held its level is worth
+    saying so about, since that is the case the reader is entitled to assume and
+    otherwise cannot check.
+    """
+    start = getattr(evaluator, "start_level_offset_db", None)
+    best = getattr(evaluator, "best_level_offset_db", None)
+    if start is None or best is None:
+        return
+    drift = best - start
+    print("\n== level ==")
+    print(f"  the winner's whole-grid level sits {drift:+.1f} dB against the start point "
+          f"({start:+.1f} -> {best:+.1f} dB against the reference)")
+    if abs(drift) >= LEVEL_DRIFT_WARN_DB:
+        print(f"  that is past {LEVEL_DRIFT_WARN_DB:.0f} dB and no term charged for it: "
+              f"check that the shape was not bought with loudness before keeping these "
+              f"values, since every metric above is level-normalised")
+
+
 def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> None:
     """Print the loss trajectory, per-knob deltas, and the source diff."""
     print("\n== loss trajectory (improvements only) ==")
@@ -64,6 +100,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         if margin < -0.005:
             print("  the fitted values are worse than the defaults on notes the fit never "
                   "saw; treat the result as overfitted to the probe")
+
+    print_level_drift(evaluator)
 
     print("\n== knob values (start -> best) ==")
     moved = 0

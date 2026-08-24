@@ -208,7 +208,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo import REPO_ROOT  # noqa: E402
 from build_lib import build_shared, configure_build, dylib_path  # noqa: E402
 from catalogue import Catalogue, drum_patch_key, dump_catalogue  # noqa: E402
-from corpus import Corpus, corpus_oracle, corpus_pattern, describe, load_corpus  # noqa: E402
+from corpus import (  # noqa: E402
+    PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
+    Corpus, corpus_oracle, corpus_pattern, describe, load_corpus,
+)
 from knobs import (  # noqa: E402
     at_bound,
     auto_spec,
@@ -343,10 +346,24 @@ def resolve_probe(args) -> None:
             args.notes = str(args.drum_note)
     corpus = resolve_corpus(args)
     if corpus is not None:
-        if args.drum_note is not None:
+        # A corpus and a drum note go together exactly when the corpus is itself
+        # a kit, captured on the drum channel. Against a pitched corpus the two
+        # are still alternatives — the probe would sound a channel the capture
+        # has no recordings for, and every slot would score model against
+        # silence.
+        if args.drum_note is not None and not corpus.percussive():
             raise ValueError(
-                "--corpus and --drum-note are alternatives: a captured corpus is a grid of "
-                "pitched single notes, and a drum probe scores a channel it has no captures for"
+                f"--drum-note needs a corpus captured on MIDI channel "
+                f"{CORPUS_PERCUSSION_CHANNEL}; the {corpus.timbre!r} corpus is a grid of "
+                f"pitched single notes, so a drum probe would score a channel it has no "
+                f"captures for"
+            )
+        if args.drum_note is None and corpus.percussive():
+            raise ValueError(
+                f"the {corpus.timbre!r} corpus is a kit, captured on MIDI channel "
+                f"{CORPUS_PERCUSSION_CHANNEL}; pass --drum-note N so the fit knows which "
+                f"piece's knobs to move — a kit has one patch per note and no register to "
+                f"interpolate across"
             )
         if getattr(args, "oracle_wav", ""):
             raise ValueError(
@@ -554,6 +571,10 @@ class Evaluator:
         self.loss = LossWeights(cli_weights(args))
         self.normalize = not args.raw_loss
         self.baseline_terms: dict[str, float] | None = None
+        # Where the model's whole-grid level sat at the start point and where
+        # the winner left it. The difference is what no loss term charges for.
+        self.start_level_offset_db: float | None = None
+        self.best_level_offset_db: float | None = None
         # A rebuild rewrites the shared tree, so its evaluations can only ever
         # run one at a time however many workers were asked for.
         self.workers = 1 if self.needs_rebuild else max(1, args.workers)
@@ -647,10 +668,19 @@ class Evaluator:
         if self.normalize and self.loss.scales is None and terms is not None:
             self.baseline_terms = dict(terms)
             self.loss.calibrate(terms)
+            self.start_level_offset_db = terms.get("level_offset_db")
         loss = self.loss.combine(terms)
         if loss < self.best_loss:
             self.best_loss = loss
             self.best_values = list(values)
+            # Kept alongside the best values because nothing else can recover
+            # it afterwards, and because it is the one number a fit can move
+            # freely: the level term scores the spread around the grid's median
+            # offset, so a candidate that bought its shape by making the voice
+            # quieter scores exactly as if it had not.
+            self.best_level_offset_db = (
+                None if terms is None else terms.get("level_offset_db")
+            )
         self.trajectory.append((self.best_loss, loss, self.stage))
         if not self.quiet:
             # float() before the format: a numpy scalar's repr would drown the

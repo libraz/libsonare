@@ -542,6 +542,58 @@ def test_an_unknown_drum_note_is_a_clear_error_not_an_empty_spec():
         auto_spec(0, Catalogue({"d038.gain": 1.0}, {}, {}), drum_note=99)
 
 
+def test_the_output_gain_is_not_offered_as_a_knob():
+    """No objective here can see it, so a search handed it uses it to hide with.
+
+    `gain` is applied after the nonlinearity, so it changes no shape, and every
+    loss term is either normalised by the note's own level or measured around
+    the grid's median offset. A fit that keeps it spends it absorbing whatever
+    level its other choices cost — measured on a hi-hat that came back 31 dB
+    down with a bit-identical band profile and a better score.
+    """
+    cat = Catalogue(
+        defaults={"d038.gain": 0.8, "d038.percussion.wire_buzz": 0.5,
+                  "violin.gain": 1.0, "violin.bowed_string.bow_force": 0.55},
+        programs={(40, 0): "violin"},
+        bounds={},
+    )
+    assert "d038.gain" not in {e["tunable"] for e in auto_spec(0, cat, drum_note=38)}
+    assert "violin.gain" not in {e["tunable"] for e in auto_spec(40, cat)}
+    # And the exclusion is by field name, not by a substring of the path.
+    assert "d038.percussion.wire_buzz" in {
+        e["tunable"] for e in auto_spec(0, cat, drum_note=38)
+    }
+
+
+def test_the_report_states_how_far_the_winner_moved_the_level():
+    """Always, and not only when it is large: the quiet case is the one to confirm."""
+    import io
+    from contextlib import redirect_stdout
+
+    from report import LEVEL_DRIFT_WARN_DB, print_level_drift
+
+    class _Ev:
+        start_level_offset_db = -2.0
+        best_level_offset_db = -2.0 - LEVEL_DRIFT_WARN_DB * 2
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        print_level_drift(_Ev())
+    out = buf.getvalue()
+    assert "-8.0 dB against the start point" in out
+    assert "bought with loudness" in out
+
+    class _Held(_Ev):
+        best_level_offset_db = -2.4
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        print_level_drift(_Held())
+    out = buf.getvalue()
+    assert "-0.4 dB against the start point" in out
+    assert "bought with loudness" not in out
+
+
 def test_a_drum_field_is_routed_to_the_drum_table_not_reported_as_unplaceable():
     knobs = [_knob("d038.percussion.wire_buzz"), _knob("fam3.piano.brightness")]
     per_patch, per_drum, other = patch_field_assignments(knobs, [0.9, 0.9])
@@ -1184,7 +1236,8 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
 # The captured corpus as a probe
 # --------------------------------------------------------------------------- #
 def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
-                  gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True) -> Path:
+                  gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True,
+                  channel=1) -> Path:
     """A miniature capture: one short tone per slot, plus the manifest beside it."""
     sr = 48000
     root.mkdir(parents=True, exist_ok=True)
@@ -1207,7 +1260,7 @@ def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
     (root / "manifest.json").write_text(json.dumps({
         "id": "mini", "sample_rate": sr, "gate_ms": gate_ms, "tail": "2s",
         "preroll_ms": preroll_ms, "dry": dry,
-        "timbres": [{"id": "t", "label": "mini timbre"}],
+        "timbres": [{"id": "t", "label": "mini timbre", "channel": channel}],
         "notes": list(notes), "velocities": list(velocities), "renders": renders,
     }))
     return root
@@ -1262,7 +1315,31 @@ def test_a_corpus_run_refuses_the_oracle_routes_that_would_contradict_it(tmp_pat
     with pytest.raises(ValueError, match="both name the reference"):
         resolve_probe(args)
     args = _probe_args(corpus=str(tmp_path / "c"), drum_note=38)
-    with pytest.raises(ValueError, match="alternatives"):
+    with pytest.raises(ValueError, match="pitched single notes"):
+        resolve_probe(args)
+
+
+def test_a_kit_corpus_and_a_drum_note_go_together_and_each_needs_the_other(tmp_path):
+    """The pairing is decided by the capture's channel, not by the flag alone.
+
+    A kit corpus IS a grid the drum probe has captures for, which is what makes
+    the two compatible; the refusal that used to be unconditional was written
+    before one existed. Both one-sided combinations stay refused: a drum probe
+    over a pitched corpus scores every slot against silence, and a kit corpus
+    with no drum note has no single patch to move, since a kit has one per note.
+    """
+    kit = _write_corpus(tmp_path / "kit", notes=(38, 42), velocities=(56, 120), channel=10)
+    corpus = load_corpus(kit)
+    assert corpus.percussive()
+    probe = corpus_pattern(corpus, notes=(42,), velocities=(56, 120))
+    assert probe.percussive and probe.channel == 9
+
+    args = _probe_args(corpus=str(kit), drum_note=42)
+    resolve_probe(args)
+    assert args.percussive
+
+    args = _probe_args(corpus=str(kit))
+    with pytest.raises(ValueError, match="pass --drum-note"):
         resolve_probe(args)
 
 

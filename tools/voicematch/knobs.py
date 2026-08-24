@@ -319,6 +319,18 @@ def _auto_range(
     return (lo, hi, True) if log else (lo, hi, False)
 
 
+#: Patch fields no objective in this harness can identify, so `--spec auto`
+#: does not offer them. `gain` is the voice's output scale, applied after the
+#: nonlinearity, so it changes no shape; and every loss term is either
+#: normalised by the note's own level or measured around the grid's median
+#: offset, precisely so that a fit does not spend its budget on an output gain.
+#: A search handed one anyway uses it to absorb whatever level its other
+#: choices cost, which is how a hi-hat fit ends 31 dB down with a better score.
+#: Measured: restoring `gain` on such a fit moves the peak by 31 dB and leaves
+#: every band of the profile bit-identical.
+UNIDENTIFIABLE_FIELDS = frozenset({"gain"})
+
+
 def auto_spec(
     program: int, catalogue: Catalogue, *, drum_note: int | None = None, bank: int = 0
 ) -> list[dict]:
@@ -359,7 +371,8 @@ def auto_spec(
                 f"the library did not report a patch for program {program}; "
                 f"rebuild with BUILD_TUNING=ON so the catalogue is written"
             )
-    patch_keys = sorted(k for k in defaults if k.startswith(key + "."))
+    patch_keys = sorted(k for k in defaults if k.startswith(key + ".")
+                        and k.rsplit(".", 1)[-1] not in UNIDENTIFIABLE_FIELDS)
     if not patch_keys:
         raise ValueError(f"no patch fields under {key!r} in the catalogue")
 

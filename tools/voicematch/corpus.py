@@ -36,6 +36,9 @@ from patterns import Pattern
 from smf import Note
 from wavio import read_wav
 
+#: One-based MIDI channel 10, the GM drum channel. `write_smf` counts from zero.
+PERCUSSION_CHANNEL = 10
+
 
 @dataclass(frozen=True)
 class Corpus:
@@ -56,9 +59,18 @@ class Corpus:
     #: capture is the instrument; a wet one has a room baked in that the model
     #: has to be placed in before any decay metric means anything.
     dry: bool = False
+    #: One-based MIDI channel the timbre was captured on. 10 is the drum
+    #: channel, where a note number selects an instrument rather than a pitch —
+    #: which decides both the channel the model's probe is written on and which
+    #: metric set can measure it.
+    channel: int = 1
 
     def slot_count(self) -> int:
         return len(self.notes) * len(self.velocities)
+
+    def percussive(self) -> bool:
+        """Whether this corpus's note numbers select instruments, not pitches."""
+        return self.channel == PERCUSSION_CHANNEL
 
 
 def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
@@ -113,11 +125,12 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
     else:
         slot_s = gate_s + _tail_seconds(manifest.get("tail", "2s"))
 
-    label = next(
-        (t.get("label", chosen) for t in manifest.get("timbres", [])
+    entry = next(
+        (t for t in manifest.get("timbres", [])
          if isinstance(t, dict) and t.get("id") == chosen),
-        chosen,
+        {},
     )
+    label = entry.get("label", chosen)
     return Corpus(
         root=root,
         timbre=chosen,
@@ -130,6 +143,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         velocities=tuple(sorted({v for _, v in renders})),
         label=label,
         dry=_dryness(manifest),
+        channel=int(entry.get("channel", 1)),
     )
 
 
@@ -204,7 +218,13 @@ def corpus_pattern(
             seq.append(Note(n, v, t, corpus.gate_s))
             t += corpus.slot_s
     tail = max(0.0, corpus.slot_s - corpus.gate_s)
-    return Pattern("corpus", seq, analysis_notes=list(seq), tail=tail)
+    # A kit corpus is captured on the drum channel, and the model's probe has to
+    # be written on the same one or its note numbers sound pitches of program 0
+    # while the oracle plays the kit. `percussive` then carries into which metric
+    # set can measure the pair.
+    return Pattern("corpus", seq, analysis_notes=list(seq), tail=tail,
+                   channel=PERCUSSION_CHANNEL - 1 if corpus.percussive() else 0,
+                   percussive=corpus.percussive())
 
 
 def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
