@@ -41,11 +41,20 @@ harmonic series and a probe rendered by both sides:
   hardest, and whether it moves monotonically. On a plucked instrument this is
   most of the instrument's identity and no timbre metric can see it.
 
+A capture whose timbres sit on MIDI channel 10 is measured with none of that.
+There its note numbers select instruments rather than pitches, so there is no
+fundamental for any of the six to be about, and what is measured instead is the
+1/3-octave band profile, the per-octave decay of it, the attack, the crest and
+the velocity response. That path is `measure_hit` and `compare_percussion`, and
+it is separate code rather than a branch: the columns that replace the pitched
+ones are not the same columns under different names.
+
 `compare` renders the same note-and-velocity grid through libsonare's GM
-fallback — on the program the capture names, not a fixed one — measures it the
-same way, and prints the differences. That is the part which says what to
-change. `--gate` holds those differences to bounds recorded earlier, which is
-what catches the change that improves one dimension by breaking another.
+fallback — on the program the capture names, not a fixed one, and on the channel
+it names — measures it the same way, and prints the differences. That is the
+part which says what to change. `--gate` holds those differences to bounds
+recorded earlier, which is what catches the change that improves one dimension
+by breaking another.
 """
 
 from __future__ import annotations
@@ -62,7 +71,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from capture import DEFAULT_CONFIG, load_config, out_root  # noqa: E402
-from metrics import _db, _peak_near, _rms_envelope, _spectrum, midi_to_hz, to_mono  # noqa: E402
+from metrics import (  # noqa: E402
+    THIRD_OCTAVE_CENTERS, _db, _peak_near, _rms_envelope, _spectrum, analyze_hit,
+    midi_to_hz, to_mono,
+)
 from render_model import render_model  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
 from wavio import read_wav, write_wav  # noqa: E402
@@ -76,6 +88,51 @@ PARTIAL_FLOOR_DB = -60.0
 # Fewer than this many partials and the two-parameter stiffness fit has no room
 # left over to be checked by; the value it returns is an interpolation.
 MIN_PARTIALS_FOR_B = 6
+# One-based MIDI channel 10, on which a note number selects an instrument
+# instead of a pitch. `write_smf` counts channels from zero.
+PERCUSSION_CHANNEL = 10
+# The 1/3-octave band centres `analyze_hit` reports, split into the two ends the
+# tilt is taken between. The middle is left out on purpose: a kit's body lives
+# there and every piece of it puts energy there, so including it averages the
+# two ends towards each other and the tilt stops separating a dull snare from a
+# bright one.
+TILT_LOW_HZ = 500.0
+TILT_HIGH_HZ = 2000.0
+# A model render whose loudest sample is under this is a kit piece the GM
+# fallback does not voice, not a quiet one. `analyze_hit` normalises the band
+# profile to its own loudest band, so silence comes back as a flat spectrum and
+# scores as a plausible instrument rather than as an absence.
+SILENT_HIT_DBFS = -80.0
+
+
+# --------------------------------------------------------------------------
+# which kind of instrument a capture is
+
+
+def is_percussion(cap: dict) -> bool:
+    """Whether this capture's note numbers select instruments rather than pitches.
+
+    Read off the MIDI channel rather than from a flag of its own. The channel is
+    where the distinction already lives — it is what makes a note number select
+    an instrument, on the reference as much as in libsonare — and a second field
+    saying the same thing is a field that can disagree with it.
+
+    All timbres or none: a capture holding a kit on channel 10 and a melodic
+    slot on channel 1 has no single answer, and guessing one would measure half
+    of it with the wrong metric set.
+    """
+    timbres = cap.get("timbres") or []
+    if not timbres:
+        return False
+    on_ten = [int(t.get("channel", 1)) == PERCUSSION_CHANNEL for t in timbres]
+    if any(on_ten) and not all(on_ten):
+        raise ValueError(
+            "capture mixes percussion and melodic timbres: "
+            f"{[t.get('id') for t, p in zip(timbres, on_ten) if p]} sit on MIDI "
+            f"channel {PERCUSSION_CHANNEL} and the rest do not. Split them into "
+            f"two capture definitions — one profile cannot be measured both ways"
+        )
+    return all(on_ten)
 
 
 # --------------------------------------------------------------------------
@@ -352,6 +409,29 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
 # measure
 
 
+def measure_hit(audio: np.ndarray, sr: int, note: int, velocity: int, *,
+                preroll_s: float, gate_s: float) -> dict:
+    """One percussion hit, as a profile row.
+
+    A struck instrument has no fundamental, so none of the measurements above it
+    apply: there is no partial to be inharmonic, no temperament to be stretched
+    against, and nothing for a tone-to-noise ratio to be a ratio of. What is
+    left is the shape of the spectrum, how each band of it decays, and how hard
+    the strike was — which is what `analyze_hit` reports.
+
+    `peak_dbfs` is carried alongside so the velocity response is measured for a
+    drum by exactly the code that measures it for a piano. It is also the only
+    axis a drum note has: a different note is a different instrument, not the
+    same one played higher.
+    """
+    mono = to_mono(audio)
+    hit = analyze_hit(mono, sr, Note(note, velocity, preroll_s, gate_s), len(mono) / sr)
+    row = hit.to_dict()
+    strike = mono[int(preroll_s * sr):]
+    row["peak_dbfs"] = round(float(_db(float(np.max(np.abs(strike))))), 2) if len(strike) else None
+    return row
+
+
 def committed_capture(cfg: dict, tracked: dict, manifest: dict) -> dict:
     """The capture block a reference profile records: the method, never the identity.
 
@@ -398,6 +478,7 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     manifest = json.loads(manifest_path.read_text())
     preroll_s = manifest["preroll_ms"] / 1000.0
     gate_s = manifest["gate_ms"] / 1000.0
+    percussion = is_percussion(cfg)
 
     rows = []
     for i, rec in enumerate(manifest["renders"], 1):
@@ -405,7 +486,10 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         if not path.exists():
             continue
         audio, sr = read_wav(path)
-        m = measure_note(audio, sr, rec["note"], preroll_s=preroll_s, gate_s=gate_s)
+        m = (measure_hit(audio, sr, rec["note"], rec["velocity"],
+                         preroll_s=preroll_s, gate_s=gate_s)
+             if percussion else
+             measure_note(audio, sr, rec["note"], preroll_s=preroll_s, gate_s=gate_s))
         if not m:
             print(f"  {rec['id']}: nothing measurable", file=sys.stderr)
             continue
@@ -421,12 +505,15 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         "measured_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "capture": committed_capture(cfg, tracked, manifest),
         "rows": rows,
-        "summary": summarize(rows),
+        "summary": summarize_percussion(rows) if percussion else summarize(rows),
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(profile, indent=1, ensure_ascii=False) + "\n")
     print(f"\n{len(rows)} measured notes -> {out_path}", file=sys.stderr)
-    print_summary(profile["summary"])
+    if percussion:
+        print_percussion_summary(profile["summary"])
+    else:
+        print_summary(profile["summary"])
     return 0
 
 
@@ -485,6 +572,11 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> in
     notes = manifest.get("notes") or cfg["notes"]
     velocities = manifest.get("velocities") or cfg["velocities"]
     tail_s = 2.0
+    # On a kit the channel is not a transport detail: it is what makes the note
+    # number select an instrument. Rendering the model's grid on channel 1 would
+    # play 47 pitches of whatever program 0 is and write them into the corpus
+    # under drum note names.
+    channel = PERCUSSION_CHANNEL - 1 if is_percussion(cfg) else 0
 
     out_dir = corpus_dir / timbre
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -494,7 +586,7 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> in
         ((n, v) for n in notes for v in velocities), start=1
     ):
         smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
-                        end_pad=tail_s)
+                        channel=channel, end_pad=tail_s)
         audio = render_model(smf, preroll_s + gate_s + tail_s, sr)
         rel = Path(timbre) / f"n{note:03d}_v{vel:03d}.wav"
         write_wav(corpus_dir / rel, np.asarray(audio), sr)
@@ -555,6 +647,60 @@ def summarize(rows: list[dict]) -> dict:
             [r for r in rows if r["timbre"] == timbre]
         )
     return out
+
+
+def summarize_percussion(rows: list[dict]) -> dict:
+    """The per-timbre curves of a kit: one instrument per note, not one curve.
+
+    Nothing here is interpolated across notes the way a keyboard's is. A kit's
+    note 38 and note 40 are two snares that happen to be adjacent, so a summary
+    that averaged them would be describing an instrument nobody owns; every
+    table below stays keyed by note, and velocity is the only axis reduced over.
+    """
+    out: dict = {}
+    for row in rows:
+        t = out.setdefault(row["timbre"], {"bands_db": {}, "band_decay_db_s": {},
+                                           "centroid_hz": {}, "attack_ms": {},
+                                           "decay_ms": {}, "crest_db": {},
+                                           "level_dbfs": {}})
+        n, v = str(row["note"]), str(row["velocity"])
+        for key, dest in (("bands_db", "bands_db"), ("band_decay_db_s", "band_decay_db_s"),
+                          ("centroid_hz", "centroid_hz"), ("attack_ms", "attack_ms"),
+                          ("decay_ms", "decay_ms"), ("crest_db", "crest_db"),
+                          ("level_db", "level_dbfs")):
+            if key in row:
+                t[dest].setdefault(n, {})[v] = row[key]
+    for timbre, t in out.items():
+        t["velocity_response"] = velocity_response(
+            [r for r in rows if r["timbre"] == timbre]
+        )
+    return out
+
+
+def print_percussion_summary(summary: dict) -> None:
+    for timbre, s in summary.items():
+        print(f"\n== {timbre} ==", file=sys.stderr)
+        notes = sorted(s["centroid_hz"], key=int)
+        if not notes:
+            continue
+        print("  note   centroid(Hz)   attack(ms)   decay(ms)   crest(dB)", file=sys.stderr)
+        for n in notes:
+            def loudest(table):
+                by_vel = table.get(n) or {}
+                return by_vel[max(by_vel, key=int)] if by_vel else float("nan")
+            print(f"  {int(n):4d}   {loudest(s['centroid_hz']):12.0f}   "
+                  f"{loudest(s['attack_ms']):10.1f}   {loudest(s['decay_ms']):9.0f}   "
+                  f"{loudest(s['crest_db']):9.1f}", file=sys.stderr)
+        vel = s.get("velocity_response") or {}
+        if vel:
+            ranges = [row["range_db"] for row in vel.values()]
+            non_mono = [int(n) for n, row in vel.items() if not row["monotonic"]]
+            print(f"  velocity range {min(ranges):.1f} to {max(ranges):.1f} dB "
+                  f"across {len(vel)} notes", file=sys.stderr)
+            if non_mono:
+                # On a kit this is usually a sample-layer boundary rather than
+                # an instrument that genuinely plays quieter when hit harder.
+                print(f"  (level is not monotonic in velocity at {non_mono})", file=sys.stderr)
 
 
 def print_summary(summary: dict) -> None:
@@ -769,6 +915,158 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     return 0
 
 
+def band_tilt_db(bands_db: list[float] | None) -> float | None:
+    """How much of a hit sits above 2 kHz rather than below 500 Hz.
+
+    `analyze_hit` normalises the band profile to its own loudest band, so a
+    whole-spectrum level offset has already been divided out and the only thing
+    left to compare is the shape. This is the one number of that shape a listener
+    would name first: a kit piece is dull or bright before it is anything else.
+    """
+    if not bands_db:
+        return None
+    centres = np.asarray(THIRD_OCTAVE_CENTERS[:len(bands_db)], dtype=np.float64)
+    vals = np.asarray(bands_db[:len(centres)], dtype=np.float64)
+    low, high = vals[centres <= TILT_LOW_HZ], vals[centres >= TILT_HIGH_HZ]
+    if not len(low) or not len(high):
+        return None
+    return float(np.mean(high) - np.mean(low))
+
+
+def band_shape_error_db(model: list[float] | None, ref: list[float] | None) -> float | None:
+    """RMS distance between two normalised band profiles.
+
+    A magnitude and never a direction, which is the point: the tilt above says
+    which way a hit is wrong and this says how much of the error the tilt failed
+    to account for. A piece can match on tilt and still be a different
+    instrument, with a resonance in the wrong band and a hole beside it.
+    """
+    if not model or not ref:
+        return None
+    n = min(len(model), len(ref))
+    if not n:
+        return None
+    diff = np.asarray(model[:n], dtype=np.float64) - np.asarray(ref[:n], dtype=np.float64)
+    return float(np.sqrt(np.mean(diff**2)))
+
+
+def mean_band_decay_delta(model: list, ref: list) -> float | None:
+    """Model-minus-reference decay rate, averaged over the octaves both resolved.
+
+    A band that decayed in neither render, or in only one of them, is left out
+    rather than counted as agreement: `analyze_hit` reports `None` there, and
+    a hit with no energy in a band has no decay rate to be right about.
+    """
+    pairs = [(m, r) for m, r in zip(model or [], ref or [])
+             if m is not None and r is not None]
+    return float(np.mean([m - r for m, r in pairs])) if pairs else None
+
+
+def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
+                       gate_path: str, write_gate: str, margin: float) -> int:
+    """Score the model against a captured kit, one instrument per note.
+
+    Separate from `compare` rather than a branch inside it, because almost
+    nothing carries over: there is no stretch, no inharmonicity, no damper and
+    no partial stack, and the columns that replace them are not the same columns
+    under different names. What is shared is the shape of the answer — a signed
+    and an absolute median per dimension — and the gate that holds it.
+    """
+    cap = profile["capture"]
+    preroll_s = cap["preroll_ms"] / 1000.0
+    gate_s = cap["gate_ms"] / 1000.0
+    tail_s = 2.0
+    sr = cap["sample_rate"]
+
+    ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
+    if not ref:
+        print(f"profile has no timbre {timbre!r}; it has "
+              f"{sorted({r['timbre'] for r in profile['rows']})}")
+        return 2
+
+    program = profile_program(profile, cfg)
+    pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
+    print(f"model vs {timbre}: {len(pairs)} hits, model on GM kit {program}, "
+          f"MIDI channel {PERCUSSION_CHANNEL}\n")
+    print(f"{'note':>5} {'vel':>4} | {'tilt Δdb':>9} {'shape db':>9} "
+          f"{'decay Δdb/s':>12} {'centroid Δ%':>12} {'attack Δms':>11} {'crest Δdb':>10}")
+    print("-" * 78)
+
+    deltas: dict[str, list[float]] = {}
+    peaks: dict[str, dict[int, dict[int, float]]] = {}
+    silent: list[tuple[int, int]] = []
+    for note, vel in pairs:
+        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
+                        channel=PERCUSSION_CHANNEL - 1, end_pad=tail_s)
+        audio = render_model(smf, preroll_s + gate_s + tail_s, sr)
+        m = measure_hit(audio, sr, note, vel, preroll_s=preroll_s, gate_s=gate_s)
+        r = ref[(note, vel)]
+        # A kit piece the model does not voice at all renders silence, and every
+        # normalised metric scores silence as a flat spectrum rather than as an
+        # absence. Named and left out, in the same way a capped release is.
+        if m.get("peak_dbfs") is None or m["peak_dbfs"] <= SILENT_HIT_DBFS:
+            silent.append((note, vel))
+            print(f"{note:5d} {vel:4d} | model renders nothing above "
+                  f"{SILENT_HIT_DBFS:.0f} dBFS")
+            continue
+
+        tilt_m, tilt_r = band_tilt_db(m.get("bands_db")), band_tilt_db(r.get("bands_db"))
+        row = {
+            "band_tilt": None if tilt_m is None or tilt_r is None else tilt_m - tilt_r,
+            "band_shape": band_shape_error_db(m.get("bands_db"), r.get("bands_db")),
+            "band_decay": mean_band_decay_delta(m.get("band_decay_db_s"),
+                                                r.get("band_decay_db_s")),
+            "attack": m["attack_ms"] - r["attack_ms"],
+            "crest": m["crest_db"] - r["crest_db"],
+            "centroid_pct": (100.0 * (m["centroid_hz"] / r["centroid_hz"] - 1.0)
+                             if r.get("centroid_hz") else None),
+        }
+        for k, v in row.items():
+            if v is not None and np.isfinite(v):
+                deltas.setdefault(k, []).append(float(v))
+        for side, src in (("m", m), ("r", r)):
+            if src.get("peak_dbfs") is not None:
+                peaks.setdefault(side, {}).setdefault(note, {})[vel] = src["peak_dbfs"]
+
+        def fmt(v, spec):
+            return (format(v, spec) if v is not None and np.isfinite(v)
+                    else "n/a".rjust(len(format(0, spec))))
+
+        print(f"{note:5d} {vel:4d} | {fmt(row['band_tilt'], '+9.1f')} "
+              f"{fmt(row['band_shape'], '9.1f')} {fmt(row['band_decay'], '+12.2f')} "
+              f"{fmt(row['centroid_pct'], '+12.1f')} {fmt(row['attack'], '+11.1f')} "
+              f"{fmt(row['crest'], '+10.1f')}")
+
+    if silent:
+        print(f"\n* {len(silent)} of {len(pairs)} hits are silent on the model side; "
+              f"shown, not counted:")
+        print("  " + ", ".join(f"n{n}v{v}" for n, v in silent))
+    for note, model_peaks in sorted(peaks.get("m", {}).items()):
+        ref_peaks = peaks.get("r", {}).get(note, {})
+        shared = sorted(set(model_peaks) & set(ref_peaks))
+        if len(shared) < 2:
+            continue
+        span = ([model_peaks[v] for v in shared], [ref_peaks[v] for v in shared])
+        deltas.setdefault("vel_range", []).append(
+            (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
+        )
+    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [])
+    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'rows':>5}")
+    for k, row in summary.items():
+        print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
+              f"{row['abs_median']:9.2f} {row['n']:5d}")
+    print("\n  A kit has no register to average along: every row is a different "
+          "instrument,\n  so the signed median says only how the kit leans as a whole and the "
+          "absolute\n  one is the column to read. `band shape` is a magnitude already and its "
+          "two\n  columns are the same number by construction.")
+
+    if gate_path:
+        return check_gate(summary, Path(gate_path), timbre)
+    if write_gate:
+        return write_gate_file(summary, Path(write_gate), timbre, margin)
+    return 0
+
+
 def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int],
             gate_path: str = "", write_gate: str = "", margin: float = 1.25) -> int:
     """Measure libsonare the same way and print the difference, dimension by dimension."""
@@ -776,6 +1074,9 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         print(f"no profile at {profile_path} — run `profile.py measure` first")
         return 2
     profile = json.loads(profile_path.read_text())
+    if is_percussion(profile["capture"]):
+        return compare_percussion(cfg, profile, timbre=timbre, notes_filter=notes_filter,
+                                  gate_path=gate_path, write_gate=write_gate, margin=margin)
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
@@ -896,7 +1197,12 @@ DELTA_LABELS = {"stretch": "tuning vs the reference (cents)",
                 "balance": "partial stack h2-h6 vs h1 (dB)",
                 "centroid_pct": "brightness (% of the reference centroid)",
                 "tnr": "tone-to-noise, + = model is cleaner (dB)",
-                "vel_range": "softest-to-hardest level range (dB)"}
+                "vel_range": "softest-to-hardest level range (dB)",
+                "band_tilt": "band tilt, + = model is brighter (dB)",
+                "band_shape": "band profile error, magnitude only (dB)",
+                "band_decay": "per-octave decay rate (dB/s)",
+                "attack": "time to the peak of the strike (ms)",
+                "crest": "peak over RMS of the hit (dB)"}
 
 
 def select_dimensions(summary: dict[str, dict], wanted: list[str]) -> dict[str, dict]:

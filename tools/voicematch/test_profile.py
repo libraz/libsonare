@@ -304,6 +304,82 @@ def test_measure_records_the_method_and_not_the_captured_product(tmp_path):
     assert block["notes"] == [60] and block["gate_ms"] == 1000
 
 
+def test_a_kit_is_recognised_from_the_channel_its_notes_are_played_on():
+    """Which metric set a capture gets, decided where the distinction already lives.
+
+    The failure this catches is silent and total: a kit whose channel went
+    missing is measured with the pitched metric set, and every note of it comes
+    back with a fundamental, a stretch and an inharmonicity, none of which a
+    drum has. It reads as a successful measurement of the wrong instrument.
+    """
+    from capture import load_config
+
+    here = Path(__file__).resolve().parent
+    for name, percussion in (("drums", True), ("piano", False), ("harpsichord", False),
+                             ("pipe_organ", False)):
+        cfg = load_config(here / "capture" / f"{name}.json")
+        assert profile_module.is_percussion(cfg) is percussion, name
+
+    # And from the committed reference, which is what `compare` actually reads:
+    # the channel has to survive into the profile or a later comparison decides
+    # differently from the measurement it is comparing against.
+    reference = REFERENCE_DIR / "drums.json"
+    if reference.exists():
+        assert profile_module.is_percussion(json.loads(reference.read_text())["capture"])
+
+
+def test_a_capture_that_mixes_a_kit_with_a_melodic_slot_is_refused():
+    """One profile cannot be measured both ways, and picking one would be wrong twice."""
+    with pytest.raises(ValueError, match="mixes percussion and melodic"):
+        profile_module.is_percussion(
+            {"timbres": [{"id": "kit", "channel": 10}, {"id": "lead", "channel": 1}]}
+        )
+
+
+def test_the_band_comparisons_report_a_direction_and_a_magnitude_separately():
+    """Tilt says which way a hit is wrong; shape says how much that failed to explain."""
+    flat = [0.0] * len(profile_module.THIRD_OCTAVE_CENTERS)
+    assert profile_module.band_tilt_db(flat) == pytest.approx(0.0)
+    assert profile_module.band_shape_error_db(flat, flat) == pytest.approx(0.0)
+
+    bright = [
+        0.0 if c >= profile_module.TILT_HIGH_HZ else -12.0
+        for c in profile_module.THIRD_OCTAVE_CENTERS
+    ]
+    assert profile_module.band_tilt_db(bright) == pytest.approx(12.0)
+    # Same tilt, different spectrum: a resonance in the wrong band with a hole
+    # beside it cancels out of the tilt and has to survive in the magnitude.
+    lumpy = list(flat)
+    lumpy[3], lumpy[4] = 9.0, -9.0
+    assert profile_module.band_tilt_db(lumpy) == pytest.approx(0.0, abs=1e-9)
+    assert profile_module.band_shape_error_db(lumpy, flat) > 2.0
+
+    assert profile_module.band_tilt_db(None) is None
+    assert profile_module.band_shape_error_db([], [0.0]) is None
+
+
+def test_a_band_that_decayed_on_only_one_side_is_left_out_of_the_decay_average():
+    """`analyze_hit` reports None for a band with no energy; that is not agreement."""
+    assert profile_module.mean_band_decay_delta([1.0, None, 3.0],
+                                                [0.0, 2.0, None]) == pytest.approx(1.0)
+    assert profile_module.mean_band_decay_delta([None], [1.0]) is None
+
+
+def test_measure_hit_reports_a_strike_and_not_a_fundamental():
+    """The pitched columns are absent rather than present and meaningless."""
+    sr = SR
+    noise = np.random.default_rng(0).normal(0, 0.2, int(sr * 0.4))
+    noise *= np.exp(-np.arange(len(noise)) / (0.05 * sr))
+    audio = np.concatenate([np.zeros(int(0.1 * sr)), noise])
+
+    row = profile_module.measure_hit(audio, sr, 38, 100, preroll_s=0.1, gate_s=0.05)
+
+    assert row["peak_dbfs"] is not None and row["peak_dbfs"] < 0.0
+    assert row["bands_db"] and max(row["bands_db"]) == pytest.approx(0.0)
+    for pitched in ("f0_hz", "cents_vs_et", "inharmonicity_b", "partials_db"):
+        assert pitched not in row
+
+
 def test_the_two_captures_with_references_name_their_program_and_phrase_set():
     """These two fields are what stop an instrument being measured as another.
 
