@@ -1,0 +1,95 @@
+{
+  "_": "The church organ fit against a captured single-note corpus. Run it with --corpus pointed at the capture directory and --corpus-timbre naming one of its registrations; the probe and its three-second gate then come from the manifest, so this fit and the reference profile score the same stimulus. The reference has a nave in it, so leave --room at auto: it measures the reverberation off the note tails and convolves a matching space onto the MODEL before scoring, and without that every knob here is spent on the building.",
+  "_weights": "Two terms are held at zero, both because they measure something other than this instrument.\n\n`env`: a chorus does not hold a steady level - its ranks beat against each other, 9.8 dB peak to peak over the measured window at C2 - so a sustain slope fitted here returns the beat's phase and not a decay, and the model's ranks beat against a tuning the reference's know nothing about.\n\n`tnr`: a rank below the played pitch is scored as noise by construction. The 16' sounds at f/2, so its partials land at f/2, 3f/2, 5f/2 - between the harmonics of f, which is where `analyze_note` looks for noise. Measured: taking `ranks0.level` from 0.42 to 0.02 leaves the partial stack at -5.21 dB and the brightness at -28 % to within a rounding error, and moves tone-to-noise from -8.25 dB to +2.22. Every bit of that knob's motion was the artefact. A fit that keeps this term deletes the 16' rank and reports an improvement.\n\n`harm` carries the fit instead: what this voice is measurably wrong about is the partial stack, which reads 11 dB short in the upperwork and widens to 21 dB by C7. `hf` is doubled because that deficit is a treble deficit before it is anything else.",
+  "weights": {
+    "harm": 2.0,
+    "cents": 0.5,
+    "tnr": 0.0,
+    "hf": 2.0,
+    "level": 1.0,
+    "env": 0.0
+  },
+  "_ranges": "Every range contains its compiled-in default with room on both sides, and the run names any knob that ends up pinned to one. The upper rank levels reach 1.0 rather than stopping short of it, because the measured deficit is in that direction and a bound that excludes the answer returns a result indistinguishable from one that does not.",
+  "_footage": "`ranks*.footage_mult` is deliberately absent, and it is the only field excluded rather than merely unlisted. It is fittable - bounded 0.25 to 16 - and a fitter given six free footages will land on whatever additive stack fits eleven notes, which is no longer a principal chorus and no longer transfers to the notes between them. The registration is a decision, not a residual. Adding these knobs is a re-voicing and should be a separate, deliberate run.",
+  "knobs": [
+    {
+      "_": "Per-rank harmonic content. The reference carries strong h6 and h8 and the model has no 1 1/3' or 1' rank, so those partials can only arrive as the upper harmonics of the ranks it does have. This is the lever the measured deficit points at, which is why all six are open here and only two were before.",
+      "tunable": "church_organ.pipe_organ.ranks0.brightness",
+      "min": 0.1,
+      "max": 0.95,
+      "scale": "linear"
+    },
+    {
+      "tunable": "church_organ.pipe_organ.ranks1.brightness",
+      "min": 0.3,
+      "max": 0.98,
+      "scale": "linear"
+    },
+    {
+      "tunable": "church_organ.pipe_organ.ranks2.brightness",
+      "min": 0.3,
+      "max": 0.98,
+      "scale": "linear"
+    },
+    {
+      "tunable": "church_organ.pipe_organ.ranks3.brightness",
+      "min": 0.3,
+      "max": 0.98,
+      "scale": "linear"
+    },
+    {
+      "tunable": "church_organ.pipe_organ.ranks4.brightness",
+      "min": 0.3,
+      "max": 0.98,
+      "scale": "linear"
+    },
+    {
+      "tunable": "church_organ.pipe_organ.ranks5.brightness",
+      "min": 0.3,
+      "max": 0.98,
+      "scale": "linear"
+    },
+    {
+      "_": "Rank levels, from the 4' up. `ranks0.level` - the 16' - is excluded: with `tnr` at zero it is inert on every remaining term, and with `tnr` on it is the term's favourite knob for the wrong reason. Its balance against the upperwork is a registration decision, and this grid cannot inform it.",
+      "tunable": "church_organ.pipe_organ.ranks2.level",
+      "min": 0.3,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "church_organ.pipe_organ.ranks3.level",
+      "min": 0.05,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "church_organ.pipe_organ.ranks4.level",
+      "min": 0.1,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "_": "The 1 3/5' default is 0.12, the lowest of the six, and the deficit is widest exactly where it speaks. Its range reaches 1.0 for that reason rather than by symmetry with the others.",
+      "tunable": "church_organ.pipe_organ.ranks5.level",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "_": "Whole-chorus voicing, which trades against the six per-rank brightnesses above - the correlation a covariance search exists to handle, and the reason this is a cmaes fit rather than a coordinate one.",
+      "tunable": "church_organ.pipe_organ.brightness",
+      "min": 0.2,
+      "max": 0.95,
+      "scale": "linear"
+    },
+    {
+      "_": "Speech noise. The reference reads 8 dB noisier than the model overall and the model is the cleaner one at every note above C4, which on a pipe is wind rather than a defect of the tone. `breath` is steady and lives in the sustain window, which is what separates it from `chiff` below.",
+      "tunable": "church_organ.pipe_organ.breath",
+      "min": 0.1,
+      "max": 0.7,
+      "scale": "linear"
+    }
+  ],
+  "_engine_constants": "There are none here, and there were two. Every knob in this spec is a field of the `church_organ` patch, so a bad fit can only make program 19 wrong; an engine constant is shared by every pipe organ voice in the library, including presets this corpus says nothing about, and one registration's eleven notes are not evidence enough to move one.\n\n`pipe_organ_voice.kToneCornerMult` is what taught it. As the one knob that darkens the top of the compass and not the bottom, it looked like the answer to a treble deficit that widens with pitch; the fit took it from 7.3 to 13.6 and inverted a physical property of the engine, since `pipe_organ_voice_test.cpp` measures a stopped rank's upper content against an open rank's and at 13.6 the stopped rank has more, which no gedackt does.\n\n`pipe_organ_voice.kEvenPumpGain` broke nothing and came out for the same reason. Dropping it costs 1.8 points of brightness and 0.37 dB of partial stack, measured. That is the price of the rule, and it is worth paying: the fit had no way to see what it was doing to the presets it never rendered.",
+  "_chiff":"`church_organ.pipe_organ.chiff` is excluded, having been in this spec once and driven to its zero bound. Measured afterwards: it leaves the sustain window bit-identical at 0.0, 0.38 and 0.9, and the 0-120 ms window it does reach moves 0.6 % at C4 and 0.4 % at C6, against the 5 to 19 dB the rank knobs move. So it is connected and inert - a null over a bound, not a result - and the fit spent a pipe's speech transient on a difference below the resolution of everything else it was weighing. A knob whose only evidence is an order of magnitude under the rest of the objective does not belong in the same run as them; fit it against a probe built for the attack, or by ear."
+}

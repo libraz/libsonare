@@ -462,20 +462,30 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   o.church_organ.amp_env = fallback_env(120.0f, 0.0f, 1.0f, 380.0f);
   o.church_organ.cutoff_hz = 20000.0f;
   o.church_organ.pipe_organ.tone_decay_s = 8.0f;
-  o.church_organ.pipe_organ.breath = 0.26f;
+  o.church_organ.pipe_organ.breath = 0.549198f;
   o.church_organ.pipe_organ.chiff = 0.38f;
   o.church_organ.pipe_organ.release_damp_s = 0.75f;
   // GM Church Organ: a principal chorus (plenum) — 16' stopped sub for gravity
   // under an 8'+4'+2-2/3'+2' open principal chorus, the upperwork brighter.
   // The upperwork (smaller pipes) radiates more brightly into the room than the
   // wide bass ranks: radiation rises rank by rank, the 16' bourdon staying dark.
+  // Levels and brightnesses are fitted against a measured chorus rather than
+  // chosen: the upperwork carries most of a plenum's sound and voicing it by ear
+  // had left the partial stack 11 dB short of the reference and widening to
+  // 21 dB by C7. The 2-2/3' quint sits at its clamp maximum, which is the model
+  // saying it cannot supply that rank's share any other way.
   o.church_organ.pipe_organ.rank_count = 6;
-  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.4f, 0.42f, 0.0f, 0.0f};  // 16'
-  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.8f, 1.0f, 0.0f, 0.3f};     // 8' principal
-  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.63f, 0.89f, 0.0f, 0.45f};  // 4' octave
-  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.7f, 0.5f, 0.0f, 0.55f};    // 2-2/3' quint
-  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.72f, 0.55f, 0.0f, 0.6f};   // 2' super-octave
-  o.church_organ.pipe_organ.ranks[5] = {5.0f, false, 0.6f, 0.12f, 0.0f, 0.6f};    // 1-3/5' tierce
+  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.232389f, 0.42f, 0.0f,
+                                        0.0f};                                      // 16'
+  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.841979f, 1.0f, 0.0f, 0.3f};  // 8' principal
+  o.church_organ.pipe_organ.ranks[2] = {2.0f,      false, 0.636014f,
+                                        0.978447f, 0.0f,  0.45f};                    // 4' octave
+  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.476471f, 1.0f, 0.0f, 0.55f};  // 2-2/3' quint
+  o.church_organ.pipe_organ.ranks[4] = {4.0f,      false, 0.712067f,
+                                        0.918024f, 0.0f,  0.6f};  // 2' super-octave
+  o.church_organ.pipe_organ.ranks[5] = {5.0f,      false, 0.369863f,
+                                        0.687749f, 0.0f,  0.6f};  // 1-3/5' tierce
+  o.church_organ.pipe_organ.brightness = 0.417552f;
   // Treble regulation: thin the upperwork (4'/quint/2'/tierce) toward the treble
   // so the plenum does not turn shrill above C4, while the bass and mid compass
   // keep the full chorus.
