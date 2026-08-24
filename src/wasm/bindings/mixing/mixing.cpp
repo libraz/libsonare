@@ -5,14 +5,7 @@
 
 #include "mixing_wasm.h"
 
-val js_mixing_scene_preset_names() {
-  val out = val::array();
-  auto names = mixing::api::scene_preset_names();
-  for (size_t index = 0; index < names.size(); ++index) {
-    out.call<void>("push", names[index]);
-  }
-  return out;
-}
+val js_mixing_scene_preset_names() { return stringVectorToVal(mixing::api::scene_preset_names()); }
 
 std::string js_mixing_scene_preset_json(std::string preset_name) {
   return mixing::api::scene_to_json(

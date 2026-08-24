@@ -237,13 +237,11 @@ std::string js_mixing_assistant_suggest_scene_json(val left_channels, val right_
 
 // Source-class identifiers the assistant can report, in enum order.
 val js_mixing_assistant_source_class_names() {
-  val out = val::array();
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  for (const std::string& name : assistant::source_class_names()) {
-    out.call<void>("push", name);
-  }
+  return stringVectorToVal(assistant::source_class_names());
+#else
+  return val::array();
 #endif
-  return out;
 }
 
 // Resolves a source-class identifier to its index in the names list, or -1 when

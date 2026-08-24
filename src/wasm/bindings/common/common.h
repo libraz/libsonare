@@ -132,6 +132,10 @@
 using namespace emscripten;
 using namespace sonare;
 
+/// @brief Copies @p names into a JS array of strings.
+/// @details One owner for a loop nine binding entry points had written out for
+///          themselves; each copy carried its own inlined embind push sequence.
+val stringVectorToVal(const std::vector<std::string>& names);
 val vectorToFloat32Array(const std::vector<float>& vec);
 val vectorToInt32Array(const std::vector<int>& vec);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
@@ -247,30 +251,46 @@ void requireOrdinalInRange(int value, int min, int max, const char* subject);
 /// is rejected instead of zero-filled — a missing boolean silently read as
 /// `false` has turned off a safety-critical DSP stage (the ISP limiter) in
 /// the past.
-template <typename T>
-T requireProperty(const val& object, const char* key, const char* subject) {
+/// @brief The numeric half of @ref requireProperty, shared by every arithmetic
+///        instantiation so the validation is compiled once rather than per type.
+inline double requireNumberProperty(const val& object, const char* key, const char* subject) {
   if (!hasProperty(object, key)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(subject) + "." + key + " is required");
   }
   const val value = object[key];
-  const std::string type = value.typeOf().as<std::string>();
-  if constexpr (std::is_same_v<T, bool>) {
-    if (type != "boolean") {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(subject) + "." + key + " must be a boolean");
-    }
-  } else {
-    if (type != "number") {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(subject) + "." + key + " must be a number");
-    }
-    if (!std::isfinite(value.as<double>())) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(subject) + "." + key + " must be finite");
-    }
+  if (value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " must be a number");
   }
-  return value.as<T>();
+  const double number = value.as<double>();
+  if (!std::isfinite(number)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " must be finite");
+  }
+  return number;
+}
+
+inline bool requireBoolProperty(const val& object, const char* key, const char* subject) {
+  if (!hasProperty(object, key)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " is required");
+  }
+  const val value = object[key];
+  if (value.typeOf().as<std::string>() != "boolean") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " must be a boolean");
+  }
+  return value.as<bool>();
+}
+
+template <typename T>
+T requireProperty(const val& object, const char* key, const char* subject) {
+  if constexpr (std::is_same_v<T, bool>) {
+    return requireBoolProperty(object, key, subject);
+  } else {
+    return static_cast<T>(requireNumberProperty(object, key, subject));
+  }
 }
 /// @brief Converts a JS object of {name -> number|boolean} into mastering params.
 /// @param skip_keys Keys the caller consumes itself and that must not reach the

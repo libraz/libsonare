@@ -26,6 +26,14 @@
 // JS-side `TypedArray.prototype.set(otherTypedArray)` fast path.
 // ---------------------------------------------------------------------------
 
+val stringVectorToVal(const std::vector<std::string>& names) {
+  val out = val::array();
+  for (const std::string& name : names) {
+    out.call<void>("push", name);
+  }
+  return out;
+}
+
 val vectorToFloat32Array(const std::vector<float>& vec) {
   const size_t n = vec.size();
   val result = val::global("Float32Array").new_(n);

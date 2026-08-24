@@ -437,10 +437,7 @@ RealtimeVoiceChangerWrapper* createRealtimeVoiceChanger(val config) {
 }
 
 val realtimeVoiceChangerPresetNames() {
-  val out = val::array();
-  const auto names = editing::voice_changer::realtime_voice_changer_preset_names();
-  for (size_t i = 0; i < names.size(); ++i) out.call<void>("push", names[i]);
-  return out;
+  return stringVectorToVal(editing::voice_changer::realtime_voice_changer_preset_names());
 }
 
 std::string realtimeVoiceChangerPresetJson(const std::string& id) {

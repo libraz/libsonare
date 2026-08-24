@@ -16,25 +16,13 @@
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
-val js_mastering_processor_names() {
-  val out = val::array();
-  auto names = mastering::api::processor_names();
-  for (size_t index = 0; index < names.size(); ++index) {
-    out.call<void>("push", names[index]);
-  }
-  return out;
-}
+val js_mastering_processor_names() { return stringVectorToVal(mastering::api::processor_names()); }
 
 // Names of the insert processors the mastering chain can instantiate by name
 // (mastering::api::insert_factory_names). Mirrors the C ABI
 // sonare_mastering_insert_names (which joins this list) as a string[].
 val js_mastering_insert_names() {
-  val out = val::array();
-  auto names = mastering::api::insert_factory_names();
-  for (size_t index = 0; index < names.size(); ++index) {
-    out.call<void>("push", names[index]);
-  }
-  return out;
+  return stringVectorToVal(mastering::api::insert_factory_names());
 }
 
 // Parameter names a given insert processor reads (mastering::api::insert_param_names).
@@ -129,14 +117,7 @@ std::string js_capability_catalog() {
 // supported. Pass null/undefined for "preset only".
 // ---------------------------------------------------------------------------
 
-val js_mastering_preset_names() {
-  val out = val::array();
-  auto names = mastering::api::preset_names();
-  for (const auto& name : names) {
-    out.call<void>("push", name);
-  }
-  return out;
-}
+val js_mastering_preset_names() { return stringVectorToVal(mastering::api::preset_names()); }
 
 val js_mastering_platform_names() {
   // Read from the shared delivery-target table, so the names a caller can pass
@@ -286,30 +267,15 @@ val js_master_audio_stereo_with_progress(std::string preset_name, val left_sampl
 }
 
 val js_mastering_pair_processor_names() {
-  val out = val::array();
-  auto names = mastering::api::pair_processor_names();
-  for (size_t index = 0; index < names.size(); ++index) {
-    out.call<void>("push", names[index]);
-  }
-  return out;
+  return stringVectorToVal(mastering::api::pair_processor_names());
 }
 
 val js_mastering_pair_analysis_names() {
-  val out = val::array();
-  auto names = mastering::api::pair_analysis_names();
-  for (size_t index = 0; index < names.size(); ++index) {
-    out.call<void>("push", names[index]);
-  }
-  return out;
+  return stringVectorToVal(mastering::api::pair_analysis_names());
 }
 
 val js_mastering_stereo_analysis_names() {
-  val out = val::array();
-  auto names = mastering::api::stereo_analysis_names();
-  for (size_t index = 0; index < names.size(); ++index) {
-    out.call<void>("push", names[index]);
-  }
-  return out;
+  return stringVectorToVal(mastering::api::stereo_analysis_names());
 }
 
 val js_mastering_process(std::string processor_name, val samples, int sample_rate, val params) {
