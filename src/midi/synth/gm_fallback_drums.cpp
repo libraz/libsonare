@@ -455,6 +455,37 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[72].percussion.exclusive_class = 4;
   t[39] = clap;  // Hand Clap
 
+  // --- radiated ceiling (mute group note) ---
+  // A real cymbal, snare or clap stops putting energy into the room well below
+  // Nyquist; the noise streams that voice them here do not, so every one of
+  // these pieces filled the top 1/3-octave band while the reference had rolled
+  // off by 4-6 kHz. Each corner below is solved rather than chosen: rendered,
+  // measured against the reference's own top edge, and iterated. The gain beside
+  // it restores the peak the ceiling costs, which is a re-gain the piece has to
+  // have in the same change - every metric in the comparison is normalised, so a
+  // level left 5 dB down reads as correct everywhere and is only audible.
+  //
+  // The hi-hats are absent on purpose. The ceiling does not reach them: taking
+  // their corner down to 200 Hz still leaves the top band filled while costing
+  // 60 dB of level, which says their brightness arrives by a path this filter is
+  // not in. Same for the shakers and scrapers, where it moves nothing at all.
+  t[38].percussion.noise_air_hz = 2032.0f;
+  t[38].gain = 2.931f;  // Acoustic Snare
+  t[39].percussion.noise_air_hz = 3125.0f;
+  t[39].gain = 0.858f;  // Hand Clap
+  t[40].percussion.noise_air_hz = 1984.0f;
+  t[40].gain = 1.828f;  // Electric Snare
+  t[49].percussion.noise_air_hz = 1000.0f;
+  t[49].gain = 2.696f;  // Crash 1
+  t[51].percussion.noise_air_hz = 2560.0f;
+  t[51].gain = 0.765f;  // Ride 1
+  t[52].percussion.noise_air_hz = 1562.0f;
+  t[52].gain = 0.663f;  // China
+  t[55].percussion.noise_air_hz = 800.0f;
+  t[55].gain = 1.090f;  // Splash
+  t[57].percussion.noise_air_hz = 1000.0f;
+  t[57].gain = 2.421f;  // Crash 2
+
   // --- PhISEM shakers + scrapers ---
   t[54] = make_shaker(32.0f, 120.0f, 2500.0f, 2.0f, 0.5f);   // Tambourine
   t[58] = make_shaker(24.0f, 400.0f, 2500.0f, 3.0f, 0.45f);  // Vibraslap
