@@ -70,12 +70,33 @@ option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
 # for the power-of-two sizes the STFT uses; KissFFT stays linked and serves every
 # transform length PFFFT cannot factor.
 #
-# The WebAssembly configuration is off by default. The vendored PFFFT does carry
-# a wasm-simd128 path, so this is a size decision rather than a capability one:
-# the module would carry both FFTs, and the shipped budget in
-# bindings/wasm/wasm-size-budget.json allows 2% -- roughly 8 kB gzip on the
-# analysis-only entry. Turning it on for WebAssembly means measuring the built
-# module and rebasing that budget in the same change.
+# The WebAssembly configuration is off by default, and it stays off because the
+# trade was measured rather than because it is untried. Three things decide it.
+#
+# The flag first: `-msimd128` is applied target by target to the sonare_*
+# libraries below and the vendored `pffft` target is not among them. PFFFT
+# selects its kernels from the compiler's own target macros, so without that
+# flag `__wasm_simd128__` is undefined, `pffft_simd_size()` reports 1 instead of
+# 4, and what gets compiled is the scalar path -- a second FFT that is not the
+# one worth carrying, and one that also shifts which lengths PFFFT serves, since
+# fft.cpp derives its granularity from that same value. Enabling the option here
+# means giving the `pffft` target the flag in the same change.
+#
+# Size, built with the flag and compared against bindings/wasm/wasm-size-budget.json:
+# the full module takes +0.47% raw / +0.49% gzip and fits inside the 2% the gate
+# allows, while the analysis-only module takes +2.55% raw / +2.70% gzip and does
+# not. Turning it on therefore also means re-recording that budget.
+#
+# Speed does not carry over from the native measurement and has to be taken on
+# WebAssembly. The phase-vocoder streaming benchmark (n_fft 2048, hop 512,
+# 48 kHz) moves from 11.70 to 10.73 ms per second of audio, -8.3%, well short of
+# the native STFT figure because that pipeline spends most of its time on phase
+# accumulation and overlap-add rather than in the transform. A transform-bound
+# workload should gain more; none is measured here, so that is a reason to
+# re-measure rather than a number to rely on.
+#
+# -8.3% on one pipeline does not pay for a budget rebase on the entry whose
+# whole point is being small, so the WebAssembly build keeps KissFFT alone.
 if(BUILD_WASM)
   set(SONARE_PFFFT_DEFAULT OFF)
 else()
@@ -175,6 +196,39 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Link-line de-duplication.
+#
+# CMake's default REORDER_MINIMALLY strategy emits a target's direct link
+# entries first, in their declared order, and then appends whatever the
+# transitive closure still needs. An archive that is both a direct dependency
+# and an indirect one therefore lands on the link line twice; with this tree's
+# feature-scoped archives that is nine repeats on the CLI and the shared
+# library, which Apple's linker reports as `ignoring duplicate libraries`.
+# REORDER_FREELY lets CMake merge the two passes and de-duplicate. Nothing here
+# intermixes raw link flags with libraries or relies on ordering between
+# independent entries, which is the control that strategy gives up.
+#
+# Older CMake ignores the variable and keeps the duplicated -- still correct --
+# link line.
+if(NOT CMAKE_VERSION VERSION_LESS 3.31)
+  set(CMAKE_LINK_LIBRARIES_STRATEGY REORDER_FREELY)
+
+  # What survives de-duplication is the sonare_core / sonare_pitch_editor pair:
+  # those two archives depend on each other (see src/CMakeLists.txt), and CMake
+  # answers a declared cycle by repeating both -- which GNU ld needs to resolve
+  # it and Apple's linker does not. Silence the report for that one deliberate
+  # case. Kept inside this branch so a CMake too old for REORDER_FREELY still
+  # reports the accidental duplicates, which are the ones worth seeing.
+  if(APPLE)
+    include(CheckLinkerFlag)
+    check_linker_flag(CXX "LINKER:-no_warn_duplicate_libraries"
+                      SONARE_LINKER_NO_WARN_DUPLICATE_LIBRARIES)
+    if(SONARE_LINKER_NO_WARN_DUPLICATE_LIBRARIES)
+      add_link_options("LINKER:-no_warn_duplicate_libraries")
+    endif()
+  endif()
+endif()
 
 # 警告設定 (サードパーティに波及させないためターゲット単位で適用)
 # MSVC /W4 suppressions, applied so MSVC matches the warning bar the primary

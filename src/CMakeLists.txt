@@ -674,6 +674,13 @@ if(BUILD_PITCH_EDITOR)
   # line, so declaring it is enough. Left undeclared, every target in this tree
   # still links -- they all pull in the whole set -- and only a consumer that
   # links an installed sonare::core on its own gets undefined symbols.
+  #
+  # Moving those C-ABI units here instead would break the cycle, and it costs
+  # more than it saves: the shared library takes sonare_core as objects but
+  # sonare_pitch_editor as an archive, so an exported function whose only
+  # definition sits in an archive member nothing else references is never pulled
+  # in, and it silently disappears from the dylib's export table -- which is the
+  # whole Python ctypes surface. The repeated archives are the cheaper price.
   target_link_libraries(sonare_core INTERFACE sonare_pitch_editor)
 endif()
 
