@@ -298,9 +298,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // modes are detuned until none of them is a pitch.
   //
   // The plate lengths are the physical ones - a splash is 8 to 10 inches and a
-  // ride 20 to 22 - so these are starting points a calibration can reach, not
-  // fitted values. They exist because a shared patch cannot be calibrated at
-  // all: every knob moved for the ride moved the crash by the same amount.
+  // ride 20 to 22 - so those are starting points a calibration can reach rather
+  // than fitted values; the wash corners below have since been measured. They
+  // exist per piece because a shared patch cannot be calibrated at all: every
+  // knob moved for the ride moved the crash by the same amount.
   auto make_cymbal = [&](float base_hz, float mode_decay_s, float tone_gain, float noise_decay_ms,
                          float noise_cutoff_hz, float shimmer, float length_ms, float gain) {
     NativeSynthPatch p = d.cymbal;
@@ -350,16 +351,24 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // members of each pair are the two sizes a kit actually carries - a 16 inch
   // crash against an 18, a 20 inch ride against a 22 - so the larger of each is
   // darker, slower and longer.
+  //
+  // The corners are measured against the sampled kit, on the bands that
+  // reference can resolve, and they land where the plate sizes say they should:
+  // a splash speaks from 3.4 kHz up, a crash from around 1.2, and a ride - the
+  // largest plate here and the one whose lowest modes are lowest - from 200 Hz.
+  // Each is several times under the corner the archetype started with, which is
+  // why every cymbal in the kit was reading 20 to 45 dB short across its whole
+  // midrange while matching at the top.
   //                       base   ring  tone   wash  cutoff shimm   len   gain
-  t[49] = make_cymbal(3600.0f, 1.10f, 0.25f, 900.0f, 5500.0f, 6.0f, 1400.0f, 0.50f);   // Crash 1
-  t[57] = make_cymbal(2500.0f, 1.55f, 0.28f, 1250.0f, 3600.0f, 5.0f, 1900.0f, 0.52f);  // Crash 2
+  t[49] = make_cymbal(3600.0f, 1.10f, 0.25f, 900.0f, 1100.0f, 6.0f, 1400.0f, 0.50f);   // Crash 1
+  t[57] = make_cymbal(2500.0f, 1.55f, 0.28f, 1250.0f, 1200.0f, 5.0f, 1900.0f, 0.52f);  // Crash 2
   // A ride is played on its shoulder with the tip of the stick, so what carries
   // is a defined ping over a wash kept short enough to stay out of its way; a
   // ride that blooms like a crash is a ride nobody can play time on.
-  t[51] = make_cymbal(2800.0f, 2.20f, 0.75f, 260.0f, 6500.0f, 1.0f, 2600.0f, 0.50f);  // Ride 1
-  t[59] = make_cymbal(1900.0f, 2.80f, 0.90f, 170.0f, 4000.0f, 0.6f, 3200.0f, 0.48f);  // Ride 2
-  t[55] = make_cymbal(5200.0f, 0.30f, 0.35f, 240.0f, 9000.0f, 2.5f, 420.0f, 0.45f);   // Splash
-  t[52] = make_cymbal(2600.0f, 0.35f, 0.85f, 420.0f, 4200.0f, 3.0f, 700.0f, 0.55f);   // China
+  t[51] = make_cymbal(2800.0f, 2.20f, 0.75f, 260.0f, 200.0f, 1.0f, 2600.0f, 0.50f);  // Ride 1
+  t[59] = make_cymbal(1900.0f, 2.80f, 0.90f, 170.0f, 150.0f, 0.6f, 3200.0f, 0.48f);  // Ride 2
+  t[55] = make_cymbal(5200.0f, 0.30f, 0.35f, 240.0f, 3400.0f, 2.5f, 420.0f, 0.45f);  // Splash
+  t[52] = make_cymbal(2600.0f, 0.35f, 0.85f, 420.0f, 4200.0f, 3.0f, 700.0f, 0.55f);  // China
   // The china's upturned flange is what makes it trashy, and trashy is neither
   // dark nor bright: it concentrates the wash into one harsh band instead of
   // spreading it up the spectrum the way a flat plate does. That is a different
