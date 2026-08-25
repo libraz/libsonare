@@ -391,11 +391,25 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // Pedal Hi-Hat: the foot closes the cymbals against each other rather than a
   // stick striking them, so the "chick" is duller, softer and slightly longer
   // than a stick-closed hat - and, sharing a patch with one, was neither.
+  //
+  // Fitted against the captured kit, and it reaches less far than its two
+  // neighbours did. The reference peaks at 315 Hz on a hump from 200 to 400 Hz
+  // that is the two cymbals clashing rather than anything a noise stream makes,
+  // and this voice has no low mode to put there. What the fit could reach is
+  // the top - the voice's own low-pass down to 4.2 kHz with the drive up to
+  // hold the body - which takes the centroid from 429 percent of the reference
+  // to 240. The 20 dB hole left at 200-400 Hz is a missing mechanism and will
+  // not close from these knobs, and the attack sits on its clamp maximum
+  // against a reference that takes 12 to 18 ms to arrive.
   t[44] = d.closed_hat;
-  t[44].amp_env = fallback_env(0.5f, 120.0f, 0.0f, 40.0f);
-  t[44].percussion.noise_decay_ms = 55.0f;
-  t[44].percussion.noise_cutoff_hz = 5200.0f;
-  t[44].gain = 0.40f;
+  t[44].amp_env = fallback_env(4.0f, 97.3073f, 0.164827f, 40.0f);
+  t[44].cutoff_hz = 4201.99f;
+  t[44].drive = 0.497364f;
+  t[44].percussion.noise_cutoff_hz = 5466.16f;
+  t[44].percussion.noise_decay_ms = 100.52f;
+  t[44].percussion.noise_gain = 2.32112f;
+  t[44].percussion.noise_q = 0.606395f;
+  t[44].gain = 0.6692f;
 
   // Hi-hats share mute group 1; the open hat gets a snappy choke fade (release
   // is unused by one-shot voices in normal play, so this stays bit-identical
@@ -431,9 +445,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // reference that peaks at 2.5 kHz and had nothing at all below 630 Hz. The
   // corner comes down to 2.6 kHz, and the noise envelope rather than the
   // amplitude one carries the ring - 1285 ms against a reference that takes
-  // about a second to fall 20 dB. The pedal hat is still not fitted: its run
-  // took the other route out, pushing the corner up to 18.6 kHz and the noise
-  // gain to 2.4 to compensate, and gave up 10 dB of output doing it.
+  // about a second to fall 20 dB.
   t[46].amp_env.attack_ms = 0.535176f;
   t[46].amp_env.decay_ms = 1334.75f;
   t[46].cutoff_hz = 2500.0f;
