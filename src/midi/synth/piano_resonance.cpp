@@ -46,30 +46,66 @@ SONARE_TUNABLE(kDuplexFloor, 0.3f);
 /// it should be -- these strings are never hit, they are only leaned on, and
 /// nothing is damping them.
 ///
-/// The level is nonetheless zero, and the reason is worth recording rather
-/// than quietly leaving a dead knob. Swept against the reference at a damper
-/// line the instrument actually has -- note 88 or above, which is where its own
-/// release measurement puts it, since a released C6 keeps 0.9 percent of its
-/// level and a string in this population would keep far more -- the bank moves
-/// the keyboard error by nothing at all, at any coupling from 2 to 100. Drop
-/// the line to 84 and it appears to help, but every decibel of that comes from
-/// the played note finding ITSELF in the bank and ringing on undamped, which
-/// then measures as a released C6 holding 7 percent against the reference's
-/// 0.9. That is an artefact with the sign of a result.
+/// The level is zero, and it has now been zero for two different reasons. The
+/// first was that the bank moved a keyboard-wide error by nothing at any
+/// coupling from 2 to 100. That reading was about the measurement rather than
+/// the mechanism: what this population acts on is the top octave's aftersound,
+/// which every term in that error de-weights — the cell comparison floors
+/// eighty-five decibels under the note's own peak and its weight bottoms out at
+/// seventy, and a C7 four seconds in is below both. A knob whose whole effect
+/// lies under the floor reads as a dead knob.
 ///
-/// The reason it cannot be exercised is upstream. These resonators are narrow,
-/// so they take almost nothing from a transient and live instead on the played
-/// note's upper partials landing on them — and those partials are the model's
-/// known deficit: measured at 0.2 s a C6 arrives with h2 twenty-five decibels
-/// under the reference. There is nothing for the coupling to work with. The
-/// population is real and the bank is now tuned to it; turning it up is work
-/// that follows fixing the excitation, not work that substitutes for it.
+/// Measured where it acts it is emphatically not dead, and that is the trap.
+/// Tracking the played note's OWN partials, C7 arrives correct and then
+/// collapses — thirty-seven decibels under the reference at two seconds, forty-
+/// seven by three. Turning this on at 2 puts the curve within eleven decibels
+/// at two seconds and exactly on the reference at three, improves the fit AND
+/// the held-out notes on the shipped constants and on a fitted set alike, and
+/// takes the treble's tail from forty-six decibels more non-harmonic than the
+/// instrument to within four. Every one of those is a real measurement and the
+/// result is audibly a chime.
+///
+/// The mechanism it recruits is the one the paragraph below already warned
+/// about, at the line the instrument actually has rather than at 84: notes 88
+/// and up find THEMSELVES in the bank. A struck C7 stops being a string with a
+/// two-second aftersound and becomes a resonator with a five-second one, at a
+/// fixed pitch, and every note below it lights the same twenty resonators
+/// through whichever upper partials land on them. Fixed pitches ringing five
+/// seconds under everything is the definition of the defect, and it improved
+/// every number available at the time — including the one written to catch it,
+/// because a row-wise minimum across notes prices invariant energy by its
+/// weakest relative appearance, and a bank that is a small fraction of a loud
+/// note and a large fraction of a quiet one has no weak appearance to find.
+///
+/// So this stays at zero until the played note can be excluded from what
+/// answers it, and the treble's real deficit is the string's to fix: its
+/// aftersound taper, not a bank standing in for one.
 SONARE_TUNABLE(kSympTopLevel, 0.0f);
 SONARE_TUNABLE(kSympTopNoteLo, 88.0f);
 SONARE_TUNABLE(kSympTopT60S, 5.0f);
 /// How the ring shortens with pitch, in halvings of t60 per octave above the
 /// lowest undamped string.
 SONARE_TUNABLE(kSympTopT60Oct, 0.5f);
+
+/// The pedal-lifted register: how long a string the felt has left rings, how
+/// its partials sit under its fundamental, how much faster they decay, and how
+/// hard the bank couples back into the output.
+///
+/// None of these were parameters before -- the ring was a literal 0.6 s and the
+/// coupling a literal 0.06 buried in prepare() -- and that is worth stating
+/// rather than quietly fixing, because it explains why no fit ever touched
+/// them. It is not that the search rejected these values. The search could not
+/// see them, and the corpus it runs on could not have judged them either: every
+/// note in it is struck alone with the pedal up, which is the one condition
+/// under which this entire population is silent.
+///
+/// The ring is the value most obviously wrong on inspection. A string with its
+/// damper lifted rings for as long as the pedal is held -- that is what a pedal
+/// is -- and 0.6 s is shorter than the note that drove it.
+SONARE_TUNABLE(kSympRingT60S, 0.6f);
+SONARE_TUNABLE(kSympPartialTilt, 0.7f);
+SONARE_TUNABLE(kSympPartialDamp, 0.5f);
+SONARE_TUNABLE(kSympCoupling, 0.06f);
 
 /// Soundboard radiating band: the modes are log-spread between these corners.
 SONARE_TUNABLE(kFLow, 92.0f);
@@ -152,6 +188,41 @@ SONARE_TUNABLE(kFrameT60Slope, 0.0f);
 /// the notes below the tenor break by well under a decibel, which is the
 /// behaviour a member with this decay and this band should have.
 SONARE_TUNABLE(kFrameLevel, 4.0f);
+/// Split between the two halves of each frame mode, in cents. Zero leaves the
+/// bank as eight separate frequencies and renders exactly as a build without
+/// this; above zero the same eight resonators are re-read as four near-
+/// degenerate PAIRS, which costs nothing on the audio thread because the count
+/// does not change.
+///
+/// A ring that does not waver is what a bell is, and the bank at eight separate
+/// frequencies does not waver: spread over the plate band its neighbours sit
+/// tens of hertz apart, far enough that any beating between them is averaged
+/// away inside a single envelope window, so each mode decays smoothly and their
+/// sum decays smoothly. Measured, the bank's low aftersound is FLATTER than
+/// band-limited noise -- below the floor a diffuse field produces -- while the
+/// instrument's sits around the figure two partials beating to a full null
+/// give. The instrument is not more diffuse there than the model. It is less
+/// steady, and those are opposite readings of the same number.
+///
+/// Pairs are how a real structure produces that. A plate's modes come in
+/// near-degenerate families that a real instrument's broken symmetry splits by
+/// a small fraction of their frequency, and a split pair driven together beats
+/// at the difference. Cents rather than hertz because the splitting mechanism
+/// is proportional: the same asymmetry moves a high mode further in absolute
+/// terms than a low one.
+///
+/// Eight cents is four tenths of a percent, which is where a real structure's
+/// broken symmetry puts a near-degenerate pair, and it is also where the
+/// measurement settles from both directions. Against the shipped constants it
+/// takes the whole-keyboard error from 10.39 to 9.50 and the held-out notes
+/// from 10.80 to 9.97; against a fitted set, 7.93 to 7.69 and 8.79 to 8.36. On
+/// the term that counts how much of the spectrum answers every note alike --
+/// which is what a bell is, and what four rounds of listening kept reporting
+/// while the level-based terms called each change an improvement -- it goes
+/// from 12.68 to 6.79 on the shipped constants and 8.45 to 6.25 on the fitted
+/// one. Four and fourteen cents measure within noise of eight on one basis
+/// each; twenty and thirty-five are worse on both.
+SONARE_TUNABLE(kFrameSplitCents, 8.0f);
 
 /// Soundboard phase diffusion coefficient (both allpass stages).
 SONARE_TUNABLE(kDiffuserG, 0.55f);
@@ -160,6 +231,40 @@ SONARE_TUNABLE(kDiffuserG, 0.55f);
 /// signal. Reference renders measure 20-40 dB tone-to-noise; a clean partial
 /// stack reads dry and synthetic.
 SONARE_TUNABLE(kAirGain, 0.0f);
+
+/// Case and rim network: its return level, its decay, and where that decay
+/// starts falling with frequency. See the network's own commentary in
+/// piano_voice.h for why the late field is made this way and not with more
+/// resonators. Zero renders exactly as a build without the network.
+///
+/// The decay is quoted at the bottom of the range, like the frame bank's, and
+/// is the same quantity that bank was carrying: the long tail a wooden member
+/// cannot hold. What is new is that it arrives dense instead of as eight
+/// pitches, so it can be long without being a chord.
+SONARE_TUNABLE(kCaseLevel, 0.0f);
+SONARE_TUNABLE(kCaseT60S, 6.0f);
+/// One-pole corner on each line's feedback. A radiating case loses its high
+/// frequencies first, and this is the only place that grading is stated: the
+/// frame bank's slope had to be flat because its modes are too far apart to
+/// grade anything between them.
+SONARE_TUNABLE(kCaseDampHz, 2200.0f);
+/// Delay lengths in samples at 48 kHz, mutually prime so the network's own
+/// period is their product rather than a short common multiple. They total
+/// 6472, which is a mode every 7.4 Hz -- Schroeder's density for a response
+/// that is not heard as individual modes, from eight lines.
+constexpr uint32_t kCaseDelays48k[8] = {509, 587, 673, 761, 853, 941, 1031, 1117};
+/// Injection signs, one per line. Driving every line with the same sign and
+/// gain feeds the network eight coherent copies of its input, and coherent
+/// copies at eight fixed delays are a comb filter -- which is audible as
+/// flutter and measures as an envelope that swings far wider than a diffuse
+/// field's. A fixed sign pattern decorrelates them at no cost and keeps a
+/// bounce bit-stable, which a random one would not.
+constexpr float kCaseInSign[8] = {1.0f, -1.0f, 1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f};
+/// Coefficient of the allpass diffuser inside each line, and its lengths at
+/// 48 kHz. Zero skips the stage outright, which renders exactly as the network
+/// without it; see the header for why skipping and not passing through.
+SONARE_TUNABLE(kCaseDiffuseG, 0.0f);
+constexpr uint32_t kCaseApDelays48k[8] = {89, 97, 113, 127, 137, 149, 157, 167};
 
 }  // namespace
 
@@ -189,21 +294,57 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
     }
   }
   ungated_count_ = n;
-  // The damped register, which answers only while the pedal holds it off the
-  // strings: a reduced set spread E1..E6, every 4 semitones.
-  for (int i = 0; i < 16 && n < kResonanceModes; ++i) {
-    const int note = 28 + 4 * i;
-    const float f = 440.0f * std::exp2((static_cast<float>(note) - 69.0f) / 12.0f);
-    if (f >= 0.45f * sr) continue;
-    Mode& m = modes_[static_cast<size_t>(n++)];
-    const float w = kTwoPi * f / sr;
-    const float r = std::exp(-6.907755279f / (sr * 0.6f));  // ~0.6 s ring t60
-    m.a1 = 2.0f * r * std::cos(w);
-    m.a2 = -r * r;
-    // Normalize the resonator to ~unity peak gain (the (1-r) factor cancels
-    // the high-Q resonant boost) so the bank is a weak coupling, not a
-    // runaway bandpass on the played note.
-    m.gain = 1.0f - r;
+  // The damped register, which answers only while the pedal holds the felt off
+  // the strings: fundamentals spread E1..E6 every 4 semitones, then the second
+  // and third partials of the same strings.
+  //
+  // The partials are the mechanism, not a refinement of it. A pedalled bass
+  // note is heard lighting up the upper half of the keyboard, and what is
+  // sounding up there is the treble strings' UPPER partials, not their
+  // fundamentals -- those sit far below the energy that reached them. A bank of
+  // fundamentals alone is therefore not a reduced model of sympathetic
+  // resonance; it is a set of pure tones under the note, which is a hum. Every
+  // played note also arrives as a partial series, so a bank with no partials
+  // has almost nothing for the coupling to find in the first place.
+  //
+  // They are free. The process loop runs over all forty-four slots whichever
+  // are filled, and twenty-eight of them stand empty whenever the undamped
+  // treble population above ships at a zero level -- which is its default. The
+  // cost of this was already being paid to circulate zeros.
+  //
+  // Stretched, for the reason the population above states about itself: these
+  // pitches ARE played strings, the instrument's own rows sit a few cents
+  // sharp of equal temperament, and a bank on bare equal temperament beats
+  // against every note that drives it. That the two populations disagreed
+  // about this was an oversight rather than a decision.
+  const float ring = std::max(0.05f, kSympRingT60S);
+  const float tilt = std::max(0.0f, kSympPartialTilt);
+  const float pdamp = std::max(0.0f, kSympPartialDamp);
+  for (int k = 1; k <= 3 && n < kResonanceModes; ++k) {
+    const float kf = static_cast<float>(k);
+    for (int i = 0; i < 16 && n < kResonanceModes; ++i) {
+      const auto note = static_cast<uint8_t>(28 + 4 * i);
+      const float b = piano_inharmonicity_b(note);
+      const float f0 = note_to_hz(note) * std::exp2(piano_stretch_cents(note) / 1200.0f);
+      // Stiff-string placement, the same law the played strings carry: the
+      // third partial of a bass string is sharp by more than a cent, and a
+      // sympathetic bank that answers a note's own third partial has to be
+      // where that partial actually is or it beats instead of ringing.
+      const float f = f0 * kf * std::sqrt(1.0f + b * kf * kf);
+      if (f >= 0.45f * sr) continue;
+      // A string's upper partials shed energy faster than its fundamental, so
+      // the higher the partial the shorter the ring.
+      const float t60 = std::max(0.02f, ring * std::pow(kf, -pdamp));
+      const float w = kTwoPi * f / sr;
+      const float r = std::exp(-6.907755279f / (sr * t60));
+      Mode& m = modes_[static_cast<size_t>(n++)];
+      m.a1 = 2.0f * r * std::cos(w);
+      m.a2 = -r * r;
+      // Normalize the resonator to ~unity peak gain (the (1-r) factor cancels
+      // the high-Q resonant boost) so the bank is a weak coupling, not a
+      // runaway bandpass on the played note, then tilt the series down.
+      m.gain = (1.0f - r) * std::pow(kf, -tilt);
+    }
   }
   gate_ = 0.0f;
   // Damper-open envelope: ~10 ms to lift, ~60 ms to fall.
@@ -212,7 +353,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
   // Extra ring-out applied while the dampers are falling (~0.15 s t60).
   ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
   // Weak sympathetic coupling (the played string still dominates).
-  out_gain_ = 0.06f;
+  out_gain_ = std::max(0.0f, kSympCoupling);
 }
 
 void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, int count,
@@ -367,10 +508,19 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
   for (int i = 0; i < kFrameModes; ++i) {
     Mode& m = frame_[static_cast<size_t>(i)];
     m = Mode{};
-    const float u = static_cast<float>(i) / static_cast<float>(kFrameModes - 1);
-    const uint32_t h = (static_cast<uint32_t>(i) + 7u) * 2246822519u;
+    // Paired or separate, decided once here: above a zero split the eight
+    // resonators are four pair centres, each half moved by half the split, and
+    // the jitter is drawn per PAIR so the two halves stay a pair rather than
+    // being pulled apart by an amount that dwarfs the split itself.
+    const bool paired = kFrameSplitCents > 0.0f;
+    const int slot = paired ? i / 2 : i;
+    const int slots = paired ? kFrameModes / 2 : kFrameModes;
+    const float u = static_cast<float>(slot) / static_cast<float>(slots - 1);
+    const uint32_t h = (static_cast<uint32_t>(slot) + 7u) * 2246822519u;
     const float jit = (static_cast<float>((h >> 9) & 0xFFFFu) / 65535.0f - 0.5f) * 0.10f;
-    const float f = kFrameFLow * std::pow(frame_hi / kFrameFLow, u) * (1.0f + jit);
+    const float split =
+        paired ? std::exp2(((i % 2 == 0) ? -0.5f : 0.5f) * kFrameSplitCents / 1200.0f) : 1.0f;
+    const float f = kFrameFLow * std::pow(frame_hi / kFrameFLow, u) * (1.0f + jit) * split;
     if (kFrameLevel <= 0.0f || f >= 0.45f * sr) continue;
     const float w = kTwoPi * f / sr;
     const float t60 =
@@ -382,6 +532,62 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     const float d_im = m.a1 * std::sin(w) + m.a2 * std::sin(2.0f * w);
     const float d_mag = std::sqrt(d_re * d_re + d_im * d_im);
     m.gain = kFrameLevel * d_mag / std::max(2.0f * std::sin(w), 1.0e-6f);
+  }
+  // Case network. Lengths scale with the sample rate so the network's modal
+  // density is a property of time and not of the rate, and the whole set is
+  // scaled down together if it will not fit the pool -- which costs density at
+  // very high rates rather than truncating one line into a different network.
+  {
+    uint32_t total = 0;
+    for (const uint32_t d48 : kCaseDelays48k) {
+      total +=
+          std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(d48) * sr / 48000.0)));
+    }
+    const double fit = total > kCaseCapacity
+                           ? static_cast<double>(kCaseCapacity) / static_cast<double>(total)
+                           : 1.0;
+    uint32_t ap_total = 0;
+    for (const uint32_t d48 : kCaseApDelays48k) {
+      ap_total +=
+          std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(d48) * sr / 48000.0)));
+    }
+    const double ap_fit = ap_total > kCaseApCapacity
+                              ? static_cast<double>(kCaseApCapacity) / static_cast<double>(ap_total)
+                              : 1.0;
+    uint32_t off = 0;
+    uint32_t ap_off = 0;
+    for (size_t i = 0; i < kCaseLines; ++i) {
+      const auto len =
+          std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(kCaseDelays48k[i]) *
+                                                         fit * sr / 48000.0)));
+      case_off_[i] = off;
+      case_len_[i] = len;
+      case_idx_[i] = 0;
+      off += len;
+      const auto ap_len =
+          kCaseDiffuseG == 0.0f
+              ? 0u
+              : std::max(
+                    2u, static_cast<uint32_t>(std::lround(static_cast<double>(kCaseApDelays48k[i]) *
+                                                          ap_fit * sr / 48000.0)));
+      case_ap_off_[i] = ap_off;
+      case_ap_len_[i] = ap_len;
+      case_ap_idx_[i] = 0;
+      ap_off += ap_len;
+      // Per-line feedback for a common t60: a long line is traversed fewer
+      // times a second, so it must lose less each time for the network to
+      // decay at one rate rather than eight. The diffuser sits in the loop, so
+      // its length counts toward the traversal -- charging the loss against the
+      // delay alone would make every line decay faster than it was asked to,
+      // by more the shorter the line.
+      const float t60 = std::max(0.05f, kCaseT60S);
+      case_g_[i] = std::min(
+          0.9999f, std::exp(-6.907755279f * static_cast<float>(len + ap_len) / (sr * t60)));
+      case_lp_[i] = 0.0f;
+    }
+    case_buf_.fill(0.0f);
+    case_ap_buf_.fill(0.0f);
+    case_lp_a_ = 1.0f - std::exp(-kTwoPi * std::clamp(kCaseDampHz, 100.0f, 0.45f * sr) / sr);
   }
   in1_ = 0.0f;
   in2_ = 0.0f;
@@ -408,6 +614,11 @@ void PianoSoundboard::reset() noexcept {
     diff_buf_[d].fill(0.0f);
     diff_idx_[d] = 0;
   }
+  case_buf_.fill(0.0f);
+  case_idx_.fill(0u);
+  case_lp_.fill(0.0f);
+  case_ap_buf_.fill(0.0f);
+  case_ap_idx_.fill(0u);
   in1_ = 0.0f;
   in2_ = 0.0f;
   air_env_ = 0.0f;
@@ -473,6 +684,55 @@ float PianoSoundboard::process(float in) noexcept {
   // shipped build kAirGain is a constexpr zero and the whole block folds out;
   // in a tuning build the test is what lets a fit switch the layer back on
   // without a rebuild.
+  // Case and rim network, off the same bandpass residue the two banks use, so
+  // all three sit on one normalization. Tested rather than multiplied out for
+  // the same reason the frame bank and the air layer are: at a zero return
+  // level the lines would circulate a zero at the cost of eight delay reads,
+  // eight writes and a one-pole each, and `0.0f * x` is not a constant the
+  // optimizer may fold. In a shipped build kCaseLevel is a constexpr zero and
+  // the whole block folds out.
+  float late = 0.0f;
+  if (kCaseLevel != 0.0f) {
+    constexpr size_t kLines = static_cast<size_t>(kCaseLines);
+    float scaled[kLines];
+    float out_sum = 0.0f;
+    float mix_sum = 0.0f;
+    for (size_t i = 0; i < kLines; ++i) {
+      float tap = case_buf_[case_off_[i] + case_idx_[i]];
+      // Diffuser, ahead of the output tap so the network radiates what it
+      // circulates rather than the undispersed echo. A lattice allpass: unity
+      // magnitude at every frequency, so it spreads one echo over its own
+      // length without touching the decay the per-line gain sets.
+      if (case_ap_len_[i] != 0u) {
+        const size_t p = case_ap_off_[i] + case_ap_idx_[i];
+        const float stored = case_ap_buf_[p];
+        const float v = tap + kCaseDiffuseG * stored;
+        case_ap_buf_[p] = v;
+        case_ap_idx_[i] = case_ap_idx_[i] + 1 < case_ap_len_[i] ? case_ap_idx_[i] + 1 : 0u;
+        tap = stored - kCaseDiffuseG * v;
+      }
+      out_sum += kCaseInSign[i] * tap;
+      // Damp, then attenuate, and only then mix. The matrix has to act on the
+      // vector that is actually fed back: applied to the raw taps instead it
+      // is no longer the orthogonal map of what circulates, and the network's
+      // decay stops being the per-line gain it was designed from.
+      case_lp_[i] += case_lp_a_ * (tap - case_lp_[i]);
+      scaled[i] = case_g_[i] * case_lp_[i];
+      mix_sum += scaled[i];
+    }
+    // Householder: y = x - (2/N) * sum(x). Orthogonal, so the matrix is
+    // lossless and the decay is entirely the per-line gain and damping --
+    // which is what lets one t60 be stated for the network rather than
+    // emerging from the mixing.
+    const float mix = (2.0f / static_cast<float>(kCaseLines)) * mix_sum;
+    for (size_t i = 0; i < kLines; ++i) {
+      case_buf_[case_off_[i] + case_idx_[i]] = scaled[i] - mix + kCaseInSign[i] * bp;
+      case_idx_[i] = case_idx_[i] + 1 < case_len_[i] ? case_idx_[i] + 1 : 0u;
+    }
+    // The output tap sums the lines back with the same signs, so what the
+    // injection decorrelated is recombined rather than left half cancelled.
+    late = out_sum * kCaseLevel;
+  }
   float air = 0.0f;
   if (kAirGain != 0.0f) {
     const float mag = d >= 0.0f ? d : -d;
@@ -483,7 +743,10 @@ float PianoSoundboard::process(float in) noexcept {
     air_hp_ += air_hp_a_ * (air_lp_ - air_hp_);
     air = kAirGain * air_env_ * (air_lp_ - air_hp_);
   }
-  return (1.0f - kPianoDirectGain) * d + out_gain_ * sum + air;
+  // The late field is added at its own level rather than through `out_gain_`:
+  // that gain is the patch's soundboard mix, and the case network is a member
+  // of the instrument rather than a share of the board's colour.
+  return (1.0f - kPianoDirectGain) * d + out_gain_ * sum + air + late;
 }
 
 }  // namespace sonare::midi::synth

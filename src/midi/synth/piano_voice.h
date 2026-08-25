@@ -509,8 +509,103 @@ class PianoSoundboard {
   // cannot make 125 Hz out of a 4 kHz C8. Measured across three different
   // concert grands the attack level agrees to within 0.6 dB, which is what a
   // structure common to all of them looks like.
+  // Sixteen rather than eight, and the reason is a band rather than a count.
+  // Log-spread from forty hertz to four and a half kilohertz, eight modes put
+  // exactly ONE below sixty and one more below a hundred and twenty-five --
+  // and that octave is where the model's aftersound is furthest from the
+  // instrument's by a wide margin: nineteen decibels down on a single note,
+  // twenty on a held chord, twenty-seven across a register sweep, thirty-nine
+  // on a sustained C4 whose own fundamental is far above the band. A body that
+  // does not radiate below the notes it is under is what "thin" means.
+  //
+  // Lowering the band's corner cannot fix it, and the fit already tried: the
+  // modes are spread BETWEEN the corners, so moving the bottom one down moves
+  // all of them and buys coverage at the bottom by thinning everything above.
+  // Only the count adds modes where there were none.
+  //
+  // Doubling it is free in any sense that matters. The bank is per instrument,
+  // not per voice -- one in the native synth and one per channel in the SF2
+  // fallback -- so this is sixteen extra two-pole sections per sample at worst,
+  // against a polyphony that runs hundreds of string models.
+  //
+  // With the pairing below it is eight pair centres instead of four, which is
+  // the other half of the argument: a near-degenerate pair beats, and a bank
+  // with too few centres to cover its band has to choose between covering it
+  // and beating.
   static constexpr int kFrameModes = 8;
   std::array<Mode, kFrameModes> frame_{};
+  // Case and rim: the DIFFUSE late field, which a bank of resonators cannot be.
+  //
+  // The frame bank above answers every note at its own eight pitches, and that
+  // is audible as exactly what it is. It is also the only member the model has
+  // with a long decay, so the two are inseparable by calibration: switching it
+  // off takes the note-invariant ringing from 5.5 to 1.5 on the shape metric
+  // and the tail's band balance from 8.1 to 9.1 in the same move. They are the
+  // same eight resonators.
+  //
+  // Whether a set of resonances is heard as pitches or as a body is decided by
+  // modal overlap -- each resonance's bandwidth over the spacing between them.
+  // An exponential decay of t60 seconds has a bandwidth of 2.2/t60 Hz, so the
+  // frame's nine-second modes are a quarter of a hertz wide; spread over its
+  // band they sit hundreds of hertz apart, and the overlap is 0.0003. A
+  // soundboard at a kilohertz has a few tenths of a mode per hertz and a Q of
+  // order fifty, which is an overlap of several. Schroeder's criterion for a
+  // response that is not heard as individual modes is about 0.15 modes per
+  // hertz; the frame bank has 0.001 there.
+  //
+  // No parameter reaches that. Packing the same eight modes into a narrower
+  // band measured WORSE, because their bandwidth does not change with their
+  // spacing, and shortening the decay to widen them removes the long tail the
+  // bank exists to provide. The count is the quantity, and a count is not a
+  // knob.
+  //
+  // So the late field is made the way a dense response is made: a feedback
+  // delay network. Eight lines with mutually prime lengths and an orthogonal
+  // (Householder) mixing matrix put a mode roughly every seven hertz -- about
+  // 0.14 per hertz, which is Schroeder's number -- for eight delay lines
+  // instead of the thousands of resonators the equivalent bank would need.
+  // Per-line damping grades the decay with frequency, which is what a radiating
+  // case does and what the frame bank's flat grade could not state.
+  //
+  // Its delays are longer than the case's own path lengths, and that is a
+  // deliberate departure from geometry rather than an oversight. A grand's
+  // reflections are one to nine milliseconds; a network built on those alone
+  // has a quarter of the modal density and rings as audibly as the bank it
+  // replaces. The instrument reaches its density through the degrees of freedom
+  // of a plate, a cavity, a rim and a lid, which a delay network does not have
+  // -- so the density is bought with delay instead, and this member is a
+  // perceptual stand-in for that structure and not a model of it.
+  static constexpr int kCaseLines = 8;
+  // Shared pool rather than a buffer per line, sized for the whole set at the
+  // rates this synth runs at. Above them the lengths scale down together, which
+  // costs density rather than correctness.
+  static constexpr size_t kCaseCapacity = 8192;
+  std::array<float, kCaseCapacity> case_buf_{};
+  std::array<uint32_t, kCaseLines> case_off_{};
+  std::array<uint32_t, kCaseLines> case_len_{};
+  std::array<uint32_t, kCaseLines> case_idx_{};
+  std::array<float, kCaseLines> case_g_{};
+  std::array<float, kCaseLines> case_lp_{};
+  float case_lp_a_ = 1.0f;
+  // An allpass diffuser inside each line. Eight lines put eight echoes into
+  // every circulation of the network, and eight is few enough that the pattern
+  // is audible as flutter before the mixing matrix has had time to fill it in.
+  // Density in TIME is what a delay length buys; density WITHIN one traversal
+  // is what this buys, and they are not the same quantity -- lengthening the
+  // lines to get the second costs modal spacing, which is why the standard cure
+  // is a diffuser in the loop rather than a longer loop.
+  //
+  // Each stays short against its own line so it disperses the echo without
+  // moving the mode it sits on, and mutually prime against every other length
+  // in the network for the same reason those are prime against each other. At
+  // a zero coefficient the stage is skipped rather than passed through: an
+  // allpass at zero is a plain delay, which would lengthen the loop and
+  // detune the network instead of leaving it alone.
+  static constexpr size_t kCaseApCapacity = 2048;
+  std::array<float, kCaseApCapacity> case_ap_buf_{};
+  std::array<uint32_t, kCaseLines> case_ap_off_{};
+  std::array<uint32_t, kCaseLines> case_ap_len_{};
+  std::array<uint32_t, kCaseLines> case_ap_idx_{};
   // Schroeder allpass diffusers (fixed capacity, no allocation: the lazy
   // fallback prepare runs on the audio thread; prepare() sets the active
   // lengths, clamped to the capacity at very high sample rates).
