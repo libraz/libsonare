@@ -229,10 +229,13 @@ void FFT::forward_complex(const std::complex<float>* input, std::complex<float>*
 #if SONARE_HAVE_PFFFT
   if (impl_->complex_setup) {
     const size_t floats = 2 * static_cast<size_t>(n_fft_);
-    std::memcpy(impl_->complex_in.get(), input, floats * sizeof(float));
+    // std::complex<float> is specified to have the layout of float[2] and is
+    // trivially copyable, but it is not a trivial class, so the void* casts keep
+    // GCC's -Wclass-memaccess from flagging the interleaved copies.
+    std::memcpy(impl_->complex_in.get(), static_cast<const void*>(input), floats * sizeof(float));
     pffft_transform_ordered(impl_->complex_setup.get(), impl_->complex_in.get(),
                             impl_->complex_out.get(), impl_->complex_work.get(), PFFFT_FORWARD);
-    std::memcpy(output, impl_->complex_out.get(), floats * sizeof(float));
+    std::memcpy(static_cast<void*>(output), impl_->complex_out.get(), floats * sizeof(float));
     return;
   }
 #endif
