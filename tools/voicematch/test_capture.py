@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -20,9 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import au_oracle  # noqa: E402
+import capture  # noqa: E402
 from au_oracle import AuSource, _strip_preroll  # noqa: E402
 from metrics import midi_to_hz  # noqa: E402
 from profile import double_decay, find_partials, measure_note  # noqa: E402
+from wavio import write_wav  # noqa: E402
 
 SR = 48000
 
@@ -166,3 +169,90 @@ def test_argv_carries_realtime_and_settle(monkeypatch):
     assert "--realtime" in argv
     assert argv[argv.index("--settle-ms") + 1] == "4000"
     assert AuSource(plugin="x:y:z", realtime=False).argv(Path("/tmp/o.wav")).count("--realtime") == 0
+
+
+# --------------------------------------------------------------------------- #
+# A render that arrived late is not the note
+# --------------------------------------------------------------------------- #
+def _render_file(path: Path, onset_ms: float, *, peak: float = 0.4,
+                 seconds: float = 2.0, sr: int = SR) -> Path:
+    """A capture-shaped WAV: digital silence, then a decaying burst."""
+    n = int(seconds * sr)
+    audio = np.zeros((n, 2), dtype=np.float32)
+    start = int(onset_ms / 1000.0 * sr)
+    t = np.arange(n - start) / sr
+    body = (peak * np.sin(2 * np.pi * 300.0 * t) * np.exp(-t / 0.1)).astype(np.float32)
+    audio[start:, 0] = body
+    audio[start:, 1] = body
+    write_wav(path, audio, sr)
+    return path
+
+
+def test_a_render_is_timed_from_where_its_audio_actually_begins(tmp_path):
+    assert capture._onset_ms(_render_file(tmp_path / "a.wav", 100.0), SR) == pytest.approx(100.0, abs=0.5)
+    assert capture._onset_ms(_render_file(tmp_path / "b.wav", 280.0), SR) == pytest.approx(280.0, abs=0.5)
+    # Silence has no onset, and says so rather than answering zero — which is
+    # the one answer that would read as a render arriving perfectly on time.
+    write_wav(tmp_path / "c.wav", np.zeros((SR, 2), dtype=np.float32), SR)
+    assert capture._onset_ms(tmp_path / "c.wav", SR) is None
+
+
+def test_the_onset_test_reads_the_first_sample_over_a_floor_not_the_peak():
+    """A slow-attack instrument must not be mistaken for a late render.
+
+    The threshold is absolute and far under anything an instrument radiates, so
+    what it finds is where the render stopped being digital silence — which is
+    the note-on however long the swell after it takes.
+    """
+    assert capture.ONSET_FLOOR_DBFS <= -60.0
+    # Wide enough that a real preroll's jitter never trips it, narrow enough
+    # that the failure it was written for — 150 ms at the very least, and up to
+    # 843 — cannot get through.
+    assert 10.0 <= capture.ONSET_SLACK_MS <= 100.0
+
+
+def test_a_late_render_is_retried_rather_than_recorded(tmp_path, monkeypatch):
+    """The failure the quiet-retry is structurally unable to see.
+
+    A render whose samples did not arrive is quiet, and that is what the ratio
+    catches. This one is LOUDER than the note — 4 to 25 dB, uncorrelated with
+    the correct render, beginning after a stretch of digital silence — so every
+    level test passes it. Only when it arrived says anything.
+    """
+    out = tmp_path / "n042_v127.wav"
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(len(calls))
+        # Late and loud the first two times, then the real note.
+        _render_file(out, 280.0 if len(calls) <= 2 else 100.0,
+                     peak=0.9 if len(calls) <= 2 else 0.1)
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.9 if len(calls) <= 2 else 0.1,
+                                             "seconds": 2.0}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    src = AuSource(plugin="aumu:test:test")
+    summary = capture._render_note(src, out, 42, 127, 50, floor_peak=0.0,
+                                   preroll_ms=100.0, sample_rate=SR)
+    assert len(calls) == 3
+    assert summary["attempts"] == 3
+    assert summary["onset_ms"] == pytest.approx(100.0, abs=1.0)
+
+
+def test_a_render_on_time_is_taken_first_try(tmp_path, monkeypatch):
+    """The null: without it the guard could be rejecting everything."""
+    out = tmp_path / "n038_v100.wav"
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(len(calls))
+        _render_file(out, 100.0)
+        return SimpleNamespace(returncode=0,
+                               stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    summary = capture._render_note(AuSource(plugin="aumu:test:test"), out, 38, 100, 50,
+                                   floor_peak=0.0, preroll_ms=100.0, sample_rate=SR)
+    assert len(calls) == 1
+    assert summary["attempts"] == 1

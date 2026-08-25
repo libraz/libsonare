@@ -116,6 +116,14 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("realtime", True)
     cfg.setdefault("gate_ms", 8000)
     cfg.setdefault("tail", "2s")
+    # How long is recorded after note-off, for the notes that need more than the
+    # rest. A cymbal's wash runs four to ten seconds; measured on the captured
+    # kit, every cymbal's `decay_ms` — the time to fall 20 dB — sits between
+    # 1170 and 1760 ms against an analysis ceiling of 1800, which means those
+    # numbers are the window rather than the instrument, and what happens after
+    # it was never recorded. A flat `tail` long enough for a ride would triple
+    # the whole grid's render time for the sake of ten notes.
+    cfg.setdefault("tail_by_note", {})
     cfg.setdefault("preroll_ms", 100)
     cfg.setdefault("dry", True)
     cfg.setdefault("params", [])
@@ -137,6 +145,68 @@ def config_params(cfg: dict) -> tuple[str, ...]:
     if cfg.get("dry", True):
         params = tuple(dict.fromkeys(dry_params(cfg["plugin"]) + params))
     return params
+
+
+def tail_for(cfg: dict, note: int) -> str:
+    """How long to record after note-off for one note of the grid.
+
+    `tail_by_note` maps a MIDI note (as a string, since it comes from JSON) to
+    its own tail; everything unnamed keeps the capture's flat `tail`. A range is
+    written as "49-59" and covers both ends.
+    """
+    table = cfg.get("tail_by_note") or {}
+    for key, value in table.items():
+        for part in str(key).split(","):
+            part = part.strip()
+            if "-" in part:
+                lo, hi = part.split("-", 1)
+                if int(lo) <= note <= int(hi):
+                    return str(value)
+            elif part and int(part) == note:
+                return str(value)
+    return str(cfg["tail"])
+
+
+def note_map(cfg: dict) -> dict[int, int]:
+    """Which model note answers each captured note, where they disagree.
+
+    A drum note number names an instrument, and a sampled kit is under no
+    obligation to lay its instruments out the way GM does. The kit measured for
+    `reference/drums.json` does not: its six toms ascend in the order 45, 47,
+    48, 50, 41, 43, so a note-for-note comparison scores the low floor tom
+    against the high one and reports a tuning error that is really a mapping.
+
+    Applied to the ORACLE side only — the model is rendered on GM's layout,
+    which is the layout it ships with and the one a user's MIDI file is written
+    against. Correcting the model would be calibrating out the reference's
+    idiosyncrasy into the product.
+
+    Keys arrive from JSON as strings and are returned as ints. An empty map is
+    the normal case: only a capture whose layout was measured and found to
+    differ carries one.
+    """
+    return {int(k): int(v) for k, v in (cfg.get("note_map") or {}).items()}
+
+
+def note_groups(cfg: dict) -> dict[str, tuple[int, ...]]:
+    """Which of the capture's notes are members of one family, by family name.
+
+    A percussion capture's note numbers name instruments, and some of those
+    instruments are one thing: six toms are one series of sizes, three hi-hats
+    are one mechanism at three openings, a mute and an open cuica are one drum
+    played two ways. `loss._kit_terms` scores the relations inside each family,
+    which is the only part of a kit no per-hit measurement can reach.
+
+    A family is a SET here and never a sequence — the term compares the sorted
+    contrasts within it — so a capture whose layout disagrees with GM's needs no
+    order and no map to be grouped correctly.
+
+    Names are for the reader; nothing keys off them. An absent block is the
+    normal case, and gives a fit with no kit relations rather than an error:
+    only a capture whose families were identified in its own rows carries one.
+    """
+    return {str(name): tuple(int(n) for n in notes)
+            for name, notes in (cfg.get("groups") or {}).items()}
 
 
 def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
@@ -324,8 +394,23 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
     """Render the note x velocity x timbre grid, one note per process."""
     manifest_path = out / "manifest.json"
     done: dict[str, dict] = {}
+    # Timbres somebody else registered in this corpus — `profile.py render-grid`
+    # adds the model's own grid as one, flagged `model: true`, and that flag is
+    # what `profile.py measure` excludes it by. The renders survive a re-capture
+    # because they are in `done`; without this the registration does not, so a
+    # corpus re-rendered after a render-grid keeps the model's audio and loses
+    # the only thing that says it is the model. `measure` then folds the voice
+    # being calibrated into the reference it is calibrated against, which is
+    # silent, self-confirming, and cost this capture its measured band edge:
+    # `measure_band_edge` reads across-instrument separation, and the model's
+    # rows are not one of the instruments.
+    foreign: list[dict] = []
     if resume and manifest_path.exists():
-        done = {r["id"]: r for r in json.loads(manifest_path.read_text()).get("renders", [])}
+        prior = json.loads(manifest_path.read_text())
+        done = {r["id"]: r for r in prior.get("renders", [])}
+        ours = {t["id"] for t in cfg["timbres"]}
+        foreign = [t for t in prior.get("timbres", [])
+                   if isinstance(t, dict) and t.get("id") not in ours]
 
     # Loudest velocity of a note first, so every quieter render of that note can
     # be checked against a level that is known to have loaded.
@@ -349,9 +434,13 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         "settle_ms": cfg["settle_ms"],
         "realtime": cfg["realtime"],
         "params": list(config_params(cfg)),
-        "timbres": cfg["timbres"],
+        "timbres": list(cfg["timbres"]) + foreign,
         "notes": cfg["notes"],
         "velocities": cfg["velocities"],
+        # Carried into the manifest so a corpus is self-describing, the way the
+        # note list and the velocities are. `corpus.py` falls back to the config
+        # this header names for a manifest written before the block existed.
+        "groups": cfg.get("groups", {}),
     }
 
     todo = [j for j in jobs if _job_id(*j) not in done or not (out / done[_job_id(*j)]["path"]).exists()]
@@ -371,11 +460,13 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
     for i, (timbre, note, vel) in enumerate(todo, 1):
         jid = _job_id(timbre, note, vel)
         rel = Path(timbre["id"]) / f"n{note:03d}_v{vel:03d}.wav"
-        src = source_for(cfg, timbre)
+        src = source_for(cfg, timbre, tail=tail_for(cfg, note))
         try:
             summary = _render_note(
                 src, out / rel, note, vel, int(cfg["gate_ms"]),
                 floor_peak=loudest.get((timbre["id"], note), 0.0),
+                preroll_ms=float(cfg["preroll_ms"]),
+                sample_rate=int(cfg["sample_rate"]),
             )
             loudest[(timbre["id"], note)] = max(
                 loudest.get((timbre["id"], note), 0.0), float(summary["peak"])
@@ -384,6 +475,7 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
                 "id": jid, "timbre": timbre["id"], "note": note, "velocity": vel,
                 "path": str(rel), "peak": summary["peak"], "seconds": summary["seconds"],
                 "preroll_peak": summary.get("preroll_peak", 0.0),
+                "onset_ms": summary.get("onset_ms"),
                 "attempts": summary.get("attempts", 1),
             }
         except (AuRenderError, json.JSONDecodeError) as exc:
@@ -412,9 +504,45 @@ def _job_id(timbre: dict, note: int, vel: int) -> str:
 # around -24 dB, and a render whose samples did not arrive sits at -42 dB.
 QUIET_RATIO = 1.0 / 40.0  # -32 dB
 
+# The other failure, and the one the ratio above is structurally unable to see:
+# the note arrives LATE, and louder than it should be.
+#
+# Measured on the drum kit by re-rendering the grid and comparing. Every render
+# that reproduced sits at exactly the preroll — 100.1 to 100.6 ms on a 100 ms
+# preroll — while every render that came back a different signal begins 150 to
+# 843 ms in, after a stretch of digital silence, and is 4 to 25 dB LOUDER than
+# the note really is. Their correlation with the correct render is 0.000: it is
+# not the note shifted, it is a different event. Whole instruments came out that
+# way — all six velocities of the closed hi-hat, all six of the mute triangle —
+# and their velocity ramps were nonsense (-7.99, -8.03, -8.04, -0.57, -0.79,
+# -0.32 dBFS) against clean ones that ascend smoothly.
+#
+# Being loud is exactly why nothing caught it. `QUIET_RATIO` asks whether the
+# samples arrived; this asks whether they arrived on time, which is the only
+# part of the failure that shows. A slow-attack instrument does not defeat it:
+# the test is the first sample over an absolute -80 dBFS, not the peak, and the
+# preroll is digital silence.
+ONSET_SLACK_MS = 40.0
+#: Absolute level that counts as the render having begun. Well under anything an
+#: instrument radiates and well over a silent preroll, which is exactly zero.
+ONSET_FLOOR_DBFS = -80.0
+
+
+def _onset_ms(path: Path, sr: int) -> float | None:
+    """Where the written render's audio actually begins, in ms, or None if silent."""
+    audio, file_sr = read_wav(path)
+    if audio.size == 0:
+        return None
+    level = np.abs(audio).max(axis=1) if audio.ndim > 1 else np.abs(audio)
+    over = level > 10.0 ** (ONSET_FLOOR_DBFS / 20.0)
+    if not over.any():
+        return None
+    return float(np.argmax(over)) / float(file_sr or sr) * 1000.0
+
 
 def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
-                 *, floor_peak: float, attempts: int = 5) -> dict:
+                 *, floor_peak: float, preroll_ms: float = 0.0,
+                 sample_rate: int = 48000, attempts: int = 5) -> dict:
     """One corpus render, retried while it comes back too quiet to be the note.
 
     The failure this catches is a race inside the plugin rather than a setting:
@@ -456,6 +584,14 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
         if peak < floor:
             last = f"peak {peak:.5f} against a floor of {floor:.5f}: the samples did not arrive"
             continue
+        onset = _onset_ms(out, sample_rate)
+        summary["onset_ms"] = None if onset is None else round(onset, 2)
+        if onset is not None and onset > preroll_ms + ONSET_SLACK_MS:
+            # See ONSET_SLACK_MS. Loud enough to pass the ratio above and not
+            # the note: retried rather than recorded.
+            last = (f"the render begins {onset:.0f} ms in against a {preroll_ms:.0f} ms "
+                    f"preroll: this is not the note")
+            continue
         if attempt:
             print(f"       (took {attempt + 1} attempts)", file=sys.stderr)
         summary["attempts"] = attempt + 1
@@ -494,6 +630,17 @@ def verify(out: Path) -> int:
         pre = int(manifest["preroll_ms"] * sr / 1000)
         if pre and float(np.abs(mono[:pre]).max()) > 1e-4:
             doubts.append(f"{row['id']}: energy before the note")
+        # The late-render failure, auditable without re-rendering anything. See
+        # ONSET_SLACK_MS: a render that starts well past the preroll is a
+        # different event from the one that was asked for, and it is loud, so
+        # nothing above this line can see it. A FAULT rather than a doubt —
+        # the file is not the note, and a corpus carrying one produces a
+        # reference profile that looks exactly like a good one.
+        onset = _onset_ms(path, sr)
+        if onset is not None and onset > manifest["preroll_ms"] + ONSET_SLACK_MS:
+            faults.append(f"{row['id']}: begins {onset:.0f} ms in, against a "
+                          f"{manifest['preroll_ms']:.0f} ms preroll — not the note")
+            continue
         rms = float(np.sqrt((mono[pre:] ** 2).mean()))
         levels.setdefault((row["timbre"], row["note"]), []).append((row["velocity"], rms))
 

@@ -27,7 +27,7 @@ rule.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -64,6 +64,10 @@ class Corpus:
     #: which decides both the channel the model's probe is written on and which
     #: metric set can measure it.
     channel: int = 1
+    #: The capture's own families of notes — the tom series, the hi-hat trio —
+    #: as sets of note numbers. Empty for a capture that named none, which is
+    #: every pitched one. See `capture.note_groups` and `loss._kit_terms`.
+    groups: dict[str, tuple[int, ...]] = field(default_factory=dict)
 
     def slot_count(self) -> int:
         return len(self.notes) * len(self.velocities)
@@ -144,6 +148,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         label=label,
         dry=_dryness(manifest),
         channel=int(entry.get("channel", 1)),
+        groups=_groups(manifest),
     )
 
 
@@ -171,6 +176,36 @@ def _dryness(manifest: dict) -> bool:
         return bool(json.loads(path.read_text()).get("dry", False))
     except (OSError, ValueError):
         return False
+
+
+def _groups(manifest: dict) -> dict[str, tuple[int, ...]]:
+    """The capture's families of notes, from the manifest or from its config.
+
+    Same two-step as `_dryness`, and for the same reason: the block was added
+    after corpora had already been captured, and re-rendering a 282-note grid to
+    pick up one header field is not a reasonable thing to ask of anyone. A
+    manifest that carries it answers from itself; one that does not reads the
+    config it names.
+
+    Absent everywhere means no kit relations are scored, which is exactly right
+    for a capture whose families were never identified — the alternative would
+    be guessing them from note numbers, and a guessed family scores a relation
+    between instruments that are not related.
+    """
+    import json
+
+    if "groups" in manifest:
+        raw = manifest.get("groups") or {}
+    else:
+        config = manifest.get("config", "")
+        path = Path(config) if config else None
+        if path is None or not path.exists():
+            return {}
+        try:
+            raw = json.loads(path.read_text()).get("groups") or {}
+        except (OSError, ValueError):
+            return {}
+    return {str(name): tuple(int(n) for n in notes) for name, notes in raw.items()}
 
 
 def _tail_seconds(tail) -> float:
