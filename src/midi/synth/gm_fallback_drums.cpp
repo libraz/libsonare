@@ -407,9 +407,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // by 12.5 kHz, while the model's peaked at 12.5 kHz and was at the -60 dB
   // floor below 630 Hz. The fitted band is a low corner under the voice's own
   // filter rather than a ceiling over it, which is what moves the peak rather
-  // than only attenuating past it. The open and pedal hats are not fitted: both
-  // of their runs bought a better profile with 13 and 31 dB of level, which
-  // nothing in the objective charges for.
+  // than only attenuating past it.
   t[42].amp_env.attack_ms = 0.581237f;
   t[42].amp_env.decay_ms = 11.25f;
   t[42].cutoff_hz = 2556.94f;
@@ -428,6 +426,25 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[44].percussion.exclusive_class = 1;
   t[46].percussion.exclusive_class = 1;
   t[46].amp_env.release_ms = 40.0f;
+  // Open Hi-Hat, voiced against the same kit and with the same defect: it
+  // inherits the archetype's 7.5 kHz corner, so it peaked at 12.5 kHz against a
+  // reference that peaks at 2.5 kHz and had nothing at all below 630 Hz. The
+  // corner comes down to 2.6 kHz, and the noise envelope rather than the
+  // amplitude one carries the ring - 1285 ms against a reference that takes
+  // about a second to fall 20 dB. The pedal hat is still not fitted: its run
+  // took the other route out, pushing the corner up to 18.6 kHz and the noise
+  // gain to 2.4 to compensate, and gave up 10 dB of output doing it.
+  t[46].amp_env.attack_ms = 0.535176f;
+  t[46].amp_env.decay_ms = 1334.75f;
+  t[46].cutoff_hz = 2500.0f;
+  t[46].drive = 0.857972f;
+  t[46].percussion.noise_cutoff_hz = 2577.12f;
+  t[46].percussion.noise_decay_ms = 1285.27f;
+  t[46].percussion.noise_gain = 0.392099f;
+  t[46].percussion.noise_q = 2.8605f;
+  t[46].resonance_q = 1.32664f;
+  t[46].stereo_spread = 0.565048f;
+  t[46].gain = 0.5415f;
 
   // --- wooden idiophones + clicks ---
   t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);   // Sticks
