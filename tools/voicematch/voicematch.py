@@ -34,11 +34,14 @@ from metrics import (
     THIRD_OCTAVE_CENTERS,
     analyze_hit,
     analyze_note,
+    attack_peaks,
     compare_hit,
     compare_note,
     normalize_rms,
+    note_onset,
     to_mono,
 )
+from loss import fixed_resonances
 from patterns import (
     DRUM_GATE_HELP,
     PATTERN_BUILDERS,
@@ -263,7 +266,65 @@ def format_report(program: int, pattern_name: str, rows: list[dict]) -> str:
         )
         lines.append(f"  harmonics Δ dB vs h1-normalized oracle: {harm}")
         lines.append("")
+    lines.extend(_format_resonances(rows))
     return "\n".join(lines)
+
+
+def _format_resonances(rows: list[dict]) -> list[str]:
+    """Name the attack's fixed resonances, on both sides, or say there are none.
+
+    The per-note block above cannot show this: a resonance is only identifiable
+    as one by appearing at the same frequency on notes that share no partial
+    there, so it belongs after the grid rather than inside it. The `hf` term
+    already prices whatever energy these carry — what this adds is which
+    frequency, which is the part someone can act on.
+
+    Printed even when the model is clean, because "no fixed resonance" is a
+    result too, and a section that only appears on failure trains a reader to
+    skim past its absence.
+    """
+    model_rows = [r["model"] for r in rows]
+    oracle_rows = [r["oracle"] for r in rows]
+    model = fixed_resonances(model_rows)
+    oracle = fixed_resonances(oracle_rows)
+    # The same question with the off-partial test dropped, which is the only way
+    # to see a resonance driven AT a partial — a fixed-pitch ring lands near one
+    # on some notes of a grid and is rejected exactly on the notes that would
+    # have proved it. Reported separately rather than merged: it buys its
+    # corroboration by demanding nearly the whole grid instead, so the two lists
+    # are findings of different strength and reading them as one loses that.
+    model_driven = [r for r in fixed_resonances(model_rows, recurrence_only=True)
+                    if r["on_partial_notes"]]
+    oracle_driven = [r for r in fixed_resonances(oracle_rows, recurrence_only=True)
+                     if r["on_partial_notes"]]
+
+    def lines(header: str, pairs) -> list[str]:
+        out = [header]
+        for label, found in pairs:
+            if not found:
+                out.append(f"  {label}  none")
+                continue
+            for r in found:
+                notes = ",".join(str(n) for n in r["notes"])
+                on = (f", on a partial for {r['on_partial_notes']} of them"
+                      if r["on_partial_notes"] else "")
+                out.append(
+                    f"  {label}  {r['hz']:8.0f} Hz  +{r['prominence_db']:.0f} dB over "
+                    f"its neighbours, on notes {notes}{on}"
+                )
+        return out
+
+    out: list[str] = []
+    if model or oracle:
+        out += lines("fixed resonances in the attack (same frequency across notes):",
+                     (("model ", model), ("oracle", oracle)))
+    else:
+        out.append("fixed resonances in the attack: none on either side")
+    if model_driven or oracle_driven:
+        out += lines("driven at a fixed pitch (on nearly every note, partial or not):",
+                     (("model ", model_driven), ("oracle", oracle_driven)))
+    out.append("")
+    return out
 
 
 def run_compare(args: argparse.Namespace) -> int:
@@ -318,11 +379,16 @@ def run_compare(args: argparse.Namespace) -> int:
                 end = analysis_window_end(pattern, note)
                 nm = analyze_note(model_mono, SR, note, end)
                 no = analyze_note(oracle_mono, SR, note, end)
-                rows.append({
-                    "model": nm.to_dict(),
-                    "oracle": no.to_dict(),
-                    "delta": compare_note(nm, no),
-                })
+                md, od = nm.to_dict(), no.to_dict()
+                # Attribution for the attack, carried per side so `format_report`
+                # can group it across notes. Each side finds its own onset: the
+                # measure is about what a strike rings, so it has to start where
+                # that side's strike actually did.
+                md["attack_peaks"] = attack_peaks(
+                    model_mono, SR, note, note_onset(model_mono, SR, note, end))
+                od["attack_peaks"] = attack_peaks(
+                    oracle_mono, SR, note, note_onset(oracle_mono, SR, note, end))
+                rows.append({"model": md, "oracle": od, "delta": compare_note(nm, no)})
 
         report = (format_drum_report(pattern.name, rows) if pattern.percussive
                   else format_report(program, pattern.name, rows))

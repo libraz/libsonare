@@ -27,13 +27,26 @@ the per-note analysis in `metrics.py` never sees them.
 All versions of a take are written at one shared gain, so their level
 difference survives into the comparison; the listening page has its own
 loudness match for when that difference is in the way.
+
+`--variant` adds candidate settings of the voice as further versions of every
+take, each rendered under its own `SONARE_TUNING_OVERRIDES`. That is the form a
+listening question usually arrives in — "is this constant better at 0 or at 4"
+is not a question the metrics can settle, and the answer has to be heard against
+the same phrase and the same reference. It needs a library built with
+`-DBUILD_TUNING=ON`; without one the override layer is compiled out and every
+variant renders identically, which the tool checks for and reports rather than
+producing a page of indistinguishable versions.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,8 +56,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from _repo import REPO_ROOT  # noqa: E402
 from au_oracle import AuRenderError, render_oracle_au  # noqa: E402
 from capture import load_config, source_for, CORPUS_ROOT, DEFAULT_CONFIG  # noqa: E402
+from patterns import registers_for_program  # noqa: E402
 from render_model import render_model  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
 from wavio import write_wav  # noqa: E402
@@ -65,13 +80,17 @@ class Take:
     notes: list[Note]
     tail_s: float = 4.0
     cc_events: tuple[tuple[float, int, int], ...] = field(default=())
+    #: MIDI channel. 9 is the GM drum channel, on which a note number selects a
+    #: percussion instrument rather than a pitch — the kit set needs it and
+    #: nothing else does.
+    channel: int = 0
 
     def duration(self) -> float:
         end = max((n.start + n.dur) for n in self.notes)
         return end + self.tail_s
 
 
-def piano_takes() -> list[Take]:
+def piano_takes(program: int = 0) -> list[Take]:
     """The piano set: one phrase per thing that is hard to hear any other way."""
     out: list[Take] = []
 
@@ -153,7 +172,7 @@ def piano_takes() -> list[Take]:
     return out
 
 
-def harpsichord_takes() -> list[Take]:
+def harpsichord_takes(program: int = 6) -> list[Take]:
     """The harpsichord set.
 
     Almost nothing the piano set probes transfers. There is no pedal to lift and
@@ -252,11 +271,203 @@ def harpsichord_takes() -> list[Take]:
     return out
 
 
+def drum_takes(program: int = 0) -> list[Take]:
+    """The kit set: what a drum part is, which single hits are not.
+
+    The single-hit probe strikes one instrument every two seconds, which is the
+    right stimulus for measuring one drum and the wrong one for hearing a kit.
+    Everything below lives in the relation between hits, and a fit that never
+    plays two hits close together cannot produce any of it — not because the
+    search failed but because the question was never put.
+
+    Written on the drum channel, so a note number selects an instrument. The
+    take set is `analysis_notes`-free by nature: every per-hit measurement
+    assumes an isolated strike.
+    """
+    out: list[Take] = []
+
+    # The mute group. 42, 44 and 46 share a GM exclusive class, so an open hat
+    # left ringing is cut the instant a closed one or the pedal arrives. That is
+    # the pedal, it is most of what a hi-hat part sounds like, and no probe in
+    # this harness has ever fired it.
+    out.append(Take(
+        "hh-choke", "Hi-hat — open, choked, open, pedal", "the mute group",
+        "46 open / 42 closed / 46 open / 44 pedal",
+        [Note(46, 110, 0.3, 0.05), Note(42, 100, 0.8, 0.05),
+         Note(46, 110, 1.8, 0.05), Note(44, 90, 2.3, 0.05)], tail_s=4.0, channel=9,
+    ))
+
+    # At speed each strike lands on the last one's ring. A voice that sounds
+    # right alone and identical every time reads as a machine here, which is
+    # what a fixed one-shot with no round robin and no choke sounds like.
+    out.append(Take(
+        "hh-sixteenths", "Hi-hat — sixteenths at 120", "at speed",
+        "42 closed, accented on the beat",
+        [Note(42, 112 if i % 4 == 0 else 96, 0.3 + i * 0.125, 0.05)
+         for i in range(16)], tail_s=2.5, channel=9,
+    ))
+
+    # Two strikes close enough to fuse into one event. The ear hears a flam as
+    # thickness rather than as two notes, and whether it does depends entirely
+    # on what the second strike finds the first one doing.
+    out.append(Take(
+        "snare-flam", "Snare — flams and a roll", "at speed",
+        "grace note 28 ms ahead, then a 12-stroke roll",
+        [Note(38, 60, 0.3, 0.05), Note(38, 110, 0.328, 0.05),
+         Note(38, 60, 1.3, 0.05), Note(38, 110, 1.328, 0.05)]
+        + [Note(38, 90, 2.4 + i * 0.06, 0.05) for i in range(12)], tail_s=3.0, channel=9,
+    ))
+
+    # The tom fill is where the kit's tuning is audible as a kit rather than as
+    # six separate instruments. The order is the MEASURED pitch order of the
+    # capture, which is not the order General MIDI names the keys in.
+    out.append(Take(
+        "tom-fill", "Toms — a descending fill", "the kit as a kit",
+        "43 41 50 48 47 45, the capture's measured pitch order, high to low",
+        [Note(n, 104, 0.3 + i * 0.22, 0.05)
+         for i, n in enumerate((43, 41, 50, 48, 47, 45))], tail_s=3.5, channel=9,
+    ))
+
+    # A cymbal's wash is four to ten seconds and every measurement in this
+    # harness stops at 1.8. This is the take that hears what none of them reach.
+    out.append(Take(
+        "cymbal-wash", "Cymbals — crash and ride, let ring", "the long tail",
+        "49 crash, then 51 ride, ten seconds",
+        [Note(49, 120, 0.3, 0.05), Note(51, 100, 3.0, 0.05)], tail_s=10.0, channel=9,
+    ))
+
+    out.append(Take(
+        "groove", "Groove — a bar of eights", "the kit as a kit",
+        "kick, snare, closed hat, 100 bpm",
+        [Note(42, 92 if i % 2 else 104, 0.3 + i * 0.3, 0.05) for i in range(8)]
+        + [Note(36, 110, 0.3, 0.05), Note(36, 100, 1.5, 0.05)]
+        + [Note(38, 108, 0.9, 0.05), Note(38, 108, 2.1, 0.05)], tail_s=3.5, channel=9,
+    ))
+    return out
+
+
+def sustained_takes(program: int = 40) -> list[Take]:
+    """The set for anything bowed or blown: what happens BETWEEN notes.
+
+    The whole harness measures isolated held notes, and on a wind or a bowed
+    string that is the least characteristic thing the instrument does. Tonguing,
+    a bow change, the join in a slur and the shape of a swell are where the
+    playing is, and none of them exists inside one note.
+
+    Generic across the family rather than per instrument: the register comes
+    from the capture's own program, so this set is a shape and the notes are
+    filled in against `registers_for_program`.
+    """
+    lo, mid, hi = registers_for_program(program)
+    out: list[Take] = []
+
+    out.append(Take(
+        "single-long", "Single note — held six seconds", "one note at a time",
+        "the vibrato, if there is one, and how it starts",
+        [Note(mid, 96, 0.3, 6.0)], tail_s=2.5,
+    ))
+
+    # A slur is one continuous sound with the pitch changed inside it. A model
+    # that retriggers its excitation on every note-on produces a series of
+    # separate notes, which is audible immediately and invisible to every
+    # measurement here.
+    out.append(Take(
+        "legato-scale", "Legato — a scale, slurred", "between notes",
+        "overlapping note-ons, no gap anywhere",
+        [Note(mid + d, 92, 0.3 + i * 0.38, 0.44)
+         for i, d in enumerate((0, 2, 4, 5, 7, 9, 11, 12))], tail_s=2.5,
+    ))
+
+    out.append(Take(
+        "tongued", "Repeated notes — separated", "between notes",
+        "the same pitch eight times, each articulated",
+        [Note(mid, 100, 0.3 + i * 0.35, 0.22) for i in range(8)], tail_s=2.5,
+    ))
+
+    out.append(Take(
+        "swell", "Swell — one note from nothing and back", "one note at a time",
+        "expression from 0 to 127 and back over 6 s",
+        [Note(mid, 100, 0.3, 6.0)], tail_s=2.5,
+        cc_events=tuple((0.3 + i * 0.25, 11, v) for i, v in enumerate(
+            list(range(0, 128, 11)) + list(range(127, -1, -11)))),
+    ))
+
+    out.append(Take(
+        "leap", "Leaps — across the compass", "between notes",
+        "low, high, low, slurred",
+        [Note(n, 96, 0.3 + i * 0.6, 0.7)
+         for i, n in enumerate((lo, hi, mid, hi, lo))], tail_s=3.0,
+    ))
+    return out
+
+
 #: Phrase sets by name. A capture definition names the one its instrument needs.
 TAKE_SETS = {
     "piano": piano_takes,
     "harpsichord": harpsichord_takes,
+    "drums": drum_takes,
+    "sustained": sustained_takes,
 }
+
+
+#: Renders one SMF in a fresh interpreter. The tuning override table is read
+#: when the library loads, so two settings of the same constant cannot be
+#: rendered by one process -- the second would silently get the first's values.
+_VARIANT_WORKER = r'''
+import sys
+import numpy as np
+sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
+from render_model import render_model
+smf, out, seconds, sr = sys.argv[1], sys.argv[2], float(sys.argv[3]), int(sys.argv[4])
+with open(smf, "rb") as fh:
+    a = np.asarray(render_model(fh.read(), seconds, sr), dtype=np.float32)
+np.save(out, a.mean(axis=1) if a.ndim > 1 else a)
+'''
+
+
+def parse_variants(specs: list[str]) -> list[tuple[str, str]]:
+    """`name=overrides` pairs, in the order given.
+
+    The name is the source key the page shows and the file stem on disk, so it
+    is restricted to what is safe in both; the overrides are passed through
+    untouched, since the library is the only thing that can say whether a key
+    exists.
+    """
+    out: list[tuple[str, str]] = []
+    for spec in specs:
+        name, sep, overrides = spec.partition("=")
+        name = name.strip()
+        if not sep or not name:
+            raise SystemExit(f"--variant wants name=overrides, got {spec!r}")
+        if not all(c.isalnum() or c in "._-" for c in name):
+            raise SystemExit(f"--variant name may only hold letters, digits, . _ - : {name!r}")
+        if name == "model":
+            raise SystemExit("--variant name 'model' is taken by the unmodified voice")
+        out.append((name, overrides.strip()))
+    return out
+
+
+def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
+                   lib_path: str = "") -> np.ndarray:
+    """One take under one override set, in its own interpreter."""
+    env = dict(os.environ)
+    if lib_path:
+        env["SONARE_LIB_PATH"] = lib_path
+    if overrides:
+        env["SONARE_TUNING_OVERRIDES"] = overrides
+    else:
+        env.pop("SONARE_TUNING_OVERRIDES", None)
+    with tempfile.TemporaryDirectory() as tmp:
+        smf_path = Path(tmp) / "take.mid"
+        smf_path.write_bytes(smf)
+        out_path = Path(tmp) / "render.npy"
+        proc = subprocess.run(
+            [sys.executable, "-c", _VARIANT_WORKER, str(smf_path), str(out_path),
+             str(seconds), str(sr)],
+            capture_output=True, text=True, env=env, cwd=str(REPO_ROOT))
+        if proc.returncode:
+            raise RuntimeError(proc.stderr[-4000:])
+        return np.load(out_path)
 
 
 def shared_gain(renders: dict[str, np.ndarray], headroom_db: float = -1.0) -> float:
@@ -285,7 +496,14 @@ def main() -> int:
                     help=f"phrase set: {'/'.join(TAKE_SETS)} (default: the config's)")
     ap.add_argument("--program", type=int, default=None,
                     help="GM program the model answers with (default: the config's)")
+    ap.add_argument("--variant", action="append", default=[], metavar="NAME=OVERRIDES",
+                    help="an extra version of every take, rendered under this "
+                         "SONARE_TUNING_OVERRIDES string; repeatable")
+    ap.add_argument("--lib", default="",
+                    help="library the variants load (a -DBUILD_TUNING=ON build); "
+                         "sets SONARE_LIB_PATH for them")
     args = ap.parse_args()
+    variants = parse_variants(args.variant)
 
     cfg = load_config(Path(args.config))
     out = Path(args.out).expanduser().resolve()
@@ -310,23 +528,61 @@ def main() -> int:
         print(f"the capture names {named}; have {', '.join(TAKE_SETS)}", file=sys.stderr)
         return 2
 
-    selected = [t for t in TAKE_SETS[set_name]() if not only or t.id in only]
-    sources = {"model": {"label": "libsonare NativeSynth (GM fallback)"}}
+    selected = [t for t in TAKE_SETS[set_name](program) if not only or t.id in only]
+    # `role` splits the page's version switch into a model row and a reference
+    # row. Seven versions of a take is an ordinary number once a couple of
+    # candidate settings are in play, and as one undifferentiated strip of
+    # buttons it takes reading every label to find which side of the comparison
+    # a version is on -- which is the one thing the page should never make
+    # anybody work out.
+    sources = {"model": {
+        "label": "libsonare NativeSynth (GM fallback)",
+        "role": "model",
+        "detail": "the library as it stands, no overrides",
+    }}
+    for name, overrides in variants:
+        sources[name] = {
+            "label": f"libsonare NativeSynth (GM fallback), {name}",
+            "role": "model",
+            "detail": overrides or "no overrides",
+        }
     for t in timbres:
-        sources[t["id"]] = {"label": f"{cfg['label'].split(',')[0]} — {t['label']}"}
+        sources[t["id"]] = {
+            "label": t["label"],
+            "role": "reference",
+            "detail": cfg["label"].split(",")[0],
+        }
 
     items = []
+    variant_digests: dict[str, set[str]] = {}
     for take in selected:
         total = take.duration()
         smf = write_smf(
             take.notes, program=program, end_pad=take.tail_s,
-            cc_events=take.cc_events,
+            cc_events=take.cc_events, channel=take.channel,
         )
         print(f"== {take.id} ({total:.1f}s) ==", file=sys.stderr)
 
         renders: dict[str, np.ndarray] = {}
-        renders["model"] = render_model(smf, total, SR)
+        # `--lib` has to reach the unmodified voice as well as the variants.
+        # Rendering it in-process instead would take whichever library the
+        # loader prefers, so a page meant to compare four settings of one
+        # constant would be comparing two builds -- and the difference between
+        # two build trees is invisible on a listening page and reads as tuning.
+        renders["model"] = (render_variant(smf, total, SR, "", args.lib) if args.lib
+                            else render_model(smf, total, SR))
         print("  model", file=sys.stderr)
+
+        for name, overrides in variants:
+            audio = render_variant(smf, total, SR, overrides, args.lib)
+            renders[name] = audio
+            # Hashed rather than compared pairwise: what has to be caught is a
+            # library with the override layer compiled out, where EVERY variant
+            # is the same render, and a set of digests says that in one look.
+            variant_digests.setdefault(take.id, set()).add(
+                hashlib.sha256(np.ascontiguousarray(audio, dtype=np.float32)
+                               .tobytes()).hexdigest())
+            print(f"  {name}", file=sys.stderr)
 
         for timbre in timbres:
             # Built through the same helper the capture path uses, so a timbre
@@ -392,7 +648,25 @@ def main() -> int:
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"\n{len(items)} takes -> {out}", file=sys.stderr)
-    print(f"listen:  python tools/audition/serve.py {out}", file=sys.stderr)
+    # A page whose variants are all the same render looks exactly like a page
+    # whose variants are subtly different, and the difference is a build flag
+    # nobody sees. Say it here rather than let it be listened to.
+    if len(variants) > 1:
+        identical = [tid for tid, d in variant_digests.items() if len(d) == 1]
+        if len(identical) == len(variant_digests):
+            print(f"WARNING: all {len(variants)} variants rendered identically on every "
+                  f"take.\n         The library has no tuning override layer -- rebuild "
+                  f"it with -DBUILD_TUNING=ON,\n         or point --lib at one that has.",
+                  file=sys.stderr)
+        elif identical:
+            print(f"note: {len(identical)} take(s) render identically across the "
+                  f"variants: {', '.join(sorted(identical))}", file=sys.stderr)
+    if out.is_relative_to(CORPUS_ROOT):
+        print("listen:  python tools/audition/serve.py"
+              "   (this set is under the scratch root, so it is found with no argument)",
+              file=sys.stderr)
+    else:
+        print(f"listen:  python tools/audition/serve.py {out}", file=sys.stderr)
     return 0
 
 

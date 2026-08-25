@@ -142,7 +142,25 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
         print("  dropped (largest effect first):", file=sys.stderr)
         for label, effect in sorted(dropped, key=lambda kv: -kv[1]):
             print(f"    {label}  effect={effect:.5f}", file=sys.stderr)
-    return keep or list(range(len(knobs)))
+    if not keep:
+        # Not the same event as "most knobs are inert", and it used to be
+        # reported as one: the fallback below quietly restored the whole list,
+        # so a spec that moved NOTHING and a spec that moved everything both
+        # continued into the fit with the same knob count and the same
+        # one-line message. Zero is the signature of a probe that did not
+        # reach what it was aimed at — an engine switched off underneath the
+        # fields being swept, or a value swept over a range the clamp rejects
+        # — and it is worth more than the fit that follows it.
+        biggest = max((e for _, e in dropped), default=0.0)
+        raise RuntimeError(
+            f"screening: 0 of {len(knobs)} knobs move the loss at all "
+            f"(largest effect {biggest:.2e}, threshold {args.screen_threshold}). "
+            f"The probe is not reaching these fields. Check that the engine they "
+            f"belong to is switched on for this program, that their ranges are "
+            f"the ones clamp_synth_patch accepts, and that the probe's pattern "
+            f"exercises the axis they act on."
+        )
+    return keep
 
 
 # Which stage a knob belongs to, by substring of its *leaf* — the field's own

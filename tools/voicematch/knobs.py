@@ -330,6 +330,25 @@ def _auto_range(
 #: every band of the profile bit-identical.
 UNIDENTIFIABLE_FIELDS = frozenset({"gain"})
 
+#: Patch fields whose value is fixed by the model's geometry rather than by an
+#: instrument's voicing, so `--spec auto` does not offer them either. A
+#: percussion mode's `mode_alpha` is the Bessel zero alpha_mn: it scales the
+#: spatial argument the strike weighting J_m(alpha * strike_r) is evaluated at,
+#: and `percussion_voice.h` records that `mode_ratios[k] == mode_alpha[k] /
+#: mode_alpha[0]` for the ideal membrane. A fit allowed to move it independently
+#: does not retune a drum, it uses a documented physical relation as a per-mode
+#: gain — measured on a kick, which took alpha0 to its bound at eight times the
+#: first zero of J0 while dropping alpha1 below alpha0, leaving a mode set no
+#: membrane has. The mode *ratios* stay fittable: a real head genuinely detunes
+#: away from the ideal set, and that is what a ratio is for.
+STRUCTURAL_FIELD_PREFIXES = ("mode_alpha",)
+
+
+def _offered(field: str) -> bool:
+    """Whether `--spec auto` puts this patch field in front of a search."""
+    return (field not in UNIDENTIFIABLE_FIELDS
+            and not field.startswith(STRUCTURAL_FIELD_PREFIXES))
+
 
 def auto_spec(
     program: int, catalogue: Catalogue, *, drum_note: int | None = None, bank: int = 0
@@ -372,7 +391,7 @@ def auto_spec(
                 f"rebuild with BUILD_TUNING=ON so the catalogue is written"
             )
     patch_keys = sorted(k for k in defaults if k.startswith(key + ".")
-                        and k.rsplit(".", 1)[-1] not in UNIDENTIFIABLE_FIELDS)
+                        and _offered(k.rsplit(".", 1)[-1]))
     if not patch_keys:
         raise ValueError(f"no patch fields under {key!r} in the catalogue")
 

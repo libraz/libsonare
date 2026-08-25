@@ -11,12 +11,21 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass, field
 
+from metrics import LONG_DECAY_DRUM_NOTES
 from smf import Note
+from toneclass import PROGRAM_REGISTERS as _CLASS_REGISTERS
 
 # Register presets per GM program (MIDI note numbers for low/mid/high probes).
 # Chosen to sit inside each instrument's real playing range so the reference
 # SoundFont plays natural samples rather than extreme transpositions. Programs
-# not listed fall back to their 8-program family entry, then to C3/C4/C5.
+# not listed fall back to their 8-program family entry, then to the table in
+# `toneclass.py`, then to C3/C4/C5.
+#
+# Two tables rather than one, and which is which matters: this one holds the
+# families that were probed and tuned against a reference, and is authoritative
+# where it has an entry. `toneclass.PROGRAM_REGISTERS` fills the families this
+# one never listed — 0-15, 24-31, 48-55 and everything from 80 up — which fell
+# through to C3/C4/C5 whatever the instrument's compass was.
 _DEFAULT_REGISTERS = (48, 60, 72)
 
 _PROGRAM_REGISTERS: dict[int, tuple[int, int, int]] = {
@@ -75,7 +84,9 @@ def registers_for_program(program: int) -> tuple[int, int, int]:
     if program in _PROGRAM_REGISTERS:
         return _PROGRAM_REGISTERS[program]
     family_base = (program // 8) * 8
-    return _PROGRAM_REGISTERS.get(family_base, _DEFAULT_REGISTERS)
+    if family_base in _PROGRAM_REGISTERS:
+        return _PROGRAM_REGISTERS[family_base]
+    return _CLASS_REGISTERS.get(program, _DEFAULT_REGISTERS)
 
 
 @dataclass(frozen=True)
@@ -242,7 +253,7 @@ def drum_pattern(
     notes: tuple[int, ...] | None = None,
     velocities: tuple[int, ...] = DRUM_VELOCITIES,
     dur: float = DRUM_GATE,
-    gap: float = 2.0,
+    gap: float | None = None,
 ) -> Pattern:
     """Isolated one-shot hits of one drum note at increasing velocities.
 
@@ -263,8 +274,9 @@ def drum_pattern(
     below -20 dB under the next onset; the belltree, the quietest instrument in
     the kit and one of the longest, is the single exception at -15 dB.
     """
+    gap = drum_gap_for(notes) if gap is None else gap
     return _drum_pattern(
-        "drum", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=2.0
+        "drum", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=gap
     )
 
 
@@ -274,7 +286,7 @@ def drum_holdout_pattern(
     notes: tuple[int, ...] | None = None,
     velocities: tuple[int, ...] = DRUM_HOLDOUT_VELOCITIES,
     dur: float = DRUM_GATE,
-    gap: float = 2.0,
+    gap: float | None = None,
 ) -> Pattern:
     """`drum` at velocities the fit never saw — the generalisation check.
 
@@ -282,9 +294,81 @@ def drum_holdout_pattern(
     velocity: values fitted at 64/100/127 that are wrong at 48/88/112 are
     overfitted to the probe exactly as a violin fitted on three pitches can be.
     """
+    gap = drum_gap_for(notes) if gap is None else gap
     return _drum_pattern(
-        "drum-holdout", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=2.0
+        "drum-holdout", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=gap
     )
+
+
+# How long the kit's long pieces need after a hit. Which pieces those are is
+# `metrics.LONG_DECAY_DRUM_NOTES`, where the measurement that named them lives.
+#
+# The long pieces get a long gap and everything else keeps the short one, rather
+# than the whole probe getting the long one: rendering ten notes six seconds
+# longer costs about six minutes, and rendering all 47 of them longer costs an
+# hour. The capture side takes the same split through `tail_by_note`, and the
+# analysis window through `metrics.HIT_LONG_MAX_SEC` — a longer probe and a
+# longer recording measure nothing if the window still stops at 1.8 s.
+LONG_DECAY_GAP_S = 8.0
+
+
+def drum_gap_for(notes: tuple[int, ...] | None) -> float:
+    """How long to leave after a hit, from what is being struck.
+
+    One number for the whole probe rather than per hit, because the analysis
+    window is derived from the next onset and a probe with uneven spacing is
+    harder to read than one that is simply long enough.
+    """
+    if notes and any(n in LONG_DECAY_DRUM_NOTES for n in notes):
+        return LONG_DECAY_GAP_S
+    return 2.0
+
+
+# The hi-hat trio, and why a probe of single hits cannot see it.
+#
+# 42, 44 and 46 share a GM exclusive class: striking one chokes the others,
+# which is the pedal, and it is most of what a hi-hat part sounds like. The
+# model implements it (`PercussionPatchParams::exclusive_class`) and the drum
+# probe has never fired it once, because it strikes one note every two seconds.
+#
+# The same gap covers everything else that lives in the relation between hits: a
+# sixteenth-note closed-hat pattern, where each strike lands on the last one's
+# ring, and a flam, where two strikes are close enough to fuse. A kit that
+# sounds correct one hit at a time and wrong at speed is the ordinary outcome of
+# fitting it one hit at a time.
+DRUM_SEQUENCES: dict[str, tuple[tuple[int, int, float], ...]] = {
+    # (note, velocity, seconds from the start of the phrase)
+    "hh-choke": ((46, 110, 0.0), (42, 100, 0.5), (46, 110, 1.5), (44, 90, 2.0)),
+    "hh-sixteenths": tuple((42, 96 if i % 4 else 112, i * 0.125) for i in range(16)),
+    "flam": ((38, 60, 0.0), (38, 110, 0.028), (38, 60, 1.0), (38, 110, 1.028)),
+    "roll": tuple((38, 90, i * 0.06) for i in range(12)),
+}
+
+
+def drum_sequence_pattern(
+    program: int,
+    *,
+    sequence: str = "hh-choke",
+    dur: float = DRUM_GATE,
+) -> Pattern:
+    """A short percussion phrase, scored as one gesture rather than per hit.
+
+    Nothing here is an analysis note. Every per-hit measurement assumes the hit
+    is isolated — `analyze_hit` walks back from the loudest moment to find the
+    strike, and the window runs to the next onset — and none of that survives
+    hits a tenth of a second apart. What this probe is for is the whole-timeline
+    comparison (`--w-mss`), which needs no such assumption and which is the one
+    measure that can see a choke that did not happen.
+    """
+    try:
+        events = DRUM_SEQUENCES[sequence]
+    except KeyError:
+        raise ValueError(
+            f"unknown drum sequence {sequence!r} (choose from "
+            f"{sorted(DRUM_SEQUENCES)})") from None
+    seq = [Note(n, v, 0.1 + t, dur) for n, v, t in events]
+    return Pattern(f"drum-sequence:{sequence}", seq, analysis_notes=[],
+                   tail=3.0, channel=9, percussive=True)
 
 
 def scale_pattern(
@@ -308,6 +392,7 @@ PATTERN_BUILDERS = {
     "room-probe": room_probe_pattern,
     "drum": drum_pattern,
     "drum-holdout": drum_holdout_pattern,
+    "drum-sequence": drum_sequence_pattern,
     "scale": scale_pattern,
 }
 
