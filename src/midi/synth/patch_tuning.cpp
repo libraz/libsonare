@@ -10,7 +10,9 @@
 // reach, since nothing there ever populates the override map.
 #if defined(SONARE_TUNING) && SONARE_TUNING
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <string>
 #include <vector>
@@ -63,7 +65,51 @@ struct Fields {
     return ::sonare::tuning::tunable_keyed((prefix + '.' + path).c_str(), current);
   }
 
+  /// The same walk for a field that counts rather than measures.
+  ///
+  /// Every field above is a float, and for a while that was the whole table —
+  /// which meant the questions a count answers could not be asked without a
+  /// rebuild. That is worse than it sounds: a count is often the switch that
+  /// decides whether the fields around it do anything at all, so sweeping
+  /// `shell_freq_hz` and `shell_mix` while `shell_num_modes` sits at 0 reads
+  /// as a clean structural negative — "the shell cannot reach this" — when the
+  /// finding is only that the shell was off.
+  ///
+  /// The override arrives as a float like every other, and is rounded rather
+  /// than truncated so a fitter stepping across 2.5 lands on 3 and not on 2.
+  /// `lo`/`hi` are the field's REPRESENTABLE range, which for a plain `int`
+  /// field is wide open and left to `clamp_synth_patch` to narrow — the same
+  /// arrangement the float probe relies on. A narrow type states its own,
+  /// because a probe that overflows it measures the wraparound.
+  int as_int(const char* path, int current, int lo, int hi) const {
+    if (pass == FieldPass::kFill) {
+      return std::clamp(static_cast<int>(std::lround(fill_int())), lo, hi);
+    }
+    if (pass == FieldPass::kRead) {
+      read_bound(path, static_cast<float>(current));
+      return current;
+    }
+    if (pass == FieldPass::kReport) {
+      if (paths != nullptr) paths->emplace_back(path);
+      return current;
+    }
+    const float value =
+        ::sonare::tuning::tunable_keyed((prefix + '.' + path).c_str(), static_cast<float>(current));
+    if (!std::isfinite(value)) return current;
+    return std::clamp(static_cast<int>(std::lround(value)), lo, hi);
+  }
+
  private:
+  /// The probe an integer field is filled with. The float probe is 1e30, which
+  /// no integer type can hold, so the sign is taken from it and the magnitude
+  /// from what an `int` can represent. `clamp_synth_patch` narrows it to the
+  /// real bound exactly as it does for a float, so the bound stays measured
+  /// rather than mirrored from the clamp.
+  float fill_int() const {
+    const float sign = fill < 0.0f ? -1.0f : 1.0f;
+    return sign * static_cast<float>(std::numeric_limits<int>::max() / 2);
+  }
+
   void read_bound(const char* path, float value) const {
     if (bounds == nullptr) return;
     if (!bounds->upper) {
@@ -84,6 +130,16 @@ struct Fields {
 /// table below reads as a list of member paths and nothing else.
 #define F(path) p.path = f(#path, p.path)
 
+/// An `int` field, bounded by `clamp_synth_patch` like every float here.
+#define I(path) \
+  p.path = f.as_int(#path, p.path, std::numeric_limits<int>::min(), std::numeric_limits<int>::max())
+
+/// A field whose own type is the range — the clamp does not narrow it, and a
+/// probe wide enough for an `int` would measure the type's wraparound instead.
+#define I_TYPED(path, type_lo, type_hi)   \
+  p.path = static_cast<decltype(p.path)>( \
+      f.as_int(#path, static_cast<int>(p.path), (type_lo), (type_hi)))
+
 /// A DAHDSR section (`amp_env`, `filter_env`, an FM operator's `env`).
 void apply_env(DahdsrConfig& e, const Fields& f, const std::string& path) {
   const auto at = [&](const char* leaf, float current) {
@@ -100,6 +156,11 @@ void apply_env(DahdsrConfig& e, const Fields& f, const std::string& path) {
 /// The patch sections every engine shares: oscillator detune / drift, gain,
 /// both envelopes, the filter, the LFOs, glide, body and stereo.
 void apply_common(NativeSynthPatch& p, const Fields& f) {
+  // The oscillator count and the body voicing: the two shared fields that
+  // switch a mechanism rather than trim one, and the two whose absence made a
+  // sweep of `detune_cents` or `body_mix` read as a structural answer.
+  I(unison);
+  I_TYPED(body, static_cast<int>(BodyType::kNone), static_cast<int>(BodyType::kVocal));
   F(detune_cents);
   F(drift_cents);
   F(drift_rate_hz);
@@ -309,6 +370,7 @@ void apply_vocal(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_modal(NativeSynthPatch& p, const Fields& f) {
+  I(modal.num_modes);
   F(modal.decay_s);
   F(modal.decay_stretch);
   F(modal.strike_brightness);
@@ -333,6 +395,18 @@ void apply_additive(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_percussion(NativeSynthPatch& p, const Fields& f) {
+  // The counts come first because they decide whether the fields under them do
+  // anything: sweeping the shell's frequencies with `shell_num_modes` at 0
+  // reads as "the shell cannot reach this measurement" and means "the shell is
+  // switched off".
+  I(percussion.num_modes);
+  I(percussion.shell_num_modes);
+  // Neither is narrowed by `clamp_synth_patch`, so each states the range its
+  // own type defines. `exclusive_class` is the GM mute group — 0 is "none",
+  // and it is here so a choke relationship can be tested without a rebuild.
+  I_TYPED(percussion.exclusive_class, 0, 255);
+  I_TYPED(percussion.noise_output, static_cast<int>(SynthFilterOutput::kLowpass),
+          static_cast<int>(SynthFilterOutput::kHighpass));
   for (int i = 0; i < kMaxPercussionModes; ++i) {
     const std::string index = std::to_string(i);
     float& ratio = p.percussion.mode_ratios[static_cast<size_t>(i)];
