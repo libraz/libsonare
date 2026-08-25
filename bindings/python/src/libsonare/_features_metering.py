@@ -476,7 +476,7 @@ def _scope_point_columns(
     ctypes mirror flows through here without a second edit. The returned arrays
     are copies -- the caller frees the C result immediately after.
     """
-    names = [name for name, _ in point_type._fields_]
+    names = [name for name, *_ in point_type._fields_]
     if ctypes.sizeof(point_type) != 4 * len(names):
         raise RuntimeError(f"{point_type.__name__} is not a packed float32 record")
     if count == 0:
