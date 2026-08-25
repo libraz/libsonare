@@ -438,6 +438,71 @@ TEST_CASE("the radiated bound leaves the particle layer alone", "[midi][synth][p
   REQUIRE(energy > 0.0);  // the layer really is sounding, so the match means something
 }
 
+namespace {
+
+/// A bare PhISEM shaker: no membrane, no noise burst, one bright band.
+NativeSynthPatch shaker_patch() {
+  NativeSynthPatch p{};
+  p.mode = SynthEngineMode::kPercussion;
+  p.one_shot = true;
+  p.cutoff_hz = 20000.0f;
+  p.percussion.num_modes = 0;
+  p.percussion.noise_gain = 0.0f;
+  p.percussion.phisem_beans = 24.0f;
+  p.percussion.phisem_energy_ms = 120.0f;
+  p.percussion.phisem_res_hz = 3000.0f;
+  p.percussion.phisem_res_q = 2.0f;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("phisem_body_gain == 0 reproduces the legacy particle output bit-for-bit",
+          "[midi][synth][percussion]") {
+  const NativeSynthPatch legacy = shaker_patch();
+  NativeSynthPatch configured = legacy;
+  configured.percussion.phisem_body_hz = 285.0f;  // set but silenced by gain 0
+  configured.percussion.phisem_body_q = 5.5f;
+  configured.percussion.phisem_body_gain = 0.0f;
+
+  const std::vector<float> a = render_patch(legacy, 73, 110, 8192);
+  const std::vector<float> b = render_patch(configured, 73, 110, 8192);
+  REQUIRE(a.size() == b.size());
+  double energy = 0.0;
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+    energy += static_cast<double>(a[i]) * a[i];
+  }
+  REQUIRE(energy > 0.0);  // the layer really is sounding, so the match means something
+}
+
+TEST_CASE("the particle body rings well below the band the collisions radiate",
+          "[midi][synth][percussion]") {
+  const NativeSynthPatch dry = shaker_patch();
+  NativeSynthPatch gourd = dry;
+  gourd.percussion.phisem_body_hz = 285.0f;
+  gourd.percussion.phisem_body_q = 5.5f;
+  gourd.percussion.phisem_body_gain = 0.4f;
+
+  const std::vector<float> a = render_patch(dry, 73, 110, 8192);
+  const std::vector<float> b = render_patch(gourd, 73, 110, 8192);
+
+  // The body lifts its own centre by a wide margin and leaves the bright band
+  // where it was: the two paths are parallel, so neither passes through the
+  // other.
+  REQUIRE(goertzel(b, 285.0) > goertzel(a, 285.0) * 4.0);
+  REQUIRE(goertzel(b, 3000.0) == Catch::Approx(goertzel(a, 3000.0)).epsilon(0.02));
+
+  // Two pole pairs, not one. An octave under the centre a single pair of this Q
+  // is down 18.4 dB and the cascade twice that, so a threshold between them
+  // fails if the second pair ever stops being applied. Read against the same
+  // octave of the dry render, which carries the bright band's own skirt.
+  const double centre = goertzel(b, 285.0) - goertzel(a, 285.0);
+  const double octave_down = goertzel(b, 142.5) - goertzel(a, 142.5);
+  REQUIRE(octave_down > 0.0);
+  REQUIRE(20.0 * std::log10(centre / octave_down) > 26.0);
+}
+
 // ---------------------------------------------------------------------------
 // GM/GS drum map: per-note archetypes + exclusive (mute-group) choke.
 // ---------------------------------------------------------------------------

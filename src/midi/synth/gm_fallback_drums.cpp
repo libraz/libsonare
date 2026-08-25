@@ -256,8 +256,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
     return p;
   };
 
-  // Shaker (PhISEM): a burst of stochastic bead collisions rung through a gourd
-  // resonance — maracas, cabasa, shaker, tambourine, vibraslap.
+  // Shaker (PhISEM): a burst of stochastic bead collisions voiced by the band
+  // they radiate directly — maracas, cabasa, shaker, tambourine, vibraslap. The
+  // body they sound inside is a separate resonance, set per instrument below.
   auto make_shaker = [&](float beans, float energy_ms, float res_hz, float res_q, float gain) {
     NativeSynthPatch p = piece;
     p.amp_env = fallback_env(0.5f, energy_ms + 200.0f, 0.0f, 40.0f);
@@ -561,6 +562,24 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[79] = make_scrape(6.0f, 250.0f, 40.0f, 500.0f, 3.0f, 0.5f, 0.55f);   // Open Cuica (up)
   t[78].percussion.exclusive_class = 2;
   t[79].percussion.exclusive_class = 2;
+
+  // The body the collisions happen inside, radiating alongside the bright band
+  // above rather than through it. Fitted against the measured kit on the bands
+  // that reference can still resolve: a tambourine's frame and head are one
+  // broad low shelf, a maraca's gourd is a little narrower, and a guiro's is a
+  // narrow peak that stands 23 dB over the third of an octave beneath it. The
+  // shakers left without one are the ones the measurement says have none - the
+  // cabasa is flat from 125 Hz to 1 kHz, and the long guiro's and vibraslap's
+  // errors are in the midrange, where a body cannot reach them.
+  t[54].percussion.phisem_body_hz = 200.0f;  // Tambourine
+  t[54].percussion.phisem_body_q = 0.65f;
+  t[54].percussion.phisem_body_gain = 3.2f;
+  t[70].percussion.phisem_body_hz = 210.0f;  // Maracas
+  t[70].percussion.phisem_body_q = 1.0f;
+  t[70].percussion.phisem_body_gain = 2.1f;
+  t[73].percussion.phisem_body_hz = 285.0f;  // Short Guiro
+  t[73].percussion.phisem_body_q = 5.5f;
+  t[73].percussion.phisem_body_gain = 0.4f;
 
   for (auto& p : t) p = clamp_synth_patch(p);
 

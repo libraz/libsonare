@@ -123,8 +123,11 @@ struct PercussionPatchParams {
   /// at a 4 kHz bound, so enabling this on a calibrated piece means re-gaining
   /// it in the same change.
   ///
-  /// The particle layer is excluded — it is a separate excitation model with a
-  /// resonance stage of its own (`phisem_res_hz`) that already bounds it.
+  /// The particle layer is excluded — it is a separate excitation model, shaped
+  /// by resonance stages of its own (`phisem_res_hz`, `phisem_body_hz`). Those
+  /// are peaks and not bounds: a pole pair falls 6 dB per octave above its
+  /// centre, so a shaker or scraper that needs a hard upper edge does not have
+  /// one here.
   float noise_air_hz = 0.0f;
 
   // --- shell resonance ---
@@ -174,10 +177,30 @@ struct PercussionPatchParams {
   float phisem_energy_ms = 100.0f;
   /// Per-collision sound decay (ms): the grain length of one bead click.
   float phisem_sound_ms = 3.0f;
-  /// Gourd/shell resonance centre (Hz; 0 = raw particle noise, no resonance).
+  /// Centre of the band the collisions radiate directly (Hz; 0 = raw particle
+  /// noise, no resonance). This is the bright end of the instrument — the bead
+  /// against the shell, the ridge under the scraper — and it sits in the low
+  /// kilohertz, well above the body.
   float phisem_res_hz = 0.0f;
-  /// Resonance Q (cabasa weak .. maraca / jingle stronger).
+  /// Q of that band (cabasa weak .. maraca / jingle stronger).
   float phisem_res_q = 1.0f;
+  /// Body resonance centre (Hz; 0 = off, bit-identical): the gourd, shell or
+  /// frame the collisions happen inside. Separate from the band above because a
+  /// real shaker radiates two of them at once and they are octaves apart — a
+  /// guiro's gourd is a narrow peak near 265 Hz under a scrape whose own band is
+  /// at 3 kHz, and a maraca and a tambourine carry the same shape with a wider
+  /// body. One resonance cannot be both, and placed between them it is neither.
+  float phisem_body_hz = 0.0f;
+  /// Q of the body resonance, per pole pair. Two identical pairs are cascaded,
+  /// because the measured peak is far narrower than one of them: a guiro's gourd
+  /// falls 23 dB in the third of an octave under it, where a single pole pair
+  /// falls 6 dB per octave and leaves a skirt that fills the bass with particle
+  /// noise the instrument does not radiate. A gourd reads about 4 here; a
+  /// tambourine's frame and head are broad, nearer 1.5.
+  float phisem_body_q = 4.0f;
+  /// Level of the body against the direct band, as a fraction of the raw
+  /// collision amplitude. 0 = off.
+  float phisem_body_gain = 0.0f;
   /// Scrape ridge rate (Hz; 0 = pure random shaker). >0 makes the collisions
   /// quasi-periodic — a ratchet/guiro/cuica scrape.
   float phisem_scrape_hz = 0.0f;
@@ -268,12 +291,15 @@ class PercussionVoiceCore {
   float phisem_scrape_inc_ = 0.0f;
   float phisem_res_hz_ = 0.0f;
   float phisem_res_q_ = 1.0f;
+  float phisem_body_gain_ = 0.0f;
   float phisem_glide_state_ = 0.0f;
   float phisem_glide_coeff_ = 0.0f;
   float phisem_sr_ = 48000.0f;
   uint64_t phisem_prob_index_ = 0;
   uint64_t phisem_noise_index_ = 0;
   TptSvf phisem_filter_;
+  TptSvf phisem_body_;
+  TptSvf phisem_body2_;
 };
 
 }  // namespace sonare::midi::synth

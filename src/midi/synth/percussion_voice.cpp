@@ -173,6 +173,17 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
       phisem_filter_.set(std::clamp(c, 20.0f, 0.45f * static_cast<float>(sr)), phisem_res_q_);
     }
     phisem_filter_.reset();
+    phisem_body_gain_ =
+        params.phisem_body_hz > 0.0f ? std::max(0.0f, params.phisem_body_gain) : 0.0f;
+    if (phisem_body_gain_ > 0.0f) {
+      const float c = std::clamp(params.phisem_body_hz, 20.0f, 0.45f * static_cast<float>(sr));
+      const float q = std::max(0.5f, params.phisem_body_q);
+      for (TptSvf* pair : {&phisem_body_, &phisem_body2_}) {
+        pair->prepare(sr);
+        pair->set(c, q);
+        pair->reset();
+      }
+    }
   }
 }
 
@@ -272,9 +283,10 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     if (collide) {
       phisem_sound_level_ = std::min(phisem_sound_level_ + phisem_shake_energy_ * 0.6f, 4.0f);
     }
-    float particle =
+    const float raw =
         noise_.bipolar_at(kPhisemNoiseIndexBase + phisem_noise_index_++) * phisem_sound_level_;
     phisem_sound_level_ *= phisem_sound_decay_;
+    float particle = raw;
     if (phisem_res_hz_ > 0.0f) {
       // Cuica pitch glide: ease the resonance centre back to res_hz.
       if (phisem_glide_state_ != 0.0f) {
@@ -286,6 +298,13 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
       particle = phisem_filter_.process(particle).bp;
     }
     mix += particle;
+    // The body is driven by the collisions themselves, not by the band above
+    // it: the two are parallel radiation paths from one excitation, and
+    // cascading them would leave the gourd with nothing left to resonate.
+    if (phisem_body_gain_ > 0.0f) {
+      const float b = phisem_body_.process(raw).bp;
+      mix += phisem_body2_.process(b).bp * phisem_body_gain_;
+    }
   }
 
   if (shell_.active()) mix = shell_.process(mix);
@@ -316,6 +335,9 @@ void PercussionVoiceCore::kill() noexcept {
   phisem_shake_energy_ = 0.0f;
   phisem_sound_level_ = 0.0f;
   phisem_filter_.reset();
+  phisem_body_gain_ = 0.0f;
+  phisem_body_.reset();
+  phisem_body2_.reset();
 }
 
 }  // namespace sonare::midi::synth

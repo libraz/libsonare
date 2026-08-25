@@ -373,6 +373,9 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.phisem_sound_ms);
   F(percussion.phisem_res_hz);
   F(percussion.phisem_res_q);
+  F(percussion.phisem_body_hz);
+  F(percussion.phisem_body_q);
+  F(percussion.phisem_body_gain);
   F(percussion.phisem_scrape_hz);
   F(percussion.phisem_pitch_glide);
 }

@@ -4,15 +4,15 @@
   "margin": 1.25,
   "bounds": {
     "band_tilt": {
-      "median": 16.944,
-      "abs_median": 16.944
+      "median": 15.314,
+      "abs_median": 15.314
     },
     "band_shape": {
-      "median": 23.074,
-      "abs_median": 23.074
+      "median": 22.706,
+      "abs_median": 22.706
     },
     "band_decay": {
-      "median": 144.752,
+      "median": 137.688,
       "abs_median": 300.703
     },
     "attack": {
@@ -20,12 +20,12 @@
       "abs_median": 5.0
     },
     "crest": {
-      "median": 2.35,
-      "abs_median": 4.037
+      "median": 2.3,
+      "abs_median": 4.075
     },
     "centroid_pct": {
-      "median": 76.697,
-      "abs_median": 77.269
+      "median": 72.698,
+      "abs_median": 76.557
     },
     "vel_range": {
       "median": 13.65,

@@ -776,6 +776,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_res_hz, 0.0f), 0.0f, 20000.0f);
   p.percussion.phisem_res_q =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_res_q, 1.0f), 0.5f, 30.0f);
+  p.percussion.phisem_body_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_body_hz, 0.0f), 0.0f, 20000.0f);
+  p.percussion.phisem_body_q =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_body_q, 4.0f), 0.5f, 30.0f);
+  p.percussion.phisem_body_gain =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_body_gain, 0.0f), 0.0f, 4.0f);
   p.percussion.phisem_scrape_hz =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_scrape_hz, 0.0f), 0.0f, 20000.0f);
   p.percussion.phisem_pitch_glide =
