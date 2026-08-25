@@ -86,6 +86,35 @@ TEST_CASE("map_chord_quality folds detector qualities onto symbol granularity", 
         sonare::arrangement::ChordQuality::kUnknown);
 }
 
+TEST_CASE("map_chord_quality answers every detector quality", "[mir]") {
+  // The analysis and arrangement layers keep separate chord vocabularies, and
+  // this mapping is the only bridge. Dropping the switch's `default:` makes an
+  // appended detector quality a build error, but it does not stop the new case
+  // from being answered with kUnknown just to get the build green -- which is a
+  // silent hole in the timeline. Sweeping the whole enum by its declared count
+  // is what catches that, and catches a quality whose extension degrees the
+  // pitch-correction target cannot interpret.
+  static const std::vector<uint8_t> kInterpretableDegrees = {2, 4, 6, 7, 9, 11, 13};
+
+  for (int value = 0; value < sonare::kChordQualityCount; ++value) {
+    const auto quality = static_cast<sonare::ChordQuality>(value);
+    const sonare::mir::MappedQuality mapped = sonare::mir::map_chord_quality(quality);
+
+    INFO("detector quality value " << value);
+    if (quality == sonare::ChordQuality::Unknown) {
+      CHECK(mapped.quality == sonare::arrangement::ChordQuality::kUnknown);
+      CHECK(mapped.extensions.empty());
+      continue;
+    }
+    CHECK(mapped.quality != sonare::arrangement::ChordQuality::kUnknown);
+    for (const uint8_t degree : mapped.extensions) {
+      INFO("extension degree " << static_cast<int>(degree));
+      CHECK(std::find(kInterpretableDegrees.begin(), kInterpretableDegrees.end(), degree) !=
+            kInterpretableDegrees.end());
+    }
+  }
+}
+
 TEST_CASE("map_key_mode maps every mode", "[mir]") {
   CHECK(sonare::mir::map_key_mode(Mode::Major) == sonare::arrangement::KeyMode::kMajor);
   CHECK(sonare::mir::map_key_mode(Mode::Minor) == sonare::arrangement::KeyMode::kMinor);

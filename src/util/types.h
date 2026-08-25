@@ -139,6 +139,14 @@ enum class Mode {
 ///       additions. They are only ever produced when the chord analyzer runs
 ///       with its full template set (@c ChordConfig::use_triads_only false);
 ///       a triads-only analysis still emits the four triad qualities.
+///
+/// @note This is the ANALYSIS-side vocabulary: one enumerator per chord
+///       template the detector scores. The arrangement layer stores harmony at
+///       chord-symbol granularity and has its own, deliberately coarser
+///       @c sonare::arrangement::ChordQuality (a triad/seventh family plus an
+///       extension-degree list). @c sonare::mir::map_chord_quality is the only
+///       conversion between them; appending here means extending that switch,
+///       which the build enforces.
 enum class ChordQuality {
   Major,
   Minor,

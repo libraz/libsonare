@@ -61,9 +61,12 @@ std::vector<int> quality_intervals(arrangement::ChordQuality quality,
       if (has_degree(extensions, 2) && !has_degree(extensions, 4)) return {0, 2, 7};
       return {0, 5, 7};
     case arrangement::ChordQuality::kUnknown:
-    default:
-      return {0};
+      break;
   }
+  // No `default:` above, so -Wswitch names this function when a quality is
+  // appended to the enum. The fallthrough covers kUnknown and any value that
+  // reached here through a cast from serialized data.
+  return {0};
 }
 
 /// Extension scale-degree (e.g. 9, 11, 13, or 2 for sus2) -> semitone offset.
@@ -113,9 +116,9 @@ std::vector<int> mode_scale(arrangement::KeyMode mode) {
     case arrangement::KeyMode::kLocrian:
       return {0, 1, 3, 5, 6, 8, 10};
     case arrangement::KeyMode::kUnknown:
-    default:
-      return {};
+      break;
   }
+  return {};
 }
 
 /// Converts a time in seconds to a PPQ position via a prepared tempo map.
@@ -228,7 +231,6 @@ MappedQuality map_chord_quality(ChordQuality quality) {
       m.extensions = {7};
       break;
     case ChordQuality::Unknown:
-    default:
       m.quality = arrangement::ChordQuality::kUnknown;
       break;
   }
@@ -251,9 +253,8 @@ arrangement::KeyMode map_key_mode(Mode mode) {
       return arrangement::KeyMode::kMixolydian;
     case Mode::Locrian:
       return arrangement::KeyMode::kLocrian;
-    default:
-      return arrangement::KeyMode::kUnknown;
   }
+  return arrangement::KeyMode::kUnknown;
 }
 
 arrangement::HarmonicTimeline build_harmonic_timeline(const HarmonicAnalysisInput& input,

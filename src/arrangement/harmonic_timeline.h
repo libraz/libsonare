@@ -37,9 +37,13 @@ inline constexpr uint8_t kUnknownPitchClass = 255;
 ///
 /// This is the ARRANGEMENT-side quality enum (distinct from the analysis-side
 /// sonare::ChordQuality in util/types.h, which carries a different, detector-
-/// oriented set). MIR maps detector qualities onto this enum; assist modules
-/// author it directly. Forward-compatible: append new enumerators at the end
-/// and never renumber (serialization stability).
+/// oriented set). A chord symbol is a family plus a list of extension degrees,
+/// so a detector quality such as Dominant9 arrives here as kDominant with
+/// extensions {7, 9} rather than as an enumerator of its own; that is why this
+/// set stays small while the detector set grows with the template library.
+/// sonare::mir::map_chord_quality is the single conversion between the two, and
+/// assist modules author this side directly. Forward-compatible: append new
+/// enumerators at the end and never renumber (serialization stability).
 enum class ChordQuality : uint32_t {
   kUnknown = 0,
   kMajor = 1,
