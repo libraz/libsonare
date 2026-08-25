@@ -133,6 +133,17 @@ class Bed:
     def load(cls, path: Path | str, scales) -> "Bed":
         z = np.load(path)
         n = len(scales)
+        # A bed is measured against one analysis geometry, so a cache written
+        # before a scale was added does not describe the current one. Said here
+        # rather than left as a KeyError on an array name: the fix is to measure
+        # it again, and nothing about `shape2` says so.
+        missing = [s for s in range(n) if f"shape{s}" not in z]
+        if missing:
+            raise ValueError(
+                f"{path} was measured over {len(z.files) // 2} scales and this "
+                f"geometry has {n} — the noise bed belongs to the scales it was "
+                f"measured on. Delete it and measure it again."
+            )
         return cls(shapes={s: z[f"shape{s}"] for s in range(n)},
                    anchor_rows={s: z[f"anchor{s}"] for s in range(n)},
                    agreement_db=float(z["agreement"]), scales=scales)

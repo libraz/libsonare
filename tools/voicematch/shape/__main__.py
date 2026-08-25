@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from corpus import load_corpus  # noqa: E402
 
-from . import probes, purity, takes  # noqa: E402
+from . import admittance, probes, purity, takes  # noqa: E402
 from .bed import Bed  # noqa: E402
 from .loss import ShapeLoss  # noqa: E402
 from .partials import Track  # noqa: E402
@@ -206,6 +206,21 @@ def cmd_purity(args):
                 f"{d.get(n, float('nan')):>+7.1f}" for n in notes))
 
 
+def cmd_admittance(args):
+    """The prompt decay against the aftersound, pooled by absolute frequency.
+
+    Read the reference's spread column first. The table is only a curve if the
+    notes agree on it, and where they do not the right conclusion is that the
+    prompt rate is a per-note quantity here rather than a termination the model
+    could be designed against.
+    """
+    _cap, _corpus, sigs, loss, notes = build(args)
+    pairs = [(n, v) for n in notes for v in loss.velocities]
+    ov = ",".join(f"{k}={v!r}" for k, v in sorted(
+        read_overrides(Path(args.overrides).read_text()).items())) if args.overrides else ""
+    print(admittance.report(sigs(pairs, ref=True), sigs(pairs, ov=ov)))
+
+
 def cmd_takes(args):
     """Chords, pedal and repeats, against a reference, from an audition page.
 
@@ -214,21 +229,33 @@ def cmd_takes(args):
     This reads what `make_audition.py` wrote, which is the only material in the
     harness that can.
     """
-    page = takes.load(args.page)
-    ref = page["_reference"]
-    if ref is None:
+    page = takes.load(args.page, args.reference)
+    refs = takes.pick_references(page["_manifest"], args.reference)
+    if not refs:
         raise SystemExit(f"{args.page} has no reference source; render it without "
                          "--model-only")
+    ref = refs[0]
     items = {it["id"]: it for it in page["_manifest"]["items"]}
     for tid, item in items.items():
         tracks = page.get(tid)
         if not tracks or ref not in tracks:
             continue
+        print(f"\n== {tid}: {item['label']}")
+        # First, and for every take: the wave as it is drawn, levels absolute.
+        # An output level that is wrong by the same amount everywhere is a
+        # finding of its own, and one this harness had nowhere to report -- the
+        # note metrics normalise it away and the band table below divides it out
+        # deliberately, so it could only be seen on the audition page, where it
+        # looks like a difference in envelope rather than in level.
+        phrase = takes.window_for(item, "phrase")
+        print(f"   drawn envelope, {phrase[0]:.1f}-{phrase[1]:.1f} s, dBFS")
+        print(takes.envelope_report(tracks, refs, phrase))
+
         body = takes.window_for(item, "body")
         try:
             ring = takes.window_for(item, "ringing")
         except ValueError as exc:
-            print(f"\n== {tid}: {item['label']}\n   skipped: {exc}")
+            print(f"   band table skipped: {exc}")
             continue
         rows = []
         for src in tracks:
@@ -238,8 +265,7 @@ def cmd_takes(args):
             rows.append((f"{src} ({g:+.1f} dB on body)", vals))
         if not rows:
             continue
-        print(f"\n== {tid}: {item['label']}")
-        print(f"   body {body[0]:.1f}-{body[1]:.1f} s, "
+        print(f"   bands against {ref}, body {body[0]:.1f}-{body[1]:.1f} s, "
               f"measured {ring[0]:.1f}-{ring[1]:.1f} s")
         print(takes.report(rows))
 
@@ -290,11 +316,18 @@ def main(argv=None):
     s.add_argument("--overrides", default="")
     s.set_defaults(fn=cmd_purity)
 
+    s = sub.add_parser("admittance", parents=[common])
+    s.add_argument("--overrides", default="")
+    s.set_defaults(fn=cmd_admittance)
+
     # Reads a rendered audition page rather than the corpus, so it needs none of
     # the corpus options -- but they are harmless and keep one invocation shape.
     s = sub.add_parser("takes", parents=[common])
     s.add_argument("--page", required=True,
                    help="audition directory holding manifest.json and the takes")
+    s.add_argument("--reference", default="",
+                   help="source key everything is measured against (default: the "
+                        "one declaring role=reference, or the only non-model one)")
     s.set_defaults(fn=cmd_takes)
 
     args = p.parse_args(argv)

@@ -39,7 +39,7 @@ from shape.partials import (  # noqa: E402
 from shape.probes import decay_bins, sustain_colour, tail_residue  # noqa: E402
 from shape.render import read_overrides, write_overrides  # noqa: E402
 from shape.search import split_notes  # noqa: E402
-from shape.spectro import Spectro, rows_hz  # noqa: E402
+from shape.spectro import DEFAULT_SCALES, Spectro, rows_hz  # noqa: E402
 
 SR = 48000
 
@@ -820,3 +820,322 @@ def test_the_two_note_sets_are_disjoint_and_both_span_the_range():
 @pytest.mark.parametrize("note", (21, 60, 108))
 def test_note_frequencies_follow_equal_temperament(note):
     assert abs(note_hz(note) / (440.0 * 2 ** ((note - 69) / 12)) - 1.0) < 1e-12
+
+
+# --- admittance ----------------------------------------------------------
+
+def _two_stage(note, count, fast_s, slow_s, split=0.5, seconds=6.0, seed=3):
+    """A note whose every partial decays at two rates at once.
+
+    `split` is the share of each partial's starting amplitude in the fast
+    component, so the early window sees a mixture and the late window sees only
+    the slow one -- which is what a measured piano partial does and what the two
+    windows are there to separate.
+    """
+    from shape.partials import note_hz, partial_hz
+    t = np.arange(int(seconds * SR)) / SR
+    rng = np.random.default_rng(seed)
+    out = np.zeros_like(t)
+    for k in range(1, count + 1):
+        f = partial_hz(note_hz(note), 0.0, k)
+        if f > 0.45 * SR:
+            break
+        env = split * np.exp(-t / fast_s) + (1.0 - split) * np.exp(-t / slow_s)
+        out += (np.sin(2 * np.pi * f * t + rng.uniform(0, 2 * np.pi)) / k) * env
+    return out
+
+
+def test_the_two_windows_separate_the_two_rates_they_were_given():
+    from shape import admittance
+    from shape.partials import Track
+    sig = _two_stage(48, 8, fast_s=0.30, slow_s=6.0)
+    got = admittance.rates(Track(sig, 48), sig)
+    assert len(got) >= 4
+    for _, prompt, after in got:
+        # The synthesised rates are 8.686/tau dB/s: 29 fast, 1.4 slow. Neither is
+        # asserted tightly -- the early window holds a mixture of the two by
+        # construction, so its fit lands between them and the property being
+        # tested is that the windows do not read the same number.
+        assert prompt < -8.0
+        assert after > -5.0
+        assert prompt < after - 5.0
+
+
+def test_a_single_rate_reads_the_same_in_both_windows():
+    """The null. Without it a pair of windows fitted anywhere would look like a
+    double decay, because a straight line through an exponential is the same
+    line wherever it is fitted -- which is exactly why that has to be shown."""
+    from shape import admittance
+    from shape.partials import Track
+    sig = _two_stage(48, 8, fast_s=2.0, slow_s=2.0)
+    got = admittance.rates(Track(sig, 48), sig)
+    assert len(got) >= 4
+    for _, prompt, after in got:
+        assert abs(prompt - after) < 3.0
+
+
+def test_the_collapse_test_cannot_agree_with_itself_on_one_note():
+    """One note's ladder walks the whole frequency axis on its own, and every
+    bin it fills would then be a bin whose notes agree perfectly. A bin that
+    only one note reached is dropped, so a single-note corpus reports nothing
+    rather than reporting a curve."""
+    from shape import admittance
+    from shape.partials import Track
+    sig = _two_stage(48, 12, fast_s=0.3, slow_s=6.0)
+    one = admittance.rates(Track(sig, 48), sig)
+    assert one
+    assert admittance.collapse({(48, 88): one}) == []
+
+
+def test_notes_sharing_a_rate_curve_collapse_and_notes_that_do_not_spread():
+    """The claim the module exists to test, both ways round.
+
+    Two notes given the SAME per-partial decay land on one curve, and the bins
+    they share report a small spread. Give one of them a decay several times
+    faster and the same bins have to widen -- otherwise the spread column would
+    be reporting the binning rather than the agreement.
+    """
+    from shape import admittance
+    from shape.partials import Track
+
+    def prof(note, fast):
+        sig = _two_stage(note, 16, fast_s=fast, slow_s=6.0)
+        return admittance.rates(Track(sig, note), sig)
+
+    agree = {(48, 88): prof(48, 0.4), (55, 88): prof(55, 0.4)}
+    differ = {(48, 88): prof(48, 0.4), (55, 88): prof(55, 0.08)}
+    shared = admittance.collapse(agree)
+    assert shared, "two notes must share at least one bin for the test to mean anything"
+    wide = {round(c): iqr for c, _, iqr, _, _, _ in admittance.collapse(differ)}
+    for centre, _, iqr, notes, _, _ in shared:
+        assert notes == 2
+        assert iqr < 12.0
+        assert wide.get(round(centre), 0.0) > iqr
+
+
+def test_a_partial_the_model_let_die_is_counted_rather_than_dropped():
+    """The floor a rate is refused against is the REFERENCE's.
+
+    So a None on the model side is not a measurement failure — it is the model
+    having gone quiet where the reference is still sounding, which is the defect
+    and not a reason to stop looking at it. Dropping it removes the partial from
+    the comparison, and what is left is a shorter table whose every row still
+    agrees.
+    """
+    from shape import admittance
+    from shape.partials import Track
+    ref_sig = _two_stage(48, 14, fast_s=0.4, slow_s=6.0)
+    # The same note with nothing above its fourth partial: a voice that dies in
+    # the top of its range.
+    model_sig = _two_stage(48, 4, fast_s=0.4, slow_s=6.0)
+    track = Track(ref_sig, 48)
+    reference = admittance.rates(track, ref_sig)
+    dropped = admittance.rates(track, model_sig)
+    kept = admittance.rates(track, model_sig, keep_unfittable=True)
+    assert len(dropped) < len(reference)
+    assert len(kept) >= len(reference)
+    assert any(p[1] is None or p[2] is None for p in kept)
+    # And the reference side keeps the drop, because there a refusal is a
+    # property of the recording with nothing to compare against.
+    assert all(p[1] is not None and p[2] is not None for p in reference)
+
+
+def test_the_report_names_a_band_the_model_could_not_answer():
+    """Intersecting the two sides lets the thing being measured narrow the
+    comparison: the bands a model went quiet in leave its own `collapse`, leave
+    the intersection, and leave the table. The reference decides which bands
+    appear."""
+    from shape import admittance
+    ref = {(48, 88): _two_stage(48, 16, fast_s=0.4, slow_s=6.0),
+           (55, 88): _two_stage(55, 16, fast_s=0.4, slow_s=6.0)}
+    model = {key: _two_stage(key[0], 5, fast_s=0.4, slow_s=6.0) for key in ref}
+    text = admittance.report(ref, model)
+    assert "n/a" in text
+    assert "the model did not at all" in text
+    assert "quiet" in text
+    # A run where the model answers everything says so, and prints no absence.
+    same = admittance.report(ref, dict(ref))
+    assert "n/a" not in same
+    assert "the model did not at all" not in same
+
+
+# --------------------------------------------------------------------------- #
+# What each analysis scale can and cannot separate
+# --------------------------------------------------------------------------- #
+def _two_modes(hz_a: float, hz_b: float, seconds: float = 2.0) -> np.ndarray:
+    t = np.arange(int(48000 * seconds)) / 48000.0
+    return np.sin(2 * np.pi * hz_a * t) + np.sin(2 * np.pi * hz_b * t)
+
+
+def _peaks_between(signal: np.ndarray, n_fft: int, lo: float, hi: float) -> list[float]:
+    mag = np.abs(np.fft.rfft(signal[:n_fft] * np.hanning(n_fft)))
+    freq = np.fft.rfftfreq(n_fft, 1.0 / 48000.0)
+    band = (freq > lo) & (freq < hi)
+    m, f = mag[band], freq[band]
+    return [float(f[k]) for k in range(1, len(m) - 1)
+            if m[k] > m[k - 1] and m[k] > m[k + 1] and m[k] > 0.4 * m.max()]
+
+
+def test_the_longest_scale_separates_two_modes_a_few_hertz_apart():
+    """Whether two components come apart is decided by the window length alone.
+
+    A piano's low register is a field of individual resonances rather than a
+    diffuse bottom end, and two of them can sit 3.58 Hz apart. Nothing about
+    transform size or peak interpolation reaches that: a finer grid places one
+    peak more precisely, it does not turn one peak into two. 3.58 Hz needs at
+    least 0.28 s of signal, which 8192 samples (0.17 s) does not have.
+    """
+    signal = _two_modes(100.0, 103.58)
+    scales = {n_fft for n_fft, _, _ in DEFAULT_SCALES}
+    assert 32768 in scales, "the geometry must carry a window longer than 0.28 s"
+
+    assert len(_peaks_between(signal, 8192, 90.0, 115.0)) == 1
+    long_peaks = _peaks_between(signal, 32768, 90.0, 115.0)
+    assert len(long_peaks) == 2
+    assert long_peaks[0] == pytest.approx(100.0, abs=1.5)
+    assert long_peaks[1] == pytest.approx(103.58, abs=1.5)
+
+
+def test_the_added_scale_leaves_the_existing_ones_where_they_were():
+    """Consumers index scales by number, so a new one goes on the end."""
+    assert DEFAULT_SCALES[0][0] == 8192
+    assert DEFAULT_SCALES[1][0] == 1024
+
+
+def test_a_noise_bed_measured_over_fewer_scales_is_refused_by_name(tmp_path):
+    """A bed belongs to the geometry it was measured on, and says so.
+
+    Adding a scale invalidates every cached bed. Left to fall through, that
+    surfaces as a KeyError on an array called `shape2`, which does not say that
+    the fix is to measure it again.
+    """
+    path = tmp_path / "bed.npz"
+    np.savez(path, agreement=1.0, shape0=np.zeros(4), anchor0=np.zeros(4))
+    with pytest.raises(ValueError, match="measure it again"):
+        Bed.load(path, scales=DEFAULT_SCALES)
+
+
+# --------------------------------------------------------------- phrase takes
+
+def _burst(sr=SR, seconds=6.0, period=0.1, body=0.02, spike=0.5):
+    """A transient every `period` seconds over a steady bed of amplitude `body`.
+
+    Dense on purpose: the 95th percentile only reaches the transients when
+    enough columns hold one, which is a property of the statistic and not of
+    this helper -- a take with four events in twelve seconds reports its body as
+    its peak. The phrase takes this measures are dense in exactly this way.
+    """
+    n = int(seconds * sr)
+    x = body * np.sin(2 * np.pi * 220.0 * np.arange(n) / sr)
+    for k in range(int(seconds / period)):
+        a = int(k * period * sr)
+        env = np.exp(-np.arange(min(int(0.05 * sr), n - a)) / (0.01 * sr))
+        x[a:a + env.size] += spike * env
+    return x
+
+
+def test_a_level_offset_moves_peak_body_and_floor_together():
+    """The measurement that separates "louder" from "denser".
+
+    A version scaled by a constant is the same envelope at a different level, so
+    every percentile has to move by that constant and the interval between them
+    must not move at all. If `spike-body` drifted here, an output-level error
+    would read as a difference in envelope shape -- which is exactly the reading
+    the audition page produces, and the reason this measurement exists.
+    """
+    from shape.takes import drawn
+
+    x = _burst()
+    win = (0.0, 6.0)
+    a = drawn(x, SR, win)
+    b = drawn(x * 10 ** (-8.0 / 20.0), SR, win)
+    for lo, hi in zip(a, b):
+        assert lo - hi == pytest.approx(8.0, abs=0.05)
+    assert (a[0] - a[1]) == pytest.approx(b[0] - b[1], abs=0.05)
+
+
+def test_a_denser_body_moves_the_body_far_more_than_the_peak():
+    """The other half: the same transients over a louder bed.
+
+    The discriminator is not that the peak is unmoved -- a bed loud enough to
+    matter adds to the transient it sits under, so it does move it a little --
+    but that the body moves by an order of magnitude more, which closes the
+    interval. That pair, body up and interval closed, is what "the wave is
+    filled in" means, and it is a different reading from a level offset, where
+    the two move together and the interval does not move at all.
+    """
+    from shape.takes import drawn
+
+    thin = drawn(_burst(body=0.02), SR, (0.0, 6.0))
+    dense = drawn(_burst(body=0.2), SR, (0.0, 6.0))
+    peak_shift = dense[0] - thin[0]
+    body_shift = dense[1] - thin[1]
+    assert body_shift > 15.0
+    assert body_shift > 5.0 * peak_shift
+    assert (dense[0] - dense[1]) < (thin[0] - thin[1]) - 12.0
+
+
+def test_digital_silence_is_not_a_level():
+    """A column of zeros must not come back as a sentinel two rows can subtract."""
+    from shape.takes import drawn
+
+    x = np.zeros(int(2.0 * SR))
+    x[:int(0.1 * SR)] = 0.5
+    hi, mid, lo = drawn(x, SR, (0.0, 2.0))
+    assert hi == hi                       # the burst is a real level
+    assert lo != lo and mid != mid        # the silence is not
+
+
+def test_a_variant_is_not_mistaken_for_the_reference():
+    """`--variant` renders sit beside the references and no key tells them apart.
+
+    Answering "whichever source is not `model`" picks the first variant, and
+    every table then reads as a comparison against a reference when it is a
+    comparison against the model under different constants.
+    """
+    from shape.takes import pick_references
+
+    roled = {"sources": {
+        "model": {"role": "model"},
+        "cand_a": {"role": "model"},
+        "grand-227": {"role": "reference"},
+        "grand-290": {"role": "reference"},
+    }}
+    assert pick_references(roled) == ["grand-227", "grand-290"]
+
+    # No roles and one other source: unambiguous, and the old pages look like this.
+    assert pick_references({"sources": {"model": {}, "kit-a": {}}}) == ["kit-a"]
+
+    # No roles and several: refused rather than guessed.
+    with pytest.raises(SystemExit, match="role=reference"):
+        pick_references({"sources": {"model": {}, "cand_a": {}, "grand-227": {}}})
+
+    # Named explicitly, roles or not.
+    assert pick_references({"sources": {"model": {}, "a": {}, "b": {}}},
+                           "b,a") == ["b", "a"]
+    with pytest.raises(SystemExit, match="no source"):
+        pick_references({"sources": {"model": {}, "a": {}}}, "nope")
+
+
+def test_the_reference_median_is_not_one_reference():
+    """Three captured instruments, and one of them 7 dB off the other two.
+
+    The report is against the median for this reason: reading the model against
+    a single reference that happens to be first in the manifest moved its
+    transient-to-body figure by more than 10 dB on a real take.
+    """
+    from shape.takes import envelope_report
+
+    tracks = {
+        "model": (_burst(body=0.02, spike=0.5), SR),
+        "ref-a": (_burst(body=0.02, spike=0.05), SR),
+        "ref-b": (_burst(body=0.2, spike=0.05), SR),   # the odd one out
+        "ref-c": (_burst(body=0.02, spike=0.05), SR),
+    }
+    text = envelope_report(tracks, ["ref-a", "ref-b", "ref-c"], (0.0, 6.0))
+    assert "reference median" in text
+    assert "(reference spread)" in text
+    median_row = next(r for r in text.splitlines() if "reference median" in r)
+    a_row = next(r for r in text.splitlines() if r.strip().startswith("ref-a"))
+    # The median follows the two that agree, not the outlier.
+    assert float(median_row.split()[3]) == pytest.approx(float(a_row.split()[2]), abs=0.1)

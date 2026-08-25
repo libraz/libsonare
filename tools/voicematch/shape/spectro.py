@@ -1,12 +1,21 @@
-"""Log-frequency spectrograms at two resolutions, energy-preserving.
+"""Log-frequency spectrograms at three resolutions, energy-preserving.
 
-Two scales, and both are load-bearing. The long window resolves partials at the
-bottom of a keyboard, where consecutive harmonics of C2 sit 65 Hz apart; the
-short one resolves the attack, where the long window smears the first 170 ms
-into a single column and reports the average of a transient. Fitted on the long
-window alone a search is free to get the strike wrong as long as the steady tone
-lands; on the short one alone it cannot separate two adjacent bass partials at
-all.
+Three scales, and each is load-bearing. The middle window resolves partials at
+the bottom of a keyboard, where consecutive harmonics of C2 sit 65 Hz apart; the
+short one resolves the attack, where a long window smears the first 170 ms into
+a single column and reports the average of a transient. Fitted on a long window
+alone a search is free to get the strike wrong as long as the steady tone lands;
+on the short one alone it cannot separate two adjacent bass partials at all.
+
+The longest window is not about partials but about **modes**. A piano's low
+register is a field of individual resonances rather than a diffuse bottom end,
+and two of them can sit 3.58 Hz apart. Separating those is decided by the window
+LENGTH and by nothing else: not by the transform size, not by interpolation, not
+by the direct-projection refinement `loss.py` uses to place a partial off the
+bin grid — that improves where a peak is, not whether two of them are one. Two
+components 3.58 Hz apart need at least 0.28 s to come apart, and 8192 samples is
+0.17 s, so at that scale they are one peak however finely it is located. 32768
+samples is 0.68 s, which resolves them with margin.
 
 Rows are log-spaced and each row sums the power of every bin inside it, so a row
 carries energy rather than a sampled magnitude. That matters at the top of the
@@ -21,7 +30,10 @@ from dataclasses import dataclass, field
 import numpy as np
 
 #: (n_fft, hop, display rows) per scale.
-DEFAULT_SCALES = ((8192, 2048, 240), (1024, 256, 160))
+#:
+#: Appended rather than ordered by length, so scale 0 and scale 1 keep the
+#: meaning every consumer indexing them by number already has.
+DEFAULT_SCALES = ((8192, 2048, 240), (1024, 256, 160), (32768, 8192, 240))
 
 
 def rows_hz(rows: int, f_lo: float, f_hi: float) -> np.ndarray:

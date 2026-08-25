@@ -24,17 +24,24 @@ The modules, in dependency order:
     probes    diagnostics that answer a question rather than drive a search
     density   how many things are ringing, and how diffuse the field is
     purity    how much of a render is the played string and how much is not
+    admittance  the prompt decay against the aftersound, per absolute frequency
     takes     phrase material -- chords, pedal, repeats -- against a reference
     reach     which residuals any parameter can move, and which none can
     search    coordinate descent, single-move ablation, and pruning
 
-The last four exist because the loss is blind to what they measure, and each of
+The last five exist because the loss is blind to what they measure, and each of
 them was written after the ear reported something the score could not. The loss
 counts how MUCH energy sits off the string's partials; `purity` and `density`
 between them say what KIND it is, and a bank of fixed resonances and a diffuse
 body register identically on the first and oppositely on the second. `takes`
 covers the material the note corpus does not contain at all -- everything an
 instrument does when more than one string is moving.
+
+`admittance` splits a quantity every other measure here averages over. A piano
+partial decays at two rates, quickly while the component that moves the bridge
+survives and slowly once it is gone, and a voice can match the second exactly
+while being wrong about the first by twenty decibels a second -- which is the
+half second a listener uses to decide what the instrument is.
 
 One rule cuts across all of them and has produced a wrong answer in every module
 that lacked it: a recorded reference stops decaying and sits on its session

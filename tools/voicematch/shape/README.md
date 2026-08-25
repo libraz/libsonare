@@ -14,12 +14,21 @@ PYTHONPATH=tools/voicematch python -m shape fit    --corpus <capture dir> --knob
 PYTHONPATH=tools/voicematch python -m shape ablate --corpus <capture dir> --knobs dump.txt --overrides fitted.txt
 PYTHONPATH=tools/voicematch python -m shape probe  --corpus <capture dir> --overrides fitted.txt --notes 36,60,84
 PYTHONPATH=tools/voicematch python -m shape purity --corpus <capture dir> --overrides fitted.txt --notes 36,60,84
+PYTHONPATH=tools/voicematch python -m shape admittance --corpus <capture dir> --overrides fitted.txt
 PYTHONPATH=tools/voicematch python -m shape takes  --corpus <capture dir> --page <audition dir>
 ```
 
 `--knobs` is a `SONARE_TUNING_DUMP` file, so the coordinate list and its defaults come from the library rather than from a parse of the source. `--lib` needs a build configured with `-DBUILD_TUNING=ON`; without it the override layer compiles out and every candidate renders identically.
 
-## The five terms
+## Three analysis scales, and what each one is for
+
+`spectro.DEFAULT_SCALES` carries 8192, 1024 and 32768 samples. The first two divide the usual way — one resolves partials, the other resolves the attack — and the third exists for a question neither can answer.
+
+**Whether two components come apart is decided by the window length and by nothing else.** A piano's low register is a field of individual resonances rather than a diffuse bottom end, and two of them can sit 3.58 Hz apart. That separation needs at least 0.28 s of signal; 8192 samples is 0.17 s, so at that scale the two are one peak no matter how the peak is treated afterwards. Nothing about transform size, zero-padding or interpolation reaches it — not even the direct-projection refinement `loss.py` uses to place a partial off the bin grid, which is effectively infinite frequency *precision* and still cannot turn one peak into two. 32768 samples is 0.68 s, which resolves them with margin. Precision and resolution are different axes, and only the second one is a window.
+
+A noise bed is measured against one analysis geometry, so **adding a scale invalidates every cached bed**; `Bed.load` says so by name rather than failing on a missing array.
+
+## The six level terms
 
 They are kept apart because they name different repairs, and combined as energies so none can be bought with another at a discount. A fit that improves the tone by dulling the strike should read as no improvement, and under a single blended number it reads as progress.
 
@@ -30,8 +39,11 @@ They are kept apart because they name different repairs, and combined as energie
 | `residue` | energy away from the played note's own partials, as a ratio inside one render |
 | `invariance` | what is left of every note's residue once each is levelled — a frequency that answers whatever you strike |
 | `release` | what the damper leaves behind after note-off |
+| `balance` | each band's share of the render's own energy, over an early and a late window |
 
-The last four each exist because the first was measured to be blind to what they ask. The onset occupies six tenths of one percent of the spectrogram's cells, so a fit run on the picture alone trades the strike for the tail every time. The residue escapes through the bed mask, which lets a low ring sit under a treble note for nearly nothing. The release escapes through the weight floor, since a note ringing seventy decibels under its own peak is weighted at three percent. And a resonator that answers every note equally is never a large error on any single one of them, which is what `invariance` is for.
+`balance` is the one term here that is two-sided everywhere, and that is why it exists. Every other measure gives the model a way to be *less* than the reference for free: the cell comparison weights a cell by the louder of the two sides and floors it eighty-five decibels under the note's peak, which puts the whole aftersound at or near the weight floor; `residue` is gated off once the reference has decayed; `invariance` and `release` only charge for excess. Reading each band against the render's **own** total rather than against an absolute level also means two renders compare with no gain removed — a model can be thirteen decibels loud and still be thin, and every measure that starts by aligning levels answers a different question.
+
+The last five each exist because the first was measured to be blind to what they ask. The onset occupies six tenths of one percent of the spectrogram's cells, so a fit run on the picture alone trades the strike for the tail every time. The residue escapes through the bed mask, which lets a low ring sit under a treble note for nearly nothing. The release escapes through the weight floor, since a note ringing seventy decibels under its own peak is weighted at three percent. And a resonator that answers every note equally is never a large error on any single one of them, which is what `invariance` is for.
 
 ### The seventh term: recurrence
 
@@ -74,6 +86,9 @@ The loss counts how much energy sits off the played string's partials. It has no
 
 - `density.py` — how many things are ringing. Peaks per octave with the played note's own partials notched out, and an envelope statistic that needs no peak-picking threshold at all: a diffuse field's envelope is flat because it is the sum of many independent contributions, and a handful of resonances beat instead. Read against `diffuse_floor`, which measures where the bottom of the scale actually sits by putting noise through the identical path — not against Rayleigh's 0.523, which applies to an unsmoothed envelope and is roughly twice what this returns. The envelope is detrended first, because an exponential decay spreads an envelope wide on its own and without that step a band that merely decayed faster reads as a sparser one.
 - `purity.py` — how much of a render is the played string. On-partial against off-partial energy, per window, per note. The number has no absolute zero: how much of the band the partial mask covers depends on the note, so white noise reads as +5 dB for a middle C rather than 0. Every comparison is therefore between two renders of the *same* note, where that offset cancels. Kept per note rather than pooled, because pooling it changed sign depending on whether the ratios or the powers were averaged — which is what notes disagreeing looks like, and the disagreement was the finding.
+- `admittance.py` — the first half second against the rest of the note. A piano partial has two decay rates, not one: it falls quickly while the component that moves the bridge is still there and slowly once only the component that does not is left. Every other measure here averages across that boundary, so a voice can match the aftersound to within three decibels per second at every partial and still be twenty out on the prompt rate — which is the half second a listener uses to decide what the instrument is, and where "muddy" lives. The module reports both rates pooled by ABSOLUTE frequency, and `collapse` is the test of whether that pooling is legitimate: a termination-side loss does not know which string is driving it, so partials of different notes landing at the same frequency should agree, and where they do not the prompt rate is a per-note quantity and there is no curve to design against. It stops short of quoting a bridge admittance. The conversion exists — a partial makes f0 traversals a second — but the prompt window's rate is the bridge term plus the string's own internal and air losses together, and nothing measurable from a recording separates them.
+
+  **The reference decides which bands appear, and a model's silence is a count rather than an absence.** The rate estimator refuses a window whose envelope dips under the floor, and the floor is the reference's — so a refusal on the model side is not a measurement failure, it is the model having gone quiet where the reference is still sounding. Dropping that partial removed it from the comparison, took its band out of the model's `collapse`, took the band out of the intersection the table was built from, and printed a shorter table whose every remaining row still agreed. Now every band the reference answered is printed whether the model could answer it or not, `n/a` where it could not, with a per-band `quiet` count of the partials it let fall and a closing line naming the bands it missed entirely. Same failure shape as the `-120 dB` ladder sentinel and the empty `loss_terms` average, one level along: a comparison narrowed by the thing being measured cannot report what narrowed it.
 - `reach.py` — which residuals any parameter can move and which none can. Connectivity and improvement are different claims and only the first is structural; reading improvement alone inverts the answer after a fit has been written back, when every knob sits at its own optimum. Choose the buckets narrowly: a band wide enough that every note has something in it is a band wide enough to hide a hole at one end, and a 30–250 Hz bucket reported healthy while the bottom of it was 18 dB down.
 
 ## Phrase takes
@@ -83,6 +98,16 @@ The loss counts how much energy sits off the played string's partials. It has no
 Windows come from the take's own schedule, which the manifest now carries, rather than from a number typed against a phrase the reader cannot see. That is not tidiness — the pedal take's resonance lives between the last note-off and the pedal lifting, and a window a little further on measures the dampers landing instead, which is the opposite mechanism at the other end of the same take.
 
 `band_error` removes one gain measured over a body window and reports the per-band difference in a later one, so "the total is right and the contents are tilted" becomes readable — which is what thinness is. `relative_to` compares each side against its own rendering of a simpler take, so whatever a side gets wrong about how one note decays cancels and what is left is what the phrase added; a raw level difference cannot separate "eight strikes stacked up" from "one strike decays wrong", and that ratio can.
+
+### The drawn envelope, and why the gain is a finding
+
+`drawn` keeps the level that everything else here removes. Peak, body and floor are read separately from one absolute peak per 15 ms column — the same thing a waveform pane draws — and the interval between them, `spike-body`, is the part a level offset cannot move. A row that is uniformly high with `spike-body` near zero is a version that is **louder**; a row whose `spike-body` has collapsed is a version whose transients no longer stand out of what it is sustaining, which is what "the wave is filled in" means. They look identical on an audition page, because every version of a take is written at one shared gain set by the loudest of them: a model that plays hot draws as a solid slab filling its pane and pushes the reference down it, and the reference then draws as a thin core with the transients standing clear.
+
+Nothing else would have caught it. The note metrics are h1-normalised and level-blind by construction, `band_error` divides the offset out on purpose, and the page draws from the raw buffer — so an output level wrong by the same amount on every take was visible on screen, absent from every table, and shaped exactly like a defect it is not.
+
+The references keep their own rows and are compared against their **median**, with the spread among them printed underneath. Reading that line is not optional: on the arpeggio take one of three captured grands sits 7 dB above the other two, and against that one alone the model's `spike-body` is 12.8 dB out where the median puts it 1.2 dB out — a difference decided entirely by which reference happened to come first in the manifest.
+
+`--reference` names the sources to measure against. A page carrying `role: reference` in its manifest needs no flag; one with several non-`model` sources and no roles is refused rather than guessed at, because `--variant` renders sit beside the references and no rule tells a variant from a reference by its key.
 
 ## Tests
 
