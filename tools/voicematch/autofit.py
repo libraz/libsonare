@@ -679,6 +679,12 @@ class Evaluator:
         # about the reference and a probe that names a subset of its notes still
         # scores the relations among the ones it kept.
         self.groups = dict(getattr(corpus, "groups", None) or {})
+        # Whether a render has to hand its audio back, which only the multi-scale
+        # term needs. Read from the RESOLVED weight rather than from `--w-mss`:
+        # every `--w-*` flag defaults to None so that "not given" stays
+        # distinguishable from "given as zero", and the number it stands for
+        # comes from the instrument's own class.
+        self.want_audio = cli_weights(args).get("mss", 0.0) > 0.0
         self.percussive = bool(getattr(args, "percussive", False))
         self.needs_rebuild = any(k.tunable is None for k in knobs)
         self.built = False
@@ -785,7 +791,7 @@ class Evaluator:
 
     def _render_terms(self, values: list[float]) -> dict[str, float] | None:
         """Render one candidate and reduce it to raw loss terms. Thread-safe."""
-        want_audio = self.args.w_mss > 0.0
+        want_audio = self.want_audio
         model_rows, model_audio = render_model_rows_subprocess(
             self.build_dir, self.args.program, self.args.pattern, self.args.notes,
             velocities_csv=self.args.velocities,
@@ -1036,8 +1042,11 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
               file=sys.stderr)
         return None
 
-    want_audio = args.w_mss > 0.0
-    weights = LossWeights(cli_weights(args))
+    resolved = cli_weights(args)
+    weights = LossWeights(resolved)
+    # From the resolved weight, not from the flag: `--w-mss` defaults to None so
+    # that an unset weight and an explicit zero stay distinguishable.
+    want_audio = resolved.get("mss", 0.0) > 0.0
     corpus = resolve_corpus(holdout)
 
     def score(values: list[float]) -> float:

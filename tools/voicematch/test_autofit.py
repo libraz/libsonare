@@ -2419,3 +2419,26 @@ def test_a_source_only_spec_has_no_override_plumbing_to_check(monkeypatch):
                         raising=False)
     ev.check_overrides_reach([Knob(label="a", lo=0.0, hi=1.0, log=False,
                                    start_value=0.5, file=Path("x.cpp"), pattern="p")])
+
+
+# --------------------------------------------------------------------------- #
+# The resolved weight, not the flag
+# --------------------------------------------------------------------------- #
+def test_a_run_that_never_named_a_weight_still_knows_whether_it_needs_audio():
+    """Every `--w-*` defaults to None so an unset weight stays distinguishable
+    from an explicit zero, and the number it stands for comes from the
+    instrument's class. Anything deciding on `args.w_mss` itself therefore
+    compares None against a float, which is a TypeError rather than a weight -
+    and the guard that renders twice to prove the overrides reach the library
+    asks that question before the weights have been resolved, so every drum fit
+    hit it.
+    """
+    base = {f"w_{t}": None for t in LOSS_TERMS}
+    base.update(program=0, drum_note=42, percussive=True, raw_loss=False, workers=1)
+    args = argparse.Namespace(**base)
+
+    resolved = cli_weights(args)
+    assert isinstance(resolved.get("mss", 0.0), float)
+
+    ev = Evaluator([], {}, [], None, args, Path("build-none"))
+    assert ev.want_audio is (resolved.get("mss", 0.0) > 0.0)
