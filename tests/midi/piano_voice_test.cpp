@@ -277,7 +277,15 @@ TEST_CASE("coupled unison strings produce a two-stage decay", "[midi][synth][pia
   const double early = decay_rate_db_per_s(4800, 48000);    // 0.1 - 1.0 s
   const double late = decay_rate_db_per_s(120000, 192000);  // 2.5 - 4.0 s
   REQUIRE(early > 0.0);
-  REQUIRE(late < 0.6 * early);
+  // The bound comes from the instrument rather than from what this voice
+  // happened to do. Measured over these same two windows on three separately
+  // captured concert grands, a C4's late rate is 0.63, 0.32 and 0.15 of its
+  // early one -- and C4 is where a piano's double decay is WEAKEST, which is
+  // why a tighter bound here reads as a stronger test and is really a bound on
+  // one recording. It is not decoration: with the two-stage contrast forced to
+  // zero this voice returns 0.91, so the assertion still separates a coupled
+  // unison from a single recirculating gain.
+  REQUIRE(late < 0.8 * early);
 }
 
 TEST_CASE("the treble rings on while the key is held", "[midi][synth][piano]") {

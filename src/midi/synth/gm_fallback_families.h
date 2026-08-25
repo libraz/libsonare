@@ -10,8 +10,15 @@ namespace sonare::midi::synth::detail {
 /// these are the knobs the voicematch fitter sweeps against a reference
 /// rendering; every other family's values stay inline until one needs fitting.
 SONARE_TUNABLE(kPianoBrightness, 0.81459f);
-SONARE_TUNABLE(kPianoDetuneCents, 1.0f);
+SONARE_TUNABLE(kPianoDetuneCents, 1.6f);
 SONARE_TUNABLE(kPianoDecayFastS, 1.35f);
+/// Aftersound t60 at A4 and how it stretches into the bass, overriding the
+/// PianoPatchParams defaults for this family only. The struct's own values
+/// describe a piano in general; these are what a concert grand measured
+/// against a captured reference wants, and the difference between the two is
+/// not something a default should be carrying for every caller.
+SONARE_TUNABLE(kPianoDecaySlowS, 9.6f);
+SONARE_TUNABLE(kPianoDecayStretch, 0.448f);
 SONARE_TUNABLE(kPianoSoundboard, 0.35f);
 SONARE_TUNABLE(kPianoHammerContactMs, 1.1f);
 SONARE_TUNABLE(kPianoHammerDynamics, 0.5f);
@@ -56,12 +63,26 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[0].piano.brightness = kPianoBrightness;
   t[0].piano.detune_cents = kPianoDetuneCents;
   t[0].piano.decay_fast_s = kPianoDecayFastS;
+  t[0].piano.decay_slow_s = kPianoDecaySlowS;
+  t[0].piano.decay_stretch = kPianoDecayStretch;
   t[0].piano.soundboard = kPianoSoundboard;
   t[0].piano.hammer_contact_ms = kPianoHammerContactMs;
   t[0].piano.hammer_dynamics = kPianoHammerDynamics;
   t[0].piano.release_damp_s = kPianoReleaseDampS;
   t[0].stereo_spread = 0.3f;
-  t[0].gain = 0.8f;
+  // Levelled against a captured concert grand, which is also where the
+  // harpsichord's 0.30 comes from -- the two voices in this bank whose output
+  // level answers to a measurement rather than to whatever the physics
+  // happened to produce. A physical model has no output level of its own: the
+  // string, the hammer and the board are each calibrated against something, and
+  // the product of the three is a number nobody chose. At 0.8 this one struck
+  // 8.5 dB above the harpsichord, 5.7 to 10.0 dB above three captured grands
+  // across the phrase takes, and 11.4 dB above the median peak of the bank's
+  // own twelve programs at one note and one velocity -- three measurements that
+  // do not share a method and agree on the sign and nearly on the size. At 0.30
+  // it sits between the violin and the alto sax, which is where a grand belongs
+  // among them.
+  t[0].gain = 0.3f;
 
   // 8-15 chromatic percussion: FM bell (inharmonic 3.5 ratio, long
   // key-rate-scaled decay). Every program in this family (8 celesta, 9

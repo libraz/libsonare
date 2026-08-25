@@ -128,16 +128,19 @@ SONARE_TUNABLE(kFHigh, 5400.0f);
 /// broadband level anywhere. That was the board standing in for a member the
 /// instrument has and the model did not, and it is why the number came out two
 /// and a half times what the wood can do. With the frame bank carrying the long
-/// tail the board measures better back at its own value, so the pair moved
-/// together.
+/// tail the board no longer has to, and the whole-keyboard fit takes it back
+/// under the material figure rather than to it: four tenths of a second, which
+/// is spruce at the stiff end of its loss range. The material argument bounds
+/// the number from above and does not pin it, so a fitted value inside the
+/// bound is the fit telling the board how much of the tail is not its job.
 ///
 /// The slope is the part of the law the fit is confident about, and it is
-/// steep: a board mode at 1 kHz keeps a fortieth of the t60 of one at 92. That
-/// is the wood doing what wood does, and it is also what leaves room for the
-/// frame — with a gentle slope the board would still be ringing where only the
-/// iron should be, and the two banks would be fitting against each other
+/// steep: a board mode at 1 kHz keeps a small fraction of the t60 of one at 92.
+/// That is the wood doing what wood does, and it is also what leaves room for
+/// the frame — with a gentle slope the board would still be ringing where only
+/// the iron should be, and the two banks would be fitting against each other
 /// instead of dividing the spectrum between them.
-SONARE_TUNABLE(kBoardT60Base, 1.0f);
+SONARE_TUNABLE(kBoardT60Base, 0.4f);
 SONARE_TUNABLE(kBoardT60Slope, 2.0f);
 SONARE_TUNABLE(kBoardT60Max, 1.0f);
 
@@ -145,12 +148,12 @@ SONARE_TUNABLE(kBoardT60Max, 1.0f);
 /// level. See the bank's own commentary in piano_voice.h for why an iron
 /// member is a different resonator from a wooden one.
 ///
-/// The decay is quoted at the bottom of the band and graded flat, not because
-/// a material says so but because the fit will not accept a grade: what the
-/// bank is standing in for turns out to be the whole long-decay structure and
-/// not a plate whose loss factor can be looked up. It is worth being precise
-/// about what is and is not derived here, because an earlier revision of this
-/// comment claimed more than the measurement supports.
+/// The decay is quoted at the bottom of the band and graded barely at all, not
+/// because a material says so but because that is as much grade as the fit will
+/// accept: what the bank is standing in for turns out to be the whole
+/// long-decay structure and not a plate whose loss factor can be looked up. It
+/// is worth being precise about what is and is not derived here, because a
+/// claim about this bank is easy to make and hard to earn.
 ///
 /// What IS derived is that the member exists. A grand carries 150 kg of cast
 /// iron and a laminated rim; iron's loss factor is an order of magnitude below
@@ -158,36 +161,55 @@ SONARE_TUNABLE(kBoardT60Max, 1.0f);
 /// frequency for seconds, and the reference plainly does hold one. Adding the
 /// bank at all takes the keyboard's low-band error from 15.8 dB to about 7.
 ///
-/// What is NOT derived is nine seconds. Quote it against 62 Hz and it implies
-/// 0.39 percent, above the 0.1-0.3 that iron gives; graded flat, the implied
-/// loss factor varies right across the band, which no single material does.
-/// The value it replaces was eighteen, which does land on iron's own 0.20
-/// percent at 62 Hz — and it was wrong: scored only on the note while the key
-/// is DOWN it looked best, and it left a released treble note ringing forty
-/// times louder than the instrument does. Nine is what survives once the
-/// release is in the metric. A number that lands on a textbook constant is
-/// evidence for nothing if the measurement it came from could not see half the
-/// note.
+/// What is NOT derived is nine seconds. Quote it against the bottom of the band
+/// and it implies a loss factor above the 0.1-0.3 percent that iron gives, and
+/// with almost no grade the implied figure varies right across the band, which
+/// no single material does. The value it replaces was eighteen, which does land
+/// on iron's own 0.20 percent at 62 Hz — and it was wrong: scored only on the
+/// note while the key is DOWN it looked best, and it left a released treble
+/// note ringing forty times louder than the instrument does. Nine is what
+/// survives once the release is in the metric. A number that lands on a
+/// textbook constant is evidence for nothing if the measurement it came from
+/// could not see half the note.
 ///
-/// The band runs to 1800 Hz rather than stopping where the plate stops
-/// behaving as a plate. Above roughly 600 Hz its modal density does turn its
-/// response into a broadband floor rather than a set of rings, so the upper
-/// part of this band is not literally plate modes; it is the rim, the lid and
-/// the case answering, which have the same property of ringing long and the
+/// The band is wider at both ends than a plate is, and deliberately. It reaches
+/// below the lowest note's fundamental because the reference radiates there
+/// under every note including the ones whose own series starts an octave up,
+/// and it runs into the low kilohertz rather than stopping where the plate
+/// stops behaving as a plate: above roughly 600 Hz the plate's modal density
+/// turns its response into a broadband floor rather than a set of rings, so the
+/// upper part of this band is not literally plate modes; it is the rim, the lid
+/// and the case answering, which have the same property of ringing long and the
 /// same indifference to which note was struck.
-SONARE_TUNABLE(kFrameFLow, 62.0f);
-SONARE_TUNABLE(kFrameFHigh, 1800.0f);
+SONARE_TUNABLE(kFrameFLow, 39.68f);
+SONARE_TUNABLE(kFrameFHigh, 4500.0f);
 SONARE_TUNABLE(kFrameT60S, 9.0f);
-SONARE_TUNABLE(kFrameT60Slope, 0.0f);
-/// Return level. Zero renders exactly as a build without the bank.
+SONARE_TUNABLE(kFrameT60Slope, 0.1f);
+/// Return level. Zero renders exactly as a build without the bank, and that is
+/// what ships: the late field below carries this member's job with two orders
+/// of magnitude more modes, and eight resonators standing in for a structure
+/// are audible as eight resonators.
 ///
-/// Four is where the whole-keyboard fit settles with the frame's decay and
-/// band free to disagree. Two had been chosen against a level comparison with
-/// no gain alignment, which read the body as louder than it was and so wanted
-/// less of it; corrected, the bank fills the tail and touches the attack and
-/// the notes below the tenor break by well under a decibel, which is the
-/// behaviour a member with this decay and this band should have.
-SONARE_TUNABLE(kFrameLevel, 4.0f);
+/// The bank had been at four, which is where a whole-keyboard fit settled with
+/// its decay and band free to disagree. What no term in that fit could price is
+/// that a bank is a set of PITCHES. Rendered on its own -- the voice minus the
+/// same voice without it, which is exact, since it feeds nothing back -- it
+/// answers every note at 40, 195, 945 and 4547 Hz, with 40 to 90 dB of canyon
+/// between them, and the last of those is a pair split by 8 cents that beats at
+/// 21 Hz. Its share of the note rises with pitch, from 47 dB under a C3 to 29
+/// under a C6, so the higher the note the more of it is the bank. That is a
+/// bell, it is present from the first 200 ms, and it is what listening reported
+/// while the level-based terms were calling the bank an improvement.
+///
+/// It was also not filling the hole it appeared to fill. Measured as
+/// non-harmonic energy per octave against three concert grands, the bank leaves
+/// 62 and 125 Hz exactly where they were -- 30 to 45 dB under the instrument,
+/// identical with the bank on and off -- and puts 15 to 20 dB TOO MUCH at 250 Hz
+/// and 1 kHz, on two pitches. The hole and the spike were the same defect, and
+/// replacing the eight resonators with a continuum closes both at once: the
+/// whole profile's error over 31 Hz to 1 kHz goes from 24.16 dB rms to 7.93,
+/// with 62, 125 and 1000 Hz landing within 1.6 dB of the instrument.
+SONARE_TUNABLE(kFrameLevel, 0.0f);
 /// Split between the two halves of each frame mode, in cents. Zero leaves the
 /// bank as eight separate frequencies and renders exactly as a build without
 /// this; above zero the same eight resonators are re-read as four near-
@@ -225,12 +247,14 @@ SONARE_TUNABLE(kFrameLevel, 4.0f);
 SONARE_TUNABLE(kFrameSplitCents, 8.0f);
 
 /// Soundboard phase diffusion coefficient (both allpass stages).
-SONARE_TUNABLE(kDiffuserG, 0.55f);
+SONARE_TUNABLE(kDiffuserG, 0.22f);
 
 /// Soundboard air/sizzle noise gain, envelope-followed off the radiated
 /// signal. Reference renders measure 20-40 dB tone-to-noise; a clean partial
-/// stack reads dry and synthetic.
-SONARE_TUNABLE(kAirGain, 0.0f);
+/// stack reads dry and synthetic. Small: what the whole-keyboard fit wants is
+/// a trace, and the level above which it starts paying for the hiss with tone
+/// is not far above it.
+SONARE_TUNABLE(kAirGain, 0.01f);
 
 /// Case and rim network: its return level, its decay, and where that decay
 /// starts falling with frequency. See the network's own commentary in
@@ -241,18 +265,91 @@ SONARE_TUNABLE(kAirGain, 0.0f);
 /// is the same quantity that bank was carrying: the long tail a wooden member
 /// cannot hold. What is new is that it arrives dense instead of as eight
 /// pitches, so it can be long without being a chord.
-SONARE_TUNABLE(kCaseLevel, 0.0f);
-SONARE_TUNABLE(kCaseT60S, 6.0f);
+///
+/// It is the second of the two figures the reference states about its low field
+/// (see the header for the first, and for how both were measured). Thirty
+/// decibels between a mode's peak and the floor beside it is a modal overlap
+/// near 0.15, and at the density below that is 2.2 * 0.28 / 0.15 seconds. It is
+/// not the same quantity as the frame bank's nine and does not contradict it:
+/// nine seconds was one bank's ring, this is the decay a field of a thousand-odd
+/// modes needs for its peaks to stand where the instrument's do.
+///
+/// The level is fitted against the instrument's non-harmonic octave profile
+/// rather than against the corpus loss, and that choice needs stating because
+/// the two disagree.
+///
+/// Built to the two figures above the network measures right: it takes the low
+/// band's density from 0.137 per hertz to 0.21 against the instrument's 0.28,
+/// and its peak-to-floor from 71 dB to 42 against 30. It nevertheless scores
+/// WORSE on the corpus loss than the eight-resonator bank at every setting --
+/// over thirty tried by hand across level, drive corner, bank level and bank
+/// band, and a seven-coordinate descent that was free to turn it on and
+/// declined.
+///
+/// The two are not in contradiction, because the loss cannot resolve what was
+/// measured. Its long scale is an 8192-point transform, whose bins are 5.86 Hz,
+/// and a 0.28-per-hertz field has its modes 3.58 Hz apart -- every one of them
+/// falls inside a neighbour's bin. Counted through that geometry the three
+/// reference grands show 0.3, 1.7 and 3.7 peaks below 300 Hz where a 0.25 Hz
+/// transform finds 69, 72 and 80; the bank shows 4.0, which is more than any of
+/// them. In the band where the defect lives, the term written to catch a bell
+/// already reads the bank as the peakiest thing in the comparison and has no
+/// resolution left to reward putting the density back.
+///
+/// What settles it is a measurement the loss's geometry does not bound. Read as
+/// non-harmonic energy per octave -- the partials masked out, each octave
+/// against the render's own total -- the instrument is a smooth curve and the
+/// bank makes a comb. Against the median of three grands over 31 Hz to 1 kHz the
+/// bank is 24.16 dB rms out; this network at one is 7.93, and 62, 125 and
+/// 1000 Hz land within 1.6 dB. Listening agrees, which is the direction that
+/// matters: the bank's ring was reported by ear before any of this was measured.
+///
+/// One rather than the profile's own optimum, which sits a little lower: the
+/// remaining profile error is a 17.5 dB shortfall at 31 Hz that this member
+/// cannot fix, because the fourth-order radiation highpass at kRadiationHpHz
+/// removes the drive two octaves below its corner before the network sees it.
+/// Fitting the level against an error owned by something else would buy that
+/// band by overshooting 250 and 500 Hz, which is what the smaller values do.
+///
+/// Quoted against the board's own return rather than against the output, since
+/// process() sends this through `out_gain_` with the two banks. The figure the
+/// profile was fitted at is 1.0 of the OUTPUT, and the piano family's soundboard
+/// mix is 0.35, so the number here is that over this one.
+SONARE_TUNABLE(kCaseLevel, 2.857143f);
+SONARE_TUNABLE(kCaseT60S, 4.2f);
 /// One-pole corner on each line's feedback. A radiating case loses its high
 /// frequencies first, and this is the only place that grading is stated: the
 /// frame bank's slope had to be flat because its modes are too far apart to
 /// grade anything between them.
 SONARE_TUNABLE(kCaseDampHz, 2200.0f);
-/// Delay lengths in samples at 48 kHz, mutually prime so the network's own
-/// period is their product rather than a short common multiple. They total
-/// 6472, which is a mode every 7.4 Hz -- Schroeder's density for a response
-/// that is not heard as individual modes, from eight lines.
-constexpr uint32_t kCaseDelays48k[8] = {509, 587, 673, 761, 853, 941, 1031, 1117};
+/// Corner of the two-pole filter on what the network is DRIVEN with, which is a
+/// different job from the damping above: that grades the decay inside the loop,
+/// this decides which part of the spectrum reaches the loop at all. See the
+/// header for why the network is band-limited rather than full-band.
+///
+/// Eighty rather than the three hundred the density measurement is quoted at,
+/// because the octave profile wants a tilt and not just a limit. At 300 the
+/// network lands 62 and 125 Hz correctly and then carries 7 and 4 dB too much
+/// into 250 and 500; two poles at 80 keep the same in-band level -- both have
+/// unity gain at DC -- while taking 16 dB more out of 250 Hz, which is where
+/// the instrument's own curve falls away. The physical reading is the same one:
+/// what couples a string's bridge force into a structure of that mass falls with
+/// frequency well before the structure stops radiating.
+SONARE_TUNABLE(kCaseInHz, 80.0f);
+/// Delay lengths in samples at the network's own 6 kHz internal rate (a 48 kHz
+/// host decimated by kCaseDecim), all prime and so mutually prime, which makes
+/// the network's period their product rather than a short common multiple.
+///
+/// Their TOTAL is the design quantity and the individual values are only a
+/// spread around it: a delay network's modal density in modes per hertz is its
+/// total delay in seconds, so this set's 1676 samples at 6 kHz is 0.2793 s and
+/// therefore 0.28 modes per hertz -- the figure measured off three concert
+/// grands' low band. The previous set was half that in time and was chosen
+/// against a criterion that turned out to be a different quantity (see the
+/// header). The ratio between longest and shortest is kept near the old set's,
+/// so the spread of line lengths -- which is what stops a network sounding like
+/// one delay -- is unchanged.
+constexpr uint32_t kCaseDelays6k[8] = {131, 149, 173, 197, 223, 241, 269, 293};
 /// Injection signs, one per line. Driving every line with the same sign and
 /// gain feeds the network eight coherent copies of its input, and coherent
 /// copies at eight fixed delays are a comb filter -- which is audible as
@@ -264,7 +361,7 @@ constexpr float kCaseInSign[8] = {1.0f, -1.0f, 1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -
 /// 48 kHz. Zero skips the stage outright, which renders exactly as the network
 /// without it; see the header for why skipping and not passing through.
 SONARE_TUNABLE(kCaseDiffuseG, 0.0f);
-constexpr uint32_t kCaseApDelays48k[8] = {89, 97, 113, 127, 137, 149, 157, 167};
+constexpr uint32_t kCaseApDelays6k[8] = {11, 13, 17, 19, 23, 29, 31, 37};
 
 }  // namespace
 
@@ -533,23 +630,24 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     const float d_mag = std::sqrt(d_re * d_re + d_im * d_im);
     m.gain = kFrameLevel * d_mag / std::max(2.0f * std::sin(w), 1.0e-6f);
   }
-  // Case network. Lengths scale with the sample rate so the network's modal
-  // density is a property of time and not of the rate, and the whole set is
-  // scaled down together if it will not fit the pool -- which costs density at
-  // very high rates rather than truncating one line into a different network.
+  // Case network, at its own decimated rate. Lengths scale with that rate so
+  // the network's modal density is a property of time and not of the host's
+  // rate, and the whole set is scaled down together if it will not fit the pool
+  // -- which costs density at very high rates rather than truncating one line
+  // into a different network.
   {
+    const float sr_case = sr / static_cast<float>(kCaseDecim);
+    const double rate = static_cast<double>(sr_case) / 6000.0;
     uint32_t total = 0;
-    for (const uint32_t d48 : kCaseDelays48k) {
-      total +=
-          std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(d48) * sr / 48000.0)));
+    for (const uint32_t d6 : kCaseDelays6k) {
+      total += std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(d6) * rate)));
     }
     const double fit = total > kCaseCapacity
                            ? static_cast<double>(kCaseCapacity) / static_cast<double>(total)
                            : 1.0;
     uint32_t ap_total = 0;
-    for (const uint32_t d48 : kCaseApDelays48k) {
-      ap_total +=
-          std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(d48) * sr / 48000.0)));
+    for (const uint32_t d6 : kCaseApDelays6k) {
+      ap_total += std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(d6) * rate)));
     }
     const double ap_fit = ap_total > kCaseApCapacity
                               ? static_cast<double>(kCaseApCapacity) / static_cast<double>(ap_total)
@@ -557,9 +655,9 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     uint32_t off = 0;
     uint32_t ap_off = 0;
     for (size_t i = 0; i < kCaseLines; ++i) {
-      const auto len =
-          std::max(2u, static_cast<uint32_t>(std::lround(static_cast<double>(kCaseDelays48k[i]) *
-                                                         fit * sr / 48000.0)));
+      const auto len = std::max(
+          2u,
+          static_cast<uint32_t>(std::lround(static_cast<double>(kCaseDelays6k[i]) * fit * rate)));
       case_off_[i] = off;
       case_len_[i] = len;
       case_idx_[i] = 0;
@@ -567,9 +665,8 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
       const auto ap_len =
           kCaseDiffuseG == 0.0f
               ? 0u
-              : std::max(
-                    2u, static_cast<uint32_t>(std::lround(static_cast<double>(kCaseApDelays48k[i]) *
-                                                          ap_fit * sr / 48000.0)));
+              : std::max(2u, static_cast<uint32_t>(std::lround(
+                                 static_cast<double>(kCaseApDelays6k[i]) * ap_fit * rate)));
       case_ap_off_[i] = ap_off;
       case_ap_len_[i] = ap_len;
       case_ap_idx_[i] = 0;
@@ -582,12 +679,28 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
       // by more the shorter the line.
       const float t60 = std::max(0.05f, kCaseT60S);
       case_g_[i] = std::min(
-          0.9999f, std::exp(-6.907755279f * static_cast<float>(len + ap_len) / (sr * t60)));
+          0.9999f, std::exp(-6.907755279f * static_cast<float>(len + ap_len) / (sr_case * t60)));
       case_lp_[i] = 0.0f;
     }
     case_buf_.fill(0.0f);
     case_ap_buf_.fill(0.0f);
-    case_lp_a_ = 1.0f - std::exp(-kTwoPi * std::clamp(kCaseDampHz, 100.0f, 0.45f * sr) / sr);
+    // In-loop damping is quoted against the network's own rate, since that is
+    // what its one-poles run at.
+    case_lp_a_ =
+        1.0f - std::exp(-kTwoPi * std::clamp(kCaseDampHz, 100.0f, 0.45f * sr_case) / sr_case);
+    // The drive filter runs at the HOST rate -- it is the anti-alias filter, so
+    // it has to act before the decimation and not after it. Its ceiling is a
+    // tenth of the internal rate, which keeps what folds back at least two
+    // octaves down its own skirt.
+    case_in_a_ = 1.0f - std::exp(-kTwoPi * std::clamp(kCaseInHz, 20.0f, 0.1f * sr_case) / sr);
+    case_in_1_ = 0.0f;
+    case_in_2_ = 0.0f;
+    case_phase_ = 0;
+    case_hold_ = 0.0f;
+    case_out_lp_ = 0.0f;
+    // Smooths the held sample. Well above the band the drive filter passes, so
+    // it costs the member nothing and only removes the hold's own steps.
+    case_out_a_ = 1.0f - std::exp(-kTwoPi * std::min(800.0f, 0.45f * sr) / sr);
   }
   in1_ = 0.0f;
   in2_ = 0.0f;
@@ -619,6 +732,17 @@ void PianoSoundboard::reset() noexcept {
   case_lp_.fill(0.0f);
   case_ap_buf_.fill(0.0f);
   case_ap_idx_.fill(0u);
+  // The per-line damping poles hold energy the delay lines do not. Zeroing the
+  // buffers alone leaves it, and it is re-injected on the next traversal --
+  // so a network "cleared" by an All Sound Off goes on radiating at its own
+  // t60, which is seconds. That is exactly the wash a DAW panic exists to
+  // stop, and it survived one until this line was here.
+  case_lp_.fill(0.0f);
+  case_in_1_ = 0.0f;
+  case_in_2_ = 0.0f;
+  case_phase_ = 0;
+  case_hold_ = 0.0f;
+  case_out_lp_ = 0.0f;
   in1_ = 0.0f;
   in2_ = 0.0f;
   air_env_ = 0.0f;
@@ -684,8 +808,9 @@ float PianoSoundboard::process(float in) noexcept {
   // shipped build kAirGain is a constexpr zero and the whole block folds out;
   // in a tuning build the test is what lets a fit switch the layer back on
   // without a rebuild.
-  // Case and rim network, off the same bandpass residue the two banks use, so
-  // all three sit on one normalization. Tested rather than multiplied out for
+  // Case and rim network, off the same bandpass residue the two banks use so
+  // all three sit on one normalization, then band-limited to the range this
+  // member radiates in (see kCaseInHz). Tested rather than multiplied out for
   // the same reason the frame bank and the air layer are: at a zero return
   // level the lines would circulate a zero at the cost of eight delay reads,
   // eight writes and a one-pole each, and `0.0f * x` is not a constant the
@@ -694,44 +819,58 @@ float PianoSoundboard::process(float in) noexcept {
   float late = 0.0f;
   if (kCaseLevel != 0.0f) {
     constexpr size_t kLines = static_cast<size_t>(kCaseLines);
-    float scaled[kLines];
-    float out_sum = 0.0f;
-    float mix_sum = 0.0f;
-    for (size_t i = 0; i < kLines; ++i) {
-      float tap = case_buf_[case_off_[i] + case_idx_[i]];
-      // Diffuser, ahead of the output tap so the network radiates what it
-      // circulates rather than the undispersed echo. A lattice allpass: unity
-      // magnitude at every frequency, so it spreads one echo over its own
-      // length without touching the decay the per-line gain sets.
-      if (case_ap_len_[i] != 0u) {
-        const size_t p = case_ap_off_[i] + case_ap_idx_[i];
-        const float stored = case_ap_buf_[p];
-        const float v = tap + kCaseDiffuseG * stored;
-        case_ap_buf_[p] = v;
-        case_ap_idx_[i] = case_ap_idx_[i] + 1 < case_ap_len_[i] ? case_ap_idx_[i] + 1 : 0u;
-        tap = stored - kCaseDiffuseG * v;
+    // Band-limit the drive before anything is injected, at the HOST rate: both
+    // poles have unity gain at DC, so inside the band the network is fed exactly
+    // what the two resonator banks are and no level has to be re-fitted for the
+    // filter, and running it here rather than after the decimation is what makes
+    // it the anti-alias filter as well.
+    case_in_1_ += case_in_a_ * (bp - case_in_1_);
+    case_in_2_ += case_in_a_ * (case_in_1_ - case_in_2_);
+    if (case_phase_ == 0u) {
+      const float drive = case_in_2_;
+      float scaled[kLines];
+      float out_sum = 0.0f;
+      float mix_sum = 0.0f;
+      for (size_t i = 0; i < kLines; ++i) {
+        float tap = case_buf_[case_off_[i] + case_idx_[i]];
+        // Diffuser, ahead of the output tap so the network radiates what it
+        // circulates rather than the undispersed echo. A lattice allpass: unity
+        // magnitude at every frequency, so it spreads one echo over its own
+        // length without touching the decay the per-line gain sets.
+        if (case_ap_len_[i] != 0u) {
+          const size_t p = case_ap_off_[i] + case_ap_idx_[i];
+          const float stored = case_ap_buf_[p];
+          const float v = tap + kCaseDiffuseG * stored;
+          case_ap_buf_[p] = v;
+          case_ap_idx_[i] = case_ap_idx_[i] + 1 < case_ap_len_[i] ? case_ap_idx_[i] + 1 : 0u;
+          tap = stored - kCaseDiffuseG * v;
+        }
+        out_sum += kCaseInSign[i] * tap;
+        // Damp, then attenuate, and only then mix. The matrix has to act on the
+        // vector that is actually fed back: applied to the raw taps instead it
+        // is no longer the orthogonal map of what circulates, and the network's
+        // decay stops being the per-line gain it was designed from.
+        case_lp_[i] += case_lp_a_ * (tap - case_lp_[i]);
+        scaled[i] = case_g_[i] * case_lp_[i];
+        mix_sum += scaled[i];
       }
-      out_sum += kCaseInSign[i] * tap;
-      // Damp, then attenuate, and only then mix. The matrix has to act on the
-      // vector that is actually fed back: applied to the raw taps instead it
-      // is no longer the orthogonal map of what circulates, and the network's
-      // decay stops being the per-line gain it was designed from.
-      case_lp_[i] += case_lp_a_ * (tap - case_lp_[i]);
-      scaled[i] = case_g_[i] * case_lp_[i];
-      mix_sum += scaled[i];
+      // Householder: y = x - (2/N) * sum(x). Orthogonal, so the matrix is
+      // lossless and the decay is entirely the per-line gain and damping --
+      // which is what lets one t60 be stated for the network rather than
+      // emerging from the mixing.
+      const float mix = (2.0f / static_cast<float>(kCaseLines)) * mix_sum;
+      for (size_t i = 0; i < kLines; ++i) {
+        case_buf_[case_off_[i] + case_idx_[i]] = scaled[i] - mix + kCaseInSign[i] * drive;
+        case_idx_[i] = case_idx_[i] + 1 < case_len_[i] ? case_idx_[i] + 1 : 0u;
+      }
+      // The output tap sums the lines back with the same signs, so what the
+      // injection decorrelated is recombined rather than left half cancelled.
+      case_hold_ = out_sum;
     }
-    // Householder: y = x - (2/N) * sum(x). Orthogonal, so the matrix is
-    // lossless and the decay is entirely the per-line gain and damping --
-    // which is what lets one t60 be stated for the network rather than
-    // emerging from the mixing.
-    const float mix = (2.0f / static_cast<float>(kCaseLines)) * mix_sum;
-    for (size_t i = 0; i < kLines; ++i) {
-      case_buf_[case_off_[i] + case_idx_[i]] = scaled[i] - mix + kCaseInSign[i] * bp;
-      case_idx_[i] = case_idx_[i] + 1 < case_len_[i] ? case_idx_[i] + 1 : 0u;
-    }
-    // The output tap sums the lines back with the same signs, so what the
-    // injection decorrelated is recombined rather than left half cancelled.
-    late = out_sum * kCaseLevel;
+    case_phase_ = case_phase_ + 1u < kCaseDecim ? case_phase_ + 1u : 0u;
+    // Smooth the held sample rather than radiating its steps.
+    case_out_lp_ += case_out_a_ * (case_hold_ - case_out_lp_);
+    late = case_out_lp_ * kCaseLevel;
   }
   float air = 0.0f;
   if (kAirGain != 0.0f) {
@@ -743,10 +882,14 @@ float PianoSoundboard::process(float in) noexcept {
     air_hp_ += air_hp_a_ * (air_lp_ - air_hp_);
     air = kAirGain * air_env_ * (air_lp_ - air_hp_);
   }
-  // The late field is added at its own level rather than through `out_gain_`:
-  // that gain is the patch's soundboard mix, and the case network is a member
-  // of the instrument rather than a share of the board's colour.
-  return (1.0f - kPianoDirectGain) * d + out_gain_ * sum + air + late;
+  // The late field goes through `out_gain_` with the banks. It had been added
+  // outside it, on the reading that the case is a member of the instrument
+  // rather than a share of the board's colour -- which was untested while the
+  // network shipped at a zero level, and is wrong the moment it does not: a
+  // patch that sets `piano.soundboard` to zero is asking for no body, and it
+  // was still getting a four-second one. `kCaseLevel` is therefore a level
+  // relative to the board's own return rather than an absolute one.
+  return (1.0f - kPianoDirectGain) * d + out_gain_ * (sum + late) + air;
 }
 
 }  // namespace sonare::midi::synth

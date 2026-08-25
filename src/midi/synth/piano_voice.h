@@ -207,6 +207,15 @@ class PianoVoiceCore {
   /// coefficient's transparent value of 1 this tracks `bridge_` exactly.
   float bridge_drain_ = 0.0f;
   float drain_lp_a_ = 1.0f;
+  /// The drain's upper band, quoted in absolute frequency rather than in
+  /// partials of this note (see kBridgeHfDrain). `bridge_hf_lp_` is the
+  /// fixed-corner one-pole whose complement is the band, `drain_hi_w_` the
+  /// weight it enters at, and `drain_out_` the sum the string loops actually
+  /// subtract -- at a zero weight exactly `bridge_drain_`.
+  float bridge_hf_lp_ = 0.0f;
+  float drain_hf_a_ = 0.0f;
+  float drain_hi_w_ = 0.0f;
+  float drain_out_ = 0.0f;
   /// Damper radius cap, derived in start() from the note and the strike
   /// velocity and applied by release() / damp().
   float release_gain_ = 0.0f;
@@ -509,32 +518,13 @@ class PianoSoundboard {
   // cannot make 125 Hz out of a 4 kHz C8. Measured across three different
   // concert grands the attack level agrees to within 0.6 dB, which is what a
   // structure common to all of them looks like.
-  // Sixteen rather than eight, and the reason is a band rather than a count.
-  // Log-spread from forty hertz to four and a half kilohertz, eight modes put
-  // exactly ONE below sixty and one more below a hundred and twenty-five --
-  // and that octave is where the model's aftersound is furthest from the
-  // instrument's by a wide margin: nineteen decibels down on a single note,
-  // twenty on a held chord, twenty-seven across a register sweep, thirty-nine
-  // on a sustained C4 whose own fundamental is far above the band. A body that
-  // does not radiate below the notes it is under is what "thin" means.
-  //
-  // Lowering the band's corner cannot fix it, and the fit already tried: the
-  // modes are spread BETWEEN the corners, so moving the bottom one down moves
-  // all of them and buys coverage at the bottom by thinning everything above.
-  // Only the count adds modes where there were none.
-  //
-  // Doubling it is free in any sense that matters. The bank is per instrument,
-  // not per voice -- one in the native synth and one per channel in the SF2
-  // fallback -- so this is sixteen extra two-pole sections per sample at worst,
-  // against a polyphony that runs hundreds of string models.
-  //
-  // With the pairing below it is eight pair centres instead of four, which is
-  // the other half of the argument: a near-degenerate pair beats, and a bank
-  // with too few centres to cover its band has to choose between covering it
-  // and beating.
+  // Eight, which with the cents split below is four near-degenerate pair
+  // centres spread across kFrameFLow..kFrameFHigh. The count trades against
+  // the split: fewer centres cover the band less finely, and a bank with too
+  // few of them has to choose between covering the band and beating.
   static constexpr int kFrameModes = 8;
   std::array<Mode, kFrameModes> frame_{};
-  // Case and rim: the DIFFUSE late field, which a bank of resonators cannot be.
+  // Case and rim: the DENSE late field, which a bank of eight resonators is not.
   //
   // The frame bank above answers every note at its own eight pitches, and that
   // is audible as exactly what it is. It is also the only member the model has
@@ -543,43 +533,75 @@ class PianoSoundboard {
   // and the tail's band balance from 8.1 to 9.1 in the same move. They are the
   // same eight resonators.
   //
-  // Whether a set of resonances is heard as pitches or as a body is decided by
-  // modal overlap -- each resonance's bandwidth over the spacing between them.
-  // An exponential decay of t60 seconds has a bandwidth of 2.2/t60 Hz, so the
-  // frame's nine-second modes are a quarter of a hertz wide; spread over its
-  // band they sit hundreds of hertz apart, and the overlap is 0.0003. A
-  // soundboard at a kilohertz has a few tenths of a mode per hertz and a Q of
-  // order fifty, which is an overlap of several. Schroeder's criterion for a
-  // response that is not heard as individual modes is about 0.15 modes per
-  // hertz; the frame bank has 0.001 there.
+  // What the field has to be is not a matter of taste, and it is not diffusion
+  // either. Read the reference's 40-300 Hz sustain under a note whose own
+  // partials are all above the band -- so nothing the string radiates directly
+  // is being counted -- and two numbers come back on all three concert grands:
+  // about 0.28 resolvable resonances per hertz, each standing some THIRTY
+  // decibels over the floor between them. Band-limited noise through the
+  // identical transform gives 0.17 per hertz at eight decibels, and the frame
+  // bank gives half the count at fifty to a hundred. The instrument is neither.
+  // It is a dense set of resonances that are still individually resolvable, and
+  // both numbers have to be quoted because either one alone is reachable by
+  // something audibly wrong -- a short decay hits thirty decibels by having no
+  // tail left to be peaky with.
   //
-  // No parameter reaches that. Packing the same eight modes into a narrower
-  // band measured WORSE, because their bandwidth does not change with their
-  // spacing, and shortening the decay to widen them removes the long tail the
-  // bank exists to provide. The count is the quantity, and a count is not a
-  // knob.
+  // Those two numbers determine the network instead of being fitted into it. A
+  // feedback delay network's modal density in modes per hertz is its TOTAL delay
+  // in seconds, so 0.28 per hertz IS 0.28 seconds of delay spread over the
+  // lines. Peak-to-floor follows from modal overlap -- a mode's bandwidth
+  // 2.2/t60 over the spacing 1/T -- and thirty decibels is an overlap near 0.15,
+  // which at this density is a t60 of about four seconds. Both were then
+  // confirmed by measuring the built network exactly as the reference was
+  // measured rather than by trusting the arithmetic.
   //
-  // So the late field is made the way a dense response is made: a feedback
-  // delay network. Eight lines with mutually prime lengths and an orthogonal
-  // (Householder) mixing matrix put a mode roughly every seven hertz -- about
-  // 0.14 per hertz, which is Schroeder's number -- for eight delay lines
-  // instead of the thousands of resonators the equivalent bank would need.
-  // Per-line damping grades the decay with frequency, which is what a radiating
-  // case does and what the frame bank's flat grade could not state.
+  // Also worth stating because the earlier reasoning here got it backwards: the
+  // instrument's low field does NOT satisfy Schroeder's criterion and is not
+  // supposed to. Modes per hertz and modal overlap are different quantities, and
+  // a response with 0.28 modes per hertz whose modes are a fraction of a hertz
+  // wide is a long way from being heard as a continuum -- which is exactly why
+  // the reference measures thirty decibels peak-to-floor and not eight.
+  //
+  // No parameter of a bank reaches that. Packing the same eight modes into a
+  // narrower band measured WORSE, because their bandwidth does not change with
+  // their spacing, and shortening the decay to widen them removes the long tail
+  // the bank exists to provide. The count is the quantity, and a count is not a
+  // knob: matching the measured density with resonators takes over a thousand
+  // biquads per part, against eight delay lines here.
   //
   // Its delays are longer than the case's own path lengths, and that is a
   // deliberate departure from geometry rather than an oversight. A grand's
   // reflections are one to nine milliseconds; a network built on those alone
-  // has a quarter of the modal density and rings as audibly as the bank it
-  // replaces. The instrument reaches its density through the degrees of freedom
-  // of a plate, a cavity, a rim and a lid, which a delay network does not have
-  // -- so the density is bought with delay instead, and this member is a
-  // perceptual stand-in for that structure and not a model of it.
+  // has a small fraction of the measured density and rings as audibly as the
+  // bank it replaces. The instrument reaches its density through the degrees of
+  // freedom of a plate, a cavity, a rim and a lid, which a delay network does
+  // not have -- so the density is bought with delay instead, and this member is
+  // a perceptual stand-in for that structure and not a model of it.
   static constexpr int kCaseLines = 8;
+  // The network runs decimated, at an eighth of the host rate.
+  //
+  // Density is bought with total delay and nothing else, so at the full rate the
+  // measured 0.28 modes per hertz is 13416 samples of delay line per board --
+  // and a player carries sixteen boards whether or not a piano is ever loaded on
+  // one. That is a megabyte and a half of buffer, per player, for a member
+  // deliberately driven at three hundred hertz and below; it is also enough to
+  // overflow the stack of anything that holds two players as locals, which the
+  // suite does.
+  //
+  // Decimating by eight buys the same 0.28 seconds of delay for an eighth of the
+  // buffer and an eighth of the arithmetic, and costs nothing this member
+  // needs: the internal Nyquist is 3 kHz at a 48 kHz host, and the two-pole
+  // filter that band-limits the drive IS the anti-alias filter, forty decibels
+  // down there at its default corner -- which is why the corner is clamped to a
+  // tenth of the internal rate rather than left free. On the way out the held
+  // sample is smoothed by a one-pole, costing 0.07 dB at the top of the member's
+  // own band and removing the stepping a bare hold would radiate.
+  static constexpr uint32_t kCaseDecim = 8;
   // Shared pool rather than a buffer per line, sized for the whole set at the
   // rates this synth runs at. Above them the lengths scale down together, which
-  // costs density rather than correctness.
-  static constexpr size_t kCaseCapacity = 8192;
+  // costs density rather than correctness -- and density is the one property
+  // this member is built to a measured figure.
+  static constexpr size_t kCaseCapacity = 2048;
   std::array<float, kCaseCapacity> case_buf_{};
   std::array<uint32_t, kCaseLines> case_off_{};
   std::array<uint32_t, kCaseLines> case_len_{};
@@ -587,6 +609,27 @@ class PianoSoundboard {
   std::array<float, kCaseLines> case_g_{};
   std::array<float, kCaseLines> case_lp_{};
   float case_lp_a_ = 1.0f;
+  // Injection filter: two cascaded one-poles, so what the network is driven
+  // with is the low band and not the whole spectrum.
+  //
+  // The band is the point of the member rather than a refinement of it. What
+  // the density measurement establishes exists below three hundred hertz, and
+  // the inter-partial floor ABOVE that is already where the reference puts it --
+  // so a network driven full-band raises a floor that was correct in order to
+  // fill one that was not, and measures exactly that way: at a level too low to
+  // move the low band at all it still costs three decibels of note-invariant
+  // residue keyboard-wide. Twelve decibels an octave rather than six because a
+  // single pole is still only twenty decibels down two octaves up, which is
+  // inside the range those terms can see.
+  float case_in_a_ = 1.0f;
+  float case_in_1_ = 0.0f;
+  float case_in_2_ = 0.0f;
+  // Decimation state: which sample of the current block we are on, the network
+  // output being held across it, and the one-pole that smooths the hold.
+  uint32_t case_phase_ = 0;
+  float case_hold_ = 0.0f;
+  float case_out_lp_ = 0.0f;
+  float case_out_a_ = 1.0f;
   // An allpass diffuser inside each line. Eight lines put eight echoes into
   // every circulation of the network, and eight is few enough that the pattern
   // is audible as flutter before the mixing matrix has had time to fill it in.
@@ -601,7 +644,7 @@ class PianoSoundboard {
   // a zero coefficient the stage is skipped rather than passed through: an
   // allpass at zero is a plain delay, which would lengthen the loop and
   // detune the network instead of leaving it alone.
-  static constexpr size_t kCaseApCapacity = 2048;
+  static constexpr size_t kCaseApCapacity = 256;
   std::array<float, kCaseApCapacity> case_ap_buf_{};
   std::array<uint32_t, kCaseLines> case_ap_off_{};
   std::array<uint32_t, kCaseLines> case_ap_len_{};

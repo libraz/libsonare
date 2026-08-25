@@ -230,7 +230,7 @@ SONARE_TUNABLE(kTrebleDecayFloorOct, 3.0f);
 /// to something the size of the instrument and the keyboard's crest error falls
 /// from 9.6 dB to 6.0 while the sustained band profile improves alongside it
 /// instead of paying for it.
-SONARE_TUNABLE(kTwoStageWidthOct, 2.5f);
+SONARE_TUNABLE(kTwoStageWidthOct, 2.0f);
 /// Where that profile peaks, in octaves from C4. Zero is the identity and is
 /// where it had always been, but only because C4 is the pivot every other
 /// keytrack in this file measures from — the contrast was given the same origin
@@ -240,15 +240,15 @@ SONARE_TUNABLE(kTwoStageWidthOct, 2.5f);
 /// -41 against -1.9 and -2.9), so the Gaussian's crest was sitting on the one
 /// note where the instrument has almost no double decay at all.
 ///
-/// Fitted across the keyboard it lands an octave and a half up, around F#5,
-/// which is further than the per-note rates alone suggest and is not a
-/// contradiction of them: the profile also has to carry the treble's own short
-/// decay, so with the width now the size of the instrument the peak sits where
-/// the fast stage is needed most rather than where the contrast is sharpest.
-/// It is the second largest single term in the voice — removing it costs 2.0 dB
-/// of total error, against 11.8 for the uncombed blow and under 0.6 for
-/// everything else.
-SONARE_TUNABLE(kTwoStageCenterOct, 1.5f);
+/// Fitted across the keyboard it lands two octaves up, around C6, which is
+/// further than the per-note rates alone suggest and is not a contradiction of
+/// them: the profile also has to carry the treble's own short decay, so the
+/// peak sits where the fast stage is needed most rather than where the contrast
+/// is sharpest. It is one of the largest single terms in the voice, and it is
+/// overloaded in exactly that way — half of what it carries is a property of
+/// frequency rather than of register, and kBridgeHfDrain is the half that has
+/// been taken out of it and stated directly.
+SONARE_TUNABLE(kTwoStageCenterOct, 2.4f);
 /// Treble taper cap (octaves above C4): the decay/darkening keytracks stop
 /// steepening past here — an uncapped taper leaves the top octave with a
 /// sub-100 ms husk of a note.
@@ -263,7 +263,7 @@ SONARE_TUNABLE(kTrebleBrightPerOct, 0.06f);
 /// damping; see bright_eff). The h1 decay is unaffected — the loop-lowpass
 /// loss at the fundamental is compensated (lp_comp), so this only shortens
 /// the upper partials.
-SONARE_TUNABLE(kBassDarkPerOct, 0.15f);
+SONARE_TUNABLE(kBassDarkPerOct, 0.06f);
 /// String-to-string inharmonicity spread inside a unison (fractional jitter
 /// on the dispersion allpass): real unison strings never share an exact B, so
 /// each partial's unison beat runs at its own rate. Identical coefficients
@@ -286,12 +286,12 @@ SONARE_TUNABLE(kUnisonStrikeUneven, 0.15f);
 /// with equal radiation the slow mode is silent, and compensating with deep
 /// detune buys the second stage at the cost of a chorus-like beating
 /// fundamental no tuned piano has.
-SONARE_TUNABLE(kUnisonRadSpread, 0.6f);
+SONARE_TUNABLE(kUnisonRadSpread, 1.2f);
 /// Felt impact noise: level relative to the hammer amplitude, exponential
 /// decay time, and hard stop of the burst. The noise passes the same
 /// velocity-driven felt-stiffness lowpass as the pulse, so soft strikes thud
 /// and hard strikes click.
-SONARE_TUNABLE(kStrikeNoiseGain, 0.6f);
+SONARE_TUNABLE(kStrikeNoiseGain, 0.75f);
 SONARE_TUNABLE(kStrikeNoiseTauMs, 8.0f);
 SONARE_TUNABLE(kStrikeNoiseMaxMs, 30.0f);
 /// The impact noise radiates through a darker path than the string pulse: a
@@ -367,7 +367,7 @@ SONARE_TUNABLE(kInjectBassBoostOct, 1.23607f);
 /// grams of hard felt on a short string — its scrub is faint next to the
 /// tone, where the same level against a fast-dying treble note reads as a
 /// pick scratch riding every onset.
-SONARE_TUNABLE(kNoiseTrebleTaperOct, 1.08754f);
+SONARE_TUNABLE(kNoiseTrebleTaperOct, 0.435016f);
 /// Hammer-knock radiation (through the soundboard) relative to the string
 /// injection, and its growth per octave BELOW C4: the wide wound bass
 /// strings take a massive hammer whose impact drives the board directly —
@@ -383,7 +383,28 @@ SONARE_TUNABLE(kKnockGain, 2.6f);
 /// string fundamental — an audible onset notch in the treble.
 SONARE_TUNABLE(kKnockThudHz, 350.0f);
 /// Halvings of the thud frequency per octave below C4 (see thud_hz).
-SONARE_TUNABLE(kKnockThudBassOct, 0.7f);
+///
+/// Zero, and the grading is gone rather than reduced, because what it graded
+/// away is the only path by which the blow reaches the air before the string
+/// has built up. Every halving per octave puts C1's thud three octaves down:
+/// at 2.8 the corner is one hertz, at 0.7 it is eighty, and at neither does the
+/// knock reach the output at all in the bottom octave.
+///
+/// What that costs is the whole shape of a bass attack. Measured against three
+/// concert grands, the instrument reaches its peak 23 ms after a C1 is struck,
+/// 18 ms after a C2 and 20 ms after a C3, and has already fallen 2.5-3.6 dB by
+/// 200 ms. Graded, this voice took 140, 78 and 61 ms and was still RISING at
+/// 200 ms -- a swell rather than a blow -- and its peak stood only 4.3 dB over
+/// the note at 0.3 s where the instrument's stands 11.0. Ungraded it reaches
+/// 22, 21 and 20 ms with a 5.3 to 11.0 dB peak, which is the instrument to
+/// within a few decibels on both counts, and it moves nothing at C4 and above,
+/// where the string is fast enough not to need the help.
+///
+/// Nothing else reaches it. The board bank, the late field, unison detune, the
+/// two-stage decay, the contact-time controls and the radiation corner were each
+/// switched off or swept in turn; removing the board bank makes the rise WORSE
+/// (321 ms at C1), and no other lever moved it by more than a few tens of ms.
+SONARE_TUNABLE(kKnockThudBassOct, 0.0f);
 /// Radiation bloom: the string radiates only through the board, whose modes
 /// take time to ring up — the tone swells over tens of ms in the bass and a
 /// few ms in the treble, while a plucked string (or a harpsichord jack) is
@@ -398,7 +419,7 @@ SONARE_TUNABLE(kBloomTauOct, 0.9f);
 /// string barely loads the bounce (a clean full-period dwell); the wound
 /// bass strings are massive and swing away under the light-relative hammer,
 /// stretching the contact and softening the transfer.
-SONARE_TUNABLE(kStringYield, 0.8f);
+SONARE_TUNABLE(kStringYield, 1.28f);
 /// How far the strike point may be driven aside, as a fraction of THIS blow's
 /// peak felt compression. Tension bounds the excursion — the strike point is a
 /// sprung wave port, not a free particle — and the bound scales with the blow
@@ -580,12 +601,25 @@ SONARE_TUNABLE(kLongFirstOct, 0.6f);
 /// A0 has no other source at all for 0.8-3 kHz, and every dB here is a dB of
 /// the growl that tells the ear a low note came from a piano. Against the
 /// sustain it wants to be small, because the bank keeps ringing and the
-/// sustained centroid is already 12% over the reference. Where it sits recovers
-/// 7.4 dB of A0's attack and 3.3 dB of the keyboard median for 3.9 points of
-/// centroid, and leaves tuning, decay, the partial stack and the level swing
-/// untouched. Pushed further the 3-12 kHz octaves overshoot and the centroid
-/// runs away, which is the scrub-noise trade over again.
-SONARE_TUNABLE(kLongLevel, 8000.0f);
+/// sustained centroid is already 12% over the reference. Pushed further the
+/// 3-12 kHz octaves overshoot and the centroid runs away, which is the
+/// scrub-noise trade over again.
+///
+/// It had been at eight thousand, which is on the far side of that overshoot
+/// rather than at it. The drive is highpassed at kLongDriveHpHz and then
+/// SQUARED, so its products land at twice the band it is driven from; measured
+/// over the first 150 ms against three concert grands, the 5.7-11.3 kHz octave
+/// stood 12 to 27 dB over the instrument on every note from C2 to C6. At five
+/// hundred that octave lands within 3 dB across the keyboard, and it is where
+/// listening stops calling the strike metallic -- one round of the same audition
+/// rejected the old value by ear on that word alone.
+///
+/// Lowering the drive corner does NOT substitute for lowering the level, which
+/// is worth recording because the arithmetic suggests it should: squaring a
+/// wider band adds low products without removing the high ones, and the 8 kHz
+/// excess measured slightly WORSE at every corner from 2.5 kHz down. The corner
+/// stays where the scale length puts it.
+SONARE_TUNABLE(kLongLevel, 500.0f);
 SONARE_TUNABLE(kLongTrebleTaperOct, 1.5f);
 SONARE_TUNABLE(kLongT60S, 0.35f);
 /// Band limit on the slope operator the drive passes through before it is
@@ -608,13 +642,14 @@ SONARE_TUNABLE(kLongT60S, 0.35f);
 /// the same reason: it is 38 dB down at 100 Hz, which takes the drive away in
 /// exactly the register the bank exists for.
 SONARE_TUNABLE(kLongDriveHpHz, 4000.0f);
-/// Soundboard radiation highpass (2nd order). The board radiates poorly
+/// Soundboard radiation highpass (fourth order; see kRadiationHpSections).
+/// The board radiates poorly
 /// below its first body modes, so a piano's low fundamentals barely reach
 /// the air — the pitch is carried as virtual pitch by the upper partials.
 /// Passing the raw string fundamental instead makes the note read as a
 /// literally vibrating string (a guitar with its Helmholtz-supported lows),
 /// an octave darker than a piano radiates.
-SONARE_TUNABLE(kRadiationHpHz, 95.0f);
+SONARE_TUNABLE(kRadiationHpHz, 60.8f);
 /// Section Qs of the fourth-order Butterworth radiation highpass. Fixed by the
 /// filter order rather than voiced: they are 1/(2 cos(pi/8)) and
 /// 1/(2 cos(3pi/8)), the pole pair that makes the cascade maximally flat. The
@@ -627,8 +662,8 @@ constexpr std::array<float, 2> kRadiationHpSectionQ = {0.54119610f, 1.30656296f}
 /// partial crown, the mid-register presence, and the treble's h2-h3 body all
 /// radiate from this resonance, not from the strings. Without it every
 /// register reads mid-heavy and boxed-in regardless of the hammer spectrum.
-SONARE_TUNABLE(kBridgeHillHz, 1485.15f);
-SONARE_TUNABLE(kBridgeHillGainDb, 9.91486f);
+SONARE_TUNABLE(kBridgeHillHz, 1856.4375f);
+SONARE_TUNABLE(kBridgeHillGainDb, 15.863776f);
 SONARE_TUNABLE(kBridgeHillQ, 2.40983f);
 
 /// How far up the partial series the prompt-decay drain is allowed to reach,
@@ -657,6 +692,54 @@ SONARE_TUNABLE(kBridgeHillQ, 2.40983f);
 /// spectrum, so the profile could not be widened without brightening the
 /// sustain. Limited, the two move together.
 SONARE_TUNABLE(kTwoStageDrainPartials, 4.0f);
+/// The drain's second band, quoted where the instrument quotes it. 0 leaves
+/// the drain exactly the band-limited one above.
+///
+/// The band limit is measured in partials of the note being played, and a
+/// bridge does not know which note is driving it. Both statements can be true
+/// because they describe different halves of one curve, and the half the
+/// note-relative corner cannot reach is the one that matters most to a
+/// listener: measured against a dry concert grand, pooled by ABSOLUTE
+/// frequency over ten notes and three velocities, the reference's first half
+/// second falls at 34 dB/s around 2 kHz and 31 dB/s around 3 kHz against 10
+/// and 12 in the model, while its aftersound over the same partials agrees to
+/// within 3 dB/s everywhere. The sustain is right and the attack is not, and
+/// the missing loss is nine decibels of upper spectrum sitting through the
+/// whole early body of every note -- which is what "muddy" is a description of.
+///
+/// A note-relative corner at four partials puts that band above the drain at
+/// every pitch: a C4 stops draining at a kilohertz, a C2 at 262 Hz. So the
+/// second band is taken from a one-pole at a FIXED corner and added back at
+/// its own weight, which makes the drain a shelf in absolute frequency.
+///
+/// The weight is divided by the note's own fundamental because the drain acts
+/// once per traversal while the target is quoted per second, and a note makes
+/// f0 traversals a second. Without that division a weight fitted at C4 is four
+/// times too strong at C6 and four times too weak at C2 -- the same register
+/// runaway kLoopDampRateNorm exists to remove from the loop lowpass, arriving
+/// by the same route. kBridgeHfRefHz is the note the raw weight is quoted at.
+///
+/// The corner lands inside the bridge hill's band (kBridgeHillHz, fitted
+/// independently and from a different measurement), which is what it should do
+/// if both are describing the same mobility peak: the band where the bridge
+/// moves most is the band where the string loses most.
+///
+/// The shape is one-sided, and the same measurement asks for a lower lobe it
+/// does not have. Below 120 Hz the reference's first half second falls fifteen
+/// decibels a second faster than the model's, and a second fixed-corner band
+/// closes that to one and a half -- while costing the spectrogram comparison
+/// and the off-partial residue at every weight tried, because the model's bass
+/// is already too quiet and the lower lobe's only action there is to make it
+/// quieter. It is a correct mechanism whose paired defect is elsewhere, so it
+/// is not here.
+SONARE_TUNABLE(kBridgeHfDrain, 6.0f);
+SONARE_TUNABLE(kBridgeHfHz, 1600.0f);
+SONARE_TUNABLE(kBridgeHfRefHz, 261.6256f);
+/// Ceiling on the second band's share of the loop gain, as a fraction. The
+/// weight is a multiplier on a difference of two loop gains, so nothing in its
+/// own units says how large it may become before the coherent component is
+/// removed inside a single traversal; this bounds it in the units that do.
+SONARE_TUNABLE(kBridgeHfDrainMax, 0.5f);
 /// Design the loop's loss filter from the decay it has to produce rather than
 /// from the patch's tone knob. 0 keeps the tone-derived coefficient.
 ///
@@ -1144,6 +1227,31 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   drain_lp_a_ = (drain_partials <= 0.0f || drain_corner >= 0.5f * static_cast<float>(sr))
                     ? 1.0f
                     : 1.0f - std::exp(-kTwoPi * drain_corner / static_cast<float>(sr));
+  // Upper band: a fixed corner, so the drain is a shelf in absolute frequency
+  // rather than in this note's partials, and a weight divided by the note's own
+  // fundamental so that what it costs per SECOND is the same at every pitch.
+  const float hf_corner = std::clamp(kBridgeHfHz, 20.0f, 0.45f * static_cast<float>(sr));
+  drain_hf_a_ = 1.0f - std::exp(-kTwoPi * hf_corner / static_cast<float>(sr));
+  drain_hi_w_ =
+      std::max(0.0f, kBridgeHfDrain) * std::max(kBridgeHfRefHz, 1.0f) / std::max(f0, 1.0f);
+  if (drain_hi_w_ > 0.0f) {
+    // Bound it where the quantity has meaning: the drain is a multiple of the
+    // gap between the two loop gains, so it is that gap, not the weight, that
+    // says how close a traversal comes to removing the coherent component
+    // outright. Taken over the widest string so no member of the unison can
+    // exceed the ceiling on its own.
+    float widest = 0.0f;
+    for (int i = 0; i < num_strings_; ++i) {
+      const String& s = strings_[static_cast<size_t>(i)];
+      widest = std::max(widest, s.g_slow - s.g_fast);
+    }
+    if (widest > 1.0e-9f) {
+      drain_hi_w_ =
+          std::min(drain_hi_w_, std::max(0.0f, kBridgeHfDrainMax) * strings_[0].g_slow / widest);
+    }
+  }
+  bridge_hf_lp_ = 0.0f;
+  drain_out_ = 0.0f;
   // Damper keytrack: slightly heavier felt on the wound bass strings, and a
   // SHORTER stop toward the treble — the treble string carries so little
   // energy that even its light damper chokes it almost immediately (reference
@@ -1619,7 +1727,7 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
     if (s.buffer == nullptr || s.size < 8) continue;
     // Coupled two-stage decay: the coherent (bridge) component recirculates
     // at the fast prompt rate, the residual at the slow aftersound rate.
-    const float fb = s.g_slow * s.lp_state - (s.g_slow - s.g_fast) * bridge_drain_;
+    const float fb = s.g_slow * s.lp_state - (s.g_slow - s.g_fast) * drain_out_;
     const float delay =
         std::clamp(s.base_period / ratio - s.comp, 1.0f, static_cast<float>(s.size - 4));
     const float out = rt::lagrange3_fractional_delay(
@@ -1646,6 +1754,12 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
   // four thousand times a second is not a rounding difference for long. This
   // form is exactly `bridge_` at the transparent coefficient.
   bridge_drain_ = bridge_ - (1.0f - drain_lp_a_) * (bridge_ - bridge_drain_);
+  // The upper band. Written so that a zero weight leaves `drain_out_` exactly
+  // `bridge_drain_` -- the one-pole still runs, but nothing it produces reaches
+  // the loop, so the voice renders bit-identically to the band-limited drain
+  // alone.
+  bridge_hf_lp_ += drain_hf_a_ * (bridge_ - bridge_hf_lp_);
+  drain_out_ = bridge_drain_ + drain_hi_w_ * (bridge_ - bridge_hf_lp_);
   // Modal top-octave bank: the same hammer excitation, resolved into partials.
   // It stands in for the string's radiated wave and nothing else -- knock,
   // scrub noise, longitudinal bank, board and bridge hill all read the blended
