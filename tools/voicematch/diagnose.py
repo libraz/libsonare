@@ -71,8 +71,10 @@ VERDICT_ORDER = ("unreachable", "unscored", "spent", "partial", "reachable",
 TERM_UNITS = {
     "harm": "dB", "cents": "cents", "tnr": "dB", "env": "composite",
     "init": "dB", "slope": "dB/s ÷10", "tail": "dB/s ÷10", "hf": "dB",
+    "lf": "dB", "dyn": "dB per 64 velocity", "stiff": "cents",
     "level": "dB", "crest": "dB", "mss": "ratio", "band": "dB",
-    "bdecay": "dB/s ÷10",
+    "bdecay": "octaves of decay rate", "modes": "dB + cents÷25", "mod": "composite",
+    "kit": "doublings",
 }
 
 TERM_MEANS = {
@@ -84,11 +86,22 @@ TERM_MEANS = {
     "slope": "how fast each harmonic decays over the first two seconds",
     "tail": "the aftersound, from two seconds on",
     "hf": "the high-frequency content of the first 120 ms",
+    "lf": "the low and mid bands of the first 50 ms — the attack's weight",
+    "dyn": "the dynamics curve: how brightness tracks velocity, per pitch",
+    "stiff": "string stiffness — how far it stretches its twelfth partial",
     "level": "how the level is distributed across the probe",
     "crest": "peak against RMS",
     "mss": "the whole timeline, at four spectral resolutions",
     "band": "the third-octave level profile",
-    "bdecay": "how fast each octave band dies",
+    "bdecay": "how fast each octave band dies, as a ratio to the reference's rate",
+    "modes": "the partials as measured — where they actually are, not where a "
+             "harmonic series predicts. The only pitched reading a bar, a bell "
+             "or a membrane has",
+    "mod": "movement: vibrato, tremolo, and the beat of an ensemble",
+    "kit": "the relations inside the kit's own families — how far the six toms "
+           "spread apart, how the three hi-hats stand against each other. The "
+           "one percussion reading that lives between instruments rather than "
+           "inside one",
 }
 
 

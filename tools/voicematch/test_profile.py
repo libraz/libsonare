@@ -19,6 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import profile as profile_module  # noqa: E402
+from capture import note_groups, note_map  # noqa: E402
+from loss import _kit_terms, kit_report  # noqa: E402
 from metrics import _spectrum  # noqa: E402
 
 SR = 48000
@@ -531,9 +533,14 @@ def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys):
     """
     import make_audition
 
-    assert "drums" in shipped_captures()
+    # The organ is the shipped capture with no phrase set. The kit used to be,
+    # and now has one: a fit that moves one drum note at a time has no
+    # measurement of what happens BETWEEN hits — the hi-hats' mute group, a
+    # sixteenth pattern landing on its own ring — so the kit needed a listening
+    # path more than most.
+    assert "pipe_organ" in shipped_captures()
     argv = ["make_audition.py", "--config", str(Path(make_audition.__file__).resolve().parent
-                                                / "capture" / "drums.json")]
+                                                / "capture" / "pipe_organ.json")]
     old = sys.argv
     sys.argv = argv
     try:
@@ -572,3 +579,134 @@ def test_every_gate_dimension_has_a_floor_under_its_bound(tmp_path):
     bounds = json.loads(gate.read_text())["bounds"]
     assert set(bounds) == set(profile_module.DELTA_LABELS)
     assert all(b["median"] > 0.0 and b["abs_median"] > 0.0 for b in bounds.values())
+
+
+# --------------------------------------------------------------------------- #
+# The captured layout, and the model's
+# --------------------------------------------------------------------------- #
+def test_a_capture_may_state_which_model_note_answers_each_of_its_own():
+    """A drum note names an instrument, and a sampled kit need not use GM's order.
+
+    The kit measured for `reference/drums.json` does not: its toms ascend
+    45, 47, 48, 50, 41, 43. Without a map, a note-for-note comparison scores the
+    low floor tom against the high one and reports a tuning error that is a
+    mapping.
+    """
+    assert note_map({}) == {}
+    assert note_map({"note_map": {"41": 45, "43": 47}}) == {41: 45, 43: 47}
+    # Keys arrive from JSON as strings; both ends come back as ints so a caller
+    # can look up a MIDI note without knowing where the config came from.
+    mapped = note_map({"note_map": {"41": 45}})
+    assert all(isinstance(k, int) and isinstance(v, int) for k, v in mapped.items())
+
+
+def test_every_shipped_capture_s_note_map_names_notes_it_actually_captured():
+    """A map entry for a note outside the grid is a typo that silently does nothing."""
+    for name in shipped_captures():
+        cfg = json.loads((CAPTURE_DIR / f"{name}.json").read_text())
+        mapping = note_map(cfg)
+        if not mapping:
+            continue
+        captured = set(cfg.get("notes") or [])
+        assert captured, f"{name} maps notes but lists none"
+        unknown = sorted(set(mapping) - captured)
+        assert not unknown, f"{name} maps notes it never captured: {unknown}"
+
+
+# --------------------------------------------------------------------------- #
+# The families inside a capture
+# --------------------------------------------------------------------------- #
+def test_every_shipped_tail_override_names_notes_the_capture_actually_holds():
+    """A longer tail for a note the grid never records renders nothing at all.
+
+    It reads as a decision — the belltree was named for ten seconds and the
+    standard kit stops at 81 — and nothing in a capture run reports it, since
+    the table is consulted per note of the grid and a note outside it is never
+    looked up.
+    """
+    for name in shipped_captures():
+        cfg = json.loads((CAPTURE_DIR / f"{name}.json").read_text())
+        table = cfg.get("tail_by_note") or {}
+        if not table:
+            continue
+        captured = set(cfg.get("notes") or [])
+        named: set[int] = set()
+        for key in table:
+            for part in str(key).split(","):
+                part = part.strip()
+                if "-" in part:
+                    lo, hi = part.split("-", 1)
+                    named |= set(range(int(lo), int(hi) + 1))
+                elif part:
+                    named.add(int(part))
+        unknown = sorted(named - captured)
+        assert not unknown, f"{name} gives a tail to notes it never captures: {unknown}"
+
+
+def test_every_shipped_family_names_notes_the_capture_actually_holds():
+    """A family naming a note outside the grid loses that member in silence."""
+    for name in shipped_captures():
+        cfg = json.loads((CAPTURE_DIR / f"{name}.json").read_text())
+        groups = note_groups(cfg)
+        if not groups:
+            continue
+        captured = set(cfg.get("notes") or [])
+        for family, notes in groups.items():
+            assert len(notes) >= 2, f"{name}/{family} is not a family"
+            unknown = sorted(set(notes) - captured)
+            assert not unknown, f"{name}/{family} names uncaptured notes: {unknown}"
+
+
+def test_a_reference_scores_no_kit_relation_against_itself():
+    """The identity value, before any sweep of the term means anything.
+
+    A relation term compares two contrast vectors, and a contrast is a
+    subtraction against a median — arithmetic with several ways to come out
+    non-zero on identical input. Exactly zero over a non-zero count is the only
+    reading that says the term is measuring a difference rather than a method.
+    """
+    for name in shipped_captures():
+        reference = REFERENCE_DIR / f"{name}.json"
+        cfg = json.loads((CAPTURE_DIR / f"{name}.json").read_text())
+        groups = note_groups(cfg)
+        if not groups or not reference.exists():
+            continue
+        rows = json.loads(reference.read_text())["rows"]
+        value, count = _kit_terms(rows, rows, groups)
+        assert count > 0, f"{name} declares families and none could be measured"
+        assert value == 0.0
+
+
+def test_every_shipped_family_holds_at_least_one_relation_in_its_own_rows():
+    """A family whose members the reference cannot tell apart is not a family.
+
+    Which relations a family has is measured rather than declared, so a group
+    that survived nothing is one whose members are interchangeable in this
+    capture — the whistle pair, whose lengths are the capture's gate — and
+    declaring it puts a name in the file that scores nothing.
+    """
+    for name in shipped_captures():
+        reference = REFERENCE_DIR / f"{name}.json"
+        cfg = json.loads((CAPTURE_DIR / f"{name}.json").read_text())
+        groups = note_groups(cfg)
+        if not groups or not reference.exists():
+            continue
+        rows = json.loads(reference.read_text())["rows"]
+        held = {row["family"] for row in kit_report(rows, rows, groups)}
+        assert set(groups) == held, f"{name}: {sorted(set(groups) - held)} hold nothing"
+
+
+# --------------------------------------------------------------------------- #
+# The dimension that sees gain
+# --------------------------------------------------------------------------- #
+def test_the_compare_table_has_a_dimension_that_moves_when_a_gain_does():
+    """Every other column is normalised, and so is blind to output level.
+
+    Rewriting eighteen of the kit's output levels moved not one of the others by
+    a digit. `vel_range` is a span and cancels an offset by construction, so it
+    is not this either.
+    """
+    assert "level" in profile_module.DELTA_LABELS
+    normalised = {"band_tilt", "band_shape", "band_decay", "attack", "crest",
+                  "centroid_pct", "vel_range"}
+    assert "level" not in normalised

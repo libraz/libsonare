@@ -17,6 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from diagnose import (  # noqa: E402
     CONNECTED_UNITS,
+    TERM_MEANS,
+    TERM_UNITS,
     Diagnosis,
     diagnose,
     print_report,
@@ -334,3 +336,17 @@ def test_the_verdict_can_be_written_to_a_file(tmp_path, capsys):
     print_report(diag, out_path=str(out))
     capsys.readouterr()
     assert out.exists() and '"unreachable"' in out.read_text()
+
+
+def test_every_loss_term_has_a_unit_and_a_meaning_the_report_can_print():
+    """Two hand-kept tables against one list, which is a mirror and drifts.
+
+    A term missing from either prints an empty unit or no explanation at all,
+    and a diagnosis whose whole job is to tell a reader where to go next says
+    nothing about that one. Nothing else notices: the report renders, the run
+    exits zero, and the gap is a blank column.
+    """
+    missing_units = [t for t in LOSS_TERMS if t not in TERM_UNITS]
+    missing_means = [t for t in LOSS_TERMS if t not in TERM_MEANS]
+    assert not missing_units, f"no unit for {missing_units}"
+    assert not missing_means, f"no explanation for {missing_means}"
