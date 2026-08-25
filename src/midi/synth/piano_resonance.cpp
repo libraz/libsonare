@@ -256,6 +256,56 @@ SONARE_TUNABLE(kDiffuserG, 0.22f);
 /// is not far above it.
 SONARE_TUNABLE(kAirGain, 0.01f);
 
+/// The band the air layer occupies. The lowpass is two poles, and that order is
+/// the point rather than an implementation detail.
+///
+/// A single pole leaves the band at 6 dB per octave, so at 8 kHz it is only
+/// 9 dB below its own peak. The instrument's content there is nowhere near that
+/// high: measured against three concert grands over a sustained note, the
+/// octave above 8 kHz sits 60 to 70 dB under the octave holding the fundamental
+/// on every note from C2 to C5, which made this layer's skirt the loudest thing
+/// in that octave -- 14 to 31 dB over the instrument. It reads as a veil rather
+/// than as hiss because it does not decay with the note the way a partial does:
+/// the follower holds it up while the tone underneath falls away, so the top
+/// end loses its shape as the note sustains.
+///
+/// The second pole was chosen against the band's tonality -- the negated log
+/// spectral flatness of 2 to 8 kHz, which says whether the band is a comb of
+/// partials or a bed -- because that is the quantity the defect is heard as and
+/// a level alone cannot separate the two. One pole reads 3 to 8 dB less tonal
+/// than the instrument, two lands within 2.5 dB on every note, three overshoots
+/// to 3 to 6 dB MORE tonal, which is the dry-and-synthetic side this layer
+/// exists to stay off. Nothing below 4 kHz moves by so much as a tenth of a
+/// decibel at any order, so the level the whole-keyboard fit put on the layer
+/// carries over unchanged and is not refitted here.
+/// How much of the board's return is radiated differently to the two legs,
+/// and the allpass coefficient that makes it different.
+///
+/// A grand's board is metres across and radiates to two listening positions
+/// through paths that differ in phase at every frequency, so a close pair
+/// hears one instrument twice rather than one signal twice. Measured over a
+/// sustained note against three concert grands, their channel correlation runs
+/// 0.09 to 0.92 depending on band and note and their side energy sits 0 to
+/// 12 dB under their mid; this voice returned its board to both legs
+/// identically, which is a correlation of exactly 1 and a side 24 to 53 dB
+/// down -- a point source. Per-voice pan scatter cannot supply this: it moves
+/// one mono voice sideways, so a single note stays perfectly correlated.
+///
+/// Allpasses rather than filters or delays, so each leg receives the same
+/// magnitude spectrum the mono return had and only its phase differs. That is
+/// what the two paths actually differ in, and it is also what keeps the mono
+/// sum from developing a comb.
+///
+/// Zero is the identity and folds the whole layer out. Eight tenths is where
+/// the three instruments stop agreeing with each other: they span 0.29 to 0.85
+/// of correlation at C6 and -0.35 to 0.13 at C7, so no single setting lands
+/// every note, and the value was chosen by listening inside that range rather
+/// than fitted to a median none of them sits at.
+SONARE_TUNABLE(kBoardWidth, 0.8f);
+SONARE_TUNABLE(kBoardWidthG, 0.62f);
+SONARE_TUNABLE(kAirHpHz, 500.0f);
+SONARE_TUNABLE(kAirLpHz, 2800.0f);
+
 /// Case and rim network: its return level, its decay, and where that decay
 /// starts falling with frequency. See the network's own commentary in
 /// piano_voice.h for why the late field is made this way and not with more
@@ -555,6 +605,17 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     diff_buf_[d].fill(0.0f);
     diff_idx_[d] = 0;
   }
+  // One decorrelator per leg. Longer than the diffusers and incommensurate
+  // with them, so the two legs' phase fields separate at low frequencies too
+  // rather than only where the diffusers act.
+  constexpr float kSideMs[2] = {13.3f, 21.1f};
+  for (int d = 0; d < 2; ++d) {
+    side_len_[d] =
+        std::clamp<size_t>(static_cast<size_t>(kSideMs[d] * 0.001f * sr), 4, kDiffuserCapacity);
+    side_buf_[d].fill(0.0f);
+    side_idx_[d] = 0;
+  }
+  side_ = 0.0f;
   // Modes log-spread across the soundboard's radiating band. A perfectly
   // geometric spacing would comb; a deterministic per-mode nudge breaks the
   // periodicity (no RNG — derived from the index so bounces stay bit-stable).
@@ -706,12 +767,13 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
   in2_ = 0.0f;
   air_env_ = 0.0f;
   air_lp_ = 0.0f;
+  air_lp2_ = 0.0f;
   air_hp_ = 0.0f;
   air_rng_ = 0x9E3779B9u;
   air_attack_ = 1.0f - std::exp(-1.0f / (0.03f * sr));
   air_release_ = 1.0f - std::exp(-1.0f / (0.2f * sr));
-  air_lp_a_ = 1.0f - std::exp(-kTwoPi * 2800.0f / sr);
-  air_hp_a_ = 1.0f - std::exp(-kTwoPi * 500.0f / sr);
+  air_lp_a_ = 1.0f - std::exp(-kTwoPi * std::min(kAirLpHz, 0.45f * sr) / sr);
+  air_hp_a_ = 1.0f - std::exp(-kTwoPi * kAirHpHz / sr);
 }
 
 void PianoSoundboard::reset() noexcept {
@@ -727,6 +789,11 @@ void PianoSoundboard::reset() noexcept {
     diff_buf_[d].fill(0.0f);
     diff_idx_[d] = 0;
   }
+  for (int d = 0; d < 2; ++d) {
+    side_buf_[d].fill(0.0f);
+    side_idx_[d] = 0;
+  }
+  side_ = 0.0f;
   case_buf_.fill(0.0f);
   case_idx_.fill(0u);
   case_lp_.fill(0.0f);
@@ -747,6 +814,7 @@ void PianoSoundboard::reset() noexcept {
   in2_ = 0.0f;
   air_env_ = 0.0f;
   air_lp_ = 0.0f;
+  air_lp2_ = 0.0f;
   air_hp_ = 0.0f;
   air_rng_ = 0x9E3779B9u;
 }
@@ -800,22 +868,20 @@ float PianoSoundboard::process(float in) noexcept {
   // tone-to-noise; a clean stack reads dry and synthetic). Deterministic
   // seed, so bounces stay bit-stable.
   //
-  // The gain has never been fitted away from zero, and `0.0f * x` is not a
-  // constant the optimizer may fold (a NaN or an infinity in x would have to
-  // survive), so without this test the follower, the generator and both
-  // one-poles would run per sample to produce a zero. The layer's state feeds
-  // nothing but `air`, so skipping it cannot reach any other output. In a
-  // shipped build kAirGain is a constexpr zero and the whole block folds out;
-  // in a tuning build the test is what lets a fit switch the layer back on
-  // without a rebuild.
+  // `0.0f * x` is not a constant the optimizer may fold (a NaN or an infinity
+  // in x would have to survive), so without this test the follower, the
+  // generator and all three one-poles would run per sample to produce a zero
+  // at a zero gain. The layer's state feeds nothing but `air`, so skipping it
+  // cannot reach any other output. A patch that asks for no air gets none for
+  // free, and a fit can switch the layer off without a rebuild.
   // Case and rim network, off the same bandpass residue the two banks use so
   // all three sit on one normalization, then band-limited to the range this
   // member radiates in (see kCaseInHz). Tested rather than multiplied out for
   // the same reason the frame bank and the air layer are: at a zero return
   // level the lines would circulate a zero at the cost of eight delay reads,
   // eight writes and a one-pole each, and `0.0f * x` is not a constant the
-  // optimizer may fold. In a shipped build kCaseLevel is a constexpr zero and
-  // the whole block folds out.
+  // optimizer may fold. A patch that asks for no case network pays nothing
+  // for it.
   float late = 0.0f;
   if (kCaseLevel != 0.0f) {
     constexpr size_t kLines = static_cast<size_t>(kCaseLines);
@@ -879,8 +945,9 @@ float PianoSoundboard::process(float in) noexcept {
     air_rng_ = air_rng_ * 1664525u + 1013904223u;
     const float white = static_cast<float>(air_rng_ >> 8) * (1.0f / 8388608.0f) - 1.0f;
     air_lp_ += air_lp_a_ * (white - air_lp_);
-    air_hp_ += air_hp_a_ * (air_lp_ - air_hp_);
-    air = kAirGain * air_env_ * (air_lp_ - air_hp_);
+    air_lp2_ += air_lp_a_ * (air_lp_ - air_lp2_);
+    air_hp_ += air_hp_a_ * (air_lp2_ - air_hp_);
+    air = kAirGain * air_env_ * (air_lp2_ - air_hp_);
   }
   // The late field goes through `out_gain_` with the banks. It had been added
   // outside it, on the reading that the case is a member of the instrument
@@ -889,7 +956,26 @@ float PianoSoundboard::process(float in) noexcept {
   // patch that sets `piano.soundboard` to zero is asking for no body, and it
   // was still getting a four-second one. `kCaseLevel` is therefore a level
   // relative to the board's own return rather than an absolute one.
-  return (1.0f - kPianoDirectGain) * d + out_gain_ * (sum + late) + air;
+  const float out = (1.0f - kPianoDirectGain) * d + out_gain_ * (sum + late) + air;
+  // Radiation split across the legs. Tested rather than multiplied out for the
+  // same reason the air layer and the case network are: at a zero width the
+  // two allpasses would circulate a zero at the cost of two buffer reads, two
+  // writes and four multiplies, and `0.0f * x` is not a constant the optimizer
+  // may fold. A patch that asks for a point source pays nothing for one.
+  side_ = 0.0f;
+  if (kBoardWidth != 0.0f) {
+    float leg[2];
+    for (int st = 0; st < 2; ++st) {
+      float* buf = side_buf_[st].data();
+      size_t& idx = side_idx_[st];
+      const float v = out + kBoardWidthG * buf[idx];
+      leg[st] = buf[idx] - kBoardWidthG * v;
+      buf[idx] = v;
+      idx = idx + 1 < side_len_[st] ? idx + 1 : 0;
+    }
+    side_ = kBoardWidth * 0.5f * (leg[0] - leg[1]);
+  }
+  return out;
 }
 
 }  // namespace sonare::midi::synth

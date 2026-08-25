@@ -796,17 +796,20 @@ void NativeSynth::process_impl(float* const* channels,
       mix_r = swell_lp_r_;
     }
     // Shared modal soundboard plus pedal-gated sympathetic resonance, both
-    // driven by the summed dry piano mix and folded back into both legs
-    // (centre).
+    // driven by the summed dry piano mix. The sympathetic bank returns to the
+    // centre; the board does not, because its two radiation paths differ.
     if (piano_body_active_) {
       // Radiation split: the board returns the phase-diffused complement of
       // the direct share (plus the modal colour), so most of the note reaches
       // the mix through the board rather than as the raw string waveform.
       const float dry_mono = 0.5f * (piano_l + piano_r);
       const float body = soundboard_.process(dry_mono);
+      // The board's two radiation paths differ in phase, so its return is not
+      // the same signal on both legs. Zero at a zero board width.
+      const float side = soundboard_.last_side();
       const float symp = resonance_.process(soundboard_.last_diffused(), damper_open);
-      mix_l += kPianoDirectGain * piano_l + body + symp;
-      mix_r += kPianoDirectGain * piano_r + body + symp;
+      mix_l += kPianoDirectGain * piano_l + body + side + symp;
+      mix_r += kPianoDirectGain * piano_r + body - side + symp;
     } else if (sympathetic_active_) {
       // Plucked-string sound halo: the open strings ring behind the note. Held
       // open (no dampers). Skipped entirely for KS patches that did not opt in,

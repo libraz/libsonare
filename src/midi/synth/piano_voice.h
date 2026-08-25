@@ -474,6 +474,12 @@ class PianoSoundboard {
   /// Radiates one summed input sample: returns the phase-diffused complement
   /// of the host's direct share plus the (mix-scaled) modal colour.
   float process(float in) noexcept;
+  /// The side component of the last process() call: add it to the left leg
+  /// and subtract it from the right. A grand is not a point source -- its
+  /// board radiates to two listening positions through different paths -- and
+  /// a mono return renders one however wide the per-voice pan scatter is.
+  /// Zero at a zero width, where the whole layer folds out.
+  float last_side() const noexcept { return side_; }
   /// The phase-diffused sample computed by the last process() call. Feed
   /// resonance banks from this (not the raw dry) so their returns share the
   /// radiated path's phase field instead of partially cancelling it.
@@ -659,9 +665,16 @@ class PianoSoundboard {
   float in1_ = 0.0f;
   float in2_ = 0.0f;
   float out_gain_ = 0.0f;
+  // Radiation-path decorrelators: one allpass per leg, incommensurate with
+  // each other and with the phase diffusers above.
+  std::array<float, kDiffuserCapacity> side_buf_[2]{};
+  size_t side_len_[2] = {0, 0};
+  size_t side_idx_[2] = {0, 0};
+  float side_ = 0.0f;
   // Sustain-air texture state (level-tracked bandpassed noise).
   float air_env_ = 0.0f;
   float air_lp_ = 0.0f;
+  float air_lp2_ = 0.0f;
   float air_hp_ = 0.0f;
   float air_attack_ = 0.0f;
   float air_release_ = 0.0f;

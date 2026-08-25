@@ -247,22 +247,27 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         const FallbackBodyState& body = fallback_body_[static_cast<size_t>(part)];
         const float dry = body_dry[part];
         float add = 0.0f;
+        // The board's two radiation paths differ in phase, so its return is
+        // added to one leg and subtracted from the other. Zero at a zero board
+        // width, and never non-zero for a non-piano body.
+        float side = 0.0f;
         if (body.kind == FallbackBodyKind::kPiano) {
           PianoSoundboard& board = fallback_board_[static_cast<size_t>(part)];
           add = board.process(dry) +
                 fallback_reso_[static_cast<size_t>(part)].process(
                     board.last_diffused(), channels_[static_cast<size_t>(part)].sustain);
+          side = board.last_side();
         } else {
           add = fallback_reso_[static_cast<size_t>(part)].process(dry, /*damper_open=*/true);
         }
-        if (add == 0.0f) continue;
+        if (add == 0.0f && side == 0.0f) continue;
         if (part_bussed[part]) {
           float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-          bus[i] += add;
-          bus[kChunkFrames + i] += add;
+          bus[i] += add + side;
+          bus[kChunkFrames + i] += add - side;
         } else {
-          mix_l_[static_cast<size_t>(i)] += add;
-          mix_r_[static_cast<size_t>(i)] += add;
+          mix_l_[static_cast<size_t>(i)] += add + side;
+          mix_r_[static_cast<size_t>(i)] += add - side;
         }
 #if defined(SONARE_MIDI_WITH_FX)
         // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
