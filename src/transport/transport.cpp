@@ -74,7 +74,7 @@ void Transport::prepare(double sample_rate, const TempoMap* tempo_map) {
 
 TransportState Transport::snapshot() const noexcept {
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
-  const LoopState loop = loop_state_.try_load();
+  const LoopState loop = loop_reader_.try_load();
   return make_snapshot(map, sample_rate_.load(std::memory_order_acquire), playing(), loop.enabled,
                        render_frame(), sample_position(), loop.start_ppq, loop.end_ppq);
 }
@@ -94,7 +94,7 @@ void Transport::advance(int num_frames) noexcept {
   int64_t position = sample_position_.load(std::memory_order_acquire) + frames;
 
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
-  const LoopState loop = loop_state_.try_load();
+  const LoopState loop = loop_reader_.try_load();
   if (!loop.enabled || loop.end_ppq <= loop.start_ppq) {
     sample_position_.store(position, std::memory_order_release);
     return;
@@ -157,7 +157,7 @@ bool Transport::set_loop_from_markers(uint32_t start_marker_id, uint32_t end_mar
 bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const noexcept {
   if (!out) return false;
   out->clear();
-  const LoopState loop = loop_state_.try_load();
+  const LoopState loop = loop_reader_.try_load();
   const bool is_playing = playing();
   const int64_t current_sample = sample_position();
   const int64_t current_render = render_frame();

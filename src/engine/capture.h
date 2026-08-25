@@ -36,7 +36,7 @@ struct CaptureSegment {
 ///    is mid-update: a setter republishes the whole snapshot guarded by an
 ///    even/odd counter, and a reader that observes an in-progress write retries.
 ///    The setter is the single seqlock writer (control thread).
-///  - @ref process uses the seqlock's non-spinning @c try_load() path so the
+///  - @ref process reads through the seqlock's non-spinning reader handle so the
 ///    audio callback never waits for a preempted control-thread store. Accessor
 ///    getters use the spinning @c load() path and are control-thread helpers.
 ///
@@ -92,12 +92,16 @@ class CaptureSink {
   };
 
   Control snapshot() const noexcept { return control_.load(); }
-  Control snapshot_rt() const noexcept { return control_.try_load(); }
+  Control snapshot_rt() const noexcept { return control_reader_.try_load(); }
 
   // Control-thread shadow of the published state. The setters mutate this then
   // republish the whole snapshot so partial updates are never visible.
   Control control_state_{};
   rt::SeqlockCell<Control> control_{};
+  // The one audio-thread reader of the cell above (process, via
+  // punch_state_rt). Mutable because those reads run from const members and the
+  // handle owns the stale-value cache the non-spinning path falls back on.
+  mutable rt::SeqlockCell<Control>::Reader control_reader_ = control_.reader();
 
   std::atomic<int64_t> captured_frames_{0};
   // Atomic: process() (audio thread) bumps it while overflow_count() is polled

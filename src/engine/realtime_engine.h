@@ -986,6 +986,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};
   std::atomic<int64_t> record_offset_samples_{0};
   rt::SeqlockCell<InputMonitorState> input_monitor_{InputMonitorState{}};
+  // The one audio-thread reader of the cell above; the control-thread getters
+  // next to set_input_monitor() take the spinning load() path instead.
+  rt::SeqlockCell<InputMonitorState>::Reader input_monitor_reader_ = input_monitor_.reader();
   Metronome metronome_{};
 #if defined(SONARE_WITH_MIXING)
   MeterTelemetryTap meter_tap_{};

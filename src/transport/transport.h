@@ -81,11 +81,11 @@ class Transport {
  private:
   // Consistent snapshot of the loop region. set_loop (control thread) publishes
   // all three fields atomically via the seqlock cell below; the audio thread
-  // (advance / collect_loop_boundaries / snapshot) reads a torn-free copy via
-  // the cell's single non-spinning try_load() (RT-safe; on a detected conflict
-  // it returns the last cached value instead of spinning up to a scheduler
-  // tick, which would risk an xrun if the control thread were preempted
-  // mid-write). The control thread alone calls store().
+  // (advance / collect_loop_boundaries / snapshot) reads a torn-free copy
+  // through the single reader handle (RT-safe; on a detected conflict it
+  // returns the last cached value instead of spinning up to a scheduler tick,
+  // which would risk an xrun if the control thread were preempted mid-write).
+  // The control thread alone calls store().
   struct LoopState {
     double start_ppq = 0.0;
     double end_ppq = 0.0;
@@ -98,6 +98,10 @@ class Transport {
   std::atomic<int64_t> render_frame_{0};
   std::atomic<int64_t> sample_position_{0};
   rt::SeqlockCell<LoopState> loop_state_{};
+  // The one audio-thread reader of the cell above. Mutable because the reads
+  // happen from const members (snapshot / collect_loop_boundaries) and the
+  // handle owns the stale-value cache the non-spinning path falls back on.
+  mutable rt::SeqlockCell<LoopState>::Reader loop_reader_ = loop_state_.reader();
   // Diagnostic overflow counter (see loop_overflow_count()). Incremented on the
   // audio thread from the const collect_loop_boundaries(), hence mutable atomic.
   mutable std::atomic<uint32_t> loop_overflow_count_{0};

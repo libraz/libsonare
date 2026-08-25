@@ -246,7 +246,7 @@ const RealtimeVoiceChangerConfig& RealtimeVoiceChanger::adopt_snapshot_for_block
   const std::uint32_t version = config_version_.load(std::memory_order_acquire);
   if (version != applied_config_version_) {
     RealtimeVoiceChangerConfig candidate;
-    if (config_cell_.try_load_into(&candidate)) {
+    if (config_reader_.try_load_into(&candidate)) {
       active_config_ = candidate;
       const bool next_isp_limiter_active = active_config_.limiter.enable_isp_limiter;
       update_derived();

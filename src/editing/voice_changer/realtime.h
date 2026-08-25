@@ -324,6 +324,11 @@ class RealtimeVoiceChanger {
   ///        snapshots, storing into this cell never allocates on the writer
   ///        side either — see @ref set_config for why that matters on WASM.
   rt::SeqlockCell<RealtimeVoiceChangerConfig> config_cell_;
+  /// @brief The one audio-thread reader of @c config_cell_, used by @ref
+  ///        adopt_snapshot_for_block. Holding the handle rather than reading
+  ///        the cell directly is what keeps the non-spinning path's fallback
+  ///        cache private to this reader.
+  rt::SeqlockCell<RealtimeVoiceChangerConfig>::Reader config_reader_ = config_cell_.reader();
   /// @brief Monotonic version bumped (release ordering) every time @c
   ///        config_cell_ is stored into. The audio thread compares this
   ///        against @c applied_config_version_ to detect a pending

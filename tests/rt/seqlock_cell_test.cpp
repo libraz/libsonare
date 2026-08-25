@@ -4,6 +4,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 namespace {
 
@@ -28,21 +30,48 @@ TEST_CASE("SeqlockCell load returns the published value", "[rt][seqlock]") {
 
 TEST_CASE("SeqlockCell explicit-initial constructor seeds both value and cache", "[rt][seqlock]") {
   sonare::rt::SeqlockCell<Pair> cell{Pair{3, 3}};
+  auto reader = cell.reader();
   // Spinning and non-spinning reads agree on the seed before any store.
   CHECK(cell.load().a == 3u);
-  CHECK(cell.try_load().a == 3u);
+  CHECK(reader.try_load().a == 3u);
 }
 
 TEST_CASE("SeqlockCell try_load reflects the latest store", "[rt][seqlock]") {
   sonare::rt::SeqlockCell<Pair> cell;
+  auto reader = cell.reader();
   cell.store({1, 1});
-  CHECK(cell.try_load().a == 1u);
+  CHECK(reader.try_load().a == 1u);
   cell.store({2, 2});
-  CHECK(cell.try_load().a == 2u);
+  CHECK(reader.try_load().a == 2u);
+}
+
+TEST_CASE("SeqlockCell reader handles carry independent fallback caches", "[rt][seqlock]") {
+  // The stale-value fallback is per reader, which is what makes a second
+  // reading thread safe: it gets its own cache instead of racing on a shared
+  // one. Two handles taken from the same cell must therefore stay independent,
+  // and each must seed from what was published at the time it was created
+  // rather than from a zeroed value.
+  sonare::rt::SeqlockCell<Pair> cell;
+  cell.store({5, 5});
+  auto early = cell.reader();
+  CHECK(early.try_load().a == 5u);
+
+  cell.store({9, 9});
+  auto late = cell.reader();
+  CHECK(late.try_load().a == 9u);
+  CHECK(early.try_load().a == 9u);
+
+  // Move transfers the handle rather than duplicating it; copying is rejected
+  // at compile time so a second reader cannot appear by accident.
+  static_assert(!std::is_copy_constructible<sonare::rt::SeqlockCell<Pair>::Reader>::value,
+                "a reader handle must not be copyable");
+  auto moved = std::move(late);
+  CHECK(moved.try_load().a == 9u);
 }
 
 TEST_CASE("SeqlockCell never tears under a concurrent writer", "[.][slow][rt][seqlock]") {
   sonare::rt::SeqlockCell<Pair> cell;
+  auto reader = cell.reader();
   std::atomic<bool> stop{false};
 
   std::thread writer([&] {
@@ -56,7 +85,7 @@ TEST_CASE("SeqlockCell never tears under a concurrent writer", "[.][slow][rt][se
   for (int i = 0; i < 200000; ++i) {
     const Pair s = cell.load();
     REQUIRE(s.a == s.b);
-    const Pair t = cell.try_load();
+    const Pair t = reader.try_load();
     REQUIRE(t.a == t.b);
   }
 
@@ -84,6 +113,7 @@ TEST_CASE(
   // machine; the assertions below hold regardless of whether one occurs.
   sonare::rt::SeqlockCell<Pair> cell;
   cell.store({1, 1});
+  auto reader = cell.reader();
   std::atomic<bool> stop{false};
   std::atomic<int> conflicts_observed{0};
 
@@ -96,7 +126,7 @@ TEST_CASE(
   constexpr Pair kSentinel{0xDEADBEEFu, 0xCAFEBABEu};
   for (int i = 0; i < 500000; ++i) {
     Pair out = kSentinel;
-    if (cell.try_load_into(&out)) {
+    if (reader.try_load_into(&out)) {
       REQUIRE(out.a == out.b);
     } else {
       REQUIRE(out.a == kSentinel.a);

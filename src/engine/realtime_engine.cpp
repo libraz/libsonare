@@ -390,7 +390,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                                      transport_.render_frame(), 0xFFFFu);
 #endif
     }
-    const InputMonitorState monitor = input_monitor_.try_load();
+    const InputMonitorState monitor = input_monitor_reader_.try_load();
     if (!monitor.enabled || monitor.gain != 1.0f) {
       for (int ch = 0; ch < channels; ++ch) {
         float* channel = sub_channels[static_cast<size_t>(ch)];
