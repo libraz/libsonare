@@ -12,24 +12,64 @@
 <body>
 
 <header>
-  <div class="titles">
-    <div id="sets" class="sets" role="group" aria-label="sets" hidden></div>
-    <h1 id="title">audition</h1>
-    <p id="notes"></p>
-  </div>
-  <div class="toggles">
+  <label class="pick">
+    <span class="pick-lab">set</span>
+    <select id="setSelect" aria-label="set"></select>
+  </label>
+  <h1 id="title">audition</h1>
+  <span class="grow"></span>
+  <button id="optionsBtn" type="button" class="ghost" aria-expanded="false"
+          aria-controls="options">options</button>
+</header>
+
+<!-- Everything that is decided once and then left alone. On screen it is one
+     button; the listening surface below stays about what is being listened to. -->
+<div id="options" class="options" hidden>
+  <div class="opt-col">
+    <h2>playback</h2>
     <label class="compare-only"><input type="checkbox" id="matchRms"> match loudness <kbd>M</kbd></label>
     <label class="compare-only"><input type="checkbox" id="restartOnSwitch" checked> switch restarts <kbd>S</kbd></label>
     <label class="compare-only"><input type="checkbox" id="blind"> blind <kbd>B</kbd></label>
     <button id="exportBtn" type="button">export notes</button>
   </div>
-</header>
+  <div class="opt-col">
+    <h2>keys</h2>
+    <dl class="keys">
+      <dt><kbd>space</kbd></dt><dd>play / pause</dd>
+      <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>take</dd>
+      <dt class="compare-only"><kbd>1</kbd>…<kbd>9</kbd> <kbd>←</kbd><kbd>→</kbd></dt><dd class="compare-only">version</dd>
+      <dt><kbd>L</kbd></dt><dd>loop</dd>
+      <dt class="compare-only"><kbd>M</kbd></dt><dd class="compare-only">match loudness</dd>
+      <dt class="compare-only"><kbd>S</kbd></dt><dd class="compare-only">switch restarts</dd>
+      <dt class="compare-only"><kbd>B</kbd></dt><dd class="compare-only">blind</dd>
+      <dt class="compare-only"><kbd>R</kbd></dt><dd class="compare-only">reveal / reshuffle</dd>
+    </dl>
+    <p class="hint">Drag across the waveform to set a loop region; a click seeks.</p>
+  </div>
+  <div class="opt-col wide">
+    <h2>about this set</h2>
+    <p id="notes" class="hint"></p>
+    <p id="sharedNote" class="hint"></p>
+  </div>
+</div>
 
 <main>
   <nav id="takes" aria-label="takes"></nav>
 
   <section id="stage">
-    <div id="versions" class="segmented compare-only" role="group" aria-label="versions"></div>
+    <!-- What is sounding, spelled out, and the link that reproduces it. A
+         listening report that names the wrong version is worse than no report,
+         and every other control on this page is one keystroke away from
+         changing what this line says. -->
+    <div class="ident">
+      <div class="crumbs" id="crumbs"></div>
+      <span class="grow"></span>
+      <code id="identPath" class="path"></code>
+      <button id="copyLink" type="button" class="ghost">copy link</button>
+    </div>
+
+    <div id="versions" class="versions compare-only"></div>
+    <p id="versionDetail" class="detail"></p>
 
     <figure class="pane">
       <canvas id="wave" height="150"></canvas>
@@ -46,24 +86,16 @@
       <button id="loopBtn" type="button">loop</button>
       <span id="clock" class="mono">0.00 / 0.00</span>
       <span id="levels" class="mono"></span>
-      <span class="spacer"></span>
+      <span class="grow"></span>
       <span id="blindScore" class="mono"></span>
     </div>
 
-    <textarea id="takeNotes" placeholder="Notes on this take — saved in this browser, and included in the export."></textarea>
+    <details id="notePanel">
+      <summary>notes on this take</summary>
+      <textarea id="takeNotes" placeholder="Saved in this browser, and included in the export."></textarea>
+    </details>
   </section>
 </main>
-
-<footer>
-  <span><kbd>space</kbd> play</span>
-  <span class="compare-only"><kbd>1</kbd>…<kbd>9</kbd> / <kbd>←</kbd><kbd>→</kbd> version</span>
-  <span><kbd>↑</kbd><kbd>↓</kbd> take</span>
-  <span><kbd>L</kbd> loop</span>
-  <span class="compare-only"><kbd>M</kbd> match loudness</span>
-  <span class="compare-only"><kbd>B</kbd> blind</span>
-  <span class="compare-only"><kbd>R</kbd> reveal / reshuffle</span>
-  <span>drag the waveform to set a loop region</span>
-</footer>
 
 <script src="app.js"></script>
 </body>

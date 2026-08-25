@@ -126,6 +126,7 @@ jobs:
           python3 tools/parity/test_surface_coverage.py
           python3 tools/parity/test_allowlist_audit.py
           python3 tools/eval/test_summarize_accuracy.py
+          python3 tools/audition/test_serve.py
           python3 tools/parity/surface_coverage.py --check
           python3 tools/parity/check_parity.py --audit-allowlist
 

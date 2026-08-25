@@ -19,6 +19,20 @@ move between them. Each is a separate instrument or a separate experiment: a
 piano set and a harpsichord set have different takes and different references,
 so they are separate sets rather than one long list, and one server serves both.
 
+WHAT IS SOUNDING IS ADDRESSABLE. Every set, take and version has an address —
+`#<set>/<take>/<version>` — which the page rewrites as it is navigated, and the
+per-set form is printed below on startup. A listening report that names the
+wrong render is worse than none, and once several sets of one instrument are up
+at once, each holding a reference, an unmodified build and a few candidate
+settings, nobody can be sure from memory which one they heard.
+
+ONE SERVER, FOR AS LONG AS THE WORK LASTS. The set list is rebuilt on every
+request for it, so a set rendered after the server started shows up on a
+refresh; and starting this again while it is running does not start a second
+one, it opens a browser on the first. Between them there is never a reason to
+pick a different port, which is what stops a tuning session ending with a row of
+servers each showing a subset of the renders.
+
 WHAT IS SERVED, AND WHAT IS NOT. Given no directory, the sets are discovered
 under the scratch root the rest of the harness uses — `.cache/voicematch/` in
 the checkout, or wherever `SONARE_VOICEMATCH_ROOT` points. None of it is
@@ -49,6 +63,8 @@ import re
 import socketserver
 import sys
 import threading
+import urllib.error
+import urllib.request
 import webbrowser
 from pathlib import Path
 
@@ -59,9 +75,12 @@ AUDIO_SUFFIXES = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac")
 #: reads. Untracked on purpose — the reference side of a comparison is captured
 #: from a commercial plugin and cannot be redistributed — so a fresh clone finds
 #: nothing here, which is a supported state rather than a failure.
+#: Resolved, because `discover` resolves what it finds and `set_id` compares a
+#: set's parent against this: one symlink anywhere above the checkout and the
+#: two spellings stop matching, which would rename every set silently.
 SCRATCH_ROOT = Path(
     os.environ.get("SONARE_VOICEMATCH_ROOT") or REPO_ROOT / ".cache" / "voicematch"
-).expanduser()
+).expanduser().resolve()
 #: Searched under the scratch root, in order. The second form is for a root that
 #: holds one set directly rather than a directory of them.
 FALLBACK_GLOBS = ("audition/*", "audition", "*/audition")
@@ -99,16 +118,40 @@ def read_manifest(root: Path) -> dict:
     return infer_manifest(root)
 
 
+#: Leaf names that say nothing about which set a directory holds.
+GENERIC_NAMES = ("audition", "renders", "out")
+
+
 def set_id(root: Path) -> str:
-    """A short URL-safe name for a set.
+    """A short URL-safe name for a set, and the one its links carry.
 
     Taken from the parent directory when the leaf says nothing — `pianolab` and
-    `harpsichordlab` distinguish two sets that are both called `audition`.
+    `harpsichordlab` distinguish two sets that are both called `audition` —
+    except directly under the scratch root, where the parent is the scratch root
+    and names the harness rather than the set.
     """
     name = root.name
-    if name in ("audition", "renders", "out") and root.parent != root:
+    if name in GENERIC_NAMES and root.parent not in (root, SCRATCH_ROOT):
         name = root.parent.name
     return re.sub(r"[^a-zA-Z0-9._-]+", "-", name).strip("-") or "set"
+
+
+def take_dirs(root: Path) -> set[Path]:
+    """The directories a set's own manifest names as holding its takes."""
+    mf = root / "manifest.json"
+    if not mf.exists():
+        return set()
+    try:
+        manifest = json.loads(mf.read_text())
+    except (OSError, ValueError):
+        return set()
+    out: set[Path] = set()
+    for item in manifest.get("items", []):
+        for rel in (item.get("tracks") or {}).values():
+            parent = (root / rel).parent.resolve()
+            if parent != root:
+                out.add(parent)
+    return out
 
 
 def discover(paths: list[str]) -> list[Path]:
@@ -119,17 +162,44 @@ def discover(paths: list[str]) -> list[Path]:
     for pattern in FALLBACK_GLOBS:
         found += [p.resolve() for p in sorted(SCRATCH_ROOT.glob(pattern)) if p.is_dir()]
     unique = list(dict.fromkeys(found))
-    # A set is a leaf. Two of these globs can match a directory and its parent,
-    # and the parent holds no renders of its own — offering it produces a name
-    # in the picker that plays nothing, reported as a skip nobody caused.
-    return [p for p in unique if not any(p in other.parents for other in unique)]
+    # A directory a set's manifest names as one of its own takes is part of that
+    # set, not a set beside it. The default output directory is the parent of
+    # every named one, so `audition/*` matches a set's take directories as
+    # readily as it matches the sets: a kit set of six takes came out as six
+    # play-only "sets" of two versions each -- and the kit set itself was gone,
+    # dropped by the leaf rule below for being their parent.
+    claimed: set[Path] = set()
+    for p in unique:
+        claimed |= take_dirs(p)
+    unique = [p for p in unique if p not in claimed]
+    # A directory with a manifest is a set whatever it contains. One without is
+    # a set only if it is a leaf: two of these globs can match a directory and
+    # its parent, and a parent holding no renders of its own would otherwise put
+    # a name in the picker that plays nothing.
+    return [p for p in unique
+            if (p / "manifest.json").exists()
+            or not any(p in other.parents for other in unique)]
 
 
 class Sets:
-    """The served sets, by id, and the index the page reads to list them."""
+    """The served sets, by id, and the index the page reads to list them.
 
+    Reloaded on every request for the index rather than once at startup, so one
+    server outlives the renders it is showing. A tuning session produces a set
+    every few minutes and the alternative is a server -- and a port, and a stale
+    browser tab -- per set, which is how eight of them came to be running at
+    once. Discovery is a handful of `glob` calls against a directory that holds
+    tens of entries, so doing it per index request costs nothing worth naming.
+    """
+
+    #: What `main` was asked to serve, so a reload can repeat the same search.
+    paths: list[str] = []
     by_id: dict[str, Path] = {}
     index: list[dict] = []
+
+    @classmethod
+    def reload(cls) -> None:
+        cls.load(discover(cls.paths))
 
     @classmethod
     def load(cls, roots: list[Path]) -> None:
@@ -217,6 +287,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - http.server's spelling
         rel = self.path.split("?", 1)[0].lstrip("/")
         if rel == "sets.json":
+            # Re-scan here, so a set rendered after the server started appears
+            # on a refresh instead of needing a second server.
+            Sets.reload()
             self._json(Sets.index)
             return
         root, rest = self._set_and_rest(rel)
@@ -239,6 +312,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             super().log_message(fmt, *args)
 
 
+def already_serving(port: int) -> bool:
+    """Whether an audition server is answering on this port already.
+
+    Checked before binding rather than after failing to, because the useful
+    answer to "the port is taken" is almost always "by the one you started an
+    hour ago" -- and starting a second server on a second port is what leaves a
+    row of them running, each showing a subset of the sets. Anything else
+    holding the port is left to the bind to report as itself.
+    """
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/sets.json", timeout=1.0) as r:
+            json.load(r)
+        return True
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("directory", nargs="*",
@@ -248,6 +338,16 @@ def main() -> int:
     ap.add_argument("--no-open", action="store_true", help="do not launch a browser")
     args = ap.parse_args()
 
+    # A running server rediscovers its sets on every index request, so one that
+    # is already up is showing this set too and there is nothing to start.
+    if already_serving(args.port):
+        url = f"http://127.0.0.1:{args.port}/"
+        print(f"already serving at {url} — refresh it; new sets appear on their own")
+        if not args.no_open:
+            webbrowser.open(url)
+        return 0
+
+    Sets.paths = list(args.directory)
     roots = discover(args.directory)
     Sets.load(roots)
     if not Sets.index:
@@ -258,13 +358,16 @@ def main() -> int:
         print("no renders found in: " + ", ".join(str(w) for w in where), file=sys.stderr)
         print("render one with tools/voicematch/make_audition.py (--model-only needs no plugin)",
               file=sys.stderr)
+    url = f"http://127.0.0.1:{args.port}/"
+    # The per-set address, not just the name: a set is chosen for someone else
+    # to listen to at least as often as for oneself, and `#<set>/<take>/<version>`
+    # is the only form of "listen to this one" that cannot be misread.
     for entry in Sets.index:
         kind = "compare" if entry["compare"] else "play only"
-        print(f"  {entry['id']:<16} {entry['takes']:>3} takes  [{kind}]  {entry['path']}")
+        print(f"  {entry['id']:<16} {entry['takes']:>3} takes  [{kind:^10}]  {url}#{entry['id']}")
 
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", args.port), Handler) as httpd:
-        url = f"http://127.0.0.1:{args.port}/"
         print(f"  {url}   (ctrl-c to stop)")
         if not args.no_open:
             threading.Timer(0.4, lambda: webbrowser.open(url)).start()

@@ -11,6 +11,14 @@
  * restarts" (on by default) makes a switch seek back to the start instead, and
  * the sample-aligned form stays one keystroke away.
  *
+ * WHAT IS SOUNDING IS ADDRESSABLE. The URL fragment is `#<set>/<take>/<version>`
+ * and it is rewritten on every move, so the page can be pointed at one exact
+ * render and the address bar always names the one being heard. A listening
+ * report is worthless if the two people cannot be sure they heard the same
+ * file, and with several sets of the same instrument open — each holding a
+ * reference, an unmodified build, and a handful of candidate settings — being
+ * sure is not something either of them can do from memory.
+ *
  * The waveform and the spectrogram are drawn once into offscreen canvases and
  * blitted each frame with only the playhead on top. Recomputing either one per
  * frame is what turns a listening tool into a slideshow.
@@ -28,7 +36,9 @@ const state = {
   manifest: null,
   items: [],
   itemIndex: 0,
-  versionIndex: 0,
+  versionIndex: 0,     // slot: an index into take.keys, or into blindOrder when blind
+  display: [],         // slots in the order they are shown, which is what 1..9 count
+  wantKey: '',         // version to re-select when the take or the set changes
   take: null,          // { id, keys[], buffers{}, rms{}, duration, specs{}, peaks{} }
   ctx: null,
   sources: [],
@@ -49,6 +59,11 @@ const SWITCH_RAMP = 0.006;   // seconds: instant to the ear, long enough not to 
 const SPEC_FFT = 1024;
 const SPEC_HOP = 512;
 const SPEC_FLOOR_DB = -78;
+
+//: Source roles, in the order their rows are shown. A manifest that declares
+//: none puts every version in one unlabelled row, which is what a hand-made
+//: directory gets and is the layout this page had before roles existed.
+const ROLE_ORDER = ['model', 'reference'];
 
 const layers = { wave: { sig: '', cv: null }, spec: { sig: '', cv: null } };
 
@@ -183,6 +198,57 @@ function togglePlay() {
   else startAt(state.startOffset >= state.take.duration - 0.01 ? 0 : state.startOffset);
 }
 
+/* ----------------------------------------------------------------- route */
+
+/* `#<set>/<take>/<version>`, with `?set=&take=&v=` accepted as well so a link
+ * can be built by anything that finds a query string easier to write. The
+ * fragment is authoritative and is what gets written back, since it costs no
+ * request and leaves the page's own state the only thing that has to agree.
+ *
+ * The version is left off in blind mode: the whole point of that mode is that
+ * the name is not visible, and an address bar is visible. */
+
+function readRoute() {
+  const frag = location.hash.replace(/^#\/?/, '');
+  if (frag) {
+    const [set, take, ver] = frag.split('/');
+    return {
+      set: decodeURIComponent(set || ''),
+      take: decodeURIComponent(take || ''),
+      ver: decodeURIComponent(ver || ''),
+    };
+  }
+  const q = new URLSearchParams(location.search);
+  return { set: q.get('set') || '', take: q.get('take') || '', ver: q.get('v') || '' };
+}
+
+function routeHash() {
+  const parts = [state.setId];
+  const item = state.items[state.itemIndex];
+  if (item) parts.push(item.id);
+  if (item && state.take && !state.blind) parts.push(activeKey());
+  return '#' + parts.filter(Boolean).map(encodeURIComponent).join('/');
+}
+
+/// Rewritten rather than pushed: every arrow key is a move, and a hundred of
+/// them in the back stack makes the browser's own back button useless.
+function writeRoute() {
+  const hash = routeHash();
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+  renderIdent();
+}
+
+async function applyRoute(r) {
+  if (r.set && r.set !== state.setId && state.sets.some((s) => s.id === r.set)) {
+    await loadSet(r.set, r);
+    return;
+  }
+  if (r.ver) state.wantKey = r.ver;
+  const i = r.take ? state.items.findIndex((it) => it.id === r.take) : -1;
+  if (i >= 0 && i !== state.itemIndex) { await selectTake(i); return; }
+  if (r.ver) selectVersionByKey(r.ver);
+}
+
 /* ------------------------------------------------------------------- data */
 
 const notesKey = () => `audition:notes:${state.setId || 'untitled'}`;
@@ -190,20 +256,29 @@ const picksKey = () => `audition:picks:${state.setId || 'untitled'}`;
 
 const SET_KEY = 'audition:set';
 
+function fail(msg) {
+  $('title').textContent = msg;
+  $('crumbs').replaceChildren();
+  $('identPath').textContent = '';
+}
+
 async function boot() {
   state.sets = await (await fetch('sets.json')).json();
   if (!state.sets.length) {
-    $('title').textContent = 'audition';
-    $('notes').textContent =
-      'No renders found. Generate a set with tools/voicematch/make_audition.py — '
-      + '--model-only needs no plugin — then reload.';
+    fail('No renders found. Generate a set with tools/voicematch/make_audition.py '
+       + '— --model-only needs no plugin — then reload.');
     return;
   }
   buildSetPicker();
-  const remembered = localStorage.getItem(SET_KEY);
-  const start = state.sets.some((s) => s.id === remembered) ? remembered : state.sets[0].id;
   wire();
-  await loadSet(start);
+  // An address wins over what was last listened to: a link is sent precisely
+  // because the two ends are otherwise not looking at the same thing.
+  const route = readRoute();
+  const remembered = localStorage.getItem(SET_KEY);
+  const start = state.sets.some((s) => s.id === route.set) ? route.set
+    : state.sets.some((s) => s.id === remembered) ? remembered
+      : state.sets[0].id;
+  await loadSet(start, route);
 }
 
 const specCaptionText = () => state.compare
@@ -211,7 +286,7 @@ const specCaptionText = () => state.compare
   : 'spectrogram — log frequency';
 
 /// Switch to a set: its manifest, its takes, and whether it can compare at all.
-async function loadSet(id) {
+async function loadSet(id, want) {
   const entry = state.sets.find((s) => s.id === id) || state.sets[0];
   stopSources();
   state.playing = false;
@@ -237,39 +312,40 @@ async function loadSet(id) {
     : 'waveform';
   $('specCaption').textContent = specCaptionText();
 
-  $('title').textContent = m.title || 'audition';
+  $('title').textContent = m.title || '';
+  document.title = `${entry.id} — audition`;
   $('notes').textContent = m.notes || '';
-  document.title = m.title ? `${m.title} — audition` : 'audition';
+  $('sharedNote').textContent = m.sources_note || '';
   // Keyed on the set, so notes taken on one instrument do not surface on another.
   state.notes = JSON.parse(localStorage.getItem(notesKey()) || '{}');
   state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');
-  [...$('sets').children].forEach((b) =>
-    b.setAttribute('aria-pressed', String(b.dataset.set === state.setId)));
+  $('setSelect').value = state.setId;
 
-  state.itemIndex = 0;
+  const wanted = want || {};
+  if (wanted.ver) state.wantKey = wanted.ver;
+  const i = wanted.take ? state.items.findIndex((it) => it.id === wanted.take) : -1;
+  state.itemIndex = i >= 0 ? i : 0;
   state.versionIndex = 0;
   buildTakeList();
-  if (state.items.length) await selectTake(0);
+  if (state.items.length) await selectTake(state.itemIndex);
+  else { $('versions').replaceChildren(); writeRoute(); }
 }
 
 function buildSetPicker() {
-  const box = $('sets');
-  box.replaceChildren();
-  // One set needs no picker; the title already says which it is.
-  box.hidden = state.sets.length < 2;
-  if (box.hidden) return;
+  const sel = $('setSelect');
+  sel.replaceChildren();
+  // The id is what a link carries and what the directory is called, so it leads;
+  // the title is context and is routinely the same on several sets of one
+  // instrument, which is exactly the case a title alone cannot tell apart.
   state.sets.forEach((s) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.dataset.set = s.id;
-    b.textContent = s.title || s.id;
-    if (!s.compare) {
-      b.appendChild(Object.assign(document.createElement('span'),
-        { className: 'tag', textContent: 'no reference' }));
-    }
-    b.addEventListener('click', () => loadSet(s.id));
-    box.appendChild(b);
+    const o = document.createElement('option');
+    o.value = s.id;
+    const marks = [`${s.takes} takes`];
+    if (!s.compare) marks.push('no reference');
+    o.textContent = `${s.id}  ·  ${marks.join(', ')}`;
+    sel.appendChild(o);
   });
+  sel.addEventListener('change', () => loadSet(sel.value));
 }
 
 function buildTakeList() {
@@ -287,12 +363,12 @@ function buildTakeList() {
     const b = document.createElement('button');
     b.type = 'button';
     b.appendChild(document.createTextNode(item.label || item.id));
-    if (item.sub) {
-      const s = document.createElement('span');
-      s.className = 'sub';
-      s.textContent = item.sub;
-      b.appendChild(s);
-    }
+    const s = document.createElement('span');
+    s.className = 'sub';
+    // The id is what the URL carries, so it is shown rather than left to be
+    // guessed from a prose label that does not have to resemble it.
+    s.textContent = item.sub ? `${item.id} — ${item.sub}` : item.id;
+    b.appendChild(s);
     b.addEventListener('click', () => selectTake(i));
     nav.appendChild(b);
   });
@@ -331,11 +407,19 @@ async function selectTake(i) {
   $('specCaption').className = '';
   $('specCaption').textContent = specCaptionText();
   reshuffleBlind();
-  state.versionIndex = Math.min(state.versionIndex, state.take.keys.length - 1);
+  // The version carries across takes by name rather than by position, so
+  // stepping down the take list keeps auditioning the same candidate.
+  const want = state.take.keys.indexOf(state.wantKey);
+  state.versionIndex = state.blind
+    ? Math.min(state.versionIndex, state.take.keys.length - 1)
+    : (want >= 0 ? want : Math.min(state.versionIndex, state.take.keys.length - 1));
   buildVersionButtons();
+  if (!state.blind) state.wantKey = activeKey();
   $('takeNotes').value = state.notes[item.id] || '';
+  $('notePanel').open = Boolean(state.notes[item.id]);
   renderLevels();
   renderScore();
+  writeRoute();
   if (wasPlaying) startAt(0);
 }
 
@@ -348,47 +432,130 @@ function reshuffleBlind() {
   }
 }
 
+const sourceOf = (key) => (state.manifest.sources || {})[key] || {};
+
 function sourceLabel(key) {
-  const src = (state.manifest.sources || {})[key];
-  return (src && src.label) || key;
+  return sourceOf(key).label || key;
 }
 
+function roleOf(key) {
+  const r = sourceOf(key).role;
+  return ROLE_ORDER.includes(r) ? r : '';
+}
+
+/// Slots in the order they are shown, which is the order `1`…`9` count in.
+function displayOrder() {
+  const slots = state.take.keys.map((_, i) => i);
+  if (state.blind) return slots;
+  const rank = (slot) => {
+    const r = roleOf(state.take.keys[slot]);
+    const at = ROLE_ORDER.indexOf(r);
+    return at < 0 ? ROLE_ORDER.length : at;
+  };
+  // Stable, so a role's own versions keep the order the manifest gave them.
+  return slots.map((s, i) => [s, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
+    .map(([s]) => s);
+}
+
+/// What goes on the button.
+///
+/// The source key, not the label: it is short enough to survive a segmented
+/// control at seven across, and it is what the URL carries and what a listening
+/// note has to name. A label is prose and there is no arranging for prose to be
+/// both descriptive and four characters long -- the two references of one
+/// instrument differ in the last three words of a forty-character label, which
+/// is precisely the part a button ellipsises away. The label is not lost: the
+/// selected version's is spelled out under the row, in full.
 function versionLabel(slot) {
   const item = state.items[state.itemIndex];
   const key = state.take.keys[state.blind ? state.blindOrder[slot] : slot];
-  if (!state.blind) return sourceLabel(key);
-  const letter = String.fromCharCode(65 + slot);
+  if (!state.blind) return key;
+  const letter = String.fromCharCode(65 + state.display.indexOf(slot));
   const pick = state.picks[item.id];
-  return pick && pick.revealed ? `${letter} · ${sourceLabel(key)}` : letter;
+  return pick && pick.revealed ? `${letter} · ${key}` : letter;
 }
 
 function buildVersionButtons() {
   const box = $('versions');
   box.replaceChildren();
-  state.take.keys.forEach((_, slot) => {
+  state.display = displayOrder();
+
+  // One row per role, in the role order, so the model side and the reference
+  // side are not one undifferentiated strip of seven buttons. A manifest that
+  // declares no roles gets a single unlabelled row, unchanged.
+  let row = null;
+  let rowRole = null;
+  state.display.forEach((slot, pos) => {
+    const role = state.blind ? '' : roleOf(state.take.keys[slot]);
+    if (row === null || role !== rowRole) {
+      rowRole = role;
+      const wrap = document.createElement('div');
+      wrap.className = role ? 'vrow' : 'vrow unlabelled';
+      if (role) {
+        const lab = document.createElement('span');
+        lab.className = 'role';
+        lab.textContent = role;
+        wrap.appendChild(lab);
+      }
+      row = document.createElement('div');
+      row.className = 'segmented';
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', role || 'versions');
+      wrap.appendChild(row);
+      box.appendChild(wrap);
+    }
     const b = document.createElement('button');
     b.type = 'button';
+    b.dataset.slot = String(slot);
     const k = document.createElement('span');
     k.className = 'key';
-    k.textContent = String(slot + 1);
+    k.textContent = String(pos + 1);
     b.appendChild(k);
     b.appendChild(document.createTextNode(versionLabel(slot)));
+    b.title = versionTitle(slot);
     b.setAttribute('aria-pressed', String(slot === state.versionIndex));
     b.addEventListener('click', () => setVersion(slot));
-    box.appendChild(b);
+    row.appendChild(b);
   });
+  markVersion();
+}
+
+function versionTitle(slot) {
+  if (state.blind) return '';
+  const key = state.take.keys[slot];
+  const src = sourceOf(key);
+  return [key, src.label, src.detail].filter(Boolean).join('\n');
+}
+
+function markVersion() {
+  [...$('versions').querySelectorAll('button')].forEach((b) =>
+    b.setAttribute('aria-pressed', String(+b.dataset.slot === state.versionIndex)));
+  // The selected version said in full, since the button can only carry its key.
+  // Blind mode gets nothing here: this line is the answer it is withholding.
+  const key = state.blind ? '' : activeKey();
+  const src = key ? sourceOf(key) : {};
+  $('versionDetail').textContent =
+    [src.label, src.detail].filter((s) => s && s !== key).join('  ·  ');
+  renderIdent();
+}
+
+function selectVersionByKey(key) {
+  if (!state.take || state.blind) return;
+  const slot = state.take.keys.indexOf(key);
+  if (slot >= 0) setVersion(slot);
 }
 
 function setVersion(slot) {
   if (!state.take || slot < 0 || slot >= state.take.keys.length) return;
   state.versionIndex = slot;
+  if (!state.blind) state.wantKey = activeKey();
   if (state.blind) {
     const id = state.items[state.itemIndex].id;
     state.picks[id] = { slot, key: state.take.keys[state.blindOrder[slot]], revealed: false };
     localStorage.setItem(picksKey(), JSON.stringify(state.picks));
     renderScore();
   }
-  [...$('versions').children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === slot)));
+  markVersion();
   // Two ways to switch, and they answer different questions. Crossfading in
   // place keeps the comparison sample-aligned, which is the only way to hear a
   // difference in a sustain or a decay. Restarting throws away that alignment
@@ -404,6 +571,42 @@ function setVersion(slot) {
     applyGains(false);
   }
   renderLevels();
+  writeRoute();
+}
+
+/// Step through the versions in the order they are shown, not in manifest order.
+function stepVersion(delta) {
+  const at = state.display.indexOf(state.versionIndex);
+  const n = state.display.length;
+  if (!n) return;
+  setVersion(state.display[((at < 0 ? 0 : at) + delta + n) % n]);
+}
+
+function renderIdent() {
+  const crumbs = $('crumbs');
+  crumbs.replaceChildren();
+  const item = state.items[state.itemIndex];
+  const parts = [state.setId, item && item.id];
+  if (item && state.take) {
+    parts.push(state.blind
+      ? String.fromCharCode(65 + state.display.indexOf(state.versionIndex))
+      : activeKey());
+  }
+  parts.filter(Boolean).forEach((p, i, all) => {
+    const s = document.createElement('span');
+    s.textContent = p;
+    if (i === all.length - 1) s.className = 'now';
+    crumbs.appendChild(s);
+    if (i < all.length - 1) {
+      crumbs.appendChild(Object.assign(document.createElement('span'),
+        { className: 'sep', textContent: '›' }));
+    }
+  });
+  // The path, so the file a listening note refers to is never inferred. Hidden
+  // in blind mode, where it would name the version the letters are hiding.
+  $('identPath').textContent = (item && state.take && !state.blind)
+    ? state.base + item.tracks[activeKey()]
+    : '';
 }
 
 function renderLevels() {
@@ -414,7 +617,7 @@ function renderLevels() {
   const matched = $('matchRms').checked ? `  gain ${(20 * Math.log10(g)).toFixed(1)} dB` : '';
   $('levels').textContent = state.blind
     ? `rms ${db(state.take.rms[key] * g)} dBFS${matched}`
-    : `${sourceLabel(key)}  rms ${db(state.take.rms[key])} dBFS${matched}`;
+    : `rms ${db(state.take.rms[key])} dBFS${matched}`;
 }
 
 function renderScore() {
@@ -673,6 +876,20 @@ function seekFromEvent(cv, ev) {
   return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * state.take.duration;
 }
 
+async function copyLink() {
+  const url = location.origin + location.pathname + routeHash();
+  const btn = $('copyLink');
+  try {
+    await navigator.clipboard.writeText(url);
+    btn.textContent = 'copied';
+  } catch {
+    // A page served over plain http from another host has no clipboard; show
+    // the address instead of failing silently, since it can still be read off.
+    btn.textContent = url;
+  }
+  setTimeout(() => { btn.textContent = 'copy link'; }, 1600);
+}
+
 function wire() {
   $('playBtn').addEventListener('click', togglePlay);
 
@@ -682,6 +899,14 @@ function wire() {
     if (state.playing) startAt(playhead());
   });
 
+  $('optionsBtn').addEventListener('click', () => {
+    const open = $('options').hidden;
+    $('options').hidden = !open;
+    $('optionsBtn').setAttribute('aria-expanded', String(open));
+  });
+
+  $('copyLink').addEventListener('click', copyLink);
+
   $('matchRms').addEventListener('change', () => { applyGains(false); renderLevels(); });
 
   $('blind').addEventListener('change', () => {
@@ -689,6 +914,7 @@ function wire() {
     reshuffleBlind();
     if (state.take) { buildVersionButtons(); applyGains(false); renderLevels(); }
     renderScore();
+    writeRoute();
   });
 
   $('exportBtn').addEventListener('click', exportNotes);
@@ -697,6 +923,8 @@ function wire() {
     state.notes[state.items[state.itemIndex].id] = $('takeNotes').value;
     localStorage.setItem(notesKey(), JSON.stringify(state.notes));
   });
+
+  window.addEventListener('hashchange', () => { applyRoute(readRoute()); });
 
   for (const cv of [$('wave'), $('spec')]) {
     let dragFrom = null;
@@ -728,14 +956,14 @@ function wire() {
   }
 
   document.addEventListener('keydown', (ev) => {
-    if (ev.target.tagName === 'TEXTAREA' || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const tag = ev.target.tagName;
+    if (tag === 'TEXTAREA' || tag === 'SELECT' || ev.metaKey || ev.ctrlKey || ev.altKey) return;
     const k = ev.key;
     if (k === ' ') { ev.preventDefault(); togglePlay(); return; }
     if (!state.take) return;
-    const n = state.take.keys.length;
-    if (k >= '1' && k <= '9') { setVersion(+k - 1); return; }
-    if (k === 'ArrowRight') { ev.preventDefault(); setVersion((state.versionIndex + 1) % n); return; }
-    if (k === 'ArrowLeft') { ev.preventDefault(); setVersion((state.versionIndex - 1 + n) % n); return; }
+    if (k >= '1' && k <= '9') { setVersion(state.display[+k - 1]); return; }
+    if (k === 'ArrowRight') { ev.preventDefault(); stepVersion(1); return; }
+    if (k === 'ArrowLeft') { ev.preventDefault(); stepVersion(-1); return; }
     if (k === 'ArrowDown') { ev.preventDefault(); selectTake(state.itemIndex + 1); return; }
     if (k === 'ArrowUp') { ev.preventDefault(); selectTake(state.itemIndex - 1); return; }
     if (k === 'l' || k === 'L') { $('loopBtn').click(); return; }
@@ -780,6 +1008,7 @@ function wire() {
 
 function exportNotes() {
   const payload = {
+    set: state.setId,
     title: state.manifest.title,
     exported: new Date().toISOString(),
     notes: state.notes,
@@ -791,11 +1020,11 @@ function exportNotes() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `audition-notes-${(state.manifest.title || 'takes').replace(/\W+/g, '-')}.json`;
+  a.download = `audition-notes-${state.setId || 'takes'}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 boot().catch((err) => {
-  $('notes').textContent = `could not load the renders: ${err.message}`;
+  fail(`could not load the renders: ${err.message}`);
 });

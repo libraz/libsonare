@@ -213,10 +213,14 @@ test-hardening-asan:
 	$(CMAKE) --build build-hardening-asan --target sonare_tests --parallel $(HARDENING_JOBS)
 	ASAN_OPTIONS=$(HARDENING_ASAN_OPTIONS) UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ctest --test-dir build-hardening-asan --output-on-failure --no-tests=error --output-log build-hardening-asan/test-hardening.log -R "public input corpus|set_markers rejects an invalid list|duplicate parameter rejection|offline results reject shapes|default Audio exposes a valid empty iterator"
 
+# The TSan filter selects every test that starts a second thread, matched on the
+# naming vocabulary those tests share. Three threaded cases stay out of reach
+# because they are `[.]`-hidden and ctest never discovers them: the GS EFX render
+# race and the two seqlock tearing soaks.
 test-hardening-tsan:
 	CC=clang CXX=clang++ $(CMAKE) -B build-hardening-tsan -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 	$(CMAKE) --build build-hardening-tsan --target sonare_tests --parallel $(HARDENING_JOBS)
-	TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-hardening-tsan --output-on-failure --no-tests=error --output-log build-hardening-tsan/test-hardening.log -R "^StreamAnalyzer publishes frames and stats to one concurrent consumer$$"
+	TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-hardening-tsan --output-on-failure --no-tests=error --output-log build-hardening-tsan/test-hardening.log -R "concurrent|producer consumer stress|control/audio threads|captured samples before captured_frames|polls safely during processing|reclaims retired pages|cannot lap an audio-held snapshot|race with process_block"
 
 test-hardening-host:
 ifeq ($(UNAME_S),Darwin)
@@ -291,6 +295,7 @@ conformance:
 	python3 tools/parity/test_surface_coverage.py
 	python3 tools/parity/test_allowlist_audit.py
 	python3 tools/eval/test_summarize_accuracy.py
+	python3 tools/audition/test_serve.py
 	python3 tools/parity/surface_coverage.py --check
 	python3 tools/parity/check_parity.py --audit-allowlist
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \

@@ -17,12 +17,44 @@ way to compare a sustain or a decay.
 Standard library only, no build step, nothing specific to this repository.
 Point it at any directory of renders.
 
+## Addressing one render
+
+Every set, take and version has an address, and the page rewrites it as it is
+navigated:
+
+```
+http://127.0.0.1:8730/#piano-body/single-c4/E_strike
+http://127.0.0.1:8730/?set=piano-body&take=single-c4&v=E_strike
+```
+
+Either form opens on exactly that render; the fragment is what the page writes
+back. `serve.py` prints the per-set form for each set it finds. `copy link` in
+the identity strip puts the current one on the clipboard.
+
+The strip above the waveform says what is sounding — `set › take › version` and
+the file's own path — and the version buttons are labelled with the source key
+rather than with its prose label, so what is on the button, what is in the URL
+and what is in a listening note are the same string. A report that names the
+wrong render is worse than no report, and with several sets of one instrument
+open at once, each holding a reference, an unmodified build and a few candidate
+settings, nobody can be sure which one they heard from memory.
+
+The version is left out of the address in blind mode, along with the path and
+the label: an address bar is visible, and hiding the name is the whole point of
+that mode.
+
 ## Several sets, one server
 
 Name more than one directory and the page gets a control to move between them.
 Each is a separate instrument or a separate experiment — a piano set and a
 harpsichord set have different takes and different references — so they stay
 separate sets rather than one long list, and one server serves them all.
+
+A directory with a `manifest.json` is a set whatever it contains; one without is
+a set only if it holds no other set. That distinction matters because the
+default output directory is the parent of every named one, so the take
+directories of the set written there sit beside the other sets and match the
+same glob.
 
 Name none and they are discovered under the scratch root the rest of the
 harness renders into — `.cache/voicematch/` here, or wherever
@@ -46,6 +78,10 @@ some. Nothing here requires a reference to exist.
   shared gain so their level difference survives; `match loudness` equalises
   them when that difference is in the way, and says how much gain it applied.
 
+Everything that is set once and then left alone — the loudness match, the switch
+behaviour, blind mode, the key list, the export — is behind `options`. What
+stays on the listening surface is what is being listened to.
+
 ## Keys
 
 | key | |
@@ -60,6 +96,8 @@ some. Nothing here requires a reference to exist.
 | `R` | reveal this take, or reshuffle if already revealed |
 
 Dragging across the waveform sets a loop region; a click with no drag seeks.
+The digits count in the order the versions are shown, which is by role, not the
+order the manifest happens to list them in.
 
 **Blind mode** hides which version is which and shuffles them per take, so a
 preference is a preference rather than an expectation. Whichever version is
@@ -79,8 +117,9 @@ sets do not share them; re-rendering a set keeps them.
   "title": "libsonare piano vs the sampled reference",
   "notes": "shown under the title",
   "sources": {
-    "model":     { "label": "libsonare NativeSynth" },
-    "grand-227": { "label": "227 cm concert grand, close" }
+    "model":     { "label": "libsonare NativeSynth", "role": "model" },
+    "grand-227": { "label": "227 cm concert grand, close", "role": "reference",
+                   "detail": "the plugin it was captured from" }
   },
   "items": [
     {
@@ -95,9 +134,15 @@ sets do not share them; re-rendering a set keeps them.
 ```
 
 `tracks` maps a source key to a path relative to the served directory; every
-key of every take that appears in `sources` gets its label from there and its
-own switch button. Takes with the same `group` are listed under one heading.
-Nothing but `id` and `tracks` is required.
+key of every take gets its own switch button, labelled with the key. Takes with
+the same `group` are listed under one heading. Nothing but `id` and `tracks` is
+required.
+
+A source's `label` and `detail` are shown for whichever version is selected,
+under the row, in full — so they can say as much as they need to without a
+segmented button ellipsising the part that distinguishes them. `role` splits the
+switch into a labelled row per role, `model` first and then `reference`; a
+manifest that declares none gets one unlabelled row.
 
 With no `manifest.json`, one is inferred from the layout: each subdirectory is
 a take and the audio files inside it are its versions.

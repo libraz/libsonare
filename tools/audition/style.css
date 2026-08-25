@@ -9,6 +9,8 @@
   --accent-ink: #0f1416;
   --warn: #d09a5a;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --tint: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  --tint-line: color-mix(in srgb, var(--accent) 28%, var(--line));
 }
 
 * { box-sizing: border-box; }
@@ -23,59 +25,120 @@ html, body {
 
 body {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr;
 }
+
+.grow { flex: 1; }
 
 /* ---- header ---- */
 
 header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 14px 18px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
 
 h1 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   letter-spacing: 0.02em;
-}
-
-#notes {
-  margin: 3px 0 0;
   color: var(--ink-dim);
-  font-size: 12.5px;
-  max-width: 70ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.toggles {
+.pick {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex: none;
-  font-size: 12.5px;
+}
+
+.pick-lab {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--ink-dim);
 }
 
-.toggles label {
+select {
+  padding: 6px 10px;
+  border: 1px solid var(--tint-line);
+  border-radius: 6px;
+  background: var(--tint);
+  color: var(--ink);
+  font: 500 13px/1.2 var(--mono);
+  cursor: pointer;
+  max-width: 42ch;
+}
+
+/* ---- options ---- */
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px 32px;
+  padding: 16px 18px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.options[hidden] { display: none; }
+
+.options h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.opt-col { min-width: 0; }
+.opt-col.wide { grid-column: span 2; }
+
+.opt-col label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  padding: 3px 0;
+  font-size: 12.5px;
+  color: var(--ink-dim);
   cursor: pointer;
   user-select: none;
 }
 
-.toggles input { accent-color: var(--accent); margin: 0; }
+.opt-col input { accent-color: var(--accent); margin: 0; }
+.opt-col button { margin-top: 10px; }
+
+.keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.keys dt, .keys dd { margin: 0; }
+
+.hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  max-width: 72ch;
+}
 
 /* ---- layout ---- */
 
 main {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 250px 1fr;
   min-height: 0;
 }
 
@@ -83,7 +146,7 @@ nav {
   border-right: 1px solid var(--line);
   overflow-y: auto;
   background: var(--panel);
-  padding: 8px 0;
+  padding: 8px 0 16px;
 }
 
 nav .group {
@@ -104,48 +167,120 @@ nav button {
   color: var(--ink);
   font: inherit;
   cursor: pointer;
-  border-left: 2px solid transparent;
 }
 
 nav button:hover { background: var(--panel-2); }
 
 nav button[aria-current="true"] {
-  background: var(--panel-2);
-  border-left-color: var(--accent);
+  background: var(--tint);
+  color: var(--accent);
+  font-weight: 600;
 }
 
+/* One line, clipped. The id leads it because that is what a link carries; the
+   rest is a description and a take list that grows to three lines an entry
+   stops being a list you can scan. */
 nav .sub {
   display: block;
   color: var(--ink-dim);
   font-size: 11.5px;
   font-family: var(--mono);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #stage {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 16px 18px 20px;
+  padding: 14px 18px 20px;
   min-width: 0;
   overflow-y: auto;
 }
 
+/* ---- identity strip ---- */
+
+.ident {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--tint-line);
+  border-radius: 6px;
+  background: var(--tint);
+  min-width: 0;
+}
+
+.crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-dim);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.crumbs .sep { opacity: 0.45; }
+.crumbs .now { color: var(--accent); font-weight: 600; }
+
+.path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;      /* keep the file name visible when the path is clipped */
+  text-align: left;
+}
+
 /* ---- version switch ---- */
+
+.versions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vrow {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* A manifest that declares no roles has no label column to leave room for. */
+.vrow.unlabelled { grid-template-columns: minmax(0, 1fr); }
+
+.vrow > .role {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-align: right;
+}
 
 .segmented {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 1fr;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
+  min-width: 0;
 }
 
 .segmented button {
-  padding: 9px 10px;
+  padding: 8px 10px;
   border: 0;
+  border-radius: 0;
   background: var(--panel);
   color: var(--ink-dim);
   font: inherit;
@@ -153,6 +288,7 @@ nav .sub {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .segmented button:hover { color: var(--ink); }
@@ -168,6 +304,17 @@ nav .sub {
   opacity: 0.55;
   margin-right: 7px;
 }
+
+.detail {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  word-break: break-word;
+}
+
+.detail:empty { display: none; }
 
 /* ---- canvases ---- */
 
@@ -202,8 +349,6 @@ figcaption {
   gap: 12px;
 }
 
-.spacer { flex: 1; }
-
 button {
   padding: 7px 14px;
   border: 1px solid var(--line);
@@ -222,38 +367,56 @@ button[aria-pressed="true"] {
   color: var(--accent-ink);
 }
 
+button.ghost {
+  padding: 5px 11px;
+  background: none;
+  color: var(--ink-dim);
+  font-size: 12.5px;
+  flex: none;
+}
+
+button.ghost:hover { color: var(--ink); }
+button.ghost[aria-expanded="true"] { background: var(--panel); color: var(--ink); }
+
 .play { min-width: 78px; font-weight: 600; }
 
 .mono { font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); }
 
+/* ---- per-take notes ---- */
+
+details {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+summary {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+summary:hover { color: var(--ink); }
+
 textarea {
+  display: block;
   width: 100%;
   min-height: 74px;
   resize: vertical;
   padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
   color: var(--ink);
   font: inherit;
 }
 
-textarea:focus, button:focus-visible, nav button:focus-visible {
+textarea:focus, button:focus-visible, nav button:focus-visible,
+select:focus-visible, summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
-}
-
-/* ---- footer ---- */
-
-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  padding: 9px 18px;
-  border-top: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--ink-dim);
-  font-size: 11.5px;
 }
 
 kbd {
@@ -261,7 +424,7 @@ kbd {
   border: 1px solid var(--line);
   border-bottom-width: 2px;
   border-radius: 4px;
-  background: var(--panel-2);
+  background: var(--panel);
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--ink);
@@ -269,40 +432,8 @@ kbd {
 
 .loading { color: var(--warn); }
 
-/* --------------------------------------------------------------- set picker */
-
-/* One server serves every set of renders on the machine; this moves between
-   them. Hidden when there is only one, since the title already names it. */
-.sets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.sets button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sets button[aria-pressed="true"] {
-  border-color: var(--accent, #6ea8fe);
-  color: var(--fg, #e8e8e8);
-}
-
-.sets .tag {
-  font-size: 11px;
-  opacity: 0.65;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  padding: 0 4px;
-}
-
 /* A set holding one version of each take has nothing to switch between: the
    comparison controls come off rather than sitting there inert. That is the
    ordinary state for anyone without the commercial plugin the reference side
    is captured from, so it is a supported layout and not a degraded one. */
-body.no-compare .compare-only {
-  display: none;
-}
+body.no-compare .compare-only { display: none; }
