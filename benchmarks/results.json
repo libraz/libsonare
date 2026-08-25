@@ -7,69 +7,69 @@
   "methodology": "Both libraries measured 'standalone from raw audio': every per-feature call reconstructs STFT/Mel from the resampled samples. libsonare uses chrono::steady_clock inside C++; librosa uses time.perf_counter around the Python call.",
   "librosa_version": "0.11.0",
   "hardware_threads": 18,
-  "load_average_before": 1.93,
-  "load_average_after": 1.82,
+  "load_average_before": 2.49,
+  "load_average_after": 3.09,
   "full_analysis": {
-    "libsonare_ms": 1152.52,
-    "bpm_detector_comprehensive_ms": 34544.97,
-    "bpm_detector_speedup": 29.97,
+    "libsonare_ms": 541.45,
+    "bpm_detector_comprehensive_ms": 38949.54,
+    "bpm_detector_speedup": 71.94,
     "bpm_detector_version": "1.1.0",
     "note": "Full pipeline (BPM + key + beats + chords + sections + timbre + dynamics) running entirely inside libsonare C++. The comparison target is bpm-detector --comprehensive: a pipeline built on librosa, not librosa itself. It is the same author's earlier Python project, chosen because it computes the same set of features end to end; librosa alone has no equivalent one-shot pipeline to time. Ratios against a different librosa-based pipeline will differ."
   },
   "per_feature": [
     {
       "feature": "STFT",
-      "librosa_ms": 12.61,
-      "libsonare_ms": 13.52,
-      "speedup": 0.93
+      "librosa_ms": 12.63,
+      "libsonare_ms": 6.81,
+      "speedup": 1.85
     },
     {
       "feature": "Mel Spectrogram",
-      "librosa_ms": 19.45,
-      "libsonare_ms": 22.23,
-      "speedup": 0.88
+      "librosa_ms": 19.89,
+      "libsonare_ms": 15.87,
+      "speedup": 1.25
     },
     {
       "feature": "HPSS",
-      "librosa_ms": 1680.69,
-      "libsonare_ms": 81.94,
-      "speedup": 20.51
+      "librosa_ms": 1715.77,
+      "libsonare_ms": 64.41,
+      "speedup": 26.64
     },
     {
       "feature": "Onset Strength",
-      "librosa_ms": 20.54,
-      "libsonare_ms": 22.72,
-      "speedup": 0.9
+      "librosa_ms": 20.98,
+      "libsonare_ms": 16.76,
+      "speedup": 1.25
     },
     {
       "feature": "Chroma",
-      "librosa_ms": 41.99,
-      "libsonare_ms": 14.78,
-      "speedup": 2.84
+      "librosa_ms": 42.9,
+      "libsonare_ms": 8.46,
+      "speedup": 5.07
     },
     {
       "feature": "Beat Track",
-      "librosa_ms": 32.88,
-      "libsonare_ms": 54.95,
-      "speedup": 0.6
+      "librosa_ms": 34.69,
+      "libsonare_ms": 44.44,
+      "speedup": 0.78
     },
     {
       "feature": "MFCC",
-      "librosa_ms": 20.8,
-      "libsonare_ms": 23.01,
-      "speedup": 0.9
+      "librosa_ms": 21.29,
+      "libsonare_ms": 16.91,
+      "speedup": 1.26
     },
     {
       "feature": "pYIN",
-      "librosa_ms": 5461.02,
-      "libsonare_ms": 427.89,
-      "speedup": 12.76
+      "librosa_ms": 5745.04,
+      "libsonare_ms": 364.38,
+      "speedup": 15.77
     },
     {
       "feature": "Spectral Centroid",
-      "librosa_ms": 24.86,
-      "libsonare_ms": 18.12,
-      "speedup": 1.37
+      "librosa_ms": 24.67,
+      "libsonare_ms": 12.1,
+      "speedup": 2.04
     }
   ]
 }

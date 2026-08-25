@@ -5,27 +5,27 @@
   "resampled_sample_rate": 22050,
   "runs_per_case": 3,
   "hardware_threads": 18,
-  "load_average_before": 2.01,
-  "load_average_after": 1.93,
+  "load_average_before": 2.29,
+  "load_average_after": 2.43,
   "timing_source": "chrono::steady_clock (C++ internal)",
-  "full_analysis_ms": 1152.52,
-  "full_analysis_with_cancel_callback_ms": 1157.80,
+  "full_analysis_ms": 541.45,
+  "full_analysis_with_cancel_callback_ms": 541.18,
   "per_feature_standalone": [
-    {"feature": "STFT", "libsonare_ms": 13.52},
-    {"feature": "Mel Spectrogram", "libsonare_ms": 22.23},
-    {"feature": "HPSS", "libsonare_ms": 81.94},
-    {"feature": "Onset Strength", "libsonare_ms": 22.72},
-    {"feature": "Chroma", "libsonare_ms": 14.78},
-    {"feature": "Beat Track", "libsonare_ms": 54.95},
-    {"feature": "MFCC", "libsonare_ms": 23.01},
-    {"feature": "pYIN", "libsonare_ms": 427.89},
-    {"feature": "Spectral Centroid", "libsonare_ms": 18.12}
+    {"feature": "STFT", "libsonare_ms": 6.81},
+    {"feature": "Mel Spectrogram", "libsonare_ms": 15.87},
+    {"feature": "HPSS", "libsonare_ms": 64.41},
+    {"feature": "Onset Strength", "libsonare_ms": 16.76},
+    {"feature": "Chroma", "libsonare_ms": 8.46},
+    {"feature": "Beat Track", "libsonare_ms": 44.44},
+    {"feature": "MFCC", "libsonare_ms": 16.91},
+    {"feature": "pYIN", "libsonare_ms": 364.38},
+    {"feature": "Spectral Centroid", "libsonare_ms": 12.10}
   ],
   "per_feature_cached": [
     {"feature": "Mel Spectrogram", "libsonare_ms": 8.75},
-    {"feature": "Onset Strength", "libsonare_ms": 0.50},
-    {"feature": "Chroma", "libsonare_ms": 1.07},
-    {"feature": "MFCC", "libsonare_ms": 0.91},
-    {"feature": "Spectral Centroid", "libsonare_ms": 2.86}
+    {"feature": "Onset Strength", "libsonare_ms": 0.47},
+    {"feature": "Chroma", "libsonare_ms": 1.10},
+    {"feature": "MFCC", "libsonare_ms": 0.89},
+    {"feature": "Spectral Centroid", "libsonare_ms": 2.65}
   ]
 }
