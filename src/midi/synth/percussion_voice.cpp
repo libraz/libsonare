@@ -29,6 +29,15 @@ constexpr uint64_t kPhisemProbIndexBase = 1ull << 30;
 constexpr uint64_t kPhisemNoiseIndexBase = 1ull << 31;
 /// Random bead collisions per bean per unit shake energy per second.
 SONARE_TUNABLE(kPhisemCollisionRate, 100.0f);
+/// Shake energy at zero velocity, as a fraction of its energy at full. The
+/// energy scales both how loud a collision is and how often one happens, so it
+/// reaches the output twice and reaches it on top of the velocity response the
+/// voice already has. Left at the modes' and the noise band's own slope it made
+/// every shaker and scraper swing 8 dB further from soft to hard than anything
+/// else in the kit, which no sampled kit does — theirs swing no wider than
+/// their drums. Held high enough that what velocity still carries here is the
+/// collision rate, which is a shaker's own cue and not a level.
+SONARE_TUNABLE(kPhisemVelocityFloor, 0.9f);
 
 float radius_for(double sample_rate, float t60_s) noexcept {
   return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
@@ -154,7 +163,7 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
     // A shake gesture: the system energy is set by the strike and dies over
     // phisem_energy_ms; each collision bumps the sounding energy, which decays
     // over the short grain time phisem_sound_ms.
-    phisem_shake_energy_ = 0.3f + 0.7f * vel01;
+    phisem_shake_energy_ = kPhisemVelocityFloor + (1.0f - kPhisemVelocityFloor) * vel01;
     phisem_sys_decay_ = std::exp(
         -1.0f / (std::max(1.0f, params.phisem_energy_ms) * 0.001f * static_cast<float>(sr)));
     phisem_sound_decay_ = std::exp(

@@ -503,6 +503,45 @@ TEST_CASE("the particle body rings well below the band the collisions radiate",
   REQUIRE(20.0 * std::log10(centre / octave_down) > 26.0);
 }
 
+TEST_CASE("a shaker does not swing wider from soft to hard than a noise piece",
+          "[midi][synth][percussion]") {
+  // The shake energy scales both how loud a collision is and how often one
+  // happens, so it reaches the output twice and does so on top of the velocity
+  // response every voice already has. Left unchecked that made every shaker and
+  // scraper swing 8 dB further than anything else in the kit, which no sampled
+  // kit does.
+  auto swing_db = [](const NativeSynthPatch& patch) {
+    auto rms = [](const std::vector<float>& buf) {
+      double acc = 0.0;
+      for (float x : buf) acc += static_cast<double>(x) * x;
+      return std::sqrt(acc / std::max<size_t>(buf.size(), 1));
+    };
+    const double soft = rms(render_patch(patch, 82, 48, 24000));
+    const double hard = rms(render_patch(patch, 82, 127, 24000));
+    REQUIRE(soft > 0.0);
+    return 20.0 * std::log10(hard / soft);
+  };
+
+  NativeSynthPatch noise;
+  noise.mode = SynthEngineMode::kPercussion;
+  noise.one_shot = true;
+  noise.cutoff_hz = 20000.0f;
+  noise.percussion.num_modes = 0;
+  noise.percussion.noise_gain = 1.0f;
+  noise.percussion.noise_decay_ms = 90.0f;
+  noise.percussion.noise_cutoff_hz = 3000.0f;
+
+  const double reference = swing_db(noise);
+  const double shaker = swing_db(shaker_patch());
+  // Both live, so neither side of the comparison is a constant.
+  REQUIRE(reference > 6.0);
+  REQUIRE(shaker > 6.0);
+  // One-sided: swinging *less* than a noise piece is not the defect. The
+  // particle stream reads about 2 dB under this control, and would read 6 dB
+  // over it if the shake energy carried velocity at the modes' own slope.
+  REQUIRE(shaker < reference + 2.0);
+}
+
 // ---------------------------------------------------------------------------
 // GM/GS drum map: per-note archetypes + exclusive (mute-group) choke.
 // ---------------------------------------------------------------------------
