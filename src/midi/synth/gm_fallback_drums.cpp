@@ -81,16 +81,34 @@ constexpr DrumPatches build_drum_patches() noexcept {
   d.snare.percussion.wire_cutoff_hz = 4500.0f;
   d.snare.gain = 0.8f;
 
-  // Hi-hats: high-passed noise shimmer, closed short / open ringing.
+  // Hi-hats: high-passed noise shimmer, closed short / open ringing, over the
+  // low plate modes of the pair. A hi-hat is two cymbals and radiates like one:
+  // the measured kit peaks at 315 Hz on the closed hat and at 280 on the pedal,
+  // 20 dB over the 1 kHz valley above it, and a voice built only from
+  // high-passed noise has no way to put anything there. The ratios are the
+  // cymbal archetype's, because this is the same object; what tells a hat from
+  // a crash is that its plate is small, its modes die in tens of milliseconds
+  // under the chick, and the pair damps each other.
   d.closed_hat = piece;
   d.closed_hat.amp_env = fallback_env(0.5f, 90.0f, 0.0f, 40.0f);
+  d.closed_hat.percussion.num_modes = 3;
+  d.closed_hat.percussion.mode_ratios = {1.0f, 1.34f, 1.72f, 0.0f, 0.0f, 0.0f};
+  d.closed_hat.percussion.base_freq_hz = 300.0f;
+  d.closed_hat.percussion.mode_decay_s = 0.05f;
+  d.closed_hat.percussion.tone_gain = 1.4f;
   d.closed_hat.percussion.noise_gain = 1.0f;
   d.closed_hat.percussion.noise_decay_ms = 35.0f;
   d.closed_hat.percussion.noise_cutoff_hz = 7500.0f;
   d.closed_hat.percussion.noise_output = SynthFilterOutput::kHighpass;
   d.closed_hat.gain = 0.5f;
+  // Open: nothing damps the pair, so the same plate rings an order of magnitude
+  // longer and a little higher — the two cymbals are no longer loading each
+  // other.
   d.open_hat = d.closed_hat;
   d.open_hat.amp_env = fallback_env(0.5f, 550.0f, 0.0f, 150.0f);
+  d.open_hat.percussion.base_freq_hz = 330.0f;
+  d.open_hat.percussion.mode_decay_s = 0.35f;
+  d.open_hat.percussion.tone_gain = 4.0f;
   d.open_hat.percussion.noise_decay_ms = 350.0f;
 
   // Toms: note-tracked membrane (full Rayleigh set) with a pitch drop.
@@ -408,24 +426,27 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // stick striking them, so the "chick" is duller, softer and slightly longer
   // than a stick-closed hat - and, sharing a patch with one, was neither.
   //
-  // Fitted against the captured kit, and it reaches less far than its two
-  // neighbours did. The reference peaks at 315 Hz on a hump from 200 to 400 Hz
-  // that is the two cymbals clashing rather than anything a noise stream makes,
-  // and this voice has no low mode to put there. What the fit could reach is
+  // Fitted against the captured kit in two passes. The first could only reach
   // the top - the voice's own low-pass down to 4.2 kHz with the drive up to
-  // hold the body - which takes the centroid from 429 percent of the reference
-  // to 240. The 20 dB hole left at 200-400 Hz is a missing mechanism and will
-  // not close from these knobs, and the attack sits on its clamp maximum
+  // hold the body - because the reference peaks at 315 Hz on a hump from 200 to
+  // 400 that is the two cymbals clashing, and the voice had no low mode to put
+  // there. The plate modes above are that mode; the second pass places them
+  // lowest of the three hats and rings them longest, which is what a foot
+  // closing the pair does against a stick striking it, and gives back some of
+  // the noise the first pass had leaned on. The attack still sits at its clamp
   // against a reference that takes 12 to 18 ms to arrive.
   t[44] = d.closed_hat;
   t[44].amp_env = fallback_env(4.0f, 97.3073f, 0.164827f, 40.0f);
   t[44].cutoff_hz = 4201.99f;
   t[44].drive = 0.497364f;
+  t[44].percussion.base_freq_hz = 230.0f;
+  t[44].percussion.mode_decay_s = 0.15f;
+  t[44].percussion.tone_gain = 4.0f;
   t[44].percussion.noise_cutoff_hz = 5466.16f;
   t[44].percussion.noise_decay_ms = 100.52f;
-  t[44].percussion.noise_gain = 2.32112f;
+  t[44].percussion.noise_gain = 1.4f;
   t[44].percussion.noise_q = 0.606395f;
-  t[44].gain = 0.6692f;
+  t[44].gain = 0.1481f;
 
   // Hi-hats share mute group 1; the open hat gets a snappy choke fade (release
   // is unused by one-shot voices in normal play, so this stays bit-identical
@@ -452,7 +473,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // the fit is not offered the output gain, because no term it minimises can
   // see one, so the values it chose left the peak 10 dB down and nothing in its
   // report was entitled to notice. Measured across three velocities.
-  t[42].gain = 1.5631f;
+  t[42].gain = 0.9931f;
   t[44].percussion.exclusive_class = 1;
   t[46].percussion.exclusive_class = 1;
   t[46].amp_env.release_ms = 40.0f;
@@ -472,7 +493,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[46].percussion.noise_q = 2.8605f;
   t[46].resonance_q = 1.32664f;
   t[46].stereo_spread = 0.565048f;
-  t[46].gain = 0.2461f;
+  t[46].gain = 0.1486f;
 
   // --- wooden idiophones + clicks ---
   t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);      // Sticks
