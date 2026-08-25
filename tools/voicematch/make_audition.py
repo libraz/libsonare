@@ -358,6 +358,18 @@ def main() -> int:
                 "shared_gain_db": round(float(20 * np.log10(max(gain, 1e-9))), 2),
                 "program": program,
                 "pedal": bool(take.cc_events),
+                # The schedule, so a take can say where its own measurement
+                # windows are. Anything reading these files otherwise has to
+                # place a window by eye against a phrase it cannot see, and a
+                # window placed by eye lands in the wrong place: the pedal
+                # take's resonance lives between the last note-off and the
+                # pedal lifting, and a window a little further on measures the
+                # dampers landing instead -- the opposite mechanism, at the
+                # other end of the same take.
+                "notes": [{"note": n.note, "velocity": n.velocity,
+                           "start": round(n.start, 4), "duration": round(n.dur, 4)}
+                          for n in take.notes],
+                "cc": [[round(t, 4), int(cc), int(v)] for t, cc, v in take.cc_events],
             },
         })
 
