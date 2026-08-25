@@ -49,6 +49,9 @@ class Corpus:
     sample_rate: int
     gate_s: float
     preroll_s: float
+    #: The longest slot in the grid, and the window for any slot the manifest
+    #: recorded no length for. Read `slot_for` instead wherever a particular
+    #: note is in hand — a grid with a per-note tail has no single slot length.
     slot_s: float
     #: (note, velocity) -> path, for this timbre only.
     renders: dict[tuple[int, int], Path]
@@ -68,9 +71,19 @@ class Corpus:
     #: as sets of note numbers. Empty for a capture that named none, which is
     #: every pitched one. See `capture.note_groups` and `loss._kit_terms`.
     groups: dict[str, tuple[int, ...]] = field(default_factory=dict)
+    #: (note, velocity) -> the audio captured for that slot, less the preroll.
+    #: A grid captured at one flat tail has the same value in every entry; one
+    #: that recorded eight seconds for its cymbals and two for the rest does
+    #: not, and a single number for both truncates the cymbals to the kick's
+    #: window — which is the whole reason the longer tail was captured.
+    slots: dict[tuple[int, int], float] = field(default_factory=dict)
 
     def slot_count(self) -> int:
         return len(self.notes) * len(self.velocities)
+
+    def slot_for(self, note: int, velocity: int) -> float:
+        """The analysis window for one slot: exactly what was recorded for it."""
+        return self.slots.get((note, velocity), self.slot_s)
 
     def percussive(self) -> bool:
         """Whether this corpus's note numbers select instruments, not pitches."""
@@ -114,20 +127,19 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
     if not renders:
         raise ValueError(f"{path.name} has no renders for timbre {chosen!r}")
 
+    preroll_s = float(manifest.get("preroll_ms", 0)) / 1000.0
+    gate_s = float(manifest["gate_ms"]) / 1000.0
     # The slot is the capture's own render length, so a note's analysis window is
-    # exactly what was recorded for it. Taken from the manifest's own seconds
-    # where it agrees across the grid, and from gate + tail otherwise.
-    seconds = {
-        float(rec["seconds"])
+    # exactly what was recorded for it — per slot, because `tail_by_note` lets one
+    # grid hold several. The flat gate + tail is the fallback for a manifest
+    # written before per-render lengths were recorded.
+    slots = {
+        (int(rec["note"]), int(rec["velocity"])): float(rec["seconds"]) - preroll_s
         for rec in manifest.get("renders", [])
         if rec.get("timbre") == chosen and "seconds" in rec
     }
-    preroll_s = float(manifest.get("preroll_ms", 0)) / 1000.0
-    gate_s = float(manifest["gate_ms"]) / 1000.0
-    if len(seconds) == 1:
-        slot_s = seconds.pop() - preroll_s
-    else:
-        slot_s = gate_s + _tail_seconds(manifest.get("tail", "2s"))
+    slot_s = (max(slots.values()) if slots
+              else gate_s + _tail_seconds(manifest.get("tail", "2s")))
 
     entry = next(
         (t for t in manifest.get("timbres", [])
@@ -149,6 +161,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         dry=_dryness(manifest),
         channel=int(entry.get("channel", 1)),
         groups=_groups(manifest),
+        slots=slots,
     )
 
 
@@ -248,11 +261,16 @@ def corpus_pattern(
 
     seq = []
     t = 0.0
+    last_slot = corpus.slot_s
     for n in picked_notes:
         for v in picked_vels:
             seq.append(Note(n, v, t, corpus.gate_s))
-            t += corpus.slot_s
-    tail = max(0.0, corpus.slot_s - corpus.gate_s)
+            last_slot = corpus.slot_for(n, v)
+            t += last_slot
+    # The trailing pad is the final slot's own, not the grid's longest: it is
+    # there so the last note is not cut off, and every earlier note is spaced by
+    # the slot it was captured in.
+    tail = max(0.0, last_slot - corpus.gate_s)
     # A kit corpus is captured on the drum channel, and the model's probe has to
     # be written on the same one or its note numbers sound pitches of program 0
     # while the oracle plays the kit. `percussive` then carries into which metric
@@ -280,7 +298,8 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
             f"probe renders at {sr} Hz; re-capture at the render rate rather than "
             f"resampling a reference"
         )
-    total = int(round((max(n.start for n in pattern.notes) + corpus.slot_s) * sr))
+    last = max(pattern.notes, key=lambda n: n.start)
+    total = int(round((last.start + corpus.slot_for(last.note, last.velocity)) * sr))
     out: np.ndarray | None = None
     skip = int(round(corpus.preroll_s * sr))
     for note in pattern.notes:
@@ -296,7 +315,8 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
             out = np.zeros((total, audio.shape[1]), dtype=np.float64)
         seg = audio[skip:]
         start = int(round(note.start * sr))
-        room = min(len(seg), total - start, int(round(corpus.slot_s * sr)))
+        slot = corpus.slot_for(note.note, note.velocity)
+        room = min(len(seg), total - start, int(round(slot * sr)))
         if room > 0:
             out[start : start + room] += seg[:room]
     if out is None:
@@ -306,7 +326,8 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
 
 def describe(corpus: Corpus, pattern: Pattern) -> str:
     """One line naming what a run is about to score against, and what it costs."""
-    seconds = max(n.start for n in pattern.notes) + corpus.slot_s
+    last = max(pattern.notes, key=lambda n: n.start)
+    seconds = last.start + corpus.slot_for(last.note, last.velocity)
     return (
         f"corpus oracle: {corpus.label} — {len(pattern.notes)} slots "
         f"({len({n.note for n in pattern.notes})} notes x "

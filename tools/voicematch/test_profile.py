@@ -710,3 +710,53 @@ def test_the_compare_table_has_a_dimension_that_moves_when_a_gain_does():
     normalised = {"band_tilt", "band_shape", "band_decay", "attack", "crest",
                   "centroid_pct", "vel_range"}
     assert "level" not in normalised
+
+
+# --------------------------------------------------------------------------
+# the model is rendered over the window its reference was captured in
+
+
+def test_the_model_grid_is_rendered_over_each_note_s_own_tail(tmp_path, monkeypatch):
+    """A kit records eight seconds for a ride and two for a kick; so must the model.
+
+    Both sides of every band and decay column are measured over a window, and
+    the columns only mean something when it is the same window. Rendering the
+    model at one flat length against a grid captured at several compares two
+    seconds of model against two seconds of reference on the short notes and
+    against eight on the long ones, where the six seconds the model never
+    rendered read as a wash that died.
+    """
+    asked: dict[int, float] = {}
+
+    def fake_render(smf, seconds, sr):
+        asked[fake_render.note] = seconds
+        return np.zeros((int(seconds * sr), 1), dtype=np.float32)
+
+    monkeypatch.setattr(profile_module, "render_model", fake_render)
+    monkeypatch.setattr(profile_module, "write_wav", lambda *a, **k: None)
+
+    real_smf = profile_module.write_smf
+
+    def spy_smf(notes, **kw):
+        fake_render.note = notes[0].note
+        return real_smf(notes, **kw)
+
+    monkeypatch.setattr(profile_module, "write_smf", spy_smf)
+
+    cfg = {"id": "kit", "notes": [35, 51, 81], "velocities": [100],
+           "sample_rate": 48000, "gate_ms": 50, "preroll_ms": 100,
+           "tail": "2s", "tail_by_note": {"49-59": "8s", "80-81": "6s"},
+           "channel": 10, "timbres": [{"id": "t", "channel": 10}]}
+    profile_module.render_grid(cfg, tmp_path, timbre="model", program=0)
+
+    # preroll 0.1 + gate 0.05 + the note's own tail.
+    assert asked[35] == pytest.approx(2.15)
+    assert asked[51] == pytest.approx(8.15)
+    assert asked[81] == pytest.approx(6.15)
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    recorded = {r["note"]: r["seconds"] for r in manifest["renders"]}
+    # And the manifest records it, which is what `load_corpus` reads the
+    # analysis window back out of.
+    assert recorded == {35: pytest.approx(2.15), 51: pytest.approx(8.15),
+                        81: pytest.approx(6.15)}

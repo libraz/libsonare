@@ -71,7 +71,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from capture import (  # noqa: E402
-    DEFAULT_CONFIG, load_config, note_groups, note_map, out_root,
+    DEFAULT_CONFIG, load_config, note_groups, note_map, out_root, tail_seconds,
 )
 from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
@@ -582,7 +582,6 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> in
     sr = int(manifest.get("sample_rate", cfg["sample_rate"]))
     notes = manifest.get("notes") or cfg["notes"]
     velocities = manifest.get("velocities") or cfg["velocities"]
-    tail_s = 2.0
     # On a kit the channel is not a transport detail: it is what makes the note
     # number select an instrument. Rendering the model's grid on channel 1 would
     # play 47 pitches of whatever program 0 is and write them into the corpus
@@ -596,6 +595,7 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> in
     for i, (note, vel) in enumerate(
         ((n, v) for n in notes for v in velocities), start=1
     ):
+        tail_s = tail_seconds(cfg, note)
         smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
                         channel=channel, end_pad=tail_s)
         audio = render_model(smf, preroll_s + gate_s + tail_s, sr)
@@ -865,7 +865,6 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
-    tail_s = 2.0
 
     program = profile_program(profile, cfg)
     ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
@@ -888,6 +887,7 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     swing: dict[str, list[float]] = {}
     for note in notes:
         got = {}
+        tail_s = tail_seconds(cfg, note)
         for v in (lo_v, hi_v):
             if (note, v) not in ref:
                 break
@@ -1035,7 +1035,6 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
-    tail_s = 2.0
     sr = cap["sample_rate"]
     # The reference's own ceiling, recorded when it was measured. Absent from a
     # profile measured before the edge was, and then the model is measured
@@ -1076,6 +1075,10 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     kit_rows: list[tuple[dict, dict]] = []
     for note, vel in pairs:
         played = mapping.get(note, note)
+        # The captured note, not the one the map makes the model play: the window
+        # has to be the one the reference row was measured over, and `tail_by_note`
+        # is written in the capture's own numbering.
+        tail_s = tail_seconds(cfg, note)
         smf = write_smf([Note(played, vel, preroll_s, gate_s)], program=program,
                         channel=PERCUSSION_CHANNEL - 1, end_pad=tail_s)
         audio = render_model(smf, preroll_s + gate_s + tail_s, sr)
@@ -1175,7 +1178,6 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
-    tail_s = 2.0
 
     ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
     if not ref:
@@ -1201,6 +1203,7 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     # between two of them, so it is accumulated here and reduced after the loop.
     peaks: dict[str, dict[int, dict[int, float]]] = {}
     for note, vel in pairs:
+        tail_s = tail_seconds(cfg, note)
         smf = write_smf([Note(note, vel, preroll_s, gate_s)],
                         program=program, end_pad=tail_s)
         audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"])
@@ -1257,8 +1260,13 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
               f"{fmt(centroid_pct, '+12.1f')} {fmt(row['tnr'], '+9.1f')} {damper_col}")
 
     if damper_censored:
+        # Each censored row was rendered over its own note's tail, so the
+        # sentence names the span rather than one number it no longer has.
+        tails = sorted({tail_seconds(cfg, n) for n, _ in damper_censored})
+        span = (f"{tails[0]:.0f} s" if len(tails) == 1
+                else f"{tails[0]:.0f}-{tails[-1]:.0f} s")
         print(f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "
-              f"{tail_s:.0f} s tail on one side or the other; shown, not counted:")
+              f"{span} tail on one side or the other; shown, not counted:")
         print("  " + ", ".join(f"n{n}v{v}" for n, v in damper_censored))
     for note, model_peaks in sorted(peaks.get("m", {}).items()):
         ref_peaks = peaks.get("r", {}).get(note, {})
@@ -1471,7 +1479,6 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int]) -> i
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
-    tail_s = 2.0
     sr = cap["sample_rate"]
     band_edge = cap.get("band_edge_hz")
     program = profile_program(profile, cfg)
@@ -1493,6 +1500,7 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int]) -> i
     counted: dict[str, int] = {k: 0 for k in AGREEMENT_TOLERANCE}
     deltas: dict[str, list[float]] = {}
     for note, vel in pairs:
+        tail_s = tail_seconds(cfg, note)
         smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
                         channel=PERCUSSION_CHANNEL - 1, end_pad=tail_s)
         try:

@@ -256,3 +256,31 @@ def test_a_render_on_time_is_taken_first_try(tmp_path, monkeypatch):
                                    floor_peak=0.0, preroll_ms=100.0, sample_rate=SR)
     assert len(calls) == 1
     assert summary["attempts"] == 1
+
+
+# --------------------------------------------------------------------------
+# the per-note tail, and the sides that have to render over it
+
+
+def test_a_named_note_carries_its_own_tail_and_the_rest_keep_the_flat_one():
+    """`tail_by_note` is read as ranges and as single notes, both inclusive."""
+    cfg = {"tail": "2s", "tail_by_note": {"49-59": "8s", "80-81": "6s", "84": "10s"}}
+    assert capture.tail_seconds(cfg, 35) == pytest.approx(2.0)
+    assert capture.tail_seconds(cfg, 48) == pytest.approx(2.0)
+    assert capture.tail_seconds(cfg, 49) == pytest.approx(8.0)
+    assert capture.tail_seconds(cfg, 54) == pytest.approx(8.0)
+    assert capture.tail_seconds(cfg, 59) == pytest.approx(8.0)
+    assert capture.tail_seconds(cfg, 60) == pytest.approx(2.0)
+    assert capture.tail_seconds(cfg, 81) == pytest.approx(6.0)
+    assert capture.tail_seconds(cfg, 84) == pytest.approx(10.0)
+
+
+def test_a_capture_with_no_per_note_table_answers_its_flat_tail():
+    """Which is every pitched capture, and the pipe organ's flat tail is not 2 s.
+
+    Worth asserting rather than assuming: the render sides used to hardcode two
+    seconds, so a capture that recorded four had its model measured over half
+    the window its reference was measured over, with nothing reporting it.
+    """
+    assert capture.tail_seconds({"tail": "4s"}, 60) == pytest.approx(4.0)
+    assert capture.tail_seconds({"tail": "2s", "tail_by_note": {}}, 60) == pytest.approx(2.0)

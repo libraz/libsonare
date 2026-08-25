@@ -1317,16 +1317,22 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
 def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
                   gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True,
                   channel=1, groups=None) -> Path:
-    """A miniature capture: one short tone per slot, plus the manifest beside it."""
+    """A miniature capture: one short tone per slot, plus the manifest beside it.
+
+    `seconds` is a number for a grid captured at one flat tail, or a note-keyed
+    dict for one that recorded longer for some of its notes — which is what
+    `tail_by_note` produces and what a single slot length cannot describe.
+    """
     sr = 48000
     root.mkdir(parents=True, exist_ok=True)
     renders = []
     for note in notes:
+        secs = seconds[note] if isinstance(seconds, dict) else seconds
         for vel in velocities:
             rel = f"t/n{note:03d}_v{vel:03d}.wav"
             path = root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
-            n = int(seconds * sr)
+            n = int(secs * sr)
             t = np.arange(n) / sr
             # Silence through the preroll, then a decaying tone at the note's own
             # pitch, so a misplaced onset shows up as a measurable shift.
@@ -1335,7 +1341,7 @@ def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
             body[: int(preroll_ms / 1000.0 * sr)] = 0.0
             write_wav(path, np.stack([body, body], axis=1).astype(np.float32), sr)
             renders.append({"id": rel, "timbre": "t", "note": note, "velocity": vel,
-                            "path": rel, "seconds": seconds})
+                            "path": rel, "seconds": secs})
     header = {
         "id": "mini", "sample_rate": sr, "gate_ms": gate_ms, "tail": "2s",
         "preroll_ms": preroll_ms, "dry": dry,
@@ -1374,6 +1380,44 @@ def test_corpus_slots_are_spaced_by_the_capture_s_own_length(tmp_path):
     assert corpus.slot_s == pytest.approx(10.0)
     for note in probe.notes:
         assert analysis_window_end(probe, note) == pytest.approx(note.start + corpus.slot_s)
+
+
+def test_a_note_captured_for_longer_is_analysed_for_longer(tmp_path):
+    """A grid with a per-note tail gives each slot the window it was recorded in.
+
+    A kit records eight seconds for a ride and two for a kick, because a cymbal's
+    wash is most of what makes it a cymbal. Reduced to one slot length the whole
+    grid takes the short one, and six seconds of ride are dropped before any
+    metric sees them — which reads as a model whose bands all decay too fast,
+    on the notes the longer tail was captured for.
+    """
+    root = _write_corpus(tmp_path / "c", gate_ms=1000,
+                         seconds={60: 4.1, 72: 10.1})
+    corpus = load_corpus(root)
+    probe = corpus_pattern(corpus, velocities=(56,))
+    starts = [n.start for n in probe.notes]
+    # The short note is followed by its own 4 s, not by the grid's longest and
+    # not by the flat gate + tail that a single length would have fallen back to.
+    assert starts == pytest.approx([0.0, 4.0])
+    assert probe.tail == pytest.approx(10.0 - 1.0)
+
+    assert corpus.slot_for(60, 56) == pytest.approx(4.0)
+    assert corpus.slot_for(72, 56) == pytest.approx(10.0)
+    for note in probe.notes:
+        assert analysis_window_end(probe, note) == pytest.approx(
+            note.start + corpus.slot_for(note.note, note.velocity)
+        )
+
+
+def test_the_long_note_keeps_its_tail_when_the_grid_also_holds_short_ones(tmp_path):
+    """The assembled oracle carries the full capture, not the shortest slot's worth."""
+    root = _write_corpus(tmp_path / "c", gate_ms=1000,
+                         seconds={60: 4.1, 72: 10.1})
+    corpus = load_corpus(root)
+    probe = corpus_pattern(corpus, notes=(72,), velocities=(56,))
+    audio = corpus_oracle(corpus, probe, 48000)
+    # 10.1 s captured less the 0.1 s preroll that assembly drops.
+    assert len(audio) / 48000.0 == pytest.approx(10.0, abs=0.01)
 
 
 def test_the_corpus_oracle_places_each_capture_at_its_own_onset(tmp_path):

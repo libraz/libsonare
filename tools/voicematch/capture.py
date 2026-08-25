@@ -167,6 +167,20 @@ def tail_for(cfg: dict, note: int) -> str:
     return str(cfg["tail"])
 
 
+def tail_seconds(cfg: dict, note: int) -> float:
+    """`tail_for` as a number of seconds, for the sides that render rather than record.
+
+    The capture records each note for its own tail; the model has to be rendered
+    over the same window or the two are not comparable. Reading it from the same
+    table rather than from a constant is what keeps them together: a flat 2 s
+    model render against an 8 s captured cymbal compares two seconds of model
+    against two seconds of reference and eight seconds of decay against nothing,
+    which reads as a model whose every band dies too fast.
+    """
+    text = tail_for(cfg, note).strip().lower()
+    return float(text[:-1]) if text.endswith("s") else float(text)
+
+
 def note_map(cfg: dict) -> dict[int, int]:
     """Which model note answers each captured note, where they disagree.
 

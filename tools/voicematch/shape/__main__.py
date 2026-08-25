@@ -41,6 +41,11 @@ def build(args):
     corpus = load_corpus(args.corpus, args.timbre)
     gate_s = float(cap["gate_ms"]) / 1000.0
     preroll = float(cap.get("preroll_ms", 0)) / 1000.0
+    # One plane size for the whole run, so this is the grid's LONGEST slot rather
+    # than a per-note window: a spectrogram bed is cached and compared cell by
+    # cell, and two notes cannot share a plane at two sizes. On a grid with a
+    # per-note tail that pads the short notes with silence, which costs render
+    # time; the other direction would cut the long ones short.
     seconds = round(corpus.slot_s + preroll, 3)
     spectro = Spectro(sample_rate=corpus.sample_rate, seconds=seconds)
     sigs = Signals(corpus_root=Path(args.corpus), program=int(cap["program"]),
