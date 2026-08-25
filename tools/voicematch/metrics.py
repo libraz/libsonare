@@ -19,8 +19,9 @@ Metric set (per note):
 Percussion metric set (per hit, `analyze_hit`):
   bands_db               1/3-octave levels, dB relative to the loudest band
   band_decay_db_s        per-octave-band decay slope after the peak
-  attack_ms              onset to envelope peak
-  decay_ms               peak to 20 dB below it
+  onset_ms               note-on to the strike the rest of the set is measured from
+  attack_ms              strike to first arrival within 3 dB of the peak
+  decay_ms               end of the attack to the last moment within 20 dB of the peak
   crest_db               peak-to-RMS ratio over the hit
   centroid_hz            broadband spectral centroid of the hit
   level_db               hit RMS (post global normalization)
@@ -76,6 +77,23 @@ BAND_FLOOR_DB = -60.0
 # quantisation rather than the attack.
 HIT_ENVELOPE_HOP_MS = 0.5
 HIT_ENVELOPE_WIN_MS = 2.0
+
+# How far below the hit's own peak the strike is considered to have begun, and
+# how long after the note-on one may still be looked for. A hosted plugin does
+# not always sound a note in the buffer it was delivered in — measured on a
+# sampled kit, the same key at six velocities started anywhere between 0 and
+# 750 ms after the note-on — and a window anchored on the note-on rather than on
+# the strike reports that scheduling jitter as the instrument's attack time.
+HIT_ONSET_FLOOR_DB = -50.0
+HIT_ONSET_SEARCH_SEC = 1.0
+
+# How close to its own peak a hit counts as having arrived. Time to the peak
+# itself is not a usable statistic for anything that washes: a crash holds
+# within a couple of dB of its maximum for hundreds of milliseconds, so which
+# frame carries the maximum is decided by ripple, and the same cymbal at six
+# velocities reported 34, 204, 174, 164, 197 and 197 ms. First arrival within a
+# tolerance is stable and is what a rise time means in any case.
+HIT_ATTACK_TOLERANCE_DB = -3.0
 
 
 def midi_to_hz(note: int) -> float:
@@ -475,6 +493,7 @@ class HitMetrics:
     peak_band_hz: float
     band_decay_db_s: list[float | None]  # per octave band
     centroid_hz: float
+    onset_ms: float                      # strike, relative to the note-on
     attack_ms: float
     decay_ms: float
     decay_capped: bool
@@ -485,15 +504,47 @@ class HitMetrics:
         return asdict(self)
 
 
+def _hit_onset(mono: np.ndarray, sr: int, start: float, limit: float) -> float:
+    """Where the strike actually begins, in seconds, at or after `start`.
+
+    Located by walking back from the loudest moment to the last frame under
+    `HIT_ONSET_FLOOR_DB`, so a piece whose envelope genuinely swells (a crash, a
+    vibraslap's rattle) keeps its real onset rather than being cut to its peak.
+    Only the first `HIT_ONSET_SEARCH_SEC` is searched: past that the loudest
+    thing in the window is more likely to be the next event than this one.
+
+    Falls back to `start` when nothing rises above the floor, which is what a
+    silent render gives and what the caller already handles.
+    """
+    scan_end = int(min(limit, start + HIT_ONSET_SEARCH_SEC) * sr)
+    scan = np.asarray(mono[int(start * sr):min(scan_end, len(mono))], dtype=np.float64)
+    if len(scan) < 2:
+        return start
+    times, env = _rms_envelope(scan, sr, hop_ms=HIT_ENVELOPE_HOP_MS,
+                               win_ms=HIT_ENVELOPE_WIN_MS)
+    peak_i = int(np.argmax(env))
+    floor = float(env[peak_i]) * 10.0 ** (HIT_ONSET_FLOOR_DB / 20.0)
+    if floor <= 0.0:
+        return start
+    below = np.where(env[: peak_i + 1] <= floor)[0]
+    return start + float(times[int(below[-1])]) if below.size else start
+
+
 def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float) -> HitMetrics:
     """Compute the percussion metric set for one hit.
 
-    The window runs from the onset to `window_end` (the next hit, or the end of
+    The window runs from the strike to `window_end` (the next hit, or the end of
     the render), capped at `HIT_MAX_SEC`. The note's own duration is ignored:
     a drum is a one-shot and its note-off carries no information.
+
+    The strike is located rather than assumed to be at the note-on, because a
+    hosted plugin's is not: leading silence inside the window inflates time to
+    peak by exactly its own length, dilutes the RMS the crest and level are
+    measured against, and tilts every per-band decay fit.
     """
-    on = int(note.start * sr)
-    end = int(min(window_end, note.start + HIT_MAX_SEC) * sr)
+    onset = _hit_onset(mono, sr, note.start, window_end)
+    on = int(onset * sr)
+    end = int(min(window_end, onset + HIT_MAX_SEC) * sr)
     seg = np.asarray(mono[on:min(end, len(mono))], dtype=np.float64)
     if len(seg) < 256:
         seg = np.asarray(mono[on : on + 256], dtype=np.float64)
@@ -514,15 +565,25 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float) -> Hit
     times, env = _rms_envelope(
         seg, sr, hop_ms=HIT_ENVELOPE_HOP_MS, win_ms=HIT_ENVELOPE_WIN_MS
     )
-    peak_i = int(np.argmax(env))
-    peak = float(env[peak_i])
-    attack_ms = float(times[peak_i] * 1000.0)
+    peak = float(np.max(env))
+    reached = np.where(env >= peak * 10.0 ** (HIT_ATTACK_TOLERANCE_DB / 20.0))[0]
+    attack_i = int(reached[0]) if reached.size else int(np.argmax(env))
+    attack_ms = float(times[attack_i] * 1000.0)
 
-    fallen = (np.arange(len(env)) > peak_i) & (env <= peak * 10.0 ** (-20.0 / 20.0))
-    capped = not bool(np.any(fallen))
-    decay_ms = float(
-        ((times[-1] if capped else times[int(np.argmax(fallen))]) - times[peak_i]) * 1000.0
-    )
+    # Decay runs from the same moment the attack ended, not from wherever the
+    # maximum happened to land: on a hit that plateaus, the maximum sits in the
+    # middle of the plateau and the time it takes to fall is measured short by
+    # however much of the plateau preceded it.
+    #
+    # Read as the last moment the hit was still above the threshold rather than
+    # the first moment it dipped below. A 2 ms window on a noise wash crosses
+    # -20 dB and comes back within one frame, and the open hi-hat that rings for
+    # half a second reported 14 ms on three of its six velocities for that
+    # reason alone.
+    over = np.where(env[attack_i:] > peak * 10.0 ** (-20.0 / 20.0))[0]
+    last_i = attack_i + int(over[-1]) if over.size else attack_i
+    capped = last_i >= len(env) - 1
+    decay_ms = float((times[last_i] - times[attack_i]) * 1000.0)
 
     rms = float(np.sqrt(np.mean(seg**2)))
     crest_db = float(_db(np.max(np.abs(seg))) - _db(rms))
@@ -535,6 +596,7 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float) -> Hit
         band_decay_db_s=[None if v is None else round(v, 2)
                          for v in _band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO)],
         centroid_hz=round(centroid, 1),
+        onset_ms=round((onset - note.start) * 1000.0, 2),
         attack_ms=round(attack_ms, 2),
         decay_ms=round(decay_ms, 1),
         decay_capped=capped,

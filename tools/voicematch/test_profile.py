@@ -365,6 +365,108 @@ def test_a_band_that_decayed_on_only_one_side_is_left_out_of_the_decay_average()
     assert profile_module.mean_band_decay_delta([None], [1.0]) is None
 
 
+def test_the_model_grid_is_not_measured_into_the_reference_it_is_measured_against():
+    """`render-grid` writes into the same corpus; a profile is the target half of it."""
+    shipped = [t["id"] for t in json.loads(
+        (REFERENCE_DIR / "drums.json").read_text())["capture"]["timbres"]]
+    measured = {r["timbre"] for r in json.loads(
+        (REFERENCE_DIR / "drums.json").read_text())["rows"]}
+    assert measured <= set(shipped)
+    assert "model" not in measured
+
+
+def _decaying_burst(sr: int, seconds: float, tau_s: float, seed: int = 0) -> np.ndarray:
+    burst = np.random.default_rng(seed).normal(0, 0.2, int(sr * seconds))
+    return burst * np.exp(-np.arange(len(burst)) / (tau_s * sr))
+
+
+def test_a_hit_the_host_sounded_late_measures_the_same_as_one_it_sounded_on_time():
+    """The window follows the strike, because a hosted plugin's does not follow the note-on.
+
+    Measured on a sampled kit: the same key at six velocities started anywhere
+    from 0 to 750 ms after its note-on. Anchoring on the note-on charges that
+    latency to the instrument — time to peak comes back as the delay itself, and
+    the leading silence dilutes the RMS that crest and level are read against.
+    """
+    sr = SR
+    burst = _decaying_burst(sr, 0.4, 0.05)
+    preroll = np.zeros(int(0.1 * sr))
+    on_time = np.concatenate([preroll, burst])
+    late = np.concatenate([preroll, np.zeros(int(0.25 * sr)), burst])
+
+    a = profile_module.measure_hit(on_time, sr, 38, 100, preroll_s=0.1, gate_s=0.05)
+    b = profile_module.measure_hit(late, sr, 38, 100, preroll_s=0.1, gate_s=0.05)
+
+    assert a["onset_ms"] == pytest.approx(0.0, abs=2.0)
+    assert b["onset_ms"] == pytest.approx(250.0, abs=2.0)
+    assert b["attack_ms"] == pytest.approx(a["attack_ms"], abs=1.0)
+    assert b["crest_db"] == pytest.approx(a["crest_db"], abs=0.5)
+    assert b["level_db"] == pytest.approx(a["level_db"], abs=0.5)
+    assert b["decay_ms"] == pytest.approx(a["decay_ms"], abs=2.0)
+
+
+def test_a_wash_does_not_move_its_attack_when_ripple_moves_its_loudest_frame():
+    """Time to the peak is not a statistic on a cymbal; time to arrival is.
+
+    A crash holds within a couple of dB of its maximum for hundreds of
+    milliseconds, so which frame carries the maximum is decided by noise. Two
+    renders of the same gesture, differing only in where that ripple puts the
+    maximum, have to report the same attack.
+    """
+    sr = SR
+    n = int(sr * 1.2)
+    wash = np.random.default_rng(2).normal(0, 0.2, n)
+    wash *= np.minimum(1.0, np.arange(n) / (0.008 * sr))          # 8 ms strike
+    wash *= np.exp(-np.arange(n) / (2.0 * sr))                    # then a long plateau
+
+    def bump_at(seconds: float) -> np.ndarray:
+        lift = np.ones(n)
+        i = int(seconds * sr)
+        lift[i:i + int(0.02 * sr)] = 1.15
+        return np.concatenate([np.zeros(int(0.1 * sr)), wash * lift])
+
+    early = profile_module.measure_hit(bump_at(0.02), sr, 49, 100,
+                                       preroll_s=0.1, gate_s=0.05)
+    late = profile_module.measure_hit(bump_at(0.40), sr, 49, 100,
+                                      preroll_s=0.1, gate_s=0.05)
+
+    assert late["attack_ms"] == pytest.approx(early["attack_ms"], abs=5.0)
+    assert early["attack_ms"] < 30.0
+
+
+def test_a_momentary_dip_does_not_end_a_ring_that_is_still_going():
+    """Decay is the last moment above the threshold, not the first moment under it.
+
+    A 2 ms window on a noise wash crosses -20 dB and comes straight back. Read
+    as a first crossing, a hi-hat that rings for half a second reports 14 ms.
+    """
+    sr = SR
+    n = int(sr * 1.0)
+    ring = np.random.default_rng(3).normal(0, 0.2, n)
+    ring *= np.exp(-np.arange(n) / (0.15 * sr))
+    ring[int(0.05 * sr):int(0.052 * sr)] *= 0.001                 # one dropout frame
+    audio = np.concatenate([np.zeros(int(0.1 * sr)), ring])
+
+    row = profile_module.measure_hit(audio, sr, 46, 100, preroll_s=0.1, gate_s=0.05)
+
+    # exp(-t/0.15) is 20 dB down — a tenth of the amplitude — at 0.15 * ln(10).
+    assert row["decay_ms"] == pytest.approx(345.0, abs=30.0)
+
+
+def test_a_hit_that_swells_keeps_its_onset_rather_than_being_cut_to_its_peak():
+    """A crash and a vibraslap peak well after the strike; that is the instrument."""
+    sr = SR
+    swell = np.random.default_rng(1).normal(0, 0.2, int(sr * 0.9))
+    ramp = np.minimum(1.0, np.arange(len(swell)) / (0.3 * sr))
+    swell *= ramp * np.exp(-np.arange(len(swell)) / (0.6 * sr))
+    audio = np.concatenate([np.zeros(int(0.1 * sr)), swell])
+
+    row = profile_module.measure_hit(audio, sr, 58, 100, preroll_s=0.1, gate_s=0.05)
+
+    assert row["onset_ms"] == pytest.approx(0.0, abs=5.0)
+    assert row["attack_ms"] > 100.0
+
+
 def test_measure_hit_reports_a_strike_and_not_a_fundamental():
     """The pitched columns are absent rather than present and meaningless."""
     sr = SR

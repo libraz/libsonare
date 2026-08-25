@@ -103,6 +103,10 @@ TILT_HIGH_HZ = 2000.0
 # profile to its own loudest band, so silence comes back as a flat spectrum and
 # scores as a plausible instrument rather than as an absence.
 SILENT_HIT_DBFS = -80.0
+# Past this much delay between a note-on and the strike, the host scheduled the
+# note rather than the instrument being slow to speak. Well above any real
+# attack on a kit and well under the shortest delay a retried note came back at.
+LATE_ONSET_MS = 20.0
 
 
 # --------------------------------------------------------------------------
@@ -480,8 +484,16 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     gate_s = manifest["gate_ms"] / 1000.0
     percussion = is_percussion(cfg)
 
+    # A reference profile is the calibration target, so the model's own grid is
+    # not part of it even when `render-grid` has put it in the same corpus: it
+    # would double the committed file with a snapshot of the thing being
+    # calibrated, which is stale the next time the voice is touched.
+    modelled = {t["id"] for t in manifest.get("timbres", []) if t.get("model")}
+
     rows = []
     for i, rec in enumerate(manifest["renders"], 1):
+        if rec["timbre"] in modelled:
+            continue
         path = corpus_dir / rec["path"]
         if not path.exists():
             continue
@@ -660,12 +672,14 @@ def summarize_percussion(rows: list[dict]) -> dict:
     out: dict = {}
     for row in rows:
         t = out.setdefault(row["timbre"], {"bands_db": {}, "band_decay_db_s": {},
-                                           "centroid_hz": {}, "attack_ms": {},
+                                           "centroid_hz": {}, "onset_ms": {},
+                                           "attack_ms": {},
                                            "decay_ms": {}, "crest_db": {},
                                            "level_dbfs": {}})
         n, v = str(row["note"]), str(row["velocity"])
         for key, dest in (("bands_db", "bands_db"), ("band_decay_db_s", "band_decay_db_s"),
-                          ("centroid_hz", "centroid_hz"), ("attack_ms", "attack_ms"),
+                          ("centroid_hz", "centroid_hz"), ("onset_ms", "onset_ms"),
+                          ("attack_ms", "attack_ms"),
                           ("decay_ms", "decay_ms"), ("crest_db", "crest_db"),
                           ("level_db", "level_dbfs")):
             if key in row:
@@ -701,6 +715,18 @@ def print_percussion_summary(summary: dict) -> None:
                 # On a kit this is usually a sample-layer boundary rather than
                 # an instrument that genuinely plays quieter when hit harder.
                 print(f"  (level is not monotonic in velocity at {non_mono})", file=sys.stderr)
+        late = [(int(n), v, ms) for n, by_vel in (s.get("onset_ms") or {}).items()
+                for v, ms in by_vel.items() if ms > LATE_ONSET_MS]
+        if late:
+            # Every measurement here is taken from the strike rather than from
+            # the note-on, so a late one costs nothing but its own tail. Said
+            # out loud anyway: it is the host's scheduling, it means those rows
+            # were retried during capture, and a hit late enough to fall outside
+            # the window would be lost silently.
+            worst = max(ms for _, _, ms in late)
+            print(f"  ({len(late)} of {sum(len(x) for x in s['onset_ms'].values())} rows "
+                  f"sounded up to {worst:.0f} ms after their note-on; measured from the "
+                  f"strike)", file=sys.stderr)
 
 
 def print_summary(summary: dict) -> None:
