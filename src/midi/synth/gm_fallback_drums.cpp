@@ -161,10 +161,16 @@ constexpr DrumPatches build_drum_patches() noexcept {
 // built from a mechanism archetype (fixed-pitch membrane / struck wood / struck
 // metal / whistle / noise) plus a fixed tuning, on top of the shared kit
 // archetypes above. Unmapped keys fall back to the generic short burst so every
-// drum key stays audible. The stochastic (PhISEM) shakers and scrapers
-// (maracas, cabasa, guiro, cuica, tambourine, vibraslap) are a separate
-// archetype not yet built — they resolve to the generic burst here until it
-// lands.
+// drum key stays audible.
+//
+// A piece's `gain` is how loud it stands against the rest of the kit, and that
+// balance is not something one reference can settle: two commercial GM kits
+// measured against each other disagree by 7 dB RMS over the map and by 25 on a
+// tambourine, because where a shaker sits under a snare is a mix decision as
+// much as an instrument's property. So a gain here is moved only when this kit
+// falls outside the range the two of them span, and only as far as the nearer
+// of the two — a value some real kit actually uses, taking no side on which. Of
+// the 47 mapped keys, 29 already sit inside that range and are left alone.
 SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
   const DrumPatches d = build_drum_patches();
   std::array<NativeSynthPatch, 128> t{};
@@ -365,10 +371,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // A ride is played on its shoulder with the tip of the stick, so what carries
   // is a defined ping over a wash kept short enough to stay out of its way; a
   // ride that blooms like a crash is a ride nobody can play time on.
-  t[51] = make_cymbal(2800.0f, 2.20f, 0.75f, 260.0f, 200.0f, 1.0f, 2600.0f, 0.50f);  // Ride 1
-  t[59] = make_cymbal(1900.0f, 2.80f, 0.90f, 170.0f, 150.0f, 0.6f, 3200.0f, 0.48f);  // Ride 2
-  t[55] = make_cymbal(5200.0f, 0.30f, 0.35f, 240.0f, 3400.0f, 2.5f, 420.0f, 0.45f);  // Splash
-  t[52] = make_cymbal(2600.0f, 0.35f, 0.85f, 420.0f, 4200.0f, 3.0f, 700.0f, 0.55f);  // China
+  t[51] = make_cymbal(2800.0f, 2.20f, 0.75f, 260.0f, 200.0f, 1.0f, 2600.0f, 0.50f);    // Ride 1
+  t[59] = make_cymbal(1900.0f, 2.80f, 0.90f, 170.0f, 150.0f, 0.6f, 3200.0f, 0.1495f);  // Ride 2
+  t[55] = make_cymbal(5200.0f, 0.30f, 0.35f, 240.0f, 3400.0f, 2.5f, 420.0f, 0.45f);    // Splash
+  t[52] = make_cymbal(2600.0f, 0.35f, 0.85f, 420.0f, 4200.0f, 3.0f, 700.0f, 0.55f);    // China
   // The china's upturned flange is what makes it trashy, and trashy is neither
   // dark nor bright: it concentrates the wash into one harsh band instead of
   // spreading it up the spectrum the way a flat plate does. That is a different
@@ -466,17 +472,17 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[46].percussion.noise_q = 2.8605f;
   t[46].resonance_q = 1.32664f;
   t[46].stereo_spread = 0.565048f;
-  t[46].gain = 0.5415f;
+  t[46].gain = 0.2461f;
 
   // --- wooden idiophones + clicks ---
-  t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);   // Sticks
-  t[32] = make_wood(1000.0f, 0.0f, 0.02f, 0.5f);   // Square Click
-  t[33] = make_wood(1200.0f, 0.0f, 0.02f, 0.5f);   // Metronome Click
-  t[37] = make_wood(820.0f, 0.0f, 0.05f, 0.7f);    // Side Stick
-  t[75] = make_wood(2500.0f, 0.0f, 0.025f, 0.6f);  // Claves (2500 Hz, ~25 ms)
-  t[76] = make_wood(1200.0f, 0.0f, 0.06f, 0.6f);   // Hi Wood Block
-  t[77] = make_wood(800.0f, 0.0f, 0.07f, 0.6f);    // Low Wood Block
-  t[85] = make_wood(1800.0f, 0.0f, 0.02f, 0.5f);   // Castanets
+  t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);      // Sticks
+  t[32] = make_wood(1000.0f, 0.0f, 0.02f, 0.5f);      // Square Click
+  t[33] = make_wood(1200.0f, 0.0f, 0.02f, 0.5f);      // Metronome Click
+  t[37] = make_wood(820.0f, 0.0f, 0.05f, 0.7f);       // Side Stick
+  t[75] = make_wood(2500.0f, 0.0f, 0.025f, 1.3248f);  // Claves (2500 Hz, ~25 ms)
+  t[76] = make_wood(1200.0f, 0.0f, 0.06f, 0.6f);      // Hi Wood Block
+  t[77] = make_wood(800.0f, 0.0f, 0.07f, 0.6f);       // Low Wood Block
+  t[85] = make_wood(1800.0f, 0.0f, 0.02f, 0.5f);      // Castanets
 
   // --- metal idiophones + bells ---
   t[34] =
@@ -499,21 +505,21 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[81].percussion.exclusive_class = 3;
 
   // --- fixed-pitch membranes (congas/bongos/timbales/surdo) ---
-  t[60] = make_membrane(260.0f, 0.18f, 0.30f, 0.0f, 0.70f);    // Hi Bongo
-  t[61] = make_membrane(180.0f, 0.20f, 0.30f, 0.0f, 0.70f);    // Low Bongo
-  t[62] = make_membrane(220.0f, 0.08f, 0.20f, 0.0f, 0.70f);    // Mute Hi Conga
-  t[63] = make_membrane(200.0f, 0.25f, 0.30f, 0.0f, 0.70f);    // Open Hi Conga
-  t[64] = make_membrane(130.0f, 0.30f, 0.35f, 0.0f, 0.75f);    // Low Conga
-  t[65] = make_membrane(250.0f, 0.22f, 0.20f, 700.0f, 0.70f);  // High Timbale
-  t[66] = make_membrane(200.0f, 0.26f, 0.20f, 550.0f, 0.70f);  // Low Timbale
-  t[86] = make_membrane(95.0f, 0.12f, 0.40f, 0.0f, 0.80f);     // Mute Surdo
-  t[87] = make_membrane(80.0f, 0.40f, 0.50f, 0.0f, 0.85f);     // Open Surdo
+  t[60] = make_membrane(260.0f, 0.18f, 0.30f, 0.0f, 0.70f);      // Hi Bongo
+  t[61] = make_membrane(180.0f, 0.20f, 0.30f, 0.0f, 0.70f);      // Low Bongo
+  t[62] = make_membrane(220.0f, 0.08f, 0.20f, 0.0f, 0.70f);      // Mute Hi Conga
+  t[63] = make_membrane(200.0f, 0.25f, 0.30f, 0.0f, 1.1847f);    // Open Hi Conga
+  t[64] = make_membrane(130.0f, 0.30f, 0.35f, 0.0f, 1.4014f);    // Low Conga
+  t[65] = make_membrane(250.0f, 0.22f, 0.20f, 700.0f, 1.1120f);  // High Timbale
+  t[66] = make_membrane(200.0f, 0.26f, 0.20f, 550.0f, 0.70f);    // Low Timbale
+  t[86] = make_membrane(95.0f, 0.12f, 0.40f, 0.0f, 0.80f);       // Mute Surdo
+  t[87] = make_membrane(80.0f, 0.40f, 0.50f, 0.0f, 0.85f);       // Open Surdo
   t[86].percussion.exclusive_class = 6;
   t[87].percussion.exclusive_class = 6;
 
   // --- whistles (mute group 4) + hand clap ---
-  t[71] = make_whistle(1400.0f, 0.12f, 0.5f);  // Short Whistle
-  t[72] = make_whistle(1400.0f, 0.50f, 0.5f);  // Long Whistle
+  t[71] = make_whistle(1400.0f, 0.12f, 0.7473f);  // Short Whistle
+  t[72] = make_whistle(1400.0f, 0.50f, 0.5f);     // Long Whistle
   t[71].percussion.exclusive_class = 4;
   t[72].percussion.exclusive_class = 4;
   t[39] = clap;  // Hand Clap
@@ -541,34 +547,34 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].percussion.noise_air_hz = 2032.0f;
   t[38].gain = 2.931f;  // Acoustic Snare
   t[39].percussion.noise_air_hz = 3125.0f;
-  t[39].gain = 0.858f;  // Hand Clap
+  t[39].gain = 2.5615f;  // Hand Clap
   t[40].percussion.noise_air_hz = 1984.0f;
   t[40].gain = 1.828f;  // Electric Snare
   t[49].percussion.noise_air_hz = 1000.0f;
-  t[49].gain = 2.696f;  // Crash 1
+  t[49].gain = 1.2698f;  // Crash 1
   t[51].percussion.noise_air_hz = 2560.0f;
-  t[51].gain = 0.765f;  // Ride 1
+  t[51].gain = 0.1802f;  // Ride 1
   t[52].percussion.noise_air_hz = 1562.0f;
   t[52].gain = 0.663f;  // China
   t[55].percussion.noise_air_hz = 800.0f;
   t[55].gain = 1.090f;  // Splash
   t[57].percussion.noise_air_hz = 1000.0f;
-  t[57].gain = 2.421f;  // Crash 2
+  t[57].gain = 1.3107f;  // Crash 2
 
   // --- PhISEM shakers + scrapers ---
-  t[54] = make_shaker(32.0f, 120.0f, 2500.0f, 2.0f, 0.5f);   // Tambourine
-  t[58] = make_shaker(24.0f, 400.0f, 2500.0f, 3.0f, 0.45f);  // Vibraslap
-  t[69] = make_shaker(24.0f, 90.0f, 4000.0f, 1.0f, 0.5f);    // Cabasa
-  t[70] = make_shaker(20.0f, 90.0f, 3200.0f, 1.5f, 0.5f);    // Maracas
-  t[82] = make_shaker(28.0f, 110.0f, 6000.0f, 1.0f, 0.5f);   // Shaker
+  t[54] = make_shaker(32.0f, 120.0f, 2500.0f, 2.0f, 0.2267f);  // Tambourine
+  t[58] = make_shaker(24.0f, 400.0f, 2500.0f, 3.0f, 0.2912f);  // Vibraslap
+  t[69] = make_shaker(24.0f, 90.0f, 4000.0f, 1.0f, 0.3232f);   // Cabasa
+  t[70] = make_shaker(20.0f, 90.0f, 3200.0f, 1.5f, 0.2173f);   // Maracas
+  t[82] = make_shaker(28.0f, 110.0f, 6000.0f, 1.0f, 0.5f);     // Shaker
   // Guiro (mute group 5): ratchet ridge train.
-  t[73] = make_scrape(8.0f, 120.0f, 150.0f, 2500.0f, 3.0f, 0.0f, 0.5f);  // Short Guiro
-  t[74] = make_scrape(8.0f, 500.0f, 120.0f, 2500.0f, 3.0f, 0.0f, 0.5f);  // Long Guiro
+  t[73] = make_scrape(8.0f, 120.0f, 150.0f, 2500.0f, 3.0f, 0.0f, 0.2065f);  // Short Guiro
+  t[74] = make_scrape(8.0f, 500.0f, 120.0f, 2500.0f, 3.0f, 0.0f, 0.1437f);  // Long Guiro
   t[73].percussion.exclusive_class = 5;
   t[74].percussion.exclusive_class = 5;
   // Cuica (mute group 2): friction drum with a resonance pitch glide.
-  t[78] = make_scrape(6.0f, 120.0f, 40.0f, 400.0f, 3.0f, -0.3f, 0.55f);  // Mute Cuica (down)
-  t[79] = make_scrape(6.0f, 250.0f, 40.0f, 500.0f, 3.0f, 0.5f, 0.55f);   // Open Cuica (up)
+  t[78] = make_scrape(6.0f, 120.0f, 40.0f, 400.0f, 3.0f, -0.3f, 1.7655f);  // Mute Cuica (down)
+  t[79] = make_scrape(6.0f, 250.0f, 40.0f, 500.0f, 3.0f, 0.5f, 0.55f);     // Open Cuica (up)
   t[78].percussion.exclusive_class = 2;
   t[79].percussion.exclusive_class = 2;
 
