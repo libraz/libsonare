@@ -268,7 +268,20 @@ SONARE_TUNABLE(kBassDarkPerOct, 0.06f);
 /// on the dispersion allpass): real unison strings never share an exact B, so
 /// each partial's unison beat runs at its own rate. Identical coefficients
 /// make every partial null in lockstep — an audibly artificial hollow dip.
-SONARE_TUNABLE(kUnisonStiffJitter, 0.05f);
+///
+/// The size of the spread is bounded from above by roughness, and the bound
+/// bites long before the ear notices the lockstep. A partial's frequency
+/// carries the stiffness as k^2, so a spread that is inaudible at the
+/// fundamental separates a high partial's three copies by tens of hertz —
+/// which is the rate the ear hears as roughness rather than as pitch. Measured
+/// per critical band on a sustained C4 against three concert grands, every
+/// band holding several partials above 2.5 kHz fluctuated 14 to 17 dB more
+/// than the instrument's, in one case eighteen times what the three of them
+/// disagree by, while nothing below h10 was out at all. Two percent lands
+/// those bands within 2 dB; three percent is worse than two, so this is a real
+/// optimum and not a ceiling. Real unison strings are the same gauge cut to
+/// the same length and do not differ by five percent in anything.
+SONARE_TUNABLE(kUnisonStiffJitter, 0.02f);
 /// Under the soft pedal the action rides a softer, less-grooved felt patch that
 /// compresses far less under a hard blow, so the velocity dynamics is scaled
 /// down there (this also preserves the una-corda high-frequency softening).
@@ -286,7 +299,21 @@ SONARE_TUNABLE(kUnisonStrikeUneven, 0.15f);
 /// with equal radiation the slow mode is silent, and compensating with deep
 /// detune buys the second stage at the cost of a chorus-like beating
 /// fundamental no tuned piano has.
-SONARE_TUNABLE(kUnisonRadSpread, 1.2f);
+///
+/// It had been past that warning rather than short of it, which is worth
+/// stating because the paragraph above already described what was happening.
+/// Above one the antisymmetric mode radiates louder than the symmetric one, so
+/// the two components arrive near equal and the beat between them reaches full
+/// depth. Measured over a sustained C5 against three concert grands, whose
+/// fundamentals wobble 5.2 to 11.6 dB, this voice wobbled 21.1.
+///
+/// The setting is a trade and the losing side is named here rather than left
+/// to be rediscovered. Bringing it down costs the bass: C1, E1 and F#2 land
+/// 0.3 to 1.0 dB shallower than the least-beating of the three instruments,
+/// against ten decibels recovered at C5. Silencing the slow mode outright also
+/// costs C5 five decibels of its two-second aftersound, which is why this is
+/// half and not zero.
+SONARE_TUNABLE(kUnisonRadSpread, 0.5f);
 /// Felt impact noise: level relative to the hammer amplitude, exponential
 /// decay time, and hard stop of the burst. The noise passes the same
 /// velocity-driven felt-stiffness lowpass as the pulse, so soft strikes thud
@@ -307,7 +334,24 @@ SONARE_TUNABLE(kStrikeNoiseMaxMs, 30.0f);
 /// Read the two together or this constant will fit itself into noise.
 SONARE_TUNABLE(kStrikeNoiseCutoffScale, 0.487539f);
 /// Halvings of the noise cutoff per octave below C4 (see noise_cutoff).
-SONARE_TUNABLE(kNoiseCutoffBassOct, 0.5f);
+///
+/// Zero, because the instrument grades the other way and a bass hammer being
+/// bigger and softer says nothing about what the blow radiates. Measured on
+/// three concert grands, the BRIGHTEST attack on the keyboard is the bass:
+/// 810 Hz of spectral centroid over the first 50 ms at C2 against 581 at C4.
+/// Graded at a half this voice read 337 there — under half the instrument's,
+/// and 16 to 24 dB short at 500 Hz and 1 kHz, which is the band a blow is
+/// heard through. Ungraded it reaches 663 at C2 and lands on the instrument at
+/// C3, and it costs nothing above C4 by construction.
+///
+/// Nineteen knobs were swept for connectivity to that band before this one was
+/// touched; four of them (kStrikeNoiseDirect, kNoiseTrebleTaperOct,
+/// kInjTiltDbOct, kContactPeriodsAtC4) do not move it at all. The neighbouring
+/// cutoff scale reaches it too and is the wrong lever: it opens the noise
+/// across the whole keyboard and buys the brightness as hiss, which is the
+/// trap its own commentary describes. This one costs no tonality anywhere —
+/// the sustained 2-8 kHz figure reads the same on both sides of the change.
+SONARE_TUNABLE(kNoiseCutoffBassOct, 0.0f);
 /// Third noise pole, placed this factor above the main cutoff: the felt
 /// noise keeps its passband but falls off a cliff past it — the reference
 /// attack holds energy to a few kHz then drops ~37 dB into the next octave,
@@ -374,14 +418,36 @@ SONARE_TUNABLE(kNoiseTrebleTaperOct, 0.435016f);
 /// on a reference grand the low-register attack peaks in the 60-250 Hz
 /// thump, not in the string partials. Without that boom the exposed bass
 /// harmonic stack reads as a harpsichord register.
-SONARE_TUNABLE(kKnockGain, 2.6f);
+/// Impact-knock level.
+///
+/// Judged against the note's own body rather than against anything absolute:
+/// how far the low-band envelope peak stands over its own 30-100 ms. Three
+/// concert grands stand 1.0 to 3.8 dB over it from C1 to C5; this voice stood
+/// 4.3 to 6.1, and every note's envelope topped out in the first ten
+/// milliseconds where the instrument's low band tops out 20 to 170 ms in and
+/// then holds. A blow that stands too far over what follows it is heard as a
+/// hit rather than as weight, whatever its spectrum.
+///
+/// The level cannot come down on its own: at this band it takes C2's broadband
+/// rise from the instrument's 17 ms to 107. It comes down together with
+/// kKnockThudHz moving up, and the pair is what keeps the rise while the
+/// proportion corrects.
+SONARE_TUNABLE(kKnockGain, 1.6f);
 /// The knock radiates only the impact THUD: the hammer/action/board contact
 /// pumps a fixed low band regardless of the note (a treble strike lands as a
 /// quiet thock, not a burst at the string's own pitch). Radiating the raw
 /// pulse instead puts note-frequency energy straight into the board and
 /// sympathetic modes, whose stretch-detuned ring then beats against the
 /// string fundamental — an audible onset notch in the treble.
-SONARE_TUNABLE(kKnockThudHz, 350.0f);
+///
+/// The corner is where the thud stops, not where it sits, and at a third of a
+/// kilohertz it stopped below the band a blow is heard through. Measured over
+/// the first 50 ms against three concert grands, C2 was 16 dB short at 500 Hz
+/// and 24 at 1 kHz while carrying a large excess below both — a bass attack
+/// that is felt and not heard, which is the same shape a missing mid-band
+/// always takes. Here C2's 500 Hz hole closes to within 2 dB of the
+/// instrument's own reading.
+SONARE_TUNABLE(kKnockThudHz, 1400.0f);
 /// Halvings of the thud frequency per octave below C4 (see thud_hz).
 ///
 /// Zero, and the grading is gone rather than reduced, because what it graded
@@ -458,34 +524,40 @@ SONARE_TUNABLE(kYieldTrebleOct, 2.0f);
 /// down there. With the pulse reaching the register it drives, half the knock
 /// comes out and the note keeps its weight.
 SONARE_TUNABLE(kKnockBassBoostOct, 0.3f);
-/// ...and does NOT shrink above C4, though it reads as if it should: the treble
-/// hammer is a few grams, so its own thud must be small, and measured against
-/// the tone the reference's treble attack does sit 23-26 dB under broadband
-/// where a C4 sits 16 under. That comparison is the trap. What is radiating
-/// down there is not the hammer, it is the instrument -- the same body, struck
-/// through the bridge, at a level the string's pitch has little say in -- so
-/// the ratio moves because the tone above it changes and not because the body
-/// does.
+/// ...and DOES shrink above C4, but by a third of what a ratio reading asks
+/// for, and for a reason the ratio reading gets wrong.
 ///
-/// The register profile that claim rests on is the SUSTAIN, not the attack.
-/// Measured on the reference over 0.4-1.4 s, where the note's own fundamental
-/// has left the band, the 60-250 Hz level runs -39.6 dB at C4, -37.8 at C5,
-/// -38.7 at C6, -37.7 at C7: flat to two decibels across three octaves, which
-/// is what a fixed mass struck by a fixed blow gives. The first fifty
-/// milliseconds are NOT flat -- the same measurement reads -9.6, -19.2, -25.0
-/// and -23.1 there -- because the attack window still holds the strike
-/// transient, whose spectrum the contact time and the felt do shape with pitch.
-/// An earlier revision of this comment quoted an attack profile flat to five
-/// decibels; no window reproduces that, and the sustain is where the constant
-/// the argument needs actually lives.
+/// The trap first, because it is still there. Measured against the tone, the
+/// reference's treble attack sits 23-26 dB under broadband where a C4 sits 16
+/// under, and reading that as a taper is wrong: what radiates down there is
+/// not the hammer, it is the instrument -- the same body, struck through the
+/// bridge, at a level the string's pitch has little say in -- so the ratio
+/// moves because the tone above it changes and not because the body does.
 ///
-/// Zero survives the correction anyway. Graded at 2.0 the model fell 31 dB
-/// across that span and the top two octaves arrived with no body at all; held
-/// flat it is what the whole-keyboard fit settles on with every other body knob
-/// free to disagree. The knob stays because a real taper is not zero -- it is
-/// just far smaller than a fitted-on-ratios reading makes it look, and what
-/// remains of the gap is the board's, not the hammer's.
-SONARE_TUNABLE(kKnockTrebleTaperOct, 0.0f);
+/// What the ratio reading missed is that there are two windows and they do not
+/// agree. Measured on the reference over 0.4-1.4 s, where the note's own
+/// fundamental has left the band, the 60-250 Hz level runs -39.6 dB at C4,
+/// -37.8 at C5, -38.7 at C6, -37.7 at C7: flat to two decibels across three
+/// octaves, which is what a fixed mass struck by a fixed blow gives, and which
+/// is why this knob was held at zero. The first fifty milliseconds are NOT
+/// flat. The same measurement reads -34.2, -44.7, -47.3 and -49.2 there --
+/// fifteen decibels of fall across the same three octaves, agreed on by all
+/// three instruments to within eight -- because the attack window still holds
+/// the strike transient, whose spectrum the contact time and the felt do shape
+/// with pitch. The sustain argument is sound and applies to the sustain; this
+/// knob acts on the attack.
+///
+/// Held flat, every treble note began with a low thump the instrument does not
+/// have: 19 dB over at C6 in that band, and 24 dB over relative to the note
+/// itself, which is what masks a note into sounding cloudy. Graded here all six
+/// notes from C2 to C7 land within 2 dB.
+///
+/// Two is still too steep and the earlier reading of it stands: at 2.0 the
+/// model fell 31 dB across that span and the top two octaves arrived with no
+/// body at all. Fifteen decibels over three octaves is five per octave, and
+/// this is that slope. What the earlier round tested was zero and two, with
+/// nothing between them; the value the measurement points at was never swept.
+SONARE_TUNABLE(kKnockTrebleTaperOct, 1.4f);
 /// How much of the knock is taken from the blow itself rather than from the
 /// wave injected into the string. 0 keeps the injected copy, 1 takes the blow.
 ///

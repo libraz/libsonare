@@ -10,17 +10,39 @@ namespace sonare::midi::synth::detail {
 /// these are the knobs the voicematch fitter sweeps against a reference
 /// rendering; every other family's values stay inline until one needs fitting.
 SONARE_TUNABLE(kPianoBrightness, 0.81459f);
-SONARE_TUNABLE(kPianoDetuneCents, 1.6f);
+/// Unison spread. Read together with kUnisonRadSpread in piano_voice.cpp: the
+/// two set how deeply the fundamental beats, and a deep beat on a treble note
+/// is the one thing a tuned piano never does. Measured over a sustained C5
+/// against three concert grands, whose fundamentals wobble 5.2 to 11.6 dB, the
+/// pair had this voice at 21.1.
+SONARE_TUNABLE(kPianoDetuneCents, 1.0f);
 SONARE_TUNABLE(kPianoDecayFastS, 1.35f);
 /// Aftersound t60 at A4 and how it stretches into the bass, overriding the
 /// PianoPatchParams defaults for this family only. The struct's own values
 /// describe a piano in general; these are what a concert grand measured
 /// against a captured reference wants, and the difference between the two is
 /// not something a default should be carrying for every caller.
+///
+/// The stretch is measured on the fundamental's own band rather than
+/// broadband: over 0.5-2.0 s the reference's E1 fundamental falls 1.0 dB per
+/// second and its three instruments disagree by 0.7, which is the tightest
+/// agreement anywhere in the corpus. This voice fell 2.4.
 SONARE_TUNABLE(kPianoDecaySlowS, 9.6f);
-SONARE_TUNABLE(kPianoDecayStretch, 0.448f);
+SONARE_TUNABLE(kPianoDecayStretch, 0.6f);
 SONARE_TUNABLE(kPianoSoundboard, 0.35f);
-SONARE_TUNABLE(kPianoHammerContactMs, 1.1f);
+/// Felt contact time at A4 and mezzo-forte. It buys two things and costs two,
+/// and no value inside the literature's 1-4 ms band lands all four, so this is
+/// the point where the four cross rather than an optimum for any of them.
+///
+/// Longer takes the h6-h12 partials back inside what a felt hammer can produce
+/// at C4 -- they had been 6 dB harder than the instrument's, which is the band
+/// a plectrum lives in -- and puts the tenor's sustained fundamental back
+/// toward the reference. Shorter keeps the 2-8 kHz sustain tonal and keeps the
+/// bass unison beat from shallowing. Measured across the value: C4's hardness
+/// needs 1.35 or more, the mid and treble tonality needs 1.35 or less, and the
+/// tenor's fundamental share does not arrive by 1.8 and wants a mechanism this
+/// knob is not.
+SONARE_TUNABLE(kPianoHammerContactMs, 1.35f);
 SONARE_TUNABLE(kPianoHammerDynamics, 0.5f);
 /// Damper t60 at note-off, at the loud end of the velocity range; the voice
 /// lengthens it for a softer blow, because felt damps a quiet string weakly
