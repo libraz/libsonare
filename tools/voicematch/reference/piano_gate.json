@@ -15,6 +15,10 @@
       "median": 40.0,
       "abs_median": 40.0
     },
+    "aftersound": {
+      "median": 4.088,
+      "abs_median": 4.281
+    },
     "stereo": {
       "median": 0.406,
       "abs_median": 0.496

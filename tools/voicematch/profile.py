@@ -1243,6 +1243,16 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
             # a model whose envelope peaks on the strike and falls from there
             # reads as a thump rather than as a note that sinks in.
             "attack": d("attack_ms"),
+            # The SECOND decay rate. A piano string loses energy fast while the
+            # strings of its unison move together and far more slowly once they
+            # have drifted apart and are trading it through the bridge rather
+            # than radiating it. That second rate is what a pedalled note is
+            # still doing seconds later -- it is the afterglow -- and `decay`
+            # above cannot see it: one straight line through both regimes lands
+            # between them, so a voice with no aftersound at all can hold that
+            # line. Measured against three concert grands, this voice sat inside
+            # the decay bound while its late rate at C5 was three times theirs.
+            "aftersound": d("decay_late_db_s"),
             # The two radiation paths of a real board arrive decorrelated. A
             # model that folds one signal into both legs scores exactly 0.0
             # here and is inaudibly mono however wide the reverb around it is,
@@ -1315,6 +1325,7 @@ DELTA_LABELS = {"stretch": "tuning vs the reference (cents)",
                 "tnr": "tone-to-noise, + = model is cleaner (dB)",
                 "vel_range": "softest-to-hardest level range (dB)",
                 "stereo": "board width, + = model radiates wider (0 = mono)",
+                "aftersound": "aftersound, the decay AFTER the knee (dB/s)",
                 "band_tilt": "band tilt, + = model is brighter (dB)",
                 "band_shape": "band profile error, magnitude only (dB)",
                 "band_decay": "per-octave decay rate (dB/s)",
@@ -1431,11 +1442,11 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
     # guess: the reference corpus holds three instruments of the same kind, and
     # the median disagreement BETWEEN them is the tightest bound any model can
     # be held to without failing on which one it was compared against. On the
-    # grands that is 0.15-0.27 of width and 12.5-40 ms of attack, so the looser
-    # end of each is what a bound may not go under.
+    # grands that is 0.15-0.27 of width, 12.5-40 ms of attack and 1.23-1.81 dB/s
+    # of aftersound, so the looser end of each is what a bound may not go under.
     floors = {"stretch": 1.0, "decay": 0.5, "damper": 5.0, "balance": 0.5,
               "centroid_pct": 1.0, "tnr": 1.0, "vel_range": 1.0,
-              "stereo": 0.27, "attack": 40.0}
+              "stereo": 0.27, "attack": 40.0, "aftersound": 1.81}
     bounds = {}
     for key, row in summary.items():
         floor = floors.get(key, 1.0)
