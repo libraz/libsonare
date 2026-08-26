@@ -1096,6 +1096,10 @@ TEST_CASE("the class-AB crossover's small-signal gain never exceeds class A",
   // real render carries (confirmed below 1% end to end); the actual defect
   // was a rise of several hundred percent, so this tolerance cannot mask it.
   constexpr double kTolerance = 1.02;
+  // The step-to-step slack is that same 2% measured against class A rather than
+  // against the previous point: past crossover 0.8 the render sits on a residue
+  // floor 21 dB down, where a relative bound reads libm noise, not the model.
+  const double kStepSlack = class_a_gain * (kTolerance - 1.0);
   double previous_gain = class_a_gain;
   for (int step = 0; step <= 10; ++step) {
     AmpSimConfig cfg = base;
@@ -1104,7 +1108,7 @@ TEST_CASE("the class-AB crossover's small-signal gain never exceeds class A",
     const double gain = rms_of(process_mono(amp, quiet_input)) / kQuietLevel;
     CAPTURE(cfg.crossover, gain, class_a_gain);
     CHECK(gain <= class_a_gain * kTolerance);
-    CHECK(gain <= previous_gain * kTolerance);
+    CHECK(gain <= previous_gain + kStepSlack);
     previous_gain = gain;
   }
 }
