@@ -16,6 +16,14 @@ note, which band, and whether the energy sits on the played string's partials or
 away from them -- and then asks both questions of each bucket by sweeping every
 coordinate the voice declares.
 
+The loss's own terms are buckets here too, `term.`-prefixed. The level buckets
+are a decomposition of one question and there are several the arrangement of
+band levels cannot state at all -- how many things are ringing, how the strike
+separates from the sustain -- so without a row of their own those have no reach
+column and get judged by whether the fit improved them, which is the reading
+that inverts. The movement threshold is in the bucket's own units, decibels for
+a level and counted resonances for a density.
+
 A bucket no coordinate can move is the finding. It says the model has no term
 for whatever produces that part of the sound, and no amount of calibration will
 produce one. A bucket that many coordinates move but none improves is the
@@ -101,8 +109,40 @@ def bucket_error(loss, overrides, notes, velocity):
     return {k: float(np.mean(v)) for k, v in acc.items() if v}
 
 
+def term_error(loss, overrides, notes):
+    """Each term of the loss as a bucket in its own right.
+
+    The level buckets above decompose ONE question -- where the energy sits --
+    and several terms ask something no arrangement of band levels can represent.
+    Mode count is the sharp case: a plate with half the reference's resonances
+    can hold every band level exactly, so the buckets read clean while the piece
+    sounds like a tuned bar. Without a row of its own, a deficit like that has no
+    reach column at all, and "no coordinate improves it" gets read off the fit
+    instead -- which after a write-back is true of every knob in the voice.
+
+    A term is already a distance from the reference, so it enters as its own
+    value: zero is the target and the sign is fixed.
+    """
+    return {f"term.{k}": v
+            for k, v in loss.score(overrides, notes=notes).parts.items()}
+
+
+def measure_all(loss, overrides, notes, velocity):
+    """Level buckets and loss terms together, which is what a sweep asks about.
+
+    The level buckets are dropped for a kit. Their `on`/`off` split is a notch
+    around `note_hz(n)`, and on channel 10 the note number selects an instrument
+    rather than a pitch -- so the notch lands on a frequency that is not in the
+    signal, and every row it produces is a reading of an arbitrary comb. The
+    terms already carry a band decomposition that was written for a struck piece.
+    """
+    out = {} if not loss.pitched else bucket_error(loss, overrides, notes, velocity)
+    out.update(term_error(loss, overrides, notes))
+    return out
+
+
 def reach(loss, base, moves, notes, velocity, steps=(0.8, 1.25),
-          zero_ladder=(0.15, 0.4), workers=7, log=print):
+          zero_ladder=(0.15, 0.4), workers=7, log=print, measure=measure_all):
     """Per bucket: how far the best coordinate moves it, and how far toward zero.
 
     Returns (errors, movement, best, mover) -- the error at the starting point,
@@ -110,7 +150,7 @@ def reach(loss, base, moves, notes, velocity, steps=(0.8, 1.25),
     absolute error any single coordinate reached, and which coordinate that was.
     """
     start = {**base, **moves}
-    err0 = bucket_error(loss, write_overrides(start, base), notes, velocity)
+    err0 = measure(loss, write_overrides(start, base), notes, velocity)
     names = sorted(err0)
     log(f"{len(names)} buckets, {len(base)} coordinates")
 
@@ -120,7 +160,7 @@ def reach(loss, base, moves, notes, velocity, steps=(0.8, 1.25),
         out = []
         for c in cands:
             try:
-                out.append(bucket_error(
+                out.append(measure(
                     loss, write_overrides({**start, coord: c}, base), notes, velocity))
             except Exception:
                 continue
