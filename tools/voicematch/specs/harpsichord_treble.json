@@ -1,0 +1,51 @@
+{
+  "_": "What sits between this voice's treble partials, from both ends at once: the excitation that decides how deep the plucking-point comb cuts, and the board that decides what fills the gaps. They are fitted together because either one alone will be spent covering the other's deficit — a board fitted over an ideal comb fills the nulls with noise and buries the partials measured against it, which is what happened when the board was fitted on its own.",
+  "_oracle": "Run against the captured grid (`--corpus .cache/voicematch/capture/harpsichord --corpus-timbre gm007`), the dry slot, rather than the fluidsynth oracle.",
+  "_measured": "An ideal end (1.0) at a 1/4 pluck puts C4's fourth partial 36.7 dB under its fundamental; the three captured references put theirs at 13.6, 22.7 and 13.6, and none of them has a comb at all. Sweeping the reflection moves h4 and h8 and leaves h2, h3, h5, h6, the centroid and the tone-to-noise where they were, so it is the one knob here that is not a trade.",
+  "_ranges": "`board_diffuse_db` stops short of its -120 clamp, which is the off sentinel rather than a quiet board. The follow time starts at 15 ms because the lowest note's period is 27: below that the field tracks the waveform instead of its energy and amplitude-modulates the tone, which the grid loss does not measure and the ear does.",
+  "_pluck": "The plucking point and the plectrum's edge belong in the same run as the reflection, not before it. They were last set against a voice whose comb was ideal, where the only way to reach the reference's partial stack was to put the null on a partial and let it vanish; with the null no longer bottomless the point that best matches is a different one. All three references fall away at BOTH the fourth and the fifth partial, which is a point between 1/4 and 1/5 rather than exactly on either.",
+  "knobs": [
+    {
+      "tunable": "harpsichord.harpsichord.end_reflection",
+      "min": 0.5,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.pluck_8a",
+      "min": 0.1,
+      "max": 0.35,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.plectrum_edge",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.board_diffuse_db",
+      "min": -90.0,
+      "max": -20.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord_voice.kDiffuseSchroederHz",
+      "min": 200.0,
+      "max": 8000.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kDiffuseTopHz",
+      "min": 1500.0,
+      "max": 16000.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kDiffuseFollowMs",
+      "min": 15.0,
+      "max": 200.0,
+      "scale": "log"
+    }
+  ]
+}

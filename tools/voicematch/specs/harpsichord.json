@@ -1,0 +1,180 @@
+{
+  "_": "The harpsichord's own mechanism, without the sampler-generic envelope, filter and gain knobs `--spec auto` adds. Two reasons to have it: the reach check pushes every knob in a spec to the far end of its range at once, and an auto spec's `amp_env.attack_ms` (1 ms, bounded to 20 s) and `cutoff_hz` (20 kHz, bounded down to 10 Hz) silence the render there, which aborts a `--diagnose` run before it probes anything. And a generic envelope is not what this voice is wrong about: what it answers with is a plectrum, three string choirs and the segment behind the bridge.",
+  "_ranges": "Every patch field's range is its `clamp_synth_patch` bound, so a knob pinned to one is a statement about the model rather than about the range. The engine constants have no clamp, so theirs are guides: an eighth to eight times the compiled-in default, narrowed where the quantity is a fraction.",
+  "_excluded": "`harpsichord_voice.kOutputTrim` is fittable and deliberately absent. It is an output level, not a property of the instrument, and every term here is normalised by the note's own level — so it buys a better-looking spectrum by moving the whole voice, which the level-drift fence then has to pay for.",
+  "knobs": [
+    {
+      "_": "Where each choir's jack plucks, as a fraction of the speaking length. With `plectrum_edge` and `damping_ref_hz` this is one lever on the partial stack above the fundamental, not three.",
+      "tunable": "harpsichord.harpsichord.pluck_8a",
+      "min": 0.0,
+      "max": 0.5,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.pluck_8b",
+      "min": 0.0,
+      "max": 0.5,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.pluck_4",
+      "min": 0.0,
+      "max": 0.5,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.plectrum_edge",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.decay_s",
+      "min": 0.05,
+      "max": 60.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.decay_stretch",
+      "min": 0.0,
+      "max": 2.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.hf_damping",
+      "min": 0.05,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.damping_ref_hz",
+      "min": 100.0,
+      "max": 20000.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.unison_detune_cents",
+      "min": -50.0,
+      "max": 50.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.octave_detune_cents",
+      "min": -50.0,
+      "max": 50.0,
+      "scale": "linear"
+    },
+    {
+      "_": "The undamped string behind the bridge, which is where this instrument's inharmonic content comes from.",
+      "tunable": "harpsichord.harpsichord.rear_segment_mm",
+      "min": 0.0,
+      "max": 400.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.rear_coupling",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.scale_c5_mm",
+      "min": 80.0,
+      "max": 800.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.bass_foreshortening",
+      "min": 0.0,
+      "max": 0.9,
+      "scale": "linear"
+    },
+    {
+      "_": "Mechanism noise: the plectrum scraping off on release, and the jack falling back with the damper behind it.",
+      "tunable": "harpsichord.harpsichord.pluck_noise",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.jack_noise",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.damper_s",
+      "min": 0.005,
+      "max": 10.0,
+      "scale": "log"
+    },
+    {
+      "_": "The dynamic the key commands. `sustain` holds velocity constant, so both read inert there and mean something only under `--pattern velocity`.",
+      "tunable": "harpsichord.harpsichord.velocity_range_db",
+      "min": 0.0,
+      "max": 24.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord.harpsichord.velocity_droop_db",
+      "min": 0.0,
+      "max": 12.0,
+      "scale": "linear"
+    },
+    {
+      "_": "The plectrum's release pulse: how abruptly it lets go, and the contact patch a soft and a hard plectrum release through.",
+      "tunable": "harpsichord_voice.kPlectrumRise",
+      "min": 0.5,
+      "max": 8.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kContactWide",
+      "min": 0.1,
+      "max": 2.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kContactNarrow",
+      "min": 0.005,
+      "max": 0.4,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kChiffMs",
+      "min": 0.5,
+      "max": 120.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kChiffCutoffHz",
+      "min": 500.0,
+      "max": 18000.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kJackMs",
+      "min": 2.0,
+      "max": 200.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kJackCutoffHz",
+      "min": 200.0,
+      "max": 12000.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "harpsichord_voice.kDamperDelayMs",
+      "min": 0.0,
+      "max": 60.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "harpsichord_voice.kRearMaxRatio",
+      "min": 0.02,
+      "max": 0.5,
+      "scale": "log"
+    }
+  ]
+}

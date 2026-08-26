@@ -4,46 +4,33 @@
 /// @brief Harpsichord core for the NativeSynth voice: a jack-and-plectrum
 ///        mechanism driving a registration of real string choirs.
 ///
-/// A harpsichord is not a bright guitar. What separates it from every other
-/// plucked string is the mechanism between the key and the string, and three of
-/// its consequences are things a plucked-string core parameterised by tone knobs
-/// cannot produce:
+/// Three consequences of that mechanism are what a plucked-string core with tone
+/// knobs cannot produce:
 ///
-///   - THE KEY BARELY CONTROLS THE LOUDNESS. The plectrum lifts the string to
-///     the same place however fast the key falls, so the whole dynamic range of
-///     the instrument is a few dB — the literature measures 3 to 6, against a
-///     piano's 40 — and it is not even monotonic: past a peak key speed the
-///     plectrum slips off the string sooner and the note gets QUIETER. Here that
-///     is the plectrum's release law rather than a velocity knob turned down,
-///     and the engine opts out of the sampler velocity curve entirely.
-///   - THE TREBLE HAS TO KEEP RINGING. A loop closed through a lowpass picked
-///     for its tone attenuates a treble fundamental on every traversal, and at a
-///     thousand traversals a second the string is gone long before its nominal
-///     decay. The loss filter here is solved against decay targets at the
-///     fundamental and at a named frequency (solve_string_loop_filter), so the
-///     top octave sustains for the time it was asked to.
-///   - THE SOUND IS NOT CLEAN. Behind the bridge every string carries a short
-///     undamped segment whose modes have nothing to do with the note being
-///     played; the literature names that, not string stiffness, as where a
-///     harpsichord's inharmonic content comes from. A harpsichord's partials
-///     are harmonic to within a couple of cents, and it still does not sound
-///     like a synthesizer.
+///   - Key speed barely controls loudness — 3 to 6 dB across the instrument, and
+///     not even monotonic, since past a peak speed the plectrum slips off sooner
+///     and the note gets quieter. That is the plectrum's release law here, and
+///     the engine opts out of the sampler velocity curve entirely.
+///   - A loop closed through a tone-picked lowpass loses the treble long before
+///     its nominal decay, so the loss filter is solved against decay targets at
+///     the fundamental and at a named frequency (solve_string_loop_filter).
+///   - The inharmonic content is the short undamped segment behind the bridge,
+///     not string stiffness — the partials stay harmonic to a couple of cents.
 ///
-/// Registration is modelled as what it is: separate choirs of strings, each with
-/// its own jacks. Two 8' unisons and a 4' octave are three real delay lines at
-/// three periods, not one line with a mix knob.
+/// Registration is separate string choirs: two 8' unisons and a 4' octave are
+/// three delay lines at three periods, not one line with a mix knob.
 ///
-/// The delay buffer is NOT owned by the core: the host instrument allocates one
-/// slab per voice slot in prepare() (the only allocation site) and attach()es it
-/// before start(). RT contract: attach()/start()/render() are allocation-free.
-/// Determinism: every noise source is the counter-based (voice_index, note, age)
-/// stream, so identical event streams render bit-identically.
+/// The delay buffer is not owned here — the host attaches one slab per voice
+/// slot before start(). RT contract: attach()/start()/render() are
+/// allocation-free. Determinism: every noise source is the counter-based
+/// (voice_index, note, age) stream, so identical events render bit-identically.
 
 #include <cstddef>
 #include <cstdint>
 
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
+#include "rt/biquad_design.h"
 
 namespace sonare::midi::synth {
 
@@ -94,10 +81,28 @@ struct HarpsichordPatchParams {
   float pluck_8a = 0.14f;
   float pluck_8b = 0.22f;
   float pluck_4 = 0.11f;
-  /// The plectrum's edge, from a worn Delrin tongue (0, a wide rounded release)
-  /// to a fresh-cut quill (1, a narrow abrupt one). A harder plectrum releases
-  /// the string through a shorter contact and so excites more of the top.
+  /// The plectrum's edge, from a worn Delrin tongue (0, a slow rounded release)
+  /// to a fresh-cut quill (1, a fast abrupt one). It sets how long the tongue
+  /// takes to let the string go, which rounds the corners of the bridge-force
+  /// wave and so rolls off the top of the series. It does NOT set the series'
+  /// envelope — that is the pluck point's, and the two were one knob until the
+  /// reference was measured wanting both a -6 dB partial balance in the bass and
+  /// a -35 dB one at the top, which no single width reaches from either end.
   float plectrum_edge = 0.8f;
+  /// How much of the plucking-point image the bridge sends back, in [0,1]. An
+  /// ideally plucked string drives its bridge with a rectangle whose duty cycle
+  /// is the plucking point, and the depth of that rectangle's return stroke is
+  /// what the far end sends back: at 1 — a fixed end — a jack plucking at
+  /// exactly 1/n erases every nth partial outright, while a real bridge drives
+  /// the soundboard and cannot return quite everything, so the null fills in.
+  ///
+  /// The captured references DO have a comb, at their fourth or fifth partial;
+  /// what differs is where it falls, not that it is there. Spending this knob to
+  /// flatten one leaves an even harmonic series that reads as synthetic, and no
+  /// dimension of the note grid reports the difference — so a fit is free to do
+  /// exactly that. 1 is the harpsichord's setting; below it belongs to a voice
+  /// whose reference genuinely has no null.
+  float end_reflection = 1.0f;
 
   // --- What the key can do ------------------------------------------------
   /// The whole loudness range the key commands, in dB from the softest playable
@@ -150,6 +155,12 @@ struct HarpsichordPatchParams {
   float rear_segment_mm = 0.0f;
   /// How much of the bridge's motion crosses into that segment, in [0,1].
   float rear_coupling = 0.35f;
+  /// t60 of that segment, in seconds. It is NOT the speaking string's: the
+  /// bridge loads a short length heavily and most instruments weave listing
+  /// cloth through the rear lengths to stop them. Taking the speaking t60 left a
+  /// fixed-pitch ring 28 dB over the reference's late residue at F2 — the whole
+  /// of a 41 dB excess there. 0 takes the speaking string's.
+  float rear_decay_s = 0.0f;
   /// The speaking length of c'' in millimetres, and how far the bass departs
   /// from doubling that length every octave (0 = a Pythagorean scale, which no
   /// case is long enough for). Together they set the string length the rear
@@ -169,6 +180,35 @@ struct HarpsichordPatchParams {
   /// but a damper and not a mute — a captured reference stops a bass string at
   /// about -40 dB/s.
   float damper_s = 0.09f;
+
+  // --- Soundboard ---------------------------------------------------------
+  /// The lowest frequency the board radiates, in Hz, at 12 dB per octave below
+  /// it: a plate small against the wavelength goes stiffness-controlled AND
+  /// cancels between its two faces, and neither loss is the other's. A
+  /// harpsichord is heard through its partials at the bottom of its compass, and
+  /// radiating the bridge force flat instead leaves the lowest octave led by a
+  /// fundamental no real instrument produces — the register sweep puts the model
+  /// 23.7 dB over the baroque slot at 30 Hz where its two siblings sit at 1.7 and
+  /// 1.1. The general-MIDI slot shares the excess, so it cannot adjudicate this.
+  /// 0 radiates the whole compass flat.
+  float board_radiating_from_hz = 0.0f;
+  /// How much brighter the board radiates than it is driven, in dB per octave.
+  ///
+  /// A string hands its bridge a force whose partials fall as sin(n.pi.beta)/n;
+  /// what reaches a listener is that force through the board's radiation
+  /// efficiency, which rises with frequency until the plate's critical frequency
+  /// and levels off above it. Without the stage the model radiates the bridge
+  /// force itself, and the bare force is far darker than any captured reference:
+  /// at FF they hold partials 3-10 level with the fundamental where it puts them
+  /// 13 dB under. 0 is that bare force, and it renders as a voice with no board.
+  float board_tilt_db_oct = 0.0f;
+  /// The board's diffuse radiation, in dB below the strings' own. Above the
+  /// board's Schroeder frequency its modes are too dense to resolve one at a
+  /// time, so what radiates there is a broadband field following the strings'
+  /// energy rather than a bank of resonances — which is why it stops when they
+  /// do and leaves nothing behind the note. @ref body carries the separable
+  /// modes below that frequency. -120 removes it.
+  float board_diffuse_db = -120.0f;
   /// The top of the 4' choir carries no dampers on a real instrument, so those
   /// strings go on sounding after the key is released. The MIDI note above which
   /// the 4' choir is left undamped; 128 dampers the whole choir.
@@ -207,9 +247,21 @@ class HarpsichordVoiceCore {
     StringLoop loop;
     /// Output level (0 = the stop is not drawn and the loop is skipped).
     float level = 0.0f;
-    /// Where along the string this choir's jack plucks, in samples of the loop
-    /// period — the comb delay applied to its share of the excitation.
-    int pluck_delay = 0;
+    /// The loop's actual period in samples — the delay line plus the feedback
+    /// path and the loss filter's phase delay — and where along it this choir's
+    /// jack plucks. One period of bridge force is injected over exactly this
+    /// span, so it must be the period the loop will circulate it at rather than
+    /// the ideal one, or the wave meets itself a sample or two early.
+    float n_eff = 0.0f;
+    float duty = 0.0f;
+    /// How many whole samples of it are injected, and the mean of exactly those
+    /// samples. The rectangle is zero-mean as a continuous shape, but the samples
+    /// taken from it are not, and a string cannot hold a DC displacement — its
+    /// two ends are fixed. The loop can: a lowpass closed at unity DC gain is
+    /// LEAST damped there, so the leftover offset outlives every partial, answers
+    /// at the same frequency whatever is struck, and survives the damper.
+    int inject_len = 0;
+    float dc_trim = 0.0f;
     /// Whether the damper reaches this choir at note-off.
     bool damped = true;
   };
@@ -227,17 +279,31 @@ class HarpsichordVoiceCore {
   float rear_level_ = 0.0f;
   float rear_drive_ = 0.0f;
 
-  /// The plectrum's release pulse: a raised-cosine lobe whose width IS the
-  /// contact patch (a harder plectrum releases through a narrower one) and whose
-  /// height is the release displacement. It is a closed-form function of its
-  /// position, not a filtered burst, which is what lets each choir's jack comb
-  /// the same pulse at its own plucking point — and it is deterministic, because
-  /// a plectrum is not a noise source. That is why a harpsichord's attack is the
-  /// same every time and a noise-excited plucked string's is not.
+  /// The plectrum's release, injected as one period of the bridge-force wave an
+  /// ideally plucked string produces: a rectangle whose duty cycle is the
+  /// plucking point, which is the waveform whose partials are sin(n.pi.beta)/n.
+  /// One period of it loads the loop, so the loop then circulates exactly that
+  /// series — the comb and its 1/n envelope come out of the same shape instead
+  /// of an envelope being chosen separately from the comb.
+  ///
+  /// It is a closed-form function of position rather than a filtered burst, and
+  /// deterministic, because a plectrum is not a noise source. That is why a
+  /// harpsichord's attack is the same every time and a noise-excited plucked
+  /// string's is not.
   int pluck_pos_ = 0;
-  int pluck_len_ = 0;
   int pluck_span_ = 0;
   float pluck_amp_ = 0.0f;
+  /// The rectangle's corner radius in samples: how long the tongue takes to let
+  /// the string go. Absolute, not a share of the period — the release is the
+  /// plectrum's and the tension's, so the same release cuts the series at a
+  /// lower partial the shorter the string, which is the keyboard-wide darkening
+  /// the references show and a pitch-relative width cannot produce.
+  float edge_w_ = 1.0f;
+  /// How much of the plucking-point image comes back — 1 cuts an ideal comb.
+  float pluck_image_ = 1.0f;
+  /// Last sample's raw excitation, so the rear segment can be driven by the
+  /// bridge force's transient rather than by the force itself.
+  float exc_prev_ = 0.0f;
 
   /// Mechanism noise. Both are silent unless their patch amount is non-zero, and
   /// a silent one is skipped rather than multiplied by zero.
@@ -250,6 +316,42 @@ class HarpsichordVoiceCore {
   float jack_amount_ = 0.0f;
   int jack_pos_ = 0;
   int jack_len_ = 0;
+  /// The board's radiation efficiency, as a fractional-slope tilt: three
+  /// one-pole/one-zero sections spread geometrically across the plate's band, so
+  /// the cascade holds a slope of a few dB per octave that no single first-order
+  /// section can (one is 6 dB/oct or nothing). Skipped entirely at zero tilt.
+  struct TiltSection {
+    float g = 1.0f;
+    float zero = 0.0f;
+    float pole = 0.0f;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+  };
+  static constexpr int kTiltSections = 3;
+  TiltSection tilt_[kTiltSections]{};
+  bool tilt_on_ = false;
+
+  /// The board's low-frequency radiation limit: a fourth-order Butterworth, as
+  /// two staggered-Q sections. The order is what the references measure — 27 dB
+  /// between FF and its octave — and the flat passband is what a cascade of
+  /// identical one-poles cannot give: that knee spans two octaves, so reaching
+  /// the fundamental at all costs 7 dB of the very partials the instrument leads
+  /// with, and the note-29 band shares go from 7.50 to 9.20 while the picture
+  /// itself improves. Skipped entirely when the patch does not ask for one.
+  static constexpr int kRadiationStages = 2;
+  rt::BiquadState hp_[kRadiationStages]{};
+  bool hp_on_ = false;
+
+  /// The soundboard's diffuse field, tracking the strings. Silent at level 0,
+  /// and skipped rather than added at zero gain.
+  float diffuse_level_ = 0.0f;
+  float diffuse_env_ = 0.0f;
+  float diffuse_follow_ = 0.0f;
+  float diffuse_lp_ = 0.0f;
+  float diffuse_tilt_ = 1.0f;
+  float diffuse_top_ = 0.0f;
+  float diffuse_top_a_ = 1.0f;
+  uint64_t diffuse_age_ = 0;
   /// Samples from the jack's fall to the damper's arrival — the two mechanism
   /// events are not simultaneous and they do not sound alike.
   int damper_delay_ = 0;

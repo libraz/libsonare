@@ -1020,6 +1020,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_4, 0.11f), 0.0f, 0.5f);
   p.harpsichord.plectrum_edge =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.plectrum_edge, 0.8f), 0.0f, 1.0f);
+  p.harpsichord.end_reflection =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.end_reflection, 1.0f), 0.0f, 1.0f);
   // The instrument's own range is 3 to 6 dB; the ceiling leaves room to voice a
   // stop that is deliberately more responsive without letting a patch turn the
   // harpsichord into a piano.
@@ -1043,6 +1045,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.rear_segment_mm, 0.0f), 0.0f, 400.0f);
   p.harpsichord.rear_coupling =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.rear_coupling, 0.35f), 0.0f, 1.0f);
+  // The floor is the inherit sentinel, not a decay; the ceiling is the longest
+  // the speaking strings themselves are allowed.
+  p.harpsichord.rear_decay_s =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.rear_decay_s, 0.0f), 0.0f, 60.0f);
   p.harpsichord.scale_c5_mm =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.scale_c5_mm, 280.0f), 80.0f, 800.0f);
   p.harpsichord.bass_foreshortening = std::clamp(
@@ -1053,6 +1059,18 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.jack_noise, 0.0f), 0.0f, 1.0f);
   p.harpsichord.damper_s =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.damper_s, 0.09f), 0.005f, 10.0f);
+  // The floor is the off sentinel; the ceiling is the middle of the compass,
+  // past which the board would not be radiating the instrument at all.
+  p.harpsichord.board_radiating_from_hz = std::clamp(
+      patch_clamp_detail::sanitize(p.harpsichord.board_radiating_from_hz, 0.0f), 0.0f, 500.0f);
+  // The ceiling is one first-order section's whole slope: past it the board
+  // would be differentiating its own drive rather than radiating it.
+  p.harpsichord.board_tilt_db_oct =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.board_tilt_db_oct, 0.0f), 0.0f, 6.0f);
+  // The floor is the off sentinel and the ceiling is the strings' own level: a
+  // board radiating more than what drives it is not a board.
+  p.harpsichord.board_diffuse_db = std::clamp(
+      patch_clamp_detail::sanitize(p.harpsichord.board_diffuse_db, -120.0f), -120.0f, 0.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 4) p.body = BodyType::kNone;
   p.body_mix = std::clamp(patch_clamp_detail::sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(patch_clamp_detail::sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);

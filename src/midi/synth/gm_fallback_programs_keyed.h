@@ -405,19 +405,17 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   o.koto.gain = 0.85f;
 
   // Harpsichord (GM 6): the jack-and-plectrum engine, voiced as a single 8'
-  // choir — one string per key at written pitch, which is the registration the
-  // instrument always has available.
-  //
-  // The decay is not a taste setting. It is regressed on the SUSTAINED slope of
-  // the captured GM reference across eleven notes — the sustained one, because
-  // the first second of any plucked note is the upper partials dying and says
-  // more about the loop filter than about the string. Two numbers cover five
-  // octaves to within about half a dB per second, except at the very top, where
-  // the reference's decay stops steepening and this law keeps going.
-  //
-  // The damper is the one thing neither reference could settle: one cuts its
-  // samples dead at note-off, the other carries a room, so this is a plausible
-  // felt damper rather than a measured one.
+  // choir — one string per key at written pitch. Decay and stretch are regressed
+  // on the captured reference's sustained slope over eleven notes (the first
+  // second is the loop filter, not the string); the damper is plausible rather
+  // than measured, since neither reference could settle it.
+  // damping_ref_hz / pluck_8a / plectrum_edge move as one lever: both move the
+  // partial stack and the centroid, which a fresh quill at the nut left 21 dB and
+  // 92 % over both references. Set together they land inside the reference spread.
+  // The comb these cut is real and stays: all three references have one, at the
+  // fourth or the fifth partial rather than nowhere. Flattening it to reach the
+  // reference's fourth partial gives the voice an even harmonic series that reads
+  // as synthetic, and the grid loss does not see the difference.
   o.harpsichord.mode = SynthEngineMode::kHarpsichord;
   o.harpsichord.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 250.0f);
   o.harpsichord.cutoff_hz = 20000.0f;
@@ -425,14 +423,42 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   o.harpsichord.harpsichord.decay_s = 11.6f;
   o.harpsichord.harpsichord.decay_stretch = 0.40f;
   o.harpsichord.harpsichord.hf_damping = 0.45f;
-  o.harpsichord.harpsichord.damping_ref_hz = 2000.0f;
-  o.harpsichord.harpsichord.pluck_8a = 0.14f;
-  o.harpsichord.harpsichord.plectrum_edge = 0.8f;  // quill, not a worn tongue
+  o.harpsichord.harpsichord.damping_ref_hz = 1600.0f;
+  o.harpsichord.harpsichord.pluck_8a = 0.25f;
+  o.harpsichord.harpsichord.plectrum_edge = 0.3f;  // a Delrin tongue, part worn
   o.harpsichord.harpsichord.velocity_range_db = 5.0f;
   o.harpsichord.harpsichord.rear_segment_mm = 90.0f;  // the undamped halo
   o.harpsichord.harpsichord.rear_coupling = 0.3f;
+  // Inheriting the speaking string's t60 rang this fixed-pitch segment for 22 s
+  // at F2, putting late 800-6000 Hz residue 41 dB over the reference; shortening
+  // it recovers 28.6 of that and drops the recurrence term from 2.75 to 1.86.
+  // The tail is flat from 0.4 s to 2.5 s, so the value is the physics: a short
+  // length loaded by the bridge does not ring for a second.
+  o.harpsichord.harpsichord.rear_decay_s = 0.6f;
   o.harpsichord.harpsichord.pluck_noise = 0.15f;  // the plectrum leaving the string
   o.harpsichord.harpsichord.damper_s = 0.12f;
+  // The board's diffuse field, set on the phrase set rather than the note grid:
+  // five of its seven takes land inside the references' own span here, against
+  // none before. The top octave still wants it 13 dB louder than a single note
+  // does, so this is not yet a register-independent level.
+  // Where the board gives out. All three real-instrument slots put FF's
+  // fundamental 27 to 30 dB under its own strongest partial and its octave-and-a
+  // -fifth's on top, so the wall is between them; 75 Hz takes the bottom three
+  // notes' picture from 13.13 to 12.80 and their off-partial energy from 2.67 to
+  // 1.41, and leaves the middle and top of the compass where they were. The
+  // general-MIDI slot has no such wall and cannot adjudicate this.
+  o.harpsichord.harpsichord.board_radiating_from_hz = 75.0f;
+  // The board's radiation, without which the voice puts the bare bridge force in
+  // the room: at FF the references hold partials 3-10 level with the fundamental
+  // and the bridge force alone puts them 13 dB under it. Against the baroque
+  // slot this lands the centroid at 0.7 of the references' own spread, from 2.5
+  // with no board; both 3.5 and 6 dB/oct sit outside it, one either way.
+  o.harpsichord.harpsichord.board_tilt_db_oct = 5.0f;
+  // What the board radiates that is not a partial. It moves the tone-to-noise
+  // and nothing else — the partial stack and the centroid do not shift over the
+  // whole 90 dB of its range — and this is where that lands at the references'
+  // own spread, from 7.1 times it with the field off.
+  o.harpsichord.harpsichord.board_diffuse_db = -34.0f;
   o.harpsichord.body = BodyType::kGuitar;
   o.harpsichord.body_mix = 0.3f;
   o.harpsichord.gain = 0.30f;

@@ -332,6 +332,7 @@ void apply_harpsichord(NativeSynthPatch& p, const Fields& f) {
   F(harpsichord.pluck_8b);
   F(harpsichord.pluck_4);
   F(harpsichord.plectrum_edge);
+  F(harpsichord.end_reflection);
   F(harpsichord.velocity_range_db);
   F(harpsichord.velocity_droop_db);
   F(harpsichord.decay_s);
@@ -342,11 +343,15 @@ void apply_harpsichord(NativeSynthPatch& p, const Fields& f) {
   F(harpsichord.octave_detune_cents);
   F(harpsichord.rear_segment_mm);
   F(harpsichord.rear_coupling);
+  F(harpsichord.rear_decay_s);
   F(harpsichord.scale_c5_mm);
   F(harpsichord.bass_foreshortening);
   F(harpsichord.pluck_noise);
   F(harpsichord.jack_noise);
   F(harpsichord.damper_s);
+  F(harpsichord.board_radiating_from_hz);
+  F(harpsichord.board_tilt_db_oct);
+  F(harpsichord.board_diffuse_db);
 }
 
 void apply_free_reed(NativeSynthPatch& p, const Fields& f) {

@@ -21,10 +21,17 @@ using sonare::constants::kTwoPi;
 /// spline is that instrument's, and the span is what the literature measures.
 SONARE_TUNABLE(kPlectrumRise, 2.0f);
 
-/// The plectrum's contact patch, as a fraction of the loop period, from a worn
-/// tongue (wide, dull) to a fresh quill (narrow, bright).
-SONARE_TUNABLE(kContactWide, 0.55f);
-SONARE_TUNABLE(kContactNarrow, 0.06f);
+/// How long the tongue takes to let the string go, from a worn Delrin one to a
+/// fresh quill, in milliseconds. It rounds the corners of the bridge-force
+/// rectangle, so it rolls the top of the series off and leaves the rest alone.
+///
+/// Absolute rather than a share of the period, because the release is set by the
+/// plectrum and the tension and not by the note. That is what makes one value
+/// cut a bass string's series above its fiftieth partial and a treble string's
+/// above its second — the references' partials 3-10 fall from -6 dB at FF to
+/// -35 at f''', and a pitch-relative width holds them flat across the compass.
+SONARE_TUNABLE(kReleaseWornMs, 0.55f);
+SONARE_TUNABLE(kReleaseFreshMs, 0.06f);
 
 /// The chiff of the plectrum leaving the string, and the two note-off events:
 /// the jack falling back past the string, then the felt arriving. They are
@@ -37,8 +44,39 @@ SONARE_TUNABLE(kJackCutoffHz, 1500.0f);
 SONARE_TUNABLE(kDamperDelayMs, 7.0f);
 
 /// The raw string sample is a displacement, not a level; this brings a drawn 8'
-/// up to where the rest of the bank sits.
-SONARE_TUNABLE(kOutputTrim, 2.6f);
+/// up to where the rest of the bank sits. Re-measured once the board's radiation
+/// took the voice 8.6 dB under the references across the phrase set — a stage
+/// that attenuates has to be paid for somewhere, and this is where.
+SONARE_TUNABLE(kOutputTrim, 7.0f);
+
+/// How fast the board's diffuse field follows the strings driving it, as a time
+/// constant in milliseconds, and the frequency it starts at — the board's
+/// Schroeder frequency, below which its modes are separable and BodyType carries
+/// them instead. A follow much shorter than a period tracks the waveform rather
+/// than its energy and modulates the tone; much longer and the field outlives
+/// the note it belongs to.
+SONARE_TUNABLE(kDiffuseFollowMs, 145.0f);
+SONARE_TUNABLE(kDiffuseSchroederHz, 1790.0f);
+
+/// Where the board stops radiating what reaches it. A plate's radiation
+/// efficiency levels off above its critical frequency while its internal losses
+/// keep rising, so the diffuse field is a band and not a shelf — left open, it
+/// fills 2-8 kHz with white noise and buries the treble partials that are
+/// measured against it.
+SONARE_TUNABLE(kDiffuseTopHz, 3270.0f);
+
+/// The band the board's radiation efficiency climbs across: from above its first
+/// modes, where the plate starts radiating as a plate, to coincidence for a thin
+/// spruce one, above which the efficiency is already one and stops rising. The
+/// tilt is flat outside it at both ends. Measured against the baroque slot this
+/// band beats both a wider one and a narrower one, so it is the band the voice
+/// wants and not only the band a plate would have.
+SONARE_TUNABLE(kBoardTiltLoHz, 200.0f);
+SONARE_TUNABLE(kBoardTiltHiHz, 4000.0f);
+
+/// Below this the diffuse field is off rather than merely quiet, so the default
+/// renders bit-identically to a voice that never had one.
+constexpr float kDiffuseOffDb = -119.0f;
 
 /// The behind-the-bridge segment can never approach the speaking length, however
 /// short the string gets: the hitch-pin rail converges toward the bridge in the
@@ -53,6 +91,9 @@ SONARE_TUNABLE(kRearMaxRatio, 0.17f);
 /// sit far enough apart never to share a draw.
 constexpr uint64_t kChiffNoiseBase = 1ull << 16;
 constexpr uint64_t kJackNoiseBase = 1ull << 20;
+/// The diffuse field runs for the whole note rather than a burst, so its draws
+/// start far enough above the bursts' to never reach them.
+constexpr uint64_t kDiffuseNoiseBase = 1ull << 24;
 
 /// The speaking length of a string in millimetres.
 ///
@@ -89,6 +130,29 @@ float plectrum_release_db(const HarpsichordPatchParams& params, uint8_t velocity
   // because it is a loss of contact, not a gain law.
   const float over = (v - peak) / std::max(1.0e-6f, 1.0f - peak);
   return -std::max(0.0f, params.velocity_droop_db) * over * over;
+}
+
+/// One rounded corner of the bridge-force rectangle: 0 before the transition, 1
+/// after it, a raised cosine of width @p w across it.
+float edge_ramp(float x, float w) noexcept {
+  const float half = 0.5f * w;
+  if (x <= -half) return 0.0f;
+  if (x >= half) return 1.0f;
+  return 0.5f * (1.0f - std::cos(sonare::constants::kPi * (x / w + 0.5f)));
+}
+
+/// The bridge force an ideally plucked string produces, at sample @p k of one
+/// period, before its DC trim: a rectangle standing at (1 - beta) while the kink
+/// travels the short side of the pluck point and at -beta.image while it travels
+/// the long one, with both corners rounded by the plectrum's release.
+float bridge_force(float k, float beta, float duty, float image, float w) noexcept {
+  const float back = beta * image;
+  const float step = (1.0f - beta) + back;
+  // Both corners are shifted by the same half-width, so rounding them leaves the
+  // duty cycle — and with it the comb — exactly where the pluck point put it.
+  const float rise = edge_ramp(k - 0.5f * w, w);
+  const float fall = edge_ramp(k - duty - 0.5f * w, w);
+  return step * (rise - fall) - back;
 }
 
 float onepole_alpha(float cutoff_hz, double sample_rate) noexcept {
@@ -130,7 +194,8 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
     if (!drawn || slab_ == nullptr) {
       choir.loop.disable();
       choir.level = 0.0f;
-      choir.pluck_delay = 0;
+      choir.n_eff = 0.0f;
+      choir.duty = 0.0f;
       choir.damped = true;
       return;
     }
@@ -146,8 +211,13 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
         std::min(0.9999f, string_loop_gain_for(choir_period, sr, damper_t60) * compensation);
     choir.loop.configure_filter(span, span_capacity, choir_period, filter.a, filter.g, release_g);
     choir.level = 1.0f;
-    choir.pluck_delay =
-        static_cast<int>(std::clamp(pluck_fraction, 0.0f, 0.5f) * choir_period + 0.5f);
+    // The span one period of bridge force is laid down over is the loop's own,
+    // which is shorter than the ideal period by the feedback path and the loss
+    // filter's phase delay. Laying it over the ideal one instead leaves the wave
+    // meeting itself a sample or two early on the first wrap, which is a click.
+    choir.n_eff = std::max(4.0f, choir_period - choir.loop.loop_comp);
+    choir.duty = std::clamp(pluck_fraction, 0.02f, 0.5f) * choir.n_eff;
+    choir.inject_len = static_cast<int>(choir.n_eff);
     choir.damped = damped;
   };
 
@@ -175,10 +245,12 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
     const float ratio =
         std::clamp(rear_mm / speaking_length_mm(params, note), 0.004f, kRearMaxRatio);
     const float rear_period = std::max(4.0f, period * ratio);
-    // Undamped and short: it rings well past the note. Its top goes first, like
-    // any string's.
-    const float g0 = string_loop_gain_for(rear_period, sr, t60);
-    const float g_ref = string_loop_gain_for(rear_period, sr, t60 * hf);
+    // Its own t60, and an absolute one: the segment's length is set by the case,
+    // so neither the note's decay nor the bass stretch applies to it. Its top
+    // goes first, like any string's.
+    const float rear_t60 = params.rear_decay_s > 0.0f ? params.rear_decay_s : t60;
+    const float g0 = string_loop_gain_for(rear_period, sr, rear_t60);
+    const float g_ref = string_loop_gain_for(rear_period, sr, rear_t60 * hf);
     const StringLoopFilter filter = solve_string_loop_filter(
         kTwoPi / rear_period, std::max(omega_ref, kTwoPi * 2.0f / rear_period), g0, g_ref);
     rear_.configure_filter(span_rear, full / 8, rear_period, filter.a, filter.g, filter.g);
@@ -196,15 +268,44 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
   // The plectrum. Its release displacement is what the key speed buys, and that
   // is nearly nothing — the whole span is a few dB.
   const float edge = std::clamp(params.plectrum_edge, 0.0f, 1.0f);
-  const float contact = kContactWide + (kContactNarrow - kContactWide) * edge;
-  pluck_len_ = std::max(4, static_cast<int>(contact * period));
+  const float release_ms = kReleaseWornMs + (kReleaseFreshMs - kReleaseWornMs) * edge;
+  edge_w_ = std::max(1.0f, std::max(0.0f, release_ms) * 0.001f * static_cast<float>(sr));
+  // Neither corner may reach the other. Once they overlap the rectangle stops
+  // reaching its full height, and the note goes quiet rather than dull — which
+  // is not what a slower release does: the plectrum lifts every string to the
+  // same place whatever speed it lets go at, and the flat compass both captured
+  // references hold is that fact. A treble string is where this binds, and its
+  // binding is why the top of the compass is the darkest part of it.
+  float narrowest = 0.0f;
+  for (const Choir* c : {&eight_a_, &eight_b_, &four_}) {
+    if (c->level <= 0.0f) continue;
+    const float room = std::min(c->duty, c->n_eff - c->duty);
+    narrowest = narrowest > 0.0f ? std::min(narrowest, room) : room;
+  }
+  if (narrowest > 0.0f) edge_w_ = std::min(edge_w_, 0.95f * narrowest);
   pluck_amp_ = std::pow(10.0f, plectrum_release_db(params, velocity) / 20.0f);
+  pluck_image_ = std::clamp(params.end_reflection, 0.0f, 1.0f);
   pluck_pos_ = 0;
-  // The pulse has to keep running until the last jack's combed copy has been
-  // injected, or that choir loses the second lobe of its doublet.
-  const int longest_comb =
-      std::max({eight_a_.pluck_delay, eight_b_.pluck_delay, four_.pluck_delay});
-  pluck_span_ = pluck_len_ + longest_comb;
+  exc_prev_ = 0.0f;
+
+  // The mean of exactly the samples about to be injected, summed rather than
+  // derived: the continuous rectangle is zero-mean by construction and the
+  // sampling of it is not, and the loop has no path that removes what is left.
+  // Once per note-on against a period of render calls, so the walk is cheap
+  // where a per-sample blocker would sit on the fundamental's own decay.
+  for (Choir* c : {&eight_a_, &eight_b_, &four_}) {
+    c->dc_trim = 0.0f;
+    if (c->level <= 0.0f || c->inject_len <= 0) continue;
+    const float beta = c->duty / c->n_eff;
+    double sum = 0.0;
+    for (int i = 0; i < c->inject_len; ++i) {
+      sum += bridge_force(static_cast<float>(i), beta, c->duty, pluck_image_, edge_w_);
+    }
+    c->dc_trim = static_cast<float>(sum / static_cast<double>(c->inject_len));
+  }
+  // Every drawn choir gets exactly one period of force, and the 4' choir's is
+  // half the 8' choirs'; the counter runs until the longest of them is done.
+  pluck_span_ = std::max({eight_a_.inject_len, eight_b_.inject_len, four_.inject_len});
 
   // Mechanism. Both bursts are inert at 0 and are skipped rather than scaled.
   chiff_amount_ = std::clamp(params.pluck_noise, 0.0f, 1.0f);
@@ -218,6 +319,65 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
   jack_lp_ = 0.0f;
   jack_alpha_ = onepole_alpha(kJackCutoffHz, sr);
   damper_delay_ = std::max(1, static_cast<int>(kDamperDelayMs * 0.001f * static_cast<float>(sr)));
+
+  // Where the board stops radiating at all: below its own size it moves air
+  // without launching a wave, so a bass string reaches the room through its
+  // partials and not through its fundamental.
+  const float radiate_hz = std::max(0.0f, params.board_radiating_from_hz);
+  hp_on_ = radiate_hz > 0.0f;
+  if (hp_on_) {
+    const float fc = std::min(radiate_hz, 0.45f * static_cast<float>(sr));
+    const float w0 = kTwoPi * fc / static_cast<float>(sr);
+    for (int i = 0; i < kRadiationStages; ++i) {
+      hp_[i].set(rt::rbj_highpass(w0, rt::butterworth_stage_q(2 * kRadiationStages, i)));
+      hp_[i].reset();
+    }
+  }
+
+  // The board's radiation efficiency. A first-order section can only hold
+  // 6 dB/oct, so a gentler slope is built by spreading three of them across the
+  // band and giving each a pole/zero ratio of the band's cube root raised to the
+  // slope's share of first order. Off at zero tilt, and skipped there.
+  const float tilt_db_oct = std::clamp(params.board_tilt_db_oct, 0.0f, 6.0f);
+  tilt_on_ = tilt_db_oct > 0.0f;
+  if (tilt_on_) {
+    const float lo = std::clamp(kBoardTiltLoHz, 10.0f, 0.2f * static_cast<float>(sr));
+    const float hi = std::clamp(kBoardTiltHiHz, lo * 2.0f, 0.45f * static_cast<float>(sr));
+    const float span = std::pow(hi / lo, 1.0f / static_cast<float>(kTiltSections));
+    // 6.0206 dB/oct is one first-order section's whole slope; the ratio below is
+    // how much of one this tilt asks for.
+    const float share = tilt_db_oct / 6.0206f;
+    const float pole_ratio = std::pow(span, share);
+    for (int i = 0; i < kTiltSections; ++i) {
+      const float zero_hz = lo * std::pow(span, static_cast<float>(i));
+      const float pole_hz = std::min(zero_hz * pole_ratio, 0.45f * static_cast<float>(sr));
+      TiltSection& s = tilt_[i];
+      s.zero = std::exp(-kTwoPi * zero_hz / static_cast<float>(sr));
+      s.pole = std::exp(-kTwoPi * pole_hz / static_cast<float>(sr));
+      // Unity ABOVE the band, where a radiation efficiency reaches one and stops.
+      // Normalised at DC instead the cascade is not a tilt at all but a
+      // broadband boost — same shape, and every partial louder: it put the
+      // voice's peak 13 dB over the references on all nine phrase takes while
+      // every level-blind measure on the note grid reported it unchanged.
+      s.g = (1.0f + s.pole) / std::max(1.0e-9f, 1.0f + s.zero);
+      s.x1 = 0.0f;
+      s.y1 = 0.0f;
+    }
+  }
+
+  // The soundboard's diffuse field. Off by default and skipped entirely there,
+  // so a patch that does not ask for one renders exactly as it did before.
+  diffuse_level_ = params.board_diffuse_db <= kDiffuseOffDb
+                       ? 0.0f
+                       : std::pow(10.0f, std::min(0.0f, params.board_diffuse_db) / 20.0f);
+  diffuse_env_ = 0.0f;
+  diffuse_lp_ = 0.0f;
+  diffuse_top_ = 0.0f;
+  diffuse_age_ = 0;
+  const float follow_s = std::max(0.001f, kDiffuseFollowMs) * 0.001f;
+  diffuse_follow_ = 1.0f - std::exp(-1.0f / (follow_s * static_cast<float>(sr)));
+  diffuse_tilt_ = onepole_alpha(kDiffuseSchroederHz, sr);
+  diffuse_top_a_ = onepole_alpha(std::max(kDiffuseTopHz, kDiffuseSchroederHz), sr);
 
   // Level is set by the mechanism, not by the note: the plectrum lifts every
   // string to the same place, so a harpsichord's peak level is flat across the
@@ -233,25 +393,22 @@ float HarpsichordVoiceCore::render(float pitch_ratio) noexcept {
 
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
-  // The plectrum's release pulse, evaluated in closed form so each jack can comb
-  // it at its own plucking point.
-  auto pluck_at = [this](int k) noexcept -> float {
-    if (k < 0 || k >= pluck_len_) return 0.0f;
-    const float win = 0.5f * (1.0f - std::cos(kTwoPi * (static_cast<float>(k) + 1.0f) /
-                                              static_cast<float>(pluck_len_ + 1)));
-    // Zero-mean: the string is lifted and let go, not pushed. A pulse with a DC
-    // component would charge the loop instead of exciting it.
-    return (k < pluck_len_ / 2) ? win : -win;
-  };
   const bool plucking = pluck_pos_ < pluck_span_;
-  const int k = pluck_pos_;
+  const float k = static_cast<float>(pluck_pos_);
   if (plucking) ++pluck_pos_;
 
+  // One period of the force an ideally plucked string puts on its bridge: a
+  // rectangle that stands at (1 - beta) while the kink travels the short side of
+  // the pluck point and at -beta while it travels the long one. Its partials are
+  // sin(n.pi.beta)/n, so the plucking-point comb and the 1/n envelope are one
+  // shape rather than a comb and an envelope chosen apart from each other.
+  //
+  // Injecting exactly one period into an empty loop loads it, which is why this
+  // runs once and stops rather than driving the string continuously.
   auto excite = [&](const Choir& choir) noexcept -> float {
-    if (!plucking || choir.level <= 0.0f) return 0.0f;
-    // The plucking-point comb: the string is driven at one point, so the
-    // harmonics with a node there are not driven at all.
-    return pluck_amp_ * (pluck_at(k) - pluck_at(k - choir.pluck_delay));
+    if (!plucking || choir.level <= 0.0f || k >= static_cast<float>(choir.inject_len)) return 0.0f;
+    const float beta = choir.duty / choir.n_eff;
+    return pluck_amp_ * (bridge_force(k, beta, choir.duty, pluck_image_, edge_w_) - choir.dc_trim);
   };
 
   float bridge = 0.0f;
@@ -274,6 +431,12 @@ float HarpsichordVoiceCore::render(float pitch_ratio) noexcept {
     bridge += four_.loop.process(e + four_.loop.feedback(), ratio);
   }
 
+  // What crosses the bridge is the force's transient, not the force: the
+  // rectangle stands at a level for most of a period, and a level fed to a loop
+  // this short and this lightly damped is a tone rather than a strike.
+  const float exc_slew = bridge_exc - exc_prev_;
+  exc_prev_ = bridge_exc;
+
   float result = bridge;
 
   if (rear_level_ > 0.0f) {
@@ -287,7 +450,39 @@ float HarpsichordVoiceCore::render(float pitch_ratio) noexcept {
     // a tone louder than the note. It never drives back into the speaking
     // string either — that path is real but weak, and leaving it out keeps a
     // high-Q loop out of the string's feedback path entirely.
-    result += rear_level_ * rear_.process(rear_drive_ * bridge_exc + rear_.feedback(), ratio);
+    result += rear_level_ * rear_.process(rear_drive_ * exc_slew + rear_.feedback(), ratio);
+  }
+
+  if (hp_on_) {
+    for (rt::BiquadState& s : hp_) result = s.process(result);
+  }
+
+  if (tilt_on_) {
+    // Everything the bridge carries goes out through the board, so the strings
+    // and the segment behind them are tilted together. The diffuse field below
+    // is already radiated and is added after.
+    for (int i = 0; i < kTiltSections; ++i) {
+      TiltSection& s = tilt_[i];
+      const float y = s.g * (result - s.zero * s.x1) + s.pole * s.y1;
+      s.x1 = result;
+      s.y1 = y;
+      result = y;
+    }
+  }
+
+  if (diffuse_level_ > 0.0f) {
+    // The board radiating what it cannot resolve: the field follows the strings'
+    // energy, so it fills the space between their partials while they sound and
+    // is gone when they are. Subtracting the lowpass leaves the band above the
+    // board's Schroeder frequency, which is where a mode field stops being a set
+    // of resonances; the second pole closes it above the critical frequency,
+    // where the board stops radiating what reaches it.
+    diffuse_env_ += diffuse_follow_ * (std::fabs(bridge) - diffuse_env_);
+    const float nz = noise_.bipolar_at(kDiffuseNoiseBase + diffuse_age_);
+    diffuse_lp_ += diffuse_tilt_ * (nz - diffuse_lp_);
+    diffuse_top_ += diffuse_top_a_ * ((nz - diffuse_lp_) - diffuse_top_);
+    result += diffuse_level_ * diffuse_env_ * diffuse_top_;
+    ++diffuse_age_;
   }
 
   if (chiff_pos_ < chiff_len_) {
@@ -332,12 +527,21 @@ void HarpsichordVoiceCore::release() noexcept {
 
 void HarpsichordVoiceCore::kill() noexcept {
   pluck_pos_ = pluck_span_;
+  exc_prev_ = 0.0f;
+  for (TiltSection& s : tilt_) {
+    s.x1 = 0.0f;
+    s.y1 = 0.0f;
+  }
+  for (rt::BiquadState& s : hp_) s.reset();
   eight_a_.loop.kill();
   eight_b_.loop.kill();
   four_.loop.kill();
   rear_.kill();
   chiff_pos_ = chiff_len_;
   jack_pos_ = jack_len_;
+  diffuse_env_ = 0.0f;
+  diffuse_lp_ = 0.0f;
+  diffuse_top_ = 0.0f;
 }
 
 }  // namespace sonare::midi::synth
