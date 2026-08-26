@@ -33,6 +33,8 @@ from shape.density import (  # noqa: E402
     modal_density,
 )
 from shape import struck  # noqa: E402
+from shape.__main__ import holdout  # noqa: E402
+from shape.search import split_velocities  # noqa: E402
 from shape.loss import (  # noqa: E402
     DEFAULT_WEIGHTS, STRUCK_WEIGHTS, ShapeLoss, Terms,
 )
@@ -1274,3 +1276,30 @@ def test_an_unscored_term_is_named_rather_than_counted_as_a_match():
     t = Terms(total=1.0, parts={"spectrum": 1.0}, per_note={}, gain_db=0.0,
               unscored=("density",))
     assert "unscored" in str(t) and "density" in str(t)
+
+
+def test_a_kit_holds_out_a_dynamic_because_a_held_out_note_is_another_patch():
+    fit_v, hold_v = split_velocities((64, 88, 100, 112, 127))
+    assert set(fit_v) & set(hold_v) == set()
+    assert fit_v and hold_v
+    # Alternating rather than split in half, so neither set is one end of the
+    # range: a fit shown only soft layers and held out on loud ones is asked to
+    # extrapolate, which is a different question.
+    assert fit_v == (64, 100, 127) and hold_v == (88, 112)
+
+
+def test_the_holdout_axis_follows_whether_the_capture_is_pitched():
+    class FakeLoss:
+        pitched = True
+        velocities = (64, 88, 100, 112)
+    played = holdout(FakeLoss(), (60, 62, 64, 66))
+    assert played[0] != played[1] and played[2] is None
+
+    loss = ShapeLoss(signals=None, pitched=False, velocities=(64, 88, 100, 112))
+    notes = (42, 44, 46)
+    fit_notes, hold_notes, hold_loss = holdout(loss, notes)
+    # Every piece is measured on both sides; what is held back is the dynamic.
+    assert fit_notes == notes and hold_notes == notes
+    assert hold_loss is not None
+    assert set(loss.velocities) & set(hold_loss.velocities) == set()
+    assert hold_loss.pitched is False

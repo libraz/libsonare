@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -31,7 +32,9 @@ from profile import PERCUSSION_CHANNEL, is_percussion  # noqa: E402
 from .loss import ShapeLoss  # noqa: E402
 from .partials import Track  # noqa: E402
 from .render import Signals, load_knob_dump, read_overrides, write_overrides  # noqa: E402
-from .search import Descent, ablate, prune, split_notes, summarise  # noqa: E402
+from .search import (  # noqa: E402
+    Descent, ablate, prune, split_notes, split_velocities, summarise,
+)
 from .spectro import Spectro  # noqa: E402
 
 CAPTURE_DIR = Path(__file__).resolve().parents[1] / "capture"
@@ -106,18 +109,38 @@ def cmd_score(args):
         print(f"overrides {loss.score(text, notes=notes)}")
 
 
+def holdout(loss, notes):
+    """The fit and hold-out comparisons, split on the axis this capture has.
+
+    A keyboard splits the notes and one loss serves both. A kit cannot: each
+    piece is its own patch, so a held-out note is one no move could reach and
+    the hold-out sits frozen at its starting value -- after which `prune`, which
+    keeps a move only if it paid on the hold-out, drops every move the descent
+    made. Splitting the velocity layers instead asks the same patch a dynamic
+    the fit was not shown, which is what a hold-out is for.
+    """
+    if loss.pitched:
+        fit_notes, hold_notes = split_notes(notes)
+        return fit_notes, hold_notes, None
+    fit_v, hold_v = split_velocities(loss.velocities)
+    loss.velocities = fit_v
+    hold = replace(loss, velocities=hold_v)
+    return notes, notes, hold
+
+
 def cmd_fit(args):
     _cap, _corpus, _sigs, loss, notes = build(args)
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(","))
                           if args.namespaces else ())
     deny = set(Path(args.deny).read_text().split()) if args.deny else set()
-    fit_notes, hold_notes = split_notes(notes)
+    fit_notes, hold_notes, hold_loss = holdout(loss, notes)
     d = Descent(loss=loss, base=base, fit_notes=fit_notes, hold_notes=hold_notes,
-                deny=deny, workers=args.workers, passes=args.passes)
+                deny=deny, workers=args.workers, passes=args.passes,
+                hold_loss=hold_loss)
     start = read_overrides(Path(args.start).read_text()) if args.start else None
     moves = d.run(start)
     kept, report = prune(loss, base, moves, fit_notes, hold_notes,
-                         workers=args.workers)
+                         workers=args.workers, hold_loss=hold_loss)
     print("\n" + summarise(report["contributions"], base, moves))
     print(f"\nbefore  fit {report['before']['fit']:.3f}  hold {report['before']['hold']:.3f}")
     print(f"pruned  fit {report['after']['fit']:.3f}  hold {report['after']['hold']:.3f}"
@@ -133,8 +156,9 @@ def cmd_ablate(args):
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(","))
                           if args.namespaces else ())
     moves = read_overrides(Path(args.overrides).read_text())
-    fit_notes, hold_notes = split_notes(notes)
-    scores, (f0, h0) = ablate(loss, base, moves, fit_notes, hold_notes, args.workers)
+    fit_notes, hold_notes, hold_loss = holdout(loss, notes)
+    scores, (f0, h0) = ablate(loss, base, moves, fit_notes, hold_notes, args.workers,
+                              hold_loss=hold_loss)
     print(f"fitted set  fit {f0:.3f}  hold {h0:.3f}\n")
     print(summarise(scores, base, moves))
 
