@@ -32,7 +32,10 @@ from shape.density import (  # noqa: E402
     envelope_diffuseness,
     modal_density,
 )
-from shape.loss import ShapeLoss  # noqa: E402
+from shape import struck  # noqa: E402
+from shape.loss import (  # noqa: E402
+    DEFAULT_WEIGHTS, STRUCK_WEIGHTS, ShapeLoss, Terms,
+)
 from shape.partials import (  # noqa: E402
     Track, band_envelope, decay_db_s, fit_inharmonicity, harmonic_rows, note_hz,
 )
@@ -1139,3 +1142,135 @@ def test_the_reference_median_is_not_one_reference():
     a_row = next(r for r in text.splitlines() if r.strip().startswith("ref-a"))
     # The median follows the two that agree, not the outlier.
     assert float(median_row.split()[3]) == pytest.approx(float(a_row.split()[2]), abs=0.1)
+
+
+# ---------------------------------------------------------------------------
+# struck pieces: windows from the piece, and the two terms a plate needs
+
+
+def _hit(t60_s, sr=48000, seconds=3.0, seed=7, hf_t60=None):
+    """A decaying noise burst, optionally with its own decay rate up top."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(int(seconds * sr)) / sr
+    lo = rng.standard_normal(len(t)) * np.exp(-6.907755 * t / t60_s)
+    if hf_t60 is None:
+        return lo
+    # A second, brighter layer with a decay of its own, so "the top dies before
+    # the body does" can be built on purpose rather than hoped for.
+    hi = rng.standard_normal(len(t)) * np.exp(-6.907755 * t / hf_t60)
+    hi = np.diff(np.concatenate([[0.0], hi]))  # crude high-pass
+    return lo + 4.0 * hi
+
+
+def test_a_pieces_windows_follow_its_own_decay_and_not_the_clock():
+    short = struck.windows(_hit(0.2), 48000)
+    long_ = struck.windows(_hit(3.0), 48000)
+    assert short[1][1] < long_[1][1] / 3.0
+    # The aftersound window has to start after the body ends, on both.
+    for body, late in (short, long_):
+        assert late[0] == body[1] and late[1] > late[0]
+
+
+def test_a_decay_mark_is_where_the_hit_reached_that_level():
+    t20, t60 = struck.decay_marks(_hit(1.0), 48000)
+    assert 0.30 < t20 < 0.38          # 20 dB down at a third of the t60
+    assert 0.90 < t60 < 1.10
+
+
+def test_a_floor_cannot_be_read_out_of_digital_padding():
+    sr = 48000
+    padded = np.concatenate([_hit(0.2, seconds=0.6), np.zeros(sr * 3)])
+    win = struck.floor_window(padded, sr)
+    # It must land inside what was recorded, never in the zeros after it.
+    assert win is not None and win[1] <= 0.6 + 1e-6
+
+
+def test_a_band_that_could_not_be_read_is_reported_unusable_not_zero():
+    # Nothing but padding: no floor to measure against, so no band is readable.
+    values, usable = struck.mode_count(np.zeros(48000), (0.0, 0.5), 48000)
+    assert not usable.any()
+    assert not values.any()
+
+
+def _field(n, band=(2000, 4000), seconds=3.0, sr=48000, seed=3, t60=None):
+    """n partials at random frequencies inside one band, optionally decaying."""
+    t = np.arange(int(seconds * sr)) / sr
+    r = np.random.default_rng(seed)
+    x = sum(np.sin(2 * np.pi * f * t + r.uniform(0, 6.28))
+            for f in r.uniform(band[0], band[1], n))
+    return x if t60 is None else x * np.exp(-6.907755 * t / t60)
+
+
+def test_the_density_estimator_is_graded_against_fields_it_knows_the_size_of():
+    """The count has to rise with the number of things ringing, and it has to
+    keep doing so when they are decaying -- a statistic that moves with the
+    decay instead is measuring the envelope and not the texture."""
+    sr, band, win = 48000, (2000, 4000), (0.30, 0.60)
+    counts = [modal_density(_field(n), 0, window=win, sr=sr, bands=(band,),
+                            notch=False)[band][0]
+              for n in (2, 8, 32, 128)]
+    assert counts == sorted(counts) and counts[0] < counts[-1] / 8
+    # White noise is not a resolvable field, and reads below the dense end.
+    nz = modal_density(np.random.default_rng(11).standard_normal(int(3.0 * sr)), 0,
+                       window=win, sr=sr, bands=(band,), notch=False)[band][0]
+    assert nz < counts[-1]
+    # Decay must not move it: the same fields, given a 1.5 s t60.
+    decayed = [modal_density(_field(n, t60=1.5), 0, window=win, sr=sr, bands=(band,),
+                             notch=False)[band][0]
+               for n in (2, 8, 32, 128)]
+    for a, b in zip(counts, decayed):
+        assert abs(a - b) <= max(2, 0.1 * a)
+
+
+def test_an_unpitched_count_cannot_be_had_by_passing_a_nominal_note():
+    """The notch is uncapped, so a low note masks the whole upper spectrum and
+    the count comes back zero for a signal full of resonances. That is why the
+    opt-out exists rather than a convention of passing note 0."""
+    sr, band, win = 48000, (2000, 4000), (0.30, 0.60)
+    sig = _field(32)
+    assert modal_density(sig, 21, window=win, sr=sr, bands=(band,))[band][0] == 0
+    assert modal_density(sig, 21, window=win, sr=sr, bands=(band,),
+                         notch=False)[band][0] > 8
+
+
+def test_the_texture_window_is_a_fixed_length_inside_the_aftersound():
+    short = struck.texture_window((0.1, 0.2))
+    long_ = struck.texture_window((0.5, 9.0))
+    assert short[0] == 0.1 and long_[0] == 0.5
+    assert long_[1] - long_[0] == pytest.approx(struck.DENSITY_SPAN_S)
+    assert short[1] <= 0.2 + 1e-9
+
+
+def test_prompt_late_sees_a_top_that_belongs_to_the_strike_alone():
+    sr = 48000
+    body, late = (0.0, 0.1), (0.1, 0.8)
+    t = np.arange(int(1.5 * sr)) / sr
+    # A low body, not white noise: white noise is flat to Nyquist and puts most
+    # of its power in the top octave, which buries the layer under test in the
+    # very bands the test is about.
+    lo = _field(40, band=(80, 800), seconds=1.5, sr=sr, seed=5) \
+        * np.exp(-6.907755 * t / 1.0)
+    top = _field(24, band=(3000, 6000), seconds=1.5, sr=sr, seed=9)
+    even = lo + top * np.exp(-6.907755 * t / 1.0)
+    fading = lo + top * np.exp(-6.907755 * t / 0.05)
+    ev, eok = struck.prompt_late(even, body, late, sr)
+    fv, fok = struck.prompt_late(fading, body, late, sr)
+    ok = eok & fok
+    high = np.array([b[0] >= 2000 for b in struck.STRUCK_BANDS]) & ok
+    assert high.any()
+    # The piece whose top belongs to the strike reads further positive up there.
+    assert fv[high].mean() > ev[high].mean() + 3.0
+
+
+def test_a_struck_capture_is_scored_on_different_terms_than_a_played_one():
+    assert "residue" in DEFAULT_WEIGHTS and "release" in DEFAULT_WEIGHTS
+    assert "residue" not in STRUCK_WEIGHTS and "release" not in STRUCK_WEIGHTS
+    assert {"density", "prompt"} <= set(STRUCK_WEIGHTS)
+    # The four that carry over need no partial series and must be kept.
+    assert {"spectrum", "onset", "balance", "recurrence"} <= set(STRUCK_WEIGHTS)
+
+
+def test_an_unscored_term_is_named_rather_than_counted_as_a_match():
+    t = Terms(total=1.0, parts={"spectrum": 1.0}, per_note={}, gain_db=0.0,
+              unscored=("density",))
+    assert "unscored" in str(t) and "density" in str(t)

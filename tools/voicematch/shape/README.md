@@ -20,6 +20,86 @@ PYTHONPATH=tools/voicematch python -m shape takes  --corpus <capture dir> --page
 
 `--knobs` is a `SONARE_TUNING_DUMP` file, so the coordinate list and its defaults come from the library rather than from a parse of the source. `--lib` needs a build configured with `-DBUILD_TUNING=ON`; without it the override layer compiles out and every candidate renders identically.
 
+## Struck pieces, where the note number is not a pitch
+
+A kit answers on MIDI channel 10, where a note number selects an instrument. Two
+assumptions that hold everywhere else stop holding there, and neither fails
+loudly enough to notice:
+
+**The renderer had no channel.** It rendered every model note on channel 1, so a
+capture of a drum kit was compared against `program`'s pitch — note 42 as F#2 on
+a grand piano, against a hi-hat. Both sides rendered, every term returned a
+number, and `spectrum` read 28.1 where the same comparison on the right channel
+reads 16.3. `Signals` now takes the channel and `__main__` reads it off the
+capture through `profile.is_percussion`, which is where that distinction already
+lived.
+
+**Six of the seven terms mask by the played note's partials, and every window is
+an absolute number of seconds.** `note_hz(42)` is a real frequency, so the mask
+gets built and notches a pitch that is not in the signal. And a closed hi-hat
+has fallen 60 dB 0.67 s after the strike while the aftersound windows begin at
+2.0 and 2.5 s, so they measure silence and the floor discipline quietly drops it.
+
+So `pitched=False` selects a different term set and takes every window from the
+piece's own decay — body from the strike to 20 dB down, aftersound from there to
+60 dB down, which mean the same thing for a hat and for a ride without either
+being told how long it is. A kit's pieces are an order of magnitude apart in
+length; one set of absolute windows cannot serve them.
+
+| term | struck | why |
+| --- | --- | --- |
+| `spectrum` `onset` `balance` | kept | need no partial series |
+| `invariance` `recurrence` | kept, unnotched | mean MORE here: a kit whose pieces all answer at the same frequencies is one plate wearing several names |
+| `residue` | gone | asks how much of a render is *not* the played string; with no played partials the ratio's denominator is empty |
+| `release` | gone | straddles a note-off a one-shot voice does not have |
+| `density` | new | how many things are ringing |
+| `prompt` | new | how the strike separates from the sustain |
+
+### Which density estimator, and the one that does not work here
+
+`density.py` offers two. Graded against fields of 2 to 256 partials in one band,
+`modal_density`'s count reads 2, 4, 7, 12, 24, 43, 72 with white noise at 30, and
+moves by under 5 % when the same fields are given a decay. `envelope_diffuseness`
+over the short, stationary window a struck piece allows reads between 0.22 and
+0.25 for every one of them **and** for the noise — the diffuse floor. What varies
+when its window is lengthened is the decay inside it, not the texture: forty
+decibels of decay in one transform smears every peak by however fast the piece is
+dying. So the count is what `struck.py` uses, over a fixed-length slice of the
+aftersound rather than the whole of it, and the slice is fixed precisely so that
+one piece's count is comparable with another's.
+
+The count saturates. A field denser than roughly a hundred partials in a band
+reads about the same as one of seventy, and noise reads about thirty — so a
+reading near thirty says "not resolvable as separate things", not "thirty modes",
+and two pieces both at the ceiling are not thereby alike.
+
+`modal_density` also needs `notch=False` here rather than a nominal note number:
+its notch is uncapped, so a low note's mask fuses into a continuous band and
+covers the whole upper spectrum, and the count comes back zero for a signal full
+of resonances.
+
+### A gate that threw away what it was for
+
+`prompt` compares each band's share of the strike against its share of the
+aftersound, so the overall decay divides out and what is left is how the colour
+moved. Its first version gated on both windows — and a band that goes from 40 dB
+down at the strike to 163 down afterwards then has no readable aftersound level,
+so the estimator dropped it. That band vanishing *is* the measurement: it is the
+closed hi-hat that had every band level right over the whole hit and sounded like
+a small drum. The aftersound level is floored instead, so vanishing reads as the
+largest movement there is, and the mask that decides which bands are asked about
+is the reference's — a model silent where the instrument is not is a finding and
+not a question withdrawn. Same discipline `admittance` states for its own bands.
+
+Both new terms are gated on the recording's own floor, and that floor cannot be
+read from a fixed window either: the plane is padded to the longest piece in the
+grid, and padding is exact zeros, which passes as an infinite signal-to-noise
+ratio and is then refused as non-finite. Every band drops out, the term averages
+an empty set, and an empty average scores as a perfect match. `struck.floor_window`
+finds the stretch between the piece's t60 and the last non-zero sample instead,
+and a term nothing could be read for is left out of the total and **named** in
+the score line rather than entered at zero.
+
 ## Three analysis scales, and what each one is for
 
 `spectro.DEFAULT_SCALES` carries 8192, 1024 and 32768 samples. The first two divide the usual way — one resolves partials, the other resolves the attack — and the third exists for a question neither can answer.

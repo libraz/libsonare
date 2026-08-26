@@ -31,6 +31,7 @@ sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 pairs = [tuple(p) for p in json.loads(sys.argv[1])]
 out, root, program, gate_s, seconds = sys.argv[2], sys.argv[3], int(sys.argv[4]), \
     float(sys.argv[5]), float(sys.argv[6])
+channel = int(sys.argv[7])
 if root:
     from corpus import load_corpus
     from wavio import read_wav
@@ -43,7 +44,8 @@ else:
     from render_model import render_model
     from smf import Note, write_smf
     def get(n, v):
-        smf = write_smf([Note(n, v, 0.1, gate_s)], program=program, end_pad=2.0)
+        smf = write_smf([Note(n, v, 0.1, gate_s)], program=program, end_pad=2.0,
+                        channel=channel)
         a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
         return a.mean(axis=1) if a.ndim > 1 else a
 np.savez(out, **{f"{n}_{v}": get(n, v) for n, v in pairs})
@@ -54,16 +56,26 @@ np.savez(out, **{f"{n}_{v}": get(n, v) for n, v in pairs})
 class Signals:
     """Renders a (note, velocity) grid, from the capture or from the model.
 
-    `program` and `gate_s` come from the capture definition rather than from a
-    default, because a capture that names a GM program is the only statement in
-    the tree about which program the model answers it with. A harness that
-    hardcodes program zero can compare exactly one instrument, and has.
+    `program`, `channel` and `gate_s` come from the capture definition rather
+    than from a default, because a capture that names a GM program is the only
+    statement in the tree about which program the model answers it with. A
+    harness that hardcodes program zero can compare exactly one instrument, and
+    has.
+
+    `channel` is the one that cannot be left at its default at all. MIDI channel
+    10 is what makes a note number select an instrument instead of a pitch, so a
+    kit rendered on channel 1 answers note 42 as F#2 on whatever program was
+    named — a piano — while the reference side holds a hi-hat. Nothing about
+    that fails: both sides render, every term returns a number, and the
+    comparison is between two different instruments.
     """
 
     corpus_root: Path
     program: int
     gate_s: float
     seconds: float
+    #: Zero-based MIDI channel the model renders on (9 = the GM drum channel).
+    channel: int = 0
     lib_path: str = ""
     cache_dir: Path = Path("/tmp/voicematch-shape")
 
@@ -75,7 +87,8 @@ class Signals:
 
     def _key(self, pairs, ov: str, ref: bool) -> str:
         blob = json.dumps([sorted(pairs), ov, ref, str(self.corpus_root),
-                           self.program, self.gate_s, self.seconds, self.lib_path])
+                           self.program, self.channel, self.gate_s, self.seconds,
+                           self.lib_path])
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
     def _render(self, pairs, ov: str, ref: bool, out_path: Path) -> None:
@@ -90,7 +103,7 @@ class Signals:
         p = subprocess.run(
             [sys.executable, "-c", _WORKER, json.dumps(pairs), str(tmp),
              str(self.corpus_root) if ref else "", str(self.program),
-             str(self.gate_s), str(self.seconds)],
+             str(self.gate_s), str(self.seconds), str(self.channel)],
             capture_output=True, text=True, env=env)
         if p.returncode:
             tmp.unlink(missing_ok=True)

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import terms
+from . import struck, terms
 from .bed import MARGIN_DB
 from .partials import (
     RESOLVABLE_PARTIAL,
@@ -44,6 +44,21 @@ DEFAULT_WEIGHTS = {"spectrum": 1.0, "onset": 1.0, "residue": 0.7,
                    "invariance": 1.0, "release": 1.0, "balance": 1.0,
                    "recurrence": 1.0}
 
+#: What a struck, unpitched piece is scored on. Two of the seven above are gone
+#: and two others take their place; the four that stay need no partial series
+#: and are unchanged.
+#:
+#: `residue` asks how much of a render is NOT the played string, which on a
+#: piece with no played partials is the whole render — the ratio's denominator
+#: is empty and the question has no percussion form. `release` straddles a
+#: note-off that a one-shot voice does not have. `invariance` and `recurrence`
+#: both survive with an empty mask and mean MORE here than they do on a
+#: keyboard: a kit whose pieces all answer at the same frequencies is one plate
+#: wearing several names, which is the exact failure a shared resonator causes.
+STRUCK_WEIGHTS = {"spectrum": 1.0, "onset": 1.0, "invariance": 1.0,
+                  "balance": 1.0, "recurrence": 1.0, "density": 1.0,
+                  "prompt": 1.0}
+
 
 @dataclass
 class Terms:
@@ -54,9 +69,17 @@ class Terms:
     per_note: dict
     gain_db: float
 
+    #: Terms this instrument is scored on that nothing could be read for. They
+    #: are out of the total rather than in it at zero, and named here because a
+    #: score built from fewer terms is not the same number as one built from all
+    #: of them and must not read as one.
+    unscored: tuple = ()
+
     def __str__(self) -> str:
-        return f"{self.total:.3f}  " + "  ".join(
+        out = f"{self.total:.3f}  " + "  ".join(
             f"{k} {v:.2f}" for k, v in self.parts.items())
+        return out + ("  [unscored: " + ", ".join(self.unscored) + "]"
+                      if self.unscored else "")
 
 
 @dataclass
@@ -68,12 +91,18 @@ class ShapeLoss:
     bed: object = None
     #: Note-off time in the capture, from its gate. The release term straddles it.
     note_off_s: float = 8.1
-    weights: dict = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+    weights: dict = None
     velocities: tuple = (56, 88, 120)
     floor_db: float = FLOOR_DB
+    #: Whether the note number names a pitch. False for a kit, where it names an
+    #: instrument: the partial mask has nothing to mask and every window is set
+    #: by the piece's own decay rather than by a keyboard's note length.
+    pitched: bool = True
 
     def __post_init__(self) -> None:
         self._ref: dict = {}
+        if self.weights is None:
+            self.weights = dict(DEFAULT_WEIGHTS if self.pitched else STRUCK_WEIGHTS)
         end = self.spectro.seconds
         self.release_pre = (self.note_off_s - 0.5, self.note_off_s - 0.1)
         self.release_post = (min(self.note_off_s + 1.1, end - 0.4), end)
@@ -99,31 +128,52 @@ class ShapeLoss:
                     c, b = self.bed.clean(self.spectro, R[s], s)
                     clean.append(c)
                     beds.append(b)
-            f0 = note_hz(k[0])
-            B = fit_inharmonicity(sig, f0, self.spectro.sample_rate)
-            hm = harmonic_rows(self.spectro.rows_hz(0), f0, B)
-            pack[k] = {
-                "clean": clean, "bed": beds, "harmonic": hm,
-                "held": terms.held_db(sig, sr=self.spectro.sample_rate),
-                "onset": terms.onset_stats(sig, self.spectro.sample_rate),
-                "residue": terms.residue_ratio(self.spectro, clean[0], hm),
-                "valid": terms.residue_valid(self.spectro, clean[0], beds[0], hm),
-                "curve": terms.residue_curve(self.spectro, clean[0], hm),
-                "release": terms.release_stats(sig, self.release_pre,
-                                               self.release_post,
-                                               self.spectro.sample_rate),
-                "balance": [terms.band_balance(self.spectro, clean[0], w)
-                            for w in terms.BALANCE_WINDOWS],
+            sr = self.spectro.sample_rate
+            if self.pitched:
+                f0 = note_hz(k[0])
+                B = fit_inharmonicity(sig, f0, sr)
+                hm = harmonic_rows(self.spectro.rows_hz(0), f0, B)
                 # Capped at a resolvable partial, unlike the mask above it: this
                 # one is asking what is up there BESIDES the string, and the
                 # uncapped mask covers a bass note's whole upper spectrum.
-                "peaks": terms.peak_rows(
-                    self.spectro, clean[0],
-                    harmonic_rows(self.spectro.rows_hz(0), f0, B,
-                                  max_partial=RESOLVABLE_PARTIAL)),
-                "peak_mask": harmonic_rows(self.spectro.rows_hz(0), f0, B,
-                                           max_partial=RESOLVABLE_PARTIAL),
+                pm = harmonic_rows(self.spectro.rows_hz(0), f0, B,
+                                   max_partial=RESOLVABLE_PARTIAL)
+                bal_windows = terms.BALANCE_WINDOWS
+                late = terms.RECUR_WINDOW
+                held_window = (0.4, 1.4)
+            else:
+                # Nothing to notch, and every window from the piece's own decay.
+                # A kit's pieces are an order of magnitude apart in length, so a
+                # fixed aftersound window reads a ride's tail and a hi-hat's
+                # silence and reports the two as the same kind of measurement.
+                hm = np.zeros(self.spectro.rows_hz(0).shape, dtype=bool)
+                pm = hm
+                body, late = struck.windows(sig, sr)
+                bal_windows = (body, late)
+                held_window = body
+            pack[k] = {
+                "clean": clean, "bed": beds, "harmonic": hm,
+                "windows": bal_windows, "late": late, "held_window": held_window,
+                "held": terms.held_db(sig, window=held_window, sr=sr),
+                "onset": terms.onset_stats(sig, sr),
+                "curve": terms.residue_curve(self.spectro, clean[0], hm,
+                                             window=late),
+                "balance": [terms.band_balance(self.spectro, clean[0], w)
+                            for w in bal_windows],
+                "peaks": terms.peak_rows(self.spectro, clean[0], pm, window=late),
+                "peak_mask": pm,
             }
+            if self.pitched:
+                pack[k].update({
+                    "residue": terms.residue_ratio(self.spectro, clean[0], hm),
+                    "valid": terms.residue_valid(self.spectro, clean[0], beds[0], hm),
+                    "release": terms.release_stats(sig, self.release_pre,
+                                                   self.release_post, sr),
+                })
+            else:
+                d, dok = struck.mode_count(sig, late, sr)
+                p, pok = struck.prompt_late(sig, bal_windows[0], late, sr)
+                pack[k].update({"density": (d, dok), "prompt": (p, pok)})
         self._ref[key] = pack
         return pack
 
@@ -132,10 +182,12 @@ class ShapeLoss:
         keys = self.pairs(notes)
         mod = self.signals(keys, ov=overrides)
         sr = self.spectro.sample_rate
-        g = float(np.mean([terms.held_db(mod[k], sr=sr) - ref[k]["held"] for k in keys]))
+        g = float(np.mean([terms.held_db(mod[k], window=ref[k]["held_window"], sr=sr)
+                           - ref[k]["held"] for k in keys]))
 
         per_note, cells, grids = {}, [], {}
         onset_err, res_err, rel_err, bal_err = [], [], [], []
+        den_err, pro_err = [], []
         mcurves, rcurves = {}, {}
         mpeaks, rpeaks = {}, {}
         for k in keys:
@@ -153,29 +205,54 @@ class ShapeLoss:
             # One-sided, and scored only while the reference still had a note to
             # damp: once it has decayed past seventy decibels under its own peak
             # the ratio is about its floor and not about its felt.
-            mrel = terms.release_stats(mod[k], self.release_pre, self.release_post, sr)
-            if r["release"][0] > -70.0:
-                rel_err.append(min(max(mrel[1] - r["release"][1], 0.0), terms.RELEASE_CLIP))
+            if self.pitched:
+                mrel = terms.release_stats(mod[k], self.release_pre,
+                                           self.release_post, sr)
+                if r["release"][0] > -70.0:
+                    rel_err.append(min(max(mrel[1] - r["release"][1], 0.0),
+                                       terms.RELEASE_CLIP))
 
             M = self.spectro(mod[k])
             # Two-sided and gain-free: a band the model under-fills costs
             # exactly what a band it over-fills costs. Bands the reference
             # itself does not occupy are not asked about, so a model is not
             # charged for failing to reproduce a floor.
-            for w, rb in zip(terms.BALANCE_WINDOWS, r["balance"]):
+            for w, rb in zip(r["windows"], r["balance"]):
                 mb = terms.band_balance(self.spectro, M[0], w)
                 live = rb > terms.BALANCE_LIVE_DB
                 if live.any():
                     bal_err.append(np.clip(mb[live] - rb[live],
                                            -terms.BALANCE_CLIP, terms.BALANCE_CLIP))
-            res_err.append(np.clip(
-                terms.residue_ratio(self.spectro, M[0], r["harmonic"]) - r["residue"],
-                -terms.RESIDUE_CLIP, terms.RESIDUE_CLIP)[r["valid"]])
+            if self.pitched:
+                res_err.append(np.clip(
+                    terms.residue_ratio(self.spectro, M[0], r["harmonic"])
+                    - r["residue"],
+                    -terms.RESIDUE_CLIP, terms.RESIDUE_CLIP)[r["valid"]])
+            else:
+                # Both are two-sided. Too sparse is a tuned bar and too diffuse
+                # is a hiss, and a strike that keeps its top and one that loses
+                # it are different pieces -- neither direction is free.
+                md, mok = struck.mode_count(mod[k], r["late"], sr)
+                rd, rok = r["density"]
+                ok = mok & rok
+                if ok.any():
+                    den_err.append(np.clip(md[ok] - rd[ok],
+                                           -struck.DENSITY_CLIP, struck.DENSITY_CLIP))
+                # The REFERENCE decides which bands are asked about. A model
+                # silent where the instrument is not is the finding, so its own
+                # mask must not be allowed to withdraw the question.
+                mp, _ = struck.prompt_late(mod[k], r["windows"][0], r["late"], sr)
+                rp, rpok = r["prompt"]
+                ok = rpok
+                if ok.any():
+                    pro_err.append(np.clip(mp[ok] - rp[ok],
+                                           -struck.PROMPT_CLIP, struck.PROMPT_CLIP))
             mcurves.setdefault(k[1], []).append(
-                terms.residue_curve(self.spectro, M[0], r["harmonic"]))
+                terms.residue_curve(self.spectro, M[0], r["harmonic"],
+                                    window=r["late"]))
             rcurves.setdefault(k[1], []).append(r["curve"])
             mpeaks.setdefault(k[1], []).append(
-                terms.peak_rows(self.spectro, M[0], r["peak_mask"]))
+                terms.peak_rows(self.spectro, M[0], r["peak_mask"], window=r["late"]))
             rpeaks.setdefault(k[1], []).append(r["peaks"])
 
             note_cells = []
@@ -216,8 +293,22 @@ class ShapeLoss:
         parts = {"spectrum": float(np.sqrt(np.sum(wa * da ** 2) / np.sum(wa)))}
         oe = np.concatenate(onset_err)
         parts["onset"] = float(np.sqrt(np.mean(oe ** 2)))
-        re_ = [x for x in res_err if x.size]
-        parts["residue"] = float(np.sqrt(np.mean(np.concatenate(re_) ** 2))) if re_ else 0.0
+        if self.pitched:
+            re_ = [x for x in res_err if x.size]
+            parts["residue"] = float(np.sqrt(np.mean(np.concatenate(re_) ** 2))) \
+                if re_ else 0.0
+        else:
+            # Omitted rather than zeroed when nothing could be read. Both are
+            # gated -- a band under its own recording's floor is not asked about
+            # -- and a gate that rejects everything leaves an empty average,
+            # which scores as a perfect match for a measurement that never ran.
+            # Leaving the key out keeps it out of the weighted mean as well, and
+            # `Terms` prints what was not scored so a shorter list is visible
+            # rather than silently better.
+            if den_err:
+                parts["density"] = float(np.sqrt(np.mean(np.concatenate(den_err) ** 2)))
+            if pro_err:
+                parts["prompt"] = float(np.sqrt(np.mean(np.concatenate(pro_err) ** 2)))
         # One-sided: a model that rings less at fixed pitches than the reference
         # does is not thereby wrong, and the reference's own figure carries the
         # residual of its bed subtraction, which is a floor and not a target.
@@ -229,7 +320,9 @@ class ShapeLoss:
             inv.append(np.clip(np.maximum(mi[live] - ri[live], 0.0),
                                0.0, terms.INVARIANCE_CLIP))
         parts["invariance"] = float(np.sqrt(np.mean(np.concatenate(inv) ** 2))) if inv else 0.0
-        parts["release"] = float(np.sqrt(np.mean(np.array(rel_err) ** 2))) if rel_err else 0.0
+        if self.pitched:
+            parts["release"] = float(np.sqrt(np.mean(np.array(rel_err) ** 2))) \
+                if rel_err else 0.0
         parts["balance"] = float(np.sqrt(np.mean(np.concatenate(bal_err) ** 2))) \
             if bal_err else 0.0
         # Recurrence: per row, how much more often the model's aftersound peaks
@@ -262,5 +355,7 @@ class ShapeLoss:
 
         num = sum(self.weights[k] * parts[k] ** 2 for k in parts)
         total = float(np.sqrt(num / sum(self.weights[k] for k in parts)))
-        out = Terms(total=total, parts=parts, per_note=per_note, gain_db=g)
+        missing = tuple(k for k in self.weights if k not in parts)
+        out = Terms(total=total, parts=parts, per_note=per_note, gain_db=g,
+                    unscored=missing)
         return (out, grids) if detail else out

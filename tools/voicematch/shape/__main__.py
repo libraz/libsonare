@@ -26,6 +26,8 @@ from corpus import load_corpus  # noqa: E402
 
 from . import admittance, probes, purity, takes  # noqa: E402
 from .bed import Bed  # noqa: E402
+from profile import PERCUSSION_CHANNEL, is_percussion  # noqa: E402
+
 from .loss import ShapeLoss  # noqa: E402
 from .partials import Track  # noqa: E402
 from .render import Signals, load_knob_dump, read_overrides, write_overrides  # noqa: E402
@@ -48,7 +50,13 @@ def build(args):
     # time; the other direction would cut the long ones short.
     seconds = round(corpus.slot_s + preroll, 3)
     spectro = Spectro(sample_rate=corpus.sample_rate, seconds=seconds)
+    # Which kind of instrument this is decides the channel the model renders on
+    # and which terms the comparison can even ask. Read off the capture through
+    # the harness's own predicate rather than from a flag here, so one answer
+    # serves `profile.py` and this package alike.
+    percussion = is_percussion(cap)
     sigs = Signals(corpus_root=Path(args.corpus), program=int(cap["program"]),
+                   channel=PERCUSSION_CHANNEL - 1 if percussion else 0,
                    gate_s=gate_s, seconds=seconds, lib_path=args.lib)
     notes = tuple(int(x) for x in args.notes.split(",")) if args.notes else corpus.notes
     # Every velocity but the softest. Fitted at one dynamic, a contact model has
@@ -83,7 +91,8 @@ def build(args):
                   f"to subtract", file=sys.stderr)
             bed = None
     loss = ShapeLoss(signals=sigs, spectro=spectro, bed=bed,
-                     note_off_s=preroll + gate_s, velocities=vels)
+                     note_off_s=preroll + gate_s, velocities=vels,
+                     pitched=not percussion)
     return cap, corpus, sigs, loss, notes
 
 

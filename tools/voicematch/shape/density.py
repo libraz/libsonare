@@ -63,7 +63,7 @@ def _fine_spectrum(sig, window, sr):
 
 
 def modal_density(sig, note, window=(2.5, 6.0), sr=48000, bands=DENSITY_BANDS,
-                  B=0.0, notch_cents=35.0):
+                  B=0.0, notch_cents=35.0, notch=True):
     """Peaks per octave in the aftersound, with the played note's partials removed.
 
     The note's own partials are notched out rather than left in, because a
@@ -71,19 +71,28 @@ def modal_density(sig, note, window=(2.5, 6.0), sr=48000, bands=DENSITY_BANDS,
     counted as the structure's modes. The notch is a third of a semitone, which
     is wide enough for the analysis window's own resolution and narrow enough
     to leave a resonance sitting between two partials.
+
+    `notch=False` is for a struck piece that has no played partials to remove,
+    where the whole spectrum is the structure. It is not an optimisation: the
+    notch is uncapped, so on a low note the mask fuses into a continuous band
+    above roughly the sixteenth partial and covers the entire upper spectrum —
+    every band comes back empty and the count reads zero for a signal full of
+    resonances. Passing an unpitched piece a nominal note number is therefore
+    not a way to get an unnotched count.
     """
     from .partials import note_hz, partial_hz
     fr, sp = _fine_spectrum(sig, window, sr)
     if fr is None:
         return {b: (0, 0.0) for b in bands}
-    f0 = note_hz(note)
     keep = np.ones(len(fr), dtype=bool)
-    half = 2.0 ** (notch_cents / 1200.0)
-    for k in range(1, 200):
-        f = partial_hz(f0, B, k)
-        if f > fr[-1]:
-            break
-        keep &= ~((fr > f / half) & (fr < f * half))
+    if notch:
+        f0 = note_hz(note)
+        half = 2.0 ** (notch_cents / 1200.0)
+        for k in range(1, 200):
+            f = partial_hz(f0, B, k)
+            if f > fr[-1]:
+                break
+            keep &= ~((fr > f / half) & (fr < f * half))
     out = {}
     for lo, hi in bands:
         m = keep & (fr >= lo) & (fr < hi)
