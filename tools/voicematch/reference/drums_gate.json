@@ -2,34 +2,41 @@
   "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps the magnitude of the signed median and 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "kit-a",
   "margin": 1.25,
+  "reference_measured_utc": "2026-08-25T09:14:42+00:00",
+  "recorded_utc": "2026-08-26T06:24:48+00:00",
+  "reference_spread": {},
   "bounds": {
     "band_tilt": {
-      "median": 13.222,
-      "abs_median": 13.311
+      "median": 7.603,
+      "abs_median": 9.084
     },
     "band_shape": {
-      "median": 21.435,
-      "abs_median": 21.435
+      "median": 20.534,
+      "abs_median": 20.534
     },
     "band_decay": {
-      "median": 137.688,
-      "abs_median": 300.703
+      "median": 288.57,
+      "abs_median": 313.62
     },
     "attack": {
-      "median": 5.0,
-      "abs_median": 5.0
+      "median": 40.0,
+      "abs_median": 40.0
     },
     "crest": {
-      "median": 2.3,
-      "abs_median": 4.131
+      "median": 1.912,
+      "abs_median": 3.481
     },
     "centroid_pct": {
-      "median": 53.966,
-      "abs_median": 63.759
+      "median": 39.774,
+      "abs_median": 60.32
+    },
+    "level": {
+      "median": 19.062,
+      "abs_median": 19.062
     },
     "vel_range": {
-      "median": 13.625,
-      "abs_median": 13.625
+      "median": 12.713,
+      "abs_median": 12.713
     }
   }
 }

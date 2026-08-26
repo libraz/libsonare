@@ -431,14 +431,14 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // keep trading energy, and a wash that stops leaves the partials to ring on
   // undisturbed, which reads as a bell rather than as a cymbal.
   t[49] = make_cymbal(3600.0f, 1.10f, 0.20f, 4000.0f, 3000.0f, 6.0f, 5000.0f, 0.50f);  // Crash 1
-  t[57] = make_cymbal(2500.0f, 1.55f, 0.22f, 4500.0f, 2800.0f, 5.0f, 5600.0f, 0.52f);  // Crash 2
+  t[57] = make_cymbal(2500.0f, 1.55f, 0.22f, 4500.0f, 2800.0f, 5.0f, 3360.0f, 0.52f);  // Crash 2
   // A ride is played on its shoulder with the tip of the stick, so what carries
   // is a defined ping over a wash kept short enough to stay out of its way; a
   // ride that blooms like a crash is a ride nobody can play time on.
-  t[51] = make_cymbal(2800.0f, 2.20f, 0.60f, 3500.0f, 3000.0f, 1.0f, 6000.0f, 0.50f);    // Ride 1
-  t[59] = make_cymbal(1900.0f, 2.80f, 0.70f, 4000.0f, 2600.0f, 0.6f, 7000.0f, 0.1495f);  // Ride 2
+  t[51] = make_cymbal(2800.0f, 2.20f, 0.96f, 3500.0f, 3000.0f, 1.0f, 6000.0f, 0.50f);    // Ride 1
+  t[59] = make_cymbal(4750.0f, 2.80f, 0.70f, 4000.0f, 2600.0f, 0.6f, 7000.0f, 0.1495f);  // Ride 2
   t[55] = make_cymbal(5200.0f, 0.30f, 0.30f, 1500.0f, 4200.0f, 2.5f, 2500.0f, 0.45f);    // Splash
-  t[52] = make_cymbal(2600.0f, 0.35f, 0.70f, 2500.0f, 4200.0f, 3.0f, 4000.0f, 0.55f);    // China
+  t[52] = make_cymbal(2600.0f, 0.35f, 0.70f, 2500.0f, 2520.0f, 3.0f, 1600.0f, 0.55f);    // China
   // The china's upturned flange is what makes it trashy, and trashy is neither
   // dark nor bright: it concentrates the wash into one harsh band instead of
   // spreading it up the spectrum the way a flat plate does. That is a different
@@ -464,24 +464,41 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[49].percussion.plate_gain = 2.0f;
   t[49].percussion.plate_hf_ratio = 0.5f;
   t[57].percussion.plate_low_hz = 145.0f;
-  t[57].percussion.plate_t60_s = 0.70f;
+  t[57].percussion.plate_t60_s = 0.56f;
   t[57].percussion.plate_gain = 2.0f;
   t[57].percussion.plate_hf_ratio = 0.5f;
+  t[57].percussion.shimmer_cutoff_hz = 3600.0f;
   t[51].percussion.plate_low_hz = 150.0f;
-  t[51].percussion.plate_t60_s = 0.80f;
+  t[51].percussion.plate_t60_s = 0.32f;
   t[51].percussion.plate_gain = 1.6f;
   t[51].percussion.plate_hf_ratio = 0.55f;
+  t[51].percussion.mode_ratios[1] = 3.35f;
+  t[51].percussion.noise_q = 0.4f;
+  t[51].amp_env.sustain = 0.1f;
+  t[51].drive = 0.1f;
   t[59].percussion.plate_low_hz = 145.0f;
-  t[59].percussion.plate_t60_s = 0.90f;
+  t[59].percussion.plate_t60_s = 2.25f;
   t[59].percussion.plate_gain = 1.6f;
   t[59].percussion.plate_hf_ratio = 0.55f;
-  t[55].percussion.plate_low_hz = 620.0f;
-  t[55].percussion.plate_t60_s = 0.35f;
+  t[59].percussion.mode_ratios[0] = 0.6f;
+  t[59].percussion.noise_gain = 0.72f;
+  t[59].percussion.noise_q = 0.4f;
+  t[59].percussion.wire_buzz = 1.0f;
+  t[59].amp_env.sustain = 0.1f;
+  t[55].percussion.plate_low_hz = 248.0f;
+  t[55].percussion.plate_t60_s = 0.56f;
   t[55].percussion.plate_gain = 1.6f;
-  t[52].percussion.plate_low_hz = 380.0f;
-  t[52].percussion.plate_t60_s = 0.50f;
-  t[52].percussion.plate_gain = 1.6f;
+  t[55].percussion.phisem_beans = 0.4f;
+  // The china's plate is at the top of its clamp. The search asked for more
+  // than the range allows, which is a result and not a setting: either the
+  // bound is wrong for a piece this small and stiff, or what it wants is not
+  // more of this plate.
+  t[52].percussion.plate_low_hz = 152.0f;
+  t[52].percussion.plate_t60_s = 0.2f;
+  t[52].percussion.plate_gain = 4.0f;
   t[52].percussion.plate_hf_ratio = 0.95f;
+  t[52].key_track = 1.0f;
+  t[52].resonance_q = 0.2828f;
   // Every plate needs a top as well as a bottom. Where the wash corners above
   // came from the reference's measured band edge, these come from the same
   // place: the band each piece still radiates in, above which the network would
@@ -499,24 +516,24 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[49].percussion.plate_air_hz = 4500.0f;
   t[49].percussion.noise_air_hz = 5000.0f;
   t[49].cutoff_hz = 5000.0f;
-  t[57].percussion.plate_air_hz = 4200.0f;
-  t[57].percussion.noise_air_hz = 4000.0f;
-  t[57].percussion.noise_q = 2.2f;
-  t[57].cutoff_hz = 4000.0f;
+  t[57].percussion.plate_air_hz = 5250.0f;
+  t[57].percussion.noise_air_hz = 6400.0f;
+  t[57].percussion.noise_q = 0.88f;
+  t[57].cutoff_hz = 1600.0f;
   t[51].percussion.plate_air_hz = 3500.0f;
-  t[51].percussion.noise_air_hz = 4000.0f;
-  t[51].cutoff_hz = 2500.0f;
+  t[51].percussion.noise_air_hz = 1600.0f;
+  t[51].cutoff_hz = 1875.0f;
   t[59].percussion.plate_air_hz = 3200.0f;
   t[59].percussion.noise_air_hz = 4000.0f;
-  t[59].cutoff_hz = 3400.0f;
+  t[59].cutoff_hz = 1360.0f;
   t[55].percussion.plate_air_hz = 6000.0f;
   t[55].percussion.noise_air_hz = 6000.0f;
   t[55].percussion.noise_cutoff_hz = 3500.0f;
   t[55].percussion.noise_q = 2.0f;
   t[55].cutoff_hz = 5000.0f;
-  t[52].percussion.plate_air_hz = 5000.0f;
+  t[52].percussion.plate_air_hz = 12500.0f;
   t[52].percussion.noise_air_hz = 5000.0f;
-  t[52].cutoff_hz = 4000.0f;
+  t[52].cutoff_hz = 2400.0f;
 
   // --- snares ---
   t[38] = d.snare;  // Acoustic Snare, the archetype
@@ -576,7 +593,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[44].percussion.plate_low_hz = 500.0f;
   t[44].percussion.plate_t60_s = 0.25f;
   t[44].percussion.plate_air_hz = 4000.0f;
-  t[44].gain = 1.152f;
+  t[44].gain = 1.4587f;
 
   // Hi-hats share mute group 1; the open hat gets a snappy choke fade (release
   // is unused by one-shot voices in normal play, so this stays bit-identical
@@ -647,7 +664,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // the fit is not offered the output gain, because no term it minimises can
   // see one, so the values it chose left the peak 10 dB down and nothing in its
   // report was entitled to notice. Measured across three velocities.
-  t[42].gain = 0.9931f;
+  t[42].gain = 1.387f;
   t[44].percussion.exclusive_class = 1;
   t[46].percussion.exclusive_class = 1;
   t[46].amp_env.release_ms = 40.0f;
@@ -688,7 +705,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[46].stereo_spread = 0.565048f;
   // Re-gained with the corner: the piece was 17 dB under its reference, which
   // every normalised metric in the comparison reads as correct.
-  t[46].gain = 0.48f;
+  t[46].gain = 2.5777f;
 
   // --- wooden idiophones + clicks ---
   t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);      // Sticks
@@ -780,11 +797,11 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // band now, and a band already has a top. What each one is bounded by instead
   // is its plate ceiling and its voice corner, beside the plate values above.
   t[49].gain = 1.2698f;  // Crash 1
-  t[51].gain = 0.4f;     // Ride 1
-  t[52].gain = 1.2f;     // China
-  t[55].gain = 1.090f;   // Splash
-  t[57].gain = 1.8f;     // Crash 2
-  t[59].gain = 0.5f;     // Ride 2
+  t[51].gain = 2.0397f;  // Ride 1
+  t[52].gain = 3.7653f;  // China
+  t[55].gain = 1.279f;   // Splash
+  t[57].gain = 4.0f;     // Crash 2, at the clamp
+  t[59].gain = 4.0f;     // Ride 2, at the clamp
 
   // --- PhISEM shakers + scrapers ---
   t[54] = make_shaker(32.0f, 120.0f, 2500.0f, 2.0f, 0.2267f);  // Tambourine
