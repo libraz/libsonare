@@ -31,17 +31,34 @@ that nothing happened -- which is exactly what it was written to rule out.
 `--reach` is `<drum note>:<override>` or `p<program>:<override>`, and may be
 repeated. Overrides need the head library to be a `-DBUILD_TUNING=ON` build,
 which the run checks rather than assumes.
+
+`--isolate` asks the neighbouring question against one library: does a constant
+addressed to one drum note reach any OTHER note's render? It takes an override
+string spanning several pieces and, for each piece it names, renders that piece
+under the whole string and under just the keys addressed to it, requiring the
+bytes to match -- and separately requiring each piece to hear its own key, since
+a string nothing reads passes the first half perfectly.
+
+    python tools/voicematch/identity.py --head build-tuning/lib/libsonare.dylib \\
+        --isolate d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0
+
+That independence is what the shape search's per-note render cache is keyed on:
+a candidate touching one piece of a kit re-renders one piece only if no other
+piece can read it.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from shape.render import DRUM_SCOPE, scope_overrides  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -102,11 +119,65 @@ def parse_reach(spec: str) -> tuple[int, int, int, str]:
     return int(where), 0, PERCUSSION_CHANNEL, ov
 
 
+def isolate_notes(ov: str) -> list[int]:
+    """The drum notes an override string addresses, in order."""
+    seen = []
+    for kv in ov.split(","):
+        m = DRUM_SCOPE.match(kv.strip())
+        if m and int(m.group(1)) not in seen:
+            seen.append(int(m.group(1)))
+    return seen
+
+
+def check_isolation(lib: str, ov: str, out: list) -> tuple[bool, str]:
+    """Does a constant addressed to one drum note reach another note's render?
+
+    Two halves, and the second is what makes the first mean anything. A piece
+    rendered under the whole string must match the same piece rendered under
+    only the keys addressed to it -- and the same piece must NOT match its own
+    default, or the string it was asked to ignore is one nothing reads and every
+    broken setup passes.
+    """
+    notes = isolate_notes(ov)
+    if len(notes) < 2:
+        return False, ("--isolate needs keys for at least two drum notes, "
+                       f"got {notes or 'none'}")
+    print(f"\n{'isolate':<14}{'scoped':<18}{'whole':<18}{'default':<18}verdict")
+    leaked, deaf = [], []
+    for n in notes:
+        scoped = scope_overrides(ov, n)
+        a = render_hash(lib, n, 0, PERCUSSION_CHANNEL, overrides=scoped)
+        b = render_hash(lib, n, 0, PERCUSSION_CHANNEL, overrides=ov)
+        d = render_hash(lib, n, 0, PERCUSSION_CHANNEL)
+        if a != b:
+            leaked.append(n)
+        if a == d:
+            deaf.append(n)
+        out.append({"note": n, "scoped": a, "whole": b, "default": d,
+                    "isolated": a == b, "hears_own": a != d})
+        print(f"drum {n:<9}{a[:16]:<18}{b[:16]:<18}{d[:16]:<18}"
+              + ("LEAKS" if a != b else "DEAF" if a == d else "isolated"))
+    if leaked:
+        return False, ("FAIL: a constant addressed to another piece changed what "
+                       f"{', '.join(str(n) for n in leaked)} rendered, so a "
+                       "per-note render cache keyed on the scoped string would "
+                       "serve a stale note")
+    if deaf:
+        return False, ("FAIL: " + ", ".join(str(n) for n in deaf) + " rendered "
+                       "its default under its own keys, so the isolation result "
+                       "is vacuous -- check the keys exist and the library was "
+                       "built with -DBUILD_TUNING=ON")
+    return True, f"OK: {len(notes)} pieces read their own constants and no other's"
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--base", required=True, help="dylib built before the mechanism")
+    p.add_argument("--base", default="", help="dylib built before the mechanism")
     p.add_argument("--head", required=True, help="dylib built with it")
+    p.add_argument("--isolate", default="",
+                   help="override string spanning several drum notes; each must "
+                        "render the same with and without the other notes' keys")
     p.add_argument("--programs", default="", help="melodic programs, comma separated")
     p.add_argument("--drums", default="", help="drum notes, comma separated")
     p.add_argument("--note", type=int, default=60, help="note the programs are played at")
@@ -120,11 +191,14 @@ def main(argv=None) -> int:
         cases.append((f"program {prog}", args.note, prog, 0))
     for note in [int(x) for x in args.drums.split(",") if x.strip()]:
         cases.append((f"drum {note}", note, 0, PERCUSSION_CHANNEL))
-    if not cases:
-        p.error("nothing to compare -- give --programs and/or --drums")
+    if not cases and not args.isolate:
+        p.error("nothing to compare -- give --programs, --drums and/or --isolate")
+    if cases and not args.base:
+        p.error("--base is what the identity is measured against")
 
     rows, differing = [], []
-    print(f"{'case':<14}{'base':<18}{'head':<18}verdict")
+    if cases:
+        print(f"{'case':<14}{'base':<18}{'head':<18}verdict")
     for label, note, prog, chan in cases:
         b = render_hash(args.base, note, prog, chan)
         h = render_hash(args.head, note, prog, chan)
@@ -148,11 +222,19 @@ def main(argv=None) -> int:
         print(f"{ov.split('=')[0].split('.')[-1]:<14}{off[:16]:<18}{on[:16]:<18}"
               f"{'reaches' if moved else 'INERT'}")
 
+    iso_rows, iso_ok, iso_msg = [], True, ""
+    if args.isolate:
+        iso_ok, iso_msg = check_isolation(args.head, args.isolate, iso_rows)
+
     if args.json:
         Path(args.json).write_text(json.dumps(
-            {"identity": rows, "reach": reach_rows}, indent=1) + "\n")
+            {"identity": rows, "reach": reach_rows, "isolate": iso_rows},
+            indent=1) + "\n")
 
     ok = True
+    if not iso_ok:
+        print("\n" + iso_msg)
+        ok = False
     if differing:
         print(f"\nFAIL: the default is not the identity for {', '.join(differing)}")
         ok = False
@@ -164,9 +246,14 @@ def main(argv=None) -> int:
               "that the override keys exist")
         ok = False
     if ok:
-        print(f"\nOK: {len(rows)} voices bit-identical at the default"
-              + (f", {len(reached)} of {len(reach_rows)} overrides audible"
-                 if args.reach else ""))
+        parts = []
+        if rows:
+            parts.append(f"{len(rows)} voices bit-identical at the default")
+        if args.reach:
+            parts.append(f"{len(reached)} of {len(reach_rows)} overrides audible")
+        if iso_msg:
+            parts.append(iso_msg.split(": ", 1)[1])
+        print("\nOK: " + ", ".join(parts))
     return 0 if ok else 1
 
 

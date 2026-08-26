@@ -17,6 +17,7 @@ import hashlib
 import itertools
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -216,6 +217,40 @@ def write_overrides(state: dict[str, float], base: dict[str, float]) -> str:
     """
     return ",".join(f"{k}={v!r}" for k, v in sorted(state.items())
                     if k not in base or v != base[k])
+
+
+#: An override key addressed to one drum note. The three digits are the MIDI
+#: note the patch voices, which is what makes a kit's coordinates separable at
+#: all -- a melodic patch field carries the patch's name instead and voices
+#: every note of the program, so it matches nothing here and is kept for all.
+DRUM_SCOPE = re.compile(r"d(\d{3})\.")
+
+
+def scope_overrides(ov: str, note: int) -> str:
+    """The part of an override string that can reach one note's render.
+
+    A kit is a bank of independent patches: `d049.percussion.plate_gain` is read
+    while the crash's patch is built and by nothing else, so no setting of it can
+    change what note 42 renders. Dropping the keys addressed to other notes
+    leaves a shorter string that must render this note identically, which is what
+    lets a candidate touching one piece re-render one piece instead of the kit.
+
+    Anything not addressed to a note -- an engine constant, a send weight, a
+    melodic patch field -- is kept for every note. Its reach is not written in
+    its name, and a guess about it would be a guess in the direction of a wrong
+    answer that looks like a fast one.
+
+    The identity this rests on is checked rather than assumed: `identity.py
+    --isolate` renders a note under both strings and requires the bytes to match.
+    """
+    keep = []
+    for kv in ov.split(","):
+        if not kv.strip():
+            continue
+        m = DRUM_SCOPE.match(kv.strip())
+        if m is None or int(m.group(1)) == note:
+            keep.append(kv)
+    return ",".join(keep)
 
 
 def load_knob_dump(path: Path | str, namespaces: tuple[str, ...] = ()) -> dict[str, float]:

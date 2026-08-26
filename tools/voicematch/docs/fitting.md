@@ -205,6 +205,19 @@ python tools/voicematch/identity.py \
 
 **The `--reach` half is the load-bearing one.** A silent build, a library the loader did not pick, an override key that does not resolve and a branch that is never taken all produce a perfect identity table, so a run that reports only that half cannot tell any of them from success — what it confirms is that nothing happened, which is what it was written to rule out. An identity table with no override moving anything is reported as vacuous and exits non-zero.
 
+### Does a constant reach only the piece it is addressed to (`--isolate`)
+
+The same question sideways, and against one library rather than two: a kit is a bank of independent patches, so `d049.percussion.plate_gain` should be read while the crash is built and by nothing else.
+
+```
+python tools/voicematch/identity.py --head build-tuning/lib/libsonare.dylib \
+    --isolate d042.percussion.plate_gain=0.9,d044.percussion.wire_buzz=0.8,d046.percussion.strike_r=0.2
+```
+
+Each piece named in the string is rendered under the whole string and under only its own keys, and the raw bytes have to match. The vacuity trap is the same shape as `--reach`'s and is guarded the same way: a string nothing reads leaks into nothing, so each piece must also differ from its own default or the result is refused.
+
+This is what the shape search's per-note render cache is keyed on — a candidate touching one piece re-renders one piece only because no other piece can read it — so it is worth re-running after any change to how the drum table is built, not only after a new mechanism.
+
 ## Write-back
 
 Everything a fit moves is written back to the source, in the form that value takes there:

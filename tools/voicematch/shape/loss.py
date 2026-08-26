@@ -16,10 +16,16 @@ Gain frame. Exactly one scalar is removed across the whole note set: the mean
 held-level offset. Per-note level error is a real error and stays in, and so
 does the model's own loudness-versus-velocity curve, which normalising each
 layer separately would grant for free.
+
+Cost. A note's render and everything read off it are cached against the part of
+the override string that can reach that note, so a candidate touching one piece
+of a kit re-renders one piece. See `_models`.
 """
 
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -32,6 +38,7 @@ from .partials import (
     harmonic_rows,
     note_hz,
 )
+from .render import scope_overrides
 from .spectro import Spectro
 
 FLOOR_DB = 85.0
@@ -98,9 +105,26 @@ class ShapeLoss:
     #: instrument: the partial mask has nothing to mask and every window is set
     #: by the piece's own decay rather than by a keyboard's note length.
     pitched: bool = True
+    #: Megabytes of analysed model notes to keep. One entry is a spectrogram at
+    #: three scales, a couple of megabytes on this geometry, so the budget is
+    #: what decides how many candidates' worth of grid the cache spans. Zero
+    #: switches it off, which is what the equivalence test scores against.
+    #:
+    #: The floor below is not optional: with room for less than two grids the
+    #: cache evicts the notes the NEXT candidate needs, which costs the analysis
+    #: and buys nothing. A grid too large for the budget therefore takes the
+    #: memory anyway rather than thrashing quietly -- the reference side already
+    #: keeps the whole grid analysed with no cap at all, so this is proportional
+    #: to a cost the comparison was paying before the cache existed.
+    cache_mb: float = 384.0
 
     def __post_init__(self) -> None:
         self._ref: dict = {}
+        self._packs: OrderedDict = OrderedDict()
+        self._pack_lock = threading.Lock()
+        self._entry_bytes = 0
+        #: Renders asked of `signals`, for the tests that price the cache.
+        self.rendered = 0
         if self.weights is None:
             self.weights = dict(DEFAULT_WEIGHTS if self.pitched else STRUCK_WEIGHTS)
         end = self.spectro.seconds
@@ -177,13 +201,99 @@ class ShapeLoss:
         self._ref[key] = pack
         return pack
 
+    def _model(self, k, sig, r) -> dict:
+        """Everything read off one model render that the gain frame cannot move.
+
+        Separated so it can be kept: the gain is a mean over the whole note set
+        and changes whenever any note in the set does, so nothing measured
+        against it survives a neighbouring note moving. Everything here is
+        measured against the reference alone, which is fixed.
+        """
+        sr = self.spectro.sample_rate
+        M = self.spectro(sig)
+        pack = {
+            "M": M,
+            "held": terms.held_db(sig, window=r["held_window"], sr=sr),
+            "onset": terms.onset_stats(sig, sr),
+            "balance": [terms.band_balance(self.spectro, M[0], w)
+                        for w in r["windows"]],
+            "curve": terms.residue_curve(self.spectro, M[0], r["harmonic"],
+                                         window=r["late"]),
+            "peaks": terms.peak_rows(self.spectro, M[0], r["peak_mask"],
+                                     window=r["late"]),
+        }
+        if self.pitched:
+            pack["release"] = terms.release_stats(sig, self.release_pre,
+                                                  self.release_post, sr)
+            pack["residue"] = terms.residue_ratio(self.spectro, M[0], r["harmonic"])
+        else:
+            pack["density"] = struck.mode_count(sig, r["late"], sr)
+            pack["prompt"] = struck.prompt_late(sig, r["windows"][0], r["late"], sr)
+        return pack
+
+    def _models(self, keys, ref, overrides: str) -> dict:
+        """One analysed pack per note, rendering only the notes that moved.
+
+        Keyed on the note, the layer, and `scope_overrides` -- the part of the
+        candidate a note can read. A coordinate descent over a kit changes one
+        piece at a time, so every other piece's key is the one the previous
+        evaluation already stored and the render is skipped.
+
+        The notes that do have to be rendered go out in a single call, under the
+        WHOLE override string rather than the scoped one. That is the same render
+        by the identity the key rests on, and it keeps the batch to one
+        subprocess; splitting it per scope would trade the process launches back.
+
+        Duplicate work under concurrency is possible and not worth locking
+        against: two threads that want the same cold note both compute it and one
+        result is discarded. It stays rare because the callers score the current
+        state serially before fanning out -- `Descent.run` for its starting
+        score, `ablate` for `f0` -- which is what puts the shared notes in the
+        cache before any pool starts.
+        """
+        want = {k: (k, scope_overrides(overrides, k[0])) for k in keys}
+        out, missing = {}, []
+        if self.cache_mb:
+            with self._pack_lock:
+                for k in keys:
+                    p = self._packs.get(want[k])
+                    if p is None:
+                        missing.append(k)
+                    else:
+                        self._packs.move_to_end(want[k])
+                        out[k] = p
+        else:
+            missing = list(keys)
+        if missing:
+            with self._pack_lock:
+                self.rendered += len(missing)
+            sigs = self.signals(missing, ov=overrides)
+            for k in missing:
+                out[k] = self._model(k, sigs[k], ref[k])
+            if self.cache_mb:
+                with self._pack_lock:
+                    for k in missing:
+                        self._packs[want[k]] = out[k]
+                        self._packs.move_to_end(want[k])
+                    cap = self.cache_limit(len(keys))
+                    while len(self._packs) > cap:
+                        self._packs.popitem(last=False)
+        return out
+
+    def cache_limit(self, grid: int) -> int:
+        """Entries the budget allows, but never fewer than two grids."""
+        if not self._entry_bytes and self._packs:
+            p = next(reversed(self._packs.values()))
+            self._entry_bytes = sum(a.nbytes for a in p["M"])
+        by_budget = int(self.cache_mb * 1e6 / self._entry_bytes) \
+            if self._entry_bytes else 0
+        return max(2 * grid, by_budget)
+
     def score(self, overrides: str = "", notes=(), detail: bool = False) -> Terms:
         ref = self.reference(notes)
         keys = self.pairs(notes)
-        mod = self.signals(keys, ov=overrides)
-        sr = self.spectro.sample_rate
-        g = float(np.mean([terms.held_db(mod[k], window=ref[k]["held_window"], sr=sr)
-                           - ref[k]["held"] for k in keys]))
+        mod = self._models(keys, ref, overrides)
+        g = float(np.mean([mod[k]["held"] - ref[k]["held"] for k in keys]))
 
         per_note, cells, grids = {}, [], {}
         onset_err, res_err, rel_err, bal_err = [], [], [], []
@@ -191,8 +301,8 @@ class ShapeLoss:
         mcurves, rcurves = {}, {}
         mpeaks, rpeaks = {}, {}
         for k in keys:
-            r = ref[k]
-            ml, mr = terms.onset_stats(mod[k], sr)
+            r, mo = ref[k], mod[k]
+            ml, mr = mo["onset"]
             rl, rr = r["onset"]
             onset_err.append(np.clip(ml - rl - g, -terms.ONSET_CLIP, terms.ONSET_CLIP))
             # Time-to-rise as a ratio in decibels, not a difference in
@@ -205,34 +315,29 @@ class ShapeLoss:
             # One-sided, and scored only while the reference still had a note to
             # damp: once it has decayed past seventy decibels under its own peak
             # the ratio is about its floor and not about its felt.
-            if self.pitched:
-                mrel = terms.release_stats(mod[k], self.release_pre,
-                                           self.release_post, sr)
-                if r["release"][0] > -70.0:
-                    rel_err.append(min(max(mrel[1] - r["release"][1], 0.0),
-                                       terms.RELEASE_CLIP))
+            if self.pitched and r["release"][0] > -70.0:
+                rel_err.append(min(max(mo["release"][1] - r["release"][1], 0.0),
+                                   terms.RELEASE_CLIP))
 
-            M = self.spectro(mod[k])
+            M = mo["M"]
             # Two-sided and gain-free: a band the model under-fills costs
             # exactly what a band it over-fills costs. Bands the reference
             # itself does not occupy are not asked about, so a model is not
             # charged for failing to reproduce a floor.
-            for w, rb in zip(r["windows"], r["balance"]):
-                mb = terms.band_balance(self.spectro, M[0], w)
+            for mb, rb in zip(mo["balance"], r["balance"]):
                 live = rb > terms.BALANCE_LIVE_DB
                 if live.any():
                     bal_err.append(np.clip(mb[live] - rb[live],
                                            -terms.BALANCE_CLIP, terms.BALANCE_CLIP))
             if self.pitched:
                 res_err.append(np.clip(
-                    terms.residue_ratio(self.spectro, M[0], r["harmonic"])
-                    - r["residue"],
+                    mo["residue"] - r["residue"],
                     -terms.RESIDUE_CLIP, terms.RESIDUE_CLIP)[r["valid"]])
             else:
                 # Both are two-sided. Too sparse is a tuned bar and too diffuse
                 # is a hiss, and a strike that keeps its top and one that loses
                 # it are different pieces -- neither direction is free.
-                md, mok = struck.mode_count(mod[k], r["late"], sr)
+                md, mok = mo["density"]
                 rd, rok = r["density"]
                 ok = mok & rok
                 if ok.any():
@@ -241,18 +346,15 @@ class ShapeLoss:
                 # The REFERENCE decides which bands are asked about. A model
                 # silent where the instrument is not is the finding, so its own
                 # mask must not be allowed to withdraw the question.
-                mp, _ = struck.prompt_late(mod[k], r["windows"][0], r["late"], sr)
+                mp, _ = mo["prompt"]
                 rp, rpok = r["prompt"]
                 ok = rpok
                 if ok.any():
                     pro_err.append(np.clip(mp[ok] - rp[ok],
                                            -struck.PROMPT_CLIP, struck.PROMPT_CLIP))
-            mcurves.setdefault(k[1], []).append(
-                terms.residue_curve(self.spectro, M[0], r["harmonic"],
-                                    window=r["late"]))
+            mcurves.setdefault(k[1], []).append(mo["curve"])
             rcurves.setdefault(k[1], []).append(r["curve"])
-            mpeaks.setdefault(k[1], []).append(
-                terms.peak_rows(self.spectro, M[0], r["peak_mask"], window=r["late"]))
+            mpeaks.setdefault(k[1], []).append(mo["peaks"])
             rpeaks.setdefault(k[1], []).append(r["peaks"])
 
             note_cells = []

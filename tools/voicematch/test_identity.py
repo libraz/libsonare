@@ -69,3 +69,56 @@ def test_both_halves_together_are_the_pass(monkeypatch, capsys):
                         "36:d036.percussion.plate_gain=1.0"])
     assert rc == 0
     assert "3 voices bit-identical" in capsys.readouterr().out
+
+
+_ISOLATE = "d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0"
+
+
+def test_isolation_passes_when_each_piece_hears_its_own_key_and_no_other(
+        monkeypatch, capsys):
+    # Each note answers its own key and is deaf to the other's, which is the
+    # arrangement the per-note render cache is keyed on.
+    monkeypatch.setattr(identity, "render_hash", _hashes({
+        ("h.dylib", 42, "d042.percussion.strike_r=0.4"): "hat",
+        ("h.dylib", 42, _ISOLATE): "hat",
+        ("h.dylib", 49, "d049.percussion.plate_gain=2.0"): "crash",
+        ("h.dylib", 49, _ISOLATE): "crash",
+    }, default="default"))
+    rc = identity.main(["--head", "h.dylib", "--isolate", _ISOLATE])
+    assert rc == 0
+    assert "2 pieces read their own constants" in capsys.readouterr().out
+
+
+def test_a_piece_that_changes_under_another_pieces_key_fails(monkeypatch, capsys):
+    monkeypatch.setattr(identity, "render_hash", _hashes({
+        ("h.dylib", 42, "d042.percussion.strike_r=0.4"): "hat",
+        ("h.dylib", 42, _ISOLATE): "hat and crash",
+        ("h.dylib", 49, "d049.percussion.plate_gain=2.0"): "crash",
+        ("h.dylib", 49, _ISOLATE): "crash",
+    }, default="default"))
+    rc = identity.main(["--head", "h.dylib", "--isolate", _ISOLATE])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "LEAKS" in out and "stale note" in out
+
+
+def test_isolation_is_not_a_pass_when_the_keys_reach_nothing(monkeypatch, capsys):
+    # Every render is the default, so nothing leaked because nothing happened --
+    # a non-tuning build, or two keys that do not resolve.
+    monkeypatch.setattr(identity, "render_hash", _hashes({}))
+    rc = identity.main(["--head", "h.dylib", "--isolate", _ISOLATE])
+    assert rc == 1
+    assert "vacuous" in capsys.readouterr().out
+
+
+def test_isolation_needs_more_than_one_piece_to_mean_anything(monkeypatch, capsys):
+    monkeypatch.setattr(identity, "render_hash", _hashes({}))
+    rc = identity.main(["--head", "h.dylib", "--isolate", "d042.percussion.x=1"])
+    assert rc == 1
+    assert "at least two drum notes" in capsys.readouterr().out
+
+
+def test_the_notes_an_override_string_addresses_are_read_off_it():
+    assert identity.isolate_notes(_ISOLATE) == [42, 49]
+    assert identity.isolate_notes("d042.a=1,d042.b=2") == [42]
+    assert identity.isolate_notes("violin.bowed_string.bow_force=2") == []

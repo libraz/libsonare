@@ -154,6 +154,16 @@ Leave-one-out pricing is the only thing available at that point and it is not ad
 
 `prune` is also a subcommand, so a saved override set — a fit's output, or one assembled by hand from several runs — can be re-priced without repeating the descent that produced it.
 
+## What a candidate costs
+
+Rendering dominates: on the drum corpus, three quarters of a candidate's time is the subprocess that renders the grid and the rest is the spectrogram. Both were being paid for every note of every candidate, and on a kit most of that is answering a question nobody asked — each piece is its own patch, so trying a value of `d049.cutoff_hz` re-rendered the hi-hat, the ride and the china to find out that they had not changed.
+
+`scope_overrides` cuts the override string down to the part one note can read: the keys addressed to that note, plus everything addressed to no note at all. `ShapeLoss` keys its per-note analysis on that string, so a candidate that moves one piece re-renders one piece and reads the rest back. A melodic patch field carries its patch's name rather than a note number and so survives scoping for every note, which makes the cache correct on a keyboard and worthless on one — the win is a kit's, because a kit is what has independent patches.
+
+The independence is checked rather than assumed. `identity.py --isolate` renders each piece under a multi-piece override string and under only its own keys and requires the raw bytes to match, and separately requires each piece to hear its own key — a string nothing reads passes the first half perfectly. Everything the cache serves is a decibel value the gain frame cannot move; the gain is a mean over the whole note set, changes whenever any note in it does, and is recomputed every score.
+
+The budget is in megabytes rather than notes, with a floor of two grids. Below that the cache evicts the notes the next candidate is about to ask for, which costs an analysis per note, saves none, and looks exactly like caching.
+
 ## Probes
 
 `probes.py` holds measurements that answer a question rather than drive a search. Every one of them started as a complaint in words, and each was added after the loss was shown to be structurally unable to see what the complaint named:
