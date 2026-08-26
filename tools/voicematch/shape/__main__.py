@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from corpus import load_corpus  # noqa: E402
 
-from . import admittance, probes, purity, takes  # noqa: E402
+from . import admittance, probes, purity, struck, takes  # noqa: E402
 from .bed import Bed  # noqa: E402
 from profile import PERCUSSION_CHANNEL, is_percussion  # noqa: E402
 
@@ -184,6 +184,50 @@ def cmd_ablate(args):
                               hold_loss=hold_loss)
     print(f"fitted set  fit {f0:.3f}  hold {h0:.3f}\n")
     print(summarise(scores, base, moves))
+
+
+def cmd_struck(args):
+    """Per piece and per band: how many things ring, and where the top went.
+
+    The two readings a struck piece is judged on, printed side by side with the
+    reference instead of folded into the score, because the decisions they drive
+    are per band. A count well under the reference's says the piece is a small
+    resonator bank where the instrument is a field, which is a mechanism
+    finding; a positive prompt/late says the band belongs to the strike and is
+    gone from the aftersound, which is the reading that separates a hard piece
+    from one that measured every band level right and sounded like a drum.
+
+    Both windows come from each side's OWN decay, so the model is not read over
+    a window the reference's length chose. Comparing a count taken over a live
+    aftersound with one taken over a piece that has already stopped is the
+    error this is arranged to avoid.
+    """
+    _cap, _corpus, sigs, loss, notes = build(args)
+    ov = ""
+    if args.overrides:
+        ov = ",".join(f"{k}={v!r}" for k, v in sorted(
+            read_overrides(Path(args.overrides).read_text()).items()))
+    vel = loss.velocities[len(loss.velocities) // 2]
+    pairs = [(n, vel) for n in notes]
+    ref, mod = sigs(pairs, ref=True), sigs(pairs, ov=ov)
+    sr = loss.spectro.sample_rate
+    bands = struck.STRUCK_BANDS
+
+    print(f"velocity {vel}. modes = resonances counted in a {struck.DENSITY_SPAN_S:.2f} s "
+          "slice of the aftersound;")
+    print("prompt = each band's share of the strike minus its share of the "
+          "aftersound, in dB.")
+    print("A band the recording could not answer is left blank rather than "
+          "counted as zero.")
+    for n in notes:
+        print(f"\nnote {n}" + "".join(f"{f'{lo}-{hi}':>13}" for lo, hi in bands))
+        for label, sig in (("reference", ref[(n, vel)]), ("model", mod[(n, vel)])):
+            body, late = struck.windows(sig, sr)
+            counts, ok = struck.mode_count(sig, late, sr)
+            prompt, alive = struck.prompt_late(sig, body, late, sr)
+            print(f"{label:>10}" + "".join(
+                f"{c:>7.0f}/{p:<5.0f}" if o and a else f"{'-':>13}"
+                for c, o, p, a in zip(counts, ok, prompt, alive)))
 
 
 def cmd_probe(args):
@@ -403,6 +447,10 @@ def main(argv=None):
     s = sub.add_parser("probe", parents=[common])
     s.add_argument("--overrides", default="")
     s.set_defaults(fn=cmd_probe)
+
+    s = sub.add_parser("struck", parents=[common])
+    s.add_argument("--overrides", default="")
+    s.set_defaults(fn=cmd_struck)
 
     s = sub.add_parser("purity", parents=[common])
     s.add_argument("--overrides", default="")
