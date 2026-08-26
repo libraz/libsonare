@@ -534,9 +534,24 @@ QUIET_RATIO = 1.0 / 40.0  # -32 dB
 # Being loud is exactly why nothing caught it. `QUIET_RATIO` asks whether the
 # samples arrived; this asks whether they arrived on time, which is the only
 # part of the failure that shows. A slow-attack instrument does not defeat it:
-# the test is the first sample over an absolute -80 dBFS, not the peak, and the
-# preroll is digital silence.
-ONSET_SLACK_MS = 40.0
+# the test is the first sample over an absolute -80 dBFS, not the peak.
+#
+# The width is measured rather than chosen, because the first value chosen was
+# too wide to catch the failure it was written for. Across a 282-render drum
+# grid every correct render onsets between 100.00 and 100.62 ms against a 100 ms
+# preroll, and nothing legitimately lands between there and the failure -- while
+# one render of the open hi-hat came back 31 ms late, 6.6 dB over a velocity
+# ramp whose neighbouring step is 0.16 dB, and was recorded because 31 sits
+# under a 40 ms slack. Re-rendered four times it returned the same correct take
+# every time, so the failure is a one-off the guard has to see, not a property
+# of the slot.
+#
+# One blind spot to know: this cannot fire for a source whose samples carry
+# their own pre-attack noise. Fifty of that grid's renders read an onset of 0
+# because the library's room tone is already sounding before the strike, and a
+# late render inside one of those is invisible here. `capture.py verify` names
+# them as energy before the note.
+ONSET_SLACK_MS = 10.0
 #: Absolute level that counts as the render having begun. Well under anything an
 #: instrument radiates and well over a silent preroll, which is exactly zero.
 ONSET_FLOOR_DBFS = -80.0
