@@ -1193,8 +1193,9 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
           f"that offset is removed from the stretch column\n")
     print(f"{'note':>5} {'vel':>4} | {'stretch Δc':>10} {'B model':>10} {'B ref':>10} "
           f"{'decay Δdb/s':>12} {'h2-6 model':>10} {'h2-6 ref':>9} "
-          f"{'centroid Δ%':>12} {'TNR Δdb':>9} {'damper Δms':>11}")
-    print("-" * 114)
+          f"{'centroid Δ%':>12} {'TNR Δdb':>9} {'damper Δms':>11}"
+          f"{'attack Δms':>11} {'width Δ':>8}")
+    print("-" * 134)
 
     deltas: dict[str, list[float]] = {}
     damper_censored: list[tuple[int, int]] = []
@@ -1236,6 +1237,17 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
             # mechanism for at all.
             "tnr": d("tnr_db"),
             "damper": None if damper_capped else d("damper_release_ms"),
+            # How long the note takes to reach its loudest point. On a piano
+            # this is not the strike -- the hammer is over in a couple of
+            # milliseconds -- it is the bloom the soundboard adds after it, and
+            # a model whose envelope peaks on the strike and falls from there
+            # reads as a thump rather than as a note that sinks in.
+            "attack": d("attack_ms"),
+            # The two radiation paths of a real board arrive decorrelated. A
+            # model that folds one signal into both legs scores exactly 0.0
+            # here and is inaudibly mono however wide the reverb around it is,
+            # which no mono-summed measurement in this file can see.
+            "stereo": d("stereo_width"),
         }
         centroid_pct = None
         if "centroid_hz" in m and r.get("centroid_hz"):
@@ -1257,7 +1269,8 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         print(f"{note:5d} {vel:4d} | {fmt(row['stretch'], '+10.1f')} "
               f"{m.get('inharmonicity_b', float('nan')):10.3e} {r.get('inharmonicity_b', float('nan')):10.3e} "
               f"{fmt(row['decay'], '+12.2f')} {fmt(bal_m, '+10.1f')} {fmt(bal_r, '+9.1f')} "
-              f"{fmt(centroid_pct, '+12.1f')} {fmt(row['tnr'], '+9.1f')} {damper_col}")
+              f"{fmt(centroid_pct, '+12.1f')} {fmt(row['tnr'], '+9.1f')} {damper_col}"
+              f"{fmt(row['attack'], '+11.1f')} {fmt(row['stereo'], '+8.3f')}")
 
     if damper_censored:
         # Each censored row was rendered over its own note's tail, so the
@@ -1301,10 +1314,17 @@ DELTA_LABELS = {"stretch": "tuning vs the reference (cents)",
                 "centroid_pct": "brightness (% of the reference centroid)",
                 "tnr": "tone-to-noise, + = model is cleaner (dB)",
                 "vel_range": "softest-to-hardest level range (dB)",
+                "stereo": "board width, + = model radiates wider (0 = mono)",
                 "band_tilt": "band tilt, + = model is brighter (dB)",
                 "band_shape": "band profile error, magnitude only (dB)",
                 "band_decay": "per-octave decay rate (dB/s)",
-                "attack": "time to the peak of the strike (ms)",
+                # Time to the envelope's peak, which is not the same event on
+                # the two paths this label serves: on a drum the peak IS the
+                # strike, on a struck string the hammer is over milliseconds
+                # before the soundboard reaches full level, so the number is
+                # the bloom after it. Naming the peak rather than the cause is
+                # the only wording true of both.
+                "attack": "time to the envelope peak (ms)",
                 "crest": "peak over RMS of the hit (dB)",
                 "level": "how loud the hit is vs the reference (dBFS)"}
 
@@ -1407,8 +1427,15 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
     happens to be near zero today would otherwise be held to a tolerance no
     change could stay inside.
     """
+    # A floor is the dimension's own noise, and for the two below it is not a
+    # guess: the reference corpus holds three instruments of the same kind, and
+    # the median disagreement BETWEEN them is the tightest bound any model can
+    # be held to without failing on which one it was compared against. On the
+    # grands that is 0.15-0.27 of width and 12.5-40 ms of attack, so the looser
+    # end of each is what a bound may not go under.
     floors = {"stretch": 1.0, "decay": 0.5, "damper": 5.0, "balance": 0.5,
-              "centroid_pct": 1.0, "tnr": 1.0, "vel_range": 1.0}
+              "centroid_pct": 1.0, "tnr": 1.0, "vel_range": 1.0,
+              "stereo": 0.27, "attack": 40.0}
     bounds = {}
     for key, row in summary.items():
         floor = floors.get(key, 1.0)

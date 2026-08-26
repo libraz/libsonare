@@ -30,6 +30,16 @@
       "label": "290 cm concert grand, close"
     }
   ],
+  "_dimensions": "One exclusion, measured rather than assumed. `damper` is out because the capture cannot hold enough of one: a grand's release does not fall 40 dB inside the 2 s tail at low velocity, and above the middle the string has already stopped before the key comes up, so only 14 to 27 rows of 60 carry a release on any one instrument and only 11 to 18 are shared by any two. On those the three grands disagree with each other by 120 to 195 ms at the median and by more than 900 ms at the worst note — wider than the model's own error — so a bound recorded here fails on which instrument it was compared against rather than on anything the voice did. Lengthen `tail` and re-measure before gating it. `tnr` is absent for a different reason: this profile was measured before the tone-to-noise column existed, so it is missing from every reference row and never reaches the summary at all. The rest are gated, including the two the mono-summed columns cannot see — the envelope's time to peak, which on a piano is the soundboard's bloom rather than the hammer, and the width between the two radiation paths, which is exactly 0.0 for a model that folds one signal into both legs.",
+  "dimensions": [
+    "stretch",
+    "decay",
+    "attack",
+    "stereo",
+    "balance",
+    "centroid_pct",
+    "vel_range"
+  ],
   "_notes": "The two extremes of the keyboard plus every sixth semitone between C1 and C7. The extremes are in because they are where a physical model diverges most: A0 is three wound strings with a wildly inharmonic partial series, C8 is a single short string with almost no sustain.",
   "notes": [
     21,

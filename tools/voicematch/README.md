@@ -252,6 +252,21 @@ All three: `--config` (default `capture/piano.json`), `--out` (default `.cache/v
 
 All: `--config`, `--corpus`, `--profile`, `--program`. `compare` / `agree` / `dynamics` also take `--timbre` and `--notes`.
 
+### The gated dimensions, and what a bound may not go under
+
+A pitched `compare` reduces to seven dimensions: `stretch` (tuning), `decay`, `attack`, `stereo`, `balance` (the h2–h6 stack against h1), `centroid_pct` (brightness) and `vel_range`. `tnr` joins them on any profile measured since the tone-to-noise column existed. Two of them answer questions the rest of this file cannot, because everything else here is computed on a mono mix of a sustain window:
+
+- **`attack`** is the time to the envelope's peak. On a drum that is the strike; on a struck string the hammer is over milliseconds before the board reaches full level, so the number is the bloom after it — which is what separates a note that sinks in from a thump.
+- **`stereo`** is `1 - |channel correlation|` over the held note. A voice that returns one signal to both legs scores exactly `0.0` and is mono however wide the reverb around it is. Nothing else measured here can see that, and a listening test finds it immediately.
+
+`--write-gate` puts a floor under every bound, because a bound tighter than its dimension's own noise fails on the noise and then gets switched off. Where the reference holds several instruments of one kind, that floor is measured rather than chosen: the median disagreement **between** them is the tightest any model can be held to without failing on which one it was compared against. On the three concert grands that is 0.15–0.27 of width and 12.5–40 ms of attack.
+
+### `make voice-gate`
+
+Runs every gate that exists — one per `reference/<id>_gate.json` — against its capture, reading each gate's own timbre back out of it, and reports every voice outside its bounds rather than stopping at the first. It builds its own `build-autofit`, so it disturbs neither the Debug tree `ctest` reads nor the shared `build-python-shared`.
+
+It is not in CI and not in `ci-local`. It renders a full grid per instrument, and re-recording a bound is a judgement about a trade that a CI job cannot make. **A gate is invalidated by its reference as well as by the voice**: re-measuring `reference/<id>.json` moves the numbers the bounds were recorded from, so a gate re-recorded before that re-measure is comparing against an instrument that no longer exists in the file.
+
 ## `shape` — compare the spectrogram instead of the summary
 
 **A package, not a script** — it needs `tools/voicematch` on `PYTHONPATH`:

@@ -4,7 +4,7 @@
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        surface-coverage surface-coverage-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
-       build-feature-matrix accuracy-report
+       build-feature-matrix accuracy-report voice-gate
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -374,6 +374,52 @@ abi-layout-check:
 # truth (per-subsystem + packed aggregate). Stdlib-only, read-only.
 check-abi-version:
 	python3 tools/abi/check_abi_versions.py
+
+# Hold every calibrated GM fallback voice to the bounds recorded beside its
+# reference profile. One target rather than one per instrument: a gate exists
+# for an instrument exactly when `tools/voicematch/reference/<id>_gate.json`
+# does, so calibrating a new voice adds it here by writing that file and
+# nothing else. Each gate names the timbre it was recorded against, and a bound
+# only means anything against that one, so the timbre is read back out of the
+# gate rather than left to `compare`'s first-timbre default. A voice outside
+# its bounds does not stop the ones after it: each run costs minutes, so
+# aborting on the first failure would hide every later instrument behind it and
+# turn one drift into several round trips.
+#
+# Deliberately outside `ci-local` and outside CI. It renders the full grid of
+# every gated instrument through the library (minutes, not seconds) and it is a
+# listening-and-measuring tool: the bounds are re-recorded by whoever makes the
+# trade, in the change that justifies it, which is a judgement no CI job can
+# make. Its own build dir, so it neither retargets the Debug `build/` that ctest
+# reads nor disturbs the shared `build-python-shared/`.
+VOICE_BUILD_DIR ?= build-autofit
+ifeq ($(UNAME_S),Darwin)
+VOICE_SHARED_LIB := $(CURDIR)/$(VOICE_BUILD_DIR)/lib/libsonare.dylib
+else
+VOICE_SHARED_LIB := $(CURDIR)/$(VOICE_BUILD_DIR)/lib/libsonare.so
+endif
+voice-gate:
+	$(CMAKE) -S . -B $(VOICE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON
+	$(CMAKE) --build $(VOICE_BUILD_DIR) --target sonare_shared -j
+	@found=0; failed=""; \
+	for gate in tools/voicematch/reference/*_gate.json; do \
+		test -e "$$gate" || continue; \
+		found=1; \
+		id=$$(basename "$$gate" _gate.json); \
+		timbre=$$($(RYE) run --pyproject bindings/python/pyproject.toml python -c \
+			"import json,sys; print(json.load(open(sys.argv[1]))['timbre'])" "$$gate"); \
+		echo "=== $$id (timbre $$timbre)"; \
+		SONARE_LIB_PATH=$(VOICE_SHARED_LIB) \
+		$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/profile.py \
+			compare --config tools/voicematch/capture/$$id.json \
+			--timbre "$$timbre" --gate "$$gate" || failed="$$failed $$id"; \
+	done; \
+	test "$$found" = 1 || { echo "no *_gate.json under tools/voicematch/reference/"; exit 1; }; \
+	if test -n "$$failed"; then \
+		echo; echo "voices outside their recorded bounds:$$failed"; \
+		exit 1; \
+	fi; \
+	echo; echo "every gated voice held its bounds"
 
 # Aggregate the fast, non-modifying mechanical gates so a pre-commit run can't
 # silently skip one. Check-only (run `make format` first to auto-fix); excludes
