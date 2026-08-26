@@ -39,7 +39,9 @@ interval the code will actually accept.
 
 from __future__ import annotations
 
+import argparse
 import concurrent.futures as cf
+import sys
 
 import numpy as np
 
@@ -202,3 +204,83 @@ def report(err0, movement, best, mover):
         out.append(f"{n:<18}{err0[n]:>+9.1f}{movement[n]:>20.1f}{best[n]:>14.1f}"
                    f"   {verdict:<15} {mover[n].split('.')[-1]}")
     return "\n".join(out)
+
+
+def coordinates(args, cap, corpus, notes, percussion, namespaces):
+    """The coordinates to sweep, from the library rather than from a file.
+
+    A dump the library wrote is the authority either way; taking it here rather
+    than requiring a path is the difference between a probe that can be run and
+    one that first needs a step nobody wrote down. `--knobs` still accepts a
+    saved dump, which is what to use when the sweep must be over the same
+    coordinate list a previous fit had.
+    """
+    from .render import load_knob_dump
+
+    if args.knobs:
+        return load_knob_dump(args.knobs, namespaces)
+    from catalogue import dump_catalogue
+
+    cat = dump_catalogue(
+        int(cap["program"]), "drum" if percussion else "sustain", args.lib or None,
+        sr=corpus.sample_rate, notes=",".join(str(n) for n in notes))
+    return {k: v for k, v in cat.defaults.items()
+            if not namespaces or k.startswith(namespaces)}
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="shape.reach",
+        description="Ask every coordinate whether it can move each bucket at "
+                    "all, before asking whether any of them improves it.")
+    # The target options are declared here rather than shared with `shape`'s own
+    # parser, whose parent factory is a closure inside its `main`. They are the
+    # same names and the same defaults; a subcommand would take them from there.
+    ap.add_argument("--capture", default="piano", help="capture definition id")
+    ap.add_argument("--corpus", required=True, help="directory holding manifest.json")
+    ap.add_argument("--timbre", default="", help="which timbre of the capture")
+    ap.add_argument("--notes", default="", help="subset of the capture's notes")
+    ap.add_argument("--velocities", default="", help="subset of the capture's velocities")
+    ap.add_argument("--lib", default="", help="SONARE_LIB_PATH for model renders")
+    ap.add_argument("--cache", default="/tmp/voicematch-shape")
+    ap.add_argument("--no-bed", action="store_true",
+                    help="skip the recorded-floor subtraction")
+    ap.add_argument("--workers", type=int, default=7)
+    ap.add_argument("--knobs", default="",
+                    help="a saved SONARE_TUNING_DUMP; without one the library "
+                         "is asked directly")
+    ap.add_argument("--namespaces", default="", help="comma-separated key prefixes")
+    ap.add_argument("--overrides", default="",
+                    help="the point to sweep around (default: the shipped voice)")
+    ap.add_argument("--steps", default="0.25,0.4,0.6,0.8,1.25,1.6,2.5,4.0",
+                    help="multiples of each coordinate's current value. A null "
+                         "over a narrow ladder is a statement about the ladder")
+    ap.add_argument("--zero-ladder", default="0.15,0.4",
+                    help="absolute values tried for a coordinate sitting at zero, "
+                         "which no multiple can leave")
+    a = ap.parse_args(argv)
+
+    from . import __main__ as cli
+    from .render import read_overrides
+
+    cap, corpus, _sigs, loss, notes = cli.build(a)
+    ns = tuple(n for n in a.namespaces.split(",") if n)
+    base = coordinates(a, cap, corpus, notes, not loss.pitched, ns)
+    if not base:
+        raise SystemExit(f"no coordinates matched {a.namespaces!r}")
+    from pathlib import Path
+    moves = read_overrides(Path(a.overrides).read_text()) if a.overrides else {}
+    steps = tuple(float(s) for s in a.steps.split(","))
+    ladder = tuple(float(s) for s in a.zero_ladder.split(","))
+    # Only the level buckets read a velocity, and a kit has none of them; the
+    # loudest layer is the one whose bands stand clearest of the recorded floor.
+    velocity = max(loss.velocities)
+    err0, movement, best, mover = reach(
+        loss, base, moves, notes, velocity, steps=steps, zero_ladder=ladder,
+        workers=a.workers, log=lambda m: print(m, file=sys.stderr))
+    print(report(err0, movement, best, mover))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
