@@ -190,6 +190,21 @@ Two guards, both unconditional, because a probe that never reached what it was a
 
 **Safety** — the pristine text of every target file is snapshotted at startup and restored in a `finally` block, so an exception or Ctrl-C never leaves the tree perturbed. On a normal run the best values are then written back and a unified diff plus the loss trajectory are printed; `--dry-run` restores pristine, skips the write, and reports the diff it would have applied.
 
+## Proving a new mechanism is inert at its default (`identity.py`)
+
+A fit moves values. Between two fits the loop adds mechanisms, and a mechanism arrives as fields on a shared patch struct, a branch in a render loop, and rows in the clamp and override tables — all of it compiled into every voice in the bank rather than into the one it was added for. "The default is the identity" is therefore a claim about 128 programs and 47 drum notes, and it is a claim about raw bytes: a mechanism that leaks a fraction of a decibel into every other instrument has still changed them, and nothing downstream will attribute the change back here.
+
+```
+python tools/voicematch/identity.py \
+    --base /tmp/before/lib/libsonare.dylib --head build-tuning/lib/libsonare.dylib \
+    --programs 0,19,40,56,73 --drums 35,36,38,47 \
+    --reach 36:d036.percussion.plate_gain=1.0
+```
+
+`--base` is built from the commit before the mechanism landed, which in a tree with a live parallel session means a `git worktree`, not a second build directory. Each case renders in a subprocess with `SONARE_LIB_PATH` pointed at one of the two, and the sha256 of the render's float bytes is what comes back — the two libraries cannot be loaded into one process, since the override table is read once at load.
+
+**The `--reach` half is the load-bearing one.** A silent build, a library the loader did not pick, an override key that does not resolve and a branch that is never taken all produce a perfect identity table, so a run that reports only that half cannot tell any of them from success — what it confirms is that nothing happened, which is what it was written to rule out. An identity table with no override moving anything is reported as vacuous and exits non-zero.
+
 ## Write-back
 
 Everything a fit moves is written back to the source, in the form that value takes there:
