@@ -26,6 +26,27 @@ from pathlib import Path
 
 import numpy as np
 
+def corpus_fingerprint(root) -> str:
+    """What the reference cache has to change with when the corpus does.
+
+    The reference grid is the one thing here kept on disk between runs, and it
+    was keyed on the corpus PATH -- so re-capturing a note wrote new audio to the
+    same path and every run afterwards read the old grid back out of the cache.
+    Nothing announces it: the stale renders load, every term returns a number,
+    and a note recorded to five seconds keeps reporting the two it used to have.
+    It cost a re-capture that appeared to have done nothing.
+
+    The manifest is what to hash, because `capture.py` rewrites it on every
+    render and it carries each slot's path and length. A file replaced without
+    the manifest moving would slip through, and nothing in the harness does that.
+    """
+    path = Path(root) / "manifest.json"
+    try:
+        return hashlib.sha1(path.read_bytes()).hexdigest()[:16]
+    except OSError:
+        return ""
+
+
 _WORKER = r'''
 import json, sys
 import numpy as np
@@ -88,11 +109,12 @@ class Signals:
         self._serial = itertools.count()
         self._tunable: bool | None = None
         self._tunable_lock = threading.Lock()
+        self._corpus_fp = corpus_fingerprint(self.corpus_root)
 
     def _key(self, pairs, ov: str, ref: bool) -> str:
         blob = json.dumps([sorted(pairs), ov, ref, str(self.corpus_root),
-                           self.program, self.channel, self.gate_s, self.seconds,
-                           self.lib_path])
+                           self._corpus_fp, self.program, self.channel,
+                           self.gate_s, self.seconds, self.lib_path])
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
     def _render(self, pairs, ov: str, ref: bool, out_path: Path,

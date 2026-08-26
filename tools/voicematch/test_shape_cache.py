@@ -19,7 +19,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from shape.loss import ShapeLoss  # noqa: E402
-from shape.render import DRUM_SCOPE, read_overrides, scope_overrides  # noqa: E402
+from shape.render import (  # noqa: E402
+    DRUM_SCOPE, Signals, corpus_fingerprint, read_overrides, scope_overrides,
+)
 from shape.spectro import Spectro  # noqa: E402
 from test_shape import synth  # noqa: E402
 
@@ -148,3 +150,37 @@ def test_a_budget_too_small_for_two_grids_is_raised_to_two_grids():
     want = [cold.score(o, notes=notes).total for o in _CANDIDATES]
     assert got == want
     assert loss.cache_limit(6) == 12 and len(loss._packs) == 12
+
+
+# --- the reference grid on disk ------------------------------------------
+
+def test_the_reference_key_changes_when_the_corpus_does(tmp_path):
+    """A re-captured note must not be read back from the previous capture.
+
+    The reference grid is the one thing here kept between runs, and it was keyed
+    on the corpus path -- which does not move when a note inside it is recorded
+    again. The stale grid then loads without complaint and the re-capture reads
+    as having changed nothing, which is what it did the first time a note's tail
+    was lengthened.
+    """
+    root = tmp_path / "corpus"
+    root.mkdir()
+    mf = root / "manifest.json"
+    mf.write_text('{"renders": [{"note": 46, "seconds": 2.15}]}')
+    sigs = Signals(corpus_root=root, program=0, gate_s=0.05, seconds=8.15,
+                   cache_dir=tmp_path / "cache")
+    before = sigs._key([(46, 100)], "", True)
+
+    mf.write_text('{"renders": [{"note": 46, "seconds": 5.15}]}')
+    after = Signals(corpus_root=root, program=0, gate_s=0.05, seconds=8.15,
+                    cache_dir=tmp_path / "cache")._key([(46, 100)], "", True)
+    assert before != after
+
+
+def test_a_corpus_with_no_manifest_still_keys(tmp_path):
+    # Model-only work names a corpus root that may not exist yet; a missing
+    # manifest is not an error, it is simply nothing to fingerprint.
+    assert corpus_fingerprint(tmp_path / "nowhere") == ""
+    sigs = Signals(corpus_root=tmp_path / "nowhere", program=0, gate_s=0.05,
+                   seconds=8.15, cache_dir=tmp_path / "cache")
+    assert sigs._key([(60, 100)], "", False)
