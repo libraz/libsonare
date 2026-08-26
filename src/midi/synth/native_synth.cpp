@@ -379,6 +379,10 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       resonance_.prepare(sample_rate_);
     }
     piano_body_active_ = true;
+    // The blow into the structure, which the board is struck with once rather
+    // than driven by. After any prepare() above, which clears the network.
+    soundboard_.strike(voice->piano.case_strike());
+    soundboard_.strike_board(voice->piano.board_strike());
   }
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }

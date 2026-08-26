@@ -231,6 +231,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
       fallback_board_[part].prepare(sample_rate_, patch.piano.soundboard);
       fallback_reso_[part].prepare(sample_rate_);
     }
+    // The blow into the structure, which the board is struck with once rather
+    // than driven by. After any prepare() above, which clears the network.
+    fallback_board_[part].strike(voice->piano.case_strike());
+    fallback_board_[part].strike_board(voice->piano.board_strike());
   } else if (patch.mode == SynthEngineMode::kKarplusStrong && patch.ks.sympathetic) {
     if (body.kind != FallbackBodyKind::kGuitarHalo) {
       body.kind = FallbackBodyKind::kGuitarHalo;

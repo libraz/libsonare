@@ -20,8 +20,8 @@
       "tunable": "piano_voice.kTwoStageWidthOct", "min": 0.3, "max": 3.5, "scale": "linear"
     },
     {
-      "_": "The aftersound cliff: halvings per octave past the knee, where it starts, and where it stops. Steep and late, because the measurement is a cliff at the top of the keyboard rather than a slope from the middle of it.",
-      "tunable": "piano_voice.kTrebleDecayOct", "min": 1.0, "max": 10.0, "scale": "log"
+      "_": "The aftersound taper: halvings per octave past the knee, where it starts, and where it stops. The range reaches well below one halving because the measurement is a narrowing rather than a cliff -- the top of the keyboard gives up about a factor of two -- so whether any taper is needed at all is inside the search rather than assumed by its floor.",
+      "tunable": "piano_voice.kTrebleDecayOct", "min": 0.25, "max": 6.0, "scale": "log"
     },
     { "tunable": "piano_voice.kTrebleDecayKneeOct", "min": 1.0, "max": 3.5, "scale": "linear" },
     { "tunable": "piano_voice.kTrebleDecayFloorOct", "min": 2.0, "max": 4.0, "scale": "linear" },

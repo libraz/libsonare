@@ -178,6 +178,14 @@ class PianoVoiceCore {
   void damp(float strength) noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// What this note's blow puts into the instrument's structure, as set by the
+  /// last start(). The host hands it to the shared PianoSoundboard rather than
+  /// mixing it into this voice's output, because a case network is struck once
+  /// per blow and not driven by the note (see kCaseStrikeGain in the .cpp).
+  float case_strike() const noexcept { return case_strike_; }
+  /// The same blow into the board bank instead, which answers it over a
+  /// fraction of a second where the case network answers over four.
+  float board_strike() const noexcept { return board_strike_; }
 
  private:
   struct String {
@@ -273,6 +281,28 @@ class PianoVoiceCore {
   float modal_env_ = 1.0f;
   float modal_damp_ = 1.0f;
   float modal_release_ = 1.0f;
+  /// The prompt stage, as a second envelope on the same sum.
+  ///
+  /// A struck string loses most of a blow while its unison and the two
+  /// polarizations of each string still move together, and rings on far more
+  /// slowly once they have drifted apart. The loop carries that as a coupled
+  /// drain between two loop gains; the bank has no loop and had no second rate
+  /// at all, so above the crossover the whole top octave decayed at the
+  /// aftersound rate from the first sample -- measured against three concert
+  /// grands whose C8 falls at 65 to 68 dB/s for half a second, this voice's
+  /// fell at 4.9 and put its knee at 3.7 s where theirs is at 0.5.
+  ///
+  /// An envelope on the sum rather than a second resonator per mode, for the
+  /// reason `modal_env_` already gives: with the hammer gone the bank's input
+  /// is zero, so multiplying the sum by (residue + (1 - residue) * e^-t/tau)
+  /// gives every mode a genuine two-exponential decay whose fast rate is the
+  /// sum of the two rates -- the same arithmetic the loop's t60_fast is built
+  /// out of -- for one multiply-add per sample rather than per mode.
+  float modal_prompt_ = 1.0f;
+  float modal_prompt_r_ = 1.0f;
+  /// Share of the amplitude that survives the prompt stage into the
+  /// aftersound. 1 leaves the bank exactly as it was.
+  float modal_residue_ = 1.0f;
 
   /// Ring capacity for the strike-position comb on the hammer force (covers
   /// a 0.5 * period tap up to ~32 Hz at 96 kHz; longer taps clamp).
@@ -305,6 +335,8 @@ class PianoVoiceCore {
   // separate units/lifetime from the force comb).
   std::array<float, kHammerCombCapacity> noise_hist_{};
   float knock_gain_ = 0.6f;
+  float case_strike_ = 0.0f;
+  float board_strike_ = 0.0f;
   float knock_lp_ = 0.0f;
   float knock_lp2_ = 0.0f;
   float knock_lp3_ = 0.0f;
@@ -474,6 +506,26 @@ class PianoSoundboard {
   /// Radiates one summed input sample: returns the phase-diffused complement
   /// of the host's direct share plus the (mix-scaled) modal colour.
   float process(float in) noexcept;
+  /// A blow's worth of energy into the case network, from a note that has just
+  /// started. Accumulated and spent at the network's own decimated rate, so
+  /// several notes struck in one host block each contribute and none is lost
+  /// between ticks. Costs nothing when the path is off, since the whole case
+  /// block is already skipped at a zero level.
+  void strike(float amount) noexcept { case_strike_ += amount; }
+  /// The same blow into the board bank instead of the case network, spent on
+  /// the next sample rather than at the decimated tick.
+  ///
+  /// Two structures answer one hammer over two timescales: the rim rings out
+  /// in a fraction of a second and the low field it feeds rings for four, and
+  /// one injection point cannot be both. Measured on three concert grands, the
+  /// blow the top octave needs is the first of those -- C8's own note is over
+  /// in half a second, so a blow spent into the four-second network is what is
+  /// left sounding, and the same blow large enough to fill C8's attack pours
+  /// four seconds of non-harmonic energy under every note in the middle of the
+  /// keyboard, which needed none. This bank is 40 modes rather than the frame
+  /// bank's eight, so a blow into it is a thud instead of a chord, and its
+  /// decay is already the fraction of a second the measurement asks for.
+  void strike_board(float amount) noexcept { board_strike_ += amount; }
   /// The side component of the last process() call: add it to the left leg
   /// and subtract it from the right. A grand is not a point source -- its
   /// board radiates to two listening positions through different paths -- and
@@ -495,6 +547,16 @@ class PianoSoundboard {
     float y2 = 0.0f;
   };
   std::array<Mode, kSoundboardModes> modes_{};
+  /// A blow waiting to be handed to the bank above, cleared by the sample that
+  /// spends it. Accumulated, so several notes struck in one host block each
+  /// contribute; zero costs nothing, since the drive is then `bp` exactly.
+  float board_strike_ = 0.0f;
+  /// The one-pole that spreads it over the contact instead of delivering it in
+  /// a single sample, and its coefficient. Unity gain at DC, so the blow's area
+  /// does not move with the time constant and the level and the spread can be
+  /// fitted apart. Both fold out of a shipped build at a zero strike gain.
+  float board_strike_lp_ = 0.0f;
+  float board_strike_a_ = 1.0f;
   // Frame: the plate and the rim, which the board above is not.
   //
   // Every member of the instrument that the model has is made of wood, and
@@ -630,6 +692,7 @@ class PianoSoundboard {
   float case_in_a_ = 1.0f;
   float case_in_1_ = 0.0f;
   float case_in_2_ = 0.0f;
+  float case_strike_ = 0.0f;
   // Decimation state: which sample of the current block we are on, the network
   // output being held across it, and the one-pole that smooths the hold.
   uint32_t case_phase_ = 0;
@@ -676,6 +739,13 @@ class PianoSoundboard {
   float air_lp_ = 0.0f;
   float air_lp2_ = 0.0f;
   float air_hp_ = 0.0f;
+  // The drive's own copy of the air band. The board is shared by every note
+  // sounding on the part, so this layer cannot be told which note it is
+  // radiating; taking its excitation from the band it radiates IN is how the
+  // note reaches it anyway. See kAirDriveBandMix.
+  float air_drv_lp_ = 0.0f;
+  float air_drv_lp2_ = 0.0f;
+  float air_drv_hp_ = 0.0f;
   float air_attack_ = 0.0f;
   float air_release_ = 0.0f;
   float air_lp_a_ = 0.0f;

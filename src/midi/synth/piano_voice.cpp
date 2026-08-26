@@ -182,21 +182,33 @@ SONARE_TUNABLE(kContactPeriodsPerBlowMax, 1.0f);
 SONARE_TUNABLE(kOutputLevel, 5.7f);
 /// Where the aftersound taper starts, in octaves above C4. The taper is not a
 /// slope running up from the middle of the keyboard: measured on three concert
-/// grands the aftersound t60 has no trend at all from A0 to note 90, sitting
-/// between 9 and 50 s across that whole span, and then falls off a cliff — 2.2 s
-/// by C7 on two of the three captures and by C8 on all of them. Starting the
-/// taper at C4 gave C6 a t60 of 1.6 s against a measured 11, which is a note
-/// that dies while the key is still down.
+/// grands the aftersound t60 has no trend to speak of from A0 to note 90 — 20 s
+/// at A0, a broad maximum of 60 to 145 s around C2, and 15 to 20 s again by C6 —
+/// so the whole span sits inside the scatter of one register. Starting the taper
+/// at C4 gave C6 a t60 of 1.6 s against a measured 15, which is a note that dies
+/// while the key is still down.
 SONARE_TUNABLE(kTrebleDecayKneeOct, 2.5f);
 /// Halvings of the aftersound stage per octave past that knee, applied to the
 /// slow stage only — the prompt-sound rate is set by the polarization/unison
-/// coupling, which has its own register profile below. Steep, because what it
-/// describes is a cliff rather than a slope: the measured t60 drops by a factor
-/// of six inside the half-octave from note 90 to C7.
-SONARE_TUNABLE(kTrebleDecayOct, 5.0f);
-/// Where that cliff bottoms out, in octaves above C4. The measurement is flat
-/// again past C7 (2.2 s there against 2.3 s at C8), so the taper stops instead
-/// of running on and leaving the top octave a click.
+/// coupling, which has its own register profile below. What it describes is a
+/// narrowing rather than a cliff: the same three grands put C7 and C8 at 11 to
+/// 18 s against 12 to 145 in the middle, so the top of the keyboard gives up a
+/// factor of two and no more. Fitted on C7 and C8 across all three, the C7/C8
+/// aftersound error falls from 8.5 dB/s to 1.2 — which is the spread the three
+/// references have between themselves on that dimension, so it is as close as
+/// this corpus can define.
+///
+/// The one phrase take that reaches this register reads the change as mixed,
+/// and it is worth knowing why before treating that as a contradiction: after
+/// an A0-to-C8 sweep the references leave a tail that is loud and bottom-heavy
+/// — the undamped bass still ringing — while this voice leaves one 11 to 20 dB
+/// quieter whose energy sits at the top. Lengthening C8 makes the top a larger
+/// share of a tail that is missing its bass, so the take moves against the note
+/// grid while measuring a deficit somewhere else entirely.
+SONARE_TUNABLE(kTrebleDecayOct, 2.0f);
+/// Where that narrowing bottoms out, in octaves above C4. The measurement is
+/// flat again past C7 (11 to 18 s there and 12 to 18 at C8), so the taper stops
+/// instead of running on and leaving the top octave a click.
 SONARE_TUNABLE(kTrebleDecayFloorOct, 3.0f);
 /// Register profile of the prompt-vs-aftersound contrast. The double decay is
 /// strongest in the trichord mid-range (vertical polarization + unison
@@ -433,6 +445,37 @@ SONARE_TUNABLE(kNoiseTrebleTaperOct, 0.435016f);
 /// kKnockThudHz moving up, and the pair is what keeps the rise while the
 /// proportion corrects.
 SONARE_TUNABLE(kKnockGain, 1.6f);
+/// Extra velocity exponent on the knock, ON TOP of the one the blow force
+/// already carries. Zero leaves the knock scaling exactly as the force does.
+///
+/// The force peak goes as v^(2p/(p+1)) and so does the string injection, so on
+/// paper the two track and no exponent is needed. What they do not share is
+/// what happens to that energy afterwards: a soft blow has a longer, duller
+/// contact that puts less into the partials still sounding at 30 ms, while the
+/// knock is a lowpassed copy of the same force and keeps all of its. The share
+/// therefore climbs as the blow gets softer, which is the opposite of a piano.
+/// Measured as the peak over the note's own 30-100 ms body against three
+/// concert grands: at C4 they stand 4.6 to 5.7 dB over it at v24 and 3.8 to
+/// 5.4 at v120 — flat — where this voice stood 11.4 and 5.1. Silencing the
+/// knock at v24 took 7.7 dB out of that and at v88 only 1.7, which is the
+/// measurement saying the excess is the knock's and that it is an exponent
+/// rather than a level: halving the gain lands v24 inside the span and drops
+/// v88 out the bottom.
+///
+/// It is also what an action does. A pianissimo is tone without knock: the key
+/// is released gently, the shank and the whole action carry less structure-borne
+/// impact into the board, and the tone that remains is the string's. The path
+/// this scales is that one, not the string.
+///
+/// The value comes from a second measurement that shares no method with the one
+/// above: the softest-to-hardest level range over the whole note grid, which the
+/// exponent is not aimed at and which no other knob in this voice moves. Against
+/// the reference it reads 2.84 dB out at zero and 1.49 at this value, or 3.1 and
+/// 1.6 times the disagreement between the three instruments. Nothing else in the
+/// gate shifts by a tenth of a decibel across the sweep, which is what a
+/// mechanism that was missing looks like rather than a value that was mis-set.
+/// Both measurements are taken on peaks, well clear of the corpus's own floor.
+SONARE_TUNABLE(kKnockVelExp, 0.4f);
 /// The knock radiates only the impact THUD: the hammer/action/board contact
 /// pumps a fixed low band regardless of the note (a treble strike lands as a
 /// quiet thock, not a burst at the string's own pitch). Radiating the raw
@@ -558,6 +601,90 @@ SONARE_TUNABLE(kKnockBassBoostOct, 0.3f);
 /// this is that slope. What the earlier round tested was zero and two, with
 /// nothing between them; the value the measurement points at was never swept.
 SONARE_TUNABLE(kKnockTrebleTaperOct, 1.4f);
+/// Size of the blow handed to the shared board's case network at note-on, per
+/// unit of the same velocity term the knock carries. Zero renders exactly as a
+/// build without the path.
+///
+/// What the second window measures is not a spectrum at all. A grand goes on
+/// radiating 60-250 Hz at a level its pitch barely moves, which is what a fixed
+/// mass struck by a fixed blow gives and is not something the strings can
+/// produce; the ratio climbs only because the treble string's own radiation
+/// falls away underneath it. So the blow reaches the structure ungraded, and
+/// the register dependence is a consequence rather than a setting.
+///
+/// Fitted on the sustained window over the whole keyboard, this takes that
+/// error from 2.1 times the three references' own spread to 0.8 — inside it —
+/// and its signed median from -15.1 dB to -0.2. It is the point where that
+/// median crosses zero, which is where a note-independent quantity should be
+/// fitted. The whole path is skipped when the case network is off.
+///
+/// The blow it is quoted against was for a long time not in the product: the
+/// path carried only the knock's EXTRA velocity exponent and not the force that
+/// exponent sits on top of, so a rim radiated 5.6 dB from a pianissimo to a
+/// fortissimo where the blow moves 26. At this level that is inaudible and it
+/// is a wall at any other — raised far enough to matter, the flat path floors
+/// the soft end and the keyboard's pp-to-ff range collapses 13.7 dB, which
+/// reads as a level fault in whatever was raised.
+///
+/// It is NOT the answer to the top octave's level, and the attempt is recorded
+/// because it looked like one. C8's first fifty milliseconds sit 9.2 dB under
+/// where its own keyboard puts it, 7.2 times what the three references disagree
+/// by and the largest error in the voice; raising this to 0.28 closes it exactly
+/// and takes C7 with it. What that costs is invisible to the eleven gated
+/// dimensions, which all hold, and plain in the harmonic-to-non-harmonic
+/// balance: C4 and C5's attack goes from 2 dB of the reference to 12, because
+/// the blow is broadband and the middle of the keyboard did not need any. The
+/// pair with a shorter kCaseT60S holds THAT and destroys the sustained field
+/// instead — C8's sustain from 23 dB too harmonic to 69 — which is the decay
+/// that constant is derived from doing its job. Two radiators are sharing one
+/// network: a blow into the rim is over in a fraction of a second and the low
+/// field it feeds rings for four, and no single level and decay is both.
+SONARE_TUNABLE(kCaseStrikeGain, 0.02f);
+/// The same blow into the board bank, which answers over a fraction of a
+/// second where the case network answers over four. Quoted the same way as
+/// kCaseStrikeGain and independent of it; zero renders exactly as a build
+/// without the path.
+///
+/// Which of the two a blow belongs in is a question about timescale, and the
+/// top octave is the only register that can answer it, because it is the only
+/// one whose own note is shorter than either structure. See kCaseStrikeGain
+/// for what a blow of this size does when it is spent into the long one.
+///
+/// Fitted on the two readings that say the top octave is too quiet, which no
+/// value of the long path could satisfy together. C8's LEVEL -- the loudest
+/// its body gets, against its own keyboard median -- goes from 6.2 times the
+/// three references' spread to 0.5, taking the whole register dimension from
+/// 1.4 to 1.3; and C8's fall to 40 dB under its own peak goes from 1.29 s to
+/// 0.52 against references at 0.43 to 0.50. Everything else in the gate is
+/// flat or better, and the bass and the middle of the keyboard are unmoved on
+/// every window of the harmonic-to-non-harmonic balance, which is what the
+/// short path buys and the long one cannot.
+///
+/// What it does not reach is that balance AT C8, which goes 11 dB more
+/// non-harmonic than the reference. Read with the level above rather than on
+/// its own: the ratio was near-perfect while both of its halves were 9 dB
+/// short, so filling one breaks it. The other half is the note, and
+/// kModalLevel at 0.4 puts the ratio back within 1.5 dB -- at a cost to the
+/// sustained windows, which is where that thread continues.
+SONARE_TUNABLE(kBoardStrikeGain, 0.12f);
+/// How the board's share of the blow GROWS into the treble (doublings per
+/// octave above C4). Zero is flat, which is what a blow into a structure would
+/// be if the string took the same share of it everywhere.
+///
+/// It does not. What reaches the bridge is the momentum the string did not
+/// accept, and a short stiff string accepts very little -- so the structural
+/// share is the complement of an admittance that collapses at the top, and it
+/// rises. Measured as each side's first fifty milliseconds of 40-320 Hz against
+/// its own C4, the three references sit flat within their own spread from C5 to
+/// C7 and come back up about 6 dB at C8; this voice falls monotonically and
+/// arrives 15 dB short there. A flat blow sized for C8 fills the flat part too,
+/// by 6 dB, which is what makes this a grading rather than a level.
+///
+/// One doubling per octave is where C8 lands with C5 to C7 held: at that value
+/// no note between C2 and C7 moves past its own reference spread on either the
+/// level or the low-band reading, and flat at the same C8 level puts 8 to 12 dB
+/// of low band on the notes that already had the right amount.
+SONARE_TUNABLE(kBoardStrikeTrebleOct, 1.0f);
 /// How much of the knock is taken from the blow itself rather than from the
 /// wave injected into the string. 0 keeps the injected copy, 1 takes the blow.
 ///
@@ -879,7 +1006,51 @@ SONARE_TUNABLE(kModalDampPow, 0.25f);
 /// Trim on the modal bank's output. The mode amplitudes are derived so the two
 /// paths agree by construction (header), which makes 1 the meaningful default
 /// and any departure from it a measurement of how well that derivation holds.
+///
+/// The derivation holds. Rendering the same keyboard twice with the crossover
+/// forced fully to one path and then fully to the other, the bank sits a flat
+/// 12.5 to 12.9 dB under the loop at the fundamental at every note from C5 to
+/// C8 -- which is this trim and nothing else, so what it states is not a
+/// correction but an attenuation the top octave carries for no physical reason.
 SONARE_TUNABLE(kModalLevel, 0.2f);
+/// How much of a struck partial's amplitude the bank leaves for the aftersound
+/// once the prompt stage has run (see PianoVoice::modal_prompt_). 1 is the
+/// identity: no prompt stage, which is what the bank had.
+///
+/// The RATE of that stage needs no constant -- it is the gap between the loop's
+/// own two t60s, which start() has already computed for this note and which the
+/// bank was throwing away. Only the split between the two stages is new, and it
+/// cannot be taken from the loop: there the split emerges from how fast the
+/// unison decoheres rather than being written down anywhere.
+///
+/// What the references ask for is severe. Three concert grands put C8's knee
+/// 33 dB under its own peak and reach it in half a second; this voice's C8 fell
+/// at 4.9 dB/s against their 65 to 68 and put its knee at 3.7 s, so the top two
+/// notes outlasted every reference by a factor of two and the comparison was
+/// refused rather than scored -- seven of sixty rows dropped, all of them at C7
+/// and C8, on the three dimensions that describe a decay.
+///
+/// Below about 0.075 every one of those rows scores against all three
+/// references, and below about 0.04 the aftersound starts to overshoot; this
+/// sits in the middle of what is left rather than at either edge, where a
+/// change elsewhere would push rows back out of the comparison. At it the body
+/// under the note improves from 0.8 to 0.4 times the references' own spread,
+/// the aftersound from 1.4 to 1.2, and the keyboard below C6 renders bit for
+/// bit as it did.
+///
+/// One phrase take reaches this register and it moves both ways, for the reason
+/// kTrebleDecayOct already records from the other direction: the A0-to-C8
+/// sweep's tail is measured after the last note, which is C8. Its 2.5-10 kHz
+/// share falls from 16 dB under the tail to 38, and its level from 76 dB under
+/// the take's peak to 87 against references at 61 to 68 -- C8's over-long ring
+/// had been standing in for a tail this voice does not otherwise have. Its
+/// SLOPE improves over the same change, from -23.9 dB/s to -15.3 against the
+/// references' -7.6 to -9.2. What the voice does have there is the case
+/// network: switching kCaseLevel off takes that tail to -99.6 dB and -71.4
+/// dB/s, while the sympathetic bank, the board and the reverb each leave it
+/// unmoved to the digit. No other take moves by so much as a tenth of a
+/// decibel.
+SONARE_TUNABLE(kModalResidue, 0.06f);
 /// Traversal-rate normalization of the loop lowpass (see its use in start()).
 /// 0 leaves the raw per-traversal coefficient, where upper-partial damping
 /// grows with the fundamental and the top two octaves lose their partial stack
@@ -1116,15 +1287,14 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // exponent it also compressed the treble, and that half of it is not in the
   // instrument: measured on three concert grands the aftersound t60 has no
   // trend from A0 to note 90, so there is nothing above A4 for a compression to
-  // describe. It stacked with the taper below and the two together left C8 at
-  // 0.44 s against a measured 2.3 — the top of the keyboard arriving as a
-  // click. Held at unity the taper alone sets the treble, and it lands 12.0 s
-  // at C6 against 11.1 measured and 2.1 s at C8 against 2.3.
+  // describe. It stacked with the taper below, and the two together took the
+  // top of the keyboard to a fraction of the measured aftersound — a note
+  // arriving as a click. Held at unity the taper alone sets the treble.
   const float octaves_below_a4 = std::max(0.0f, (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f);
   const float bass_scale = std::exp2(stretch * octaves_below_a4);
   // The aftersound taper rides its own octave axis, not the shared
   // `octaves_above_c4`: that one is capped where the loop DARKENING stops
-  // steepening, and the decay cliff sits an octave above it. Ordered through
+  // steepening, and the aftersound knee sits an octave above it. Ordered through
   // std::max so a swept knee above the floor cannot invert the clamp.
   const float decay_knee_oct = kTrebleDecayKneeOct;
   const float decay_floor_oct = std::max(decay_knee_oct, kTrebleDecayFloorOct);
@@ -1368,6 +1538,16 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   modal_env_ = 1.0f;
   modal_damp_ = 1.0f;
   modal_release_ = std::exp(-6.907755279f / (static_cast<float>(sr) * release_t60));
+  // The prompt stage, at the rate the loop's own two t60s already imply. Their
+  // reciprocals differ by exactly the extra damping the fast stage applies, so
+  // the envelope's time constant falls out of the pair with nothing fitted: at
+  // zero contrast t60_fast IS t60_slow, the difference is zero, and the
+  // envelope is the constant 1 -- the bank as it was, at any residue.
+  modal_prompt_ = 1.0f;
+  modal_residue_ = std::clamp(kModalResidue, 0.0f, 1.0f);
+  const float prompt_rate = std::max(0.0f, 1.0f / t60_fast - 1.0f / t60_slow);
+  modal_prompt_r_ =
+      prompt_rate > 0.0f ? std::exp(-6.907755279f * prompt_rate / static_cast<float>(sr)) : 1.0f;
   num_modal_ = 0;
   if (modal_mix_ > 0.0f) {
     // Full stiffness here, not the faded `dispersion` the loop uses: that fade
@@ -1564,8 +1744,26 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   noise_env_ = kStrikeNoiseGain * hammer_amp_ * dyn_bright * (una_corda ? 0.35f : 1.0f) *
                std::exp2(-kNoiseTrebleTaperOct * std::max(0.0f, octaves_from_c4) +
                          kInjTiltDbOct * std::clamp(octaves_from_c4, -1.25f, 1.25f) / 6.0206f);
-  knock_gain_ = kKnockGain * std::exp2(kKnockBassBoostOct * std::max(0.0f, -octaves_from_c4) -
-                                       kKnockTrebleTaperOct * std::max(0.0f, octaves_from_c4));
+  knock_gain_ = kKnockGain * std::pow(std::max(vel01, 1.0e-4f), kKnockVelExp) *
+                std::exp2(kKnockBassBoostOct * std::max(0.0f, -octaves_from_c4) -
+                          kKnockTrebleTaperOct * std::max(0.0f, octaves_from_c4));
+  // The same blow, told to the structure instead of to the listener. It carries
+  // the knock's whole velocity law -- the blow itself, which the knock gets
+  // through `thud_in`, times the extra exponent above -- and NONE of the
+  // register grading, because the two describe different things: the gradings
+  // say how the strike's radiated spectrum changes with pitch, which the felt
+  // and the contact time do shape, while what the plate and the rim receive is
+  // a force impulse whose size is the blow. Handed to the shared board rather
+  // than mixed into this voice's output, so it reaches the case network without
+  // passing the bridge coupling the sustained signal does.
+  //
+  // Quoted against mezzo-forte, like the injection's own normalization, so the
+  // number is a size at the reference blow rather than a raw amplitude.
+  const float blow_norm = mf_level > 0.0f ? hammer_amp_ / mf_level : 0.0f;
+  const float blow_vel = std::pow(std::max(vel01, 1.0e-4f), kKnockVelExp);
+  case_strike_ = kCaseStrikeGain * blow_norm * blow_vel;
+  board_strike_ = kBoardStrikeGain * blow_norm * blow_vel *
+                  std::exp2(kBoardStrikeTrebleOct * std::max(0.0f, octaves_from_c4));
   knock_lp_ = 0.0f;
   knock_lp2_ = 0.0f;
   knock_lp3_ = 0.0f;
@@ -1846,7 +2044,16 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
       modal_sum += y;
     }
     modal_env_ *= modal_damp_;
-    sum += (modal_sum * modal_env_ - sum) * modal_mix_;
+    float modal_gain = modal_env_;
+    // Tested rather than folded in, for the same reason the drain's weight is:
+    // at a residue of 1 the factor below is `1 + 0 * prompt`, which is 1 in
+    // floating point too, but the state update behind it is not free and there
+    // is nothing for it to do.
+    if (modal_residue_ != 1.0f) {
+      modal_prompt_ *= modal_prompt_r_;
+      modal_gain *= modal_residue_ + (1.0f - modal_residue_) * modal_prompt_;
+    }
+    sum += (modal_sum * modal_gain - sum) * modal_mix_;
   }
   // Board ring-up: the tone swells while the impact thud leads.
   bloom_ += bloom_a_ * (1.0f - bloom_);
@@ -1958,6 +2165,9 @@ void PianoVoiceCore::kill() noexcept {
   modal_mix_ = 0.0f;
   modal_env_ = 1.0f;
   modal_damp_ = 1.0f;
+  modal_prompt_ = 1.0f;
+  modal_prompt_r_ = 1.0f;
+  modal_residue_ = 1.0f;
 }
 
 }  // namespace sonare::midi::synth

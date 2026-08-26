@@ -1,9 +1,9 @@
 [
   {
-    "_": "Halvings of the aftersound stage per octave past the knee. Steep, because what it describes is a cliff and not a slope, so the range has to reach well past anything a gradual taper would want.",
+    "_": "Halvings of the aftersound stage per octave past the knee. What it describes is a narrowing and not a cliff, so the range reaches below one halving: whether any taper is needed at all belongs inside the search rather than in its floor.",
     "tunable": "piano_voice.kTrebleDecayOct",
-    "min": 1.0,
-    "max": 10.0,
+    "min": 0.25,
+    "max": 6.0,
     "scale": "log"
   },
   {

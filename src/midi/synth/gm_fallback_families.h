@@ -23,12 +23,35 @@ SONARE_TUNABLE(kPianoDecayFastS, 1.35f);
 /// against a captured reference wants, and the difference between the two is
 /// not something a default should be carrying for every caller.
 ///
-/// The stretch is measured on the fundamental's own band rather than
-/// broadband: over 0.5-2.0 s the reference's E1 fundamental falls 1.0 dB per
-/// second and its three instruments disagree by 0.7, which is the tightest
-/// agreement anywhere in the corpus. This voice fell 2.4.
-SONARE_TUNABLE(kPianoDecaySlowS, 9.6f);
-SONARE_TUNABLE(kPianoDecayStretch, 0.6f);
+/// Both are measured where the reference is still well clear of its own floor,
+/// which for this corpus is not a detail: the samples carry a recorded rumble
+/// (see the capture definition's `_floor`), and a decay fitted over a whole
+/// eight-second gate flattens onto it and reports a slower fall than the
+/// instrument has. Windows below are chosen to end while the reference is
+/// thirty decibels or more above it.
+///
+/// The stretch is a RATIO and not a rate, because the string model already
+/// keytracks on its own and this term multiplies whatever that does. Bass
+/// decay time against midrange, from the broadband envelope over 0.5-3.0 s:
+/// the three instruments give 1.51x, this voice gives 1.58x with the term at
+/// zero and 3.51x at the 0.6 it used to carry. There is a real trend and the
+/// string model already has it; the extra term was doubling it.
+///
+/// The slow t60 is the late fall, fitted over 3-7 s on the bottom two octaves
+/// alone -- the only rows whose reference is still above -57 dBFS that late.
+/// The instruments fall 2.32 dB/s there. This voice fell 7.03 at the 9.6 it
+/// used to carry, and falls 2.82 here, against 1.5 dB/s of disagreement between
+/// the three instruments. Thirty lands closer still on those rows and is not
+/// taken: read across the whole keyboard the same voice then falls 0.89 dB/s
+/// slower than the reference on average, where this value holds the signed
+/// error to 0.57 and puts the dimension inside the spread the three instruments
+/// themselves span.
+///
+/// Neither figure covers the top of the keyboard, where this voice is still
+/// 1.6 to 2.6 times too fast above F#5 and stops entirely by two seconds at
+/// C7 while the reference is still sounding at five.
+SONARE_TUNABLE(kPianoDecaySlowS, 26.0f);
+SONARE_TUNABLE(kPianoDecayStretch, 0.0f);
 SONARE_TUNABLE(kPianoSoundboard, 0.35f);
 /// Felt contact time at A4 and mezzo-forte. It buys two things and costs two,
 /// and no value inside the literature's 1-4 ms band lands all four, so this is

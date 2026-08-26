@@ -107,6 +107,29 @@ SONARE_TUNABLE(kSympPartialTilt, 0.7f);
 SONARE_TUNABLE(kSympPartialDamp, 0.5f);
 SONARE_TUNABLE(kSympCoupling, 0.06f);
 
+/// Halvings of a mode's coupling per octave below kSympTaperAnchorHz, and that
+/// anchor. Zero leaves every mode coupled equally, which is where this bank
+/// started and is not what a bridge does.
+///
+/// A string is driven sympathetically through the bridge, and how far it moves
+/// for a given bridge motion is set by its own impedance. A wound bass string
+/// is heavy and stiff and barely answers; a treble string is light and answers
+/// readily. That is the same fact the paragraph below states from the listening
+/// side -- a pedalled bass note is heard lighting up the upper half of the
+/// keyboard, not the lower -- and the bank was built with the partials that
+/// paragraph asks for while still coupling every FUNDAMENTAL at one level, of
+/// which seven of sixteen sit below 160 Hz.
+///
+/// Measured on a pedal take, which is the only probe that can see any of this:
+/// eight staccato notes under a held pedal, and the window after the last of
+/// them with the pedal still down. Three concert grands put 1.7 to 2.9 % of
+/// that window's energy below 160 Hz; this bank put 16 %, and silencing it
+/// alone accounted for 5.7 dB of the excess. Raising the coupling to fill in
+/// the wash therefore made the balance worse rather than better: every dB of
+/// wash it added arrived mostly in the octave that was already the problem.
+SONARE_TUNABLE(kSympBassTaperOct, 0.0f);
+SONARE_TUNABLE(kSympTaperAnchorHz, 261.6256f);
+
 /// Soundboard radiating band: the modes are log-spread between these corners.
 SONARE_TUNABLE(kFLow, 92.0f);
 SONARE_TUNABLE(kFHigh, 5400.0f);
@@ -301,6 +324,47 @@ SONARE_TUNABLE(kAirGain, 0.01f);
 /// of correlation at C6 and -0.35 to 0.13 at C7, so no single setting lands
 /// every note, and the value was chosen by listening inside that range rather
 /// than fitted to a median none of them sits at.
+/// How fast the air layer follows the string up, and how fast it comes back
+/// down. Both in milliseconds, and the release is the one that carries a
+/// mechanism rather than a smoothing choice.
+///
+/// The layer is an envelope follower on the radiated signal, so at a release of
+/// 200 ms against a note that decays over seconds it keeps up exactly and the
+/// board noise is a FIXED PROPORTION of the string. A real board is not: its
+/// high-frequency field has its own decay, so as the partials die away what is
+/// left is proportionally more field and less partial. Measured as the 2-8 kHz
+/// tonality of a held note against the same figure for its decay tail, three
+/// concert grands fill IN by about 20 dB between the two windows -- 36.4..39.4
+/// during a C4, 11.9..19.6 after it -- while this voice goes the other way and
+/// becomes 7.5 dB purer. That is the same sign on a held triad.
+///
+/// It is also why the layer's level cannot settle: every setting that brings
+/// the tail toward the instrument takes the note past it, because one envelope
+/// is serving two decays. A release that outlasts the string is what separates
+/// them.
+SONARE_TUNABLE(kAirAttackMs, 30.0f);
+SONARE_TUNABLE(kAirReleaseMs, 200.0f);
+
+/// How much of the air layer's excitation is taken from the air BAND of the
+/// drive rather than from the drive broadband. Zero is broadband and renders
+/// exactly as before.
+///
+/// The board is shared by every note sounding on the part, so this layer cannot
+/// be told which note it is radiating and cannot carry a keytrack. It does not
+/// need one: a structure's field in a band is driven by the energy in that
+/// band, and reading the drive through the same corners the layer radiates
+/// through is that statement rather than an approximation of it.
+///
+/// What it fixes is a top octave that would not stop. Broadband, a C8 -- whose
+/// fundamental at 4186 Hz sits ABOVE this layer's own band -- drives the layer
+/// as hard as a C4 does, so a release long enough to let a middle note's tail
+/// fill in leaves the layer sounding after the string has gone. Measured
+/// against three concert grands, whose C8 decay they agree on to within 0.57
+/// dB/s -- the tightest note on the keyboard -- a 1500 ms release took that
+/// note 7.8 dB/s slower, and 1000 ms took it 3.7. Below about 700 ms the cost
+/// disappears and so does most of the fill.
+SONARE_TUNABLE(kAirDriveBandMix, 0.0f);
+
 SONARE_TUNABLE(kBoardWidth, 0.8f);
 SONARE_TUNABLE(kBoardWidthG, 0.62f);
 SONARE_TUNABLE(kAirHpHz, 500.0f);
@@ -367,6 +431,41 @@ SONARE_TUNABLE(kAirLpHz, 2800.0f);
 /// mix is 0.35, so the number here is that over this one.
 SONARE_TUNABLE(kCaseLevel, 2.857143f);
 SONARE_TUNABLE(kCaseT60S, 4.2f);
+/// How long a blow takes to enter the board bank, in milliseconds.
+///
+/// A hammer is in contact for a fraction of a millisecond at the top of the
+/// keyboard and a couple at the bottom, and the board's answer builds over
+/// longer than either. Delivered in one sample instead, the same blow is a
+/// click: measured against three concert grands, the level that fills C8's
+/// first fifty milliseconds of energy overshoots the loudest its body ever
+/// gets by eleven decibels, and the level that lands the second leaves the
+/// first seven and a half short -- one blow, two readings, fourteen decibels
+/// apart, which is a shape in time and not a level. The one-pole has unity
+/// gain at DC, so the area is the blow whatever this is set to and the two can
+/// be fitted apart.
+///
+/// Ten milliseconds is where the two readings stop disagreeing: at three the
+/// blow still moves the peak faster than it moves the energy and the bass
+/// notes' levels shift with it, at twenty-five the peak stops arriving at all.
+SONARE_TUNABLE(kBoardStrikeSpreadMs, 10.0f);
+/// Ratio between the slowest line's decay time and kCaseT60S, which the fastest
+/// keeps. At one the network decays at a single rate; above it the lines are
+/// spread log-uniformly between the two and the aggregate falls fast and then
+/// slow, which is what a structure whose modes carry a range of loss factors
+/// does. A rigid case is not one oscillator, and the weakly coupled part of it
+/// holds energy long after the strongly coupled part has given it up.
+///
+/// A structure whose modes carry a range of loss factors does behave this way,
+/// but the reading that produced this knob does not survive its reference. The
+/// phrases it was fitted on are read in bands that sit under the corpus's own
+/// recorded rumble (see kCaseDriveDirect), and against a floor that does not
+/// decay the fit simply lengthens the slowest line until it stops decaying
+/// either: it walked to sixteen, which puts that line at sixty-seven seconds
+/// and no piano case anywhere near it.
+///
+/// Identity, and unproven, for the same reason and on the same terms as
+/// kCaseDriveDirect.
+SONARE_TUNABLE(kCaseT60Spread, 1.0f);
 /// One-pole corner on each line's feedback. A radiating case loses its high
 /// frequencies first, and this is the only place that grading is stated: the
 /// frame bank's slope had to be flat because its modes are too far apart to
@@ -386,6 +485,53 @@ SONARE_TUNABLE(kCaseDampHz, 2200.0f);
 /// what couples a string's bridge force into a structure of that mass falls with
 /// frequency well before the structure stops radiating.
 SONARE_TUNABLE(kCaseInHz, 80.0f);
+/// Share of the board's own diffused signal in what drives the case network,
+/// against the second-difference residue the two modal banks are struck with.
+///
+/// The residue is a differentiator: its magnitude is 2*|sin(w)|, which is 42 dB
+/// down at 30 Hz and 36 dB at 60 Hz. That is precisely the band this member
+/// radiates in, so a network fed the residue and then band-limited by kCaseInHz
+/// is handed almost nothing to radiate, and its level has to be raised out of
+/// proportion before anything is audible. A resonator does not mind being struck
+/// by a difference -- it rings at its own frequency whatever the drive's tilt --
+/// but a radiator does, because its output IS its drive shaped by the network.
+/// The physical quantity that moves a soundboard is the bridge force, not the
+/// second difference of the bridge force.
+///
+/// The filter shape above is arithmetic and is not in doubt. Whether it is a
+/// DEFECT is not established, and the attempt to establish it failed on the
+/// reference rather than on the voice: the corpus this voice is calibrated
+/// against carries about -64 dBFS of rumble recorded into its samples, flat
+/// from five hertz to two hundred, identical to within a decibel across all
+/// three instruments -- one recording chain, not three pianos. Nothing below
+/// roughly 250 Hz in its tail is the instrument, so it cannot say what a grand's
+/// low band should be, and a fit against it walks this control to its bound.
+///
+/// A reading the recorded rumble cannot reach has since been taken, and it
+/// settles both halves. It is a RATIO — the energy below a note's fundamental
+/// against the fundamental band, read from 0.2 to 1.2 s after the strike, where
+/// both bands sit thirty to forty decibels clear of that floor. On three concert
+/// grands it climbs about forty decibels from C3 to C8, and at C8 what is under
+/// the note outweighs the note: the string up there is short and quiet while the
+/// body's answer to a blow is not, so the top of a grand radiates mostly body.
+/// This voice is flat instead — it matches at C3 and is 18, 35, 38 and 45 dB
+/// short at C6, F#6, C7 and C8.
+///
+/// So the drive path is confirmed as the only thing that reaches that deficit:
+/// taking this control to unity moves it by 29 to 32 dB where every other
+/// candidate moves it by less than two — the modal bank's low corner, the frame
+/// bank, sympathetic coupling and the patch's own soundboard knob all measured
+/// dead. And the same measurement rules the control out as the fix, because it
+/// moves the WHOLE keyboard by that amount: at unity C3 overshoots by 34 dB
+/// while C8 is still 13 dB short, which is the shape of a fixed fraction of the
+/// string's output rather than of a body. The register dependence is what the
+/// instrument has and what this voice has no mechanism for at all, and no
+/// setting of a level can supply it.
+///
+/// The knob therefore stays at its identity, now for a stated reason rather than
+/// for want of evidence: what is missing is a body excited by the blow rather
+/// than driven by the note.
+SONARE_TUNABLE(kCaseDriveDirect, 0.0f);
 /// Delay lengths in samples at the network's own 6 kHz internal rate (a 48 kHz
 /// host decimated by kCaseDecim), all prime and so mutually prime, which makes
 /// the network's period their product rather than a short common multiple.
@@ -491,6 +637,15 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
       // the high-Q resonant boost) so the bank is a weak coupling, not a
       // runaway bandpass on the played note, then tilt the series down.
       m.gain = (1.0f - r) * std::pow(kf, -tilt);
+      // Bridge admittance: the heavier the string, the less of the bridge's
+      // motion it takes up. Applied per MODE rather than per string, because a
+      // bass string's third partial is a light, high-frequency motion of the
+      // same wire and answers more readily than its fundamental does.
+      if (kSympBassTaperOct != 0.0f && f > 0.0f) {
+        const float octaves_below =
+            std::max(0.0f, std::log2(std::max(kSympTaperAnchorHz, 1.0f) / f));
+        m.gain *= std::exp2(-kSympBassTaperOct * octaves_below);
+      }
     }
   }
   gate_ = 0.0f;
@@ -738,7 +893,16 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
       // its length counts toward the traversal -- charging the loss against the
       // delay alone would make every line decay faster than it was asked to,
       // by more the shorter the line.
-      const float t60 = std::max(0.05f, kCaseT60S);
+      //
+      // The spread, when there is one, is log-uniform across the lines so the
+      // aggregate is a sum of exponentials rather than one; kCaseT60S stays the
+      // fastest of them, so a spread of one leaves every line exactly where it
+      // was and the network keeps the single rate it was designed at.
+      float t60 = std::max(0.05f, kCaseT60S);
+      if (kCaseT60Spread != 1.0f && kCaseLines > 1) {
+        const float u = static_cast<float>(i) / static_cast<float>(kCaseLines - 1);
+        t60 *= std::pow(std::max(0.01f, kCaseT60Spread), u);
+      }
       case_g_[i] = std::min(
           0.9999f, std::exp(-6.907755279f * static_cast<float>(len + ap_len) / (sr_case * t60)));
       case_lp_[i] = 0.0f;
@@ -762,6 +926,8 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     // Smooths the held sample. Well above the band the drive filter passes, so
     // it costs the member nothing and only removes the hold's own steps.
     case_out_a_ = 1.0f - std::exp(-kTwoPi * std::min(800.0f, 0.45f * sr) / sr);
+    board_strike_a_ = std::clamp(
+        1.0f - std::exp(-1000.0f / (std::max(0.01f, kBoardStrikeSpreadMs) * sr)), 0.0f, 1.0f);
   }
   in1_ = 0.0f;
   in2_ = 0.0f;
@@ -770,8 +936,10 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
   air_lp2_ = 0.0f;
   air_hp_ = 0.0f;
   air_rng_ = 0x9E3779B9u;
-  air_attack_ = 1.0f - std::exp(-1.0f / (0.03f * sr));
-  air_release_ = 1.0f - std::exp(-1.0f / (0.2f * sr));
+  air_attack_ =
+      1.0f - std::exp(-1.0f / (std::max(kAirAttackMs, 0.1f) * 0.001f * static_cast<float>(sr)));
+  air_release_ =
+      1.0f - std::exp(-1.0f / (std::max(kAirReleaseMs, 0.1f) * 0.001f * static_cast<float>(sr)));
   air_lp_a_ = 1.0f - std::exp(-kTwoPi * std::min(kAirLpHz, 0.45f * sr) / sr);
   air_hp_a_ = 1.0f - std::exp(-kTwoPi * kAirHpHz / sr);
 }
@@ -794,6 +962,9 @@ void PianoSoundboard::reset() noexcept {
     side_idx_[d] = 0;
   }
   side_ = 0.0f;
+  board_strike_ = 0.0f;
+  board_strike_lp_ = 0.0f;
+  case_strike_ = 0.0f;
   case_buf_.fill(0.0f);
   case_idx_.fill(0u);
   case_lp_.fill(0.0f);
@@ -839,8 +1010,17 @@ float PianoSoundboard::process(float in) noexcept {
   in2_ = in1_;
   in1_ = d;
   float sum = 0.0f;
+  // The blow, if one is pending. Tested rather than added for the same reason
+  // every other block here is: with none the drive is `bp` exactly, with no
+  // sign of zero carried into forty resonators.
+  float board_in = bp;
+  if (board_strike_ != 0.0f || board_strike_lp_ != 0.0f) {
+    board_strike_lp_ += board_strike_a_ * (board_strike_ - board_strike_lp_);
+    board_strike_ = 0.0f;
+    board_in += board_strike_lp_;
+  }
   for (Mode& m : modes_) {
-    const float y = m.a1 * m.y1 + m.a2 * m.y2 + m.gain * bp;
+    const float y = m.a1 * m.y1 + m.a2 * m.y2 + m.gain * board_in;
     m.y2 = m.y1;
     m.y1 = y;
     sum += y;
@@ -890,10 +1070,27 @@ float PianoSoundboard::process(float in) noexcept {
     // what the two resonator banks are and no level has to be re-fitted for the
     // filter, and running it here rather than after the decimation is what makes
     // it the anti-alias filter as well.
-    case_in_1_ += case_in_a_ * (bp - case_in_1_);
+    // Tested rather than interpolated for the same reason the blocks above are:
+    // at the identity share the mix is bp exactly, with no sign-of-zero to carry
+    // and no multiply to fold.
+    const float case_in = kCaseDriveDirect != 0.0f ? bp + kCaseDriveDirect * (d - bp) : bp;
+    case_in_1_ += case_in_a_ * (case_in - case_in_1_);
     case_in_2_ += case_in_a_ * (case_in_1_ - case_in_2_);
     if (case_phase_ == 0u) {
-      const float drive = case_in_2_;
+      // The blow enters here rather than through the two poles above, and the
+      // distinction is the one kCaseInHz states: that filter is how a string's
+      // SUSTAINED bridge force couples into a structure of this mass, which
+      // falls with frequency well before the structure stops radiating. A
+      // hammer landing is not that transfer — it is an impulse into the plate,
+      // and what bounds its band is the loss grading inside the loop.
+      // Tested rather than added for the same reason the blocks around it are:
+      // with no blow pending the drive is case_in_2_ exactly, with no sign of
+      // zero carried into the network.
+      float drive = case_in_2_;
+      if (case_strike_ != 0.0f) {
+        drive += case_strike_;
+        case_strike_ = 0.0f;
+      }
       float scaled[kLines];
       float out_sum = 0.0f;
       float mix_sum = 0.0f;
@@ -937,10 +1134,24 @@ float PianoSoundboard::process(float in) noexcept {
     // Smooth the held sample rather than radiating its steps.
     case_out_lp_ += case_out_a_ * (case_hold_ - case_out_lp_);
     late = case_out_lp_ * kCaseLevel;
+  } else {
+    // Nothing consumes the accumulator when the network is off, so it is spent
+    // here rather than left to grow across a render. Folds out of a shipped
+    // build, where the level above is a non-zero constexpr.
+    case_strike_ = 0.0f;
   }
   float air = 0.0f;
   if (kAirGain != 0.0f) {
-    const float mag = d >= 0.0f ? d : -d;
+    float drive = d;
+    if (kAirDriveBandMix != 0.0f) {
+      // The same two poles and the same corner the radiated noise gets, so the
+      // excitation and what it excites are shaped alike.
+      air_drv_lp_ += air_lp_a_ * (d - air_drv_lp_);
+      air_drv_lp2_ += air_lp_a_ * (air_drv_lp_ - air_drv_lp2_);
+      air_drv_hp_ += air_hp_a_ * (air_drv_lp2_ - air_drv_hp_);
+      drive = d + kAirDriveBandMix * ((air_drv_lp2_ - air_drv_hp_) - d);
+    }
+    const float mag = drive >= 0.0f ? drive : -drive;
     air_env_ += (mag > air_env_ ? air_attack_ : air_release_) * (mag - air_env_);
     air_rng_ = air_rng_ * 1664525u + 1013904223u;
     const float white = static_cast<float>(air_rng_ >> 8) * (1.0f / 8388608.0f) - 1.0f;
