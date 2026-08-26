@@ -55,31 +55,24 @@ constexpr float kExpectedMaxOfNormals[kMaxMeterCandidateNumerator + 1] = {
 };
 
 /// @brief Expected maximum of the grouping search, by numerator.
-/// @details The counterpart of kExpectedMaxOfNormals for the second search the
-///          scorer runs: within one phase it also picks the best of the ways
-///          the bar divides into twos and threes, and that maximum is worth
-///          something on beats carrying no meter at all. This table cannot be
-///          the same one, and not only because it is indexed by numerator
-///          rather than by how many alternatives there are. Phases partition
-///          the beats into disjoint groups, so their scores are independent and
-///          the expected maximum is the textbook one; groupings share accent
-///          positions with each other, and the correlation that creates pulls
-///          the expected maximum well below the independent value — 13 beats
-///          divide 16 ways but behave like about 5. There is no closed form for
-///          a maximum over correlated groups, so these are measured under a
-///          null of unstructured beats. They depend only on which positions the
-///          groupings share, not on the beat strengths: repeating the
-///          measurement over uniform, normal, exponential, log-normal and
-///          bimodal strengths, and over spans from 24 to 96 beats, moves no
-///          entry by more than 0.04.
+/// @details The counterpart of kExpectedMaxOfNormals for the scorer's second
+///          search, over the ways a bar divides into twos and threes — a maximum
+///          worth something even on beats carrying no meter. It cannot be the
+///          same table: phases partition the beats into disjoint groups, so
+///          their scores are independent and the textbook expected maximum
+///          holds, while groupings share accent positions and the resulting
+///          correlation pulls the maximum well below it (13 beats divide 16 ways
+///          but behave like about 5). With no closed form, these are measured
+///          under a null of unstructured beats, and they depend only on which
+///          positions the groupings share: over five strength distributions and
+///          spans from 24 to 96 beats, no entry moves by more than 0.04.
 ///
 ///          Subtracting this and the phase correction separately treats the two
-///          searches as one after the other, which holds while the phase is
-///          chosen by the downbeat: at subdivision_weight up to about
-///          downbeat_weight the corrected scores stay level across numerators,
-///          and past that the grouping term starts choosing the phase too and
-///          the correction turns into an over-correction. The default weights
-///          sit an order of magnitude inside that.
+///          searches as sequential, which holds while the downbeat chooses the
+///          phase — up to a subdivision_weight near downbeat_weight the
+///          corrected scores stay level across numerators, and past that the
+///          grouping term starts choosing the phase and the correction
+///          over-corrects. The default weights sit an order of magnitude inside.
 constexpr float kExpectedMaxOfGroupings[kMaxGroupedMeterNumerator + 1] = {
     0.000000f, 0.000000f, 0.000000f, 0.000000f, 0.000000f, 0.573058f,
     0.568201f, 0.689606f, 0.843203f, 0.905015f, 0.997446f, 1.082682f,

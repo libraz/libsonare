@@ -6,30 +6,16 @@
 ///        (rt::ProcessorBase for inserts/effects, midi::MidiInstrument for
 ///        MIDI-driven instruments) from a plain descriptor. Header-only.
 ///
-/// Scope and invariants
-/// --------------------
-///  - A plugin instance is a core rt::ProcessorBase (an effect/insert) or a
-///    midi::MidiInstrument (an instrument that IS-A rt::ProcessorBase + a MIDI
-///    event sink). It is NEVER an SDK object (VST3 / AU / CLAP). The real SDK
-///    bridge implements this factory out-of-tree / behind a build option and
-///    wraps each SDK plugin in a core ProcessorBase adapter; core only sees the
-///    abstract interfaces below. This header includes NO plugin SDK headers
-///    (invariant 6).
-///  - The instrument the factory returns plugs straight into the host-instrument wiring
-///    point: RealtimeEngine::set_midi_instrument(midi::MidiInstrument*). The
-///    engine sums its audio at the clip/source-merge stage and the sequencer
-///    dispatches MIDI events to it.
-///  - Header-only: abstract interfaces + a POD descriptor; no .cpp, no lib.
+/// An instance is never an SDK object: the real bridge lives out-of-tree behind
+/// a build option and wraps each SDK plugin in a core ProcessorBase adapter, so
+/// this header includes no plugin SDK headers and core sees only the abstract
+/// interfaces below. What the factory returns plugs straight into
+/// RealtimeEngine::set_midi_instrument().
 ///
-/// PDC / latency
-/// -------------
-/// Every provider surfaces the instance's reported latency in samples so the
-/// arrangement compiler can fold it into the CompiledTimeline PDC / latency
-/// summary. The instance itself already
-/// reports latency via rt::ProcessorBase::latency_samples(); the provider seam
-/// ALSO exposes latency_samples(descriptor) as a control-thread query so the
-/// compiler can compute PDC WITHOUT instantiating (and preparing) the plugin —
-/// the same number the engine returns from midi_instrument_latency_samples().
+/// Beyond the instance's own rt::ProcessorBase::latency_samples(), the seam
+/// exposes latency_samples(descriptor) as a control-thread query, so the
+/// arrangement compiler can compute PDC without instantiating and preparing the
+/// plugin.
 
 #include <cstddef>
 #include <cstdint>

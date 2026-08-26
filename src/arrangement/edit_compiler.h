@@ -4,35 +4,22 @@
 /// @brief Control-thread compiler that turns a mutable arrangement Project into
 ///        an immutable, RT-readable CompiledTimeline snapshot.
 ///
-/// Threading / ownership contract
-/// ------------------------------
-/// compile() is CONTROL-THREAD-ONLY. It READS a @ref Project (plus the MIDI and
-/// audio content stores) and PRODUCES a fully-allocated, immutable
-/// @ref CompiledTimeline value object. The realtime (RT) audio thread NEVER
-/// reads a Project: it only ever sees the snapshot's prepared
-/// engine::ClipSchedule / automation::AutomationLane / transport data, which is
-/// handed over via the engine's existing direct-setter + RtPublisher paths
-/// (set_clips / automation().set_lanes / set_markers / tempo+timesig). No RT
-/// object pointers ever enter the model or the snapshot.
+/// compile() is CONTROL-THREAD-ONLY: it reads a @ref Project plus its content
+/// stores and produces an immutable @ref CompiledTimeline. The audio thread
+/// never reads a Project — it sees only the snapshot's prepared schedule,
+/// automation lanes and transport data, handed over through the engine's
+/// direct-setter and RtPublisher paths — and no RT object pointer ever enters
+/// the model or the snapshot.
 ///
-/// Determinism
-/// -----------
-/// compile() uses NO clock, NO random, NO date. Given the same Project + content
-/// stores + CompileConfig, it produces an identical CompiledTimeline and a
-/// bit-exact offline bounce within the same build. PPQ->frame conversion runs
-/// through a transport::TempoMap built from the Project's tempo/time-signature
-/// segments; sample-rate conversion uses the fixed @ref sonare::resample (r8brain
-/// 24-bit) path so the baked audio is build-deterministic.
+/// Deterministic: no clock, no random, no date, so the same inputs give an
+/// identical timeline and a bit-exact bounce within one build. PPQ->frame runs
+/// through a transport::TempoMap, and sample-rate conversion through the fixed
+/// @ref sonare::resample path, so the baked audio is build-deterministic too.
 ///
-/// Diagnostics
-/// -----------
-/// compile() does NOT throw on bad input. It returns a @ref CompileResult that
-/// carries diagnostics. An ERROR diagnostic (dangling/unavailable source,
-/// invalid tempo/PPQ, overlap-policy violation) SUPPRESSES the timeline
-/// (CompileResult::timeline stays empty). WARNING diagnostics (e.g. a graph /
-/// mixer binding requested in a build where SONARE_WITH_GRAPH / SONARE_WITH_MIXING
-/// is disabled) do NOT suppress the timeline: a valid CompiledTimeline is still
-/// returned alongside the warnings.
+/// compile() does not throw. An ERROR diagnostic (dangling source, invalid
+/// tempo/PPQ, overlap-policy violation) suppresses the timeline; a WARNING — a
+/// binding requested in a build without that feature — does not, and a valid
+/// timeline comes back alongside it.
 
 #include <cstdint>
 #include <map>

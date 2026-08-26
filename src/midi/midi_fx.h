@@ -5,28 +5,18 @@
 ///        fixed-capacity output buffer without any heap allocation on the audio
 ///        path.
 ///
-/// Threading / RT contract
-/// -----------------------
-///  - CONTROL thread: construct a @ref MidiFxChain, configure its stages via the
-///    setters (transpose / quantize / velocity curve / arpeggiator / chord /
-///    humanize), then call prepare() once. Configuration MAY allocate (it does
-///    not, today, but is allowed to).
-///  - AUDIO thread: process() reads a span of input @ref MidiEvent and writes the
-///    transformed events into a caller-owned fixed-capacity @ref MidiFxBuffer.
-///    process() performs ZERO heap allocation, takes NO lock and does NO I/O. If
-///    a transform would exceed the output capacity, the excess events are DROPPED
-///    and an atomic overflow-telemetry counter is bumped; the buffer is NEVER
-///    grown.
+/// RT contract: configure the stages and call prepare() on the control thread,
+/// where allocation is allowed; process() then reads a span of input events and
+/// writes into a caller-owned fixed-capacity @ref MidiFxBuffer with no
+/// allocation, lock or I/O. A transform that would exceed the capacity DROPS the
+/// excess and bumps an atomic overflow counter — the buffer is never grown.
 ///
-/// Determinism
-/// -----------
-/// Humanize and the arpeggiator gate derive every "random" decision from an
-/// explicit uint32_t seed via an inline SplitMix64 PRNG (see midi_fx.cpp). The
-/// same seed and the same input always produce the same output; no Date / now /
-/// std::rand is ever consulted.
+/// Determinism: humanize and the arpeggiator gate draw every decision from an
+/// explicit seed through an inline SplitMix64, so the same seed and input always
+/// give the same output.
 ///
-/// Layering: depends ONLY on midi/ump, midi/midi_event and the standard library.
-/// It does NOT depend on arrangement/ or engine/.
+/// Layering: midi/ump, midi/midi_event and the standard library only — never
+/// arrangement/ or engine/.
 
 #include <array>
 #include <cstddef>

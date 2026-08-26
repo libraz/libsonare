@@ -6,33 +6,22 @@
 ///        struck cymbal, gong or bell plate needs and a small modal bank
 ///        cannot supply.
 ///
-/// A modal bank spends one resonator per partial, so a bank capped at a
-/// handful of modes can only put its energy in a handful of places: raising
-/// its gain makes those partials louder rather than the field denser, and the
-/// result reads as a tuned bar however it is voiced. A struck plate radiates
-/// hundreds of inharmonic partials across the same band, and that density is
-/// what the ear hears as metal.
+/// A modal bank spends one resonator per partial, so a few modes can only put
+/// energy in a few places and more gain makes them louder rather than the field
+/// denser — it reads as a tuned bar however it is voiced. Measured against a
+/// sampled kit the gap is a corner, not a level: a closed hi-hat's reference
+/// holds its fine structure correlated at +0.47 with only 6 % of its band energy
+/// in its twenty strongest bins, where a six-mode bank at full gain reaches +0.34
+/// with 93 % — the opposite corner. Independent fixed partials do not reach that
+/// spread until there are several hundred of them.
 ///
-/// Measured against a sampled kit, the gap is a corner rather than a level. A
-/// closed hi-hat's reference keeps its frame-to-frame spectral fine structure
-/// correlated at +0.47 while holding only 6 % of its band energy in its
-/// twenty strongest bins — structured and spread at once. A six-mode bank
-/// driven to the top of its gain range reaches +0.34 with 93 % of the energy
-/// in those bins, which is the opposite corner; a field of independent fixed
-/// partials does not reach the reference's spread until it has several
-/// hundred of them.
-///
-/// A feedback delay network buys that density for the cost of its delay lines
-/// rather than for the cost of its modes: N lines closed through a lossless
-/// orthogonal (Householder) mixing matrix resonate at one pole per delay
-/// sample summed over the lines, so eight lines of a few hundred samples put
-/// thousands of partials in the audio band for eight multiply-accumulates per
-/// sample. The lengths are prime, so no two lines share a period and the
-/// partials land inharmonically.
-///
-/// Decay follows Jot: a per-line gain sets the low-frequency reverberation
-/// time independently of that line's length, and a one-pole loss inside each
-/// loop gives the top of the band a reverberation time of its own — which is
+/// An FDN buys the density for the cost of its delay lines instead: N lines
+/// closed through a lossless Householder matrix resonate at one pole per delay
+/// sample, so eight lines of a few hundred samples put thousands of partials in
+/// the band for eight multiply-accumulates. The lengths are prime, so no two
+/// share a period and the partials land inharmonically. Decay follows Jot — a
+/// per-line gain sets the low-frequency T60 independently of that line's length,
+/// and a one-pole loss in each loop gives the top of the band its own, which is
 /// the difference between a ride that shimmers and a plate that thuds.
 ///
 /// RT contract: start() and process() are allocation-free (the lines are

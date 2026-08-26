@@ -97,38 +97,23 @@ struct PercussionPatchParams {
   /// — the burst, the wire rattle and the shimmer wash. 0 = unbounded, the
   /// voicing that predates this field.
   ///
-  /// It exists because a high-pass has no top. The SVF's high-pass output is
-  /// flat above its corner, so white noise driven through it stays white all
-  /// the way to Nyquist, and third-octave bands get wider in proportion to
-  /// their centre frequency — which puts the most energy in the highest band
-  /// there is, whatever the corner was set to. Every open-topped piece
-  /// therefore measures its spectral peak at the top of the analysis range
-  /// rather than where the plate actually speaks: against a sampled kit, a
-  /// closed hat peaked at 12.5 kHz where the reference peaked between 315 Hz
-  /// and 4 kHz, and a crash at 12.5 kHz against 2.5 kHz. No corner setting can
-  /// correct that, because the corner is a floor and the defect is the missing
-  /// ceiling.
+  /// It exists because a high-pass has no top: noise through the SVF's high-pass
+  /// stays white to Nyquist while third-octave bands widen with their centre, so
+  /// an open-topped piece peaks in the highest band there is whatever its corner
+  /// was — a closed hat measured 12.5 kHz against a reference between 315 Hz and
+  /// 4 kHz. The corner is a floor and the defect is the missing ceiling, so no
+  /// corner setting corrects it.
   ///
-  /// This is a bound rather than a band, and it is a bound only while it sits
-  /// above the corner it is bounding. A two-pole low-pass above the corner
-  /// removes the tail past it and leaves the corner's own voicing alone, and
-  /// the measured peak follows the bound down. Taken *below* the corner the two
-  /// stop composing and start squeezing: a wash high-passed at 5.5 kHz and
-  /// bounded at 2 kHz stalls with its peak near 4 kHz and cannot be pushed
-  /// lower, because what remains is the overlap of two slopes rather than a
-  /// band anyone chose. A piece that has to speak below its corner needs the
-  /// corner moved, not the bound.
+  /// It is a bound only while it sits ABOVE the corner it bounds. Below it, the
+  /// two stop composing and start squeezing: a wash high-passed at 5.5 kHz and
+  /// bounded at 2 kHz stalls near 4 kHz, since what remains is an overlap of
+  /// slopes rather than a band anyone chose. A piece that must speak below its
+  /// corner needs the corner moved.
   ///
-  /// Removing that tail also removes its level — the energy above the corner
-  /// was most of what a flat-topped wash had. A crash measured 13.6 dB quieter
-  /// at a 4 kHz bound, so enabling this on a calibrated piece means re-gaining
-  /// it in the same change.
-  ///
-  /// The particle layer is excluded — it is a separate excitation model, shaped
-  /// by resonance stages of its own (`phisem_res_hz`, `phisem_body_hz`). Those
-  /// are peaks and not bounds: a pole pair falls 6 dB per octave above its
-  /// centre, so a shaker or scraper that needs a hard upper edge does not have
-  /// one here.
+  /// Removing the tail removes its level too — a crash measured 13.6 dB quieter
+  /// at a 4 kHz bound — so enabling this on a calibrated piece means re-gaining
+  /// it in the same change. The particle layer is excluded: its `phisem_*` stages
+  /// are peaks, not bounds, so a shaker needing a hard upper edge has none.
   float noise_air_hz = 0.0f;
 
   // --- shell resonance ---

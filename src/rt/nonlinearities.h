@@ -24,34 +24,25 @@ struct TanhNonlinearity {
 ///   which is why a push-pull stage cancels even harmonics here rather than
 ///   being asserted to.
 ///
-///   @c bias is how far into class B the pair is biased: it is the half-width
-///   of the region around the zero crossing where neither half is conducting
-///   properly, i.e. the crossover dead zone. @c knee is how abruptly each half
-///   turns on relative to the signal; a wide dead zone with a soft knee is only
-///   a gentle expander, and it takes both to get the kink at the handover that
-///   makes crossover distortion sound the way it does.
+///   @c bias is the half-width of the crossover dead zone (how far into class B
+///   the pair sits) and @c knee is how abruptly each half turns on. It takes
+///   both to get the kink at the handover: a wide dead zone with a soft knee is
+///   only a gentle expander.
 ///
-///   The composite is normalized by its own SATURATED output, not by its slope
-///   at the origin: the supply rails do not move when an amp's bias is
-///   readjusted, so the ceiling is what has to stay fixed, and the small-signal
-///   slope is what falls. Normalizing the other way round would make a colder
-///   bias louder and cleaner, which is backwards on both counts.
+///   The composite is normalized by its SATURATED output rather than by its
+///   origin slope, because the supply rails do not move when an amp's bias is
+///   readjusted — so the ceiling stays fixed and the small-signal slope falls.
+///   The other way round would make a colder bias louder and cleaner.
 ///
-///   At @c bias == 0 and @c knee == 1 the whole function collapses onto
-///   TanhNonlinearity bit-exactly: @c 1.0f*(x+-0.0f) is exact, and
-///   @c f(x)+f(x) scaled by @c 0.5f only moves a binary exponent. Class A is
-///   therefore the same arithmetic as before, with no branch.
+///   At @c bias == 0 and @c knee == 1 this collapses onto TanhNonlinearity
+///   bit-exactly, so class A is the same arithmetic with no branch.
 ///
-///   PITFALL for callers driving both fields from one control: the origin
-///   slope is @c knee*sech^2(knee*bias), and to second order in @c bias that
-///   is @c knee*(1-(knee*bias)^2). Ramping @c knee linearly in the control
-///   while @c bias starts at 0 makes the slope RISE at first — a sharper knee
-///   reads as gain before a wide-enough dead zone has caught up to cut it back
-///   down. A caller wanting the slope to fall monotonically as the dead zone
-///   opens needs @c knee's excess over 1 to scale with @c bias SQUARED (not
-///   with the control directly), which cancels the first-order term instead of
-///   fighting it — see @c saturation::AmpSim's @c crossover parameter for the
-///   worked derivation and its bound on the scaling coefficient.
+///   PITFALL when both fields come from one control: the origin slope is
+///   @c knee*sech^2(knee*bias) ~ @c knee*(1-(knee*bias)^2), so ramping @c knee
+///   linearly from @c bias == 0 makes the slope RISE at first — the sharper knee
+///   reads as gain before the dead zone catches up. For a monotonic fall,
+///   @c knee's excess over 1 must scale with @c bias SQUARED, which cancels the
+///   first-order term; @c saturation::AmpSim's @c crossover has the derivation.
 struct PushPullNonlinearity {
   float bias = 0.0f;
   float knee = 1.0f;

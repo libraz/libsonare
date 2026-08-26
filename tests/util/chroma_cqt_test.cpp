@@ -61,8 +61,8 @@ TEST_CASE("chroma_cens produces 12-bin output", "[chroma_cqt][unit][smoke]") {
 TEST_CASE("chroma_cqt frames are L-inf-normalized by default",
           "[chroma_cqt][unit][normalize][librosa-parity]") {
   // librosa.feature.chroma_cqt defaults to norm=np.inf — each frame's
-  // max magnitude must be 1 (or the frame is all-zero). Cf. CLAUDE.md
-  // librosa-parity rule for defaults.
+  // max magnitude must be 1 (or the frame is all-zero). Where librosa sets a
+  // default, this library matches it rather than choosing its own.
   Audio audio = make_c_major_chord(22050, 0.5f);
   ChromaCqtConfig cfg;
   cfg.normalize_frames = true;

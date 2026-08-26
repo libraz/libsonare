@@ -2,36 +2,22 @@
 
 /// @file ks_voice.h
 /// @brief Extended Karplus-Strong plucked-string core for the NativeSynth
-///        voice — the guitar / harp / banjo family (synthesis method (3) of
-///        the instrument build plan; Karplus & Strong 1983, Jaffe & Smith
-///        1983).
+///        voice — the guitar / harp / banjo family (Karplus & Strong 1983,
+///        Jaffe & Smith 1983).
 ///
-/// The textbook core is a fractional-delay loop closed through a one-pole
-/// loop lowpass. What carries the realism beyond it (the Jaffe-Smith
-/// extensions):
-///   - FRACTIONAL-DELAY TUNING: the loop length is interpolated with the
-///     shared 3rd-order Lagrange kernel and compensated for the loop filter's
-///     exact phase delay at the fundamental, so the pitch is accurate to a
-///     few cents across the keyboard.
-///   - Decay stretching: the string's t60 lengthens going down the keyboard
-///     (low strings ring longer), scaled per octave below A4.
-///   - Pick-position comb: the excitation burst is combed by a delay of
-///     pick_position * period, notching the harmonics with a node at the
-///     plucking point.
-///   - Dynamic-level lowpass: velocity opens the excitation lowpass
-///     (hard pluck = bright attack), the velocity -> brightness cue.
-///   - Note-off damping: release re-targets the loop gain to a short damped
-///     t60 (the finger/palm mute) instead of cutting the string.
+/// A fractional-delay loop through a one-pole lowpass, plus the Jaffe-Smith
+/// extensions that carry the realism: Lagrange-interpolated tuning compensated
+/// for the loop filter's phase delay at the fundamental; a t60 that stretches
+/// per octave below A4; a pick-position comb notching the harmonics at the
+/// plucking point; a velocity-opened excitation lowpass; and a note-off release
+/// that re-targets the loop gain to a damped t60 rather than cutting the string.
 ///
-/// The delay buffer is NOT owned by the core: the host instrument allocates
-/// one slab per voice slot in prepare() (the only allocation site) and
-/// attach()es a span before start(). Sympathetic-string coupling (harp/koto)
-/// is intentionally out of scope for this core.
+/// The delay buffer is not owned here — the host attaches one span per voice
+/// slot before start(). Sympathetic coupling is out of scope for this core.
 ///
-/// RT contract: attach()/start()/render() are allocation-free (start zeroes
-/// the attached span). Determinism: the excitation noise is the counter-based
-/// (voice_index, note, age) stream, so identical event streams render
-/// bit-identically.
+/// RT contract: attach()/start()/render() are allocation-free. Determinism: the
+/// excitation noise is the counter-based (voice_index, note, age) stream, so
+/// identical events render bit-identically.
 
 #include <cstddef>
 #include <cstdint>

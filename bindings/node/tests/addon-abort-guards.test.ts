@@ -4,36 +4,27 @@
  * C++ exception — it leaves a pending JS exception and returns a dummy value.
  * Three consequences make bad input lethal rather than merely wrong:
  *
- *  1. A second N-API throw raised while an exception is already pending is a
- *     `FATAL ERROR ... napi_throw` abort (exit 134). An entry point that keeps
- *     parsing after the first bad field therefore kills the whole process,
- *     straight through any `try`/`catch`, with no stack trace and no chance to
- *     report the error.
- *  2. A C++ exception thrown inside the callback (a `std::length_error` from
- *     `std::vector<T> v(n)` after a negative count wrapped to SIZE_MAX)
- *     terminates the process for the same reason.
- *  3. The dummy value is a perfectly ordinary `0` / `""` / `false`, so a C-ABI
- *     call built from it runs and succeeds. `ThrowIfError` cannot stop that —
- *     the native call is its ARGUMENT, so it has already run by the time the
- *     pending-exception guard is consulted. The caller gets its TypeError with
- *     the gain already zeroed, the transport already rolling, the play head
- *     already back at 0.
+ *  1. A second N-API throw while an exception is pending is a
+ *     `FATAL ERROR ... napi_throw` abort. An entry point that keeps parsing
+ *     after the first bad field kills the process through any `try`/`catch`.
+ *  2. A C++ exception inside the callback — a `std::length_error` from
+ *     `std::vector<T> v(n)` after a negative count wrapped to SIZE_MAX —
+ *     terminates it for the same reason.
+ *  3. The dummy value is an ordinary `0` / `""` / `false`, so a C-ABI call built
+ *     from it runs and succeeds. `ThrowIfError` cannot stop that: the native
+ *     call is its ARGUMENT, so it has already run. The caller gets a TypeError
+ *     with the gain already zeroed and the play head already back at 0.
  *
- * These tests pin all three shut: every covered entry point must convert the
- * FIRST offending field or argument into exactly one catchable `TypeError` (or
- * `RangeError` for an out-of-domain count or a MIDI byte the narrowing cast
- * would wrap), issue no C-ABI call, and still be alive afterwards. State is
- * asserted by comparing a snapshot either side of the rejected call — the
- * engine's strips and capture session, the transport and MIDI queues, and the
- * project's whole `toJson()`. The suite runs the matrix in a child process too,
- * so "survived" is asserted against a real exit code and not just against the
- * test runner happening to continue.
+ * These tests pin all three shut: a covered entry point must turn the FIRST
+ * offending field into exactly one catchable `TypeError` (or `RangeError` for an
+ * out-of-domain count or a MIDI byte the narrowing cast would wrap), issue no
+ * C-ABI call, and still be alive after. State is asserted by snapshotting either
+ * side of the rejected call, and the matrix also runs in a child process, so
+ * "survived" is a real exit code rather than the runner happening to continue.
  *
- * Which entry points must appear in the table is NOT decided here: the addon
- * sources are scanned for every entry point that reads a positional argument
- * through the bail-out reader family, and one missing from the table (or from
- * the reasoned register) fails. Four generations of this finding were each
- * closed by enumerating the entry points that existed at the time.
+ * The table's membership is not decided here: the addon sources are scanned for
+ * every entry point reading a positional argument through the bail-out reader
+ * family, and one missing from the table or the reasoned register fails.
  */
 
 import { spawnSync } from 'node:child_process';

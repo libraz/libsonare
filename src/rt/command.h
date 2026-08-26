@@ -13,38 +13,22 @@ namespace sonare::rt {
 /// realtime engine.
 inline constexpr uint32_t kEngineAbiVersion = 3;
 
-// The CommandType space is split into two disjoint groups:
+// The enum below is split into two disjoint groups, marked inline:
 //
-//  (1) RT-QUEUE VOCABULARY -- safe to enqueue via push_command() and applied by
-//      apply_command() on the audio thread. These carry only POD scalars and
-//      perform in-place, allocation-free updates:
-//        kSetParam, kSetParamSmoothed, kTransportPlay, kTransportStop,
-//        kTransportSeekSample, kTransportSeekPpq, kSeekMarker,
-//        kMidiNoteOnImmediate, kMidiNoteOffImmediate, kMidiCcImmediate,
-//        kMidiAllNotesOff (a.k.a. MIDI panic), kSetSoloMute,
-//        kSetTrackMonitorMode,
-//        kSetTrackInsertParam, kSetMasterInsertParam.
+//  (1) RT-QUEUE VOCABULARY -- enqueueable via push_command() and applied on the
+//      audio thread. POD scalars only, in-place and allocation-free. The live
+//      MIDI commands stay POD by synthesizing a UMP from packed scalar fields
+//      and routing it through the sequencer's host-injection path.
+//  (2) DIRECT-SETTER OPERATIONS -- must NOT flow through the queue, because they
+//      own data swapped through the RtPublisher pattern on control-thread
+//      setters. Clip set replacement, route tables, SMF import, device binding
+//      and host-node swap all belong here for that reason.
 //
-//      Live scalar MIDI commands stay strictly POD: they synthesize a UMP from
-//      packed scalar fields (no pointer, no variable-length payload) and route
-//      it through the MidiSequencer's host-injection path. MIDI CLIP set
-//      replacement, route tables, SMF import, device binding and host-node swap
-//      are NOT queueable -- they own data swapped via direct setters and remain
-//      group (2).
-//
-//  (2) DIRECT-SETTER OPERATIONS -- known command names that must NOT flow
-//      through the realtime queue because they own data swapped via the
-//      RtPublisher pattern on control-thread setters (set_tempo, set_loop,
-//      swap_graph, set_clips, set_capture_*, set_metronome_config,
-//      set_markers, ...):
-//        kSetTempoMap, kSetLoop, kSwapGraph, kSwapAutomation, kAddClip,
-//        kRemoveClip, kArmRecord, kPunch, kSetMetronome, kSetMarker.
-//
-// If a group-(2) value is pushed through the queue, apply_command() rejects it
-// with TelemetryErrorCode::kNonQueueableCommand (NOT the misleading
-// kUnknownTarget, which is reserved for queueable commands referencing an
-// unbound target). The two groups are kept in a single enum so the binding ABI
-// (kEngineAbiVersion) and the SharedArrayBuffer record layout stay stable.
+// Pushing a group-(2) value is rejected with
+// TelemetryErrorCode::kNonQueueableCommand, not the misleading kUnknownTarget,
+// which is reserved for a queueable command naming an unbound target. Both
+// groups share one enum so the binding ABI and the SharedArrayBuffer record
+// layout stay stable.
 enum class CommandType : uint16_t {
   // -- Group (1): RT-queue vocabulary --
   kSetParam,

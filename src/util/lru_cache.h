@@ -13,28 +13,23 @@ namespace sonare {
 
 /// @brief Thread-safe LRU cache with O(1) hit, insert, and eviction.
 ///
-/// @details Backed by an `std::unordered_map` for lookup plus an
-/// `std::list<Key>` that orders entries by recency (front = most recently
-/// used). Each map entry stores an iterator back into the list so a cache hit
-/// promotes the key to the front with a single `splice` instead of an O(n)
-/// search. Because `std::unordered_map` is node-based, references to a stored
-/// value stay valid until that specific entry is evicted (a rehash does not
-/// move nodes), which is what makes the `const Value&` return contract safe.
+/// @details An `std::unordered_map` for lookup beside an `std::list<Key>`
+/// ordered by recency, each map entry holding an iterator back into the list so
+/// a hit promotes with one `splice` rather than an O(n) search. The map is
+/// node-based, so a rehash does not move a stored value and a reference stays
+/// valid until that entry is evicted.
 ///
-/// Both accessors return the value *by value*, copied while the lock is held,
-/// so the result can never be invalidated by another thread evicting the entry
-/// after the call returns. They differ only in where the build runs:
-///  - `get_or_build` builds the value *outside* the lock, so unique keys build
-///    concurrently rather than serializing on the mutex. Use it when the build
-///    is expensive; the value type should be cheap to copy (e.g. a
-///    `std::shared_ptr` to an immutable filterbank), since the copy is taken on
+/// Both public accessors copy the value under the lock, so no eviction can
+/// invalidate a returned result. They differ only in where the build runs:
+///  - `get_or_build` builds OUTSIDE the lock, so unique keys build concurrently.
+///    Use it for an expensive build with a cheap-to-copy value (a
+///    `std::shared_ptr` to an immutable filterbank), since the copy is taken
 ///    every call.
-///  - `get_or_build_value` builds the value *inside* the lock, serializing
-///    unique-key builds. Use it when the build itself is cheap.
+///  - `get_or_build_value` builds INSIDE the lock, serializing unique-key
+///    builds. Use it when the build itself is cheap.
 ///
-/// @warning Never hold a reference into the cache across the lock release: a
-/// concurrent eviction can destroy the map node. Returning by value (copied
-/// under the lock) is what keeps these accessors safe for multi-threaded use.
+/// @warning Never hold a reference into the cache across the lock release — a
+/// concurrent eviction destroys the map node.
 ///
 /// @tparam Key   Hashable, equality-comparable cache key.
 /// @tparam Value Cached value type.

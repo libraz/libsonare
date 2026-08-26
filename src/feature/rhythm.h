@@ -83,18 +83,12 @@ std::vector<float> cyclic_tempogram(const Audio& audio,
                                     float bpm_min = 60.0f, int n_bins = 60);
 
 /// @brief Heuristic harmonic-ratio summary of an autocorrelation tempogram.
-/// @warning This is NOT compatible with librosa.feature.tempogram_ratio and must
-///          not be treated as a drop-in for it. librosa builds a full BPM tempo
-///          axis, estimates a reference tempo, and resamples the tempogram onto
-///          tempo-ratio bins. This function instead:
-///            - picks a single reference lag as the lag (excluding lag 0) with the
-///              strongest frame-averaged autocorrelation;
-///            - for each requested ratio f, samples the frame-averaged
-///              autocorrelation at the integer lag round(reference_lag / f);
-///          so the result is a coarse, lag-domain harmonic-ratio summary rather
-///          than a tempo-axis ratio feature. @p sr is currently ignored (no BPM
-///          axis is constructed); it is retained only for API stability and a
-///          potential future tempo-axis implementation.
+/// @warning NOT a drop-in for librosa.feature.tempogram_ratio, which builds a BPM
+///          axis and resamples onto tempo-ratio bins. This picks the strongest
+///          frame-averaged autocorrelation lag (excluding 0) as the reference and
+///          samples each ratio f at round(reference_lag / f), giving a coarse
+///          lag-domain summary rather than a tempo-axis feature. @p sr is ignored
+///          and kept only for API stability.
 /// @param tempogram_data Tempogram matrix as returned by tempogram()
 /// @param win_length Tempogram win_length used to compute the lag axis
 /// @param sr Sample rate (currently unused, see warning above)
@@ -109,9 +103,9 @@ std::vector<float> cyclic_tempogram(const Audio& audio,
 ///        @p win_length (fewer than one frame).
 /// @note These are rejections, not zero-filled results: a zero at a ratio means
 ///       "no autocorrelation energy at that lag", so an unanswerable call must
-///       not produce one. A NaN factor in particular used to reach
+///       not produce one. A NaN factor would otherwise reach
 ///       round(reference_lag / factor) as undefined behaviour, and an infinite
-///       one resolved to lag 0 — the DC peak the reference search excludes.
+///       one resolves to lag 0 — the DC peak the reference search excludes.
 std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int win_length, int sr,
                                    int hop_length,
                                    const std::vector<float>& factors = {0.5f, 1.0f, 2.0f, 3.0f,

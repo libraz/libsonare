@@ -5,37 +5,23 @@
 ///        a real-time audio thread without shared_ptr refcount churn, locks, or
 ///        heap allocation/free on the audio thread.
 ///
-/// Motivation: the free-function `std::atomic_load/store(std::shared_ptr*)`
-/// overloads use a global spinlock in libstdc++/libc++ and may free memory on
-/// the calling thread. Calling them on the audio thread is therefore forbidden
-/// (a lock + potential free in the render callback). `RtPublisher<T>` replaces
-/// that pattern with a wait-free hand-off:
+/// The atomic `shared_ptr` free functions take a global spinlock in both standard
+/// libraries and may free on the calling thread, so they are forbidden in a
+/// render callback. This replaces them with a wait-free hand-off: `publish()`
+/// first drains the retire ring (freeing on the control thread, never the audio
+/// one), then passes the snapshot through an SPSC ring, coalescing into a single
+/// pending slot when the ring is full. Ownership is partitioned by atomic slot
+/// state, so producer and consumer never touch one `shared_ptr` concurrently.
 ///
-///  - CONTROL thread calls `publish(snapshot)`:
-///      (a) drains the retire ring, freeing previously-retired shared_ptrs on
-///          the control thread (never the audio thread);
-///      (b) hands the new snapshot to the audio thread through an SPSC ring of
-///          `shared_ptr<const T>`. If the ring is full, the latest snapshot is
-///          coalesced into a single pending slot that the audio thread adopts
-///          after draining the ring. Ownership is partitioned by atomic slot
-///          state, so the producer and consumer never touch the same
-///          `shared_ptr` object concurrently.
+/// `acquire()`, at block start, drains to the newest snapshot and pushes the old
+/// and every superseded one into the retire ring — no alloc and no free there.
+/// `current()` is then a raw pointer valid for the whole block, since the audio
+/// thread's owning member only changes inside `acquire()`, and a block with no
+/// pending publish does no refcount work at all.
 ///
-///  - AUDIO thread calls `acquire()` at block start. It drains the publish ring
-///      to the newest pending snapshot; the OLD owning snapshot and every
-///      superseded one is moved into the retire ring (wait-free push, no alloc,
-///      no free here) and the newest is adopted. `current()` then returns a raw
-///      `const T*` valid for the whole block because the audio thread holds one
-///      owning copy as a member that only changes inside `acquire()`.
-///
-/// The audio-thread read path performs NO heap allocation, NO lock, and NO
-/// shared_ptr refcount operation per block when no publish is pending (the
-/// owning member is only touched when `acquire()` actually adopts a value).
-///
-/// For state that must be read concurrently from MORE than one thread (e.g.
-/// the audio thread and a control thread both calling `ppq_to_sample`), use
-/// `RtSnapshot<T>` instead: readers do a single lock-free pointer load and the
-/// control thread owns all snapshot lifetimes via a bounded retention ring.
+/// For state read from MORE than one thread, use `RtSnapshot<T>` instead:
+/// readers do one lock-free pointer load and the control thread owns every
+/// lifetime through a bounded retention ring.
 
 #include <array>
 #include <atomic>

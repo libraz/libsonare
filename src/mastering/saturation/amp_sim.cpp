@@ -175,38 +175,23 @@ constexpr float kCircuitMakeup = 0.029f;
 /// than an arbitrary scaling of a plate current.
 constexpr float kTransconductanceStepV = 0.01f;
 
-/// Crossover dead zone at `crossover == 1`, as a half-width in the power
-/// stage's normalized domain, and how much sharper each half's turn-on gets
-/// with it. Both are needed: a wide dead zone with a soft knee is only a gentle
-/// expander. Measured against the power stage's own working range, so that a
-/// driven signal traverses the zone on every cycle (the notch) while a quiet
-/// one sits inside it (the squashed, gated small-signal behaviour of a cold
-/// amp).
+/// Crossover dead zone at `crossover == 1` — a half-width in the power stage's
+/// normalized domain — and how much sharper each half's turn-on gets with it.
+/// The half-width is measured against the stage's own working range, so a driven
+/// signal traverses the zone every cycle while a quiet one sits inside it.
 ///
-/// The two are coupled, and the coupling is load-bearing rather than
-/// decorative: the origin slope of the composite is knee*sech^2(knee*bias), and
-/// knee enters that product UNSQUARED while bias enters squared to second
-/// order (sech^2(u) = 1-u^2+O(u^4)). Driving knee off 1 at the same rate as
-/// bias therefore makes the origin slope RISE before it falls — a sharper knee
-/// reads as more gain long before the widening dead zone has caught up enough
-/// to cut it back down. Making the knee's excess scale with bias SQUARED
-/// (`knee = 1 + kCrossoverKneeSharpness * bias^2`) cancels that: expanding the
-/// slope to second order in bias gives `1 + (kCrossoverKneeSharpness-1)*bias^2`,
-/// which is non-increasing for every bias exactly when
-/// `kCrossoverKneeSharpness <= 1` — enforced below, not just documented, so a
-/// future edit to either constant cannot reopen this. kCrossoverKneeSharpness
-/// is kept a bit under that bound rather than riding the edge of it.
+/// The coupling between them is load-bearing. The composite's origin slope is
+/// knee*sech^2(knee*bias), where knee enters unsquared and bias squared, so
+/// driving knee off 1 at the same rate as bias makes the slope RISE before it
+/// falls. Scaling the knee's excess with bias SQUARED cancels that: the slope
+/// becomes `1 + (kCrossoverKneeSharpness-1)*bias^2`, non-increasing exactly when
+/// the sharpness is <= 1, which the static_assert below enforces rather than
+/// merely documenting.
 ///
-/// kMaxCrossoverBias is 1.3, not the pre-fix 0.5, because coupling by the
-/// square costs depth at the same bias: the widest dead zone used to fall
-/// straight out of `knee` alone (up to 6x sharper turn-on at bias 0.5), and
-/// now has to come from `bias` itself reaching further. 1.3 is the half-width
-/// that lands `coldBiasBuzz`'s documented "cold enough that the dead zone is
-/// audible" setting (crossover 0.875, from `crossover_from_bias_fraction`)
-/// within half a dB of the OLD implementation's own crossover == 1 depth
-/// (-24.15 dB here against -24.55 dB there) — matching what that preset was
-/// tuned to sound like is the goal, not the number 1.3 itself; a rounder value
-/// would have undershot it.
+/// That square costs depth at a given bias, so the half-width has to reach
+/// further to keep `coldBiasBuzz`'s "dead zone audible" setting (crossover
+/// 0.875) at the -24 dB depth it was voiced against. 1.3 is what lands it; a
+/// rounder value undershoots.
 constexpr float kMaxCrossoverBias = 1.3f;
 constexpr float kCrossoverKneeSharpness = 0.9f;
 static_assert(kCrossoverKneeSharpness <= 1.0f,

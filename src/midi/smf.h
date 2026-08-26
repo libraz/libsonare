@@ -14,37 +14,26 @@
 /// reading / writing the byte buffer from disk (or a WASM ArrayBuffer). Import
 /// takes a const byte view; export returns a std::vector<uint8_t>.
 ///
-/// Feature coverage / lossiness (pinned by the round-trip test):
-///   - SMF format 0 (single track) and format 1 (multi-track) are imported.
-///     Format 2 (independent sequences) is rejected with a diagnostic.
-///   - Channel-voice messages (note on/off, poly pressure, control change,
-///     program change, channel pressure, pitch bend) are converted to UMP via
-///     the ump.h MIDI-1.0 byte-stream adapter (never hand-rolled).
-///   - Variable-length quantities and running status are handled on import.
-///   - Meta events: set-tempo, time-signature, track name, end-of-track and the
-///     text-class events marker (0x06), text (0x01), lyric (0x05), cue point
-///     (0x07) and key signature (0x59) are recognized. Set-tempo / time-signature
-///     populate the transport segment vectors, including SMF time-signature
-///     metronome bytes; track name is captured as a string. The text-class events
-///     are captured into @ref SmfImportResult::markers as @ref SmfMarker entries
-///     tagged with a @ref SmfMarkerKind. They are collected across all tracks into
-///     one flat, timeline-global list, so a text/lyric event's originating track
-///     (and thus per-note alignment) is not preserved — only its musical-time
-///     position. Key signatures carry the structured fifths/minor pair.
-///   - SysEx (F0 / F7) payloads are preserved in @ref SmfImportResult::sysex_store
-///     and represented in clips as SysEx-handle UMP events. F7 escape status is
-///     normalized to an F0 SysEx event on export because the normalized UMP
-///     handle intentionally stores payload bytes, not the original SMF status
-///     byte. Unrecognized meta events are skipped lossily (their delta time is
-///     still consumed so timing of following events is correct), and counted in
-///     @ref SmfImportResult::skipped_events.
-///   - Export writes format 1: one tempo/meta track (track 0) carrying the
-///     tempo + time-signature map, followed by one track per MidiClip whose
-///     channel-voice UMP events are serialized back via the ump.h adapter.
-///     SysEx handles are re-emitted as F0 SysEx events only when
-///     SmfExportOptions::sysex_store is supplied. Markers supplied in
-///     SmfExportOptions::markers are written to track 0. MIDI 2.0-only messages
-///     are skipped lossily and counted in SmfExportResult::skipped_events.
+/// Coverage and lossiness, pinned by the round-trip test:
+///   - Formats 0 and 1 import; format 2 (independent sequences) is rejected with
+///     a diagnostic. Variable-length quantities and running status are handled.
+///   - Channel-voice messages convert to UMP through the ump.h MIDI-1.0
+///     byte-stream adapter, never hand-rolled.
+///   - Set-tempo and time-signature populate the transport segments (metronome
+///     bytes included); track name is captured as a string. The text-class events
+///     (marker, text, lyric, cue point, key signature) land in
+///     @ref SmfImportResult::markers tagged with a @ref SmfMarkerKind, collected
+///     across all tracks into one timeline-global list — so a lyric's originating
+///     track, and with it per-note alignment, is NOT preserved.
+///   - SysEx payloads live in @ref SmfImportResult::sysex_store and appear in
+///     clips as handle UMP events. F7 escapes normalise to F0 on export, since
+///     the handle stores payload bytes rather than the original status byte.
+///   - Unrecognized meta events and MIDI 2.0-only messages are skipped lossily
+///     and counted in the result's `skipped_events`; a skipped event's delta time
+///     is still consumed, so what follows stays in time.
+///   - Export writes format 1: track 0 carries the tempo/time-signature map and
+///     any @ref SmfExportOptions::markers, then one track per MidiClip. SysEx
+///     handles re-emit only when `SmfExportOptions::sysex_store` is supplied.
 
 #include <cstdint>
 #include <string>

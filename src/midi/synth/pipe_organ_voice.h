@@ -1,65 +1,32 @@
 #pragma once
 
 /// @file pipe_organ_voice.h
-/// @brief Flue (labial) organ-pipe core for the NativeSynth voice — the
-///        data-free church-organ model (the air-driven resonant air column;
-///        Fletcher & Rossing, Fabre & Hirschberg). One note-on sounds a whole
-///        REGISTRATION: the selected ranks (footages) speak together, the way a
-///        drawn stop couples 8'/4'/2' principals or a mixture of upperwork.
-///        The reed (lingual) pipe family is layered on the same jet loop.
+/// @brief Flue (labial) organ-pipe core for the NativeSynth voice. One note-on
+///        sounds a whole REGISTRATION — each drawn footage is an independent
+///        self-oscillating jet pipe (bore delay plus jet delay, cubic
+///        Fabre-Hirschberg jet table) and they sum, so a chorus and a mixture
+///        fall out of decorrelated pipes rather than out of an EQ. Reed
+///        (lingual) pipes layer on the same jet loop.
 ///
-/// A flue pipe is a turbulent air jet blown across the mouth's labium, and the
-/// pipe's standing wave phase-locks that jet — the jet is a nonlinear exciter,
-/// the air column a linear resonator. This core SELF-OSCILLATES through that
-/// jet (the same physics as the sibling flute core, flute_voice.h): once the
-/// wind is on, the jet drives a periodic limit cycle that holds the tone rock
-/// steady and endlessly (an organ note does not decay or waver while keyed) —
-/// the "won't stop while the key is down" solidity a decaying, noise-driven
-/// waveguide cannot voice. Each rank is an independent jet pipe: a bore delay
-/// line (the travelling-wave air column) beside a short jet delay line (the
-/// jet's convection time), driven by a cubic jet table (Fabre-Hirschberg lumped
-/// model / STK JetTable) whose inverting small-signal slope, with the bore
-/// reflection, forms the oscillator and whose clamp bounds the limit cycle.
-/// What separates "organ pipe" from "string" and carries the realism:
-///   1. OPEN vs STOPPED PIPE: an open pipe (principal/flute) is voiced bright
-///      with the full harmonic series and the even-harmonic octave pump; a
-///      stopped pipe (gedackt/bourdon) is voiced HOLLOW off the same jet loop —
-///      the octave pump is nearly muted and the reflection darkened, so the tone
-///      is fundamental-dominant with little upperwork (the covered gedackt
-///      colour). Both use the positive-feedback open topology: it locks its
-///      fundamental and tunes cleanly across the whole 16'-down compass, where a
-///      literal negative-feedback half-length stopped comb would not hold pitch.
-///   2. SELF-OSCILLATING JET: the jet convection ratio (jet delay / bore delay,
-///      ~0.5) selects the register the jet drives, so the pipe locks its pitch
-///      and speaks a solid periodic tone rather than a resonator merely coloured
-///      by breath noise.
-///   3. SPEECH: the bore is pre-filled with a low-level f0 sine seed at note-on
-///      so the jet locks immediately, and each rank's radiated level then
-///      blooms in over ~20 of its own fundamental periods — the upperwork
-///      speaks promptly, the big bass pipes swell in behind it.
-///   4. CHIFF: the brief, brighter onset transient before the pitch settles
-///      (the pipe "speaking"), a short decaying noise burst.
-///   5. REGISTRATION: several ranks at different footages (16'/8'/4'/2-2/3'/2'/…)
-///      sound on one key, each an independent jet pipe. A principal chorus
-///      (8'+4'+2') and a mixture (several high ranks in one stop) fall out of
-///      summing decorrelated pipes, the way a real organ builds its plenum.
-///   6. LIVING CHORUS: each (rank, note) pipe carries its own fixed few-cent
-///      tuning error (the instrument's hand tuning), so the ranks beat slowly
-///      against each other instead of fusing into one static tone, and the
-///      turbulent jet hisses continuously under the pitched tone (the wind).
+/// What the declarations do not show:
+///   - A stopped pipe (gedackt/bourdon) keeps the OPEN positive-feedback
+///     topology and is voiced hollow by muting the octave pump and darkening the
+///     reflection. A literal half-length negative-feedback comb sounds right and
+///     will not hold pitch down the 16' compass.
+///   - The bore is seeded with an f0 sine at note-on so the jet locks at once;
+///     each rank then blooms over ~20 of its own periods, which is why upperwork
+///     speaks ahead of the bass pipes.
+///   - Every (rank, note) pipe carries a fixed few-cent tuning error, so ranks
+///     beat instead of fusing.
 ///
-/// The delay buffers are NOT owned by the core: the host instrument allocates
-/// one slab per voice slot in prepare() (the only allocation site) sized for
-/// kMaxPipeRanks pipes — a bore span AND a jet span per rank — and attach()es it
-/// before start(). The jet cubic self-limits (clamped to [-1,1]) and the
-/// reflection magnitudes are < 1, so every loop is BIBO-stable. The shared wind
-/// supply (tremulant / wind sag) is a separate host-owned object
-/// (OrganWindSupply) folded into the per-sample pitch/level.
+/// The delay buffers are not owned here — the host attaches one slab per voice
+/// slot sized for kMaxPipeRanks bore+jet spans, and the wind supply (tremulant,
+/// sag) is the host-owned OrganWindSupply. BIBO-stable: the jet cubic clamps to
+/// [-1,1] and every reflection magnitude is < 1.
 ///
-/// RT contract: attach()/start()/render() are allocation-free (start zeroes /
-/// fills the attached spans). Determinism: the chiff noise is the counter-based
-/// (voice_index, note, age) stream with a per-rank offset, so identical event
-/// streams render bit-identically.
+/// RT contract: attach()/start()/render() are allocation-free. Determinism: the
+/// chiff noise is the counter-based (voice_index, note, age) stream with a
+/// per-rank offset, so identical events render bit-identically.
 
 #include <array>
 #include <cstddef>

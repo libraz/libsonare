@@ -4,29 +4,22 @@
 /// @brief Time and polarity relationship between every pair of tracks.
 ///
 /// @details **Offline / control thread only.** The pass is quadratic in track
-///          count, allocates a mono excerpt per pair and runs a
-///          cross-correlation over it. Never call any of this from `process()`.
+///          count and allocates a mono excerpt per pair.
 ///
-/// @details The measurement is a single normalized cross-correlation peak
-///          search per pair. There is no coarse stage: every lag is evaluated
-///          at full sample resolution, and a preliminary pass could only ever
-///          move the answer away from that. The whole lag range is taken
-///          through one transform pair rather than one pass per lag, which is a
-///          different way of computing the same sums and not a different
-///          measurement — the reported correlation is recomputed exactly, in
-///          double, at the lag that wins, so the transform decides only which
-///          lag that is.
+/// @details One normalized cross-correlation peak search per pair, with no
+///          coarse stage — every lag is evaluated at full sample resolution. The
+///          lag range goes through one transform pair rather than a pass per
+///          lag, which computes the same sums a different way, and the winning
+///          lag's correlation is then recomputed exactly in double, so the
+///          transform decides only which lag wins.
 ///
-/// @details Cost, measured on 2 s mono tracks at 48 kHz with the default
-///          config: about 0.8 ms per pair, so a 24-track session's 276 pairs
-///          take roughly 0.2 s. The figure is per *pair* and the pair count is
-///          quadratic, which is what a caller has to budget against; the
-///          per-pair cost itself is bounded by @ref
-///          PhaseAlignmentConfig::analysis_window_sec and the sample rate, both
-///          of which are known before the pass runs.
+/// @details Cost is about 0.8 ms per pair on 2 s mono at 48 kHz, so a 24-track
+///          session's 276 pairs take roughly 0.2 s. Budget against the pair
+///          count, which is quadratic; the per-pair cost is bounded by
+///          @ref PhaseAlignmentConfig::analysis_window_sec and the sample rate.
 ///
-/// @details Switching the assistant's image domain off skips this pass
-///          entirely; it is the only decision domain that reads the result.
+/// @details The image domain is the only reader, so switching it off skips this
+///          pass entirely.
 
 #include <vector>
 
@@ -101,20 +94,16 @@ struct PhaseAlignmentConfig {
 ///          between two tracks cannot bias the result the way a raw
 ///          cross-correlation does.
 ///
-///          Both tracks of a pair are excerpted at the **same time position** —
-///          the window where the two are jointly most active — because a lag
-///          measured between two different passages means nothing. A pair whose
-///          tracks were recorded at different sample rates is left unmeasured
-///          for the same reason: a lag in samples has no shared meaning across
-///          two rates.
+///          Both tracks are excerpted at the **same time position**, the window
+///          where they are jointly most active, because a lag measured between
+///          two different passages means nothing. Pairs recorded at different
+///          sample rates go unmeasured for the same reason.
 ///
 ///          Every field is the measurement as taken: @ref
 ///          PairAlignment::lag_samples and @ref PairAlignment::polarity_opposed
-///          describe the strongest `|r|` peak found, and @ref
-///          PairAlignment::related alone says whether acting on it is
-///          warranted. An unmeasurable pair — either track unusable, silent
-///          over the excerpt, too short, or non-finite — is returned as an
-///          entry with the two indices filled and everything else at its
+///          describe the strongest `|r|` peak, and @ref PairAlignment::related
+///          alone says whether acting on it is warranted. An unmeasurable pair
+///          comes back with its indices filled and everything else at its
 ///          default, so the matrix is always complete and never carries a NaN.
 /// @param tracks Tracks to compare, planar, mono or stereo.
 /// @param profiles Per-track profiles from @ref analyze_track_profiles, in the

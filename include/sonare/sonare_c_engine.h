@@ -14,24 +14,17 @@ extern "C" {
 #endif
 
 /// @section engine_threading Thread safety (RealtimeEngine)
-/// @details The engine surface (`sonare_engine_*`) is built around two roles:
-/// the AUDIO thread (the render callback) and one CONTROL thread (the host / UI
-/// thread that drives the transport and edits state). Unless noted otherwise a
-/// given engine handle has exactly one of each; do not call from more than one
-/// control thread without external serialization.
+/// @details Every handle has one AUDIO thread (the render callback) and one
+/// CONTROL thread; more than one control thread needs external serialization.
 ///
-/// AUDIO-thread functions (realtime-safe after control-thread setup: no
-/// allocation, no lock, no throw — call only from the render callback):
-/// - `sonare_engine_process`, `sonare_engine_process_with_monitor`.
-///   These functions intentionally do not access or clear the thread-local
-///   `sonare_last_error_message()` / `sonare_last_warning_message()` channels:
-///   first-touch TLS setup is not realtime-safe. Validate arguments and inspect
-///   diagnostics on the control thread before entering the render callback.
+/// AUDIO-thread functions (no allocation, no lock, no throw):
+/// - `sonare_engine_process`, `sonare_engine_process_with_monitor`. They do not
+///   touch the thread-local `sonare_last_error_message()` /
+///   `sonare_last_warning_message()` channels, because first-touch TLS setup is
+///   not realtime-safe — validate and read diagnostics on the control thread.
 ///
-/// CONTROL-thread, realtime-safe hand-off (lock-free, non-allocating; safe to
-/// call concurrently with `sonare_engine_process` on the same handle, adopted
-/// at the next block boundary). These either enqueue a command on the engine's
-/// lock-free command queue or publish through a lock-free snapshot:
+/// CONTROL-thread, realtime-safe hand-off (lock-free, safe alongside
+/// `sonare_engine_process` on the same handle, adopted at the next block):
 /// - Transport / tempo / loop: `sonare_engine_play`, `sonare_engine_stop`,
 ///   `sonare_engine_seek_sample`, `sonare_engine_seek_ppq`,
 ///   `sonare_engine_set_tempo`, `sonare_engine_set_time_signature`,
@@ -42,16 +35,12 @@ extern "C" {
 ///   `sonare_engine_push_midi_panic`.
 /// - Capture control: `sonare_engine_set_capture_buffer`,
 ///   `sonare_engine_arm_capture`, `sonare_engine_set_capture_punch`,
-///   `sonare_engine_reset_capture`. (These publish the capture state through a
-///   lock-free snapshot adopted by the audio thread; the backing capture buffer
-///   passed to `set_capture_buffer` must outlive capture and must not be freed
-///   while the engine is armed.) Note `reset_capture` clears the captured-frame
-///   counter and so should be issued while not actively capturing.
+///   `sonare_engine_reset_capture`. The buffer given to `set_capture_buffer`
+///   must outlive capture and must not be freed while armed, and
+///   `reset_capture` clears the frame counter, so issue it while not capturing.
 ///
-/// CONTROL-thread, NON realtime-safe (allocate / build internal structures —
-/// call only from the control thread, and NOT concurrently with
-/// `sonare_engine_process` unless your engine build documents otherwise; these
-/// are intended to be issued between renders or while stopped):
+/// CONTROL-thread, NON realtime-safe (they allocate — issue them between renders
+/// or while stopped, never concurrently with `sonare_engine_process`):
 /// - Lifecycle: `sonare_engine_create`, `sonare_engine_destroy`,
 ///   `sonare_engine_prepare`.
 /// - Topology / registration: `sonare_engine_set_graph`,
@@ -61,17 +50,15 @@ extern "C" {
 ///   `sonare_engine_set_track_strip_json`,
 ///   `sonare_engine_set_master_strip_json`.
 /// - Live MIDI configuration: `sonare_engine_set_midi_fx`,
-///   `sonare_engine_clear_midi_fx`, `sonare_engine_bind_midi_cc`, and
-///   `sonare_engine_clear_midi_cc_bindings` publish immutable state that is
-///   adopted at the next audio-block boundary. These four calls may run on the
-///   control thread while `sonare_engine_process` is active; callbacks and note
-///   flushes are performed only by the audio thread.
+///   `sonare_engine_clear_midi_fx`, `sonare_engine_bind_midi_cc`,
+///   `sonare_engine_clear_midi_cc_bindings`. These four publish immutable state
+///   adopted at the next block, so they MAY run while `process` is active;
+///   callbacks and note flushes stay on the audio thread.
 /// - Offline render: `sonare_engine_render_offline`,
-///   `sonare_engine_bounce_offline`, `sonare_engine_freeze_offline` (these own
-///   the audio role internally; do not also call them from a render callback).
+///   `sonare_engine_bounce_offline`, `sonare_engine_freeze_offline`. They own
+///   the audio role internally, so never call them from a render callback.
 ///
-/// CONTROL-thread read-back (safe to call concurrently with the audio thread;
-/// returns a consistent snapshot, may lag the audio thread by up to one block):
+/// CONTROL-thread read-back (concurrent-safe, consistent, may lag by one block):
 /// - `sonare_engine_get_transport_state`, `sonare_engine_capture_status`,
 ///   `sonare_engine_parameter_*`, `sonare_engine_*_count`,
 ///   `sonare_engine_marker*`, `sonare_engine_metronome`,

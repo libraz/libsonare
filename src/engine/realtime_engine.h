@@ -94,17 +94,13 @@ class InstrumentSourceRenderSink {
 ///   @c set_param_smoothing_ms, @c set_graph_latency_samples_q8,
 ///   @c transport, @c automation accessors, all @c *_count noexcept getters.
 /// - **Control-thread seqlock publishers (single writer):** @c set_capture_*
-///   and @c reset_capture publish the arm/punch capture state through a seqlock
-///   (see @ref sonare::engine::CaptureSink). They are noexcept and
-///   allocation-free and may run concurrently with @c process (the audio thread
-///   is the torn-free seqlock reader), but they are the sole writer and must be
-///   issued from the control thread only — never from the audio thread.
+///   and @c reset_capture. Noexcept, allocation-free and safe alongside
+///   @c process (the audio thread is the torn-free reader), but sole-writer, so
+///   never from the audio thread.
 /// - **Control-thread-preferred (lock-free but NOT torn-read-safe):**
-///   @c set_metronome_config replaces the metronome config with a plain
-///   non-atomic struct copy that the audio thread reads field-by-field. It is
-///   noexcept and allocation-free, but a concurrent audio-thread read may
-///   observe a partially-updated config for one block; call it from the
-///   control thread between blocks, or route changes through @c push_command.
+///   @c set_metronome_config copies a plain non-atomic struct the audio thread
+///   reads field-by-field, so a concurrent read may see a partial config for one
+///   block. Call it between blocks or route it through @c push_command.
 /// - **Control-thread-only (NOT RT-safe; may allocate or take time):**
 ///   @c prepare, @c render_offline (offline use), @c set_tempo,
 ///   @c set_tempo_segments, @c set_time_signature,
@@ -113,17 +109,13 @@ class InstrumentSourceRenderSink {
 ///   @c bind_mixing_strip, @c set_master_strip, @c set_track_strip,
 ///   @c set_bus_strip, @c bind_track_strip, @c add_monitor_strip,
 ///   @c remove_monitor_strip, @c configure_scope_telemetry, @c swap_graph,
-///   @c bind_graph_parameter. These must
-///   be called from the thread that owns engine lifecycle, between blocks; do
-///   NOT call them from the audio callback AND do NOT call them concurrently with
-///   @c process / @c process_with_monitor / @c render_offline. The strip binders
-///   (@c set_master_strip, @c set_track_strip, @c set_bus_strip) in particular
-///   rebind a raw ChannelStrip pointer the audio thread dereferences and destroy
-///   the previously bound strip immediately (no deferred reclaim), so a
-///   concurrent render would dereference freed memory. Unlike the graph / clip /
-///   automation swaps (which publish through an @c rt::RtPublisher and reclaim
-///   the old snapshot off the audio thread), strip binding is not on a deferred
-///   reclaim path and relies on this not-concurrent-with-process contract.
+///   @c bind_graph_parameter. Call these between blocks from the thread that
+///   owns engine lifecycle, never from the audio callback and never concurrently
+///   with a render. The strip binders are the sharpest case: they rebind a raw
+///   ChannelStrip pointer the audio thread dereferences and destroy the previous
+///   strip immediately, so unlike the graph / clip / automation swaps (which
+///   reclaim through an @c rt::RtPublisher off the audio thread) they rely
+///   entirely on this contract rather than on deferred reclaim.
 /// Cross-thread state changes that must reach the audio thread (e.g. tempo,
 /// parameter automation) flow through @c push_command and the SPSC command
 /// queue, drained inside @c process at sub-block boundaries.
@@ -229,23 +221,18 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @throws SonareException(InvalidParameter) when @p num_channels exceeds
   ///         @c prepared_channels(); the render would otherwise produce silence
   ///         that reads as a successful result.
-  /// @param finalize Whether this call ENDS the timeline. True (the default, and
-  ///        what a one-shot bounce or freeze wants) releases every sounding note
-  ///        and flushes the PDC / alignment delay lines through
-  ///        @c finish_offline_render before returning. False renders one CHUNK
-  ///        of a longer timeline: a note held across the chunk boundary keeps
-  ///        sounding into the next call, the sequencer's active-note table is
-  ///        left intact, and the delay lines carry their history over, so
-  ///        consecutive chunks concatenate to exactly what one continuous render
-  ///        of the same span produces. Call @c finish_offline_render once after
-  ///        the last chunk to release what is still held.
-  ///        Sample-exact concatenation requires every chunk to use the same
-  ///        @p block_size and a @p total_frames that is a whole number of
-  ///        blocks: each call restarts the block grid at its own frame 0 and
-  ///        renders a short final block for the remainder, and the clip /
-  ///        automation / MIDI-clip snapshots are frozen once per block, so a
-  ///        chunk that ends mid-block shifts every later block boundary. Audio
-  ///        stays continuous either way; only bit-identity is lost.
+  /// @param finalize Whether this call ENDS the timeline. True — the default,
+  ///        and what a one-shot bounce wants — releases every sounding note and
+  ///        flushes the PDC delay lines through @c finish_offline_render. False
+  ///        renders one CHUNK: held notes, the active-note table and the delay
+  ///        lines all carry into the next call, so chunks concatenate to exactly
+  ///        one continuous render, and @c finish_offline_render is called once
+  ///        after the last. Sample-exact concatenation needs every chunk to share
+  ///        a @p block_size and a @p total_frames that is a whole number of
+  ///        blocks, because each call restarts the block grid at its own frame 0
+  ///        and freezes the clip / automation snapshots once per block — a chunk
+  ///        ending mid-block shifts every later boundary. Audio stays continuous
+  ///        either way; only bit-identity is lost.
   void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size,
                       bool finalize = true);
 

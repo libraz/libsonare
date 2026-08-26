@@ -1,65 +1,26 @@
 #pragma once
 
 /// @file reed_voice.h
-/// @brief Reed-woodwind (breath-excited) core for the NativeSynth voice — the
-///        data-free woodwind model (clarinet / saxophone / oboe / bassoon, and
-///        single/double-reed winds in general; McIntyre, Schumacher & Woodhouse
-///        1983, Smith's digital-waveguide single-reed). Where the bowed string
-///        is a friction-excited sustained tone, the reed is a BREATH-excited
-///        sustained tone: the player's mouth pressure blows a nonlinear reed
-///        valve that drives a resonant air column, and the note holds until the
-///        breath stops.
+/// @brief Reed-woodwind core for the NativeSynth voice — clarinet, saxophone,
+///        oboe, bassoon. A breath-excited Smith single-reed waveguide: a
+///        memoryless reed table gates the mouth pressure into a travelling-wave
+///        bore, and that one nonlinearity plus the bore resonance is the whole
+///        instrument (McIntyre, Schumacher & Woodhouse 1983).
 ///
-/// The model is the standard Smith single-reed digital waveguide, the same one
-/// STK's Clarinet implements. The air column is a travelling-wave delay line
-/// (the bore); at the mouthpiece a NONLINEAR REED VALVE couples the player's
-/// breath to the bore. The reed is a memoryless "reed table" mapping the
-/// pressure difference across the reed (mouth pressure minus the pressure
-/// reflected back up the bore) to a reflection coefficient — the reed opens and
-/// closes with the pressure, and this one nonlinearity, with the bore's
-/// resonance, is the whole instrument:
-///   1. REED VALVE (reed table): coeff = clamp(offset + slope*dp, -1, 1). The
-///      offset is the reed's rest opening (bigger offset = a smaller tip gap,
-///      the reed closes more easily); the slope is the reed stiffness (steeper =
-///      a harder, brighter reed). When the bore pressure rises the reed pinches
-///      shut, gating the breath into pressure pulses — the self-sustained
-///      oscillation that a real reed's stick/beat against the mouthpiece gives.
-///   2. BORE TOPOLOGY — CYLINDER vs CONE: a clarinet's CYLINDRICAL bore is
-///      closed at the reed and open at the bell, a quarter-wave resonator that
-///      sounds an octave lower for its length and radiates ODD HARMONICS ONLY
-///      (it overblows at the twelfth). A saxophone/oboe/bassoon's CONICAL bore
-///      behaves like an open pipe — the FULL harmonic series, overblowing at the
-///      octave. This is the loop topology, not an EQ: the cylinder is a
-///      NEGATIVE-feedback comb of half the period (sign flips every M samples ->
-///      f0, 3f0, 5f0 …), the cone a POSITIVE-feedback comb of the full period
-///      (f0, 2f0, 3f0 …). The odd-only clarinet spectrum falls out of the
-///      physics, the same way the stopped organ pipe's does. The cone is the
-///      cylindrical approximation (STK Saxofony style); the true conical
-///      waveguide (apex junction + growth term) is a later phase.
-///   3. BELL TERMINATION: the open bell reflects pressure with a sign inversion
-///      through a one-pole loss filter (the bore's round-trip damping and the
-///      energy the bell radiates). Brightness voices that filter; damping sets
-///      the loss.
-///   4. BREATH CONTOUR: the breath rises into the note (the reed takes a few
-///      periods to lock into oscillation) and falls when the player tongues off.
-///      A small internal envelope drives the mouth pressure; the reed table's
-///      saturation self-regulates the amplitude, so the loop needs no explicit
-///      level normalisation to stay bounded. A reed only speaks ABOVE a breath /
-///      stiffness threshold — below it the valve never beats and the note is
-///      silent — so the contour is calibrated to cross into the oscillating
-///      region promptly.
+/// Cylinder vs cone is loop topology, not EQ, and is the decision the
+/// declarations do not show: the clarinet's cylinder is a negative-feedback comb
+/// of half the period (odd harmonics, overblowing at the twelfth), the cone a
+/// positive-feedback comb of the full period. The cone is the cylindrical
+/// approximation, not a true apex junction.
 ///
-/// The delay buffer is NOT owned by the core: the host allocates one slab per
-/// voice slot in prepare() (one bore span) and attach()es it before start().
-/// Radiation/formant voicing (the bell and the woodwind's formants) is the
-/// shared BodyResonator on the voice, enabled per preset; the core emits the raw
-/// bore pressure. Self-sustained but unconditionally stable: the reed table
-/// output is bounded to [-1,1] and the bell loss gain is < 1.
+/// The delay buffer is not owned here — the host attaches one bore span per
+/// voice slot before start(), and bell/formant voicing is the shared
+/// BodyResonator, so the core emits raw bore pressure. Unconditionally stable:
+/// the reed table is bounded to [-1,1] and the bell loss gain is < 1.
 ///
-/// RT contract: attach()/start()/render() are allocation-free (start zeroes /
-/// seeds the attached span). Determinism: the breath turbulence and the onset
-/// chiff are drawn from the counter-based (voice_index, note, age) stream, so
-/// identical event streams render bit-identically.
+/// RT contract: attach()/start()/render() are allocation-free. Determinism:
+/// breath turbulence and onset chiff come from the counter-based
+/// (voice_index, note, age) stream, so identical events render bit-identically.
 
 #include <cstddef>
 #include <cstdint>

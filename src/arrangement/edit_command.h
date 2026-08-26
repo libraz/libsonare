@@ -10,36 +10,25 @@
 /// phase before a command is constructed): construction + apply + invert are
 /// deterministic and value-oriented.
 ///
-/// Apply / invert contract
-/// -----------------------
-/// `apply(Project&)` mutates the project and returns true on success. On the
-/// FIRST successful apply a command snapshots the prior value(s) it needs to
-/// undo itself, so that `invert(before)` can produce a command that returns the
-/// project to the pre-apply state. The round-trip is:
+/// APPLY / INVERT. `apply()` snapshots, on its first success, whatever it needs
+/// to undo itself:
 ///
 ///   auto inverse = cmd.invert(project_before_apply);
 ///   cmd.apply(project);      // project -> after
-///   inverse->apply(project); // project -> before  (deep-equal on affected fields)
+///   inverse->apply(project); // project -> before
 ///
-/// `invert(const Project& before, ...)` is called by @ref EditHistory AFTER a
-/// successful apply, and is passed the project state captured BEFORE apply. It
-/// reads the captured prior value(s) from `before` (e.g. the prior gain, the
-/// removed track) and any apply-time results recorded on the command itself
-/// (e.g. an Add*'s allocated id) to build the inverse command. Add/Remove are
-/// mutual inverses; "Set*" style commands invert to a "Set*" that restores the
-/// captured prior value. Add* commands invert to a Remove* AND restore the id
-/// counter (via Project::ensure_next_*_id) so that a subsequent redo re-allocates
-/// the SAME stable id.
+/// @ref EditHistory calls `invert()` AFTER a successful apply, passing the state
+/// captured before it, and the command reads both that state and its own
+/// apply-time results (an Add*'s allocated id) to build the inverse. Add and
+/// Remove are mutual inverses, and a Set* inverts to the Set* that restores the
+/// captured value. An Add* also restores the id counter through
+/// Project::ensure_next_*_id, so a redo re-allocates the SAME stable id.
 ///
-/// MIDI event payload seam
-/// -----------------------
-/// MIDI content commands operate on @ref MidiClipEventList: PPQ-positioned POD
-/// values that carry the first two UMP words for channel-voice messages. The
-/// commands store the payload by value and the model owns it opaquely, so richer
-/// MIDI storage can be introduced later without changing
-/// ReplaceMidiClipEvents / PatchMidiClip signatures. The model keeps per-clip
-/// event lists in a side map on the command-managed store so the EditClip
-/// struct identity is unchanged.
+/// MIDI content commands operate on @ref MidiClipEventList — PPQ-positioned PODs
+/// carrying the first two UMP words — stored by value and owned opaquely by the
+/// model, so richer MIDI storage can arrive without changing
+/// ReplaceMidiClipEvents / PatchMidiClip. The per-clip lists live in a side map
+/// so the EditClip struct identity is unchanged.
 
 #include <cstddef>
 #include <cstdint>

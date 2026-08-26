@@ -2,21 +2,18 @@
 
 /// @file tunable.h
 /// @brief Development-only runtime override for voice calibration constants.
-/// @details A voice's calibration constants are `constexpr float` file-scope
-/// values, so fitting one against a reference recording costs a full rebuild
-/// per candidate value. `SONARE_TUNABLE(name, value)` declares such a constant
-/// in a way that keeps that property in a normal build — it expands to exactly
-/// the `constexpr float` it replaced, with no storage, no lookup, and no
-/// runtime cost — while a tree configured with `-DBUILD_TUNING=ON` turns the
-/// same declaration into a `const float` seeded from an override table. An
-/// external fitter (`tools/voicematch/autofit.py`) can then sweep a knob by
-/// setting an environment variable instead of rebuilding.
+/// @details Calibration constants are file-scope `constexpr float`s, so fitting
+/// one costs a rebuild per candidate. `SONARE_TUNABLE(name, value)` expands to
+/// exactly that `constexpr float` in a normal build — no storage, no lookup, no
+/// runtime cost — and only under `-DBUILD_TUNING=ON` becomes a `const float`
+/// seeded from an override table, which lets `tools/voicematch/autofit.py` sweep
+/// a knob through an environment variable instead.
 ///
-/// A knob is addressed as `<scope>.<name>`, where the scope is the declaring
-/// file's stem — `brass_voice.kBreathBase`. The scope is derived from `__FILE__`
-/// rather than written per file because the same calibration name is used by
-/// several voices (`kBreathBase` exists in four), each in its own anonymous
-/// namespace, while the override table has a single flat key space.
+/// A knob is `<scope>.<name>`, the scope being the declaring file's stem —
+/// `brass_voice.kBreathBase`. It comes from `__FILE__` rather than being written
+/// per file because one calibration name is used by several voices
+/// (`kBreathBase` by four), each in its own anonymous namespace, while the
+/// override table has one flat key space.
 ///
 /// The override table is read once, on first use, from `SONARE_TUNING_OVERRIDES`:
 ///

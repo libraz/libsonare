@@ -10,37 +10,22 @@
 /// BpmAnalyzer and turns the detected beat grid into the piecewise tempo /
 /// time-signature representation consumed by transport::TempoMap.
 ///
-/// @section mir_determinism Determinism
-/// The same analysis input always produces byte-identical segment vectors.
-/// No clocks, no std::rand, no floating non-determinism beyond IEEE arithmetic.
-/// The smoothing pass below is a self-contained deterministic dynamic program.
+/// Deterministic: the same analysis input always produces byte-identical segment
+/// vectors, with no clocks and no randomness.
 ///
-/// @section mir_postproc Beat-activation post-processing
-/// We stabilize tempo and phase with a deterministic Viterbi / DBN-style
-/// dynamic program over the inter-beat-interval (IBI) sequence (or, when a
-/// beat-activation / onset-strength curve is supplied, over activation-weighted
-/// IBIs). Each beat index is assigned a hidden "tempo state" drawn from a
-/// discrete grid of BPM hypotheses; the Viterbi recursion balances an
-/// observation cost (how well a state's period matches the locally observed
-/// IBI, weighted by activation strength) against a transition cost that
-/// penalizes abrupt tempo jumps between adjacent beats. The decoded state path
-/// is the smoothed local-tempo curve, which we then segment into constant /
-/// linearly-ramped TempoSegments.
+/// Tempo and phase are stabilised by a Viterbi dynamic program over the
+/// inter-beat-interval sequence (activation-weighted when an onset-strength curve
+/// is supplied). Each beat takes a hidden tempo state from a discrete BPM grid,
+/// balancing how well the state's period matches the local IBI against a penalty
+/// on abrupt jumps; the decoded path is then segmented into constant and
+/// linearly-ramped TempoSegments. This is the DBN beat trackers of Korzeniowski,
+/// Böck & Widmer 2014 and Böck, Krebs & Widmer 2016 reduced to a deterministic DP
+/// with no learned model, so the bridge stays self-contained.
 ///
-/// This is inspired by the dynamic-Bayesian-network beat/downbeat trackers of
-/// Korzeniowski, Böck & Widmer 2014 ("Probabilistic Extraction of Beat
-/// Positions from a Beat Activation Function") and Böck, Krebs & Widmer 2016
-/// ("Joint Beat and Downbeat Tracking with Recurrent Neural Networks"), reduced
-/// to a deterministic DP with NO learned model and NO randomness so the bridge
-/// stays self-contained and reproducible.
-///
-/// @section mir_octave half / double tempo ambiguity
-/// Tempo octave errors (half / double) are the dominant failure mode of any
-/// beat tracker. Rather than silently committing to one octave, the bridge
-/// returns a list of TempoEstimate candidates: the primary (decoded) estimate
-/// plus the half-tempo and double-tempo variants, each with its own confidence.
-/// The caller confirms one via a project edit command; the bridge never mutates a
-/// Project.
+/// Half/double octave errors are any beat tracker's dominant failure mode, so
+/// the bridge returns the decoded estimate plus both octave variants with their
+/// own confidences rather than committing. The caller confirms one through an
+/// edit command; the bridge never mutates a Project.
 
 #include <vector>
 

@@ -59,32 +59,21 @@ void interpolate_region(std::vector<float>& samples, size_t start, size_t end) {
 /// that can be modeled as autoregressive processes," IEEE Trans. ASSP, vol. 34, no. 2,
 /// pp. 317–330, Apr. 1986. DOI: 10.1109/TASSP.1986.1164824
 ///
-/// Algorithm outline (cf. Janssen 1986, Section III):
-///   1. Initialise unknown samples x_u with cubic / linear interpolation.
-///   2. Alternate for `iterations` outer rounds:
-///      a. Estimate AR(p) coefficients a from a bounded window around the gap
-///         (known + current x_u)
-///         using Burg's method, which gives a minimum-phase, stable model.
-///      b. Build the (N-p) x N prediction-error filter matrix A whose rows are
-///         AR filter convolutions: (A x)[n] = x[n] + a[1]*x[n-1] + ... + a[p]*x[n-p].
-///      c. Partition A into columns for unknowns (A_u) and knowns (A_k).
-///      d. Solve the normal equations in x_u:
-///           (A_u^T A_u + lambda I) x_u = -A_u^T A_k y_k
-///         using Eigen's LDLT decomposition.  The Tikhonov term lambda prevents
-///         singularity when the gap is wider than the AR model's effective rank.
-///
-/// The outer loop re-estimates AR coefficients from progressively better x_u
-/// estimates, converging in 2–5 iterations for typical music material.
+/// Outline (cf. Section III): initialise the unknowns x_u by interpolation, then
+/// for each outer round estimate AR(p) coefficients over a bounded window by
+/// Burg's method (minimum-phase, stable), build the prediction-error filter
+/// matrix A, partition it into unknown and known columns, and solve
+/// `(A_u^T A_u + lambda I) x_u = -A_u^T A_k y_k` by LDLT — the Tikhonov term
+/// covering a gap wider than the model's effective rank. Re-estimating from
+/// progressively better x_u converges in 2-5 rounds on music.
 ///
 /// @pre `end - start <= kDeclipMaxLpcGapSamples`. Both dense matrices are sized
 /// from the gap, so the caller routes longer runs to interpolate_region instead.
 ///
-/// Note: the original Janssen formulation imposes a clipping-consistency
-/// constraint (|x_u[i]| >= clip_threshold) for the case where the input is
-/// known to be a hard-clipped signal. We omit that constraint here so that
-/// callers can use declip as a general gap-filling tool: a small spike that
-/// happens to exceed the threshold but was not a real clipping event should
-/// be smoothly interpolated, not anchored at the threshold.
+/// The original formulation's clipping-consistency constraint
+/// (|x_u[i]| >= clip_threshold) is omitted so this stays a general gap filler: a
+/// spike that exceeds the threshold without being a clipping event should be
+/// interpolated smoothly, not anchored at it.
 void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_t end,
                                 const DeclipConfig& config) {
   const size_t gap = end - start;

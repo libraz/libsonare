@@ -34,26 +34,21 @@ namespace sonare::mixing::assistant {
 /// @brief Suggests a static input trim per track so every usable track lands on
 ///        the configured absolute loudness target.
 ///
-/// @details A track that cannot be staged produces no delta at all rather than
-///          a delta carrying a zero trim. A zero would read downstream as "this
-///          track was decided to be zero", which is the opposite of "this track
-///          was never decided", and the balance pass would then be summing on
-///          top of a decision nobody made. Excluded are tracks the profiler
-///          marked unusable, silent tracks, tracks too short for a gated
-///          integrated loudness, and tracks with no energy in any analysis
-///          band. The exclusion is silent: this function returns suggestions,
-///          not annotations.
+/// @details A track that cannot be staged produces no delta rather than a zero
+///          trim, which would read downstream as "decided to be zero" and leave
+///          the balance pass summing on top of a decision nobody made. Excluded:
+///          unusable, silent, too short for a gated loudness, or with no energy
+///          in any band. The exclusion is silent — this returns suggestions, not
+///          annotations.
 ///
-/// @details The suggested trim is not clamped here. @ref apply_deltas clamps
-///          the summed total exactly once, and clamping a contribution as well
-///          would hide how far the total overshot. When a suggestion falls
-///          outside `[kMinSuggestedTrimDb, kMaxSuggestedTrimDb]` the delta's
-///          @ref SceneDelta::reason says so, because a trim that is quietly
-///          truncated looks like staging that simply did not work.
+/// @details The trim is not clamped here. @ref apply_deltas clamps the summed
+///          total exactly once, and clamping a contribution too would hide how
+///          far the total overshot; a suggestion outside
+///          `[kMinSuggestedTrimDb, kMaxSuggestedTrimDb]` says so in its
+///          @ref SceneDelta::reason instead.
 ///
-/// @details Degenerate input never throws. No tracks, all-excluded tracks, a
-///          disabled gain domain or a non-finite target all yield an empty
-///          vector.
+/// @details Degenerate input never throws: no tracks, all excluded, a disabled
+///          domain or a non-finite target yield an empty vector.
 ///
 /// @param profiles Per-track profiles, in the caller's order.
 /// @param config Assistant configuration; the target, the strength and the gain
@@ -65,26 +60,20 @@ std::vector<SceneDelta> decide_gain_staging(const std::vector<TrackProfile>& pro
 /// @brief Master-bus trim that keeps the summed mix inside its headroom target.
 ///
 /// @details Staging every track to the same absolute target makes each one
-///          correct on its own and the sum of them hot: N tracks at the target
-///          add up well above it. Someone has to pull the master down, and doing
-///          it once on the output is what a console operator does — it leaves
-///          every track's staging and every balance decision exactly as decided.
+///          correct alone and their sum hot, so someone has to pull the master
+///          down. Doing it once on the output leaves every track's staging and
+///          every balance decision as decided.
 ///
-/// @details The estimate is analytic, because the assistant does not process
-///          audio and therefore cannot measure the render. Each strip's peak
-///          contribution is its measured true peak shifted by the gain the scene
-///          gives it, and those contributions are added as amplitudes rather
-///          than powers: the sum of true peaks is a genuine upper bound on the
-///          true peak of the sum, whereas a power sum is only correct for
-///          uncorrelated material and a kick and a bass are not uncorrelated.
+/// @details The estimate is analytic, since the assistant never processes audio:
+///          each strip contributes its measured true peak shifted by the gain the
+///          scene gives it, summed as AMPLITUDES. That sum is a genuine upper
+///          bound, where a power sum would assume material a kick and a bass are
+///          not — uncorrelated.
 ///
-/// @details Two contributions are not modelled: effect returns, whose level
-///          depends on a reverb's own gain, and insert make-up gain. The
-///          headroom target absorbs them — it is set well below full scale
-///          precisely so the unmodelled part has somewhere to go.
-///
-/// @details The result is never positive. Raising a master that already fits is
-///          a creative decision, and this stage only guarantees the mix has room.
+/// @details Effect returns and insert make-up gain are not modelled; the
+///          headroom target sits well below full scale so they have somewhere to
+///          go. The result is never positive: raising a master that already fits
+///          is a creative decision, and this only guarantees room.
 ///
 /// @param profiles Per-track profiles, in the caller's order.
 /// @param scene The scene after every domain's deltas have been applied; the

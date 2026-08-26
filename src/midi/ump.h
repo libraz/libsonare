@@ -5,37 +5,21 @@
 ///        constructors / adapters for MIDI 1.0 and MIDI 2.0 channel-voice
 ///        messages.
 ///
-/// The internal MIDI representation is the Universal MIDI Packet (UMP). A single
-/// @ref Ump is a fixed array of up to four 32-bit words (the 32/64/96/128-bit
-/// UMP word forms) plus a small length/type tag. Because it is a POD with no
-/// heap state, an Ump may ride RT structures (the realtime event queue and the
-/// fixed-capacity active-note table) without any allocation.
+/// An @ref Ump is up to four 32-bit words plus a length/type tag, and being a POD
+/// with no heap state it rides RT structures — the event queue, the active-note
+/// table — without allocating. It covers MIDI 1.0 and MIDI 2.0 channel voice,
+/// program change / bank select, and a SysEx HANDLE: variable-length payloads are
+/// never inline, only a handle into a control-thread @ref SysExStore, which is
+/// what keeps the RT path free of variable-length data.
 ///
-/// Supported message families:
-///   - MIDI 1.0 channel voice (Message Type 0x2): 7-bit note/velocity/CC.
-///   - MIDI 2.0 channel voice (Message Type 0x4): 16-bit velocity, 32-bit CC,
-///     per-note controllers, registered/assignable controllers.
-///   - Program change / bank select (both protocols).
-///   - A SysEx HANDLE: variable-length SysEx / property payloads are NEVER
-///     carried inline. The Ump only stores a control-side handle id; the bytes
-///     live in a control-thread @ref SysExStore (see below). This keeps the RT
-///     path free of variable-length data.
-///
-/// Lossy MIDI 1.0 <-> MIDI 2.0 translation (DOCUMENTED, pinned in the test):
-///   - Velocity: MIDI 1.0 uses 7-bit velocity; MIDI 2.0 uses 16-bit. The
-///     1.0 -> 2.0 up-scale repeats the source bit pattern to fill the target
-///     width. The 2.0 -> 1.0 down-scale takes the top 7
-///     bits (>> 9). A round-trip 1.0 -> 2.0 -> 1.0 is LOSSLESS for velocity (the
-///     top 7 bits survive), but a 2.0 velocity whose low 9 bits are non-zero is
-///     LOSSY through 1.0.
-///   - Control change value: MIDI 1.0 is 7-bit, MIDI 2.0 is 32-bit. 1.0 -> 2.0
-///     left-justifies the 7-bit value into 32 bits (replicated); 2.0 -> 1.0
-///     takes the top 7 bits (>> 25). Same lossless/lossy rule as velocity.
-///   - Note number, channel, group, CC index, program, bank: identical 7-bit /
-///     4-bit fields in both protocols, so they round-trip LOSSLESLY.
-///   - Per-note controllers and registered/assignable controllers exist ONLY in
-///     MIDI 2.0; converting them to MIDI 1.0 DROPS them (no 1.0 equivalent).
-///   - Note-on attribute / per-note pitch (MIDI 2.0) is DROPPED on down-convert.
+/// MIDI 1.0 <-> 2.0 translation, pinned in the test:
+///   - Velocity (7 vs 16 bits) and CC value (7 vs 32) up-scale by repeating the
+///     source bit pattern and down-scale by taking the top 7 bits. A 1.0 round
+///     trip is lossless; a 2.0 value with non-zero low bits is not.
+///   - Note number, channel, group, CC index, program and bank are identical
+///     fields in both protocols and always round-trip.
+///   - Per-note and registered/assignable controllers, the note-on attribute and
+///     per-note pitch exist only in 2.0 and are DROPPED on down-convert.
 
 #include <array>
 #include <cstddef>

@@ -136,31 +136,22 @@ struct StreamConfig {
 ///        ask for but could never read back.
 ///
 /// @warning **StreamAnalyzer's constructor deliberately does NOT call this, and
-///          must not be changed to.** The name says "SOA" because that is the
-///          whole scope of the rule: it belongs to the read paths a caller
-///          holds, not to the config and not to the analyzer. Wiring it into the
-///          constructor would look like finishing the job and would silently
-///          kill @c read_frames()'s magnitude output for every direct C++ host —
-///          losing a working feature instead of closing a gap. The one case that
-///          would catch that regression is
-///          @c tests/streaming/stream_analyzer_core_test.cpp asserting
-///          @c frames[0].magnitude.size() == config().n_bins(); the other
-///          constructions with @c compute_magnitude enabled never read the array
-///          back, so they would stay green.
+///          must not be changed to.** The rule belongs to the SOA read paths a
+///          caller holds, not to the config or the analyzer, and wiring it into
+///          the constructor would silently kill @c read_frames()'s magnitude
+///          output for every direct C++ host. Only
+///          @c tests/streaming/stream_analyzer_core_test.cpp would catch that;
+///          the other constructions never read the array back.
 ///
-/// @details One shared answer for the four language surfaces, because they do
-///          not share a call path: the C ABI validates before constructing,
-///          while the Node addon and the WASM wrapper construct StreamAnalyzer
-///          directly and inherit nothing from it. Node accepted
-///          @ref StreamConfig::compute_magnitude while the other three refused
-///          it, so the same options object was valid on one surface and an
-///          InvalidParameter on the rest — and on Node it bought a per-frame
-///          allocation and copy whose result no read method there can return.
-///
-///          Only @ref StreamConfig::compute_magnitude is in scope.
-///          @ref StreamConfig::magnitude_downsample stays untouched on purpose:
-///          with magnitude off it is simply unused, so a non-default value is
-///          harmless, and refusing it would reject a default config round trip.
+/// @details One shared answer for four surfaces that do not share a call path —
+///          the C ABI validates before constructing, while Node and WASM
+///          construct StreamAnalyzer directly. Node accepted
+///          @ref StreamConfig::compute_magnitude where the others refused it, so
+///          one options object was valid on one surface and an InvalidParameter
+///          on the rest, buying a per-frame copy no read method there returns.
+///          Only that field is in scope:
+///          @ref StreamConfig::magnitude_downsample is unused with magnitude
+///          off, so refusing it would reject a default config round trip.
 /// @throws SonareException(InvalidParameter) when the config asks for a result
 ///         the caller's read paths could never return.
 inline void validate_soa_stream_config(const StreamConfig& config) {

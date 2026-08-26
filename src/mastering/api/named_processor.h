@@ -91,23 +91,18 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 //    "tailSamples":int,"realtimeCost":"low"|"moderate"|"high"|null,
 //    "channelPolicy":string,"category":string,
 //    "params":array}
-// where kind is pair > realtime > offline by precedence, realtimeInsertable is
-// membership in insert_factory_names(), stereoOnly is membership in
-// stereo_processor_names(), latencySamples is the realtime insert's reported
-// processing latency for its default configuration (0 for offline ids and for
-// config-dependent processors this is representative, not exact), tailSamples
-// is its corresponding audible decay length under the same prepared default
-// probe (0 for offline/dry-only/no-tail ids), realtimeCost is a coarse
-// algorithmic estimate for choosing between realtime inserts (null for
-// non-insert ids, not a hardware benchmark), `category` is the stable UI group
-// derived from the id namespace (with match.* reported as `reference`), `params`
-// contains the existing realtime-insert parameter descriptors (empty for
-// non-insert processors), and
-// channelPolicy is channel_policy(id) as a wire string (how the mixer wraps a
-// >2ch bus insert). The id universe is the union
-// of the three lists, so
-// realtime-only ids (e.g. effects.reverb.room) and pair ids that are absent from
-// processor_names() are still reported. Ids are emitted in sorted order.
+// where kind takes pair > realtime > offline by precedence; realtimeInsertable
+// and stereoOnly are membership in insert_factory_names() and
+// stereo_processor_names(); latencySamples and tailSamples come from the insert's
+// default configuration, so for a config-dependent processor they are
+// representative rather than exact (both 0 for offline ids); realtimeCost is a
+// coarse algorithmic estimate for choosing between inserts, not a hardware
+// benchmark (null for non-inserts); category is the UI group derived from the id
+// namespace, with match.* reported as `reference`; params carries the
+// realtime-insert parameter descriptors; and channelPolicy is channel_policy(id)
+// as a wire string, i.e. how the mixer wraps a >2ch bus insert. The id universe
+// is the union of the three lists, so realtime-only and pair ids absent from
+// processor_names() are still reported. Ids are emitted sorted.
 std::string processor_catalog_json();
 
 // Apply a two-input "match.*" processor. The source and reference buffers may

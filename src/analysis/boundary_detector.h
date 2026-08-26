@@ -70,26 +70,19 @@ struct BoundaryConfig {
   /// and a repeated loop shatters into a section every few seconds. This is the
   /// floor that asks whether anything changed at all.
   ///
-  /// The default is the midpoint of two measured populations. Stationary material
-  /// tops out around 0.003 (a repeated loop: 0.00004 to 0.0012 depending on how
-  /// much of it the kernel spans; a steady chord 0.0003; steady white noise, the
-  /// worst case, 0.003). A genuine section change runs from 0.008 for a weak one
-  /// up to 0.95 where the timbre changes outright. Set to 0 to disable the floor
-  /// and gate on the relative threshold alone.
+  /// The default is the midpoint of two measured populations: stationary
+  /// material tops out around 0.003 (steady white noise, the worst case), while
+  /// a genuine section change runs 0.008 for a weak one to 0.95 for an outright
+  /// timbre change. Set to 0 to gate on the relative threshold alone.
   ///
-  /// Two limits worth knowing. A change carried by level alone is not invisible
-  /// here — the first MFCC coefficient tracks level, and per-frame normalization
-  /// removes the feature vector's length but not that coefficient's ratio to the
-  /// rest, so the vector really does turn. It just turns about five times less
-  /// than a comparable change of pitch does, which puts its response at 0.0003
-  /// sustained (0.001 if the level steps abruptly and the step itself registers
-  /// as a transient) — below what steady noise produces. **Lowering this floor
-  /// does not recover level-only structure**; it admits noise first, because the
-  /// noise is louder than the signal being chased. Segmenting on level needs an
-  /// energy-based segmenter, not a smaller threshold here. Second limit: a loop
-  /// longer than the kernel span (@ref kernel_size hops, 1.5 s by default) is not
-  /// stationary at the scale the kernel measures, so its within-loop contrast
-  /// clears the floor and it is segmented.
+  /// Two limits. A level-only change does turn the feature vector — the first
+  /// MFCC coefficient tracks level and per-frame normalization does not remove
+  /// its ratio to the rest — but about five times less than a comparable pitch
+  /// change, landing at 0.0003, below what steady noise produces. **Lowering
+  /// this floor does not recover level-only structure**, it admits noise first;
+  /// that needs an energy-based segmenter. And a loop longer than the kernel
+  /// span is not stationary at the scale the kernel measures, so its within-loop
+  /// contrast clears the floor and it is segmented.
   float absolute_threshold = 0.005f;
   int n_mfcc = 13;             ///< Number of MFCC coefficients
   int n_chroma = 12;           ///< Number of chroma bins

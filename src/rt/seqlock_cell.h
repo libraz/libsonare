@@ -9,33 +9,22 @@
 /// even after, so a reader that observes an odd guard — or a guard that moved
 /// across its copy — knows it raced an in-progress write and read a torn value.
 ///
-/// Two reader idioms are provided, mirroring the two hand-written seqlocks this
-/// primitive replaces (transport LoopState and mixing MeterSnapshot):
+/// Two reader idioms. @ref SeqlockCell::load() spins to a consistent snapshot
+/// and keeps no state, so any number of threads may call it — use it where a
+/// bounded spin is acceptable. @ref SeqlockCell::Reader makes a SINGLE attempt
+/// and falls back to the last consistent value it cached, rather than spinning
+/// up to a scheduler tick if the writer were preempted mid-update; that is the
+/// audio-thread path.
 ///
-///  - @ref SeqlockCell::load() spins until it observes a consistent (untorn)
-///    snapshot. It keeps no state, so any number of threads may call it. Use it
-///    where the reader can tolerate a bounded spin (e.g. a control/host thread
-///    polling the meter).
+/// The fallback cache is what makes that path single-reader, so it lives in the
+/// move-only Reader handle rather than in the cell: two readers get two caches,
+/// and the constraint is carried by the type instead of by a comment.
 ///
-///  - @ref SeqlockCell::Reader makes a SINGLE non-spinning attempt; on a
-///    detected conflict it reports the last consistent value it cached instead
-///    of spinning up to a scheduler tick (which would risk an xrun if the
-///    writer were preempted mid-update). Use it on the audio thread.
-///
-/// The fallback cache is what makes the non-spinning path single-reader: it is
-/// written on every successful read, so two threads sharing one cache would
-/// race on it. That cache therefore lives in the Reader handle rather than in
-/// the cell, and the handle is move-only — one Reader per reading thread, which
-/// the cell hands out through @ref SeqlockCell::reader(). Two readers get two
-/// caches instead of one shared one, so the constraint is carried by the type
-/// rather than by a comment a caller has to find.
-///
-/// The guard transitions use release on the writer side and acquire on the
-/// reader side, with an acquire fence between the value copy and the second
-/// guard load, so the copy cannot be reordered past the guard check. The value
-/// is stored as lock-free atomic 32-bit words: a guard cannot make concurrent
-/// access to a plain POD legal in the C++ memory model, even when torn reads are
-/// detected and discarded. `T` must be trivially copyable.
+/// Guard transitions are release/acquire with an acquire fence between the value
+/// copy and the second guard load, so the copy cannot be reordered past the
+/// check. The value is stored as lock-free atomic 32-bit words, because a guard
+/// cannot make concurrent access to a plain POD legal in the memory model even
+/// when torn reads are discarded. `T` must be trivially copyable.
 
 #include <array>
 #include <atomic>

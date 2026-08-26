@@ -1,71 +1,29 @@
 #pragma once
 
 /// @file brass_voice.h
-/// @brief Brass (lip-reed, breath-excited) core for the NativeSynth voice — the
-///        data-free brass model (trumpet / trombone / tuba / french horn, and
-///        lip-driven brass in general; McIntyre, Schumacher & Woodhouse 1983,
-///        Cook's TBone / STK Brass waveguide). Like the reed woodwind it is a
-///        BREATH-excited sustained tone, but where the reed valve is
-///        INWARD-striking (blown-closed: rising bore pressure pinches the reed
-///        SHUT and the bore sets the pitch), the brass lip is an OUTWARD-striking
-///        (blown-open, "swinging-door") valve whose OWN resonance selects the
-///        played partial — the player buzzes the lips and their tension picks the
-///        note (Fletcher 1979). A note-driven synth locks both the lip resonance
-///        and the bore to the note frequency, so each note speaks at its
-///        fundamental.
+/// @brief Brass lip-reed core for the NativeSynth voice — trumpet, trombone,
+///        tuba, french horn. A Smith/Cook single-delay-line waveguide where the
+///        valve is a damped two-pole lip resonator tuned to the note rather than
+///        the reed's memoryless table, so the harmonic drive survives into the
+///        bore (Fletcher 1979; McIntyre, Schumacher & Woodhouse 1983).
 ///
-/// The model is the Smith/Cook single-delay-line brass waveguide, the same one
-/// STK's Brass implements. The air column is a travelling-wave delay line (the
-/// bore); at the mouthpiece a RESONANT NONLINEAR LIP VALVE couples the player's
-/// breath to the bore. Unlike the reed's memoryless table, the lip is a damped
-/// two-pole resonator (a mass-spring, the buzzing lip) tuned to the note, driven
-/// by the pressure difference across the lips (mouth pressure minus the pressure
-/// reflected back up the bore). The lip's displacement opens a valve whose flow
-/// mixes the mouth pressure into the bore — this one resonant nonlinearity, with
-/// the bore's resonance, is the whole instrument:
-///   1. LIP VALVE (resonant): the pressure difference dp = bore - mouth drives a
-///      two-pole lip resonator (a bandpass, b0/a1/a2) tuned to the note; its
-///      displacement modulates a reflection coefficient (clamped to [-1,1]) that
-///      gates the mouth pressure into the bore. The injection is the reed-style
-///      flow inj = mouth + dp*coeff — the same topology as the reed table, but
-///      the coefficient is the RESONANT buzzing lip rather than a memoryless
-///      table, so the harmonic drive (the octave and above) survives into the
-///      bore. The coupling sign is NEGATIVE: because the lip is OUTWARD-striking
-///      the note speaks just ABOVE the lip resonance, and this sign is what locks
-///      the buzz to the fundamental instead of a mistuned inter-harmonic mode.
-///   2. BORE: a travelling-wave delay line, a POSITIVE-feedback comb of the full
-///      period, so the bore resonances land on the FULL harmonic series (f0, 2f0,
-///      3f0 …) the way a bell-and-mouthpiece-corrected brass tube does — the lip
-///      buzzes the fundamental and the tube reinforces every harmonic. The
-///      @c conical flag darkens the reflection (french horn / tuba are conical
-///      and rounder than a cylindrical trumpet / trombone); both are full-
-///      harmonic, since the lip valve excites all harmonics regardless.
-///   3. BELL TERMINATION: the flaring bell is a strong high-frequency radiator
-///      that reflects only the low end, modelled as a one-pole loss lowpass with
-///      a loss gain < 1 (the bore's round-trip damping and the energy the bell
-///      radiates). Brightness voices the bell filter; damping sets the loss.
-///   4. BREATH CONTOUR: the breath rises into the note (the lips take a few
-///      periods to lock into oscillation) and falls when the player tongues off.
-///      A small internal envelope drives the mouth pressure; the lip valve's
-///      rectifying clamp self-regulates the amplitude, so the loop stays bounded
-///      without explicit level normalisation. The lips only speak ABOVE a breath
-///      threshold — below it the valve never buzzes and the note is silent — so
-///      the contour is calibrated to cross into the oscillating region promptly.
+/// Two decisions the declarations do not show. The lip coupling sign is
+/// NEGATIVE: the lip is outward-striking, so the note speaks just above the lip
+/// resonance, and that sign is what locks the buzz to the fundamental instead of
+/// a mistuned inter-harmonic mode. The bore is a positive-feedback comb of the
+/// full period in both bore shapes — @c conical only darkens the reflection,
+/// since the lip valve excites every harmonic regardless.
 ///
-/// The delay buffer is NOT owned by the core: the host allocates one slab per
-/// voice slot in prepare() (one bore span) and attach()es it before start().
-/// Radiation/formant voicing (the bell) is the shared BodyResonator on the
-/// voice, enabled per preset; the core emits the raw bore pressure. Self-
-/// sustained but unconditionally stable: the lip reflection coefficient is
-/// bounded to [-1,1] and the bell loss gain is < 1. The linear waveguide is
-/// deliberately dark (a soft/medium brass is round); the bright, brassy "cuivré"
-/// edge is the amplitude-dependent nonlinear steepening added off-by-default in a
-/// later phase.
+/// The delay buffer is not owned here — the host attaches one bore span per
+/// voice slot before start(), and bell voicing is the shared BodyResonator, so
+/// the core emits raw bore pressure. Unconditionally stable: the lip reflection
+/// coefficient is bounded to [-1,1] and the bell loss gain is < 1. The linear
+/// waveguide is deliberately dark; the brassy "cuivré" edge would be
+/// amplitude-dependent steepening, which is not modelled.
 ///
-/// RT contract: attach()/start()/render() are allocation-free (start zeroes /
-/// seeds the attached span). Determinism: the breath turbulence and the onset
-/// chiff are drawn from the counter-based (voice_index, note, age) stream, so
-/// identical event streams render bit-identically.
+/// RT contract: attach()/start()/render() are allocation-free. Determinism:
+/// breath turbulence and onset chiff come from the counter-based
+/// (voice_index, note, age) stream, so identical events render bit-identically.
 
 #include <cstddef>
 #include <cstdint>

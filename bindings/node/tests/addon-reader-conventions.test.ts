@@ -1,31 +1,25 @@
 /**
  * Mechanical enforcement of the addon's JS-object reader convention.
  *
- * File-local copies of the readers in `sonare_wrap_options.h` are not allowed,
- * and they came back anyway, because nothing checked. These tests are that
- * check. Four properties are asserted:
+ * File-local copies of the readers in `sonare_wrap_options.h` are not allowed.
+ * Four properties are asserted:
  *
- *  1. No key reader is DEFINED outside the shared header. This is decided by
- *     the definition's parameter shape, not by its name, because the name-based
- *     half below cannot see a copy it was never told about — a streaming TU
- *     with its own `NumberKey` / `BoolKey` / `StringKey` made a 25-key entry
- *     point read as taking no options at all, and every assertion here passed
- *     while it did.
- *  2. The name list the scanner recognises stays in step with the shared
- *     header, so a new member of the shared family cannot be added without the
- *     scanner learning it.
- *  3. No bare `obj.Has("key")` read outside a small, reasoned allowlist. The
- *     bare form is what makes an explicit `undefined` diverge from an omitted
- *     field, which under NAPI_DISABLE_CPP_EXCEPTIONS aborts the process as soon
- *     as a second throw lands on a pending exception.
+ *  1. No key reader is DEFINED outside the shared header, decided by the
+ *     definition's parameter shape rather than its name — the name-based half
+ *     cannot see a copy it was never told about, and a TU with its own
+ *     `NumberKey` / `BoolKey` / `StringKey` makes a 25-key entry point read as
+ *     taking no options at all while every other assertion here passes.
+ *  2. The scanner's name list stays in step with the shared header, so a new
+ *     member of the family cannot be added without the scanner learning it.
+ *  3. No bare `obj.Has("key")` outside a small, reasoned allowlist: the bare
+ *     form makes an explicit `undefined` diverge from an omitted field, which
+ *     under NAPI_DISABLE_CPP_EXCEPTIONS aborts on the second throw.
  *  4. Every options-accepting entry point is either exercised by the
- *     undefined-equivalence table below or explicitly listed as uncovered, so a
- *     NEW options-accepting function cannot be added unnoticed.
+ *     undefined-equivalence table or explicitly listed as uncovered.
  *
- * (1) and (2) together are what make (4) meaningful: (1) closes the set of
- * places a reader can be defined, (2) closes the gap between that set and the
- * names the scanner matches, and only then does "every options-accepting entry
- * point is accounted for" say something about all of them.
+ * (1) and (2) are what make (4) meaningful: they close the set of places a
+ * reader can be defined and the gap between that set and the names the scanner
+ * matches, and only then does (4) say something about all of them.
  */
 
 import { describe, expect, it } from 'vitest';

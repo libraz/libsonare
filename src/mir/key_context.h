@@ -4,33 +4,20 @@
 /// @brief Bridges offline key/chord analysis into an arrangement HarmonicTimeline
 ///        and derives pitch-correction targets and onset split candidates.
 ///
-/// This is an OFFLINE, control-plane-only component (subsystem sonare::mir). It
-/// never runs on the audio thread. It does NOT re-implement key/chord detection
-/// or onset detection; it consumes the structs produced by the existing
-/// analyzers (sonare::ChordAnalyzer, sonare::KeyAnalyzer, sonare::OnsetAnalyzer,
-/// feature/onset) and:
-///   1. builds a THIN arrangement::HarmonicTimeline (detected roots / qualities /
-///      key segments), at the same chord-symbol granularity assist uses, so
-///      the two round-trip through the SAME type;
-///   2. derives a pitch-correction TARGET (scale / chord target pitch classes)
-///      from the key/chord context at a given PPQ -- it returns target pitch
-///      classes only and never performs correction (that is editing/ DSP);
-///   3. turns onset markers into a list of candidate split PPQ positions for a
-///      clip. These are CANDIDATES only: the caller issues the actual split via a
-///      SplitClip command. The bridge never mutates a Project and never
-///      auto-splits.
+/// OFFLINE, control-plane only. It re-implements no detection — it consumes the
+/// existing analyzers' structs and turns them into three things: a thin
+/// arrangement::HarmonicTimeline at the chord-symbol granularity assist uses, so
+/// both round-trip through one type; a pitch-correction TARGET (target pitch
+/// classes at a PPQ, never the correction itself); and candidate split positions
+/// from onset markers, which the caller commits through a SplitClip command. The
+/// bridge never mutates a Project.
 ///
-/// @section keyctx_time Time conversion
-/// The analyzers report times in SECONDS. Conversion to PPQ (musical time) is
-/// done deterministically through a prepared transport::TempoMap: seconds map to
-/// samples via the map's sample rate, then samples to PPQ via sample_to_ppq().
-/// The same input + tempo map always yields byte-identical PPQ positions.
+/// Analyzer times are in SECONDS and convert to PPQ through a prepared
+/// transport::TempoMap, so the same input and map always yield byte-identical
+/// positions. Every function is pure: no clocks, no randomness.
 ///
-/// @section keyctx_determinism Determinism
-/// All functions are pure given their inputs. No clocks, no std::rand. The only
-/// @note Internal composition-assist primitive. It is not a stable C ABI or
-/// language-binding API; public callers use the project annotation/edit APIs.
-/// floating-point is IEEE arithmetic on the analyzer outputs.
+/// @note Internal composition-assist primitive, not a stable C ABI or binding
+/// API; public callers use the project annotation and edit APIs.
 
 #include <cstdint>
 #include <vector>

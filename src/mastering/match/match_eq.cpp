@@ -62,29 +62,21 @@ float db_to_gain(float db) { return db_to_linear(db); }
 /// realized FIR response returns to unity outside the matched band instead of
 /// extending the curve's endpoint gain to DC and Nyquist.
 ///
-/// A match curve is defined only over [min_frequency_hz, max_frequency_hz].
-/// interpolate_db holds the endpoint value outside that range, which is right
-/// for reading a spectrum and wrong for realizing a filter: the parametric
-/// realization places no band outside the range, so its response returns to
-/// 0 dB, and a low-heavy reference otherwise had the FIR path building the
-/// curve's edge boost at DC.
+/// interpolate_db holds the endpoint value outside the curve's range, which is
+/// right for reading a spectrum and wrong for realizing a filter: the parametric
+/// realization places no band out there and returns to 0 dB, while the FIR path
+/// would otherwise build a low-heavy reference's edge boost at DC.
 ///
-/// The taper is one octave of raised cosine on each side, narrowed on the high
-/// side when Nyquist is closer than that so the weight reaches zero AT Nyquist
-/// rather than partway there — a 12 kHz band edge at 48 kHz has exactly one
-/// octave of room, and a wider taper left several dB of boost standing on the
-/// Nyquist bin. One octave rather than the whole remaining span because the
-/// boosted region has to end well above DC in absolute Hz: a kernel resolves
-/// about `sample_rate / kernel_size`, and gain surviving closer to DC than that
-/// is smeared straight onto the DC bin by the truncation window, which is the
-/// gain the taper exists to remove.
+/// One octave of raised cosine each side, narrowed on the high side when Nyquist
+/// is closer so the weight reaches zero AT Nyquist — a wider taper left several
+/// dB standing on the Nyquist bin. One octave rather than the whole remaining
+/// span because a kernel resolves about `sample_rate / kernel_size`, and gain
+/// surviving closer to DC than that is smeared onto the DC bin anyway.
 ///
-/// The limit this cannot beat: when the band edge itself is within a kernel
-/// resolution of DC (the default 40 Hz edge at 48 kHz with a 513-tap kernel is),
-/// no taper below it is realizable and the DC bin necessarily carries roughly
-/// the curve's value at the edge. A longer kernel is the only thing that moves
-/// it, and at that point DC and the band edge are genuinely the same frequency
-/// as far as the filter is concerned.
+/// The limit this cannot beat: with the band edge itself within a kernel
+/// resolution of DC (the default 40 Hz edge at 48 kHz with 513 taps), no taper
+/// below it is realizable and the DC bin carries roughly the curve's edge value.
+/// Only a longer kernel moves that.
 constexpr float kOutOfBandTaperOctaves = 1.0f;
 
 float out_of_band_weight(const MatchEqCurve& curve, float frequency_hz, float nyquist_hz) {

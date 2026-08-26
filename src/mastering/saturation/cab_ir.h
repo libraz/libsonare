@@ -4,60 +4,33 @@
 /// @brief Synthesizes a cabinet impulse response from a cabinet model, so a cab
 ///        IR is available without shipping — or sourcing — a recording.
 ///
-/// A commercial cab IR is a microphone recording of a specific cabinet, which
-/// makes it data with its own copyright, its own file size and its own claim on
-/// whichever cabinet it captured. This library ships models rather than
-/// recordings, so the IR is generated instead.
+/// What the generator adds over the analytic cab chain is what a biquad cascade
+/// structurally cannot produce: the cabinet's GEOMETRY. A mic in front of one
+/// driver also hears its neighbours later, quieter and darker, and that
+/// summation is a comb whose spacing follows the mic distance — the reason
+/// backing a mic off a 4x12 changes its character and not just its level.
 ///
-/// What the generator adds over the analytic cab chain is the one thing a
-/// cascade of biquads structurally cannot produce: the cabinet's GEOMETRY. A
-/// real cabinet has several drivers on one baffle, and a microphone in front of
-/// one of them also hears the others, later (path length), quieter (spherical
-/// spreading) and darker (each neighbour is seen far off its own axis). That
-/// summation is a comb filter whose spacing follows the mic distance, and it is
-/// the reason backing a mic off a 4x12 changes its character rather than just
-/// its level.
+/// One mechanism per effect, so nothing is voiced twice. The miked driver is
+/// exactly `design_cab_stage()`, the same calibrated voicing the realtime chain
+/// uses; each neighbour is that response attenuated by 1/r, delayed by the path
+/// difference and rolled off by rigid-piston directivity at its angle. With the
+/// neighbours off the IR reproduces the analytic cab, which is a test rather
+/// than a claim here. What the geometry then produces is a distance-dependent
+/// low lift (+1 dB at 2.5 cm, +7 dB at 60 cm) from coherent coupling below a
+/// quarter wavelength, over a comb whose first notch walks down as the mic backs
+/// off.
 ///
-/// The split of responsibility is deliberate and is what keeps the model free of
-/// invented tone:
-///
-///   - The MIKED driver's response is exactly `design_cab_stage()` — the same
-///     calibrated cabinet and capsule voicing the realtime chain uses. The
-///     generator restates none of it.
-///   - Each NEIGHBOUR is that same response, attenuated by 1/r, delayed by the
-///     path difference, and rolled off by the directivity of a rigid circular
-///     piston at that neighbour's geometric angle.
-///
-/// One mechanism per effect, so nothing is counted twice: with the neighbours
-/// switched off the generated IR reproduces the analytic cab, which is asserted
-/// as a test rather than asserted in prose.
-///
-/// What the geometry produces, measured rather than asserted: a low-frequency
-/// lift that grows with mic distance (+1 dB at 2.5 cm, +5 dB at 15 cm, +7 dB at
-/// 60 cm), because drivers less than a quarter-wavelength apart couple and sum
-/// coherently — the documented reason a big multi-driver cabinet sounds darker
-/// than one of its own drivers — over a comb whose first notch walks down from
-/// the low mids as the mic backs off.
-///
-/// Honest limits. The cabinet dimensions and cone areas below are the standard
-/// sizes of the cabinets being modelled; the piston directivity is textbook. The
-/// breakup frequency is not a published quantity — it is the one voicing number
-/// here, and it only sets how fast a neighbour's directivity tightens above the
-/// frequency where a cone stops moving as a rigid piston.
-///
-/// The drivers are treated as identical and perfectly coherent, which is what
-/// makes the interference exact — and it is exact in the wrong direction at
-/// distance: the model nulls harder than a real cabinet, whose drivers differ by
-/// a few percent in sensitivity and resonance and whose nulls fill in
-/// accordingly. Under a close mic the miked driver dominates and the two agree
-/// (worst-case 1.4 dB at 2.5 cm, 5 dB at 8 cm); by 30 cm the model predicts a
-/// notch some 24 dB deep that no cabinet measures. Close-mic distances are where
-/// this is trustworthy, which is also where cabinets are actually miked; the
-/// escape hatch for anything else is a single driver.
-///
-/// Room reflections are deliberately absent: this models the microphone on the
-/// cabinet, not the room around it, which belongs in a reverb insert. There is
-/// no floor and no back wall, so the comb here is the cabinet's own.
+/// LIMITS. Dimensions and cone areas are the modelled cabinets' standard sizes
+/// and the directivity is textbook; the breakup frequency is the one voicing
+/// number, and it only sets how fast a neighbour's directivity tightens. The
+/// drivers are identical and perfectly coherent, which makes the interference
+/// exact in the wrong direction at distance — real drivers differ by a few
+/// percent and their nulls fill in. Close in, the miked driver dominates and the
+/// two agree (worst case 1.4 dB at 2.5 cm, 5 dB at 8 cm); by 30 cm the model
+/// predicts a 24 dB notch no cabinet measures. Those close distances are where
+/// cabinets are actually miked; anything else should use a single driver.
+/// Room reflections are absent by design — this is the mic on the cabinet, not
+/// the room around it.
 
 #include <vector>
 

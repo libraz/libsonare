@@ -1,58 +1,28 @@
 #pragma once
 
 /// @file bowed_string_voice.h
-/// @brief Bowed-string (friction-excited) core for the NativeSynth voice — the
-///        data-free violin-family model (violin / viola / cello / contrabass,
-///        and bowed strings in general; McIntyre, Schumacher & Woodhouse 1983,
-///        Smith's digital-waveguide bowed string). Where the plucked string
-///        (Karplus-Strong) and the struck string (piano) are excited once and
-///        ring down, the bowed string is a SUSTAINED excitation: the bow keeps
-///        pumping energy in, and the tone holds until the bow lifts.
+/// @brief Bowed-string core for the NativeSynth voice — violin, viola, cello,
+///        contrabass. A Smith single-junction waveguide: two delay lines (bow to
+///        nut, bow to bridge) spanning one period, coupled at the bow by a
+///        memoryless stick-slip friction table, out of which Helmholtz motion
+///        falls rather than being hand-drawn (McIntyre, Schumacher & Woodhouse
+///        1983).
 ///
-/// The model is the standard Smith single-junction digital waveguide, the same
-/// one STK's Bowed implements. The string is split at the bow contact point into
-/// two travelling-wave delay lines — @c neck (bow to nut) and @c bridge (bow to
-/// bridge) — that together span one fundamental period. At the bow point a
-/// NONLINEAR SCATTERING JUNCTION couples them: the bow imposes a friction force
-/// through a memoryless "bow table" that maps the differential velocity
-/// (bow velocity minus the string velocity at the contact point) to a
-/// reflection/absorption coefficient. This one nonlinearity is the whole
-/// instrument — the classic stick-slip mechanism, and with it the sawtooth
-/// Helmholtz motion of a real bowed string, fall out of it rather than being
-/// hand-drawn:
-///   1. STICK-SLIP FRICTION (bow table): the flat centre of the table (small
-///      differential velocity) is the sticking phase — the string is carried
-///      along at the bow's speed; the falling outer regions are the slipping
-///      phase — the string breaks free and flies back under kinetic friction.
-///      The alternation is Helmholtz motion. Bow force sets how wide the sticking
-///      region is (the table slope); harder force = a rougher, brighter slip.
-///   2. BOW POSITION: the bow contact point splits the period between the two
-///      delay lines. Bowing near the bridge (small beta) is the bright, edgy
-///      "sul ponticello"; bowing over the fingerboard (larger beta) is the soft
-///      "sul tasto". It is the delay-line split, not an EQ.
-///   3. BRIDGE / NUT TERMINATIONS: the nut reflects velocity waves with an ideal
-///      sign inversion; the bridge reflects through a one-pole loss filter (the
-///      string's round-trip damping and the energy the body radiates) plus the
-///      same sign inversion. The two inversions multiply to positive feedback,
-///      so the string resonates on the FULL harmonic series (unlike the stopped
-///      organ pipe's odd-only negative-feedback comb).
-///   4. BOW VELOCITY CONTOUR: the bow accelerates into the note (the string
-///      takes a few periods to lock into Helmholtz motion) and decelerates when
-///      the bow lifts. A small internal envelope drives the bow speed; the tone
-///      then self-regulates its amplitude through the bow table's saturation, so
-///      the loop needs no explicit level normalisation to stay bounded.
+/// Bow position is the delay-line split, not an EQ: near the bridge is sul
+/// ponticello, over the fingerboard sul tasto. Bow force sets the table slope,
+/// so a harder force is a rougher, brighter slip. Both terminations invert, and
+/// the two inversions multiply to positive feedback — the full harmonic series,
+/// unlike the stopped organ pipe's odd-only comb.
 ///
-/// The delay buffers are NOT owned by the core: the host allocates one slab per
-/// voice slot in prepare() (two delay-line spans) and attach()es it before
-/// start(). Body resonance (the violin corpus) is the shared BodyResonator on
-/// the voice, enabled per preset (BodyType::kViolin); the core emits the raw
-/// string signal at the bridge. Self-sustained but unconditionally stable: the
-/// bow table output is bounded to [0,1] and the bridge loss gain is < 1.
+/// The delay buffers are not owned here — the host attaches two spans per voice
+/// slot before start(), and the corpus is the shared BodyResonator
+/// (BodyType::kViolin), so the core emits the raw signal at the bridge.
+/// Unconditionally stable: the bow table is bounded to [0,1] and the bridge loss
+/// gain is < 1.
 ///
-/// RT contract: attach()/start()/render() are allocation-free (start zeroes the
-/// attached spans). Determinism: the optional rosin texture is drawn from the
-/// counter-based (voice_index, note, age) stream, so identical event streams
-/// render bit-identically.
+/// RT contract: attach()/start()/render() are allocation-free. Determinism: the
+/// optional rosin texture comes from the counter-based (voice_index, note, age)
+/// stream, so identical events render bit-identically.
 
 #include <cstddef>
 #include <cstdint>

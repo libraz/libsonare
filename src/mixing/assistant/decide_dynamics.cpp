@@ -175,30 +175,23 @@ struct CompressionRow {
 // on the row. The four columns do not rest on the same kind of ground, and the
 // table is written to say so rather than to read uniformly authoritative.
 //
-// Selecting by identified instrument and reading a fixed table is deliberate.
-// P. Pestana and J. D. Reiss, "Intelligent Audio Production Strategies Informed
-// by Best Practices" (AES 53rd International Conference on Semantic Audio,
-// London, 2014) reports that of the strategies it examined this is the most
-// robust one available, which is why the stage looks a decision up rather than
-// computing it as a continuous function of the measurements.
+// Looking a decision up by identified instrument, rather than computing it as a
+// continuous function of the measurements, is deliberate: Pestana and Reiss,
+// "Intelligent Audio Production Strategies Informed by Best Practices" (AES 53rd
+// International Conference on Semantic Audio, 2014) reports it as the most
+// robust of the strategies examined.
 //
-// The ratio column's ordering across the frequency range is measured. The same
-// work's Fig. 6 gives the peak-to-RMS ratio of 928 commercially released UK/US
-// number-one singles rising monotonically with octave number, and concludes
-// from it that professionals apply more compression to low frequencies than to
-// high ones. The ratios below follow that ordering: the classes living lowest
-// carry the firmest ratios and the classes living at the top of the spectrum the
-// gentlest. A row that departs from the ordering says on the row why.
+// The ratio column's ordering is measured. That work's Fig. 6 has the peak-to-RMS
+// ratio of 928 number-one singles rising monotonically with octave number, and
+// concludes that professionals compress low frequencies more than high ones, so
+// the lowest classes here carry the firmest ratios and the highest the gentlest.
+// A row departing from that ordering says why on the row.
 //
-// The attack and release columns have no comparable backing, and none is
-// claimed for them. That same survey — some sixty interviews with working
-// engineers alongside a forty-nine-question questionnaire — found no expert
-// consensus on how either should be set. So these two columns are not
-// established practice written down; they are deliberately conservative starting
-// points, sized so that being wrong about a track leaves it slightly
-// under-controlled rather than audibly reshaped, and left to be moved by the
-// crest factor, the sustain ratio and the measured onset rate, which are
-// properties of the track in hand rather than of anybody's habits.
+// The attack and release columns have no comparable backing and none is claimed:
+// the same survey found no expert consensus on either. They are conservative
+// starting points, sized so being wrong leaves a track slightly under-controlled
+// rather than audibly reshaped, and moved from there by the crest factor,
+// sustain ratio and onset rate of the track in hand.
 constexpr std::array<CompressionRow, 14> kCompressionTable = {{
     // The lowest class in the table, so it takes the firmest ratio. The late
     // attack lets the beater click through untouched, and the release is paced

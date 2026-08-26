@@ -12,20 +12,15 @@
 /// fixed-capacity output buffer (the byte stream a hardware/virtual MIDI port
 /// expects). This keeps the representation faithful to what a sync slave reads.
 ///
-/// Threading / RT contract
-/// -----------------------
-///  - AUDIO thread: generate_clock_block() emits the 0xF8 clock bytes whose tick
-///    positions fall in a render-frame block, into a FIXED-capacity output. ZERO
-///    heap allocation, no lock, no I/O. Overflow drops surplus ticks, stops
-///    scanning the block, and bumps an atomic telemetry counter. parse_byte() is a tiny state
-///    machine over one incoming byte and is also alloc-0, so an audio-thread MIDI-in handler may
-///    feed it directly (documented audio-safe).
-///  - CONTROL thread: SPP and MTC full-frame helpers (start-of-transport
-///    position broadcast) are typically issued on the control thread but are
-///    themselves alloc-0 POD encoders, so they are safe anywhere.
+/// RT contract: generate_clock_block() emits the 0xF8 bytes whose ticks fall in a
+/// render-frame block into a FIXED-capacity output, allocation-free; overflow
+/// drops the surplus, stops scanning and bumps an atomic counter. parse_byte() is
+/// a one-byte state machine, so an audio-thread MIDI-in handler may feed it
+/// directly. The SPP and MTC full-frame helpers are POD encoders and safe
+/// anywhere, though they are normally issued on the control thread.
 ///
-/// Determinism: tick positions derive purely from the TempoMap (PPQ<->frame)
-/// and integer tick math. No clock / random.
+/// Determinism: tick positions come from the TempoMap and integer tick math
+/// alone — no clock, no randomness.
 
 #include <array>
 #include <cstddef>

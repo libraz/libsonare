@@ -119,7 +119,7 @@ header = "src/analysis/key_analyzer.h"
 struct = "KeyConfig"
 
 # Mastering processors are hand-written across all four bindings (the codegen
-# system documented in CLAUDE.md was removed from this branch), so their facade
+# system that once generated them was removed from this branch), so their facade
 # defaults are only checked facade-vs-facade unless anchored here on the C++
 # core config struct.
 [map.mastering_repair_declick]

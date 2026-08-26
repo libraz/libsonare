@@ -3,27 +3,20 @@
 /// @file warp.h
 /// @brief Audio warping / alignment for the MIR -> editing bridge.
 ///
-/// This is an OFFLINE, control-plane-only component (subsystem sonare::mir).
-/// It NEVER runs on the audio thread. It MAY allocate freely. It does NOT
-/// re-implement broad DSP stacks: chroma comes from feature/chroma, the DTW core
-/// comes from util/sequence, source separation from effects/hpss, and
-/// time-scale modification uses effects/phase_vocoder for harmonic content plus
-/// a local WSOLA path for percussive transients. See @ref mir_warp_tsm.
+/// OFFLINE, control-plane only, and free to allocate. It re-implements no DSP:
+/// chroma from feature/chroma, the DTW core from util/sequence, separation from
+/// effects/hpss, and TSM from effects/phase_vocoder plus a local WSOLA path for
+/// transients. Three capabilities:
+///   1. WarpMap: a piecewise-linear, strictly monotonic map between warp time
+///      (samples or PPQ anchors on the target timeline) and source time, built
+///      from manual and/or detected beat markers.
+///   2. chroma_dtw_align: chroma + memory-restricted multiscale DTW to anchor
+///      pairs. See @ref mir_warp_mrmsdtw.
+///   3. warp_to_length / warp_to_map: HPSS-split per-component TSM. See
+///      @ref mir_warp_tsm.
 ///
-/// The module exposes three capabilities:
-///   1. WarpMap: a piecewise-linear, strictly monotonic map between "warp time"
-///      (a target/musical timeline expressed in audio samples or PPQ anchors)
-///      and "source time" (the original recording's sample index). Built from
-///      manual markers and/or detected beat markers.
-///   2. chroma_dtw_align: align two signals via chroma + (memory-restricted
-///      multiscale) DTW and emit anchor pairs. See @ref mir_warp_mrmsdtw.
-///   3. warp_to_length / warp_to_map: HPSS-split component-specific TSM to hit a
-///      target length or follow a WarpMap. See @ref mir_warp_tsm.
-///
-/// @section mir_determinism Determinism
-/// Same input -> byte-identical output. No clocks, no std::rand, no
-/// floating non-determinism beyond IEEE arithmetic. DTW and the multiscale
-/// refinement are deterministic dynamic programs.
+/// Deterministic: same input, byte-identical output, with no clocks and no
+/// randomness — DTW and the multiscale refinement are dynamic programs.
 ///
 /// @note Internal composition/editing primitive. This header is intentionally
 /// not part of the stable C ABI or language-binding API; hosts consume stored

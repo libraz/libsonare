@@ -85,31 +85,22 @@ const std::unordered_map<std::string, float>& overrides() {
 /// Every key any `SONARE_TUNABLE` or override layer has asked for, with the
 /// value it would have used had no override been set.
 ///
-/// The point is discovery: the knob space is a few hundred calibration
-/// constants plus a patch field table, spread over fifteen engine files and a
-/// program table, and a fitter that had to be told the names by hand would go
-/// stale the first time one moved. Instead the library reports what it
-/// actually consulted, so `autofit.py --spec auto` builds its knob list from
-/// the run rather than from a parse of the source.
+/// The point is discovery: a fitter told the knob names by hand goes stale the
+/// first time one moves, so the library reports what it actually consulted and
+/// `autofit.py --spec auto` builds its list from the run. Written on exit when
+/// `SONARE_TUNING_DUMP` names a path, as `key<TAB>default` lines sorted by key.
 ///
-/// Written on exit when `SONARE_TUNING_DUMP` names a path, as
-/// `key<TAB>default` lines sorted by key.
+/// The two streams feeding it have different scopes. Patch fields are recorded
+/// as the GM fallback tables are built, so those keys are the tables the run
+/// reached. Engine constants are not: `SONARE_TUNABLE` declares a
+/// namespace-scope `const float` initialised before `main`, so every linked TU's
+/// constants appear whether the render used that engine or not. Narrow by the
+/// declaring file's stem to get one engine's, as `autofit.py` does.
 ///
-/// The two streams that feed it have different scopes, which matters when
-/// reading a dump by hand. A patch field is recorded as a GM fallback table is
-/// built, so the patch keys are those of the tables the run actually reached.
-/// An engine constant is not: in a tuning build `SONARE_TUNABLE` declares a
-/// namespace-scope `const float` whose initialiser runs before `main`, so every
-/// linked translation unit's constants are recorded whether the render used
-/// that engine or not. The engine half of a dump is the whole library rather
-/// than a trace of the run; a consumer that wants one engine's constants
-/// narrows by the declaring file's stem (`autofit.py` does).
-///
-/// Two kinds of header line precede the knobs: `#program<TAB>NNN<TAB>key` maps
-/// a GM program to the patch that voices it, and `#bound<TAB>path<TAB>lo<TAB>hi`
-/// gives a patch field's admissible range. A bound is keyed by the path alone
-/// because it is a property of the field, not of the patch — every patch with a
-/// `bowed_string.bow_force` accepts the same interval.
+/// Two header line kinds precede the knobs: `#program<TAB>NNN<TAB>key` maps a GM
+/// program to its patch, and `#bound<TAB>path<TAB>lo<TAB>hi` gives a field's
+/// admissible range. A bound is keyed by path alone, being a property of the
+/// field rather than the patch.
 class Recorder {
  public:
   ~Recorder() {

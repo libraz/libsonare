@@ -4,12 +4,9 @@
 /// @brief MIDI 2.0 Clip File (SMF2 / "MIDI Clip File", MIDI Association
 ///        M2-116-U v1.0) import / export.
 ///
-/// Unlike @ref smf.h (Standard MIDI File, a MIDI 1.0 byte stream), the MIDI Clip
-/// File is a stream of Universal MIDI Packets (UMP). It can therefore carry
-/// MIDI 2.0 channel-voice messages (16-bit velocity, 32-bit CC, per-note and
-/// registered/assignable controllers, bank-valid Program Change) LOSSLESSLY —
-/// which the MIDI 1.0 SMF export drops. That losslessness is the reason this
-/// format exists alongside the SMF path.
+/// Being a stream of UMPs rather than a MIDI 1.0 byte stream, this format
+/// carries MIDI 2.0 channel-voice messages losslessly where @ref smf.h drops
+/// them, which is why it exists alongside the SMF path.
 ///
 /// File layout (all multi-byte values are BIG-ENDIAN 32-bit UMP words):
 ///   - 8-byte ASCII file header "SMF2CLIP".
@@ -20,19 +17,15 @@
 ///   - Clip Sequence Data: DCS-prepended UMPs, terminated by DCS + End of Clip
 ///     (UMP Stream status 0x21).
 ///
-/// Timing: every message is positioned by the running sum of the most recent
-/// Delta Clockstamp tick deltas, converted to PPQ (quarter-note units) via the
-/// DCTPQ resolution — matching @ref MidiClipEvent::ppq.
+/// Timing is the running sum of Delta Clockstamp deltas converted to PPQ through
+/// the DCTPQ resolution, matching @ref MidiClipEvent::ppq. Meta rides Flex Data
+/// messages, but SMF "Marker" events have no Flex Data equivalent in the spec,
+/// so markers do NOT round-trip through this format.
 ///
-/// Meta (tempo / time-signature / key-signature / text) rides Flex Data
-/// messages (MT=0xD). SMF "Marker" meta events have NO Flex Data equivalent in
-/// the spec, so markers are NOT round-tripped through this format.
-///
-/// The importer never reads out of bounds on malformed / truncated input: it
-/// returns a diagnostic status instead (same robustness contract as import_smf).
-/// Fatal structural errors such as missing DCTPQ or truncated UMP words are
-/// transactional: partially parsed sequence data is discarded and callers must
-/// check status before consuming clips.
+/// Malformed input never reads out of bounds; it returns a diagnostic status,
+/// and a fatal structural error (missing DCTPQ, truncated words) is
+/// transactional — partial data is discarded, so check status before consuming
+/// clips.
 
 #include <cstdint>
 #include <string>

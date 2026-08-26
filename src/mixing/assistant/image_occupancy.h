@@ -64,31 +64,25 @@ std::vector<TrackChannelEnergy> measure_track_channel_energy(
 /// @brief Builds the band-by-pan-position energy histogram of the tracks as they
 ///        currently sit, before any panning decision has been made.
 ///
-/// @details Each track is placed from its own channel energies rather than from
-///          a pan setting:
-///          - A mono track (@ref TrackInput::right null) is one source at
-///            centre, so its whole band energy lands in the middle bucket.
-///          - A stereo track is placed **per band** from that band's L/R energy
-///            balance, `pan = (E_R - E_L) / (E_R + E_L)` in `[-1, 1]`. A track
-///            with a narrow low end and a wide top end therefore occupies
-///            several buckets, which is the shape real material has.
+/// @details Each track is placed from its own channel energies, not from a pan
+///          setting: a mono track is one source in the middle bucket, and a
+///          stereo track is placed **per band** from that band's balance,
+///          `pan = (E_R - E_L) / (E_R + E_L)`. A narrow low end under a wide top
+///          therefore occupies several buckets, which is the shape real material
+///          has.
 ///
-/// @details Band edges are @ref kBands verbatim; this module never introduces a
-///          second band grid. Pan buckets tile `[-1, 1]` at the uniform width
-///          `2 / kPanBucketCount`, each half-open `[low, high)` so a value can
-///          never land in two, except the topmost, which is closed at `+1` so
+/// @details Band edges are @ref kBands verbatim — this module never introduces a
+///          second band grid. Pan buckets tile `[-1, 1]` uniformly, half-open so
+///          a value cannot land in two, except the topmost, closed at `+1` so
 ///          hard right has somewhere to go. @ref kPanBucketCount is odd, so the
-///          middle bucket is centred on zero and contains `pan == 0` exactly.
+///          middle bucket contains `pan == 0` exactly.
 ///
-/// @details @ref ImageOccupancy::crowding is the complement of the band's
-///          normalized pan entropy, `1 - H / log(kPanBucketCount)`. It reads the
-///          whole distribution rather than only its peak, so energy moving off
-///          the peak into neighbouring buckets registers, and it reaches the
-///          documented endpoints by construction: exactly 1 for a single
+/// @details @ref ImageOccupancy::crowding is `1 - H / log(kPanBucketCount)`, the
+///          complement of normalized pan entropy, so it reads the whole
+///          distribution rather than its peak and hits exactly 1 for a single
 ///          occupied bucket and exactly 0 for a uniform spread.
 ///
-/// @details Tracks with @ref TrackProfile::usable false contribute nothing, as
-///          do tracks with no samples or no buffer.
+/// @details Tracks that are unusable, empty or unbuffered contribute nothing.
 ///
 /// @param tracks Tracks in the mix.
 /// @param profiles Their profiles, in the same order. Entries past the shorter

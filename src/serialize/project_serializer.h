@@ -9,61 +9,37 @@
 /// @ref sonare::arrangement::MidiContentStore values and JSON strings. The host
 /// (CLI / bindings) is responsible for reading/writing bytes to storage.
 ///
-/// Determinism / byte-equality
-/// ---------------------------
-/// All numbers are emitted through @ref sonare::util::json::dump, which writes
-/// doubles at max_digits10 precision (locale-independent), so the decimal text is
-/// round-trippable and byte-deterministic across runs and builds. Object keys are
-/// stored in a std::map and dumped in sorted order, so field order is stable
-/// without per-struct ordering bookkeeping. The serializer never reads the clock,
-/// a random source, or any environment state. Therefore:
-///   - serialize(P) produces identical bytes for the same logical Project, and
-///   - serialize(deserialize(serialize(P))) == serialize(P), byte-for-byte.
+/// DETERMINISM. Numbers go through @ref sonare::util::json::dump at
+/// max_digits10 and locale-independent; keys live in a std::map and dump sorted;
+/// nothing reads the clock, a random source or the environment. So the same
+/// logical Project always produces the same bytes, and a round trip is
+/// byte-for-byte stable.
 ///
-/// Forward-compatibility
-/// ---------------------
-/// Unknown JSON fields on input are SAFELY IGNORED, EXCEPT @ref
-/// sonare::arrangement::AssistSidecar payloads, which are preserved LOSSLESSLY
-/// (module_id + schema_version + opaque payload bytes) even for unregistered
-/// modules / unknown payload schema versions. The core never interprets sidecar
-/// payload bytes; binary payloads are carried as deterministic base64.
+/// FORWARD-COMPATIBILITY. Unknown fields are ignored, except
+/// @ref sonare::arrangement::AssistSidecar payloads, which survive losslessly
+/// even for unregistered modules and unknown schema versions — the core never
+/// interprets those bytes and carries binary ones as deterministic base64.
 ///
-/// Mixer topology
-/// --------------
-/// The mixer @ref sonare::mixing::api::Scene is embedded through the canonical
-/// @c scene_to_json / @c scene_from_json helpers. They are control-plane-only
-/// utilities and are available in mixing-OFF builds as well, so every project
-/// build uses one scene schema walker and one stable key order.
+/// The mixer @ref sonare::mixing::api::Scene is embedded through
+/// @c scene_to_json / @c scene_from_json, which exist in mixing-OFF builds too,
+/// so every build uses one scene walker and one key order.
 ///
-/// Error handling
-/// --------------
-/// Malformed / truncated / garbage input never crashes or reads out of bounds:
-/// @ref project_from_json catches @ref sonare::util::json::JsonError and any
-/// structural inconsistency and returns a @ref DeserializeResult carrying
-/// diagnostics with an empty optional Project.
+/// ERRORS. Malformed input never crashes or reads out of bounds:
+/// @ref project_from_json returns a @ref DeserializeResult carrying diagnostics
+/// and an empty optional.
 ///
-/// Persistence budget
-/// ------------------
-/// A saved document must be readable by @ref project_from_json, which admits an
-/// input only within @ref sonare::resource::kDefaultProjectImportResourceLimits.
-/// The edit API is not bounded by that budget, so a caller can assemble a
-/// project whose document would exceed it. @ref project_to_json therefore
-/// measures the document it is about to emit against the same budget and throws
-/// @c SonareException(ErrorCode::InvalidState) rather than returning bytes that
-/// nothing can load back; a project within budget is serialized exactly as
-/// before, byte for byte. Callers that must report an over-budget document as
-/// something other than a project-state error — the MIDI import preflight,
-/// which rejects the import as invalid input — use
-/// @ref try_project_to_json instead.
+/// PERSISTENCE BUDGET. The edit API is not bounded by
+/// @ref sonare::resource::kDefaultProjectImportResourceLimits but
+/// @ref project_from_json is, so @ref project_to_json measures the document
+/// against the same budget and throws @c ErrorCode::InvalidState rather than
+/// emitting bytes nothing can load back. @ref try_project_to_json is for callers
+/// that must report an over-budget document as invalid input instead — the MIDI
+/// import preflight.
 ///
-/// Entity ID policy
-/// ----------------
-/// Source, track, clip, and marker IDs use the inclusive range
-/// `[1, UINT32_MAX - 1]`. Zero is the public failure/not-found sentinel and
-/// `UINT32_MAX` is reserved as the allocator-exhausted marker. Deserialization
-/// rejects either reserved value and rejects duplicate IDs within each entity
-/// namespace. Importing `UINT32_MAX - 1` is valid, but subsequent allocation in
-/// that namespace fails explicitly by returning zero rather than wrapping.
+/// ENTITY IDs run `[1, UINT32_MAX - 1]`: zero is the not-found sentinel and
+/// `UINT32_MAX` the allocator-exhausted marker, both rejected on input along
+/// with duplicates within a namespace. Importing `UINT32_MAX - 1` is valid, and
+/// the next allocation there returns zero rather than wrapping.
 
 #include <cstddef>
 #include <cstdint>

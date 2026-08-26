@@ -1076,46 +1076,26 @@ namespace {
 // ---------------------------------------------------------------------------
 // Parameter bound measurement
 //
-// The processor registry publishes no declared bounds interface: validation is
-// hand-written per processor, as a throw out of the config constructor. The
-// catalog therefore MEASURES the bounds instead of mirroring them, the same way
-// the synth's patch bounds are measured through its clamp rather than copied
-// from it — a parameter whose validation changes cannot fall out of step with
-// what is published, and a newly validated parameter is bounded for free.
+// Validation is hand-written per processor as a throw out of the config
+// constructor, with no declared bounds interface, so the catalog MEASURES the
+// bounds rather than mirroring them — the same discipline as the synth's clamp
+// probe. A candidate goes through `build_insert` with every other parameter at
+// its default, and whether construction throws is the answer. What is published
+// is a hard constraint (outside it is an error, not a clip), not a recommended
+// UI range: an unvalidated gain reports as unbounded.
 //
-// A candidate value is handed to the same construction path a host would use
-// (`build_insert`, which is what `make_insert` runs) with every OTHER parameter
-// left at its default; whether the config constructor throws is the answer.
-// What is published is therefore the interval construction accepts at the
-// default configuration. It is a hard constraint — a value outside it is an
-// error, not a clipped value — and it is NOT a recommended UI range: an
-// unvalidated gain that a host should draw as -60..0 dB honestly reports as
-// unbounded.
+// Measuring at the DEFAULT configuration makes a bound conservative rather than
+// wrong: a validator coupling two parameters yields the interval one accepts
+// while the other sits at its default (`maximizer.adaptiveRelease`), and a
+// sample-rate-derived bound reflects the pre-prepare rate (the EQ band ceiling
+// reads 24 kHz and rises once prepared higher).
 //
-// Two consequences of measuring at the DEFAULT configuration. Both are the same
-// caveat the catalog's latency and tail figures already carry, and both make a
-// bound conservative rather than wrong:
-//   - A validator that couples two parameters yields the interval one of them
-//     accepts while the other sits at its default. `maximizer.adaptiveRelease`
-//     reports minReleaseMs <= 250 and maxReleaseMs >= 20 for exactly that
-//     reason: each is bounded by the other's default, and moving one moves the
-//     other's limit.
-//   - A bound the processor derives from its sample rate is measured before
-//     prepare(), so it reflects the processor's own pre-prepare rate — the EQ
-//     band frequency ceiling reads as 24 kHz, and rises once the insert is
-//     prepared at a higher rate.
-//
-// Three consequences of measuring rather than declaring:
-//   - The probe visits |value| <= kBoundProbeLimit only. A bound beyond that
-//     window reports null, which reads the same as "no validation" — both mean
-//     "the catalog states no limit here".
-//   - A boundary is bisected to kBoundRelativeTolerance and then rounded to
-//     kBoundSignificantDigits, with a residue below kBoundZeroSnap reported as
-//     zero. An EXCLUSIVE bound therefore publishes its limit value: a validator
-//     requiring `> 0` reports `min: 0`, and 0 itself is still rejected.
-//   - A parameter the config builder never reads cannot be constrained by
-//     construction, and a boolean cannot be out of range at all; neither is
-//     probed, and both report null.
+// Measuring rather than declaring costs three things. The probe visits
+// |value| <= kBoundProbeLimit, and anything beyond reports null, which reads the
+// same as "no validation". A boundary is bisected and rounded, so an EXCLUSIVE
+// bound publishes its limit value — a `> 0` validator reports `min: 0` and still
+// rejects 0. Parameters the config builder never reads, and booleans, are not
+// probed at all.
 // ---------------------------------------------------------------------------
 
 constexpr double kBoundProbeLimit = 1.0e6;

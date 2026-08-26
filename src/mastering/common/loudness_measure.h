@@ -4,7 +4,7 @@
 /// @brief Stateless LUFS / true-peak measurement helpers shared by
 ///        mastering processors that report loudness fields.
 ///
-/// CLAUDE.md restricts non-`assistant/` `mastering/` modules to
+/// The layering rule restricts non-`assistant/` `mastering/` modules to
 /// `core/ + util/ + rt/`. `mastering/common/loudness_measure` is the single
 /// well-defined exception: it is the only `mastering/common/` translation unit
 /// allowed to depend on `metering/`, and it exists to keep that dependency

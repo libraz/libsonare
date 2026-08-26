@@ -1,59 +1,29 @@
 #pragma once
 
 /// @file flute_voice.h
-/// @brief Air-jet (flue / edge-tone) flute core for the NativeSynth voice — the
-///        data-free flute model (concert flute / piccolo / recorder / pan flute /
-///        shakuhachi / whistle, and jet-driven flue instruments in general;
-///        McIntyre, Schumacher & Woodhouse 1983, Verge/Fabre/Hirschberg 1994-2000
-///        lumped jet model, Cook/Scavone STK Flute). It completes the four
-///        classic physical-modelling exciters — the bow (kBowedString), the reed
-///        (kReed), the lip (kBrass) and, here, the AIR JET.
+/// @brief Air-jet (flue / edge-tone) flute core for the NativeSynth voice —
+///        concert flute, piccolo, recorder, pan flute, shakuhachi, whistle. A
+///        cubic Fabre-Hirschberg jet table drives an open-open bore
+///        (positive-feedback comb of one full period), completing the four
+///        classic exciters beside the bow, the reed and the lip
+///        (Verge/Fabre/Hirschberg 1994-2000).
 ///
-/// A flute is a turbulent air jet blown across a sharp edge (the labium) at the
-/// mouth of an open pipe. The jet oscillates from one side of the edge to the
-/// other, and the pipe's standing wave phase-locks that oscillation — the jet is
-/// the nonlinear exciter, the bore is the linear resonator. Unlike the reed's
-/// or the lip's memoryless pressure valve, the jet drive carries a DELAY (the
-/// air's convection time from the flue slit to the edge), so the model needs a
-/// SECOND delay line beside the bore, and it is the RATIO of the two (jet delay
-/// vs bore delay) that selects which register the jet drives — the physical seat
-/// of OVERBLOWING (blow harder and the tone jumps the octave). This is exactly
-/// what the sibling flue pipe-organ core (pipe_organ_voice.h) leaves out: that
-/// core is a linear resonator kept alive by a steady breath and is
-/// unconditionally stable, whereas the flute SELF-OSCILLATES through the
-/// nonlinear jet. The three parts:
-///   1. AIR JET (nonlinear, delayed): a short jet delay line (the convection
-///      time, jet_ratio * bore period) feeds a cubic jet function
-///      jet(x) = clamp(x*(x^2 - 1), -1, 1) — the S-shaped saturating transfer of
-///      the jet deflecting across the labium (the Fabre-Hirschberg lumped model,
-///      STK JetTable). Its small-signal slope is inverting, so with the bore
-///      reflection it forms the oscillator; the clamp bounds the limit cycle.
-///   2. BORE: an open-open pipe as a travelling-wave delay line with a one-pole
-///      loss lowpass (the frequency-dependent radiation loss at the two open
-///      ends) and an in-loop DC blocker. Each open end reflects with a PRESSURE
-///      INVERSION (a pressure node); the two inversions over a round trip cancel,
-///      so the bore is a POSITIVE-feedback comb of one full period — the full
-///      harmonic series an open flue pipe radiates, on which the jet locks the
-///      fundamental.
-///   3. BREATH + JET NOISE: a steady mouth pressure (the blowing) with a
-///      multiplicative turbulence noise (the breathy air texture a flute has and
-///      an additive/FM flute lacks) and a bright onset chiff (the pipe
-///      "speaking"). Breath also selects the register: below a threshold the jet
-///      never oscillates (the note is silent), and pushing the breath toward the
-///      top of its band drives the tone brighter and, with the overblow gate,
-///      up to the next register.
+/// The jet drive carries a DELAY the reed's and the lip's pressure valves do
+/// not — the air's convection time from slit to labium — so there is a second
+/// delay line beside the bore, and the RATIO of the two is what selects the
+/// register. That ratio is the physical seat of overblowing, and it is what the
+/// sibling pipe-organ core deliberately leaves out. Breath level also gates the
+/// register: below a threshold the jet does not oscillate and the note is
+/// silent.
 ///
-/// The delay buffers are NOT owned by the core: the host allocates one slab per
-/// voice slot in prepare() (a bore span plus a jet span) and attach()es it before
-/// start(). Radiation voicing is the shared BodyResonator on the voice, enabled
-/// per preset; the core emits the raw bore pressure. Self-oscillating but
-/// bounded: the jet cubic self-limits (clamped to [-1,1]) and the reflection
-/// magnitudes are < 1.
+/// The delay buffers are not owned here — the host attaches a bore span plus a
+/// jet span per voice slot before start(), and radiation voicing is the shared
+/// BodyResonator, so the core emits raw bore pressure. Self-oscillating but
+/// bounded: the jet cubic clamps to [-1,1] and the reflection magnitudes are < 1.
 ///
-/// RT contract: attach()/start()/render() are allocation-free (start zeroes /
-/// seeds the attached spans). Determinism: the jet turbulence and the onset chiff
-/// are the counter-based (voice_index, note, age) stream, so identical event
-/// streams render bit-identically.
+/// RT contract: attach()/start()/render() are allocation-free. Determinism: jet
+/// turbulence and onset chiff come from the counter-based
+/// (voice_index, note, age) stream, so identical events render bit-identically.
 
 #include <cstddef>
 #include <cstdint>

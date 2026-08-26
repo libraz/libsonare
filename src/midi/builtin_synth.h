@@ -6,30 +6,20 @@
 ///        silence. A richer literature-backed instrument bank (FM, Karplus-Strong,
 ///        modal) is planned separately.
 ///
-/// This fallback implements note on/off, sustain, channel mode, volume (CC7),
-/// pan (CC10) and expression (CC11), plus MPE-style expression: per-channel
-/// pitch bend (default +/-2 semitone range) and channel / polyphonic pressure.
-/// Because MPE places each note on its own member channel, per-channel bend and
-/// pressure act per-note. RPN / NRPN (including a configurable bend range)
-/// remain the domain of NativeSynth / Sf2Player, not this minimal oscillator
-/// fallback.
+/// Covers note on/off, sustain, channel mode, CC7/CC10/CC11 and MPE-style
+/// expression (per-channel bend and pressure, which act per-note because MPE
+/// gives each note its own member channel). RPN / NRPN, including a configurable
+/// bend range, stay with NativeSynth / Sf2Player.
 ///
-/// Volume, pan and expression use the same laws as NativeSynth / Sf2Player, so
-/// the same arrangement keeps its balance and stereo image when the instrument
-/// is swapped: volume x expression as a (v/127)^2 gain, and CC10 placed with the
-/// project's constant-power pan law. A voice is a point source being placed, so
-/// a centre-panned voice sits at 1/sqrt(2) per channel; a mono host folds both
-/// legs back with the same factor.
+/// Volume, pan and expression follow the same laws as those two, so swapping the
+/// instrument keeps an arrangement's balance and image: volume x expression as a
+/// (v/127)^2 gain, and CC10 through the project's constant-power pan law, which
+/// puts a centred voice at 1/sqrt(2) per channel.
 ///
-/// RT contract (inherited from MidiInstrument):
-///   - prepare() runs on the control thread and is the ONLY place that allocates
-///     (it sizes the fixed voice pool).
-///   - on_event() / process() run on the audio thread and are allocation-free,
-///     lock-free and IO-free.
-///
-/// Determinism: no RNG, no wall-clock. The same project + config bounces to
-/// bit-identical audio within one build (voice stealing is deterministic:
-/// prefer a free voice, else the oldest voice).
+/// RT contract: prepare() runs on the control thread and is the only allocation
+/// site; on_event() and process() are allocation-, lock- and IO-free.
+/// Determinism: no RNG, no clock, and voice stealing prefers a free voice then
+/// the oldest, so a project bounces bit-identically within one build.
 
 #include <array>
 #include <cstdint>

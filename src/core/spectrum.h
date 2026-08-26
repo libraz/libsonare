@@ -81,20 +81,16 @@ void validate_config(const StftConfig& config);
 ///            power of two is a performance preference and not a requirement.
 ///          - @p hop_length must lie in (0, n_fft / 2], i.e. frames overlap by
 ///            at least half a window.
-/// @details The half-window bound is deliberately stricter than the point where
-///          reconstruction actually breaks. @ref Spectrogram::to_audio divides
-///          the overlap-add by the true analysis*synthesis window sum, so a
-///          mask-and-invert round trip stays exact well past half overlap
-///          (spectrum_test covers three-quarter hops for four window families);
-///          the divisor only collapses at hop >= n_fft, where samples fall
-///          outside every frame and the output picks up periodic dropouts. Half
-///          overlap is the contract the phase-coherent paths were already
-///          written to (@ref spectral_edit, StreamingPhaseVocoder), and it is
-///          the bound below which a phase vocoder's frame-to-frame phase
-///          advance stops being resolvable.
-/// @details An analysis-only STFT is not subject to the overlap rule (nothing is
-///          reconstructed), which is why this is separate from @ref validate_config
-///          rather than folded into it.
+/// @details The half-window bound is deliberately stricter than where
+///          reconstruction breaks: @ref Spectrogram::to_audio divides by the true
+///          analysis*synthesis window sum, so a mask-and-invert round trip stays
+///          exact well past half overlap and only collapses at hop >= n_fft. Half
+///          overlap is what the phase-coherent paths were written to, and the
+///          bound below which a phase vocoder's frame-to-frame phase advance
+///          stops being resolvable.
+/// @details An analysis-only STFT reconstructs nothing and so is not subject to
+///          the overlap rule, which is why this is separate from
+///          @ref validate_config rather than folded into it.
 /// @param n_fft FFT size.
 /// @param hop_length Hop length between frames.
 /// @throws SonareException(InvalidParameter) if either rule is violated.

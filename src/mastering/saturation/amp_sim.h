@@ -4,38 +4,27 @@
 /// @brief Guitar amp-sim insert: drive -> tone stack -> cab-EQ in one
 ///        processor ("saturation.ampSim").
 ///
-/// The electric-guitar sound is two layers: the plucked string (the
-/// Karplus-Strong NativeSynth voice) and the amp/cab chain AFTER it — this
-/// processor is that second, track-insert layer. It composes existing
-/// blocks rather than inventing new models:
-///   - drive: the Dempwolf 12AX7 triode stage (saturation::Tube, oversampled)
-///     behind one [0,1] drive knob, with a drive-scaled pre-emphasis shelf in
-///     front (bright-cap voicing: more drive = more grit pushed into the
-///     clip).
-///   - tone stack: bass / mid / treble shelving-peak biquads (RBJ designs at
-///     the classic 120 Hz / 550 Hz / 3 kHz centres).
-///   - cab-EQ: a fixed parametric approximation of a 4x12 close-mic response
-///     (75 Hz high-pass, 110 Hz body bump, presence peak, 4th-order 4.8 kHz
-///     roll-off). A real cabinet is an IR convolution and therefore data —
-///     this keeps the insert data-free; hosts wanting a real cab IR layer
-///     "effects.reverb.convolution" behind it.
-///   - microphone: an optional explicit mic stage on the cab (capsule voicing,
-///     off-axis position, distance), and an optional second mic summed with the
-///     first through their path-length difference — the phase interference that
-///     makes a two-mic blend sound unlike either mic alone.
-///   - speaker: an optional cone stage (suspension nonlinearity + the
-///     excursion-driven Doppler FM of a moving radiator) between the amp and
-///     the cab EQ.
+/// This is the amp/cab layer AFTER the plucked string, and it composes existing
+/// blocks rather than inventing models:
+///   - drive: the Dempwolf 12AX7 triode stage, oversampled, behind one [0,1]
+///     knob with a drive-scaled pre-emphasis shelf in front (bright-cap voicing).
+///   - tone stack: RBJ shelving-peak biquads at 120 Hz / 550 Hz / 3 kHz.
+///   - cab-EQ: a parametric 4x12 close-mic approximation (75 Hz high-pass,
+///     110 Hz bump, presence peak, 4th-order 4.8 kHz roll-off). A real cabinet is
+///     an IR and therefore data, so hosts wanting one layer a convolution behind.
+///   - microphone: optional capsule / off-axis / distance stage, and an optional
+///     second mic summed through their path-length difference — the interference
+///     that makes a blend sound unlike either mic.
+///   - speaker: an optional cone stage (suspension nonlinearity plus
+///     excursion-driven Doppler FM) between the amp and the cab EQ.
 ///
-/// `topology` selects between that voiced-filter chain and a circuit-level one
-/// (a cascade of Dempwolf triode stages into the real passive tone-stack
-/// network, all inside a single oversampling region). The voiced chain is the
-/// default and is unchanged.
+/// `topology` switches that voiced chain for a circuit-level one: Dempwolf
+/// triode stages into the real passive tone-stack network, inside one
+/// oversampling region.
 ///
-/// Determinism: stateful biquads + the tube stage only; no RNG, no wall
-/// clock. RT contract: prepare() allocates the per-channel filter chains, the
-/// mic/Doppler delay lines, the cab-IR history and the tube or oversampler
-/// scratch; process()/set_parameter() are allocation-free.
+/// Determinism: stateful filters only, no RNG or clock. RT contract: prepare()
+/// allocates the filter chains, delay lines, cab-IR history and oversampler
+/// scratch; process() and set_parameter() are allocation-free.
 
 #include <algorithm>
 #include <vector>
