@@ -2,9 +2,10 @@
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
+       build-bank-shared bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
-       build-feature-matrix accuracy-report voice-gate
+       build-feature-matrix accuracy-report voice-gate voice-status test-voicematch
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -77,6 +78,16 @@ fixtures:
 
 test: build fixtures
 	ctest --test-dir $(BUILD_DIR) --output-on-failure --parallel
+	$(MAKE) test-voicematch
+
+# The calibration harness is Python, and nothing else runs it: `tools/` is
+# outside ctest, outside the drift gates, and outside CI, so a harness left to
+# be remembered is a harness that rots. It rides on `test` rather than standing
+# alone for that reason. The cases read only the tracked capture definitions
+# and reference profiles -- no rendered corpus, no plugin, no built library --
+# so they pass on a fresh clone in about half a minute.
+test-voicematch:
+	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch -q
 
 # Heavy cases (>~2 s each) are tagged [.][slow] and hidden from the default
 # ctest run; this runs just those. Must run from the repo root (librosa
@@ -166,6 +177,33 @@ capability-catalog: build-shared
 
 capability-catalog-check: build-shared
 	python3 tools/generate_capability_catalog.py --library $(SHARED_LIB) --check
+
+# The instrument bank's own version registry: one generation per voice, per drum
+# note and per group of shared calibration constants (the engines, the GS effect
+# scales, the fallback send weights). Read from the library's own knob dump, so
+# it cannot drift from what the render uses -- which needs a BUILD_TUNING build,
+# in its own directory, since it neither retargets the Debug `build/` that ctest
+# reads nor disturbs the shared `build-python-shared/`.
+BANK_BUILD_DIR ?= build-tuning
+ifeq ($(UNAME_S),Darwin)
+BANK_SHARED_LIB := $(CURDIR)/$(BANK_BUILD_DIR)/lib/libsonare.dylib
+else
+BANK_SHARED_LIB := $(CURDIR)/$(BANK_BUILD_DIR)/lib/libsonare.so
+endif
+
+build-bank-shared:
+	$(CMAKE) -S . -B $(BANK_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
+	$(CMAKE) --build $(BANK_BUILD_DIR) --target sonare_shared -j
+
+# NOTE is what the bump is recorded as; a run without one records "unrecorded",
+# which the version can never recover.
+bank-versions: build-bank-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/generate_bank_versions.py \
+		--library $(BANK_SHARED_LIB) --note "$(NOTE)"
+
+bank-versions-check: build-bank-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/generate_bank_versions.py \
+		--library $(BANK_SHARED_LIB) --check
 
 # Render the per-binding processor-name declarations from the tracked catalog,
 # so no surface carries a hand-maintained copy of the shipped name set. Reads
@@ -289,6 +327,7 @@ conformance:
 	python3 tools/conformance/check_cli_contract.py --schema
 	python3 -m unittest tests/conformance/test_cli_contract.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
+	python3 -m unittest tests/conformance/test_bank_versions.py
 	python3 tools/parity/test_handle_gating.py
 	python3 tools/parity/test_record_shape.py
 	python3 tools/parity/test_ts_reexport.py
@@ -374,6 +413,15 @@ abi-layout-check:
 # truth (per-subsystem + packed aggregate). Stdlib-only, read-only.
 check-abi-version:
 	python3 tools/abi/check_abi_versions.py
+
+# What each calibrated voice has and what its next round needs — the entry
+# point of the calibration loop, and the one target here that neither builds
+# nor renders anything. Read-only and always exit 0: a loop reads it to decide
+# where to start, which a target that failed on "there is work to do" could not
+# be used for.
+voice-status:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/profile.py \
+		status --all
 
 # Hold every calibrated GM fallback voice to the bounds recorded beside its
 # reference profile. One target rather than one per instrument: a gate exists
