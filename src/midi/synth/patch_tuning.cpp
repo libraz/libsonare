@@ -442,6 +442,11 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.shimmer);
   F(percussion.shimmer_attack_ms);
   F(percussion.shimmer_cutoff_hz);
+  F(percussion.plate_gain);
+  F(percussion.plate_t60_s);
+  F(percussion.plate_hf_ratio);
+  F(percussion.plate_low_hz);
+  F(percussion.plate_air_hz);
   F(percussion.phisem_beans);
   F(percussion.phisem_energy_ms);
   F(percussion.phisem_sound_ms);

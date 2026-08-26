@@ -129,6 +129,16 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   }
   shell_.start_specs(shell_specs.data(), shell_count, sr, params.shell_mix);
 
+  // Dense inharmonic plate. Off when the gain is zero (no delay lines cleared,
+  // no state advanced, bit-identical to the voicing that predates the field).
+  plate_gain_ = std::max(0.0f, params.plate_gain);
+  if (plate_gain_ > 0.0f) {
+    plate_.start(sr, params.plate_low_hz, params.plate_t60_s, params.plate_hf_ratio,
+                 params.plate_air_hz);
+  } else {
+    plate_.reset();
+  }
+
   // Snare wire rattle: gated noise driven by the membrane crossing the wire
   // contact threshold. Voiced through a dedicated high-pass.
   wire_buzz_ = std::max(0.0f, params.wire_buzz);
@@ -316,6 +326,15 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     }
   }
 
+  // Dense inharmonic plate: the whole strike drives the network, because what
+  // sets a plate ringing is the hit and not one layer of it. Added over the
+  // dry hit rather than blended with it — the strike is the noisy half of the
+  // sound and the plate is the dense half, and metal needs both.
+  if (plate_gain_ > 0.0f) {
+    const float strike = mix;
+    mix += plate_gain_ * plate_.process(strike);
+  }
+
   if (shell_.active()) mix = shell_.process(mix);
 
   return mix;
@@ -335,6 +354,8 @@ void PercussionVoiceCore::kill() noexcept {
   wire_air_.reset();
   shimmer_air_.reset();
   shell_.reset();
+  plate_gain_ = 0.0f;
+  plate_.reset();
   wire_buzz_ = 0.0f;
   wire_filter_.reset();
   shimmer_ = 0.0f;

@@ -25,6 +25,7 @@
 #include <cstdint>
 
 #include "midi/synth/body_resonator.h"
+#include "midi/synth/fdn_plate.h"
 #include "midi/synth/filter_models.h"
 #include "midi/synth/svf.h"
 #include "midi/synth/voice_random.h"
@@ -166,6 +167,39 @@ struct PercussionPatchParams {
   /// High-pass cutoff of the shimmer band.
   float shimmer_cutoff_hz = 8000.0f;
 
+  // --- dense inharmonic plate (cymbals, gongs, bells) ---
+  /// Level of the plate resonator over the dry hit (0 = off, bit-identical).
+  /// The strike — tone, noise burst, rattle and wash together — is fed through
+  /// a feedback delay network that rings at thousands of inharmonic partials,
+  /// which is the field a struck metal plate radiates and a mode bank capped
+  /// at kMaxPercussionModes cannot approximate at any gain.
+  ///
+  /// It is a level rather than a blend because the dry hit is the other half
+  /// of the sound and has to stay: metal reads as metal by being dense *and*
+  /// noisy at once, and the plate supplies only the density. What sustains the
+  /// noise beside it is `noise_decay_ms` — a burst that dies in ten
+  /// milliseconds leaves the tail purely modal, which sounds like a bar.
+  float plate_gain = 0.0f;
+  /// Reverberation time of the plate at the bottom of its band.
+  float plate_t60_s = 2.0f;
+  /// Reverberation time at Nyquist as a fraction of `plate_t60_s`. A cymbal
+  /// holds its top far longer than a drum head does, so this sits high here;
+  /// at 1 the top of the band is undamped.
+  float plate_hf_ratio = 0.6f;
+  /// Lowest partial the network places (Hz). It scales every delay line, so it
+  /// sets the plate's size — and with it how far apart the partials sit.
+  float plate_low_hz = 180.0f;
+  /// Top of the band the plate responds in at all (Hz; 0 = up to Nyquist).
+  ///
+  /// The same defect `noise_air_hz` exists for, in a different layer: a delay
+  /// network has poles all the way to Nyquist and a strike is broadband, so an
+  /// unbounded plate answers the top third-octave bands with as much as it
+  /// answers the ones the piece is played in. `plate_hf_ratio` does not stand
+  /// in for it — that says how fast the top dies once it is ringing, and damped
+  /// far enough to fix the band profile it also removes the top the piece still
+  /// needs a tenth of a second after the strike.
+  float plate_air_hz = 0.0f;
+
   // --- stochastic particle excitation (PhISEM: shakers / scrapers) ---
   /// Effective particle (bean) count driving the collision rate. 0 = off (no
   /// PhISEM layer, bit-identical). Cook's PhISEM statistical model: the sum of
@@ -259,6 +293,12 @@ class PercussionVoiceCore {
   TptSvf shimmer_air_;
 
   BodyResonator shell_;
+
+  // Dense inharmonic plate, driven by the summed strike. Its delay lines are
+  // the largest member of the voice, so it is the one layer whose cost is
+  // paid in memory rather than in arithmetic.
+  float plate_gain_ = 0.0f;
+  FdnPlate plate_;
 
   // Snare wire rattle: gated, velocity-scaled high-passed noise driven by the
   // membrane displacement crossing wire_threshold_.

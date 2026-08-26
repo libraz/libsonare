@@ -766,6 +766,26 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.percussion.shimmer_attack_ms, 40.0f), 1.0f, 2000.0f);
   p.percussion.shimmer_cutoff_hz = std::clamp(
       patch_clamp_detail::sanitize(p.percussion.shimmer_cutoff_hz, 8000.0f), 20.0f, 20000.0f);
+  p.percussion.plate_gain =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_gain, 0.0f), 0.0f, 4.0f);
+  // A cymbal rings for tens of seconds and a gong for longer, so the upper
+  // bound is the note length rather than a drum's.
+  p.percussion.plate_t60_s =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_t60_s, 2.0f), 0.01f, 30.0f);
+  p.percussion.plate_hf_ratio =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_hf_ratio, 0.6f), 0.01f, 1.0f);
+  // The floor is the lowest partial the delay lines can still place at 96 kHz,
+  // so a patch reads the same at every sample rate the library renders at. Ask
+  // for less and the network scales itself to fit, which is a smaller plate
+  // than the patch called for rather than a clamped number.
+  p.percussion.plate_low_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_low_hz, 180.0f), 140.0f, 4000.0f);
+  // 0 stays 0 — unbounded, not a ceiling pinned to the low end — for the same
+  // reason `noise_air_hz` does: the accepted interval is off plus a real
+  // ceiling, and a sweep that reads it as continuous spends its low end
+  // squeezing a plate below its own band.
+  p.percussion.plate_air_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_air_hz, 0.0f), 0.0f, 20000.0f);
   p.percussion.phisem_beans =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_beans, 0.0f), 0.0f, 256.0f);
   p.percussion.phisem_energy_ms = std::clamp(
