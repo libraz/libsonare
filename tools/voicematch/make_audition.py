@@ -36,6 +36,29 @@ the same phrase and the same reference. It needs a library built with
 `-DBUILD_TUNING=ON`; without one the override layer is compiled out and every
 variant renders identically, which the tool checks for and reports rather than
 producing a page of indistinguishable versions.
+
+The reference side comes from an archive by default, and only falls through to
+the plugin for a take the archive does not hold. That is what makes a page cheap
+enough to throw away: the model renders take seconds and can always be made
+again from the library plus the overrides the manifest records, while a
+reference render is a real-time pass through a commercial plugin and is the one
+part that cannot be reproduced from this repository. Kept per page instead, it
+was both the bulk of the disk and the reason nobody dared delete a page — and a
+directory of pages nobody dares delete stops being a place to look.
+
+    --reference-from DIR     take them from here (default: the archive; empty
+                             string to always render)
+    --archive-references DIR keep this run's reference renders for the next page
+
+The archive stores each take under a gain computed from its reference renders
+ALONE, so it does not move when a page's candidates get louder, and divides that
+gain back out on the way in. Only a take whose every reference came from the
+plugin in one run is written, so nothing in it has been through 16 bits twice.
+
+`--title` is worth setting on any page built to settle a question. The default
+comes from the capture and names the instrument, which is right until there are
+two pages of the same instrument on the picker — at which point they read
+identically and the only way to find the live one is to open both.
 """
 
 from __future__ import annotations
@@ -62,10 +85,17 @@ from capture import load_config, source_for, CORPUS_ROOT, DEFAULT_CONFIG  # noqa
 from patterns import registers_for_program  # noqa: E402
 from render_model import render_model  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
-from wavio import write_wav  # noqa: E402
+from wavio import read_wav, write_wav  # noqa: E402
 
 SR = 48000
 DEFAULT_OUT = CORPUS_ROOT / "audition"
+# Reference renders, kept once and outside the audition root so the listening
+# server does not offer the archive itself as a set to listen to. A reference
+# render costs a real-time pass through a commercial plugin on this machine and
+# is the one part of a page that cannot be reproduced from the repository, so
+# every page copying its own was both the bulk of the disk and the reason none
+# of them could be deleted.
+DEFAULT_REFERENCE_ARCHIVE = CORPUS_ROOT / "audition-references"
 PEDAL = 64
 
 
@@ -482,6 +512,60 @@ def shared_gain(renders: dict[str, np.ndarray], headroom_db: float = -1.0) -> fl
     return float(10.0 ** (headroom_db / 20.0) / peak)
 
 
+def archived_references(archive: Path, capture_id: str, take_id: str,
+                        timbres: list[dict]) -> dict[str, np.ndarray]:
+    """Reference renders for one take, back at the level the plugin produced.
+
+    The archive stores them under a gain of its own so 16 bits are spent on the
+    signal rather than on whatever headroom a particular page needed, and that
+    gain is divided out here. One gain per take rather than one per file, so the
+    level difference BETWEEN timbres -- which is a real property of the three
+    instruments and one of the things a page is read for -- survives the trip.
+    """
+    index = archive / "index.json"
+    if not index.exists():
+        return {}
+    meta = json.loads(index.read_text()).get(capture_id, {}).get(take_id)
+    if not meta:
+        return {}
+    gain = 10.0 ** (float(meta["gain_db"]) / 20.0)
+    if gain <= 0.0:
+        return {}
+    out: dict[str, np.ndarray] = {}
+    for timbre in timbres:
+        path = archive / capture_id / take_id / f"{timbre['id']}.wav"
+        if not path.exists():
+            continue
+        audio, sr = read_wav(path)
+        # A rate mismatch is a different capture, not a resampling job: the
+        # analysis windows and the take's own timing are written for one rate.
+        if sr != SR:
+            print(f"  {timbre['id']}: archived at {sr} Hz, not {SR} — rendering instead",
+                  file=sys.stderr)
+            continue
+        out[timbre["id"]] = np.asarray(audio, dtype=np.float64) / gain
+    return out
+
+
+def archive_references(archive: Path, capture_id: str, take_id: str,
+                       renders: dict[str, np.ndarray]) -> None:
+    """Keep this take's reference renders so no later page needs the plugin."""
+    if not renders:
+        return
+    gain = shared_gain(renders)
+    directory = archive / capture_id / take_id
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, audio in renders.items():
+        write_wav(directory / f"{name}.wav", np.clip(audio * gain, -1.0, 1.0), SR)
+    index = archive / "index.json"
+    data = json.loads(index.read_text()) if index.exists() else {}
+    data.setdefault(capture_id, {})[take_id] = {
+        "gain_db": round(float(20 * np.log10(max(gain, 1e-9))), 4),
+        "timbres": sorted(renders),
+    }
+    index.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default=str(DEFAULT_CONFIG),
@@ -502,6 +586,21 @@ def main() -> int:
     ap.add_argument("--lib", default="",
                     help="library the variants load (a -DBUILD_TUNING=ON build); "
                          "sets SONARE_LIB_PATH for them")
+    ap.add_argument("--title", default="",
+                    help="what this page is for, shown in the set picker (default: the "
+                         "capture's own title, which names the instrument rather than "
+                         "the question)")
+    ap.add_argument("--note", default="",
+                    help="a sentence at the top of the page saying what to listen for")
+    ap.add_argument("--reference-from", default=str(DEFAULT_REFERENCE_ARCHIVE),
+                    dest="reference_from", metavar="DIR",
+                    help="take reference renders from this archive instead of the plugin, "
+                         "falling back to the plugin for any it does not hold. Empty string "
+                         "to always render")
+    ap.add_argument("--archive-references", default="", dest="archive_references",
+                    metavar="DIR",
+                    help="write every reference render this run produced into DIR, so the "
+                         "next page can be built without the plugin")
     args = ap.parse_args()
     variants = parse_variants(args.variant)
 
@@ -512,6 +611,8 @@ def main() -> int:
     if args.model_only:
         timbres = []
     only = {t.strip() for t in args.only.split(",") if t.strip()}
+    archive = (Path(args.reference_from).expanduser().resolve()
+               if args.reference_from else None)
 
     # Which instrument is being auditioned belongs to the capture definition,
     # which already names the reference plugin it is being compared against.
@@ -584,16 +685,30 @@ def main() -> int:
                                .tobytes()).hexdigest())
             print(f"  {name}", file=sys.stderr)
 
+        held = (archived_references(archive, cfg["id"], take.id, timbres)
+                if archive is not None else {})
+        fresh: dict[str, np.ndarray] = {}
         for timbre in timbres:
+            if timbre["id"] in held:
+                renders[timbre["id"]] = held[timbre["id"]]
+                print(f"  {timbre['id']} (archived)", file=sys.stderr)
+                continue
             # Built through the same helper the capture path uses, so a timbre
             # selected by channel rather than by preset -- a slot of a
             # multitimbral rack -- reaches the plugin here too.
             source = source_for(cfg, timbre, tail=f"{take.tail_s:.0f}s", sample_rate=SR)
             try:
-                renders[timbre["id"]] = render_oracle_au(smf, total, SR, source=source)
+                fresh[timbre["id"]] = render_oracle_au(smf, total, SR, source=source)
+                renders[timbre["id"]] = fresh[timbre["id"]]
                 print(f"  {timbre['id']}", file=sys.stderr)
             except (AuRenderError, FileNotFoundError) as exc:
                 print(f"  {timbre['id']}: SKIPPED — {exc}", file=sys.stderr)
+        # Only a take whose every reference came from the plugin THIS run is
+        # written, so the archive never holds a render that has been through
+        # 16-bit twice. A partial take is left alone rather than topped up.
+        if args.archive_references and timbres and len(fresh) == len(timbres):
+            archive_references(Path(args.archive_references).expanduser().resolve(),
+                               cfg["id"], take.id, fresh)
 
         gain = shared_gain(renders)
         tracks = {}
@@ -631,8 +746,15 @@ def main() -> int:
 
     dry = bool(cfg.get("dry", True))
     manifest = {
-        "title": cfg.get("audition_title", f"libsonare vs {cfg.get('label', 'reference')}"),
+        # The capture's own title names the instrument, which is the right
+        # default and the wrong answer once two pages of the same instrument are
+        # on the picker at once: they then read identically and the only way to
+        # tell the live question from last week's is to open both. --title is
+        # what a page built to settle one question should carry.
+        "title": args.title or cfg.get(
+            "audition_title", f"libsonare vs {cfg.get('label', 'reference')}"),
         "notes": (
+            (args.note + " ") if args.note else "") + (
             "Every version of a take is written at one shared gain, so the level "
             "difference between them is real. "
             + ("The reference is captured dry — every effect section of the plugin is "
