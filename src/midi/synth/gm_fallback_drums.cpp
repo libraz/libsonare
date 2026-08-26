@@ -449,7 +449,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // rather than the wash that carry it, hence the high tone gain and the short,
   // abrupt ring.
   t[52].percussion.noise_output = SynthFilterOutput::kBandpass;
-  t[52].percussion.noise_q = 1.4f;
+  t[52].percussion.noise_q = 8.96f;
   t[52].percussion.mode_ratios = {1.0f, 1.19f, 1.51f, 1.83f, 0.0f, 0.0f};
 
   // Each plate's own partial field. `plate_low_hz` is the lowest partial the
@@ -460,33 +460,33 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // china is the exception in both: its flange stiffens the plate, which takes
   // its lowest partial up rather than down for its size, and stops it early.
   t[49].percussion.plate_low_hz = 140.0f;
-  t[49].percussion.plate_t60_s = 0.60f;
-  t[49].percussion.plate_gain = 2.0f;
+  t[49].percussion.plate_t60_s = 0.96f;
+  t[49].percussion.plate_gain = 5.0f;
   t[49].percussion.plate_hf_ratio = 0.5f;
   t[57].percussion.plate_low_hz = 145.0f;
-  t[57].percussion.plate_t60_s = 0.56f;
-  t[57].percussion.plate_gain = 2.0f;
-  t[57].percussion.plate_hf_ratio = 0.5f;
-  t[57].percussion.shimmer_cutoff_hz = 3600.0f;
+  t[57].percussion.plate_t60_s = 0.336f;
+  t[57].percussion.plate_gain = 5.0f;
+  t[57].percussion.plate_hf_ratio = 1.25f;
+  t[57].percussion.shimmer_cutoff_hz = 4500.0f;
   t[51].percussion.plate_low_hz = 150.0f;
   t[51].percussion.plate_t60_s = 0.32f;
-  t[51].percussion.plate_gain = 1.6f;
+  t[51].percussion.plate_gain = 1.28f;
   t[51].percussion.plate_hf_ratio = 0.55f;
   t[51].percussion.mode_ratios[1] = 3.35f;
   t[51].percussion.noise_q = 0.4f;
   t[51].amp_env.sustain = 0.1f;
-  t[51].drive = 0.1f;
-  t[59].percussion.plate_low_hz = 145.0f;
-  t[59].percussion.plate_t60_s = 2.25f;
-  t[59].percussion.plate_gain = 1.6f;
+  t[51].drive = 0.025f;
+  t[59].percussion.plate_low_hz = 232.0f;
+  t[59].percussion.plate_t60_s = 2.8125f;
+  t[59].percussion.plate_gain = 0.96f;
   t[59].percussion.plate_hf_ratio = 0.55f;
   t[59].percussion.mode_ratios[0] = 0.6f;
   t[59].percussion.noise_gain = 0.72f;
   t[59].percussion.noise_q = 0.4f;
   t[59].percussion.wire_buzz = 1.0f;
-  t[59].amp_env.sustain = 0.1f;
+  t[59].amp_env.sustain = 0.16f;
   t[55].percussion.plate_low_hz = 248.0f;
-  t[55].percussion.plate_t60_s = 0.56f;
+  t[55].percussion.plate_t60_s = 0.336f;
   t[55].percussion.plate_gain = 1.6f;
   t[55].percussion.phisem_beans = 0.4f;
   // The china's plate is at the top of its clamp. The search asked for more
@@ -515,24 +515,24 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // plate it reads 29 dB over, so neither is the other's substitute.
   t[49].percussion.plate_air_hz = 4500.0f;
   t[49].percussion.noise_air_hz = 5000.0f;
-  t[49].cutoff_hz = 5000.0f;
+  t[49].cutoff_hz = 2000.0f;
   t[57].percussion.plate_air_hz = 5250.0f;
-  t[57].percussion.noise_air_hz = 6400.0f;
-  t[57].percussion.noise_q = 0.88f;
-  t[57].cutoff_hz = 1600.0f;
+  t[57].percussion.noise_air_hz = 3840.0f;
+  t[57].percussion.noise_q = 2.2f;
+  t[57].cutoff_hz = 2000.0f;
   t[51].percussion.plate_air_hz = 3500.0f;
   t[51].percussion.noise_air_hz = 1600.0f;
   t[51].cutoff_hz = 1875.0f;
-  t[59].percussion.plate_air_hz = 3200.0f;
-  t[59].percussion.noise_air_hz = 4000.0f;
-  t[59].cutoff_hz = 1360.0f;
-  t[55].percussion.plate_air_hz = 6000.0f;
+  t[59].percussion.plate_air_hz = 200.0f;
+  t[59].percussion.noise_air_hz = 2560.0f;
+  t[59].cutoff_hz = 1700.0f;
+  t[55].percussion.plate_air_hz = 4800.0f;
   t[55].percussion.noise_air_hz = 6000.0f;
   t[55].percussion.noise_cutoff_hz = 3500.0f;
-  t[55].percussion.noise_q = 2.0f;
-  t[55].cutoff_hz = 5000.0f;
-  t[52].percussion.plate_air_hz = 12500.0f;
-  t[52].percussion.noise_air_hz = 5000.0f;
+  t[55].percussion.noise_q = 5.12f;
+  t[55].cutoff_hz = 3000.0f;
+  t[52].percussion.plate_air_hz = 20000.0f;
+  t[52].percussion.noise_air_hz = 2000.0f;
   t[52].cutoff_hz = 2400.0f;
 
   // --- snares ---
@@ -570,30 +570,30 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // plate mode it should have come from, a ceiling over the network, and the
   // gain the piece needs once it is no longer being carried by distortion.
   t[44].amp_env = fallback_env(25.0f, 38.9229f, 0.263723f, 40.0f);
-  t[44].amp_env.delay_ms = 1.0f;
+  t[44].amp_env.delay_ms = 2.5f;
   t[44].cutoff_hz = 3000.0f;
-  t[44].drive = 0.06f;
+  t[44].drive = 0.15f;
   t[44].key_track = 0.1f;
   t[44].resonance_q = 1.7675f;
   t[44].percussion.base_freq_hz = 224.0f;
   t[44].percussion.mode_decay_s = 0.46875f;
-  t[44].percussion.mode_ratios[1] = 0.536f;
-  t[44].percussion.mode_ratios[2] = 2.15f;
-  t[44].percussion.tone_gain = 1.5f;
+  t[44].percussion.mode_ratios[1] = 0.3216f;
+  t[44].percussion.mode_ratios[2] = 1.72f;
+  t[44].percussion.tone_gain = 1.2f;
   t[44].percussion.pitch_drop = 0.1f;
   t[44].percussion.pitch_drop_ms = 50.0f;
-  t[44].percussion.strike_r = 0.1f;
+  t[44].percussion.strike_r = 0.06f;
   t[44].percussion.wire_buzz = 0.24f;
   t[44].percussion.noise_output = SynthFilterOutput::kBandpass;
-  t[44].percussion.noise_cutoff_hz = 2600.0f;
+  t[44].percussion.noise_cutoff_hz = 2080.0f;
   t[44].percussion.noise_decay_ms = 64.3328f;
   t[44].percussion.noise_gain = 1.4f;
-  t[44].percussion.noise_q = 1.4f;
+  t[44].percussion.noise_q = 1.12f;
   t[44].percussion.plate_gain = 0.32f;
   t[44].percussion.plate_low_hz = 500.0f;
   t[44].percussion.plate_t60_s = 0.25f;
   t[44].percussion.plate_air_hz = 4000.0f;
-  t[44].gain = 1.4587f;
+  t[44].gain = 1.35353f;
 
   // Hi-hats share mute group 1; the open hat gets a snappy choke fade (release
   // is unused by one-shot voices in normal play, so this stays bit-identical
@@ -640,13 +640,13 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // after the strike falls from 54 % to 29 % against a reference that holds
   // 53 %, and what is left is a small drum. Anything voiced against the band
   // profile alone can walk into that trade, so the hats are read on both.
-  t[42].amp_env.attack_ms = 1.81637f;
+  t[42].amp_env.attack_ms = 9.08185f;
   t[42].amp_env.decay_ms = 174.0f;
   t[42].amp_env.delay_ms = 1.0f;
   t[42].cutoff_hz = 3500.0f;
   t[42].drive = 0.375f;
   t[42].percussion.base_freq_hz = 393.75f;
-  t[42].percussion.mode_decay_s = 0.16f;
+  t[42].percussion.mode_decay_s = 0.2f;
   t[42].percussion.mode_ratios[1] = 1.072f;
   t[42].percussion.mode_ratios[2] = 1.032f;
   t[42].percussion.tone_gain = 4.0f;
@@ -654,7 +654,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[42].percussion.noise_cutoff_hz = 3800.0f;
   t[42].percussion.noise_decay_ms = 600.0f;
   t[42].percussion.noise_gain = 2.54656f;
-  t[42].percussion.noise_q = 1.0f;
+  t[42].percussion.noise_q = 1.25f;
   t[42].percussion.plate_low_hz = 200.0f;
   t[42].percussion.plate_t60_s = 2.4f;
   t[42].percussion.plate_air_hz = 7000.0f;
@@ -664,8 +664,15 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // the fit is not offered the output gain, because no term it minimises can
   // see one, so the values it chose left the peak 10 dB down and nothing in its
   // report was entitled to notice. Measured across three velocities.
-  t[42].gain = 1.387f;
+  t[42].gain = 1.37909f;
+  t[42].key_track = 0.1f;
   t[44].percussion.exclusive_class = 1;
+  t[44].amp_env.decay_ms = 38.9229f;
+  t[44].amp_env.sustain = 0.263723f;
+  t[44].percussion.phisem_beans = 0.01f;
+  t[44].percussion.shimmer = 1.0f;
+  t[44].percussion.shimmer_cutoff_hz = 4800.0f;
+  t[44].percussion.mode_alpha[2] = 20.5424f;
   t[46].percussion.exclusive_class = 1;
   t[46].amp_env.release_ms = 40.0f;
   // Open Hi-Hat, voiced against the same kit and with the same defect: it
@@ -681,10 +688,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // at 4x gain put so much at 330 Hz that the network resonated almost nothing
   // else — and the plate is voiced smaller than the pair's physical size, since
   // what the two cymbals radiate together is the higher of their fields.
-  t[46].amp_env.attack_ms = 0.535176f;
-  t[46].amp_env.decay_ms = 1312.5f;
+  t[46].amp_env.attack_ms = 8.56282f;
+  t[46].amp_env.decay_ms = 1050.0f;
   t[46].cutoff_hz = 3000.0f;
-  t[46].drive = 0.375f;
+  t[46].drive = 0.75f;
   t[46].percussion.base_freq_hz = 315.0f;
   t[46].percussion.mode_decay_s = 0.12f;
   t[46].percussion.mode_ratios[0] = 1.5f;
@@ -695,17 +702,21 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[46].percussion.strike_r = 0.4f;
   t[46].percussion.noise_output = SynthFilterOutput::kBandpass;
   t[46].percussion.noise_cutoff_hz = 3200.0f;
-  t[46].percussion.noise_decay_ms = 3213.18f;
+  t[46].percussion.noise_decay_ms = 6426.36f;
   t[46].percussion.noise_gain = 0.392099f;
   t[46].percussion.noise_q = 2.5f;
-  t[46].percussion.plate_gain = 0.48f;
+  t[46].percussion.plate_gain = 0.12f;
   t[46].percussion.plate_low_hz = 400.0f;
-  t[46].percussion.plate_air_hz = 7000.0f;
-  t[46].resonance_q = 0.795984f;
+  t[46].percussion.plate_air_hz = 8750.0f;
+  t[46].resonance_q = 1.27357f;
   t[46].stereo_spread = 0.565048f;
   // Re-gained with the corner: the piece was 17 dB under its reference, which
   // every normalised metric in the comparison reads as correct.
-  t[46].gain = 2.5777f;
+  t[46].gain = 2.00081f;
+  t[46].amp_env.delay_ms = 0.4f;
+  t[46].percussion.plate_t60_s = 3.0f;
+  t[46].percussion.mode_alpha[1] = 15.3268f;
+  t[46].percussion.mode_alpha[2] = 8.21696f;
 
   // --- wooden idiophones + clicks ---
   t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);      // Sticks
@@ -797,11 +808,61 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // band now, and a band already has a top. What each one is bounded by instead
   // is its plate ceiling and its voice corner, beside the plate values above.
   t[49].gain = 1.2698f;  // Crash 1
+  t[49].amp_env.decay_ms = 5000.0f;
+  t[49].percussion.mode_decay_s = 1.1f;
+  t[49].percussion.noise_decay_ms = 4000.0f;
+  t[49].resonance_q = 0.17675f;
+  t[49].percussion.mode_ratios[0] = 0.4f;
+  t[49].gain = 2.53363f;
   t[51].gain = 2.0397f;  // Ride 1
+  t[51].drift_cents = 4.0f;
+  t[51].drift_rate_hz = 0.24f;
+  t[51].key_track = 0.64f;
+  t[51].percussion.mode_decay_s = 5.5f;
+  t[51].percussion.noise_cutoff_hz = 4800.0f;
+  t[51].resonance_q = 0.5656f;
+  t[51].percussion.mode_ratios[2] = 2.15f;
+  t[51].gain = 3.6272f;
   t[52].gain = 3.7653f;  // China
-  t[55].gain = 1.279f;   // Splash
-  t[57].gain = 4.0f;     // Crash 2, at the clamp
-  t[59].gain = 4.0f;     // Ride 2, at the clamp
+  t[52].amp_env.attack_ms = 8.0f;
+  t[52].percussion.base_freq_hz = 4160.0f;
+  t[52].percussion.mode_decay_s = 2.24f;
+  t[52].percussion.noise_cutoff_hz = 2016.0f;
+  t[52].percussion.noise_decay_ms = 25000.0f;
+  t[52].percussion.noise_gain = 0.432f;
+  t[52].percussion.phisem_beans = 0.64f;
+  t[52].percussion.phisem_sound_ms = 0.1875f;
+  t[52].percussion.shimmer = 12.0f;
+  t[52].percussion.mode_ratios[2] = 0.906f;
+  t[52].gain = 4.0f;
+  t[55].gain = 1.279f;  // Splash
+  t[55].amp_env.decay_ms = 2500.0f;
+  t[55].percussion.base_freq_hz = 2080.0f;
+  t[55].percussion.noise_decay_ms = 1500.0f;
+  t[55].percussion.noise_gain = 1.44f;
+  t[55].percussion.phisem_sound_ms = 4.8f;
+  t[55].percussion.plate_hf_ratio = 1.0625f;
+  t[55].percussion.tone_gain = 1.2f;
+  t[55].percussion.mode_ratios[0] = 2.5f;
+  t[55].percussion.mode_ratios[3] = 1.72f;
+  t[55].gain = 0.710996f;
+  t[57].gain = 4.0f;  // Crash 2, at the clamp
+  t[57].amp_env.decay_ms = 3360.0f;
+  t[57].percussion.mode_decay_s = 1.55f;
+  t[57].percussion.noise_decay_ms = 4500.0f;
+  t[57].percussion.shimmer = 7.8125f;
+  t[57].percussion.tone_gain = 0.176f;
+  t[57].resonance_q = 0.17675f;
+  t[57].percussion.mode_ratios[1] = 0.134f;
+  t[57].gain = 2.0872f;
+  t[59].gain = 4.0f;  // Ride 2, at the clamp
+  t[59].drift_cents = 1.0f;
+  t[59].percussion.mode_decay_s = 5.6f;
+  t[59].percussion.phisem_beans = 1.0f;
+  t[59].percussion.strike_r = 0.5f;
+  t[59].pitch_offset_cents = 16.0f;
+  t[59].percussion.mode_ratios[1] = 0.8576f;
+  t[59].gain = 4.0f;
 
   // --- PhISEM shakers + scrapers ---
   t[54] = make_shaker(32.0f, 120.0f, 2500.0f, 2.0f, 0.2267f);  // Tambourine

@@ -3,16 +3,16 @@
   "timbre": "kit-a",
   "margin": 1.25,
   "reference_measured_utc": "2026-08-25T09:14:42+00:00",
-  "recorded_utc": "2026-08-26T06:24:48+00:00",
+  "recorded_utc": "2026-08-26T11:08:14+00:00",
   "reference_spread": {},
   "bounds": {
     "band_tilt": {
-      "median": 7.603,
-      "abs_median": 9.084
+      "median": 6.778,
+      "abs_median": 8.442
     },
     "band_shape": {
-      "median": 20.534,
-      "abs_median": 20.534
+      "median": 20.471,
+      "abs_median": 20.471
     },
     "band_decay": {
       "median": 288.57,
@@ -23,11 +23,11 @@
       "abs_median": 40.0
     },
     "crest": {
-      "median": 1.912,
-      "abs_median": 3.481
+      "median": 2.025,
+      "abs_median": 3.119
     },
     "centroid_pct": {
-      "median": 39.774,
+      "median": 37.269,
       "abs_median": 60.32
     },
     "level": {
