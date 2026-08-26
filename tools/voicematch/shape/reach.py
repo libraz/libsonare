@@ -249,6 +249,10 @@ def main(argv=None) -> int:
     ap.add_argument("--knobs", default="",
                     help="a saved SONARE_TUNING_DUMP; without one the library "
                          "is asked directly")
+    ap.add_argument("--write-knobs", default="",
+                    help="write the resolved coordinate list here and stop. "
+                         "`shape fit` requires a dump file and nothing else in "
+                         "the harness produces one without a rebuild")
     ap.add_argument("--namespaces", default="", help="comma-separated key prefixes")
     ap.add_argument("--overrides", default="",
                     help="the point to sweep around (default: the shipped voice)")
@@ -269,6 +273,11 @@ def main(argv=None) -> int:
     if not base:
         raise SystemExit(f"no coordinates matched {a.namespaces!r}")
     from pathlib import Path
+    if a.write_knobs:
+        Path(a.write_knobs).write_text(
+            "".join(f"{k}\t{v!r}\n" for k, v in sorted(base.items())))
+        print(f"{len(base)} coordinates -> {a.write_knobs}", file=sys.stderr)
+        return 0
     moves = read_overrides(Path(a.overrides).read_text()) if a.overrides else {}
     steps = tuple(float(s) for s in a.steps.split(","))
     ladder = tuple(float(s) for s in a.zero_ladder.split(","))
