@@ -1303,3 +1303,70 @@ def test_the_holdout_axis_follows_whether_the_capture_is_pitched():
     assert hold_loss is not None
     assert set(loss.velocities) & set(hold_loss.velocities) == set()
     assert hold_loss.pitched is False
+
+
+class _SaturatingLoss:
+    """A loss where three moves are worth a decibel together and nothing apart.
+
+    `a`, `b` and `c` share one saturating mechanism: the first of them buys
+    almost all of the improvement and the other two buy the remainder, so
+    reverting any one of the three in the final state costs a hundredth of a
+    decibel while reverting all three costs 0.99. `d` does nothing at all. This
+    is the arrangement leave-one-out pricing cannot see, and it is not
+    hypothetical -- it is what a hi-hat fit's eighteen dropped moves were.
+    """
+
+    #: Improvement bought by 0, 1, 2 and 3 of the saturating group.
+    CURVE = (0.0, 0.96, 0.98, 0.99)
+
+    def score(self, ov, notes=()):
+        moved = {p.split("=")[0] for p in ov.split(",") if p}
+        total = 10.0 - self.CURVE[len(moved & {"a", "b", "c"})]
+        return Terms(total=total, parts={}, per_note={}, gain_db=0.0)
+
+
+def test_prune_loosens_until_the_kept_set_holds_what_the_full_set_held():
+    from shape.search import prune
+
+    base = {"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0}
+    moves = {k: 2.0 for k in base}
+    loss = _SaturatingLoss()
+    kept, report = prune(loss, base, moves, (60,), (62,), workers=2)
+
+    # Every individual contribution is under the strictest threshold, so the
+    # first rung drops all four moves and loses 0.99 dB doing it.
+    assert all(dh <= 0.02 for _, dh in report["contributions"].values())
+    assert report["attempts"][0]["kept"] == 0
+    assert report["attempts"][0]["hold"] > report["before"]["hold"] + 0.02
+
+    # The rung that wins keeps the three that share the mechanism and still
+    # drops the one that carries nothing, and it gives up no hold-out at all.
+    assert set(kept) == {"a", "b", "c"}
+    assert report["keep_db"] == 0.005
+    assert report["after"]["hold"] <= report["before"]["hold"] + 0.02
+
+
+def test_prune_keeps_every_move_when_no_smaller_set_holds():
+    from shape.search import PRUNE_LADDER, prune
+
+    class Redundant:
+        """Two moves that do the same job, so either one alone is enough.
+
+        Leave-one-out prices both at exactly zero -- reverting either leaves the
+        other doing the work -- and every threshold in the ladder drops a move
+        worth zero. Only the last rung, which keeps everything, survives the
+        check, and that is what makes it a rung rather than a fallback nobody
+        reaches.
+        """
+
+        def score(self, ov, notes=()):
+            moved = {p.split("=")[0] for p in ov.split(",") if p}
+            return Terms(total=10.0 - bool(moved & {"a", "b"}),
+                         parts={}, per_note={}, gain_db=0.0)
+
+    base = {"a": 1.0, "b": 1.0}
+    moves = {k: 2.0 for k in base}
+    kept, report = prune(Redundant(), base, moves, (60,), (62,), workers=2)
+    assert all(dh == 0.0 for _, dh in report["contributions"].values())
+    assert set(kept) == set(moves) and report["keep_db"] is None
+    assert PRUNE_LADDER[-1] is None

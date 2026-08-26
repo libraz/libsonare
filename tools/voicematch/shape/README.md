@@ -12,13 +12,14 @@ Nothing in it is instrument-specific. The note grid, the velocities, the gate le
 PYTHONPATH=tools/voicematch python -m shape score  --corpus <capture dir> --capture piano --lib build-autofit/lib/libsonare.dylib
 PYTHONPATH=tools/voicematch python -m shape fit    --corpus <capture dir> --knobs dump.txt --out fitted.txt
 PYTHONPATH=tools/voicematch python -m shape ablate --corpus <capture dir> --knobs dump.txt --overrides fitted.txt
+PYTHONPATH=tools/voicematch python -m shape prune  --corpus <capture dir> --knobs dump.txt --overrides fitted.txt --out kept.txt
 PYTHONPATH=tools/voicematch python -m shape probe  --corpus <capture dir> --overrides fitted.txt --notes 36,60,84
 PYTHONPATH=tools/voicematch python -m shape purity --corpus <capture dir> --overrides fitted.txt --notes 36,60,84
 PYTHONPATH=tools/voicematch python -m shape admittance --corpus <capture dir> --overrides fitted.txt
 PYTHONPATH=tools/voicematch python -m shape takes  --corpus <capture dir> --page <audition dir>
 ```
 
-`--knobs` is a `SONARE_TUNING_DUMP` file, so the coordinate list and its defaults come from the library rather than from a parse of the source. `--lib` needs a build configured with `-DBUILD_TUNING=ON`; without it the override layer compiles out and every candidate renders identically.
+`--knobs` is a `SONARE_TUNING_DUMP` file, so the coordinate list and its defaults come from the library rather than from a parse of the source. `--lib` needs a build configured with `-DBUILD_TUNING=ON`; without it the override layer compiles out and every candidate renders identically. That is checked rather than assumed — the first render that carries an override probes the loaded library with `SONARE_TUNING_DUMP` and refuses to go on when nothing comes back, because the failure is otherwise silent and reads as a result: the descent accepts no move, and an ablation prices every constant at exactly zero, which looks like a finding about the voice and is a fact about the build directory.
 
 ## Struck pieces, where the note number is not a pitch
 
@@ -147,7 +148,11 @@ The estimator has to earn its use. `Bed.measure` reports the across-note agreeme
 
 `search.py` splits the capture's notes into a set the descent sees and a set it never does, alternating so that neither is a register. A move that improves the fit while leaving the hold-out alone has learnt the notes it was shown, and a scalar fit on this corpus was caught doing exactly that twice.
 
-Descent accepts a move against the state at the moment it was tried, which is not the state it ends in — so by the end a move may be carrying nothing, or may be compensating for one made after it. `ablate` reverts each move alone in the final state and prices it honestly; `prune` keeps only those that still pay on the held-out notes. That has consistently improved the hold-out while roughly halving the number of constants a change would have to justify.
+Descent accepts a move against the state at the moment it was tried, which is not the state it ends in — so by the end a move may be carrying nothing, or may be compensating for one made after it. `ablate` reverts each move alone in the final state and prices it honestly; `prune` keeps only those that still pay on the held-out notes, which roughly halves the number of constants a change would have to justify.
+
+Leave-one-out pricing is the only thing available at that point and it is not additive, so the selection cannot be trusted on the strength of the numbers it was computed from. `prune` therefore renders and scores each candidate set end to end, and works down a ladder of thresholds until one of them gives up no hold-out against the full set — the last rung keeping everything, which is always available. A hi-hat fit is where the ladder came from: every one of eighteen dropped moves priced inside two hundredths of a decibel on its own, and dropping them together cost a quarter of a decibel. Every rung lost, and the honest answer was all forty-six moves. A set of moves that share one mechanism carry nothing apart and a great deal together, and that arrangement is invisible to the ablation.
+
+`prune` is also a subcommand, so a saved override set — a fit's output, or one assembled by hand from several runs — can be re-priced without repeating the descent that produced it.
 
 ## Probes
 

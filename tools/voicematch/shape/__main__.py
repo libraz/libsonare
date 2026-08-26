@@ -128,6 +128,23 @@ def holdout(loss, notes):
     return notes, notes, hold
 
 
+def _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss):
+    """Price every move, run the threshold ladder, and print both."""
+    kept, report = prune(loss, base, moves, fit_notes, hold_notes,
+                         workers=args.workers, hold_loss=hold_loss)
+    print("\n" + summarise(report["contributions"], base, moves))
+    print(f"\nbefore  fit {report['before']['fit']:.3f}  hold {report['before']['hold']:.3f}")
+    for a in report["attempts"]:
+        mark = "*" if a["keep_db"] == report["keep_db"] else " "
+        thresh = "all" if a["keep_db"] is None else f"{a['keep_db']:g}"
+        print(f"prune{mark} keep>{thresh:<5} fit {a['fit']:.3f}  hold {a['hold']:.3f}"
+              f"   ({a['kept']} of {len(moves)} moves)")
+    out = write_overrides({**base, **kept}, base)
+    print("\n" + out)
+    if args.out:
+        Path(args.out).write_text(out + "\n")
+
+
 def cmd_fit(args):
     _cap, _corpus, _sigs, loss, notes = build(args)
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(","))
@@ -139,16 +156,22 @@ def cmd_fit(args):
                 hold_loss=hold_loss)
     start = read_overrides(Path(args.start).read_text()) if args.start else None
     moves = d.run(start)
-    kept, report = prune(loss, base, moves, fit_notes, hold_notes,
-                         workers=args.workers, hold_loss=hold_loss)
-    print("\n" + summarise(report["contributions"], base, moves))
-    print(f"\nbefore  fit {report['before']['fit']:.3f}  hold {report['before']['hold']:.3f}")
-    print(f"pruned  fit {report['after']['fit']:.3f}  hold {report['after']['hold']:.3f}"
-          f"   ({len(kept)} of {len(moves)} moves kept)")
-    out = write_overrides({**base, **kept}, base)
-    print("\n" + out)
-    if args.out:
-        Path(args.out).write_text(out + "\n")
+    _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss)
+
+
+def cmd_prune(args):
+    """Re-select from a saved override set without repeating the descent.
+
+    The descent is the expensive half and its result is a file, so a selection
+    rule that changes -- or a set assembled by hand from several runs -- can be
+    re-priced in minutes rather than in the hour the search cost.
+    """
+    _cap, _corpus, _sigs, loss, notes = build(args)
+    base = load_knob_dump(args.knobs, tuple(args.namespaces.split(","))
+                          if args.namespaces else ())
+    moves = read_overrides(Path(args.overrides).read_text())
+    fit_notes, hold_notes, hold_loss = holdout(loss, notes)
+    _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss)
 
 
 def cmd_ablate(args):
@@ -274,6 +297,15 @@ def cmd_takes(args):
                          "--model-only")
     ref = refs[0]
     items = {it["id"]: it for it in page["_manifest"]["items"]}
+    # The take everything else is read against for accumulation. Derived from
+    # the schedules, so a page rendered with --only still picks the plainest of
+    # what it holds and says which one that was.
+    base_id = takes.plainest(items)
+    base_tracks = page.get(base_id) or {}
+    try:
+        base_window = takes.window_for(items[base_id], "ringing") if base_id else None
+    except (KeyError, ValueError):
+        base_window = None
     for tid, item in items.items():
         tracks = page.get(tid)
         if not tracks or ref not in tracks:
@@ -306,6 +338,21 @@ def cmd_takes(args):
         print(f"   bands against {ref}, body {body[0]:.1f}-{body[1]:.1f} s, "
               f"measured {ring[0]:.1f}-{ring[1]:.1f} s")
         print(takes.report(rows))
+
+        # What the phrase ADDED over the plainest take, each source against its
+        # own rendering of that take. The table above cannot answer this: it
+        # fits one gain per take, so a voice that piles up twenty decibels too
+        # much over eight strikes and a voice that gets it right are shown the
+        # same. Every source is printed, references included, because how much
+        # two real instruments accumulate is the only thing that says how much
+        # is too much.
+        if tid != base_id and base_tracks and base_window is not None:
+            brows = [(src, takes.band_buildup(tracks, base_tracks, src, ring,
+                                              base_window))
+                     for src in tracks if src in base_tracks]
+            if brows:
+                print(f"   built up over {base_id}, each source against itself")
+                print(takes.report(brows))
 
 
 def main(argv=None):
@@ -345,6 +392,13 @@ def main(argv=None):
     s.add_argument("--namespaces", default="")
     s.add_argument("--overrides", required=True)
     s.set_defaults(fn=cmd_ablate)
+
+    s = sub.add_parser("prune", parents=[common])
+    s.add_argument("--knobs", required=True)
+    s.add_argument("--namespaces", default="")
+    s.add_argument("--overrides", required=True)
+    s.add_argument("--out", default="")
+    s.set_defaults(fn=cmd_prune)
 
     s = sub.add_parser("probe", parents=[common])
     s.add_argument("--overrides", default="")

@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,6 +85,8 @@ class Signals:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._mem: dict[str, dict] = {}
         self._serial = itertools.count()
+        self._tunable: bool | None = None
+        self._tunable_lock = threading.Lock()
 
     def _key(self, pairs, ov: str, ref: bool) -> str:
         blob = json.dumps([sorted(pairs), ov, ref, str(self.corpus_root),
@@ -91,7 +94,8 @@ class Signals:
                            self.lib_path])
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
-    def _render(self, pairs, ov: str, ref: bool, out_path: Path) -> None:
+    def _render(self, pairs, ov: str, ref: bool, out_path: Path,
+                extra_env: dict | None = None) -> None:
         env = dict(os.environ)
         if self.lib_path:
             env["SONARE_LIB_PATH"] = self.lib_path
@@ -99,6 +103,7 @@ class Signals:
             env["SONARE_TUNING_OVERRIDES"] = ov
         else:
             env.pop("SONARE_TUNING_OVERRIDES", None)
+        env.update(extra_env or {})
         tmp = out_path.with_suffix(".partial.npz")
         p = subprocess.run(
             [sys.executable, "-c", _WORKER, json.dumps(pairs), str(tmp),
@@ -109,6 +114,51 @@ class Signals:
             tmp.unlink(missing_ok=True)
             raise RuntimeError(p.stderr[-4000:])
         tmp.replace(out_path)
+
+    def assert_tunable(self) -> None:
+        """Refuse to score an override set against a library that ignores it.
+
+        A tuning override reaches the render only from a `-DBUILD_TUNING=ON`
+        build; anywhere else the environment variable is read by nobody and
+        every candidate renders the shipped voice. Nothing about that fails.
+        The search runs, the descent accepts no move because no move changes
+        anything, and an ablation prices all of them at exactly zero -- which
+        reads as "these constants do nothing", the opposite of the truth.
+
+        The tree makes this easy to hit, because the library sits in several
+        build directories at once and only one of them is the tuning build. A
+        run that omits `--lib` takes whichever the loader prefers, and a build
+        directory reconfigured between two runs changes the answer without
+        changing the command.
+
+        Checked by rendering one note with `SONARE_TUNING_DUMP` pointed at a
+        scratch file: only a tuning build writes it, so a build that cannot read
+        an override cannot produce it either. One render per process, taken the
+        first time an override is actually used.
+        """
+        with self._tunable_lock:
+            if self._tunable is not None:
+                if not self._tunable:
+                    raise RuntimeError(self._not_tunable)
+                return
+            probe = self.cache_dir / f"tunable-{os.getpid()}.npz"
+            dump = self.cache_dir / f"tunable-{os.getpid()}.txt"
+            try:
+                self._render([(60, 100)], "", False, probe,
+                             extra_env={"SONARE_TUNING_DUMP": str(dump)})
+                self._tunable = dump.exists() and dump.stat().st_size > 0
+            finally:
+                probe.unlink(missing_ok=True)
+                dump.unlink(missing_ok=True)
+            if not self._tunable:
+                raise RuntimeError(self._not_tunable)
+
+    @property
+    def _not_tunable(self) -> str:
+        where = self.lib_path or "the library the loader picked (SONARE_LIB_PATH unset)"
+        return (f"{where} was not built with -DBUILD_TUNING=ON, so every override "
+                "would render the shipped voice and score as inert. Point --lib at "
+                "a tuning build.")
 
     def __call__(self, pairs, ov: str = "", ref: bool = False) -> dict:
         """(note, velocity) -> mono signal.
@@ -121,6 +171,8 @@ class Signals:
         read by every evaluation, and worth keeping between runs.
         """
         pairs = [tuple(p) for p in pairs]
+        if ov and not ref:
+            self.assert_tunable()
         key = self._key(pairs, ov, ref)
         if ref:
             if key in self._mem:

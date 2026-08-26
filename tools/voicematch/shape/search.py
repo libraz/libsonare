@@ -45,6 +45,10 @@ ZERO_LADDER = (0.0, 0.001, 0.01, 0.1, 0.4, 1.0)
 #: dB of cell RMS below which a move is noise rather than a fit.
 ACCEPT_DB = 0.02
 KEEP_DB = 0.02
+#: Hold-out contributions `prune` will drop a move for, strictest first, ending
+#: in `None` for "keep every move". Tried in order and each one scored, because
+#: individual contributions do not add and the strictest rung routinely loses.
+PRUNE_LADDER = (KEEP_DB, 0.01, 0.005, 0.0, None)
 
 
 @dataclass
@@ -156,19 +160,44 @@ def prune(loss, base: dict, moves: dict, fit_notes, hold_notes,
     a move that improves the fit while leaving the hold-out alone has learnt the
     eight notes it was shown. Verified end to end afterwards rather than assumed
     from the sum of the individual contributions, which do not add.
+
+    That last clause is not a caveat, it is the reason for the ladder. Each move
+    is priced alone in the final state, so a set of moves that each carry almost
+    nothing on their own can carry a great deal together: a hi-hat fit dropped
+    eighteen moves whose individual hold-out contributions were all inside two
+    hundredths of a decibel and lost a quarter of a decibel of hold-out doing
+    it. One threshold therefore cannot be trusted on the strength of the
+    contributions it was computed from -- it has to be rendered and scored, and
+    when it loses, loosened.
+
+    So the thresholds are tried in order from the strictest, each one scored end
+    to end, and the first whose hold-out is no worse than the full set's is the
+    answer. The last rung keeps everything, which is always available and is the
+    honest result when no smaller set holds: a smaller set of constants is worth
+    having, but not at the cost of the thing they were fitted to.
     """
     scores, (f0, h0) = ablate(loss, base, moves, fit_notes, hold_notes, workers,
                               hold_loss=hold_loss)
-    kept = {k: v for k, v in moves.items()
-            if k not in scores or scores[k][1] > keep_db}
-    ov = write_overrides({**base, **kept}, base)
-    return kept, {
-        "before": {"fit": f0, "hold": h0},
-        "after": {"fit": loss.score(ov, notes=fit_notes).total,
-                  "hold": (hold_loss or loss).score(ov, notes=hold_notes).total},
-        "dropped": sorted(set(moves) - set(kept)),
-        "contributions": scores,
-    }
+    hl = hold_loss or loss
+    attempts = []
+    for thresh in PRUNE_LADDER:
+        kept = (dict(moves) if thresh is None else
+                {k: v for k, v in moves.items()
+                 if k not in scores or scores[k][1] > thresh})
+        ov = write_overrides({**base, **kept}, base)
+        f = loss.score(ov, notes=fit_notes).total
+        h = hl.score(ov, notes=hold_notes).total
+        attempts.append({"keep_db": thresh, "kept": len(kept), "fit": f, "hold": h})
+        if h <= h0 + keep_db or thresh is None:
+            return kept, {
+                "before": {"fit": f0, "hold": h0},
+                "after": {"fit": f, "hold": h},
+                "keep_db": thresh,
+                "attempts": attempts,
+                "dropped": sorted(set(moves) - set(kept)),
+                "contributions": scores,
+            }
+    raise AssertionError("PRUNE_LADDER must end in None")
 
 
 def split_velocities(velocities, stride: int = 2):
