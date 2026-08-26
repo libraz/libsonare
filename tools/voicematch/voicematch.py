@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from catalogue import dump_catalogue
-from gm_names import gm_name
+from gm_names import drum_name, gm_name
 from metrics import (
     OCTAVE_CENTERS,
     THIRD_OCTAVE_CENTERS,
@@ -148,24 +148,6 @@ def out_dir_for(program: int, pattern) -> Path:
     if pattern.percussive and pattern.notes:
         return OUT_DIR / f"d{pattern.notes[0].note:03d}_{pattern.name}"
     return OUT_DIR / f"p{program:03d}_{pattern.name}"
-
-
-# GM percussion key map, the part of it a probe is likely to name.
-_DRUM_NAMES = {
-    35: "Acoustic Bass Drum", 36: "Bass Drum 1", 37: "Side Stick", 38: "Acoustic Snare",
-    39: "Hand Clap", 40: "Electric Snare", 41: "Low Floor Tom", 42: "Closed Hi-Hat",
-    43: "High Floor Tom", 44: "Pedal Hi-Hat", 45: "Low Tom", 46: "Open Hi-Hat",
-    47: "Low-Mid Tom", 48: "Hi-Mid Tom", 49: "Crash Cymbal 1", 50: "High Tom",
-    51: "Ride Cymbal 1", 52: "Chinese Cymbal", 53: "Ride Bell", 54: "Tambourine",
-    55: "Splash Cymbal", 56: "Cowbell", 57: "Crash Cymbal 2", 59: "Ride Cymbal 2",
-    60: "Hi Bongo", 61: "Low Bongo", 62: "Mute Hi Conga", 63: "Open Hi Conga",
-    64: "Low Conga", 65: "High Timbale", 66: "Low Timbale", 69: "Cabasa",
-    70: "Maracas", 75: "Claves", 76: "Hi Wood Block", 77: "Low Wood Block",
-}
-
-
-def drum_name(note: int) -> str:
-    return _DRUM_NAMES.get(note, f"drum note {note}")
 
 
 def format_drum_report(pattern_name: str, rows: list[dict]) -> str:

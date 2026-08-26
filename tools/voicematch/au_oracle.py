@@ -232,10 +232,17 @@ class AuSource:
         # A multitimbral rack saved as one file answers to a different sound on
         # each of its channels, so there the channel is what selects a timbre,
         # where a single-timbre plugin is selected with a preset.
-        if self.channel != 1:
-            argv += ["--channel", str(self.channel)]
+        #
+        # A file carries its own channels, so the flag is not what selects the
+        # slot then and aubounce refuses the pair rather than dropping one of
+        # them: the caller writes the channel into the score. `write_smf` takes
+        # it, and a caller that forgets renders whichever slot sits on the
+        # score's channel -- a different instrument, at the right length and
+        # level, with no sign in the file that it is the wrong one.
         if midi is not None:
             argv += ["--midi", str(midi)]
+        elif self.channel != 1:
+            argv += ["--channel", str(self.channel)]
         argv += [
             "--sample-rate", str(self.sample_rate),
             "--preroll-ms", str(self.preroll_ms),

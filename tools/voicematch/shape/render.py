@@ -55,10 +55,11 @@ pairs = [tuple(p) for p in json.loads(sys.argv[1])]
 out, root, program, gate_s, seconds = sys.argv[2], sys.argv[3], int(sys.argv[4]), \
     float(sys.argv[5]), float(sys.argv[6])
 channel = int(sys.argv[7])
+timbre = sys.argv[8] if len(sys.argv) > 8 else ""
 if root:
     from corpus import load_corpus
     from wavio import read_wav
-    c = load_corpus(root)
+    c = load_corpus(root, timbre)
     def get(n, v):
         x, _ = read_wav(c.renders[(n, v)])
         m = np.asarray(x, dtype=np.float64)
@@ -91,6 +92,17 @@ class Signals:
     named — a piano — while the reference side holds a hi-hat. Nothing about
     that fails: both sides render, every term returns a number, and the
     comparison is between two different instruments.
+
+    `timbre` is the same hazard one step quieter. The caller resolves it to pick
+    the note grid and the bed, and the reference renders used to be read by a
+    worker that was handed only the corpus root — so `load_corpus` fell back to
+    the manifest's first entry and every score, probe and fit compared against
+    that one whatever `--timbre` said. On the harpsichord corpus the first entry
+    is the general-MIDI slot, whose partial balance sits 6 dB from the three real
+    instruments beside it, so a fit steered by this package and a reading taken
+    with `profile.py` disagreed as a matter of course. It belongs in `_key` for
+    the same reason: a cache that does not name its reference serves the last
+    one asked for.
     """
 
     corpus_root: Path
@@ -99,6 +111,8 @@ class Signals:
     seconds: float
     #: Zero-based MIDI channel the model renders on (9 = the GM drum channel).
     channel: int = 0
+    #: Which timbre of the capture the reference side reads ("" = the first).
+    timbre: str = ""
     lib_path: str = ""
     cache_dir: Path = Path("/tmp/voicematch-shape")
 
@@ -114,7 +128,7 @@ class Signals:
     def _key(self, pairs, ov: str, ref: bool) -> str:
         blob = json.dumps([sorted(pairs), ov, ref, str(self.corpus_root),
                            self._corpus_fp, self.program, self.channel,
-                           self.gate_s, self.seconds, self.lib_path])
+                           self.timbre, self.gate_s, self.seconds, self.lib_path])
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
     def _render(self, pairs, ov: str, ref: bool, out_path: Path,
@@ -131,7 +145,7 @@ class Signals:
         p = subprocess.run(
             [sys.executable, "-c", _WORKER, json.dumps(pairs), str(tmp),
              str(self.corpus_root) if ref else "", str(self.program),
-             str(self.gate_s), str(self.seconds), str(self.channel)],
+             str(self.gate_s), str(self.seconds), str(self.channel), self.timbre],
             capture_output=True, text=True, env=env)
         if p.returncode:
             tmp.unlink(missing_ok=True)

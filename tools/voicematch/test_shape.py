@@ -708,8 +708,11 @@ def test_the_pedal_window_sits_before_the_pedal_lifts_not_after():
     assert 6.2 <= lo < hi <= 7.0
     body = window_for(item, "body")
     assert body[0] >= 0.5 and body[1] > body[0]
+    # The floor is the lead-in, not the end of the file: these renders stop well
+    # before their files do, so a floor read at the end is exact silence and
+    # every gate built on it passes unconditionally.
     floor = window_for(item, "floor")
-    assert floor[1] == 10.0 and floor[0] > 9.0
+    assert floor[0] == 0.0 and 0.0 < floor[1] <= 0.5
 
 
 def test_a_take_with_no_pedal_ends_its_ringing_window_before_the_take_does():
@@ -757,7 +760,8 @@ def test_band_error_removes_one_gain_and_reports_the_tilt_that_is_left():
     ref = sum(np.sin(2 * np.pi * f * t + rng.uniform(0, 2 * np.pi))
               for f in (90.0, 300.0, 1400.0, 5000.0))
     tracks = {"m": (ref * 2.0, SR), "r": (ref, SR)}
-    vals, g = band_error(tracks, "m", "r", (0.5, 2.0), (2.0, 4.0), snr_db=-300.0)
+    vals, g = band_error(tracks, "m", "r", (0.5, 2.0), (2.0, 4.0), (0.0, 0.2),
+                         snr_db=-300.0)
     assert abs(g - 6.02) < 0.2
     assert max(abs(v) for v in vals if v is not None) < 0.5
 
@@ -767,16 +771,21 @@ def test_band_error_drops_a_band_the_reference_leaves_on_its_own_floor():
     n = int(8.0 * SR)
     t = np.arange(n) / SR
     floor = np.random.default_rng(11).standard_normal(n) * 1e-4
-    # 300 Hz is alive through the measurement window and gone before the floor
-    # window; 5 kHz is gone before the measurement window. So one band is a
-    # reading and the other is a description of the floor.
-    ref = (np.sin(2 * np.pi * 300.0 * t) * np.clip(1.0 - t / 6.0, 0.0, 1.0)
-           + np.sin(2 * np.pi * 5000.0 * t) * np.exp(-t / 0.2) + floor)
+    # Nothing is struck until 0.3 s, so the lead-in is the floor and nothing but
+    # the floor -- which is the whole reason the gate reads it from there. In
+    # the measurement window 300 Hz is still sounding and 5 kHz is long gone, so
+    # one band is a reading of the instrument and the other of the noise.
+    struck = np.clip(t - 0.3, 0.0, None)
+    ref = (np.sin(2 * np.pi * 300.0 * t) * np.clip(1.0 - struck / 5.7, 0.0, 1.0)
+           * (t >= 0.3)
+           + np.sin(2 * np.pi * 5000.0 * t) * np.exp(-struck / 0.2) * (t >= 0.3)
+           + floor)
     tracks = {"m": (ref, SR), "r": (ref, SR)}
-    vals, _ = band_error(tracks, "m", "r", (0.1, 0.5), (2.0, 4.0))
+    vals, _ = band_error(tracks, "m", "r", (0.4, 0.9), (2.0, 4.0), (0.0, 0.28))
     bands = [(30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
              (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000)]
     assert vals[bands.index((250, 500))] is not None
+    assert vals[bands.index((4000, 8000))] is None
     assert vals[bands.index((4000, 8000))] is None
 
 
@@ -1370,3 +1379,115 @@ def test_prune_keeps_every_move_when_no_smaller_set_holds():
     assert all(dh == 0.0 for _, dh in report["contributions"].values())
     assert set(kept) == set(moves) and report["keep_db"] is None
     assert PRUNE_LADDER[-1] is None
+
+
+def test_a_faded_reference_does_not_drag_its_silence_into_the_window():
+    """A source that stops decaying ends the window, whatever the schedule says.
+
+    A sampled instrument reaches the end of its sample and is faded out, and the
+    file then runs on in silence. Measuring to the schedule averages one side
+    over its decay and the other over a fade plus a second of nothing, and the
+    two sides hold different amounts of nothing.
+    """
+    from shape.takes import usable_until
+    n = int(8.0 * SR)
+    t = np.arange(n) / SR
+    rng = np.random.default_rng(5)
+    hiss = rng.standard_normal(n) * 3e-5
+    tone = np.sin(2 * np.pi * 300.0 * t) * np.exp(-t / 3.0) * (t >= 0.3) + hiss
+    faded = tone.copy()
+    faded[int(5.0 * SR):] = 0.0
+    assert abs(usable_until(faded, SR, (0.0, 0.28), 1.0) - 5.0) < 0.15
+    # The same signal left to decay on its own is measured to where it reaches
+    # its own floor, not to a fixed margin under its body: a tail forty-five
+    # decibels down is an ordinary decay and cutting there would end the window
+    # on whichever voice decays fastest.
+    assert usable_until(tone, SR, (0.0, 0.28), 1.0) > 6.0
+
+
+def test_buildup_reads_accumulation_that_a_fitted_gain_hides():
+    """Two takes matched in level can still differ in what they piled up.
+
+    `band_error` removes one gain per take, so a voice that sums eight strikes
+    where the instrument does not comes out looking the same as one that gets it
+    right. Measuring each source against ITS OWN plainest take is what shows it.
+    """
+    from shape.takes import band_buildup
+    n = int(6.0 * SR)
+    t = np.arange(n) / SR
+    one = np.sin(2 * np.pi * 40.0 * t) * np.exp(-t / 2.0) * (t >= 0.2)
+    many = one * 4.0                       # four times the tail, same shape
+    base = {"m": (one, SR)}
+    vals = band_buildup({"m": (many, SR)}, base, "m", (2.0, 4.0), (2.0, 4.0),
+                        (0.0, 0.18), (0.0, 0.18))
+    assert abs(vals[0] - 12.04) < 0.3
+    same = band_buildup({"m": (one, SR)}, base, "m", (2.0, 4.0), (2.0, 4.0),
+                        (0.0, 0.18), (0.0, 0.18))
+    assert abs(same[0]) < 1e-6
+
+
+def test_the_plainest_take_is_chosen_from_the_schedule_not_named():
+    from shape.takes import plainest
+    items = {"chord": _item([(48, 0.3, 6.0), (52, 0.3, 6.0), (55, 0.3, 6.0)]),
+             "single": _item([(60, 0.3, 2.0)]),
+             "run": _item([(60 + i, 0.3 + 0.2 * i, 1.0) for i in range(7)])}
+    assert plainest(items) == "single"
+
+
+def test_buildup_refuses_a_band_the_plainest_take_never_had():
+    """Dividing by an absent band manufactures a surplus that is not there.
+
+    A model with nothing in a band puts it far under its own body level, and
+    every phrase measured against it then reports tens of decibels of
+    accumulation -- which reads as a second, opposite defect on top of the one
+    real one. The floor gate alone cannot catch it: a synthetic render's lead-in
+    is exact silence, so every band clears it.
+    """
+    from shape.takes import band_buildup
+    n = int(6.0 * SR)
+    t = np.arange(n) / SR
+    body = np.sin(2 * np.pi * 700.0 * t) * np.exp(-t / 1.5) * (t >= 0.2)
+    # 40 Hz present in the phrase and absent from the single note. `range_db` is
+    # tightened here only because a synthetic tone leaks across bands far more
+    # than a recording does, which puts the floor of this fixture near -57 dB
+    # rather than the -88 the real case showed.
+    low = np.sin(2 * np.pi * 40.0 * t) * np.exp(-t / 2.0) * (t >= 0.2)
+    base = {"m": (body + low * 1e-6, SR)}
+    many = {"m": (body + low, SR)}
+    vals = band_buildup(many, base, "m", (2.0, 4.0), (2.0, 4.0),
+                        (0.0, 0.18), (0.0, 0.18), (0.2, 1.8), (0.2, 1.8),
+                        range_db=50.0)
+    assert vals[0] is None
+    # With the band genuinely present on both sides it is still reported.
+    both = {"m": (body + low * 0.25, SR)}
+    vals = band_buildup(many, both, "m", (2.0, 4.0), (2.0, 4.0),
+                        (0.0, 0.18), (0.0, 0.18), (0.2, 1.8), (0.2, 1.8),
+                        range_db=50.0)
+    assert vals[0] is not None and abs(vals[0] - 12.04) < 0.5
+
+
+def test_a_floor_recorded_into_the_sample_is_caught_by_its_own_infrasound():
+    """A sampled instrument's noise plays back WITH the note, not before it.
+
+    So a floor read from the lead-in reads as silence and clears every band,
+    while the tail being judged sits on hiss the whole time. What catches it is
+    a band the instrument cannot radiate at all: measured in the same window, it
+    is that source's floor at that moment, whatever the lead-in said.
+    """
+    from shape.takes import band_error
+    n = int(6.0 * SR)
+    t = np.arange(n) / SR
+    rng = np.random.default_rng(3)
+    playing = (t >= 0.3).astype(float)
+    # Hiss that exists only while the sample plays -- flat, so it is as loud at
+    # 8 Hz as at 40, which no string instrument can be.
+    hiss = rng.standard_normal(n) * 1e-3 * playing
+    note = np.sin(2 * np.pi * 700.0 * t) * np.exp(-(t - 0.3) / 1.2) * playing
+    tracks = {"m": (note, SR), "r": (note + hiss, SR)}
+    vals, _ = band_error(tracks, "m", "r", (0.4, 1.6), (2.5, 4.5), (0.0, 0.28))
+    bands = [(30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
+             (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000)]
+    # Every band the hiss owns is refused; the one the note is in is not.
+    assert vals[bands.index((30, 60))] is None
+    assert vals[bands.index((125, 250))] is None
+    assert vals[bands.index((500, 1000))] is not None

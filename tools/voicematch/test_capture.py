@@ -171,6 +171,21 @@ def test_argv_carries_realtime_and_settle(monkeypatch):
     assert AuSource(plugin="x:y:z", realtime=False).argv(Path("/tmp/o.wav")).count("--realtime") == 0
 
 
+def test_a_slot_is_asked_for_by_channel_only_when_the_notes_are_ours(monkeypatch):
+    """A score carries its own channels, so the flag would be refused there.
+
+    The slot then has to be selected by what the score is written on. Sending
+    the flag anyway is not a no-op: aubounce refuses the pair, so a rack's every
+    reference render would fail — and before it refused, the flag was dropped
+    and every slot of the rack rendered as whichever one the score's channel
+    happened to select.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    source = AuSource(plugin="x:y:z", channel=2)
+    assert source.argv(Path("/tmp/o.wav")).count("--channel") == 1
+    assert source.argv(Path("/tmp/o.wav"), midi=Path("/tmp/probe.mid")).count("--channel") == 0
+
+
 # --------------------------------------------------------------------------- #
 # A render that arrived late is not the note
 # --------------------------------------------------------------------------- #

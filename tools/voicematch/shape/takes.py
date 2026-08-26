@@ -58,6 +58,15 @@ BANDS = ((30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
          (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000))
 #: dB a band must stand over the take's own tail floor to be worth reading.
 SNR_DB = 10.0
+#: A band no instrument in this harness radiates. Nothing with strings, pipes,
+#: reeds or membranes puts usable energy below about twenty hertz, so whatever a
+#: source shows here is its own noise -- and, crucially, it is noise measured AT
+#: THE SAME MOMENT as the band being judged. A sampled instrument's floor is
+#: recorded into the samples and plays back with them, so it is absent from the
+#: lead-in and present through the note; a floor read before the first note-on
+#: therefore reads as silence and clears every band, which is how a whole round
+#: of low-band findings came to be measured against a noise floor.
+INFRASONIC = (5.0, 20.0)
 #: Seconds per column of the drawn envelope. A waveform pane takes one peak per
 #: pixel, which makes its column a function of how wide the window happens to be
 #: and how long the take is; a fixed span keeps two takes comparable and is what
@@ -172,6 +181,61 @@ def band_db(x, sr, band, window) -> float:
     return 10 * np.log10(max(float(np.sum(np.abs(S[m]) ** 2)) / len(seg) ** 2, 1e-30))
 
 
+def density_db(x, sr, band, window) -> float:
+    """A band's level per hertz, so bands of different widths are comparable.
+
+    `band_db` sums the power in a band, which makes a wide band read higher than
+    a narrow one holding the same noise -- five hundred hertz of hiss against
+    fifteen is fifteen decibels of difference and none of it a signal. Every
+    comparison BETWEEN bands has to divide that out; comparisons of one band
+    across two sources do not, and use `band_db` directly.
+    """
+    return band_db(x, sr, band, window) - 10.0 * np.log10(max(band[1] - band[0], 1e-9))
+
+
+def noise_db(x, sr, window, floor) -> float:
+    """The source's own floor at this moment, per hertz.
+
+    The higher of two readings, because neither alone is enough. The lead-in
+    catches a room or a converter that is running before the take starts. The
+    infrasonic band catches a floor recorded INTO a sample, which is silent
+    until the sample plays and then sits under the whole note -- invisible to
+    the lead-in by construction. A band that does not clear both is not a
+    reading of an instrument.
+    """
+    lead = rms_db(x, sr, floor) - 10.0 * np.log10(max(sr / 2.0, 1e-9))
+    return max(lead, density_db(x, sr, INFRASONIC, window))
+
+
+def usable_until(x, sr, floor, start: float = 0.0, snr_db: float = SNR_DB,
+                 hop_s: float = 0.1) -> float:
+    """When this source stops being itself, in seconds.
+
+    The first hop, scanning forward from `start`, that has come down to within
+    `snr_db` of the source's OWN lead-in floor -- and the end of the signal if
+    none has. Below that line what is left is the capture's noise, or the exact
+    digital silence a truncated render leaves, and neither is the instrument.
+
+    Quietness is deliberately not the test. A tail forty-five decibels under the
+    body is a perfectly ordinary decay, and cutting there ends the window on the
+    voice that decays fastest rather than on the one that stopped being real: on
+    a page of eight takes that rule cut six of them to nothing. What has to be
+    excluded is a source that has run out -- a sampled instrument reaching the
+    end of its sample and being faded out, then a file that runs on in silence.
+    A synthetic render whose lead-in is exact silence has no floor to reach, so
+    it is measured to the end of its own signal, which is the right answer for
+    it.
+    """
+    line = rms_db(x, sr, floor) + snr_db
+    n = len(x) / sr
+    t = max(start, 0.0)
+    while t + hop_s <= n:
+        if rms_db(x, sr, (t, t + hop_s)) < line:
+            return t
+        t += hop_s
+    return n
+
+
 def window_for(item, what: str) -> tuple[float, float]:
     """A window derived from the take's own events rather than placed by eye.
 
@@ -216,7 +280,13 @@ def window_for(item, what: str) -> tuple[float, float]:
                 f"note-off ({last:.2f} s) and {stop:.2f} s")
         return (lo, stop)
     if what == "floor":
-        return (max(total - 0.6, 0.0), total)
+        # The lead-in, before anything has been struck -- which is where a
+        # capture's own noise floor is, and the only place it can be read
+        # without the instrument mixed into it. The end of the take is NOT that
+        # place: these renders stop well before the file does and the last
+        # second is exact digital silence, against which every band clears any
+        # threshold and a floor gate built on it rejects nothing at all.
+        return (0.0, max(first - 0.02, 0.0))
     if what == "phrase":
         return (first, total)
     raise ValueError(what)
@@ -306,27 +376,106 @@ def envelope_report(tracks, references, window, col_s: float = DRAWN_COL_S) -> s
     return "\n".join(out)
 
 
-def band_error(tracks, source, reference, body, window, bands=BANDS,
+def band_error(tracks, source, reference, body, window, floor, bands=BANDS,
                snr_db: float = SNR_DB):
     """Per-band dB difference in `window`, with one gain removed on `body`.
 
-    Bands the reference does not hold clear of its own tail floor come back as
-    None rather than as a number, for the reason every other module here now
+    Bands the reference does not hold clear of the capture's own floor come back
+    as None rather than as a number, for the reason every other module here
     carries a floor gate: a recording that has stopped decaying reads as the
     dense, instrument-like thing a model is being asked to match.
+
+    `floor` is the take's lead-in and has to be passed in, because the one place
+    it must not be read from is the end of the file. These renders finish more
+    than a second before their files do, so a floor taken there is exact silence
+    and the gate below passes every band unconditionally -- which is how a whole
+    round of low-band findings was collected against a window that also spanned
+    the reference's fade-out.
     """
     m, sr = tracks[source]
     r, _ = tracks[reference]
-    floor = (max(len(r) / sr - 0.6, 0.0), len(r) / sr)
     g = rms_db(m, sr, body) - rms_db(r, sr, body)
+    noise = noise_db(r, sr, window, floor)
     out = []
     for b in bands:
         rb = band_db(r, sr, b, window)
-        if rb - band_db(r, sr, b, floor) <= snr_db:
+        if density_db(r, sr, b, window) - noise <= snr_db:
             out.append(None)
             continue
         out.append(band_db(m, sr, b, window) - rb - g)
     return out, g
+
+
+#: How far under a take's own body level a band may sit and still be a reading
+#: of the instrument. Past this it is the arithmetic's own floor: a synthetic
+#: render's lead-in is exact digital silence, so a gate that only asks whether a
+#: band stands over the capture's noise passes anything a model produces, however
+#: far below hearing. Eighty-eight decibels under the body is not a quiet tail,
+#: it is an absent one -- and dividing by it turns one missing band into a
+#: thirty-decibel surplus somewhere else.
+BODY_RANGE_DB = 80.0
+
+
+def band_buildup(tracks, base_tracks, source, window, base_window, floor,
+                 base_floor, body=None, base_body=None, bands=BANDS,
+                 snr_db: float = SNR_DB, range_db: float = BODY_RANGE_DB):
+    """Per-band level of this take's tail against the SAME source's plainest one.
+
+    Both windows come out of one render each, so no gain is fitted and no other
+    source is involved: the number is what the phrase added to that band over a
+    single note, in that instrument's own terms. Comparing the model's column
+    against each reference's is therefore a comparison of ACCUMULATION -- how
+    much of what it is given a struck structure is still holding when it is
+    struck again -- and that is the one thing `band_error` cannot show, because
+    it removes one gain per take and divides the accumulation out with it.
+
+    Two takes that each look level-matched can differ by twenty decibels here,
+    which is what a model that sums strikes linearly does against one that does
+    not.
+
+    TWO gates, and the second one is the one that had to be learnt. A band must
+    stand over the capture's noise floor, which is what `floor` is for -- and it
+    must also sit within `range_db` of its own take's body, which is what stops
+    the arithmetic reading its own floor as an instrument. A model whose single
+    note has nothing at all in a band puts that band eighty-eight decibels under
+    its body, and every phrase then divides by it and reports a thirty-decibel
+    surplus of accumulation. The defect was one absent band, and this column
+    turned it into a different finding pointing the other way.
+    """
+    x, sr = tracks[source]
+    b, bsr = base_tracks[source]
+    here_body = rms_db(x, sr, body) if body else None
+    there_body = rms_db(b, bsr, base_body) if base_body else None
+    here_noise = noise_db(x, sr, window, floor)
+    there_noise = noise_db(b, bsr, base_window, base_floor)
+    out = []
+    for band in bands:
+        here = band_db(x, sr, band, window)
+        there = band_db(b, bsr, band, base_window)
+        if (density_db(x, sr, band, window) - here_noise <= snr_db
+                or density_db(b, bsr, band, base_window) - there_noise <= snr_db
+                or (here_body is not None and here < here_body - range_db)
+                or (there_body is not None and there < there_body - range_db)):
+            out.append(None)
+            continue
+        out.append(here - there)
+    return out
+
+
+def plainest(items) -> str:
+    """Id of the take with the fewest notes -- the one the others build on.
+
+    Chosen from the schedule rather than named, so no take id and no instrument
+    is written into this module. Ties go to the shorter take, then to the id, so
+    the choice does not depend on dictionary order.
+    """
+    def key(pair):
+        tid, item = pair
+        meta = item.get("meta", item)
+        notes = meta.get("notes") or ()
+        return (len(notes), float(meta.get("seconds", 0.0)), tid)
+
+    return min(items.items(), key=key)[0] if items else ""
 
 
 def relative_to(tracks, simple_tracks, source, window, simple_window) -> float:

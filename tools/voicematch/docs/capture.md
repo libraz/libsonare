@@ -61,6 +61,17 @@ aubounce info "<rack plugin triple>" --params reverb
 capture.py calibrate --config capture/<id>.json
 ```
 
+### How a timbre is addressed, which is decided before anything is rendered
+
+A capture's timbres are the instruments being measured, and a plugin offers them in one of two shapes. Which one it is decides what `--probe-slots` is for and what the overlay has to carry.
+
+- **A preset per timbre.** The plugin loads one instrument per preset file, so each timbre names its own `preset` and they all play on channel 1. Nothing has to be arranged in advance.
+- **One rack, one channel per slot.** The plugin cannot be told from outside which instrument to load — its preset is the whole rack rather than a slot — so the instrument set is arranged inside the plugin first: one instrument per slot, each slot on its own MIDI channel, saved once as a single preset. Every timbre then names that same file and differs only by `channel`.
+
+**In the second shape the channel is the only thing selecting a slot.** `source_for` threads it through to the host's `--channel` and nothing else reaches the rack, so a timbre list that leaves `channel` at its default captures slot 1 once per timbre. The failure has no symptom worth noticing — every render is the right length, at a normal level, with an instrument audible in it — and the only sign is that two timbres come back byte-identical, so `shasum` two of them after the first note of a new rack rather than listening for a difference.
+
+**Which slot holds what is measured, not read.** A rack does not publish its channel map, `--probe-slots` reports only which channels are placed, and a slot's name is not a description of it. Render a diagnostic note per placed channel and identify each from what comes back — speech time, tone-to-noise, where the energy sits, the partial stack — then record that reasoning in a `_`-prefixed key beside the slot list. Both multi-slot captures here were identified that way, and one of them turned out to hold five electric-organ slots among its pipe ranks.
+
 ### Fields
 
 Tracked `capture/<id>.json`:
@@ -71,7 +82,7 @@ Tracked `capture/<id>.json`:
 | `label` / `audition_title` | how the capture and its audition page are titled | — |
 | `program` | the GM program the model answers this reference with | `0` |
 | `bank` | the GS variation bank, where the reference is one (the pipe organ) | — |
-| `takes` | the audition phrase set (`piano`, `harpsichord`, `drums`, `sustained`) | `""` |
+| `takes` | the audition phrase set ([audition.md](audition.md#phrase-sets)); a capture's own always wins over the generic one | `""` |
 | `dimensions` | which `compare` columns the gate holds; empty means all of them | `[]` |
 | `timbres[]` | `id`, `label`, and `channel` — the slot, from `--probe-slots` | — |
 | `notes` / `velocities` | the grid. Velocity is an axis in its own right on anything plucked | — |
@@ -177,6 +188,21 @@ Both statistics are bounded, and the gate exits 1 when either is exceeded. What 
 
 **One of the dimensions has to be able to see gain.** Every other column is normalised — a band profile against its own loudest band, a crest against its own RMS, a decay against its own peak — which is what makes them measure timbre and also what makes all of them blind to output level. Rewriting eighteen of the kit's levels moved not one of them by a digit. `level` is the per-hit `peak_dbfs` against the reference's, and `vel_range` is not a substitute: it is a span, and a span cancels an offset by construction.
 
+### The gated dimensions, and what a bound may not go under
+
+A pitched `compare` reduces to seven dimensions: `stretch` (tuning), `decay`, `attack`, `stereo`, `balance` (the h2–h6 stack against h1), `centroid_pct` (brightness) and `vel_range`. `tnr` joins them on any profile measured since the tone-to-noise column existed. Two of them answer questions nothing else in this harness can, because everything else is computed on a mono mix of a sustain window:
+
+- **`attack`** is the time to the envelope's peak. On a drum that is the strike; on a struck string the hammer is over milliseconds before the board reaches full level, so the number is the bloom after it — which is what separates a note that sinks in from a thump.
+- **`stereo`** is `1 - |channel correlation|` over the held note. A voice that returns one signal to both legs scores exactly `0.0` and is mono however wide the reverb around it is. Nothing else measured here can see that, and a listening test finds it immediately.
+
+Where the reference holds several instruments of one kind, the floor under each bound is measured rather than chosen: the median disagreement **between** them is the tightest any model can be held to without failing on which one it was compared against. On the three concert grands that is 0.15–0.27 of width and 12.5–40 ms of attack.
+
+### `make voice-gate`
+
+Runs every gate that exists — one per `reference/<id>_gate.json` — against its capture, reading each gate's own timbre back out of it, and reports every voice outside its bounds rather than stopping at the first. It builds its own `build-autofit`, so it disturbs neither the Debug tree `ctest` reads nor the shared `build-python-shared`.
+
+It is not in CI and not in `ci-local`. It renders a full grid per instrument, and re-recording a bound is a judgement about a trade that a CI job cannot make. **A gate is invalidated by its reference as well as by the voice**: re-measuring `reference/<id>.json` moves the numbers the bounds were recorded from, so a gate re-recorded before that re-measure is comparing against an instrument that no longer exists in the file.
+
 ## A second reference, and where the two agree (`agree`)
 
 ```sh
@@ -190,15 +216,21 @@ Every bound in a `_gate.json` was decided by hand from one reference, and one re
 ## Listening to the result
 
 ```sh
-make_audition.py                                    # render the phrases
-python tools/audition/serve.py <audition-dir>       # the directory it wrote
+make_audition.py --config capture/harpsichord.json  # render the phrases
+python tools/audition/serve.py                      # serve it, and everything else
 ```
 
-`--model-only` skips the reference renders and auditions the model against itself; `--timbres`, `--only`, `--takes` and `--program` narrow or override what the config named.
+`--model-only` skips the reference renders and auditions the model against itself; `--timbres` and `--only` narrow what the config named. A capture is one way in — the whole of it, from the program to the timbres, in one file — and not the only one: [audition.md](audition.md) is the page for auditioning a voice the bank has and no capture covers.
 
-Four phrase sets, named by the capture definition's `takes`: `piano`, `harpsichord`, `drums` and `sustained`. A set belongs to an instrument rather than to the tool, and each covers what its own instrument is hard to get right and no metric here reports.
+The set a capture names belongs to an instrument rather than to the tool, and each covers what its own instrument is hard to get right and no metric here reports.
 
 - **`drums`** — the mute group (an open hat choked by a closed one and by the pedal), sixteenths landing on their own ring, a flam and a roll, a tom fill in the capture's *measured* pitch order, ten seconds of cymbal wash, and a bar of eights. Every one of those lives in the relation between hits, which a probe striking one note every two seconds cannot produce — not because the search failed but because the question was never put.
 - **`sustained`** — what happens *between* notes on anything bowed or blown: a slurred scale, repeated notes each articulated, leaps across the compass, and a swell under CC11. The whole harness measures isolated held notes, which is the least characteristic thing a wind or a bowed string does. The register comes from the capture's own program, so the set is a shape rather than one instrument's notes.
 
 `make_audition.py` renders the same phrases through libsonare and through each captured timbre, at one shared gain per take so the level difference between them survives, and writes the manifest [`tools/audition`](../../audition/README.md) reads. The phrases are chosen for what a metric will not report: a chord that exposes inharmonicity as beating, an arpeggio, a note struck again while it is still ringing, and a passage under the sustain pedal — couplings between strings rather than properties of one, which the per-note analysis in `metrics.py` never sees.
+
+**A phrase selects a rack's slot with the channel it is written on, and the corpus does not.** The two paths reach the plugin differently: the corpus has aubounce play the notes, so `--channel` carries the slot, while a phrase is a MIDI file, and a file supplies its own channels — aubounce refuses `--channel` alongside `--midi` rather than dropping it. So the audition writes one score per timbre, on that timbre's channel, and only the model keeps the take's own (which is what makes a drum note a drum). The failure this prevents is silent by construction: every render has the right length, a normal level and an instrument audible in it, and the only sign is that two slots of one rack come back byte-identical. Two of the four shipped captures have timbres off channel 1 — the harpsichord's `baroque`, `concert-8-4` and `room`, and both of the organ's choruses — so a page whose registrations sound alike is worth a `shasum` before it is worth an explanation.
+
+**A page's references are worth keeping.** `--archive-references DIR` writes every reference render the run produced, and `--reference-from DIR` builds the next page out of it, so a phrase set that has been captured once needs the plugin only when the phrases themselves change. The renders are deterministic on a sampler that passes `calibrate`'s repeat check, so an archived take and a fresh one are byte-identical and the archive can be trusted as the reference rather than as a copy of it.
+
+**A phrase that asks for silence cannot be captured.** `sustained`'s swell takes CC11 to 0, and a sampler that implements expression as a gain renders true silence there; `au_oracle` reads that as the dropout it guards against — a disk-streaming sampler starving mid-note — retries, and skips the take. The guard cannot tell the two apart, and on an organ the phrase is arguably wrong anyway: a closed swell box attenuates a chorus by 15 to 20 dB rather than muting it. Either the take declares its silence or its floor comes up; until one of them happens the swell is a model-only take.

@@ -60,6 +60,7 @@ def build(args):
     percussion = is_percussion(cap)
     sigs = Signals(corpus_root=Path(args.corpus), program=int(cap["program"]),
                    channel=PERCUSSION_CHANNEL - 1 if percussion else 0,
+                   timbre=corpus.timbre,
                    gate_s=gate_s, seconds=seconds, lib_path=args.lib)
     notes = tuple(int(x) for x in args.notes.split(",")) if args.notes else corpus.notes
     # Every velocity but the softest. Fitted at one dynamic, a contact model has
@@ -326,6 +327,27 @@ def cmd_admittance(args):
     print(admittance.report(sigs(pairs, ref=True), sigs(pairs, ov=ov)))
 
 
+def clamped(tracks, item):
+    """The take's ringing window, cut back to where every source still decays.
+
+    The schedule says when the last damper lands; it cannot say when a source
+    stops being an instrument. A sampled reference reaches the end of its sample
+    and is faded out, and the file then runs on in silence, so a window placed
+    on the schedule alone averages one side over its decay and the other over a
+    fade plus a second of nothing -- and the two sides hold different amounts of
+    nothing, which lands in the answer as a band difference.
+    """
+    ring = takes.window_for(item, "ringing")
+    floor = takes.window_for(item, "floor")
+    end = min(takes.usable_until(x, sr, floor, ring[0]) for x, sr in tracks.values())
+    if end - ring[0] < 0.3:
+        raise ValueError(
+            f"take {item.get('id', '?')} has no window in which every source is "
+            f"still decaying (last note-off {ring[0]:.2f} s, earliest source ends "
+            f"{end:.2f} s)")
+    return (ring[0], min(ring[1], end))
+
+
 def cmd_takes(args):
     """Chords, pedal and repeats, against a reference, from an audition page.
 
@@ -347,9 +369,11 @@ def cmd_takes(args):
     base_id = takes.plainest(items)
     base_tracks = page.get(base_id) or {}
     try:
-        base_window = takes.window_for(items[base_id], "ringing") if base_id else None
+        base_window = clamped(base_tracks, items[base_id]) if base_id else None
+        base_floor = takes.window_for(items[base_id], "floor") if base_id else None
+        base_body = takes.window_for(items[base_id], "body") if base_id else None
     except (KeyError, ValueError):
-        base_window = None
+        base_window = base_floor = base_body = None
     for tid, item in items.items():
         tracks = page.get(tid)
         if not tracks or ref not in tracks:
@@ -366,21 +390,45 @@ def cmd_takes(args):
         print(takes.envelope_report(tracks, refs, phrase))
 
         body = takes.window_for(item, "body")
+        floor = takes.window_for(item, "floor")
+
+        # While it is sounding, which is the only window some instruments have.
+        # `ringing` measures what a take leaves behind once nothing is driven,
+        # and an instrument whose damper stops the string in a tenth of a second
+        # leaves nothing there to read: on the harpsichord set that window is
+        # empty on all nine takes, so the phrase set had no band table at all and
+        # a level fitted from it before the window was clamped was fitted against
+        # silence. This is a different measurement and carries its own name — the
+        # colour of what is sounding, not the colour of what is left.
+        srows = []
+        for src in tracks:
+            if src == ref:
+                continue
+            vals, g = takes.band_error(tracks, src, ref, body, body, floor)
+            srows.append((f"{src} ({g:+.1f} dB on body)", vals))
+        if srows:
+            print(f"   bands against {ref} while sounding, "
+                  f"{body[0]:.1f}-{body[1]:.1f} s")
+            print(takes.report(srows))
+
         try:
-            ring = takes.window_for(item, "ringing")
+            schedule = takes.window_for(item, "ringing")
+            ring = clamped(tracks, item)
         except ValueError as exc:
-            print(f"   band table skipped: {exc}")
+            print(f"   aftersound band table skipped: {exc}")
             continue
         rows = []
         for src in tracks:
             if src == ref:
                 continue
-            vals, g = takes.band_error(tracks, src, ref, body, ring)
+            vals, g = takes.band_error(tracks, src, ref, body, ring, floor)
             rows.append((f"{src} ({g:+.1f} dB on body)", vals))
         if not rows:
             continue
+        cut = (f", cut from {schedule[1]:.1f} where a source stopped decaying"
+               if ring[1] < schedule[1] - 0.05 else "")
         print(f"   bands against {ref}, body {body[0]:.1f}-{body[1]:.1f} s, "
-              f"measured {ring[0]:.1f}-{ring[1]:.1f} s")
+              f"measured {ring[0]:.1f}-{ring[1]:.1f} s{cut}")
         print(takes.report(rows))
 
         # What the phrase ADDED over the plainest take, each source against its
@@ -391,29 +439,52 @@ def cmd_takes(args):
         # two real instruments accumulate is the only thing that says how much
         # is too much.
         if tid != base_id and base_tracks and base_window is not None:
-            brows = [(src, takes.band_buildup(tracks, base_tracks, src, ring,
-                                              base_window))
+            # Both windows open a tenth of a second after their own last damper
+            # and are cut to ONE length, the shorter of the two. Same age and
+            # same span, or a difference in decay rate is read as a difference
+            # in accumulation -- averaging a long window over more of a decay
+            # lowers it, which is a bias in whichever direction the two spans
+            # happen to differ.
+            span = min(ring[1] - ring[0], base_window[1] - base_window[0])
+            here = (ring[0], ring[0] + span)
+            there = (base_window[0], base_window[0] + span)
+            brows = [(src, takes.band_buildup(tracks, base_tracks, src, here,
+                                              there, floor, base_floor,
+                                              body, base_body))
                      for src in tracks if src in base_tracks]
             if brows:
-                print(f"   built up over {base_id}, each source against itself")
+                print(f"   built up over {base_id}, each source against itself, "
+                      f"{span:.1f} s from each last damper")
                 print(takes.report(brows))
 
 
 def main(argv=None):
     # The target options live on a parent parser so they are accepted on either
     # side of the subcommand; typed after it is what a person reaches for first.
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--capture", default="piano", help="capture definition id")
-    common.add_argument("--corpus", required=True, help="directory holding manifest.json")
-    common.add_argument("--timbre", default="", help="which timbre of the capture")
-    common.add_argument("--notes", default="", help="subset of the capture's notes")
-    common.add_argument("--velocities", default="",
-                        help="subset of the capture's velocities")
-    common.add_argument("--lib", default="", help="SONARE_LIB_PATH for model renders")
-    common.add_argument("--cache", default="/tmp/voicematch-shape")
-    common.add_argument("--no-bed", action="store_true",
-                        help="skip the recorded-floor subtraction")
-    common.add_argument("--workers", type=int, default=7)
+    # Built fresh per subcommand rather than shared through `parents`, because
+    # `takes` reads a rendered audition page and never opens the corpus. Sharing
+    # one parent made `--corpus` required there and then ignored it, so a path
+    # that did not exist was accepted without a word and every run read as though
+    # the corpus had been consulted. A required argument that is never used is
+    # worse than an absent one: it invites a value nobody checks.
+    def target(*, corpus: bool):
+        q = argparse.ArgumentParser(add_help=False)
+        q.add_argument("--capture", default="piano", help="capture definition id")
+        if corpus:
+            q.add_argument("--corpus", required=True,
+                           help="directory holding manifest.json")
+        q.add_argument("--timbre", default="", help="which timbre of the capture")
+        q.add_argument("--notes", default="", help="subset of the capture's notes")
+        q.add_argument("--velocities", default="",
+                       help="subset of the capture's velocities")
+        q.add_argument("--lib", default="", help="SONARE_LIB_PATH for model renders")
+        q.add_argument("--cache", default="/tmp/voicematch-shape")
+        q.add_argument("--no-bed", action="store_true",
+                       help="skip the recorded-floor subtraction")
+        q.add_argument("--workers", type=int, default=7)
+        return q
+
+    common = target(corpus=True)
 
     p = argparse.ArgumentParser(prog="shape", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -460,9 +531,9 @@ def main(argv=None):
     s.add_argument("--overrides", default="")
     s.set_defaults(fn=cmd_admittance)
 
-    # Reads a rendered audition page rather than the corpus, so it needs none of
-    # the corpus options -- but they are harmless and keep one invocation shape.
-    s = sub.add_parser("takes", parents=[common])
+    # Reads a rendered audition page rather than the corpus, so it is given the
+    # target options WITHOUT --corpus.
+    s = sub.add_parser("takes", parents=[target(corpus=False)])
     s.add_argument("--page", required=True,
                    help="audition directory holding manifest.json and the takes")
     s.add_argument("--reference", default="",

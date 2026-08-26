@@ -925,7 +925,8 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
     # the cap is exactly where the fraction already lands, so nothing moves. On
     # a corpus probe holding eight seconds the fraction alone would read 2.4 to
     # 7.2 s in, which on the top two octaves is entirely after the note has
-    # stopped — a real grand's C8 is 40 dB down by 2.2 s. The harmonic ladder
+    # stopped — measured on three concert grands, C8 is 40 dB down by half a
+    # second and C7 inside one. The harmonic ladder
     # then compares one render's noise floor with another's and reports the
     # model 120 dB dark, unmoved by every knob, which is what silence looks like
     # when it is mistaken for a measurement.
@@ -1086,8 +1087,8 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
 # fraction of the note, because the gate is a property of the probe and not of
 # the instrument: on a corpus probe holding eight seconds, a 0.3-0.9 fraction
 # reads 2.4 to 7.2 s in, which on the top octave is entirely after the note has
-# stopped — the reference's own C8 is down 40 dB by 2.2 s. Both sides then
-# measure silence and agree perfectly about it.
+# stopped — the reference's own C8 is down 40 dB by half a second. Both sides
+# then measure silence and agree perfectly about it.
 HELD_WINDOW_S = (0.20, 1.20)
 # Below this much under the note's own peak there is no note left in the window,
 # so its level carries no information and is reported as absent rather than as a

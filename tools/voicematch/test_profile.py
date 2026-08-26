@@ -515,7 +515,7 @@ def test_every_shipped_capture_names_the_program_it_answers_with():
 
 def test_a_capture_naming_a_phrase_set_names_one_that_exists():
     """A typo here is otherwise found by rendering the whole audition first."""
-    from make_audition import TAKE_SETS
+    from phrases import TAKE_SETS
 
     here = Path(__file__).resolve().parent / "capture"
     for name in shipped_captures():
@@ -524,7 +524,7 @@ def test_a_capture_naming_a_phrase_set_names_one_that_exists():
             assert takes in TAKE_SETS, f"{name} names phrase set {takes!r}, which does not exist"
 
 
-def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys):
+def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys, tmp_path):
     """Not rendered on the piano's phrases, which would look like it worked.
 
     The message is asserted, not just the exit code: `main` has other ways to
@@ -533,14 +533,19 @@ def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys):
     """
     import make_audition
 
-    # The organ is the shipped capture with no phrase set. The kit used to be,
-    # and now has one: a fit that moves one drum note at a time has no
-    # measurement of what happens BETWEEN hits — the hi-hats' mute group, a
-    # sixteenth pattern landing on its own ring — so the kit needed a listening
-    # path more than most.
-    assert "pipe_organ" in shipped_captures()
-    argv = ["make_audition.py", "--config", str(Path(make_audition.__file__).resolve().parent
-                                                / "capture" / "pipe_organ.json")]
+    # The config is built here rather than borrowed from the shipped set, and
+    # what that costs is worth paying: every shipped capture now names a phrase
+    # set, so a test anchored on whichever one did not would stop testing the
+    # refusal the day that capture gained its phrases — and, because nothing
+    # short of the refusal stops `main`, would render the whole audition for
+    # real, through the plugin, into the shared scratch directory.
+    source = Path(make_audition.__file__).resolve().parent / "capture" / "pipe_organ.json"
+    cfg = json.loads(source.read_text())
+    cfg.pop("takes", None)
+    cfg.pop("_takes", None)
+    config = tmp_path / "no_phrase_set.json"
+    config.write_text(json.dumps(cfg))
+    argv = ["make_audition.py", "--config", str(config), "--out", str(tmp_path / "out")]
     old = sys.argv
     sys.argv = argv
     try:
@@ -760,3 +765,248 @@ def test_the_model_grid_is_rendered_over_each_note_s_own_tail(tmp_path, monkeypa
     # analysis window back out of.
     assert recorded == {35: pytest.approx(2.15), 51: pytest.approx(8.15),
                         81: pytest.approx(6.15)}
+
+
+def test_a_stamp_moves_only_when_the_measurement_does(tmp_path):
+    """Re-measuring an unchanged corpus must leave the file byte-identical.
+
+    The stamp is the one field that is not read off the audio, so it is the one
+    field that can make an unchanged measurement look changed. Two things depend
+    on it not doing that: an analysis edit is judged safe by whether it moved a
+    committed reference, and a gate records the stamp of the reference its
+    bounds were read against, so a no-op re-measure would otherwise report every
+    gate as predating its own reference.
+    """
+    out = tmp_path / "ref.json"
+    body = {"id": "x", "label": "X", "capture": {"program": 0},
+            "rows": [{"note": 60, "f0_hz": 261.6}], "summary": {}}
+    # A stamp from the past rather than one taken here: the resolution is one
+    # second, so a "changed" case written in the same second as the file it is
+    # compared against would read as unchanged and prove nothing.
+    first = "2026-01-01T00:00:00+00:00"
+    out.write_text(json.dumps({**body, "measured_utc": first}, indent=1,
+                              ensure_ascii=False) + "\n")
+
+    # Same numbers, later run: the stamp is carried forward.
+    assert profile_module.measurement_stamp({**body, "measured_utc": ""}, out) == first
+
+    # A number moves: the stamp moves with it.
+    moved = dict(body, rows=[{"note": 60, "f0_hz": 261.7}])
+    assert profile_module.measurement_stamp({**moved, "measured_utc": ""}, out) != first
+
+    # A dimension that did not exist before is a change, not a carry-forward —
+    # this is the shape the piano reference had, with tnr_db absent throughout.
+    grown = dict(body, rows=[{"note": 60, "f0_hz": 261.6, "tnr_db": 12.0}])
+    assert profile_module.measurement_stamp({**grown, "measured_utc": ""}, out) != first
+
+    # No file yet, and an unreadable one, both mean "stamp it now" rather than
+    # an exception — a first measure and a half-written file are both normal.
+    assert profile_module.measurement_stamp({**body, "measured_utc": ""},
+                                            tmp_path / "absent.json") != first
+    out.write_text("{ not json")
+    assert profile_module.measurement_stamp({**body, "measured_utc": ""}, out) != first
+
+
+def test_a_profile_read_back_compares_equal_to_the_one_that_wrote_it(tmp_path):
+    """The comparison is on the serialized body, so a round trip is not a change.
+
+    Comparing the dicts directly would call a tuple that became a list, or a
+    float that printed at a different width, a changed measurement — and the
+    stamp would then move on every run, which is the defect this replaces.
+    """
+    out = tmp_path / "ref.json"
+    profile = {"id": "x", "label": "X", "measured_utc": "",
+               "capture": {"notes": (60, 72), "band_edge_hz": None},
+               "rows": [{"note": 60, "partials_db": [0.0, -12.5, -18.25]}],
+               "summary": {}}
+    stamp = "2026-01-01T00:00:00+00:00"
+    out.write_text(json.dumps({**profile, "measured_utc": stamp}, indent=1,
+                              ensure_ascii=False) + "\n")
+    assert profile_module.measurement_stamp(profile, out) == stamp
+
+
+def test_a_faded_sample_does_not_have_the_slope_of_its_silence_read_as_an_aftersound():
+    """`decay_late_db_s` past the audible range measures the file, not the string.
+
+    A trimmed sample is faded to digital zero at its end, and a knee search over
+    the whole gate puts the split at the fade and fits the flat -240 dBFS floor
+    below it. The rate that comes back is the flatness of the silence -- on this
+    corpus, a C7 whose aftersound is 12 s read as 54.
+    """
+    t = np.linspace(0.0, 8.0, 400)
+    real = -28.0 - 5.0 * t                     # a 12 s aftersound, unbroken
+    faded = np.where(t < 3.0, real, -240.0)    # the same note, cut at 3 s
+
+    end = profile_module.usable_decay_end(faded, 0)
+    assert t[end - 1] == pytest.approx(3.0, abs=0.1)
+    kept = profile_module.double_decay(faded[:end], t[:end])
+    assert kept["decay_late_db_s"] == pytest.approx(-5.0, abs=0.5)
+
+    whole = profile_module.double_decay(faded, t)
+    assert abs(whole["decay_late_db_s"]) < 1.0
+
+
+def test_a_beating_unison_dips_below_the_range_without_having_stopped():
+    """The end is the LAST point inside the range, not the first one outside it."""
+    t = np.linspace(0.0, 8.0, 400)
+    env = -20.0 - 9.0 * t + 14.0 * np.sin(2.0 * np.pi * t)
+    peak = int(np.argmax(env))
+    end = profile_module.usable_decay_end(env, peak)
+    dips = peak + np.where(env[peak:end] < env[peak] - profile_module.DECAY_RANGE_DB)[0]
+    assert dips.size > 0, "the fixture has to dip below the line to be a test"
+    assert t[end - 1] > t[dips[0]]
+
+
+def test_a_render_that_outlasts_its_reference_is_not_differenced_against_it():
+    """Two slopes compare only when they were fitted over comparable spans."""
+    agree = profile_module.DECAY_SPAN_AGREEMENT
+    assert min(8.0, 7.0) >= agree * max(8.0, 7.0)
+    assert min(8.0, 3.8) < agree * max(8.0, 3.8)
+
+
+def test_the_body_reading_is_a_ratio_and_a_gain_cannot_answer_it():
+    """Scaling a render leaves it where it was; adding energy under the note moves it."""
+    sr = SR
+    t = np.arange(int(1.5 * sr)) / sr
+    note = 0.5 * np.sin(2 * np.pi * 1000.0 * t)
+    quiet = profile_module.body_below_f0_db(note * 0.01, sr, 1000.0)
+    loud = profile_module.body_below_f0_db(note, sr, 1000.0)
+    assert quiet == pytest.approx(loud, abs=0.5)
+
+    with_body = note + 0.5 * np.sin(2 * np.pi * 120.0 * t)
+    assert profile_module.body_below_f0_db(with_body, sr, 1000.0) > loud + 20.0
+
+
+def test_a_note_too_low_to_have_a_band_under_it_is_not_given_a_body_number():
+    """Under 120 Hz the band below the note is thinner than an octave."""
+    sr = SR
+    t = np.arange(int(1.5 * sr)) / sr
+    assert profile_module.body_below_f0_db(np.sin(2 * np.pi * 80.0 * t), sr, 80.0) is None
+    assert profile_module.body_below_f0_db(np.sin(2 * np.pi * 400.0 * t), sr, 400.0) is not None
+
+
+def test_a_recording_gain_is_not_a_register_error():
+    """Two takes of one keyboard at different gains have the same register profile."""
+    quiet = {n: {88: -60.0 + 0.2 * n} for n in range(60, 100, 6)}
+    loud = {n: {88: v[88] + 17.0} for n, v in quiet.items()}
+    deltas = [d for _n, _v, d in profile_module.register_deltas(loud, quiet)]
+    assert deltas and max(abs(d) for d in deltas) < 1e-9
+
+
+def test_one_register_that_is_quiet_is_charged_to_that_register():
+    """A model short at the top reads as the top being short, not as a keyboard offset."""
+    ref = {n: {88: -40.0} for n in range(60, 108, 6)}
+    model = {n: {88: -40.0 - (12.0 if n >= 96 else 0.0)} for n in ref}
+    by_note = {n: d for n, _v, d in profile_module.register_deltas(model, ref)}
+    assert all(abs(by_note[n]) < 1e-6 for n in by_note if n < 96)
+    assert all(by_note[n] == pytest.approx(-12.0) for n in by_note if n >= 96)
+
+
+def test_a_velocity_with_too_few_notes_has_no_register_profile():
+    """A median over two notes normalises them against themselves."""
+    thin = {60: {88: -40.0}, 72: {88: -50.0}}
+    assert profile_module.register_deltas(thin, thin) == []
+    wide = {n: {88: -40.0} for n in range(60, 60 + 6 * profile_module.REGISTER_MIN_NOTES, 6)}
+    assert profile_module.register_deltas(wide, wide) != []
+
+
+def test_a_long_note_is_not_a_loud_one():
+    """Same peak, different decay: `rms_dbfs` calls the long one louder, the body level does not."""
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    tone = np.sin(2 * np.pi * 440.0 * t)
+
+    def measured(rate):
+        x = (tone * np.exp(-rate * t)).astype(np.float32)
+        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                           preroll_s=0.0, gate_s=2.5)
+
+    quick, sustained = measured(6.0), measured(0.2)
+    assert quick["held_peak_dbfs"] == pytest.approx(sustained["held_peak_dbfs"], abs=1.0)
+    assert sustained["rms_dbfs"] > quick["rms_dbfs"] + 5.0
+
+
+def test_the_hammer_reaches_the_body_level_only_through_the_window():
+    """A click owns `peak_dbfs` outright and reaches a windowed RMS by its energy share."""
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    tone = (0.2 * np.sin(2 * np.pi * 440.0 * t) * np.exp(-1.0 * t)).astype(np.float32)
+    clicked = tone.copy()
+    clicked[:8] += 1.0
+
+    def measured(x):
+        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                           preroll_s=0.0, gate_s=2.5)
+
+    plain, hammered = measured(tone), measured(clicked)
+    on_peak = hammered["peak_dbfs"] - plain["peak_dbfs"]
+    on_body = hammered["held_peak_dbfs"] - plain["held_peak_dbfs"]
+    assert on_peak > 10.0
+    assert 0.0 < on_body < on_peak / 4.0
+
+
+def test_a_tail_window_stops_where_the_references_do():
+    """A render that finishes before its file does must not lend its silence to the window."""
+    sr = SR
+    ran_out = np.concatenate([np.ones(int(2.0 * sr), dtype=np.float32),
+                              np.zeros(int(2.0 * sr), dtype=np.float32)])
+    full = np.ones(int(4.0 * sr), dtype=np.float32)
+    assert profile_module.signal_end_s(ran_out, sr) == pytest.approx(2.0, abs=0.01)
+    assert profile_module.usable_tail([ran_out, full], sr, (1.0, 4.0)) == \
+        pytest.approx((1.0, 2.0), abs=0.01)
+    # The model's own length never widens it, and a window with nothing left is None.
+    assert profile_module.usable_tail([full], sr, (1.0, 4.0)) == (1.0, 4.0)
+    assert profile_module.usable_tail([ran_out], sr, (2.5, 4.0)) is None
+
+
+def test_a_take_reading_does_not_answer_to_what_no_instrument_radiates():
+    """Rumble under the subsonic line changes a tail level; content above it does not."""
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    note = (np.sin(2 * np.pi * 440.0 * t) * np.exp(-2.0 * t)).astype(np.float32)
+    windows = {"tail": (2.0, 2.9)}
+
+    def tail_of(x):
+        return profile_module.measure_take(np.stack([x] * 2, axis=1), sr, windows)["tail"]
+
+    # The same amplitude either side of the line: one is the recording chain,
+    # the other is an instrument, and only the second may move the reading.
+    rumble = (0.02 * np.sin(2 * np.pi * 8.0 * t)).astype(np.float32)
+    audible = (0.02 * np.sin(2 * np.pi * 200.0 * t)).astype(np.float32)
+    plain = tail_of(note)
+    assert tail_of(note + rumble) == pytest.approx(plain, abs=0.5)
+    assert tail_of(note + audible) > plain + 5.0
+
+
+def test_a_high_pass_does_not_lend_a_loud_passage_to_a_quiet_one():
+    """The failure this guards is a filter artifact that reads as a voice with no decay."""
+    sr = SR
+    t = np.arange(3 * sr) / sr
+    x = np.zeros_like(t)
+    x[:sr // 2] = np.sin(2 * np.pi * 440.0 * t[:sr // 2])
+    tail = np.arange(2 * sr) / sr
+    x[sr:] = 1e-3 * np.sin(2 * np.pi * 200.0 * tail) * np.exp(-3.0 * tail)
+    y = profile_module.highpass(x, sr, profile_module.TAKE_SUBSONIC_HZ)
+
+    def db(sig, a, b):
+        seg = sig[int(a * sr):int(b * sr)]
+        return 20.0 * np.log10(max(float(np.sqrt(np.mean(seg ** 2))), 1e-18))
+
+    # The tail runs 70 to 110 dB under the burst and has to survive untouched:
+    # a brick wall on the rfft put a flat floor across all of it.
+    for a, b in ((1.1, 1.3), (2.1, 2.3), (2.6, 2.8)):
+        assert db(y, a, b) == pytest.approx(db(x, a, b), abs=0.5)
+
+
+def test_the_high_pass_stops_what_no_instrument_radiates():
+    """Below the line by an octave is gone; an octave above it is untouched."""
+    sr = SR
+    t = np.arange(2 * sr) / sr
+    hz = profile_module.TAKE_SUBSONIC_HZ
+
+    def through(f):
+        y = profile_module.highpass(np.sin(2 * np.pi * f * t), sr, hz)
+        return 20.0 * np.log10(float(np.sqrt(np.mean(y[sr // 4:-sr // 4] ** 2))) / np.sqrt(0.5))
+
+    assert through(hz / 5.0) < -60.0
+    assert through(hz * 2.5) == pytest.approx(0.0, abs=0.5)
