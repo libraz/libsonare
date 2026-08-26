@@ -158,6 +158,14 @@ So `recurrence` counts instead of measuring: per spectral row, how much more oft
 
 Two things it cannot see, both structural. A bank tuned to the note grid is invisible, because its pitches *are* note pitches and the partial notch removes them; the undamped-treble population is exactly that, and had to be caught by a level measurement instead. And the notch must be capped at `RESOLVABLE_PARTIAL` — a quarter-tone mask fuses into a continuous band above about the sixteenth partial, so an uncapped one marks the whole upper spectrum of a bass note as "the string" and leaves the term nothing to look at.
 
+### Fitting a kit, where the across-note terms cannot be scored
+
+A kit's pieces are separate patches — no move on note 42 can reach note 49 — so a kit has to be fitted one piece at a time, and every score such a fit takes holds exactly one note. `invariance` and `recurrence` both reduce *across* the note set, a row-wise minimum and a row-wise frequency, and on a set of one both reductions are the identity: what comes back is a one-sided level comparison wearing the name of a relationship. Neither raised anything. Both printed as ordinary numbers, and on the closed hi-hat they were the second and third largest contributions to the total.
+
+They are withheld now, below two notes, and named in `unscored` — left out of the weighted mean rather than entered at zero, which is each term's best value and would read as a voice sharing nothing with its neighbours.
+
+What that fixes is the arithmetic, not the method. A per-piece fit is now scored on the five per-note terms and nothing it does is judged against what the pieces share, so it drifts toward collision with the terms that would object switched off. Three hi-hats re-fitted independently came back kit-wide at 8.433 against 8.510, with density 5.80 → 4.07 and prompt 7.02 → 6.45 but invariance 9.84 → 10.31 and recurrence 3.13 → 3.98. Net positive, so it was kept — but **score the whole kit after per-piece work and reject a result that costs more across-note than it buys.** That comparison is the only place the check exists.
+
 ## The recorded floor
 
 A sampled reference carries its session's noise floor under every note, gated by the sampler: it opens at note-on, scales with the velocity layer, and fades with the release. It passes every test for being part of the instrument except that its spectrum is the same for the lowest note and the highest.
