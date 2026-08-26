@@ -67,6 +67,20 @@ STRUCK_WEIGHTS = {"spectrum": 1.0, "onset": 1.0, "invariance": 1.0,
                   "prompt": 1.0}
 
 
+def compares_notes(keys) -> bool:
+    """Whether a score holds enough notes for its across-note terms to mean it.
+
+    `invariance` and `recurrence` both ask what answers whichever note you
+    strike, and both express it as a reduction across the note set -- a row-wise
+    minimum and a row-wise frequency. On a set of one each reduction is the
+    identity, and what comes back is a one-sided level comparison wearing the
+    name of a relationship. It is still a number, and a kit fitted piece by
+    piece -- which is how a kit has to be fitted, since every piece is its own
+    patch -- puts exactly one note in every score it takes.
+    """
+    return len({n for n, _ in keys}) >= 2
+
+
 @dataclass
 class Terms:
     """One score, its parts, and the gain that was removed to reach it."""
@@ -82,11 +96,32 @@ class Terms:
     #: of them and must not read as one.
     unscored: tuple = ()
 
+    #: Per gated term, how many of the note-and-layer pairs could be read at all.
+    #: A term that survives on some pairs is IN the total, so the ones it could
+    #: not be read for leave no trace in the number -- and on a kit that is not a
+    #: rounding matter: the pieces a gate refuses are the long ones, whose
+    #: recording ends while they are still ringing, and they are the pieces whose
+    #: whole identity is the thing the refused term measures. Named here for the
+    #: same reason `unscored` is, one level down: a term scored on two thirds of
+    #: the set is not the term it prints as.
+    coverage: dict = field(default_factory=dict)
+
+    def short(self) -> tuple:
+        """Terms that were read for some pairs and not others, worst first."""
+        rows = [(got / max(1, asked), k) for k, (got, asked) in self.coverage.items()
+                if got < asked]
+        return tuple(k for _, k in sorted(rows))
+
     def __str__(self) -> str:
         out = f"{self.total:.3f}  " + "  ".join(
             f"{k} {v:.2f}" for k, v in self.parts.items())
-        return out + ("  [unscored: " + ", ".join(self.unscored) + "]"
-                      if self.unscored else "")
+        if self.unscored:
+            out += "  [unscored: " + ", ".join(self.unscored) + "]"
+        gaps = self.short()
+        if gaps:
+            out += "  [" + ", ".join(
+                f"{k} {self.coverage[k][0]}/{self.coverage[k][1]}" for k in gaps) + "]"
+        return out
 
 
 @dataclass
@@ -298,6 +333,9 @@ class ShapeLoss:
         per_note, cells, grids = {}, [], {}
         onset_err, res_err, rel_err, bal_err = [], [], [], []
         den_err, pro_err = [], []
+        # Pairs a gated term could be read for at all. Only the gated ones are
+        # counted; the rest answer for every pair by construction.
+        read = {k: 0 for k in ("release", "residue", "density", "prompt")}
         mcurves, rcurves = {}, {}
         mpeaks, rpeaks = {}, {}
         for k in keys:
@@ -316,6 +354,7 @@ class ShapeLoss:
             # damp: once it has decayed past seventy decibels under its own peak
             # the ratio is about its floor and not about its felt.
             if self.pitched and r["release"][0] > -70.0:
+                read["release"] += 1
                 rel_err.append(min(max(mo["release"][1] - r["release"][1], 0.0),
                                    terms.RELEASE_CLIP))
 
@@ -330,6 +369,7 @@ class ShapeLoss:
                     bal_err.append(np.clip(mb[live] - rb[live],
                                            -terms.BALANCE_CLIP, terms.BALANCE_CLIP))
             if self.pitched:
+                read["residue"] += int(r["valid"].any())
                 res_err.append(np.clip(
                     mo["residue"] - r["residue"],
                     -terms.RESIDUE_CLIP, terms.RESIDUE_CLIP)[r["valid"]])
@@ -340,6 +380,7 @@ class ShapeLoss:
                 md, mok = mo["density"]
                 rd, rok = r["density"]
                 ok = mok & rok
+                read["density"] += int(ok.any())
                 if ok.any():
                     den_err.append(np.clip(md[ok] - rd[ok],
                                            -struck.DENSITY_CLIP, struck.DENSITY_CLIP))
@@ -349,6 +390,7 @@ class ShapeLoss:
                 mp, _ = mo["prompt"]
                 rp, rpok = r["prompt"]
                 ok = rpok
+                read["prompt"] += int(ok.any())
                 if ok.any():
                     pro_err.append(np.clip(mp[ok] - rp[ok],
                                            -struck.PROMPT_CLIP, struck.PROMPT_CLIP))
@@ -414,14 +456,23 @@ class ShapeLoss:
         # One-sided: a model that rings less at fixed pitches than the reference
         # does is not thereby wrong, and the reference's own figure carries the
         # residual of its bed subtraction, which is a floor and not a target.
+        #
+        # Like `recurrence`, this asks a question ABOUT a set of notes -- what
+        # answers whichever one you strike -- and its across-note minimum is the
+        # identity on a set of one. What it returns then is the model's residue
+        # over the reference's, one-sided, which is a level comparison the other
+        # terms already make and which carries this term's weight while looking
+        # like a statement about invariance.
         inv = []
-        for v in mcurves:
-            mi = terms.invariant_floor(mcurves[v])
-            ri = terms.invariant_floor(rcurves[v])
-            live = ri > -300.0
-            inv.append(np.clip(np.maximum(mi[live] - ri[live], 0.0),
-                               0.0, terms.INVARIANCE_CLIP))
-        parts["invariance"] = float(np.sqrt(np.mean(np.concatenate(inv) ** 2))) if inv else 0.0
+        if compares_notes(keys):
+            for v in mcurves:
+                mi = terms.invariant_floor(mcurves[v])
+                ri = terms.invariant_floor(rcurves[v])
+                live = ri > -300.0
+                inv.append(np.clip(np.maximum(mi[live] - ri[live], 0.0),
+                                   0.0, terms.INVARIANCE_CLIP))
+        if inv:
+            parts["invariance"] = float(np.sqrt(np.mean(np.concatenate(inv) ** 2)))
         if self.pitched:
             parts["release"] = float(np.sqrt(np.mean(np.array(rel_err) ** 2))) \
                 if rel_err else 0.0
@@ -445,19 +496,35 @@ class ShapeLoss:
         # note set at once -- which is why it lives here rather than in a probe.
         # One-sided: a real instrument's body does recur, and recurring LESS
         # than it does is a different complaint that `residue` already carries.
+        #
+        # Scored only over a set of notes, because the fraction it takes the mean
+        # of is a fraction OF the note set: given one note the mean collapses to
+        # the mask itself, every row where the model peaks and the instrument
+        # does not is charged the full clip, and what comes back is not "how much
+        # more often" but "does it, anywhere" -- at a hundred points a row. It
+        # still returns a number, which is how a per-piece fit came to be steered
+        # by it: a kit's pieces are separate patches and fitting them one at a
+        # time puts exactly one note in every score.
         rec = []
-        for v in mpeaks:
-            if not mpeaks[v]:
-                continue
-            mf = np.mean(np.stack(mpeaks[v]), axis=0) * 100.0
-            rf = np.mean(np.stack(rpeaks[v]), axis=0) * 100.0
-            rec.append(np.clip(np.maximum(mf - rf, 0.0), 0.0, terms.RECUR_CLIP))
-        parts["recurrence"] = float(np.sqrt(np.mean(np.concatenate(rec) ** 2))) \
-            if rec else 0.0
+        if compares_notes(keys):
+            for v in mpeaks:
+                if not mpeaks[v]:
+                    continue
+                mf = np.mean(np.stack(mpeaks[v]), axis=0) * 100.0
+                rf = np.mean(np.stack(rpeaks[v]), axis=0) * 100.0
+                rec.append(np.clip(np.maximum(mf - rf, 0.0), 0.0, terms.RECUR_CLIP))
+        # Left out of the total rather than entered at zero. Zero is this term's
+        # best value and it would read as a voice that shares nothing with its
+        # neighbours -- the strongest possible claim, made by having asked
+        # nobody.
+        if rec:
+            parts["recurrence"] = float(np.sqrt(np.mean(np.concatenate(rec) ** 2)))
 
         num = sum(self.weights[k] * parts[k] ** 2 for k in parts)
         total = float(np.sqrt(num / sum(self.weights[k] for k in parts)))
         missing = tuple(k for k in self.weights if k not in parts)
         out = Terms(total=total, parts=parts, per_note=per_note, gain_db=g,
-                    unscored=missing)
+                    unscored=missing,
+                    coverage={k: (n, len(keys)) for k, n in read.items()
+                              if k in parts})
         return (out, grids) if detail else out

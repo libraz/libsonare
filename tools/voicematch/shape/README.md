@@ -92,6 +92,28 @@ largest movement there is, and the mask that decides which bands are asked about
 is the reference's — a model silent where the instrument is not is a finding and
 not a question withdrawn. Same discipline `admittance` states for its own bands.
 
+### The pieces a gated term cannot be read for
+
+A term the whole set fails is left out of the total and named. A term that
+survives on *some* pairs is a harder case: it enters the total at a value
+averaged over whatever could be read, and the pairs it could not be read for
+leave no trace at all. On a kit that is not a rounding matter, because the pairs
+a floor gate refuses are the long ones — a piece still ringing when its
+recording ends has no stretch of noise to measure a floor in — and those are the
+pieces whose identity *is* the thing the refused term measures.
+
+Measured on the nine metallic pieces of this kit, `density` reads 35 of 45
+note-and-layer pairs. The ten it cannot read are both rides, and the reason is
+the capture rather than the estimator: the grid's tail was sized on `decay_ms`,
+the time to fall 20 dB, and a floor needs the piece to reach its noise floor and
+then stay there. Notes 49–59 were recorded to 8 s on that criterion and the two
+rides still ring at the end of it. The open hi-hat was in the same position at
+the kit's 2 s and is the reason the capture now names it at 5 s.
+
+So every score line carries a `[density 35/45]` when a term is short, and a fit
+whose knobs for those pieces cost nothing on that term is reading a silence
+rather than an agreement.
+
 Both new terms are gated on the recording's own floor, and that floor cannot be
 read from a fixed window either: the plane is padded to the longest piece in the
 grid, and padding is exact zeros, which passes as an infinite signal-to-noise
