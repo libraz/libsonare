@@ -138,6 +138,12 @@ key of every take gets its own switch button, labelled with the key. Takes with
 the same `group` are listed under one heading. Nothing but `id` and `tracks` is
 required.
 
+`group` at the top level, beside `title`, is the heading the set picker files
+this set under. It is optional, and a set that declares none stays in an
+ungrouped run at the top of the list — which is right for a handful of
+hand-assembled directories and no use at all once a whole instrument bank is
+being served.
+
 A source's `label` and `detail` are shown for whichever version is selected,
 under the row, in full — so they can say as much as they need to without a
 segmented button ellipsising the part that distinguishes them. `role` splits the
@@ -155,19 +161,20 @@ render tools write by default, is decoded by some browsers and not others.
 
 `tools/voicematch/make_audition.py` writes a manifest of this shape: the same
 phrases rendered through libsonare and through a reference plugin, with one
-shared gain per take. Which instrument it renders comes from the capture
-definition it is given, which names the phrase set and the GM program:
+shared gain per take. What it renders is named as a GM program, a variation
+bank or a drum kit, and the library's own voice list is the index:
 
 ```sh
 rye run --pyproject bindings/python/pyproject.toml python \
-    tools/voicematch/make_audition.py \
-    --config tools/voicematch/capture/harpsichord.json \
-    --out .cache/voicematch/audition/harpsichord
+    tools/voicematch/make_audition.py --program 6
 ```
 
-Writing it under the scratch root is what lets `serve.py` find it with no
+One subdirectory per voice is written under `.cache/voicematch/audition/`,
+which is the scratch root, which is what lets `serve.py` find them with no
 argument.
 
-Add `--model-only` to skip the reference renders. That needs no plugin, so it
-is the form that works from a plain clone; the result plays rather than
-compares.
+Most voices have no captured reference — there are four captures and a hundred
+and twenty-eight programs — and those pages hold the model alone and play
+rather than compare, which needs no plugin and works from a plain clone.
+`--model-only` forces that for a voice which does have one. The full set of
+flags is `tools/voicematch/docs/audition.md`.

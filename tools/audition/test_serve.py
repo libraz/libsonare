@@ -116,6 +116,41 @@ def test_set_id_keeps_a_generic_leaf_under_the_scratch_root() -> None:
             serve.SCRATCH_ROOT = original
 
 
+def test_a_named_directory_of_sets_is_expanded() -> None:
+    """A run that renders several voices writes one set per voice under a root.
+
+    Naming that root is the obvious way to ask for all of them, and it is what
+    the renderer prints. Reported as empty it is true of the root and false of
+    everything in it, which reads as a run that produced nothing.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve() / "audition"
+        root.mkdir()
+        _write_set(root / "p040-violin", {"single-long": ["model"]})
+        _write_set(root / "p006-harpsichord", {"single-c4": ["model", "baroque"]})
+
+        ids = sorted(serve.set_id(p) for p in serve.discover([str(root)]))
+        assert ids == ["p006-harpsichord", "p040-violin"], ids
+
+
+def test_a_named_set_is_served_as_itself() -> None:
+    """Expansion must not reach into a set and serve its takes as sets."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve() / "pipe-organ"
+        _write_set(root, {"single-long": ["model", "plenum-a"]})
+
+        found = serve.discover([str(root)])
+        assert found == [root], found
+
+
+def test_a_named_directory_with_nothing_in_it_stays_itself() -> None:
+    """So the "no renders found in: <path>" message names what was asked for."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve() / "empty"
+        root.mkdir()
+        assert serve.discover([str(root)]) == [root]
+
+
 def test_take_dirs_survives_an_unreadable_manifest() -> None:
     """A half-written manifest must not take the whole picker down with it."""
     with tempfile.TemporaryDirectory() as tmp:

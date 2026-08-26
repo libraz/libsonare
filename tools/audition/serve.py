@@ -125,10 +125,10 @@ GENERIC_NAMES = ("audition", "renders", "out")
 def set_id(root: Path) -> str:
     """A short URL-safe name for a set, and the one its links carry.
 
-    Taken from the parent directory when the leaf says nothing — `pianolab` and
-    `harpsichordlab` distinguish two sets that are both called `audition` —
-    except directly under the scratch root, where the parent is the scratch root
-    and names the harness rather than the set.
+    Taken from the parent directory when the leaf says nothing, so that two sets
+    both written to a directory called `audition` are still told apart by the
+    directory holding them — except directly under the scratch root, where the
+    parent is the scratch root and names the harness rather than the set.
     """
     name = root.name
     if name in GENERIC_NAMES and root.parent not in (root, SCRATCH_ROOT):
@@ -154,10 +154,40 @@ def take_dirs(root: Path) -> set[Path]:
     return out
 
 
+def is_set(root: Path) -> bool:
+    """Whether this directory holds renders of its own.
+
+    A manifest settles it. Without one the layout does: a directory whose
+    subdirectories hold audio, or which holds loose audio itself, is a set, and
+    one holding neither is a container.
+    """
+    if (root / "manifest.json").exists():
+        return True
+    try:
+        return bool(infer_manifest(root).get("items"))
+    except OSError:
+        return False
+
+
+def expand(root: Path) -> list[Path]:
+    """A named directory, or the sets inside it when it is a directory of sets.
+
+    One level, and only when the directory is not a set itself. A run that
+    renders several voices writes one set per voice under a root, and naming
+    that root is the obvious way to ask for all of them — without this it is
+    reported as empty, which is true of the root and false of what is in it.
+    """
+    if not root.is_dir() or is_set(root):
+        return [root]
+    inside = [p for p in sorted(root.iterdir()) if p.is_dir() and is_set(p)]
+    return inside or [root]
+
+
 def discover(paths: list[str]) -> list[Path]:
     """The directories to serve: the ones named, else whatever the scratch root holds."""
     if paths:
-        return [Path(p).expanduser().resolve() for p in paths]
+        named = [Path(p).expanduser().resolve() for p in paths]
+        return list(dict.fromkeys(q for p in named for q in expand(p)))
     found: list[Path] = []
     for pattern in FALLBACK_GLOBS:
         found += [p.resolve() for p in sorted(SCRATCH_ROOT.glob(pattern)) if p.is_dir()]
@@ -234,6 +264,11 @@ class Sets:
                 "title": manifest.get("title") or root.name,
                 "takes": len(items),
                 "compare": compare,
+                # A heading the picker files this set under. Optional and
+                # generic — the manifest says what it is, this only carries it
+                # through — but a picker of a hundred and thirty sets is a wall
+                # of names without one.
+                "group": manifest.get("group") or "",
                 "path": str(root),
             })
 

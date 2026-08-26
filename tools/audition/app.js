@@ -209,6 +209,13 @@ function togglePlay() {
  * the name is not visible, and an address bar is visible. */
 
 function readRoute() {
+  const q = new URLSearchParams(location.search);
+  // The playhead rides in the query rather than in the fragment. It is a
+  // starting position rather than live state, and writing it back the way the
+  // fragment is written back would put a number in the address bar that changes
+  // sixty times a second.
+  const at = Number.parseFloat(q.get('t'));
+  const t = Number.isFinite(at) ? at : null;
   const frag = location.hash.replace(/^#\/?/, '');
   if (frag) {
     const [set, take, ver] = frag.split('/');
@@ -216,10 +223,10 @@ function readRoute() {
       set: decodeURIComponent(set || ''),
       take: decodeURIComponent(take || ''),
       ver: decodeURIComponent(ver || ''),
+      t,
     };
   }
-  const q = new URLSearchParams(location.search);
-  return { set: q.get('set') || '', take: q.get('take') || '', ver: q.get('v') || '' };
+  return { set: q.get('set') || '', take: q.get('take') || '', ver: q.get('v') || '', t };
 }
 
 function routeHash() {
@@ -279,6 +286,37 @@ async function boot() {
     : state.sets.some((s) => s.id === remembered) ? remembered
       : state.sets[0].id;
   await loadSet(start, route);
+  if (route.t !== null && state.take) {
+    state.startOffset = Math.max(0, Math.min(route.t, state.take.duration));
+  }
+}
+
+/* The take's schedule as numbered strikes, which is what a listening note has
+ * to be able to name. Strikes closer together than this are one audible event
+ * and share a number, which is the rule `shape/hits.py` groups its rows by. The
+ * number is not what carries the meaning: every readout beside it names the
+ * note and the time it was struck, so the two ends agree even where a grouping
+ * would not. */
+const FUSED_S = 0.035;
+
+function takeHits() {
+  const item = state.items[state.itemIndex];
+  const notes = item && item.meta && item.meta.notes;
+  if (!notes || !notes.length) return [];
+  const out = [];
+  for (const n of [...notes].sort((a, b) => a.start - b.start || a.note - b.note)) {
+    const last = out[out.length - 1];
+    if (last && n.start - last.start <= FUSED_S) last.notes.push(n);
+    else out.push({ n: out.length + 1, start: n.start, notes: [n] });
+  }
+  return out;
+}
+
+/// The strike the playhead is inside, or null before the first one.
+function hitAt(t) {
+  let cur = null;
+  for (const hit of takeHits()) if (hit.start <= t + 0.005) cur = hit;
+  return cur;
 }
 
 const specCaptionText = () => state.compare
@@ -334,16 +372,33 @@ async function loadSet(id, want) {
 function buildSetPicker() {
   const sel = $('setSelect');
   sel.replaceChildren();
+  // Grouped when the sets say what group they are in. A whole bank is a hundred
+  // and thirty entries, and a flat list of those is scrolled past rather than
+  // read; sets that declare no group stay in one ungrouped run at the top, so a
+  // handful of hand-made pages is unaffected.
+  const groups = new Map();
+  state.sets.forEach((s) => {
+    const key = s.group || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  });
   // The id is what a link carries and what the directory is called, so it leads;
   // the title is context and is routinely the same on several sets of one
   // instrument, which is exactly the case a title alone cannot tell apart.
-  state.sets.forEach((s) => {
+  const option = (s) => {
     const o = document.createElement('option');
     o.value = s.id;
     const marks = [`${s.takes} takes`];
     if (!s.compare) marks.push('no reference');
     o.textContent = `${s.id}  ·  ${marks.join(', ')}`;
-    sel.appendChild(o);
+    return o;
+  };
+  groups.forEach((sets, name) => {
+    if (!name) { sets.forEach((s) => sel.appendChild(option(s))); return; }
+    const g = document.createElement('optgroup');
+    g.label = name;
+    sets.forEach((s) => g.appendChild(option(s)));
+    sel.appendChild(g);
   });
   sel.addEventListener('change', () => loadSet(sel.value));
 }
@@ -720,6 +775,20 @@ function drawWave() {
     }
     c.strokeStyle = 'rgba(215,219,226,0.18)';
     c.beginPath(); c.moveTo(0, mid); c.lineTo(w, mid); c.stroke();
+    // Every strike, numbered where it lands and labelled with the note it
+    // plays. Without it the only way to say which one sounded wrong is to
+    // count, and a count has to be reconciled against the phrase set by hand at
+    // the other end -- which is a step where "the second one" silently becomes
+    // a different instrument.
+    c.font = '10px ui-monospace, SFMono-Regular, monospace';
+    c.textBaseline = 'top';
+    for (const hit of takeHits()) {
+      const x = (hit.start / state.take.duration) * w;
+      c.strokeStyle = 'rgba(232,226,212,0.30)';
+      c.beginPath(); c.moveTo(x, 0); c.lineTo(x, 14); c.stroke();
+      c.fillStyle = 'rgba(232,226,212,0.72)';
+      c.fillText(`#${hit.n} ${hit.notes.map((n) => n.note).join('+')}`, x + 3, 2);
+    }
   });
   g.clearRect(0, 0, w, h);
   g.drawImage(off, 0, 0);
@@ -876,18 +945,55 @@ function seekFromEvent(cv, ev) {
   return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * state.take.duration;
 }
 
-async function copyLink() {
-  const url = location.origin + location.pathname + routeHash();
+/* What was heard, in a form that can be pasted somewhere else.
+ *
+ * An address names the set, the take and the version and stops there, so
+ * everything that decides what the ear actually met -- where the playhead was,
+ * which strike that is, whether the levels were matched, whether the names were
+ * hidden -- had to be described from memory at the other end or reconstructed
+ * by counting strikes against a phrase set. Both of those are a way of getting
+ * it wrong quietly: "the second one" is a different note in every take, and the
+ * two ends do not find out that they disagreed. */
+function conditionsText() {
+  const item = state.items[state.itemIndex];
+  const url = location.origin + location.pathname
+    + `?t=${playhead().toFixed(2)}` + routeHash();
+  const lines = [
+    `set:      ${state.setId}`,
+    `take:     ${item ? item.id : '-'}${item && item.label ? ` — ${item.label}` : ''}`,
+    `version:  ${state.blind ? 'hidden (blind)' : activeKey()}`,
+    `playhead: ${playhead().toFixed(2)} s of `
+      + `${state.take ? state.take.duration.toFixed(2) : '?'} s`,
+  ];
+  const hit = hitAt(playhead());
+  if (hit) {
+    const plays = hit.notes.map((n) => `note ${n.note} v${n.velocity}`).join(' + ');
+    lines.push(`hit:      #${hit.n} — ${plays}, struck at ${hit.start.toFixed(2)} s`
+      + ` (${(playhead() - hit.start).toFixed(2)} s in)`);
+  }
+  if (state.region) {
+    lines.push(`region:   ${state.region[0].toFixed(2)}–${state.region[1].toFixed(2)} s`);
+  }
+  lines.push(`options:  gain-match ${$('matchRms').checked ? 'on' : 'off'},`
+    + ` loop ${state.loop ? 'on' : 'off'}, blind ${state.blind ? 'on' : 'off'}`);
+  lines.push(url);
+  return lines.join('\n');
+}
+
+async function copyConditions() {
+  const text = conditionsText();
   const btn = $('copyLink');
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(text);
     btn.textContent = 'copied';
   } catch {
-    // A page served over plain http from another host has no clipboard; show
-    // the address instead of failing silently, since it can still be read off.
-    btn.textContent = url;
+    // A page served over plain http from another host has no clipboard, and a
+    // block this size does not fit on a button. A prompt is selectable, and it
+    // is the one fallback that does not overwrite the take's own notes.
+    window.prompt('Listening conditions — copy this', text);
+    btn.textContent = 'shown above';
   }
-  setTimeout(() => { btn.textContent = 'copy link'; }, 1600);
+  setTimeout(() => { btn.textContent = 'copy what I hear'; }, 1600);
 }
 
 function wire() {
@@ -905,7 +1011,7 @@ function wire() {
     $('optionsBtn').setAttribute('aria-expanded', String(open));
   });
 
-  $('copyLink').addEventListener('click', copyLink);
+  $('copyLink').addEventListener('click', copyConditions);
 
   $('matchRms').addEventListener('change', () => { applyGains(false); renderLevels(); });
 
