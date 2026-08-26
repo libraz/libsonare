@@ -83,6 +83,8 @@ from report import report_result  # noqa: E402
 from room import DRY  # noqa: E402
 from staging import screen_knobs, stage_of, staged_indices  # noqa: E402
 from writeback import (  # noqa: E402
+    TUNING_LAYER_FILE,
+    array_members,
     key_to_member_path,
     materialize,
     override_patch_names,
@@ -362,6 +364,30 @@ def test_array_elements_regain_their_brackets():
 def test_a_member_whose_name_ends_in_a_digit_is_not_an_array():
     assert key_to_member_path("lfo2_rate_hz") == "lfo2_rate_hz"
     assert key_to_member_path("bowed_string.bow_force") == "bowed_string.bow_force"
+
+
+def test_every_indexed_key_the_library_forms_is_known_to_be_an_array():
+    """The list is derived, because the hand-written one drifted and broke a build.
+
+    Two percussion arrays were added to the tuning layer and not to the list, so
+    a fitted drum value was written as `mode_ratios1` — not a member of
+    anything. This asserts the derivation covers the whole key space rather than
+    the four members somebody happened to remember.
+    """
+    members = array_members()
+    text = (REPO_ROOT / TUNING_LAYER_FILE).read_text()
+    assert len(members) >= 9
+    for name in members:
+        assert f'"{name}"' in text or f'{name}" +' in text
+
+
+def test_an_array_whose_own_name_carries_digits_still_gets_its_brackets():
+    # `shell_t60_s3` is the whole reason the index is read as the trailing run
+    # rather than as everything after the last letter.
+    assert "shell_t60_s" in array_members()
+    assert key_to_member_path("percussion.shell_t60_s3") == "percussion.shell_t60_s[3]"
+    assert key_to_member_path("percussion.mode_ratios1") == "percussion.mode_ratios[1]"
+    assert key_to_member_path("percussion.mode_alpha2") == "percussion.mode_alpha[2]"
 
 
 def test_the_patch_name_list_matches_the_x_macro():

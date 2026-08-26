@@ -17,6 +17,7 @@ and nothing else — see `write_edits`, which is what records them.
 
 from __future__ import annotations
 
+import functools
 import re
 import sys
 from pathlib import Path
@@ -119,10 +120,15 @@ PROGRAM_TABLE_FILES = (
 # Where the per-drum-note voicing table is built.
 DRUM_TABLE_FILE = "src/midi/synth/gm_fallback_drums.cpp"
 
-# Patch-field path elements that address an array member. A tuning key spells
-# these without brackets (`pipe_organ.ranks2.level`) because a key travels
-# through a shell variable, where `[` and `]` would need quoting.
-ARRAY_MEMBERS = ("ops", "modes", "drawbars", "ranks")
+# Where the tuning layer forms every indexed key, and therefore the only place
+# that knows which path elements are arrays.
+TUNING_LAYER_FILE = "src/midi/synth/patch_tuning.cpp"
+
+#: An indexed key as that layer spells it: a string literal naming the array,
+#: immediately concatenated with the index. The literal is captured whole and
+#: the array is its last element, because an array's own name can carry digits
+#: (`shell_t60_s`) and a pattern that assumes otherwise silently drops it.
+_INDEXED_KEY = re.compile(r'"([a-z_0-9.]+)"\s*\+\s*(?:std::to_string\(|index\b)')
 
 
 def override_patch_names() -> list[str]:
@@ -134,12 +140,38 @@ def override_patch_names() -> list[str]:
     return re.findall(r"X\((\w+)\)", block.group(1))
 
 
+@functools.lru_cache(maxsize=1)
+def array_members() -> tuple[str, ...]:
+    """Path elements that address an array member of a patch struct.
+
+    A tuning key spells these without brackets (`pipe_organ.ranks2.level`)
+    because a key travels through a shell variable, where `[` and `]` would need
+    quoting — so a write-back has to put the brackets back, and has to know which
+    elements take them.
+
+    Read from the layer that forms the keys rather than listed here. A list
+    written by hand is a mirror of that file and it drifted: two percussion
+    arrays were added to the library and not to the list, so a fitted drum value
+    was written as `mode_ratios1`, which is not a member of anything. The tree
+    stopped compiling, which is the good case — the bad one is a name that
+    happens to exist.
+    """
+    text = (REPO_ROOT / TUNING_LAYER_FILE).read_text()
+    found = [k.rsplit('.', 1)[-1] for k in _INDEXED_KEY.findall(text)]
+    if not found:
+        raise ValueError(f"no indexed tuning keys found in {TUNING_LAYER_FILE}")
+    return tuple(sorted(set(found)))
+
+
 def key_to_member_path(path: str) -> str:
     """Turn a tuning key's field path into the C++ member expression it names."""
+    arrays = array_members()
     out = []
     for element in path.split("."):
-        m = re.fullmatch(r"([a-z_]+)(\d+)", element)
-        if m is not None and m.group(1) in ARRAY_MEMBERS:
+        # The name may carry digits of its own, so the index is the trailing
+        # run and the name is everything up to the last non-digit.
+        m = re.fullmatch(r"([a-z_0-9]*[a-z_])(\d+)", element)
+        if m is not None and m.group(1) in arrays:
             out.append(f"{m.group(1)}[{m.group(2)}]")
         else:
             out.append(element)
