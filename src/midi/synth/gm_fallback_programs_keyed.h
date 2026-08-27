@@ -501,7 +501,7 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   o.harpsichord_keyoff = o.harpsichord;
   o.harpsichord_keyoff.harpsichord.jack_noise = 0.5f;
 
-  // Drawbar Organ (GM 16): the tonewheel generator at 88 8000 000, the base
+  // Drawbar Organ (GM 16): the tonewheel generator at 88 8402 001, the base
   // registration. A patch of its own rather than the organ family's, which is
   // what makes the registration addressable and gives 18 something to differ
   // from; the values are the family's, moved rather than changed.

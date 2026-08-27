@@ -48,7 +48,7 @@ struct ProgramOverrides {
   NativeSynthPatch shamisen;            // program 106 (sawari buzzing bridge)
   NativeSynthPatch koto;                // program 107 (bridge-buzz plucked)
   NativeSynthPatch kalimba;             // program 108 (plucked steel tine, modal)
-  NativeSynthPatch drawbar_organ;       // program 16 (tonewheel, 88 8000 000)
+  NativeSynthPatch drawbar_organ;       // program 16 (tonewheel, 88 8402 001)
   NativeSynthPatch percussive_organ;    // program 17 (the same tonewheel plus percussion)
   NativeSynthPatch rock_organ;          // program 18 (fuller registration, driven)
   NativeSynthPatch church_organ;        // program 19 (Church Organ, flue pipe)

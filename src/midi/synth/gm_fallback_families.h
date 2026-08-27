@@ -150,7 +150,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[1].gain = 0.6f;
 
   // 16-23 organ: additive drawbar partials with key click (method (5));
-  // the 88 8000 000 base registration, fast gate envelope.
+  // the 88 8402 001 base registration, fast gate envelope.
   t[2].mode = SynthEngineMode::kAdditive;
   t[2].amp_env = fallback_env(2.0f, 0.0f, 1.0f, 60.0f);
   t[2].cutoff_hz = 20000.0f;
