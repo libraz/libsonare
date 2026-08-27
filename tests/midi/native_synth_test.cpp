@@ -1262,3 +1262,44 @@ TEST_CASE("each piano's wide variation hangs under its own capital", "[midi][syn
     REQUIRE(wide.stereo_spread > capital.stereo_spread);
   }
 }
+
+TEST_CASE("the banjo is a steel string drained by a head", "[midi][synth]") {
+  // 105 was the last program in its octet still answering the family patch. It
+  // derives from the steel guitar, and what makes it a banjo rather than a
+  // bright guitar is the membrane: it radiates so efficiently that the string
+  // is emptied in a fraction of the time.
+  const std::vector<float> banjo = render_program(105, 55, 240000);
+  const std::vector<float> guitar = render_program(25, 55, 240000);
+  const std::vector<float> sitar = render_program(104, 55, 240000);
+
+  // Time to fall 30 dB from the peak, in 10 ms steps. Measured 360 ms against
+  // the guitar's 1830.
+  auto fall_ms = [](const std::vector<float>& buf) {
+    const double floor_level = 0.0316 * double(peak(buf));
+    for (int w = 0; w < 480; ++w) {
+      double sum = 0.0;
+      for (size_t i = size_t(w) * 480; i < size_t(w + 1) * 480; ++i)
+        sum += double(buf[i]) * double(buf[i]);
+      if (std::sqrt(sum / 480.0) < floor_level) return w * 10;
+    }
+    return 4800;
+  };
+  REQUIRE(fall_ms(banjo) * 3 < fall_ms(guitar));
+
+  // Brighter than the guitar because of the fingerpick and the bridge-side
+  // pluck, and nowhere near the sitar, whose buzz is a different mechanism.
+  const double bright_banjo = high_fraction(banjo, 4800, 2000.0, 2048);
+  REQUIRE(bright_banjo > 2.0 * high_fraction(guitar, 4800, 2000.0, 2048));
+  REQUIRE(bright_banjo < 0.5 * high_fraction(sitar, 4800, 2000.0, 2048));
+
+  // Playable beside the guitar it is derived from.
+  REQUIRE(peak(banjo) > 0.7f * peak(guitar));
+
+  // The whole octet names its own patch now, so the family entry is a default
+  // nothing reaches.
+  for (uint8_t program = 104; program <= 111; ++program) {
+    INFO("program " << int(program));
+    REQUIRE(&sonare::midi::synth::gm_fallback_patch(0, program) !=
+            &sonare::midi::synth::detail::family_patches()[13]);
+  }
+}

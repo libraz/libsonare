@@ -101,9 +101,9 @@ constexpr GsVariationPatch kGsVariationPatches[] = {
     {0, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
     {0, 16, GsToneMap::kSc55, &ProgramOverrides::piano_dark},
     {0, 2, GsToneMap::kSc55, &ProgramOverrides::piano_dark},
-    // Piano 2w / Piano 3w / HonkyTonk w. Their capitals are the one family-0
-    // grand, so their wide voicings are the one wide grand too; listing them
-    // here is what makes the variation bank reach it at all.
+    // Piano 2w / Piano 3w / HonkyTonk w — one per capital, since the three
+    // capitals are voiced apart. Sharing the grand's wide patch would have made
+    // each of them duller, quieter or more in tune than its own capital.
     {1, 8, GsToneMap::kSc55, &ProgramOverrides::bright_piano_wide},
     {1, 1, GsToneMap::kSc55, &ProgramOverrides::bright_piano_wide},
     {2, 8, GsToneMap::kSc55, &ProgramOverrides::electric_grand_wide},
@@ -361,6 +361,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
     // Buzzing-bridge plucked strings (physical waveguide).
     case 104:  // Sitar
       return program_overrides().sitar;
+    case 105:  // Banjo (steel strings drained by a membrane head)
+      return program_overrides().banjo;
     case 106:  // Shamisen
       return program_overrides().shamisen;
     case 107:  // Koto

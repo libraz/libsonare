@@ -458,6 +458,26 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   si.plucked_string.pick_position = 0.20f;
   si.gain = 0.8f;
 
+  // Banjo (GM 105): steel strings over a stretched head, picked near the bridge
+  // with a metal fingerpick. The head is what makes it a banjo and not a bright
+  // guitar: a membrane radiates far more efficiently than a wooden box, so the
+  // string is drained in about a second where the guitar rings for three and a
+  // half, and it drains the fundamental hardest -- which is why what is left is
+  // the ping. `BodyType` has no membrane, so the head is carried as that decay
+  // and a low body mix rather than as a resonator; a wooden box put underneath
+  // it would be the wrong instrument's colour.
+  o.banjo = steel;
+  o.banjo.ks.decay_s = 1.0f;
+  o.banjo.ks.decay_stretch = 0.25f;  // a short neck: the low strings ring little longer
+  o.banjo.ks.brightness = 0.8f;
+  o.banjo.ks.pick_position = 0.10f;  // picked close to the bridge
+  o.banjo.ks.nail = 0.9f;            // a metal fingerpick, harder than a nail
+  o.banjo.ks.exc_brightness = 0.95f;
+  o.banjo.ks.body_coupling = 0.15f;
+  o.banjo.ks.tension_mod = 0.2f;
+  o.banjo.body_mix = 0.12f;
+  o.banjo.gain = 1.2f;
+
   // Shamisen (GM 106): the sawari — only a slight graze against the bare wood
   // at the nut — gives a drier, harder buzz than the sitar, over a shorter
   // ring and a hard bachi strike.

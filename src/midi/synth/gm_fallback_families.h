@@ -288,8 +288,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[12].cutoff_hz = 3000.0f;
   t[12].lfo_to_pitch_cents = 10.0f;
 
-  // 104-111 ethnic (plucked): bright short KS pluck (banjo/sitar/koto
-  // sketch — near-bridge pick, fast decay).
+  // 104-111 ethnic (plucked): bright short KS pluck, near-bridge pick, fast
+  // decay. All eight programs now name their own patch, so nothing in the octet
+  // reaches this one; it stays as the octet's default.
   t[13].mode = SynthEngineMode::kKarplusStrong;
   t[13].amp_env = fallback_env(1.0f, 0.0f, 1.0f, 200.0f);
   t[13].cutoff_hz = 20000.0f;

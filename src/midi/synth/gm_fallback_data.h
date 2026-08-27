@@ -50,6 +50,7 @@ struct ProgramOverrides {
   NativeSynthPatch bass_pop;            // program 37 (Slap Bass 2, pull/pop)
   NativeSynthPatch harp;                // program 46 (Orchestral Harp)
   NativeSynthPatch sitar;               // program 104 (buzzing jawari bridge)
+  NativeSynthPatch banjo;               // program 105 (steel over a membrane head)
   NativeSynthPatch shamisen;            // program 106 (sawari buzzing bridge)
   NativeSynthPatch koto;                // program 107 (bridge-buzz plucked)
   NativeSynthPatch kalimba;             // program 108 (plucked steel tine, modal)
@@ -206,6 +207,7 @@ struct ProgramOverrides {
   X(bass_pop)                         \
   X(harp)                             \
   X(sitar)                            \
+  X(banjo)                            \
   X(shamisen)                         \
   X(koto)                             \
   X(kalimba)                          \

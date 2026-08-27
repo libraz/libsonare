@@ -8099,7 +8099,7 @@
       "name": "Banjo",
       "group": "104-111 Ethnic",
       "tone_class": "plucked-string",
-      "patch": "fam13",
+      "patch": "banjo",
       "engine": "karplus_strong",
       "capture": null,
       "stage": 0.2,
@@ -8107,7 +8107,7 @@
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
-        "patch": "fam13",
+        "patch": "banjo",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
