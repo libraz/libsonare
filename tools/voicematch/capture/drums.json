@@ -25,11 +25,16 @@
   },
   "_round_robin": "A sampled kit commonly alternates between several recordings of the same strike, which makes the reference non-deterministic in a way that reads as measurement noise in every metric. `capture.py calibrate` renders the same note twice and reports whether the two agree; check that before trusting a corpus, because a round robin left on puts a floor under the loss that no knob can go below. This kit has none: re-rendering 120 slots of the grid reproduced every good one bit for bit, and a loss that stops falling has stopped for a reason worth finding. What that same re-render did find is a different thing entirely, and calibrate's one note could never have shown it - see `_late_renders`.",
   "_late_renders": "A render can come back loud, plausible, and not the note. Re-rendering 120 slots and correlating against the originals, 39 of them returned a completely different signal - correlation 0.000, 4 to 25 dB LOUDER than the real note, beginning 150 to 843 ms into the file after a stretch of digital silence, where every correct render begins at exactly the 100 ms preroll. Whole instruments were affected: all six velocities of the closed hi-hat and of the mute triangle, whose peak levels then read -7.99, -8.03, -8.04, -0.57, -0.79, -0.32 dBFS against a clean ramp that ascends smoothly. Being loud is why nothing caught it - the capture's retry asks whether the samples arrived, and these arrived, late and wrong. `capture.py` now also asks WHEN, retries a render whose audio starts more than `ONSET_SLACK_MS` past the preroll, and records `onset_ms` per slot so the manifest can be audited. Any measurement taken from this kit before that guard existed is suspect, and the whole grid was recaptured under it.",
-  "_timbres": "One kit per timbre, on its own channel slot if the plugin is a rack.",
+  "_timbres": "One kit per timbre, on its own channel slot if the plugin is a rack. Two rather than one because a single reference has no spread, and without a spread no dimension can be judged against anything: a gate written from one kit holds the model to that kit's mixing decisions as if they were the instrument's properties. The second is named for what was measured rather than for a product, because the rack publishes no slot names and a label claiming one would be the single unverifiable line in a file whose point is that its contents were measured. Selected against the fourteen percussion slots the rack turned out to hold: `kit-b` answers the whole General MIDI map with a General MIDI layout (a kick low, a bright closed hat, a crash that rings), which the slots reading a 50 Hz kick or a 250 Hz note 42 do not, and it sits far enough from `kit-a` to be a different instrument rather than the same one processed differently. Its near neighbours in the rack were deliberately NOT taken as a third: two kits a couple of decibels apart would put the spread where the gate's discriminating power is supposed to be, which is a gate that passes because its references agree.",
   "timbres": [
     {
       "id": "kit-a",
       "label": "Studio kit, close mics",
+      "channel": 10
+    },
+    {
+      "id": "kit-b",
+      "label": "Second kit: deeper kick and floor tom, brighter closed hat",
       "channel": 10
     }
   ],
