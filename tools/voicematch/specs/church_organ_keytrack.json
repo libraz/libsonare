@@ -1,0 +1,21 @@
+{
+  "_": "One knob, because the eleven-note corpus cannot support thirteen. The full spec (`church_organ_corpus.json`) reaches 0.947 of its start loss over 595 evaluations and then scores 1.032 on the held-out notes — it is fitting the probe, not the instrument, and every value it returns is anchored on that. A grid of eleven notes at one velocity is the whole evidence this registration has, and the number of knobs it can carry is small.\n\nSo the knob the measurement points at is fitted alone. `keytrack` is the only control here whose effect grows with pitch, which is the shape the deficit has: the partial stack is level with the reference through the bass and mid compass and falls to 15 dB short by C7. Everything else in the full spec is a per-rank level or brightness, flat across the compass, and can only trade one end against the other.\n\nRun it with the same `--corpus` and `--corpus-timbre` as the full spec, and read `--validate-notes` before the loss.",
+  "_weights": "The same as the full spec, and for the same measured reasons: `env` at zero because a chorus's ranks beat against each other and the sustain slope returns the beat's phase, `tnr` at zero because a rank below the played pitch is scored as noise by construction. `hf` is doubled because the deficit this knob addresses is a treble deficit.",
+  "weights": {
+    "harm": 2.0,
+    "cents": 0.5,
+    "tnr": 0.0,
+    "hf": 2.0,
+    "level": 1.0,
+    "env": 0.0
+  },
+  "knobs": [
+    {
+      "_": "Treble regulation: each rank's mix level rolls off as the played note rises above C4, more steeply the higher its footage. Real voicing does regulate the upperwork softer toward the treble, so the mechanism belongs; what is unmeasured is how much of it this reference has. The range stops at 0.6 rather than 1.0 because past the compiled 0.5 it only thins further, and the whole-grid sweep already rules that direction out.",
+      "tunable": "church_organ.pipe_organ.keytrack",
+      "min": 0.0,
+      "max": 0.6,
+      "scale": "linear"
+    }
+  ]
+}

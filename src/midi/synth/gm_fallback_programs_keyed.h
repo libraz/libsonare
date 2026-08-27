@@ -514,8 +514,10 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   o.church_organ.pipe_organ.brightness = 0.417552f;
   // Treble regulation: thin the upperwork (4'/quint/2'/tierce) toward the treble
   // so the plenum does not turn shrill above C4, while the bass and mid compass
-  // keep the full chorus.
-  o.church_organ.pipe_organ.keytrack = 0.5f;
+  // keep the full chorus. Over C4 and up, 0.5 regulated far harder than the
+  // sampled references: it left the partial stack 1.4x and the brightness 1.2x
+  // their spread, where 0.175 leaves them at 1.0x and 0.6x for the same tuning.
+  o.church_organ.pipe_organ.keytrack = 0.175078f;
   // A touch of wind sag so a full chord breathes, and a gentle tremulant — the
   // slow pressure undulation that keeps a sustained chord alive rather than
   // frozen (heard as faint sidebands around every partial).

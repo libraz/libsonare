@@ -83,6 +83,13 @@
       "scale": "linear"
     },
     {
+      "_": "Treble regulation, and the one knob here that darkens the top of the compass and not the bottom - the shape the deficit actually has. It was absent from this spec while the rank knobs above were fitted around it, so those values are anchored on a regulation nobody measured. Swept alone over the eleven notes: brightness reads 2.1x the reference spread at the compiled 0.5, 1.5x at 0.0 and 1.0x at 0.125, and the partial stack falls monotonically from 1.8x to 1.3x as it closes. Its range stops at 0.6 rather than 1.0 because past the compiled default it only thins further in a direction the measurement has already ruled out.",
+      "tunable": "church_organ.pipe_organ.keytrack",
+      "min": 0.0,
+      "max": 0.6,
+      "scale": "linear"
+    },
+    {
       "_": "Speech noise. The reference reads 8 dB noisier than the model overall and the model is the cleaner one at every note above C4, which on a pipe is wind rather than a defect of the tone. `breath` is steady and lives in the sustain window, which is what separates it from `chiff` below.",
       "tunable": "church_organ.pipe_organ.breath",
       "min": 0.1,
