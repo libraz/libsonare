@@ -272,23 +272,37 @@ def build_sources(voice: Voice, timbres: list[dict],
     return sources
 
 
-def reference_note(voice: Voice, timbres: list[dict]) -> str:
+def reference_note(voice: Voice, timbres: list[dict], model_sends: str = "auto") -> str:
     """The sentence under the title saying what the reference side is worth.
 
     Read off the timbres actually rendered rather than off the capture, so a
     `--model-only` page of a captured voice does not describe a reference that
     is not on it.
     """
+    forced = ""
+    if model_sends == "gs":
+        forced = ("The model side renders with CC91/93/94 at their GS power-on values "
+                  "whatever the reference does, because this page was built to be heard "
+                  "through libsonare's own ambience. ")
+    elif model_sends == "dry":
+        forced = "The model side renders with CC91/93/94 zeroed, by request. "
     if voice.capture is None or not timbres:
-        return ("Nothing is being compared here: this page holds the model alone, "
-                "either because no reference has been captured for this voice or "
-                "because none was asked for.")
+        return forced + (
+            "Nothing is being compared here: this page holds the model alone, "
+            "either because no reference has been captured for this voice or "
+            "because none was asked for.")
     if voice.capture.dry:
-        return ("The reference is captured dry — every effect section of the plugin is "
-                "switched off — so what is being compared is the instrument and not a room.")
+        return forced + (
+            "The reference is captured dry — every effect section of the plugin is "
+            "switched off — so what is being compared is the instrument and not a room.")
     return ("The reference is NOT captured dry: this one carries effects of its own "
             "that cannot be switched off per slot, so part of what is heard on the "
-            "reference side is its room.")
+            "reference side is its room. The model side therefore renders the way it "
+            "ships — CC91/93/94 left at their GS power-on values, weighted per program "
+            "by `gm_fallback_sends` — rather than at the zero a dry-versus-dry metric "
+            "needs. That is libsonare's own ambience and the only ambience a listener "
+            "gets from it, so what is being compared is the product against the "
+            "recording, room included on both sides.")
 
 
 def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
@@ -296,9 +310,30 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     """Every version of one take, written out, as the manifest item describing it."""
     total = take.duration()
     channel = 9 if voice.kit else take.channel
+    # A page is heard, not measured, so the model renders the way it SHIPS.
+    # `write_smf` defaults CC91/93/94 to 0 because a dry-versus-dry metric needs
+    # that; leaving them alone here keeps the GS power-on values a plain GM file
+    # arrives with, weighted per program by `gm_fallback_sends` — which is where
+    # libsonare's own ambience lives, and the only ambience a listener will ever
+    # get from it. Zeroing them put a bone-dry model beside a reference carrying
+    # its building, and the low end, where a registration question is decided,
+    # was then decided by the building. Only for a reference that HAS a room: a
+    # dry capture is compared dry, and its page stays what it always was.
+    #
+    # `--model-sends` overrides that inference, because the capture decides what
+    # a COMPARISON needs and the question on the page is not always a comparison.
+    # A change to the shared GS tank reaches every program, and the voice that
+    # has to be checked for collateral is whichever one the listener knows best
+    # — usually a dry-captured one, whose page would otherwise render at CC91 0
+    # and hold the one setting the question is about perfectly inert.
+    wet = (args.model_sends == "gs" or (
+        args.model_sends == "auto"
+        and voice.capture is not None and not voice.capture.dry and bool(timbres)))
     smf = write_smf(take.notes, program=voice.program, bank=voice.bank,
-                    end_pad=take.tail_s, cc_events=take.cc_events, channel=channel)
-    print(f"== {take.id} ({total:.1f}s) ==", file=sys.stderr)
+                    end_pad=take.tail_s, cc_events=take.cc_events, channel=channel,
+                    sends=(None, None, None) if wet else (0, 0, 0))
+    print(f"== {take.id} ({total:.1f}s){' [GS sends at power-on]' if wet else ''} ==",
+          file=sys.stderr)
 
     renders: dict[str, np.ndarray] = {}
     # `--lib` has to reach the unmodified voice as well as the variants.
@@ -448,7 +483,8 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
         "voice": voice.describe(),
         "notes": ((args.note + " ") if args.note else "") + (
             "Every version of a take is written at one shared gain, so the level "
-            "difference between them is real. " + reference_note(voice, timbres)),
+            "difference between them is real. "
+            + reference_note(voice, timbres, args.model_sends)),
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "sources": build_sources(voice, timbres, variants),
         "items": items,
@@ -555,6 +591,13 @@ def main() -> int:
     ap.add_argument("--model-only", action="store_true",
                     help="skip the reference renders even where one exists")
     ap.add_argument("--only", default="", help="comma-separated take ids")
+    ap.add_argument("--model-sends", choices=("auto", "gs", "dry"), default="auto",
+                    help="what the model side does with CC91/93/94: 'auto' leaves them "
+                         "at the GS power-on values where the reference carries a room "
+                         "and zeroes them where it does not, 'gs' always leaves them "
+                         "(the way the library ships, which is what a question about "
+                         "the shared GS tank has to be heard through), 'dry' always "
+                         "zeroes them")
     ap.add_argument("--variant", action="append", default=[], metavar="NAME=OVERRIDES",
                     help="an extra version of every take, rendered under this "
                          "SONARE_TUNING_OVERRIDES string; repeatable, and applied to "
@@ -606,19 +649,18 @@ def main() -> int:
         print(exc, file=sys.stderr)
         return 2
     root = Path(args.out).expanduser().resolve()
-    # A capture-driven run writes where it was pointed, which is what the
-    # existing per-instrument invocations expect. A bank-driven run writes one
-    # subdirectory per voice, because it is routinely more than one voice and
-    # they cannot share a directory.
-    flat = bool(args.config) and len(selected) == 1
 
+    # One subdirectory per voice, always. A capture-driven run used to write
+    # straight into --out instead, which put its manifest at the path every
+    # other single-voice run also writes to: the second instrument silently took
+    # the first one's page, leaving that page's takes on disk with nothing left
+    # to name or group them. `write_index` merges by slug for exactly this
+    # reason, and the flat path was the one route that skipped it.
     total = 0
     for voice in selected:
-        out = root if flat else root / voice.slug
-        total += render_set(voice, out, args, table, extra)
+        total += render_set(voice, root / voice.slug, args, table, extra)
 
-    if not flat:
-        write_index(root, selected)
+    write_index(root, selected)
     print(f"\n{len(selected)} voice(s), {total} takes -> {root}", file=sys.stderr)
     if root.is_relative_to(CORPUS_ROOT):
         print("listen:  python tools/audition/serve.py"

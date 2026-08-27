@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -555,6 +556,43 @@ def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys, tmp_path
     assert "no phrase set" in capsys.readouterr().err
 
 
+def test_a_capture_run_writes_under_its_voice_and_not_at_the_root(tmp_path):
+    """A single-voice page must not land on the path every other one uses.
+
+    `--config` once wrote flat, straight into `--out`, so the second instrument
+    auditioned took the first one's manifest and left that page's takes on disk
+    with nothing to name or group them. Asserted on the layout rather than on
+    the flag, because what matters is that two voices can coexist under one
+    root; `main` is not run here, since a real run renders through the library.
+    """
+    import make_audition
+
+    source = Path(make_audition.__file__).resolve().parent / "capture" / "pipe_organ.json"
+    cfg = json.loads(source.read_text())
+    root = tmp_path / "out"
+    written: list[Path] = []
+    argv = ["make_audition.py", "--config", str(source), "--out", str(root)]
+
+    def fake_render_set(voice, out, args, table, extra):
+        written.append(Path(out))
+        return 1
+
+    old_argv, old_render = sys.argv, make_audition.render_set
+    sys.argv = argv
+    make_audition.render_set = fake_render_set
+    try:
+        assert make_audition.main() == 0
+    finally:
+        sys.argv, make_audition.render_set = old_argv, old_render
+
+    assert written, "the run selected no voice"
+    for out in written:
+        assert out.parent == root.resolve(), f"{out} is not a voice directory under {root}"
+        assert out != root.resolve(), "the page was written flat at the root"
+    assert (root / "bank.json").exists(), "the merged index was skipped"
+    assert cfg["program"] == 19
+
+
 # --------------------------------------------------------------------------
 # which dimensions an instrument is judged on
 
@@ -1010,3 +1048,42 @@ def test_the_high_pass_stops_what_no_instrument_radiates():
 
     assert through(hz / 5.0) < -60.0
     assert through(hz * 2.5) == pytest.approx(0.0, abs=0.5)
+
+
+def test_model_sends_gs_reaches_a_dry_captured_voice(monkeypatch):
+    """The flag exists so a shared-tank question can be heard on any voice.
+
+    A dry capture renders at CC91 0, where nothing about the GS reverb can be
+    heard at all — so a page asking "is the tank long enough" built on the voice
+    a listener knows best would have held its one setting perfectly inert, and
+    looked exactly like a page of subtly different versions.
+    """
+    import make_audition
+    from smf import Note
+
+    seen: list[tuple] = []
+    monkeypatch.setattr(make_audition, "write_smf",
+                        lambda *a, **kw: seen.append(kw.get("sends")) or b"")
+
+    class Capture:
+        dry = True
+
+    class Voice:
+        capture, kit, program, bank, slug = Capture(), False, 0, 0, "p000-x"
+
+    class Take:
+        id, notes, tail_s, cc_events, channel = "t", [Note(60, 96, 0.0, 1.0)], 1.0, (), 0
+        label, sub, group = "t", "", "g"
+
+        def duration(self):
+            return 2.0
+
+    monkeypatch.setattr(make_audition, "render_variant", lambda *a, **kw: np.zeros((10, 2)))
+    monkeypatch.setattr(make_audition, "render_model", lambda *a, **kw: np.zeros((10, 2)))
+    monkeypatch.setattr(make_audition, "write_wav", lambda *a, **kw: None)
+
+    for mode, want in (("auto", (0, 0, 0)), ("gs", (None, None, None)), ("dry", (0, 0, 0))):
+        seen.clear()
+        args = SimpleNamespace(model_sends=mode, lib="", archive_references="")
+        make_audition.render_take(Take(), Voice(), [], Path("."), args, [], None)
+        assert seen == [want], f"{mode}: {seen}"
