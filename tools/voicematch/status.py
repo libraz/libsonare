@@ -131,19 +131,28 @@ def gate_agreement(gate: dict) -> dict:
     reference timbres on that dimension. Where the capture has one timbre the
     spread is empty and no dimension can be adjudicated at all, which is a
     different answer from "none of them agree" and is reported as such.
+
+    The margin comes back off the bound first. A bound is the measurement times
+    the gate's slack, and that slack is there so a regression guard survives
+    measurement noise — it says nothing about how close the voice is. Left in,
+    it would make a voice have to beat the references by the slack before it
+    counted as level with them, and would make every stage on this ladder move
+    when a gate is re-recorded at a different margin with no audio changing.
     """
     spread = gate.get("reference_spread") or {}
     bounds = gate.get("bounds") or {}
     if not spread:
         return {"inside": 0, "total": 0, "unjudgeable": sorted(bounds)}
+    margin = float(gate.get("margin") or 1.0) or 1.0
     inside, outside = [], {}
     for dim, b in bounds.items():
         if dim not in spread:
             continue
-        if b["median"] <= spread[dim] * 1.0001:
+        measured = b["median"] / margin
+        if measured <= spread[dim] * 1.0001:
             inside.append(dim)
         else:
-            outside[dim] = round(b["median"] / spread[dim], 2)
+            outside[dim] = round(measured / spread[dim], 2)
     return {
         "inside": len(inside),
         "total": len(inside) + len(outside),

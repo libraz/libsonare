@@ -141,6 +141,23 @@ def test_a_bound_inside_the_spread_agrees():
     assert got["outside"]["stereo"] == pytest.approx(1.81, abs=0.01)
 
 
+def test_the_gate_margin_does_not_decide_whether_a_voice_agrees():
+    """A bound is the measurement times the gate's slack, and the slack is there
+    so a regression guard survives noise. Counted as if it were the measurement,
+    it would put a voice measurably inside the references' own spread on the
+    wrong side of them, and would move the stage when a gate is re-recorded at a
+    different margin with nothing about the voice having changed."""
+    gate = {
+        "margin": 1.25,
+        "reference_spread": {"attack": 25.0, "stereo": 0.229},
+        # 22.5 and 0.4 measured: the first inside the spread, the second not.
+        "bounds": {"attack": {"median": 28.125}, "stereo": {"median": 0.5}},
+    }
+    got = status.gate_agreement(gate)
+    assert got["inside"] == 1
+    assert got["outside"]["stereo"] == pytest.approx(0.4 / 0.229, abs=0.01)
+
+
 # --------------------------------------------------------------------------- #
 # Canonical dimensions
 # --------------------------------------------------------------------------- #
