@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """Capture a reference corpus from an AudioUnit instrument, and calibrate the rig.
 
-Three commands, in the order they are used:
+Four commands, in the order they are used:
 
+    capture.py identify  --config capture/drums.json --channels 1-16
     capture.py calibrate --config capture/piano.json
     capture.py corpus    --config capture/piano.json
     capture.py verify    --config capture/piano.json
+
+`identify` is the one that only a multitimbral rack needs, and it comes first
+because a capture cannot name a slot it has not found. A rack answers on sixteen
+channels and publishes no slot names, so the only way to learn what is loaded in
+one is to play it: the command asks how much of the slot's answer to a key sits
+on that key's own harmonic series (near 1 and it is an instrument, not a kit)
+and, where it does not, how far the slot's diagnostic hits sit from the kit this
+capture already measured. It reports and never edits the definition.
 
 `calibrate` measures what the *host* has to do to record this plugin
 faithfully, and refuses to guess. A disk-streaming sampler has two settings
@@ -55,6 +64,8 @@ from au_oracle import (  # noqa: E402
     find_aubounce,
     resolve_preset,
 )
+from metrics import analyze_hit, harmonic_share, midi_to_hz, to_mono  # noqa: E402
+from smf import Note  # noqa: E402
 from wavio import read_wav  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -629,6 +640,201 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
 
 
 # --------------------------------------------------------------------------
+# identify
+
+#: The octave ladder stage one plays. Three notes rather than one because a
+#: patch that is silent or unvoiced on a single key would otherwise read as a
+#: kit, and two octaves is wide enough that no melodic patch covers only part
+#: of it.
+PITCH_PROBE_NOTES = (48, 60, 72)
+#: Where a slot stops being an instrument. Measured on both sides rather than
+#: chosen: the captured concert grand reads 0.95 to 1.00 across its whole
+#: compass, and the captured kit's slot reads 0.05 to 0.15 on the same three
+#: keys. Anything between those is a slot worth listening to rather than a
+#: verdict, which is what the reported number is for.
+MELODIC_SHARE = 0.5
+
+
+def _pitch_probe(src: AuSource, scratch: Path, channel: int, velocity: int,
+                 gate_ms: int, sample_rate: int) -> dict:
+    """Stage one: does this slot answer a note number with that note's pitch?
+
+    The discriminator is deliberately not a fact about drums. `harmonic_share`
+    asks how much of the render sits on the series of the key that was pressed,
+    which a melodic slot answers near 1 whatever its patch layers on top and a
+    kit answers near 0 because each key is a different instrument. Nothing here
+    knows what a drum sounds like — the tells recorded for the kit already
+    captured describe THAT kit, and a rule written from them would find only
+    more of it.
+
+    Reported as the median over the ladder: one key can fall on a patch's split
+    point, and three keys do not.
+    """
+    shares: list[float] = []
+    for note in PITCH_PROBE_NOTES:
+        wav = scratch / f"ch{channel:02d}-pitch-{note}.wav"
+        try:
+            _render_note(replace(src, channel=channel), wav, note, velocity, gate_ms,
+                         floor_peak=0.0, preroll_ms=float(src.preroll_ms),
+                         sample_rate=sample_rate)
+        except AuRenderError as exc:
+            return {"error": str(exc)[:200]}
+        audio, sr = read_wav(wav)
+        mono = to_mono(audio)
+        onset = int(float(src.preroll_ms) / 1000.0 * sr)
+        share = harmonic_share(mono[onset:], sr, midi_to_hz(note))
+        if share is not None:
+            shares.append(share)
+    if not shares:
+        # Nothing measurable is not a kit; it is unmeasured, and stage two
+        # decides.
+        return {"share": [], "median_share": None, "melodic": False}
+    median = float(np.median(shares))
+    return {"share": [round(s, 3) for s in shares], "median_share": round(median, 3),
+            "melodic": median >= MELODIC_SHARE}
+
+
+def _reference_bands(ident: str) -> tuple[dict[tuple[int, int], list[float]], float | None]:
+    """The committed reference's own band profiles, keyed by (note, velocity).
+
+    Stage two compares against these rather than against a written-down list of
+    what a kick looks like. The capture already holds one measured kit; what a
+    second one has to resemble is that measurement.
+    """
+    path = HERE / "reference" / f"{ident}.json"
+    if not path.exists():
+        return {}, None
+    profile = json.loads(path.read_text())
+    rows = {(int(r["note"]), int(r["velocity"])): r.get("bands_db") or []
+            for r in profile.get("rows") or []}
+    return rows, (profile.get("capture") or {}).get("band_edge_hz")
+
+
+def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, ...],
+                  velocity: int, gate_ms: int, sample_rate: int,
+                  reference: dict[tuple[int, int], list[float]],
+                  band_edge: float | None) -> dict:
+    """Stage two: how far this slot's diagnostic hits sit from the known kit's.
+
+    Reported as the median absolute band-profile difference in decibels, over
+    one note per declared family. The capture's own timbre channel is measured
+    through this same path as the control: without a number for a slot that IS
+    the kit, a table of distances says nothing about what a small one means.
+    """
+    per_note, distances = {}, []
+    for note in notes:
+        ref = reference.get((note, velocity))
+        if not ref:
+            continue
+        wav = scratch / f"ch{channel:02d}-kit-{note}.wav"
+        try:
+            _render_note(replace(src, channel=channel), wav, note, velocity, gate_ms,
+                         floor_peak=0.0, preroll_ms=float(src.preroll_ms),
+                         sample_rate=sample_rate)
+        except AuRenderError as exc:
+            per_note[note] = {"error": str(exc)[:120]}
+            continue
+        audio, sr = read_wav(wav)
+        mono = to_mono(audio)
+        hit = analyze_hit(mono, sr, Note(note, velocity, float(src.preroll_ms) / 1000.0,
+                                         gate_ms / 1000.0),
+                          len(mono) / sr, max_band_hz=band_edge)
+        delta = float(np.median(np.abs(np.asarray(hit.bands_db) - np.asarray(ref))))
+        distances.append(delta)
+        per_note[note] = {"peak_band_hz": hit.peak_band_hz,
+                          "attack_ms": round(hit.attack_ms, 2),
+                          "band_delta_db": round(delta, 2)}
+    return {"notes": per_note,
+            "band_delta_db": round(float(np.median(distances)), 2) if distances else None}
+
+
+def parse_channels(spec: str) -> tuple[int, ...]:
+    """`1-8,11-13,15,16` -> the channels it names, in order, without repeats."""
+    out: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo, hi = (int(x) for x in part.split("-", 1))
+            out.extend(range(lo, hi + 1))
+        else:
+            out.append(int(part))
+    seen, ordered = set(), []
+    for ch in out:
+        if 1 <= ch <= 16 and ch not in seen:
+            seen.add(ch)
+            ordered.append(ch)
+    return tuple(ordered)
+
+
+def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
+             verbose: bool) -> int:
+    """Say what is loaded in each slot of a multitimbral rack.
+
+    A rack answers on sixteen channels and publishes no slot names, so the only
+    way to learn what is in one is to play it. This asks two questions in the
+    order that makes the second cheap: does the slot play pitches (then it is
+    not a kit, and no drum render is spent on it), and if it does not, how close
+    are its diagnostic hits to the kit this capture already measured.
+
+    Reports; never edits the capture definition. Which slot to add as a second
+    timbre is a decision, and the evidence for it belongs in front of a person.
+    """
+    timbre = cfg["timbres"][0]
+    base = source_for(cfg, timbre, tail="2s")
+    claimed = {int(t.get("channel", 1)) for t in cfg["timbres"]}
+    probe = tuple(channels) or tuple(sorted(claimed))
+    scratch = out / "_identify"
+    scratch.mkdir(parents=True, exist_ok=True)
+    gate_ms = int(cfg.get("gate_ms", 50))
+    sample_rate = int(cfg["sample_rate"])
+    reference, band_edge = _reference_bands(cfg["id"])
+    groups = note_groups(cfg)
+    # One note per declared family: a kit differs from a melodic slot across the
+    # whole layout rather than on any single key, and the families are where the
+    # capture already recorded which keys are different instruments.
+    diagnostic = tuple(sorted({notes[0] for notes in groups.values() if notes}))
+
+    report: dict = {"config": cfg["_path"], "plugin": cfg["plugin"],
+                    "velocity": velocity, "band_edge_hz": band_edge,
+                    "pitch_probe": list(PITCH_PROBE_NOTES),
+                    "diagnostic_notes": list(diagnostic), "channels": {}}
+    for channel in probe:
+        control = channel in claimed
+        if verbose:
+            print(f"  ch {channel:2d}{' (control)' if control else ''}", file=sys.stderr)
+        entry: dict = {"control": control, "pitch": _pitch_probe(
+            base, scratch, channel, velocity, gate_ms, sample_rate)}
+        if not entry["pitch"].get("melodic") and diagnostic and reference:
+            entry["kit"] = _kit_likeness(base, scratch, channel, diagnostic, velocity,
+                                         gate_ms, sample_rate, reference, band_edge)
+        report["channels"][str(channel)] = entry
+
+    _write(scratch / "report.json", report)
+    print(f"\n{cfg['id']}: {len(probe)} slot(s), velocity {velocity}\n")
+    print("  ch   pitch share   verdict        band delta vs the measured kit")
+    for channel in probe:
+        e = report["channels"][str(channel)]
+        pitch, kit = e["pitch"], e.get("kit") or {}
+        share = pitch.get("median_share")
+        if pitch.get("error"):
+            verdict = "did not render"
+        elif pitch.get("melodic"):
+            verdict = "plays pitches"
+        elif kit.get("band_delta_db") is None:
+            verdict = "no pitch, unscored"
+        else:
+            verdict = "no pitch"
+        delta = kit.get("band_delta_db")
+        print(f"  {channel:2d}   {'-' if share is None else f'{share:10.3f}'}"
+              f"   {verdict:<14} {'-' if delta is None else f'{delta:6.2f} dB'}"
+              f"{'   <- the kit already captured' if e['control'] else ''}")
+    print(f"\n  {scratch / 'report.json'}")
+    return 0
+
+
+# --------------------------------------------------------------------------
 # verify
 
 
@@ -705,6 +911,7 @@ def main() -> int:
     for name, help_text in (
         ("calibrate", "measure the host settings this plugin needs"),
         ("corpus", "render the note x velocity x timbre grid"),
+        ("identify", "say what is loaded in each slot of a multitimbral rack"),
         ("verify", "re-read the corpus and report what is wrong with it"),
     ):
         p = sub.add_parser(name, help=help_text)
@@ -720,6 +927,13 @@ def main() -> int:
     cor.add_argument("--no-resume", action="store_true", help="re-render everything")
     cor.add_argument("--limit", type=int, default=0, help="stop after this many renders")
 
+    idf = sub.choices["identify"]
+    idf.add_argument("--channels", default="1-16",
+                     help="channels to probe, as `1-8,11-13,15,16` (default: all sixteen). "
+                          "The capture's own timbre channels are the control and are "
+                          "worth leaving in")
+    idf.add_argument("--velocity", type=int, default=100)
+
     args = ap.parse_args()
     cfg = load_config(Path(args.config))
     out = out_root(cfg, args.out)
@@ -729,6 +943,9 @@ def main() -> int:
         return 0
     if args.cmd == "corpus":
         return corpus(cfg, out, resume=not args.no_resume, limit=args.limit, verbose=args.verbose)
+    if args.cmd == "identify":
+        return identify(cfg, out, channels=parse_channels(args.channels),
+                        velocity=args.velocity, verbose=args.verbose)
     return verify(out)
 
 

@@ -141,11 +141,21 @@ macOS + the plugin + [aubounce](https://github.com/libraz/aubounce). The procedu
 
 | subcommand | what it does | its own flags |
 |---|---|---|
+| `identify` | say what is loaded in each slot of a multitimbral rack | `--channels` (`1-16`), `--velocity` (100) |
 | `calibrate` | measure the host settings this plugin needs | `--note` (60), `--velocity` (100) |
 | `corpus` | render the note × velocity × timbre grid, resumable | `--no-resume`, `--limit` |
 | `verify` | re-read the corpus and report what is wrong with it | — |
 
-All three: `--config` (default `capture/piano.json`), `--out` (default `.cache/voicematch/capture/<id>`), `--verbose`.
+All four: `--config` (default `capture/piano.json`), `--out` (default `.cache/voicematch/capture/<id>`), `--verbose`.
+
+**`identify` is for the case where the reference is a rack and a capture needs a second timbre out of it.** A rack answers on sixteen channels and publishes no slot names, so the only way to learn what is loaded in one is to play it. Two stages, in the order that makes the second cheap:
+
+1. **Does the slot answer a key with that key's own pitch?** `metrics.harmonic_share` measures the share of the render's power sitting on the harmonic series of the note that was pressed, over an octave ladder. Near 1 and the slot is an instrument, so no drum render is spent on it. The discriminator is deliberately not a fact about drums: the tells recorded for a kit already captured describe *that* kit, and a rule written from them would find only more of it. Both ends are measured rather than assumed — the captured concert grand reads 0.95 to 1.00 across its whole compass, the captured kit's own slot 0.05 to 0.15 on the same three keys.
+2. **How far are the slot's diagnostic hits from the kit already measured?** One note per family declared in `groups`, scored as the median absolute band-profile difference against the committed `reference/<id>.json` rows for the same note and velocity. The criteria come from the reference, not from prose about what a kick looks like.
+
+**Leave the capture's own timbre channels in the probe.** They are the control, and they score 0.00 dB by construction — without a number for a slot that *is* the kit, a table of distances says nothing about what a small one means.
+
+It reports and never edits the capture definition. Which slot becomes a second timbre is a decision, and the evidence for it belongs in front of a person.
 
 ## `profile.py` — corpus → reference profile, and the comparison against it
 

@@ -1560,6 +1560,54 @@ def _band_decay(
 # fundamentals (note 45 at 67-73 Hz, 47 at 73-83, 48 at 87-93, 50 at 93-97,
 # 41 at 163-170, 43 at 183-190) in a note to the reader, because there was
 # nowhere in the measurement path to put them.
+#: Window and tolerance for `harmonic_share`. Half a second resolves a bin
+#: every two hertz, which is a fifth of the tolerance at the bottom of the
+#: ladder it is used on; sixty cents is wide enough for a patch tuned a few
+#: cents off and far narrower than the gap between neighbouring partials.
+HARMONIC_SHARE_WINDOW_S = 0.50
+HARMONIC_SHARE_TOLERANCE_CENTS = 60.0
+
+
+def harmonic_share(seg: np.ndarray, sr: int, f0_hz: float, *,
+                   partials: int = N_HARMONICS) -> float | None:
+    """How much of a segment's energy sits on the harmonic series of `f0_hz`.
+
+    The question this answers is not what pitch a sound has but whether it has
+    the pitch it was SENT, which is what separates an instrument from a drum
+    kit on a rack slot nobody can see into: a melodic slot answers a note number
+    with that note's series whatever its patch layers on top, and a kit answers
+    it with an instrument whose partials have no relation to the key.
+
+    Asking it this way rather than by estimating a pitch and comparing is what
+    makes it usable. A pitch estimator has to decide WHICH peak is the
+    fundamental, and on a bright patch the strongest one is routinely the
+    second or third partial — an ambiguity that reads as "does not track" on an
+    instrument that tracks perfectly. A share needs no such decision.
+
+    Reported against the power below the highest partial searched, so a dark
+    instrument and a bright one are comparable; `None` when the segment is too
+    short to resolve the tolerance.
+    """
+    n = min(len(seg), int(HARMONIC_SHARE_WINDOW_S * sr))
+    if n < 4096 or f0_hz <= 0.0:
+        return None
+    freqs, mag = _spectrum(np.asarray(seg[:n], dtype=np.float64), sr)
+    power = mag**2
+    ceiling = f0_hz * (partials + 0.5)
+    band = (freqs > 0.0) & (freqs <= min(ceiling, sr / 2.0))
+    total = float(np.sum(power[band]))
+    if total <= 0.0:
+        return None
+    span = 2.0 ** (HARMONIC_SHARE_TOLERANCE_CENTS / 1200.0)
+    on = np.zeros_like(band)
+    for k in range(1, partials + 1):
+        centre = f0_hz * k
+        if centre > sr / 2.0:
+            break
+        on |= (freqs >= centre / span) & (freqs <= centre * span)
+    return float(np.sum(power[on & band]) / total)
+
+
 HIT_TONE_WINDOW_S = 0.30
 #: How far the strike's pitch overshoot is tracked, and on what grid. A membrane
 #: released from the strike falls back through a time constant of a few tens of

@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import au_oracle  # noqa: E402
 import capture  # noqa: E402
 from au_oracle import AuSource, _strip_preroll  # noqa: E402
-from metrics import midi_to_hz  # noqa: E402
+from metrics import harmonic_share, midi_to_hz  # noqa: E402
 from profile import double_decay, find_partials, measure_note  # noqa: E402
 from wavio import write_wav  # noqa: E402
 
@@ -299,3 +299,51 @@ def test_a_capture_with_no_per_note_table_answers_its_flat_tail():
     """
     assert capture.tail_seconds({"tail": "4s"}, 60) == pytest.approx(4.0)
     assert capture.tail_seconds({"tail": "2s", "tail_by_note": {}}, 60) == pytest.approx(2.0)
+
+
+# --------------------------------------------------------------------------
+# identifying what is loaded in a rack slot
+
+
+def test_channel_spec_reads_ranges_and_singles_without_repeats():
+    assert capture.parse_channels("1-8,11-13,15,16") == (1, 2, 3, 4, 5, 6, 7, 8,
+                                                         11, 12, 13, 15, 16)
+    assert capture.parse_channels("10") == (10,)
+    # A repeat is the probe order the caller wrote, deduplicated rather than
+    # rendered twice; out-of-range numbers are not MIDI channels.
+    assert capture.parse_channels("10,10,1") == (10, 1)
+    assert capture.parse_channels("0,17,3") == (3,)
+    assert capture.parse_channels("") == ()
+
+
+def _harmonic(f0: float, partials: int = 8, sr: int = SR, seconds: float = 1.0) -> np.ndarray:
+    t = np.arange(int(sr * seconds)) / sr
+    y = np.zeros_like(t)
+    for k in range(1, partials + 1):
+        y += np.sin(2.0 * np.pi * f0 * k * t) / k
+    return (y / np.max(np.abs(y))).astype(np.float32)
+
+
+@pytest.mark.parametrize("note", [36, 48, 60, 72])
+def test_harmonic_share_is_near_one_for_the_pitch_that_was_played(note):
+    """The positive half of the slot probe: a slot that plays the key it is sent."""
+    share = harmonic_share(_harmonic(midi_to_hz(note)), SR, midi_to_hz(note))
+    assert share is not None and share > 0.95
+
+
+def test_harmonic_share_is_low_for_a_sound_unrelated_to_the_key():
+    """The negative half, and the one that decides a kit.
+
+    A drum answers every key with the same instrument, so the render's series
+    belongs to that instrument and not to the key. Scored here as a series a
+    tritone-and-a-bit away from the key, which no partial of the key lands on.
+    """
+    played = midi_to_hz(60)
+    share = harmonic_share(_harmonic(played * 1.41), SR, played)
+    assert share is not None and share < 0.2
+
+
+def test_harmonic_share_declines_to_answer_a_segment_it_cannot_resolve():
+    """Too short to resolve the tolerance is unmeasured, not zero."""
+    assert harmonic_share(_harmonic(midi_to_hz(60), seconds=0.01), SR, midi_to_hz(60)) is None
+    assert harmonic_share(_harmonic(midi_to_hz(60)), SR, 0.0) is None
