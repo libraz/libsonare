@@ -203,6 +203,78 @@ def default_weights(program: int, *, drum_note: int | None = None,
 
 
 # --------------------------------------------------------------------------- #
+# Canonical gate dimensions per class
+# --------------------------------------------------------------------------- #
+# A capture's `dimensions` list says what its reference is judged on, and every
+# capture chose one for itself: the piano names 11, the pipe organ 3, and the
+# harpsichord and the drum kit name none at all. That makes a gate's size
+# unreadable — three bounds on an organ and eight on a harpsichord say nothing
+# about which voice is further along, because neither says how many the
+# instrument HAS.
+#
+# So the class carries the denominator. A dimension is listed for a class when
+# the measurement means something for that excitation, not when some instrument
+# in the class happens to have been measured on it. A capture that cannot reach
+# one says so in its own `dimensions_na`, with a reason — an organ has no
+# velocity response, and that is a fact about flue pipes rather than a gap.
+_MELODIC_ALL = (
+    "stretch",       # cents_vs_et       — the ladder against equal temperament
+    "decay",         # decay_db_s        — the free fall while the key is held
+    "aftersound",    # decay_late_db_s   — what is left after the prompt stage
+    "doubling",      # decay_early_db_s  — the prompt stage itself
+    "body",          # body_below_f0_db  — radiated energy under the fundamental
+    "attack",        # attack_ms         — time to peak
+    "stereo",        # stereo_width      — the image
+    "damper",        # damper_release_ms — how the note is stopped
+    "balance",       # partials_db       — the partial levels against each other
+    "centroid_pct",  # centroid_hz       — brightness, as a fraction
+    "tnr",           # tnr_db            — tone against noise
+    "vel_range",     # peak_dbfs         — the dynamic span
+    "register",      # held_peak_dbfs    — level against register
+)
+
+CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
+    # A hammered or plucked string is measured on everything: it has a free
+    # decay, a two-stage fall, a damper and a dynamic range, and the stiff-string
+    # ladder is meaningful.
+    ToneClass.STRUCK_STRING: _MELODIC_ALL,
+    ToneClass.PLUCKED_STRING: _MELODIC_ALL,
+    # Energy is fed continuously, so the three free-decay dimensions describe a
+    # fall this voice does not have. The release still does — `damper` is how
+    # the pipe or the bow stops, which is measurable and is where a sustained
+    # voice most often gives itself away.
+    ToneClass.SUSTAINED: tuple(
+        d for d in _MELODIC_ALL if d not in ("decay", "aftersound", "doubling")),
+    # A bar, bell or membrane has no series equal temperament predicts, so
+    # `stretch` measures the distance between two things that were never meant
+    # to agree.
+    ToneClass.MODAL: tuple(d for d in _MELODIC_ALL if d != "stretch"),
+    # No pitch, so every dimension resting on a partial or a fundamental drops.
+    ToneClass.NOISE: ("attack", "stereo", "centroid_pct", "vel_range", "decay"),
+}
+
+#: A drum kit's, which are per-metric-set rather than per class for the same
+#: reason `PERCUSSION_WEIGHTS` is: the percussion metric set produces a band
+#: profile and no ladder, whatever the piece.
+PERCUSSION_DIMENSIONS: tuple[str, ...] = (
+    "band_tilt", "band_shape", "band_decay", "attack", "crest", "centroid_pct",
+    "level", "vel_range",
+)
+
+
+def canonical_dimensions(program: int, *, drum_note: int | None = None,
+                         percussive: bool = False) -> tuple[str, ...]:
+    """Every dimension this voice's class can be judged on.
+
+    The denominator of gate coverage. What a capture actually gates is its
+    `dimensions`; what it could gate is this.
+    """
+    if percussive or drum_note is not None:
+        return PERCUSSION_DIMENSIONS
+    return CANONICAL_DIMENSIONS[tone_class(program)]
+
+
+# --------------------------------------------------------------------------- #
 # Probe registers
 # --------------------------------------------------------------------------- #
 # Where a program is probed, for the families `patterns.py` never listed. Its

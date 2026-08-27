@@ -18,6 +18,7 @@ This file is the entry point and stays one: it holds the loop and the order of t
 | know what a `--w-*` term prices, or what the defaults are | [docs/loss.md](docs/loss.md) |
 | run, read or trust a fit | [docs/fitting.md](docs/fitting.md) |
 | capture a new instrument, read a reference profile, or record a gate | [docs/capture.md](docs/capture.md) |
+| see where every voice in the bank stands, and what its next round needs | [docs/status.md](docs/status.md) |
 | listen to a voice — any GM program, with a reference or without one | [docs/audition.md](docs/audition.md) |
 | generate training pairs for an amortized inverse | [docs/dataset.md](docs/dataset.md) |
 | find the module that does something, or run the tests | [docs/modules.md](docs/modules.md) |

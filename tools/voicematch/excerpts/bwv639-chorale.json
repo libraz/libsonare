@@ -1,0 +1,247 @@
+{
+  "_": "Committed note data, cut from a Bach corpus by extract_excerpt.py. Judged by ear; nothing measures it. Velocity is flat across the source piece, so this says nothing about velocity response.",
+  "id": "bwv639-chorale",
+  "label": "Ich ruf zu dir, BWV 639 — opening",
+  "note": "a sustained line over a moving inner voice and a pedal: register balance across three parts that never stop",
+  "source": {
+    "bwv": 639,
+    "work": "BWV639",
+    "category": "orgelbuchlein",
+    "instrument": "organ",
+    "movement": null,
+    "tonic": "F minor",
+    "roles": [
+      "manual",
+      "pedal"
+    ],
+    "beats": [
+      0.0,
+      8.0
+    ]
+  },
+  "seconds": 7.8,
+  "notes": [
+    {
+      "pitch": 29,
+      "velocity": 70,
+      "start": 0.3,
+      "duration": 0.75
+    },
+    {
+      "pitch": 56,
+      "velocity": 70,
+      "start": 0.3,
+      "duration": 0.375
+    },
+    {
+      "pitch": 72,
+      "velocity": 70,
+      "start": 0.3,
+      "duration": 1.5
+    },
+    {
+      "pitch": 60,
+      "velocity": 70,
+      "start": 0.675,
+      "duration": 0.375
+    },
+    {
+      "pitch": 29,
+      "velocity": 70,
+      "start": 1.05,
+      "duration": 0.75
+    },
+    {
+      "pitch": 65,
+      "velocity": 70,
+      "start": 1.05,
+      "duration": 0.375
+    },
+    {
+      "pitch": 64,
+      "velocity": 70,
+      "start": 1.425,
+      "duration": 0.375
+    },
+    {
+      "pitch": 41,
+      "velocity": 70,
+      "start": 1.8,
+      "duration": 0.75
+    },
+    {
+      "pitch": 65,
+      "velocity": 70,
+      "start": 1.8,
+      "duration": 0.375
+    },
+    {
+      "pitch": 68,
+      "velocity": 70,
+      "start": 1.8,
+      "duration": 1.5
+    },
+    {
+      "pitch": 60,
+      "velocity": 70,
+      "start": 2.175,
+      "duration": 0.375
+    },
+    {
+      "pitch": 41,
+      "velocity": 70,
+      "start": 2.55,
+      "duration": 0.75
+    },
+    {
+      "pitch": 56,
+      "velocity": 70,
+      "start": 2.55,
+      "duration": 0.375
+    },
+    {
+      "pitch": 53,
+      "velocity": 70,
+      "start": 2.925,
+      "duration": 0.375
+    },
+    {
+      "pitch": 41,
+      "velocity": 70,
+      "start": 3.3,
+      "duration": 0.75
+    },
+    {
+      "pitch": 55,
+      "velocity": 70,
+      "start": 3.3,
+      "duration": 0.375
+    },
+    {
+      "pitch": 70,
+      "velocity": 70,
+      "start": 3.3,
+      "duration": 1.5
+    },
+    {
+      "pitch": 58,
+      "velocity": 70,
+      "start": 3.675,
+      "duration": 0.375
+    },
+    {
+      "pitch": 40,
+      "velocity": 70,
+      "start": 4.05,
+      "duration": 0.75
+    },
+    {
+      "pitch": 61,
+      "velocity": 70,
+      "start": 4.05,
+      "duration": 0.375
+    },
+    {
+      "pitch": 60,
+      "velocity": 70,
+      "start": 4.425,
+      "duration": 0.375
+    },
+    {
+      "pitch": 41,
+      "velocity": 70,
+      "start": 4.8,
+      "duration": 0.75
+    },
+    {
+      "pitch": 53,
+      "velocity": 70,
+      "start": 4.8,
+      "duration": 0.375
+    },
+    {
+      "pitch": 68,
+      "velocity": 70,
+      "start": 4.8,
+      "duration": 1.125
+    },
+    {
+      "pitch": 56,
+      "velocity": 70,
+      "start": 5.175,
+      "duration": 0.375
+    },
+    {
+      "pitch": 41,
+      "velocity": 70,
+      "start": 5.55,
+      "duration": 0.75
+    },
+    {
+      "pitch": 60,
+      "velocity": 70,
+      "start": 5.55,
+      "duration": 0.375
+    },
+    {
+      "pitch": 58,
+      "velocity": 70,
+      "start": 5.925,
+      "duration": 0.375
+    },
+    {
+      "pitch": 67,
+      "velocity": 70,
+      "start": 5.925,
+      "duration": 0.375
+    },
+    {
+      "pitch": 41,
+      "velocity": 70,
+      "start": 6.3,
+      "duration": 0.75
+    },
+    {
+      "pitch": 56,
+      "velocity": 70,
+      "start": 6.3,
+      "duration": 0.375
+    },
+    {
+      "pitch": 65,
+      "velocity": 70,
+      "start": 6.3,
+      "duration": 1.125
+    },
+    {
+      "pitch": 53,
+      "velocity": 70,
+      "start": 6.675,
+      "duration": 0.375
+    },
+    {
+      "pitch": 39,
+      "velocity": 70,
+      "start": 7.05,
+      "duration": 0.75
+    },
+    {
+      "pitch": 56,
+      "velocity": 70,
+      "start": 7.05,
+      "duration": 0.375
+    },
+    {
+      "pitch": 60,
+      "velocity": 70,
+      "start": 7.425,
+      "duration": 0.375
+    },
+    {
+      "pitch": 67,
+      "velocity": 70,
+      "start": 7.425,
+      "duration": 0.375
+    }
+  ]
+}

@@ -25,6 +25,10 @@ That is the way round it has to be. Addressed by capture, a voice could be audit
 
 Every run writes one subdirectory per voice under `--out` (default `.cache/voicematch/audition/`), named `p040-violin`, `p019b008-church-organ`, `kit000-standard-kit`, and merges `bank.json` by slug so a directory can be filled a few voices at a time. `--config` used to write flat, straight into `--out`, and that was a defect rather than a convenience: the manifest then landed on the path every other single-voice run also writes to, so auditioning a second instrument took the first one's page and left its takes on disk with nothing to name or group them. A caller who wants an exact path passes `--out` and gets the voice's slug under it.
 
+**One voice is one page.** The question a page was built to settle belongs on the version buttons, not in the directory name — a baseline, a candidate and a re-fit are three versions of one voice, and giving each its own directory produced five piano "sets" that the picker showed side by side with nothing saying which was live. Candidates come from [`calibrations.json`](status.md#unadopted-settings) with `--calibrations`, which is what makes them survive the directory.
+
+**A measurement run is not a page.** `--probe` writes under the probe root, which `serve.py` does not glob, and marks the manifest so a probe named explicitly on the command line is still skipped. A component-isolation set — a voice rendered with parts of it switched off — is a legitimate thing to produce and a nonsense thing to put on a picker beside the real pages of the same voice, where it reads as another candidate.
+
 **A page of a wet reference renders the model the way it ships.** `write_smf` zeroes CC91/93/94 by default, which is what a dry-versus-dry metric needs and exactly wrong here: against a reference carrying its building it puts a bone-dry model beside a wet one, and the low end — where a registration question is decided — is then decided by the building rather than by the voice. So where the capture is not dry the sends are left at their GS power-on values, weighted per program by `gm_fallback_sends`, which is libsonare's own ambience and the only ambience a listener ever gets from it. A dry capture is compared dry and its page is unchanged. `profile.py room-match` is what says how close that ambience gets.
 
 **`--model-sends` overrides that inference**, because the capture decides what a *comparison* needs and the question on a page is not always a comparison. `gs` leaves the sends alone whatever the reference does, `dry` always zeroes them, and `auto` is the rule above. The case it exists for: the GS tank is shared by every program, so a change made for one voice has to be checked on another — and the voice a listener knows best usually has a dry capture, whose page would render at CC91 0 and hold the one setting the question is about perfectly inert. That looks exactly like a page of subtly different versions.
@@ -53,6 +57,16 @@ A set is chosen for what it catches by ear that a metric will not report. Three 
 | `noise` | no pitch at all | one trigger heard whole, the velocity response, a retrigger |
 
 **A capture's own set wins over the generic one**, and not only because it was chosen for the instrument: the reference archive is keyed by take id, so a captured voice given a different set would find none of its references and drop to model-only without a word.
+
+### The musical take
+
+Every take above isolates one thing, and a voice can hold all of them and still be unpleasant across ten seconds of a real line — how a chord bloom sits under a moving part, whether a decay leaves room for the next entry, where the register balance goes on the way up. So every page carries one passage of Bach, about ten seconds, judged by ear and by nothing else. `--no-music` leaves it off.
+
+The note data is **committed** under `excerpts/`, so a clone renders it with nothing installed; `make excerpts` re-cuts it from a sibling corpus at `$SONARE_BACH_ROOT`. One passage per tone class, since every program needs one and four have a capture — a keyboard prelude for a struck string, a lute praeludium for a plucked one, a cello prelude for anything bowed or blown, a fugue for bars and bells. A capture may name its own with a `music` key, which is how the organ gets a chorale with a pedal part and the harpsichord a fugue rather than an arpeggiated prelude.
+
+The passage moves by **whole octaves** to reach a program's compass, and only when it does not already fit: anything but an octave puts it in a different key, and centring every passage on the program's middle register transposes a keyboard prelude that Bach put where a keyboard is. A take that moved says so under its label, since a page read weeks later cannot otherwise tell a transposed passage from a voice whose register is wrong.
+
+**It says nothing about velocity response.** The corpus carries one velocity per piece, so the `dynamics-*` takes remain the only thing that measures dynamics — a musical take does not retire them.
 
 `--only take-id,take-id` narrows a page to the takes a question needs. Rendering `--programs all` in full is about 1500 renders and several gigabytes of WAV under the scratch root; a sweep across the bank is usually two or three takes wide.
 

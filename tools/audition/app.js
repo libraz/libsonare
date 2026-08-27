@@ -271,9 +271,14 @@ function fail(msg) {
 
 async function boot() {
   state.sets = await (await fetch('sets.json')).json();
+  wireBank();
   if (!state.sets.length) {
     fail('No renders found. Generate a set with tools/voicematch/make_audition.py '
        + '— --model-only needs no plugin — then reload.');
+    // A fresh clone has no renders and that is the state the bank view is most
+    // worth being in: it says which voices exist and which need an oracle, none
+    // of which requires anything to have been rendered.
+    await setView('bank');
     return;
   }
   buildSetPicker();
@@ -1063,7 +1068,12 @@ function wire() {
 
   document.addEventListener('keydown', (ev) => {
     const tag = ev.target.tagName;
-    if (tag === 'TEXTAREA' || tag === 'SELECT' || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'INPUT'
+        || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    // Every shortcut below acts on what is sounding. On the bank there is
+    // nothing sounding, and space would scroll a list of 188 rows by a page
+    // while starting a take nobody is looking at.
+    if (document.body.classList.contains('bank-view')) return;
     const k = ev.key;
     if (k === ' ') { ev.preventDefault(); togglePlay(); return; }
     if (!state.take) return;
@@ -1129,6 +1139,199 @@ function exportNotes() {
   a.download = `audition-notes-${state.setId || 'takes'}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ------------------------------------------------------------------- bank */
+
+/* The bank is the master: every GM program and GS variation the library voices,
+ * whatever has been rendered. The listening surface shows one voice; this shows
+ * where all of them stand, which is the half of the work that is otherwise only
+ * visible to whoever remembers what has been captured.
+ *
+ * Sixteen engines, three methods. What the eye is being asked here is "physical
+ * model, FM, or neither" — sixteen hues would answer nothing, and the engine's
+ * own name is on the row for anyone who wants it. */
+const METHODS = {
+  fm: 'fm',
+  subtractive: 'classic',
+  additive: 'classic',
+};
+
+const methodOf = (engine) => (engine ? (METHODS[engine] || 'physical') : 'classic');
+
+const bank = { voices: [], loaded: false };
+
+async function loadBank() {
+  if (bank.loaded) return;
+  try {
+    const got = await (await fetch('bank.json')).json();
+    bank.voices = got.voices || [];
+  } catch {
+    bank.voices = [];
+  }
+  bank.loaded = true;
+}
+
+function bankMatches(v) {
+  const method = $('bankMethod').value;
+  const filter = $('bankFilter').value;
+  const find = $('bankFind').value.trim().toLowerCase();
+  if (method && methodOf(v.engine) !== method) return false;
+  if (filter === 'oracle' && !v.capture) return false;
+  if (filter === 'no-oracle' && v.capture) return false;
+  if (filter === 'unwritten' && !(v.open_candidates || []).length) return false;
+  if (filter === 'page' && !state.sets.some((s) => s.id === v.slug)) return false;
+  if (find) {
+    const hay = [v.name, v.engine, v.patch, v.slug, v.tone_class].join(' ').toLowerCase();
+    if (!hay.includes(find)) return false;
+  }
+  return true;
+}
+
+function stageEl(v) {
+  const wrap = document.createElement('span');
+  wrap.className = 'stage';
+  const bar = document.createElement('span');
+  bar.className = 'bar';
+  const filled = Math.round(v.stage * 5);
+  for (let i = 0; i < 5; i += 1) {
+    const seg = document.createElement('span');
+    seg.className = i < filled ? 'seg on' : 'seg';
+    bar.append(seg);
+  }
+  const num = document.createElement('span');
+  num.textContent = v.stage.toFixed(1);
+  wrap.append(bar, num);
+  wrap.title = `${v.stage_name} — ${v.next}`;
+  return wrap;
+}
+
+function bankRow(v) {
+  const hasPage = state.sets.some((s) => s.id === v.slug);
+  const row = document.createElement(hasPage ? 'button' : 'div');
+  row.className = `bank-row${hasPage ? ' has-page' : ''}`;
+  if (hasPage) {
+    row.type = 'button';
+    row.addEventListener('click', () => {
+      setView('listen');
+      loadSet(v.slug, { set: v.slug, take: '', ver: '', t: null });
+    });
+  }
+
+  const addr = document.createElement('span');
+  addr.className = 'addr';
+  addr.textContent = v.kit ? `kit ${v.program}` : `${v.program}${v.bank ? `:${v.bank}` : ''}`;
+
+  const who = document.createElement('span');
+  who.className = 'who';
+  who.append(v.name);
+  if (v.patch) {
+    const patch = document.createElement('span');
+    patch.className = 'patch';
+    patch.textContent = `  ${v.patch}`;
+    who.append(patch);
+  }
+
+  const engine = document.createElement('span');
+  engine.className = `engine ${methodOf(v.engine)}`;
+  engine.textContent = v.engine || 'not reported';
+  engine.title = v.engine
+    ? `${methodOf(v.engine)} — ${v.tone_class}`
+    : 'no tuning build was available when the bank view was generated';
+
+  const oracle = document.createElement('span');
+  oracle.className = `oracle${v.capture ? '' : ' absent'}`;
+  oracle.textContent = v.capture || 'not captured';
+
+  const flags = document.createElement('span');
+  const open = v.open_candidates || [];
+  if (open.length) {
+    const badge = document.createElement('span');
+    badge.className = 'badge warn';
+    badge.textContent = `${open.length} unwritten`;
+    badge.title = open.join(', ');
+    flags.append(badge);
+  }
+
+  row.append(addr, who, engine, stageEl(v), oracle, flags);
+  // Only past the oracle step. Below it every voice says the same sentence, and
+  // 150 copies of it bury the four that say something.
+  if (v.stage > 0.2 && v.stage < 1) {
+    const next = document.createElement('p');
+    next.className = 'bank-next';
+    next.textContent = `→ ${v.next}`;
+    row.append(next);
+  }
+  return row;
+}
+
+function renderBank() {
+  const rows = $('bankRows');
+  rows.replaceChildren();
+  if (!bank.voices.length) {
+    const p = document.createElement('p');
+    p.className = 'bank-empty';
+    p.textContent = 'No bank view generated. Run `make voice-status-refresh` '
+      + '(it needs a -DBUILD_TUNING=ON build) and reload.';
+    rows.append(p);
+    $('bankCount').textContent = '';
+    $('bankSummary').textContent = '';
+    return;
+  }
+  const shown = bank.voices.filter(bankMatches);
+  let group = null;
+  for (const v of shown) {
+    if (v.group !== group) {
+      group = v.group;
+      const h = document.createElement('h2');
+      h.className = 'bank-group';
+      h.textContent = group;
+      rows.append(h);
+    }
+    rows.append(bankRow(v));
+  }
+  if (!shown.length) {
+    const p = document.createElement('p');
+    p.className = 'bank-empty';
+    p.textContent = 'Nothing matches.';
+    rows.append(p);
+  }
+  $('bankCount').textContent = `${shown.length} / ${bank.voices.length}`;
+
+  const counts = new Map();
+  for (const v of bank.voices) counts.set(v.stage_name, (counts.get(v.stage_name) || 0) + 1);
+  const order = ['untouched', 'voiced', 'measured', 'covered', 'agreeing', 'settled'];
+  const parts = order.filter((s) => counts.get(s)).map((s) => `${counts.get(s)} ${s}`);
+  const noOracle = bank.voices.filter((v) => !v.capture).length;
+  const unwritten = bank.voices.reduce((n, v) => n + (v.open_candidates || []).length, 0);
+  const tail = [];
+  if (noOracle) tail.push(`${noOracle} with no oracle captured`);
+  if (unwritten) tail.push(`${unwritten} recorded setting(s) not written back`);
+  $('bankSummary').textContent = `${parts.join(', ')}. ${tail.join('; ')}`;
+}
+
+async function setView(view) {
+  const wantBank = view === 'bank';
+  document.body.classList.toggle('bank-view', wantBank);
+  $('bank').hidden = !wantBank;
+  for (const b of $('viewToggle').querySelectorAll('button')) {
+    b.setAttribute('aria-selected', String(b.dataset.view === view));
+  }
+  if (wantBank) {
+    if (state.playing) pause();
+    await loadBank();
+    renderBank();
+  }
+}
+
+function wireBank() {
+  for (const b of $('viewToggle').querySelectorAll('button')) {
+    b.addEventListener('click', () => setView(b.dataset.view));
+  }
+  for (const id of ['bankMethod', 'bankFilter']) {
+    $(id).addEventListener('change', renderBank);
+  }
+  $('bankFind').addEventListener('input', renderBank);
 }
 
 boot().catch((err) => {

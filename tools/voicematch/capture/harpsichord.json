@@ -3,6 +3,8 @@
   "label": "Double-manual harpsichord, sampled rack",
   "_instrument": "What the model has to answer with, and which phrase set the audition page plays. A phrase set belongs to the instrument: this one has no pedal to lift, so the piano set would spend half its takes on a control the harpsichord does not have.",
   "program": 6,
+  "_music": "A fugue rather than the class's arpeggiated prelude: on a harpsichord the question is whether one subject entry is still ringing under the next, which a broken chord cannot ask.",
+  "music": "bwv847-fugue",
   "takes": "harpsichord",
   "audition_title": "libsonare harpsichord vs the sampled reference",
   "_dry": "Left off, because it cannot be trusted here. The rack carries send effects of its own, and how wet a slot is has nothing to do with what its name says: the slot called Digi decays over 36 seconds while the one called Ambient decays in 3. Every timbre below is measured for its room instead, and the ones with one are used knowing they have one.",

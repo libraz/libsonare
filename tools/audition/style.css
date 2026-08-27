@@ -437,3 +437,187 @@ kbd {
    ordinary state for anyone without the commercial plugin the reference side
    is captured from, so it is a supported layout and not a degraded one. */
 body.no-compare .compare-only { display: none; }
+
+/* ---- view toggle ---- */
+
+/* Two states, so intrinsic width reads fine; a picker with more would want its
+   segments equal-width. */
+.toggle {
+  display: flex;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.toggle button {
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.toggle button + button { border-left: 1px solid var(--line); }
+.toggle button:hover { color: var(--ink); }
+
+.toggle button[aria-selected="true"] {
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+body.bank-view main,
+body.bank-view .listen-only,
+body.bank-view .options { display: none; }
+
+body:not(.bank-view) .bank { display: none; }
+
+/* ---- bank ---- */
+
+.bank {
+  overflow: auto;
+  padding: 16px 18px 40px;
+}
+
+.bank-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bank-bar input[type="search"] {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+#bankSummary { margin: 10px 0 18px; }
+
+.bank-group {
+  margin: 0 0 6px;
+  padding-top: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.bank-row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(11rem, 1fr) 9.5rem 5.5rem 6rem auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.bank-row.has-page { cursor: pointer; }
+.bank-row.has-page:hover,
+.bank-row:focus-visible {
+  border-color: var(--line);
+  background: var(--panel);
+}
+
+.bank-row .addr { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+.bank-row .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bank-row .who .patch { color: var(--ink-dim); font-family: var(--mono); font-size: 11.5px; }
+
+.engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+/* Three methods rather than sixteen engines: what the eye is asked for here is
+   "physical model, FM, or neither", and sixteen hues would answer nothing. */
+.engine::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink-dim);
+}
+
+.engine.physical::before { background: var(--accent); }
+.engine.fm::before { background: #6f8fb3; }
+.engine.classic::before { background: var(--line); }
+
+/* Five segments, the same shape the CLI table prints, so a number quoted from
+   one is recognisable in the other. */
+.stage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+.stage .bar { display: flex; gap: 2px; }
+
+.stage .seg {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.stage .seg.on { background: var(--accent); }
+
+.oracle {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oracle.absent { color: var(--warn); }
+
+/* A full border plus a tint, never a one-sided stripe: the straight edge of a
+   stripe fights the rounded corner. */
+.badge {
+  padding: 1px 7px;
+  border: 1px solid var(--tint-line);
+  border-radius: 999px;
+  background: var(--tint);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.badge.warn {
+  border-color: color-mix(in srgb, var(--warn) 34%, var(--line));
+  background: color-mix(in srgb, var(--warn) 11%, var(--panel));
+}
+
+.bank-next {
+  grid-column: 2 / -1;
+  margin: 2px 0 0;
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+
+.bank-empty { padding: 30px 8px; color: var(--ink-dim); }

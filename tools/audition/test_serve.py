@@ -160,6 +160,48 @@ def test_take_dirs_survives_an_unreadable_manifest() -> None:
         assert serve.take_dirs(root) == set()
 
 
+def test_a_probe_is_not_a_set() -> None:
+    """A component-isolation run renders a voice with parts of it switched off.
+
+    On the picker beside the real pages of the same voice it reads as another
+    candidate version, which is what four piano pages and one probe looked like.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        scratch = Path(tmp).resolve()
+        _write_set(scratch / "audition" / "p000-acoustic-grand-piano",
+                   {"single-c4": ["model", "grand-227"]})
+        probe = _write_set(scratch / "audition" / "p000-isolate",
+                           {"single-c4": ["model", "D_AIR"]})
+        manifest = json.loads((probe / "manifest.json").read_text())
+        manifest["probe"] = True
+        (probe / "manifest.json").write_text(json.dumps(manifest))
+
+        ids = _discover(scratch)
+        assert "p000-acoustic-grand-piano" in ids, ids
+        assert "p000-isolate" not in ids, ids
+
+
+def test_a_probe_named_explicitly_is_still_skipped() -> None:
+    """The flag travels with the data, so pointing at one does not serve it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = _write_set(Path(tmp).resolve() / "p000-isolate",
+                           {"single-c4": ["model", "D_AIR"]})
+        manifest = json.loads((probe / "manifest.json").read_text())
+        manifest["probe"] = True
+        (probe / "manifest.json").write_text(json.dumps(manifest))
+        assert serve.is_probe(probe)
+        assert serve.discover([str(probe)]) == []
+
+
+def test_an_ordinary_set_is_not_a_probe() -> None:
+    """A guard that cannot go either way is worth nothing."""
+    with tempfile.TemporaryDirectory() as tmp:
+        ordinary = _write_set(Path(tmp).resolve() / "p000-acoustic-grand-piano",
+                              {"single-c4": ["model", "grand-227"]})
+        assert not serve.is_probe(ordinary)
+        assert serve.discover([str(ordinary)]) == [ordinary]
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

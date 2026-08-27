@@ -110,6 +110,12 @@ from wavio import read_wav, write_wav  # noqa: E402
 
 SR = 48000
 DEFAULT_OUT = CORPUS_ROOT / "audition"
+#: Where a measurement run goes. `serve.py` globs `audition/` under the scratch
+#: root and nothing else, so a probe written here is out of the listening tree
+#: by construction rather than by being named something discouraging — which is
+#: what the component-isolation set was, and it sat on the picker beside four
+#: real pages of the same voice.
+DEFAULT_PROBE_OUT = CORPUS_ROOT / "probe"
 # Reference renders, kept once and outside the audition root so the listening
 # server does not offer the archive itself as a set to listen to. A reference
 # render costs a real-time pass through a commercial plugin on this machine and
@@ -455,7 +461,12 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
         t for t in (voice.capture.timbres if voice.capture else ())
         if not args.wanted_timbres or t["id"] in args.wanted_timbres
     ]
-    selected = [t for t in build_takes(voice.take_set, voice.program)
+    # A listening page carries the musical take; a measurement run does not, and
+    # `--no-music` is for the case where the ten seconds of polyphony are just
+    # render time — a sweep across the bank narrowed with `--only`, say.
+    music = None if args.no_music else (
+        (voice.capture.raw.get("music", "") if voice.capture else ""))
+    selected = [t for t in build_takes(voice.take_set, voice.program, music=music)
                 if not args.only_takes or t.id in args.only_takes]
     if not selected:
         print(f"{voice.slug}: no takes selected", file=sys.stderr)
@@ -480,6 +491,9 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
         # settle one question should carry.
         "title": args.title or voice.title,
         "group": voice.group,
+        # Travels with the data rather than with the directory, so a probe
+        # copied or pointed at explicitly is still not served.
+        "probe": bool(args.probe),
         "voice": voice.describe(),
         "notes": ((args.note + " ") if args.note else "") + (
             "Every version of a take is written at one shared gain, so the level "
@@ -583,13 +597,22 @@ def main() -> int:
                       help="a capture definition, when the capture is the subject: it "
                            "fixes the program, the phrase set and the reference timbres")
 
-    ap.add_argument("--out", default=str(DEFAULT_OUT),
-                    help="one subdirectory per voice is written under here")
+    ap.add_argument("--out", default="",
+                    help=f"one subdirectory per voice is written under here "
+                         f"(default: {DEFAULT_OUT.name}/ under the scratch root, "
+                         f"or {DEFAULT_PROBE_OUT.name}/ with --probe)")
+    ap.add_argument("--probe", action="store_true",
+                    help="a measurement run, not a listening page: writes under the "
+                         "probe root, which the listening server does not discover, "
+                         "and marks the manifest so it stays unserved wherever it is")
     ap.add_argument("--timbres", default="",
                     help="comma-separated timbre ids to render (default: all the "
                          "voice's capture has)")
     ap.add_argument("--model-only", action="store_true",
                     help="skip the reference renders even where one exists")
+    ap.add_argument("--no-music", action="store_true",
+                    help="leave off the musical take — ten seconds of real Bach, "
+                         "which nothing measures and every page otherwise carries")
     ap.add_argument("--only", default="", help="comma-separated take ids")
     ap.add_argument("--model-sends", choices=("auto", "gs", "dry"), default="auto",
                     help="what the model side does with CC91/93/94: 'auto' leaves them "
@@ -648,7 +671,8 @@ def main() -> int:
     except (Unselectable, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 2
-    root = Path(args.out).expanduser().resolve()
+    default_root = DEFAULT_PROBE_OUT if args.probe else DEFAULT_OUT
+    root = Path(args.out or default_root).expanduser().resolve()
 
     # One subdirectory per voice, always. A capture-driven run used to write
     # straight into --out instead, which put its manifest at the path every

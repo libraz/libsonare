@@ -20,7 +20,9 @@ A capture definition names its set explicitly and keeps whichever it names;
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from patterns import registers_for_program
 from smf import Note
@@ -640,6 +642,95 @@ def noise_takes(program: int = 120) -> list[Take]:
     return out
 
 
+# --------------------------------------------------------------------------- #
+# The musical take — the one nothing measures
+# --------------------------------------------------------------------------- #
+# Every other take isolates one thing. A voice can hold all of them and still be
+# unpleasant across ten seconds of a real line, which is a judgement only a
+# listener makes: how a chord bloom sits under a moving part, whether a decay
+# leaves room for the next entry, where the register balance goes on the way up.
+#
+# One passage per tone class rather than per instrument, for the same reason the
+# generic sets are per class: every program needs one and four have a capture. A
+# capture may name its own with a `music` key, which is how the organ gets a
+# chorale with a pedal part and the harpsichord a fugue.
+
+EXCERPT_DIR = Path(__file__).resolve().parent / "excerpts"
+
+#: Class to committed excerpt. See `extract_excerpt.py` for what each catches.
+MUSIC_EXCERPTS: dict[ToneClass, str] = {
+    ToneClass.STRUCK_STRING: "bwv846-prelude",
+    ToneClass.PLUCKED_STRING: "bwv996-prelude",
+    # One line across a wide compass, which is what a monophonic bowed or blown
+    # voice is asked to do. A three-part chorale would be a better organ take
+    # and a strange flute one, so the organ names that itself.
+    ToneClass.SUSTAINED: "bwv1007-prelude",
+    ToneClass.MODAL: "bwv847-fugue",
+    # Nothing with a pitch belongs to this class, so a melodic line says nothing
+    # about it. Drum kits are the same case and are covered by their own set.
+    ToneClass.NOISE: "",
+}
+
+
+def load_excerpt(ident: str) -> dict | None:
+    path = EXCERPT_DIR / f"{ident}.json"
+    return json.loads(path.read_text()) if path.is_file() else None
+
+
+def _octave_shift(pitches: list[int], compass: tuple[int, int, int]) -> int:
+    """Whole octaves to move a passage into a program's compass.
+
+    Whole octaves rather than semitones because the passage is in a key and a
+    transposition that is not an octave puts it in a different one — which for a
+    voice with fixed formants or a modal bank is a different instrument, and for
+    a listener is just wrong.
+
+    Nothing moves where the passage already fits. Centring it on the program's
+    middle register instead would transpose a keyboard prelude that Bach put
+    where a keyboard is, because the arpeggios reach above the middle and pull
+    the median up with them.
+    """
+    lo, _, hi = compass
+    low, high = min(pitches), max(pitches)
+    if low >= lo and high <= hi:
+        return 0
+
+    def outside(k: int) -> tuple[int, int]:
+        under = max(0, lo - (low + 12 * k))
+        over = max(0, (high + 12 * k) - hi)
+        return under + over, abs(k)
+
+    return min(range(-4, 5), key=outside)
+
+
+def music_take(program: int, *, excerpt: str = "") -> Take | None:
+    """Ten seconds of real music, in this program's own compass.
+
+    None where the class has no excerpt, and none where the committed excerpt is
+    missing — a page without it is a page with one take fewer, not a failure.
+    """
+    ident = excerpt or MUSIC_EXCERPTS.get(tone_class(program), "")
+    if not ident:
+        return None
+    data = load_excerpt(ident)
+    if not data:
+        return None
+    compass = registers_for_program(program)
+    shift = 12 * _octave_shift([n["pitch"] for n in data["notes"]], compass)
+    notes = [Note(n["pitch"] + shift, n["velocity"], n["start"], n["duration"])
+             for n in data["notes"]]
+    sub = data["note"]
+    if shift:
+        sub += f" ({shift // 12:+d} octave{'s' if abs(shift) > 12 else ''})"
+    return Take("music", data["label"], "a real line", sub, notes, tail_s=4.0)
+
+
+def with_music(takes: list[Take], program: int, *, excerpt: str = "") -> list[Take]:
+    """A set plus its musical take, which always comes last."""
+    take = music_take(program, excerpt=excerpt)
+    return takes + [take] if take else takes
+
+
 #: Phrase sets by name. A capture definition names the one its instrument needs;
 #: a program with no capture gets the generic set for its tone class.
 TAKE_SETS = {
@@ -672,11 +763,25 @@ def take_set_for(program: int, *, drum_note: int | None = None) -> str:
     return GENERIC_SETS[tone_class(program)]
 
 
-def build_takes(name: str, program: int) -> list[Take]:
-    """The phrases of a named set, with a program's own compass filled in."""
+def build_takes(name: str, program: int, *, music: str | None = None) -> list[Take]:
+    """The phrases of a named set, with a program's own compass filled in.
+
+    `music` names the excerpt this voice's musical take uses: None leaves it
+    off, empty takes the class default, an id overrides it.
+
+    **Off by default, because the musical take is not a measurement.** Nothing
+    scores it — it is ten seconds of overlapping polyphony judged by ear — and
+    the take-measurement path reads every take in this set as isolated notes
+    against a reference. An audition run asks for it; `profile.py` does not.
+    """
     if name not in TAKE_SETS:
         raise KeyError(f"no phrase set named {name!r}; have {', '.join(TAKE_SETS)}")
-    return TAKE_SETS[name](program)
+    takes = TAKE_SETS[name](program)
+    # A kit's note numbers select instruments rather than pitches, so a melodic
+    # line played on one is 48 different drums.
+    if music is None or any(t.channel == DRUM_CHANNEL for t in takes):
+        return takes
+    return with_music(takes, program, excerpt=music)
 
 
 def is_drum_set(name: str) -> bool:
@@ -686,4 +791,4 @@ def is_drum_set(name: str) -> bool:
     already the thing that decides it, and a second field saying the same thing
     is a field that can disagree with it.
     """
-    return any(t.channel == DRUM_CHANNEL for t in build_takes(name, 0))
+    return any(t.channel == DRUM_CHANNEL for t in TAKE_SETS[name](0))

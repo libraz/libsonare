@@ -5,7 +5,9 @@
        build-bank-shared bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
-       build-feature-matrix accuracy-report voice-gate voice-status test-voicematch
+       build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
+       voice-readiness voice-status-refresh voice-status-check \
+       excerpts excerpts-check test-voicematch
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -414,14 +416,47 @@ abi-layout-check:
 check-abi-version:
 	python3 tools/abi/check_abi_versions.py
 
-# What each calibrated voice has and what its next round needs — the entry
-# point of the calibration loop, and the one target here that neither builds
-# nor renders anything. Read-only and always exit 0: a loop reads it to decide
-# where to start, which a target that failed on "there is work to do" could not
-# be used for.
+# Where every voice in the bank stands and what its next round needs — the entry
+# point of the calibration loop, and the one target here that neither builds nor
+# renders anything. Reads the committed `tools/voice-status.json`, so a plain
+# clone sees the whole bank. Read-only and always exit 0: a loop reads it to
+# decide where to start, which a target that failed on "there is work to do"
+# could not be used for.
 voice-status:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py
+
+# The same, every voice rather than only those past the oracle step.
+voice-status-all:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py --all
+
+# The readiness of the four instruments a capture exists for, in the detail the
+# bank view does not carry: which profile columns back which dimension, which
+# phrase takes have an archived reference.
+voice-readiness:
 	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/profile.py \
 		status --all
+
+# Regenerate the bank view. Needs the tuning build, because the engine voicing
+# each patch is reported by the library rather than parsed out of it — the same
+# reason `bank-versions` needs it, and the same build directory.
+voice-status-refresh: build-bank-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py \
+		--write --lib $(BANK_SHARED_LIB)
+
+voice-status-check: build-bank-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py \
+		--check --lib $(BANK_SHARED_LIB)
+
+# Re-cut the committed Bach excerpts a musical take plays. Needs the sibling
+# corpus ($SONARE_BACH_ROOT); rendering one needs nothing, which is why the note
+# data is committed rather than resolved on demand. Deliberately outside
+# `ci-local`: no CI checkout has the corpus, so a check there would fail on an
+# absent sibling rather than on a stale excerpt.
+excerpts:
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/extract_excerpt.py
+
+excerpts-check:
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/extract_excerpt.py --check
 
 # Hold every calibrated GM fallback voice to the bounds recorded beside its
 # reference profile. One target rather than one per instrument: a gate exists
