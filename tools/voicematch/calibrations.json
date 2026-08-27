@@ -72,5 +72,49 @@
         "note": "the three hi-hats only, and one ratio the wider refit dropped (d044.mode_ratios1) — the narrower question, kept because it is not a subset of refit-metallic"
       }
     ]
+  },
+
+  "p017-percussive-organ": {
+    "variants": [
+      {
+        "name": "perc-second",
+        "overrides": "percussive_organ.additive.percussion_harmonic=2",
+        "note": "the second harmonic instead of the third - the instrument offers exactly these two and nothing but the ear decides between them"
+      },
+      {
+        "name": "perc-fast",
+        "overrides": "percussive_organ.additive.percussion_decay_ms=140",
+        "note": "the instrument's fast decay position against its normal one at 340 ms"
+      },
+      {
+        "name": "perc-quiet",
+        "overrides": "percussive_organ.additive.percussion_level=0.3",
+        "note": "half the shipped level: whether the ping sits under the registration or on top of it"
+      },
+      {
+        "name": "perc-loud",
+        "overrides": "percussive_organ.additive.percussion_level=0.9",
+        "note": "the ping well forward, which is how a jazz registration is usually drawn"
+      }
+    ]
+  },
+  "p018-rock-organ": {
+    "variants": [
+      {
+        "name": "drive-least",
+        "overrides": "rock_organ.drive=0.0001,rock_organ.gain=0.4887",
+        "note": "the smallest drive that is not off, level-matched - the knob steps straight to tanh(x)/tanh(1), so this is the question of whether ANY amplifier belongs here"
+      },
+      {
+        "name": "drive-mild",
+        "overrides": "rock_organ.drive=0.15,rock_organ.gain=0.3323",
+        "note": "1.5 dB of crest off a held chord, level-matched so loudness does not decide the choice"
+      },
+      {
+        "name": "drive-hard",
+        "overrides": "rock_organ.drive=0.5,rock_organ.gain=0.2288",
+        "note": "2.9 dB of crest off, level-matched; the far end of what a rock organ's amplifier plausibly does"
+      }
+    ]
   }
 }
