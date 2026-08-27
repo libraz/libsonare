@@ -2,6 +2,7 @@
 #include "midi/synth/gm_fallback_programs_keyed.h"
 #include "midi/synth/gm_fallback_programs_percussion.h"
 #include "midi/synth/gm_fallback_programs_physical.h"
+#include "midi/synth/gm_fallback_programs_synth.h"
 #include "midi/synth/gm_fallback_programs_variations.h"
 #include "midi/synth/patch_tuning.h"
 
@@ -13,6 +14,7 @@ SONARE_TUNED_CONSTEXPR ProgramOverrides build_program_overrides() noexcept {
   configure_keyed_programs(o);
   configure_percussion_programs(o);
   configure_physical_programs(o);
+  configure_synth_programs(o);
   configure_variation_programs(o);
 
   // Clamp member by member off the same X-macro list the struct is declared

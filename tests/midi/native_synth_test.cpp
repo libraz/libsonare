@@ -30,6 +30,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/audio_fixtures.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -1072,4 +1073,100 @@ TEST_CASE("Native and SF2 synths preserve source-track voice attribution", "[mid
 
   Sf2Player sf2 = make_fallback_player();
   exercise(sf2);
+}
+
+namespace {
+
+/// Held note from a GM fallback program, left channel.
+std::vector<float> render_program(uint8_t program, uint8_t note, int num_samples) {
+  NativeSynthConfig cfg;
+  cfg.patch = sonare::midi::synth::gm_fallback_patch(0, program);
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  return render(synth, num_samples).left;
+}
+
+/// Fraction of spectral power above @p split_hz in a window of @p fft samples
+/// starting at @p from. The window is short by design: the shared kFft window
+/// is 170 ms of Hann, which tapers an onset transient to nothing.
+double high_fraction(const std::vector<float>& buf, size_t from, double split_hz, int fft) {
+  const std::vector<double> power = sonare::test::power_spectrum(buf, from, fft);
+  const int split = static_cast<int>(std::lround(split_hz / kOutRate * fft));
+  double low = 0.0;
+  double high = 0.0;
+  for (int b = 1; b < static_cast<int>(power.size()); ++b) {
+    (b >= split ? high : low) += power[static_cast<size_t>(b)];
+  }
+  const double total = low + high;
+  return total > 0.0 ? high / total : 0.0;
+}
+
+}  // namespace
+
+TEST_CASE("the synth leads and pads are sixteen voices, not two", "[midi][synth]") {
+  // 80-95 answered to two family patches, so eight leads rendered one sound and
+  // eight pads another. Distinctness is the claim the names make; the levels
+  // are the claim that they can be sequenced next to each other.
+  std::vector<std::vector<float>> tones;
+  for (int program = 80; program <= 95; ++program) {
+    tones.push_back(render_program(static_cast<uint8_t>(program), 60, 96000));
+  }
+  float loudest = 0.0f;
+  float quietest = 1.0f;
+  for (const std::vector<float>& tone : tones) {
+    const float p = peak(tone);
+    REQUIRE(p > 0.01f);
+    REQUIRE(p < 1.0f);
+    loudest = std::max(loudest, p);
+    quietest = std::min(quietest, p);
+  }
+  for (size_t i = 0; i < tones.size(); ++i) {
+    for (size_t j = i + 1; j < tones.size(); ++j) REQUIRE(tones[i] != tones[j]);
+  }
+  REQUIRE(loudest < 1.42f * quietest);  // inside 3 dB
+}
+
+TEST_CASE("the chiff lead's brightness is in its onset", "[midi][synth]") {
+  // "Chiff" names the breath edge of a flue pipe's speech, so the program is
+  // its transient: a filter envelope wide open for the first few tens of
+  // milliseconds and shut after. The sawtooth lead is the control — an ordinary
+  // lead's brightness does not collapse.
+  const std::vector<float> chiff = render_program(83, 60, 96000);
+  const std::vector<float> saw = render_program(81, 60, 96000);
+  const double chiff_onset = high_fraction(chiff, 0, 3000.0, 1024);
+  const double chiff_held = high_fraction(chiff, 40000, 3000.0, 1024);
+  const double saw_onset = high_fraction(saw, 0, 3000.0, 1024);
+  const double saw_held = high_fraction(saw, 40000, 3000.0, 1024);
+  // Measured 36x against the lead's own 3.4x: every lead here brightens a
+  // little at the onset, and the chiff is the one where that IS the sound.
+  REQUIRE(chiff_onset > 15.0 * chiff_held);
+  REQUIRE(saw_onset < 6.0 * saw_held);
+}
+
+TEST_CASE("the sweep pad's filter is the program", "[midi][synth]") {
+  // Sweep is the one pad whose identity is a modulation rather than a timbre,
+  // and the second LFO reaches the cutoff only through the matrix. A route that
+  // silently failed to arrive would leave a pad that is merely warm.
+  const std::vector<float> sweep = render_program(95, 60, 240000);
+  double brightest = 0.0;
+  double dullest = 1.0;
+  for (int w = 0; w < 5; ++w) {
+    const double h = high_fraction(sweep, static_cast<size_t>(w) * 32768 + 16384, 1500.0, 1024);
+    brightest = std::max(brightest, h);
+    dullest = std::min(dullest, h);
+  }
+  REQUIRE(brightest > 30.0 * dullest);
+}
+
+TEST_CASE("the metallic pad is a band, not a roll-off", "[midi][synth]") {
+  // A subtractive synth makes metal with a narrow resonant band, which needs
+  // the state-variable filter: it is the only model here with a bandpass
+  // output, so this is the one pad that must not be on a ladder. What that
+  // buys is a missing bottom, which a lowpass pad cannot have.
+  const std::vector<float> metallic = render_program(93, 60, 96000);
+  const std::vector<float> warm = render_program(89, 60, 96000);
+  const double metallic_low = 1.0 - high_fraction(metallic, 40000, 800.0, 4096);
+  const double warm_low = 1.0 - high_fraction(warm, 40000, 800.0, 4096);
+  REQUIRE(metallic_low < 0.25 * warm_low);
 }

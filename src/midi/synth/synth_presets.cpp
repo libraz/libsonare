@@ -59,7 +59,9 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     t[i++] = {preset_name, from_patch(clamp_synth_patch(bare))};
   }
 
-  alias("saw-lead", 80);
+  // The lead and pad programs are voiced apart now, so these two name the one
+  // that matches the preset rather than the first of a family that was all saw.
+  alias("saw-lead", 81);
 
   NativeSynthPatch square = gm_fallback_patch(0, 80);
   square.waveform = VaWaveform::kSquare;
@@ -79,7 +81,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   {
     SynthPreset& pad = t[i++];
     pad.name = "warm-pad";
-    pad.config = from_patch(gm_fallback_patch(0, 88));
+    pad.config = from_patch(gm_fallback_patch(0, 89));
     pad.config.bus_drive = 0.15f;  // glue the supersaw stack
   }
 

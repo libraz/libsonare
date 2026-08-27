@@ -67,6 +67,22 @@ struct ProgramOverrides {
   NativeSynthPatch tinkle_bell;         // program 112 (high metal chime, percussion)
   NativeSynthPatch agogo;               // program 113 (two-tone metal bell)
   NativeSynthPatch steel_drums;         // program 114 (tuned steel pan)
+  NativeSynthPatch lead_square;         // program 80 (Lead 1, square)
+  NativeSynthPatch lead_saw;            // program 81 (Lead 2, sawtooth)
+  NativeSynthPatch lead_calliope;       // program 82 (Lead 3, calliope)
+  NativeSynthPatch lead_chiff;          // program 83 (Lead 4, chiff)
+  NativeSynthPatch lead_charang;        // program 84 (Lead 5, charang)
+  NativeSynthPatch lead_voice;          // program 85 (Lead 6, voice)
+  NativeSynthPatch lead_fifths;         // program 86 (Lead 7, fifths)
+  NativeSynthPatch lead_bass_lead;      // program 87 (Lead 8, bass + lead)
+  NativeSynthPatch pad_new_age;         // program 88 (Pad 1, new age)
+  NativeSynthPatch pad_warm;            // program 89 (Pad 2, warm)
+  NativeSynthPatch pad_polysynth;       // program 90 (Pad 3, polysynth)
+  NativeSynthPatch pad_choir;           // program 91 (Pad 4, choir)
+  NativeSynthPatch pad_bowed;           // program 92 (Pad 5, bowed)
+  NativeSynthPatch pad_metallic;        // program 93 (Pad 6, metallic)
+  NativeSynthPatch pad_halo;            // program 94 (Pad 7, halo)
+  NativeSynthPatch pad_sweep;           // program 95 (Pad 8, sweep)
   NativeSynthPatch woodblock;           // program 115 (struck wood block)
   NativeSynthPatch taiko;               // program 116 (large struck membrane)
   NativeSynthPatch melodic_tom;         // program 117 (pitched tom membrane)
@@ -201,6 +217,22 @@ struct ProgramOverrides {
   X(tinkle_bell)                      \
   X(agogo)                            \
   X(steel_drums)                      \
+  X(lead_square)                      \
+  X(lead_saw)                         \
+  X(lead_calliope)                    \
+  X(lead_chiff)                       \
+  X(lead_charang)                     \
+  X(lead_voice)                       \
+  X(lead_fifths)                      \
+  X(lead_bass_lead)                   \
+  X(pad_new_age)                      \
+  X(pad_warm)                         \
+  X(pad_polysynth)                    \
+  X(pad_choir)                        \
+  X(pad_bowed)                        \
+  X(pad_metallic)                     \
+  X(pad_halo)                         \
+  X(pad_sweep)                        \
   X(woodblock)                        \
   X(taiko)                            \
   X(melodic_tom)                      \

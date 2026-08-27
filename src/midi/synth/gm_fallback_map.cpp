@@ -358,6 +358,39 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().koto;
     case 108:  // Kalimba (a plucked steel tine is a bar, not a string)
       return program_overrides().kalimba;
+    // Synth lead and pad (subtractive, one voice each rather than two families).
+    case 80:  // Lead 1 (square)
+      return program_overrides().lead_square;
+    case 81:  // Lead 2 (sawtooth)
+      return program_overrides().lead_saw;
+    case 82:  // Lead 3 (calliope)
+      return program_overrides().lead_calliope;
+    case 83:  // Lead 4 (chiff)
+      return program_overrides().lead_chiff;
+    case 84:  // Lead 5 (charang)
+      return program_overrides().lead_charang;
+    case 85:  // Lead 6 (voice)
+      return program_overrides().lead_voice;
+    case 86:  // Lead 7 (fifths)
+      return program_overrides().lead_fifths;
+    case 87:  // Lead 8 (bass + lead)
+      return program_overrides().lead_bass_lead;
+    case 88:  // Pad 1 (new age)
+      return program_overrides().pad_new_age;
+    case 89:  // Pad 2 (warm)
+      return program_overrides().pad_warm;
+    case 90:  // Pad 3 (polysynth)
+      return program_overrides().pad_polysynth;
+    case 91:  // Pad 4 (choir)
+      return program_overrides().pad_choir;
+    case 92:  // Pad 5 (bowed)
+      return program_overrides().pad_bowed;
+    case 93:  // Pad 6 (metallic)
+      return program_overrides().pad_metallic;
+    case 94:  // Pad 7 (halo)
+      return program_overrides().pad_halo;
+    case 95:  // Pad 8 (sweep)
+      return program_overrides().pad_sweep;
     // Pitched percussion family (membrane / struck-idiophone cores, key-tracked).
     case 112:  // Tinkle Bell
       return program_overrides().tinkle_bell;

@@ -114,6 +114,7 @@ PROGRAM_TABLE_FILES = (
     "src/midi/synth/gm_fallback_programs_physical.h",
     "src/midi/synth/gm_fallback_programs_keyed.h",
     "src/midi/synth/gm_fallback_programs_percussion.h",
+    "src/midi/synth/gm_fallback_programs_synth.h",
     "src/midi/synth/gm_fallback_programs_variations.h",
 )
 

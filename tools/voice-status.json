@@ -6896,15 +6896,15 @@
       "name": "Lead 1 (square)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_square",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_square",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -6934,7 +6934,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p081-lead-2-sawtooth",
@@ -6944,15 +6944,15 @@
       "name": "Lead 2 (sawtooth)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_saw",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_saw",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -6982,7 +6982,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p082-lead-3-calliope",
@@ -6992,15 +6992,15 @@
       "name": "Lead 3 (calliope)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_calliope",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_calliope",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7030,7 +7030,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p083-lead-4-chiff",
@@ -7040,15 +7040,15 @@
       "name": "Lead 4 (chiff)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_chiff",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_chiff",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7078,7 +7078,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p084-lead-5-charang",
@@ -7088,15 +7088,15 @@
       "name": "Lead 5 (charang)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_charang",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_charang",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7126,7 +7126,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p085-lead-6-voice",
@@ -7136,15 +7136,15 @@
       "name": "Lead 6 (voice)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_voice",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_voice",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7174,7 +7174,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p086-lead-7-fifths",
@@ -7184,15 +7184,15 @@
       "name": "Lead 7 (fifths)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_fifths",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_fifths",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7222,7 +7222,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p087-lead-8-bass-lead",
@@ -7232,15 +7232,15 @@
       "name": "Lead 8 (bass+lead)",
       "group": "80-87 Synth lead",
       "tone_class": "sustained",
-      "patch": "fam10",
+      "patch": "lead_bass_lead",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam10",
+        "patch": "lead_bass_lead",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7270,7 +7270,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p088-pad-1-new-age",
@@ -7280,15 +7280,15 @@
       "name": "Pad 1 (new age)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_new_age",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_new_age",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7318,7 +7318,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p089-pad-2-warm",
@@ -7328,15 +7328,15 @@
       "name": "Pad 2 (warm)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_warm",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_warm",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7366,7 +7366,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p090-pad-3-polysynth",
@@ -7376,15 +7376,15 @@
       "name": "Pad 3 (polysynth)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_polysynth",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_polysynth",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7414,7 +7414,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p091-pad-4-choir",
@@ -7424,15 +7424,15 @@
       "name": "Pad 4 (choir)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_choir",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_choir",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7462,7 +7462,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p092-pad-5-bowed",
@@ -7472,15 +7472,15 @@
       "name": "Pad 5 (bowed)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_bowed",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_bowed",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7510,7 +7510,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p093-pad-6-metallic",
@@ -7520,15 +7520,15 @@
       "name": "Pad 6 (metallic)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_metallic",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_metallic",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7558,7 +7558,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p094-pad-7-halo",
@@ -7568,15 +7568,15 @@
       "name": "Pad 7 (halo)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_halo",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_halo",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7606,7 +7606,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p095-pad-8-sweep",
@@ -7616,15 +7616,15 @@
       "name": "Pad 8 (sweep)",
       "group": "88-95 Synth pad",
       "tone_class": "sustained",
-      "patch": "fam11",
+      "patch": "pad_sweep",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam11",
+        "patch": "pad_sweep",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7654,7 +7654,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p096-fx-1-rain",
