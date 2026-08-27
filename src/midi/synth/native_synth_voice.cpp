@@ -4,12 +4,22 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/voice_random.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-/// Whether a mode still needs the SoundFont velocity-to-amplitude curve.
+/// Exponent of the SoundFont velocity-to-amplitude curve, on the kit.
+///
+/// The curve is `(v/127)^2` and every engine but the two below is voiced with
+/// it in place, so it is the exponent rather than the curve that a measured
+/// engine adjusts. The spec's 2.0 swung the kit 10.2 dB wider from velocity 48
+/// to 127 than one reference kit and 4.5 dB wider than the other; the exponent
+/// each asks for on its own is 0.80 and 1.46, and this is the midpoint.
+SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
+
+/// Exponent of the SoundFont velocity-to-amplitude curve for @p mode, 0 = off.
 ///
 /// `sf2_velocity_gain` exists because a sampled note was recorded at one force
 /// and has to be scaled to the force actually played. A physical engine is
@@ -27,11 +37,27 @@ namespace {
 /// velocity 24 and 120. Applied on top of a plectrum model it does not merely
 /// double the dynamic, it replaces the one thing that identifies the instrument.
 ///
+/// The kit is the case where neither end is right: with the curve the model
+/// swings 19.5 dB from velocity 48 to 127 where two reference kits swing 5.8 to
+/// 13.6, and without it the percussion engine's own response is under 3 dB,
+/// which is less than either. So it takes an exponent instead of a switch.
+///
 /// An engine opts out only once it has been measured against a reference corpus.
 /// Every other physical engine was voiced with the curve in place and would
 /// shift underneath its own calibration if this changed for it too.
-bool needs_sampler_velocity_curve(SynthEngineMode mode) noexcept {
-  return mode != SynthEngineMode::kPiano && mode != SynthEngineMode::kHarpsichord;
+float sampler_velocity_exponent(SynthEngineMode mode) noexcept {
+  if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord) return 0.0f;
+  if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
+  return 2.0f;
+}
+
+/// The curve at @p exponent. The spec's exponent keeps the spec's own squaring
+/// rather than reaching `pow` for it, so a build that never moves the knob is
+/// bit-identical to one compiled before it existed.
+float sampler_velocity_gain(uint8_t velocity, float exponent) noexcept {
+  if (exponent <= 0.0f) return 1.0f;
+  if (exponent == 2.0f) return sf2_velocity_gain(velocity);
+  return std::pow(static_cast<float>(velocity & 0x7Fu) / 127.0f, exponent);
 }
 
 }  // namespace
@@ -135,8 +161,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
                                        voice_seed(voice_index, note, age) ^ (k + 1));
   }
 
-  const float sampler_vel =
-      needs_sampler_velocity_curve(p.mode) ? sf2_velocity_gain(velocity) : 1.0f;
+  const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p.mode));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +

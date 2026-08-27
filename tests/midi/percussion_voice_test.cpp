@@ -722,3 +722,39 @@ TEST_CASE("an unknown drum program leaves the Standard kit bit-identical",
     REQUIRE(no_prog[i] == prog3[i]);
   }
 }
+
+namespace {
+
+/// RMS of @p x in dBFS, for comparing one render's level against another's.
+float rms_db(const std::vector<float>& x) {
+  double sum = 0.0;
+  for (float v : x) sum += static_cast<double>(v) * static_cast<double>(v);
+  return 20.0f *
+         std::log10(static_cast<float>(std::sqrt(sum / std::max<size_t>(1, x.size()))) + 1e-12f);
+}
+
+/// How far a patch's level moves from a soft hit to a hard one, in dB.
+float velocity_span_db(const NativeSynthPatch& patch, uint8_t note) {
+  const int n = 16000;
+  return rms_db(render_patch(patch, note, 127, n)) - rms_db(render_patch(patch, note, 48, n));
+}
+
+}  // namespace
+
+TEST_CASE("the kit swings less with velocity than the sampler curve alone would",
+          "[midi][synth][percussion]") {
+  // The SoundFont curve is (v/127)^2, which is 16.9 dB between these two
+  // velocities before any engine has responded to them at all. Two reference
+  // kits swing 5.8 and 13.6 dB there, so the kit takes a softer exponent while
+  // every other engine keeps the spec's. The two spans are asserted against
+  // each other rather than against fixed numbers: what matters is that the kit
+  // is narrower and that nothing else moved with it.
+  const float sampler_curve_db = 40.0f * std::log10(127.0f / 48.0f);
+  const float melodic = velocity_span_db(NativeSynthPatch{}, 60);
+  const float kit = velocity_span_db(tom_patch(), 50);
+
+  REQUIRE(melodic == Catch::Approx(sampler_curve_db).margin(0.5));
+  REQUIRE(kit < melodic - 5.0f);
+  // A kit that stopped responding to velocity would also pass the bound above.
+  REQUIRE(kit > 4.0f);
+}

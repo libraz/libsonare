@@ -35,12 +35,10 @@
           "complete": true
         },
         "agreement": {
-          "inside": 8,
+          "inside": 10,
           "total": 11,
           "outside": {
-            "stereo": 1.81,
-            "aftersound": 1.21,
-            "vel_range": 1.11
+            "stereo": 1.45
           }
         },
         "structure": null,
@@ -1360,8 +1358,8 @@
           "inside": 6,
           "total": 8,
           "outside": {
-            "balance": 1.62,
-            "vel_range": 1.61
+            "balance": 1.29,
+            "vel_range": 1.29
           }
         },
         "structure": null,
@@ -3204,8 +3202,8 @@
           "inside": 1,
           "total": 3,
           "outside": {
-            "stretch": 1.84,
-            "centroid_pct": 1.57
+            "stretch": 1.47,
+            "centroid_pct": 1.26
           }
         },
         "structure": null,
@@ -9193,12 +9191,9 @@
       "patch": null,
       "engine": "percussion",
       "capture": "drums",
-      "stage": 0.6,
-      "stage_name": "covered",
-      "open_candidates": [
-        "refit-metallic",
-        "refit-hats"
-      ],
+      "stage": 0.8,
+      "stage_name": "agreeing",
+      "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": null,
@@ -9213,20 +9208,18 @@
           "complete": true
         },
         "agreement": {
-          "inside": 3,
+          "inside": 5,
           "total": 8,
           "outside": {
-            "band_decay": 5.63,
-            "vel_range": 3.06,
-            "level": 1.87,
-            "band_shape": 1.73,
-            "band_tilt": 1.03
+            "band_decay": 4.51,
+            "band_shape": 1.39,
+            "level": 1.32
           }
         },
         "structure": null,
         "music": null
       },
-      "next": "outside the reference spread: band_decay 5.63x, vel_range 3.06x, level 1.87x"
+      "next": "record a structural residual with autofit --diagnose, then sign off a musical take"
     }
   ]
 }
