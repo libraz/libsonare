@@ -279,6 +279,27 @@ TEST_CASE("drawbar percussion is a decaying tone at the harmonic it names",
   REQUIRE(rms(second, 19200, 21600) < 0.05f * rms(second, 0, 2400));
 }
 
+TEST_CASE("the shipped percussive organ's ping is spent inside a beat", "[midi][synth][additive]") {
+  // Every other case here sets its own decay, so none of them sees the bank's.
+  // Reading the field as a time to inaudibility rather than as a time constant
+  // stretches the ping sevenfold, and at that length it is still within 6 dB of
+  // its peak 200 ms in, where the reference's is 33 dB down.
+  const NativeSynthPatch shipped = gm_fallback_patch(0, 17);
+  NativeSynthPatch plain = shipped;
+  plain.additive.percussion_harmonic = 0;
+  const int n = static_cast<int>(kRate) / 2;
+  const std::vector<float> with = render_patch(shipped, 57, 100, n);
+  const std::vector<float> without = render_patch(plain, 57, 100, n);
+  std::vector<float> shot(with.size());
+  for (size_t i = 0; i < with.size(); ++i) shot[i] = with[i] - without[i];
+
+  const size_t window = static_cast<size_t>(kRate) / 100;  // 10 ms
+  const size_t late = static_cast<size_t>(kRate) / 5;      // 200 ms in
+  const float first = rms(shot, 0, window);
+  REQUIRE(first > 0.01f);
+  REQUIRE(rms(shot, late, late + window) < 0.05f * first);
+}
+
 TEST_CASE("drawbar percussion sounds once per phrase and recharges when the keys are up",
           "[midi][synth][additive]") {
   NativeSynthConfig cfg;

@@ -48,8 +48,11 @@ struct AdditivePatchParams {
   /// A Hammond offers those two and nothing else, and off is the default so a
   /// registration that does not ask for percussion renders as it always did.
   int percussion_harmonic = 0;
-  /// Percussion decay time constant (ms). The instrument's two positions are
-  /// roughly 340 (normal) and 140 (fast).
+  /// Percussion decay time constant (ms) — not a time to inaudibility, which is
+  /// what the figures quoted for the instrument's two positions are; consuming
+  /// one as this makes the ping some seven times too long. A reference drawbar
+  /// organ measures 45 ms, which is 310 ms to -60 dB. The shipped percussive
+  /// registration sets its own.
   float percussion_decay_ms = 340.0f;
   /// Percussion level, as a fraction of the normalized drawbar sum.
   float percussion_level = 0.6f;

@@ -517,14 +517,16 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   // Percussive Organ (GM 17): the same generator with the percussion tab down.
   // The registration goes back to the bare first three drawbars because that is
   // what the percussion is played against — it borrows the top wheel, so a
-  // drawn upper register would fight it. The third harmonic is the identifiable
-  // one; the decay is the instrument's "normal" position rather than its fast
-  // one. Level and decay are heard rather than measured, and stand until the
-  // drawbar reference is captured.
+  // drawn upper register would fight it. A reference drawbar organ settles both
+  // of the remaining choices: its third harmonic stands 33 dB over its own
+  // sustain and is spent in 200 ms while the second never leaves the floor, and
+  // the transient's time constant measures 45 ms across two takes. The level
+  // stays heard — the reference draws a different registration, so its
+  // percussion-against-fundamental does not carry across.
   o.percussive_organ = dr;
   o.percussive_organ.additive.drawbars = {8.0f, 8.0f, 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   o.percussive_organ.additive.percussion_harmonic = 3;
-  o.percussive_organ.additive.percussion_decay_ms = 340.0f;
+  o.percussive_organ.additive.percussion_decay_ms = 45.0f;
   o.percussive_organ.additive.percussion_level = 0.6f;
 
   // Rock Organ (GM 18): the same generator drawn fuller and struck harder — the
