@@ -24,6 +24,7 @@ to be expressed in to be usable.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, asdict
 
 import numpy as np
@@ -386,18 +387,64 @@ def fit_room_ir(
     return best_ir
 
 
+def measurable_room(
+    reference: np.ndarray, sr: int, notes: list[tuple[float, float]]
+) -> Room | None:
+    """The space `reference` was recorded in, or None if this probe cannot say.
+
+    None on a reference that is already dry (`Room.is_dry`) and on a probe whose
+    note windows are gates rather than notes (`Room.gated`) — in the second case
+    inverting the measurement invents a field far larger than the room and hides
+    the model's own decay deficit. Only the caller knows whether the reference
+    carries a room at all; a dry capture must not reach here, since a measured
+    0.4 s off an instrument's own release would then be convolved onto the model
+    as if it were a building.
+    """
+    room = estimate_room(reference, sr, notes)
+    return None if (room.is_dry() or room.gated()) else room
+
+
+def place_model_in(
+    model: np.ndarray, sr: int, notes: list[tuple[float, float]], room: Room,
+    ir: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Convolve `model` into `room`, returning the audio and the IR used.
+
+    `ir` skips the fit and reuses one measured elsewhere. A room belongs to the
+    recording session, not to the phrase, so a probe that cannot support the
+    measurement itself can still be corrected with the IR a longer phrase from
+    the same reference yielded — and reusing it is not the thing `Room.gated`
+    warns about, which is inverting a gated measurement, not applying a filter.
+    """
+    fitted = fit_room_ir(model, sr, notes, room) if ir is None else ir
+    return apply_room(model, fitted), fitted
+
+
 GS_DEFAULT_REVERB_DECAY = 0.7  # GsEffectsConfig::reverb_decay
 GS_POWER_ON_CC91 = 40  # what gs_reset()/gm_reset() leave CC91 at
 
 # Search grid for `match_sends`. The tank decay is swept as a multiplier on the
 # shipped GsEffectsConfig value rather than in seconds because that is the knob
 # libsonare actually exposes (`gs_effects.kReverbDecayScale`), and the mapping
-# to RT60 is neither linear nor instrument-independent: measured on program 19,
-# the same sweep gives 1.12 s at tank decay 0.28 and 6.45 s at 0.98, while the
-# measured RT60 also drifts with the send because the instrument's own release
-# sits inside the window. That coupling is why this is a search over real
-# renders rather than a closed-form inversion.
-_DECAY_SCALES = (0.4, 0.55, 0.7, 0.85, 1.0, 1.15, 1.3, 1.4)
+# to RT60 is neither linear nor instrument-independent: the measured RT60 also
+# drifts with the send, because the instrument's own release sits inside the
+# window. That coupling is why this is a search over real renders rather than a
+# closed-form inversion.
+#
+# The points are spaced uniformly in RT60, not in decay. A tank is a feedback
+# loop, so its RT60 goes as -1/ln(decay) and blows up as the decay approaches
+# unity: a grid even in decay is uselessly coarse exactly where a room lives.
+# The shipped 0.70 and the next step up, 0.805, measured 2.53 s and 4.28 s on
+# program 19 with nothing between them, and both sampled cathedral references
+# sit in that gap. `_TANK_RT60_K` is that measurement solved for k in
+# RT60 = -k / ln(decay); it sets the grid's spacing and nothing else, so a
+# drift in it costs resolution rather than correctness.
+_TANK_RT60_K = 2.53 * -np.log(0.70)
+_DECAY_TARGET_RT60 = (0.5, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.5)
+_DECAY_SCALES = tuple(
+    round(min(float(np.exp(-_TANK_RT60_K / rt)), 0.98) / GS_DEFAULT_REVERB_DECAY, 3)
+    for rt in _DECAY_TARGET_RT60
+)
 _CC91_STEPS = (0, 10, 20, 30, 40, 55, 70, 90, 110, 127)
 
 
@@ -413,8 +460,32 @@ def room_distance(a: Room, b: Room) -> float:
     return float(np.hypot(rt_err, tail_err))
 
 
-def match_sends(target: Room, measure, log=None) -> dict:
+def room_span_distance(got: Room, targets: Sequence[Room]) -> float:
+    """How far `got` sits OUTSIDE the span the reference rooms themselves cover.
+
+    Zero anywhere inside it, in the same units as `room_distance`. References
+    disagree about their own building by more than a search can resolve — the
+    two sampled cathedral organs measure RT60 3.19 s and 3.69 s — so a value
+    between them is as close as the corpus can define, and driving the search at
+    whichever one came first picks a tank the other contradicts. Here that
+    chooses a 2.88 s tank over a 3.60 s one, and 2.88 is outside both.
+    """
+    if len(targets) == 1:
+        return room_distance(got, targets[0])
+    rt = [max(t.rt60_s, 1e-3) for t in targets]
+    tail = [t.tail_db for t in targets]
+    x = max(got.rt60_s, 1e-3)
+    rt_err = max(0.0, np.log(min(rt) / x), np.log(x / max(rt))) / 0.2
+    tail_err = max(0.0, min(tail) - got.tail_db, got.tail_db - max(tail)) / 3.0
+    return float(np.hypot(rt_err, tail_err))
+
+
+def match_sends(target: Room | Sequence[Room], measure, log=None) -> dict:
     """Find the libsonare ambience controls that land closest to `target`.
+
+    `target` may be several measured rooms — every reference the archive holds
+    for the phrase — in which case anything inside the span they cover scores
+    zero. See `room_span_distance`.
 
     A fit is only useful if its result can be written back, and libsonare does
     not take an RT60 — it takes a per-channel CC91 send, a per-program send
@@ -427,13 +498,21 @@ def match_sends(target: Room, measure, log=None) -> dict:
     process and a sweep inside one interpreter would measure the first value
     every time.
 
-    Returns the best controls, the residual distance, and the `reverb_scale`
-    that would put this program at that send when the channel sits at the GS
-    power-on CC91 — which is the number to write into `gm_fallback_sends`.
+    Returns the best controls, the residual distance, and `send_factor` — what
+    to MULTIPLY this program's `gm_fallback_sends` reverb weight by, not the
+    weight itself. The probe renders through the shipped library, so the weight
+    is already in every measurement: the search moves the channel's CC91 around
+    a send that has been through it. Program 19 ships at 2.2 and the search
+    lands on CC91 30, which is 1.65 rather than the 0.75 an absolute reading
+    would write — a factor of 2.2, about 9 dB of send.
+
+    An absolute weight would need the shipped value, and the only non-mirror
+    source for it is what the library reports under `SONARE_TUNING_DUMP`.
     """
-    if target.is_dry():
+    targets = [target] if isinstance(target, Room) else list(target)
+    if not targets or all(t.is_dry() for t in targets):
         return {
-            "cc91": 0, "decay_scale": 1.0, "reverb_scale": 0.0,
+            "cc91": 0, "decay_scale": 1.0, "send_factor": 0.0,
             "residual": 0.0, "measured": DRY.to_dict(), "dry": True,
         }
 
@@ -447,7 +526,7 @@ def match_sends(target: Room, measure, log=None) -> dict:
     def consider(cc91: int, decay_scale: float) -> float:
         nonlocal best
         got = measure(cc91, decay_scale)
-        d = room_distance(got, target)
+        d = room_span_distance(got, targets)
         if log is not None:
             log(f"  cc91={cc91:3d} decay_scale={decay_scale:.2f} -> "
                 f"rt60={got.rt60_s:.2f}s tail={got.tail_db:+.1f}dB  dist={d:.2f}")
@@ -471,7 +550,7 @@ def match_sends(target: Room, measure, log=None) -> dict:
         "cc91": cc91,
         "decay_scale": round(decay_scale, 3),
         "reverb_decay": round(GS_DEFAULT_REVERB_DECAY * decay_scale, 3),
-        "reverb_scale": round(cc91 / GS_POWER_ON_CC91, 2),
+        "send_factor": round(cc91 / GS_POWER_ON_CC91, 2),
         "residual": round(residual, 3),
         "measured": got.to_dict(),
         "dry": False,

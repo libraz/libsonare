@@ -51,7 +51,7 @@ from patterns import (
 )
 from render_model import ensure_lib_path, render_model
 from render_oracle import add_oracle_args, obtain_oracle, oracle_may_carry_room
-from room import apply_room, estimate_room, fit_room_ir, match_sends
+from room import estimate_room, match_sends, measurable_room, place_model_in
 from smf import write_smf
 from wavio import write_wav
 
@@ -79,20 +79,16 @@ def match_model_room(model, oracle, sr, notes, mode: str, external: bool):
     Skipped unless the oracle came from outside libsonare's dry path
     (`oracle_may_carry_room`): the built-in fluidsynth oracle is rendered with
     its effect units off, so anything measured there is the instrument's own
-    decay and correcting for it would invent a room.
-
-    Also skipped when the measurement cannot support the correction — a dry
-    reference (`Room.is_dry`), and a probe whose note windows are gates rather
-    than notes (`Room.gated`). Both are reported rather than silently applied:
-    the room is still measured and still returned, because the reference having
-    a space is worth knowing even where the model cannot be moved into it.
+    decay and correcting for it would invent a room. `measurable_room` decides
+    the rest, and returns the room either way so a reference having a space is
+    reported even where the model cannot be moved into it.
     """
     if mode == "none" or not external:
         return model, None
-    room = estimate_room(oracle, sr, notes)
-    if room.is_dry() or room.gated():
-        return model, room
-    return apply_room(model, fit_room_ir(model, sr, notes, room)), room
+    room = measurable_room(oracle, sr, notes)
+    if room is None:
+        return model, estimate_room(oracle, sr, notes)
+    return place_model_in(model, sr, notes, room)[0], room
 
 
 def parse_programs(spec: str) -> list[int]:
@@ -556,8 +552,9 @@ def run_room_match(args: argparse.Namespace) -> int:
           f"({DECAY_SCALE_KEY}={result['decay_scale']})")
     print(f"  reached RT60 {result['measured']['rt60_s']:.2f}s  "
           f"tail {result['measured']['tail_db']:+.1f}dB   residual {result['residual']}")
-    print(f"  -> gm_fallback_sends reverb_scale for program {program}: "
-          f"{result['reverb_scale']} (currently weighting the GS power-on CC91 of 40)")
+    print(f"  -> MULTIPLY program {program}'s gm_fallback_sends reverb weight "
+          f"by {result['send_factor']} (the shipped weight is already in the "
+          f"measurement; this is not the weight to write)")
     if result["residual"] > 1.5:
         print("  NOTE: residual above 1.5 — libsonare's tank cannot reach this space; "
               "the reference room is outside its range.")

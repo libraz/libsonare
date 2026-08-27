@@ -156,8 +156,23 @@ All three: `--config` (default `capture/piano.json`), `--out` (default `.cache/v
 | `compare` | diff the model's grid against the reference, per dimension — and, on a kit, per family relation | `--gate`, `--write-gate`, `--margin` (1.25) |
 | `agree` | measure a second reference and report where the two agree | — |
 | `dynamics` | tabulate the pp→ff swing rather than one velocity at a time | — |
+| `takes` | measure the phrase set — what happens *between* notes, which a single-note grid cannot excite | `--only`, `--archive` |
+| `status` | the readiness row, and the command each gap needs | `--all`, `--archive` |
+| `room-match` | what libsonare's own CC91 send and GS tank would have to be to sit in the reference's room | `--take`, `--archive`, `--verbose` |
 
 All: `--config`, `--corpus`, `--profile`, `--program`. `compare` / `agree` / `dynamics` also take `--timbre` and `--notes`.
+
+**`takes` on a wet capture places the model in the reference's room first.** The model always renders dry — `write_smf` writes CC91 0 — so against a reference recorded in its building every tail figure would be a dry signal read against a wet one, and all of them would land outside the references' spread for that reason and not because the voice is wrong. Measured on the church organ before the correction: the tail fell at 78 dB/s against the references' 15 to 17, and its four band levels missed by 11 to 25 dB; after it, the decay is 23 dB/s and the tail tonality is inside their spread. A capture's own `dry` flag decides whether the correction runs at all — nothing in the audio can tell a building from an instrument's own long release, and guessing wrong convolves an invented room onto every figure.
+
+One room per reference, because two references are two buildings and placing the model in one of them would score it against the other's; a figure is flagged only when it is outside their range in *every* room the model was placed in. One IR per reference for the whole run, measured on the first phrase that can support the measurement and reused by the ones that cannot: a room belongs to the session that recorded it, not to the phrase, and a phrase of short notes cannot measure one itself (`Room.gated`). A run that reaches no such phrase — `--only` on a staccato take — reports the take as skipped rather than printing figures that all describe the building.
+
+**Ambience splits two ways, and the split is deliberate.** A *metric* has to read the instrument rather than the building, so `compare` and `takes` render the model dry and place it in the reference's measured space before measuring. A *listening page* has to be the product, so `make_audition.py` leaves the GS sends at their power-on values instead — see [audition.md](audition.md). `room-match` is the third question: not how to remove the room from a measurement, and not what the model sounds like in its own, but what libsonare would have to be told to sit in the reference's. It answers in the only terms the library takes — a CC91 value and a tank decay. Measured on the church organ's `single-long`: the two sampled references' naves are RT60 3.19 s and 3.69 s, the shipped path reaches 2.5 s, and `reverb_decay` 0.773 lands inside their span at 3.60 s with the send pulled back to CC91 30 — residual 0.44, well inside the 1.5 above which the tank is reported as unable to reach the space at all. The tank decay is a host-wide setting rather than a per-program one, so only the send half of that answer is something a bank can carry.
+
+Three things about that number are worth knowing before it is written anywhere.
+
+- **`send_factor` multiplies the shipped weight; it is not the weight.** The probe renders through the library, so the program's `gm_fallback_sends` weight is already inside every measurement — the search is moving a CC91 that has been through it. The organ ships at 2.2 and the search lands on CC91 30, which is 2.2 × 30/40 = 1.65, not the 0.75 an absolute reading would write. An absolute weight would need the shipped value, and the only non-mirror source for it is what the library reports under `SONARE_TUNING_DUMP`.
+- **The search is scored against the span the references cover, not against one of them.** Aimed at whichever came first, it chose a 2.88 s tank over a 3.60 s one — and 2.88 is outside both, while a pairwise distance cannot see that because 2.88 genuinely is nearer to 3.19 than 3.60 is.
+- **The decay grid is spaced uniformly in RT60 rather than in decay.** A tank is a feedback loop, so its RT60 goes as `-1/ln(decay)` and blows up near unity: on an even grid the shipped 0.70 and the next step 0.805 measured 2.53 s and 4.28 s with nothing in between, and both references sit in that gap.
 
 What each subcommand measures, which dimensions a `compare` gates on, and what `make voice-gate` runs are in [capture.md](capture.md#profilepy).
 
@@ -176,6 +191,8 @@ PYTHONPATH=tools/voicematch python -m shape fit   --capture piano --corpus <dir>
 | `fit` | search the knob space against the spectrogram loss | `--knobs` *(required)*, `--namespaces`, `--deny`, `--start`, `--out`, `--passes` (4) |
 | `ablate` | which of a fitted set actually earned its place | `--knobs` *(required)*, `--namespaces`, `--overrides` *(required)* |
 | `probe` / `purity` / `admittance` | per-cell, per-partial and driving-point readings | `--overrides` |
+| `struck` | per band over the aftersound: how many things ring, and where the top went | `--overrides` |
+| `attack` | per band over the first quarter second: how far into the strike each band's energy sits | `--overrides` |
 | `takes` | read a rendered audition page rather than the corpus | `--page` *(required)* |
 
 Common: `--capture` (`piano`), `--corpus` *(required)*, `--timbre`, `--notes`, `--velocities`, `--lib`, `--cache` (`/tmp/voicematch-shape`), `--no-bed`, `--workers` (7). Details in [shape/README.md](../shape/README.md).

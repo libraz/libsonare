@@ -61,6 +61,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,8 +81,11 @@ from metrics import (  # noqa: E402
     THIRD_OCTAVE_CENTERS, _db, _peak_near, _rms_envelope, _spectrum, analyze_hit,
     fit_partial_series, measure_band_edge, midi_to_hz, partial_hz, to_mono,
 )
+from phrases import TAKE_SETS, build_takes  # noqa: E402
+from _repo import REPO_ROOT  # noqa: E402
 from render_model import render_model  # noqa: E402
 from render_oracle import render_oracle_fluidsynth  # noqa: E402
+from room import Room, match_sends, measurable_room, place_model_in  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
 from wavio import read_wav, write_wav  # noqa: E402
 
@@ -1460,9 +1465,8 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
     out["takes_archived"] = len(held)
     if cfg.get("takes"):
         try:
-            import make_audition
-            wanted_takes = {t.id for t in make_audition.TAKE_SETS[cfg["takes"]](out["program"])}
-        except (ImportError, KeyError):
+            wanted_takes = {t.id for t in build_takes(cfg["takes"], out["program"])}
+        except KeyError:
             wanted_takes = set()
         out["takes_total"] = len(wanted_takes)
         if wanted_takes - held:
@@ -1759,6 +1763,114 @@ def archived_take_references(archive: Path, capture_id: str, take_id: str, sr: i
     return out
 
 
+def archived_take_ids(archive: Path, capture_id: str) -> set[str]:
+    """Which phrases the archive holds a reference for, by take id."""
+    index = archive / "index.json"
+    if not index.exists():
+        return set()
+    return set(json.loads(index.read_text()).get(capture_id, {}))
+
+
+def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose: bool) -> int:
+    """What libsonare's OWN ambience controls can do about the reference's room.
+
+    The complementary question to everything else here. `compare` and `takes`
+    put the model in the reference's space so the timbre is read without the
+    building; this asks what the shipped library would have to be told to be in
+    that building by itself, which it answers in the only terms it takes — a
+    CC91 send and the GS tank's decay, not an RT60. The send is what a program's
+    `gm_fallback_sends` weight scales, so the answer converts straight into that
+    table.
+
+    Driven off a phrase rather than off a synthesised probe, unlike
+    `voicematch.py room-match`: the reference for a phrase is already in the
+    archive, so this needs neither the plugin nor the machine it runs on, and
+    the room is measured on the same audio the listening page plays.
+    """
+    from voicematch import DECAY_SCALE_KEY
+
+    sr = int(cfg.get("sample_rate", 48000))
+    if cfg.get("dry", True):
+        print("the capture is dry: there is no room to reproduce", file=sys.stderr)
+        return 0
+    wanted = [t for t in build_takes(cfg["takes"], program) if t.id == take_id]
+    if not wanted:
+        print(f"no take {take_id!r} in the {cfg['takes']!r} set", file=sys.stderr)
+        return 2
+    take = wanted[0]
+    refs = archived_take_references(archive, cfg["id"], take.id, sr)
+    if not refs:
+        print(f"{take.id}: no archived reference", file=sys.stderr)
+        return 2
+    spans = [(n.start, n.start + n.dur) for n in take.notes]
+
+    # Every reference, not the first: two recordings of one instrument disagree
+    # about their building by more than this search can resolve, and aiming at
+    # whichever came first picks a tank the other contradicts.
+    targets: list[Room] = []
+    for name, audio in refs.items():
+        room = measurable_room(np.asarray(audio, dtype=np.float64), sr, spans)
+        if room is None:
+            print(f"{take.id}: {name} measures no room this phrase can support",
+                  file=sys.stderr)
+            continue
+        targets.append(room)
+        print(f"target ({name} on {take.id}): RT60 {room.rt60_s:.2f}s  "
+              f"tail level {room.tail_db:+.1f}dB  HF ratio {room.hf_ratio:.2f}")
+    if not targets:
+        return 2
+    if len(targets) > 1:
+        print(f"  span: RT60 {min(t.rt60_s for t in targets):.2f}-"
+              f"{max(t.rt60_s for t in targets):.2f}s  tail level "
+              f"{min(t.tail_db for t in targets):+.1f} to "
+              f"{max(t.tail_db for t in targets):+.1f}dB  "
+              f"(anything inside it scores zero)")
+
+    # One render per grid point, each in its own interpreter: the override table
+    # is read once when the library loads, so a sweep inside one process would
+    # measure the first tank setting at every point.
+    child = (
+        "import sys; sys.path.insert(0, %r)\n"
+        "import json\n"
+        "from phrases import build_takes\n"
+        "from smf import write_smf\n"
+        "from room import estimate_room\n"
+        "from render_model import render_model\n"
+        "prog, cc91, tid, tset = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4]\n"
+        "t = [x for x in build_takes(tset, prog) if x.id == tid][0]\n"
+        "smf = write_smf(t.notes, program=prog, end_pad=t.tail_s, "
+        "cc_events=t.cc_events, channel=t.channel, sends=(cc91, 0, 0))\n"
+        "a = render_model(smf, t.duration(), 48000)\n"
+        "r = estimate_room(a, 48000, [(n.start, n.start + n.dur) for n in t.notes])\n"
+        "print(f'{r.rt60_s} {r.tail_db} {r.hf_ratio}')\n"
+    ) % (str(Path(__file__).resolve().parent),)
+
+    def measure(cc91: int, decay_scale: float):
+        env = dict(os.environ)
+        env["SONARE_TUNING_OVERRIDES"] = f"{DECAY_SCALE_KEY}={decay_scale}"
+        proc = subprocess.run(
+            [sys.executable, "-c", child, str(program), str(cc91), take.id, cfg["takes"]],
+            env=env, capture_output=True, text=True, cwd=str(REPO_ROOT))
+        if proc.returncode:
+            raise SystemExit(proc.stderr[-1200:])
+        rt, tail, hf = (float(v) for v in proc.stdout.strip().split()[-3:])
+        return Room(rt60_s=rt, hf_ratio=hf, tail_db=tail, predelay_ms=15.0)
+
+    print("searching libsonare's ambience controls (one render per point)...")
+    result = match_sends(targets, measure, log=print if verbose else None)
+    print(f"\nclosest: CC91 {result['cc91']}, reverb_decay {result['reverb_decay']} "
+          f"({DECAY_SCALE_KEY}={result['decay_scale']})")
+    print(f"  reached RT60 {result['measured']['rt60_s']:.2f}s  "
+          f"tail {result['measured']['tail_db']:+.1f}dB   residual {result['residual']}")
+    print(f"  -> MULTIPLY program {program}'s gm_fallback_sends reverb weight "
+          f"by {result['send_factor']} (the shipped weight is already in the "
+          f"measurement; this is not the weight to write)")
+    if result["residual"] > 1.5:
+        print("  the tank cannot reach this space: the reference's room is outside "
+              "the range libsonare's own reverb spans, so no send weight fixes it")
+    return 0
+
+
 def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
     """Measure the phrase takes, which is where the couplings live.
 
@@ -1769,20 +1881,24 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
     why constants on those paths sit unexamined however many fits have run: the
     search never had a measurement of them to minimise.
     """
-    import make_audition  # deferred: it owns the phrase sets and pulls in the AU oracle
-
     # The capture's rate, not a constant of this file: the archive was written
     # at whatever the capture renders at, and a second copy of that number here
     # is a mirror that only stays equal until one of them is changed.
     sr = int(cfg.get("sample_rate", 48000))
     set_name = cfg.get("takes")
-    if set_name not in make_audition.TAKE_SETS:
+    if set_name not in TAKE_SETS:
         named = f"{set_name!r}" if set_name else "no phrase set"
-        print(f"the capture names {named}; have {', '.join(make_audition.TAKE_SETS)}",
-              file=sys.stderr)
+        print(f"the capture names {named}; have {', '.join(TAKE_SETS)}", file=sys.stderr)
         return 2
-    selected = [t for t in make_audition.TAKE_SETS[set_name](program)
-                if not only or t.id in only]
+    selected = [t for t in build_takes(set_name, program) if not only or t.id in only]
+    # The capture says whether its reference carries a room; nothing here can
+    # tell one from an instrument's own long release, and guessing the wrong way
+    # invents a building and convolves it onto every figure below.
+    wet = not cfg.get("dry", True)
+    # One IR per reference for the whole run: the room is a property of the
+    # session that recorded it, and the first take able to measure one hands it
+    # to every take that cannot.
+    room_irs: dict[str, tuple] = {}
     print(f"phrase takes, model on GM program {program}, against the archived references.")
     print("* marks a model value outside the range those references themselves span.\n")
     measured = 0
@@ -1793,6 +1909,7 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
                   f"(make_audition.py --archive-references)", file=sys.stderr)
             continue
         windows = take_windows(take)
+        spans = [(n.start, n.start + n.dur) for n in take.notes]
         smf = write_smf(take.notes, program=program, end_pad=take.tail_s,
                         cc_events=take.cc_events, channel=take.channel)
         # The tail window ends where the references do, not where the phrase
@@ -1804,8 +1921,42 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
             clipped = usable_tail([to_mono(np.asarray(a, dtype=np.float64))
                                    for a in refs.values()], sr, nominal)
             windows["tail"] = clipped
-        model = measure_take(render_model(smf, take.duration(), sr), sr, windows)
+        dry_model = render_model(smf, take.duration(), sr)
+        # The model renders dry — `write_smf` writes CC91 0 — so on a capture
+        # whose reference carries its building, every tail figure below would be
+        # a dry signal read against a wet one, and each of them would be outside
+        # the references' spread for that reason alone. Measured on the church
+        # organ: the tail fell at 78 dB/s against their 15 to 17, and its four
+        # band levels missed by 11 to 25 dB. One room per reference, because two
+        # references are two buildings and placing the model in one of them
+        # would score it against the other's.
+        model_rows, unplaced = [], []
+        if not wet:
+            model_rows.append(measure_take(dry_model, sr, windows))
+        for name, audio in (refs.items() if wet else ()):
+            if name not in room_irs:
+                room = measurable_room(audio, sr, spans)
+                if room is not None:
+                    room_irs[name] = (room, place_model_in(dry_model, sr, spans, room)[1])
+            if name not in room_irs:
+                unplaced.append(name)
+                continue
+            room, ir = room_irs[name]
+            model_rows.append(
+                measure_take(place_model_in(dry_model, sr, spans, room, ir)[0], sr, windows))
+        model = model_rows[0] if model_rows else {}
         ref_rows = [measure_take(a, sr, windows) for a in refs.values()]
+        if wet and not model_rows:
+            # Every figure below is a tail figure or is read across one, so with
+            # no room to put the model in there is nothing here to report rather
+            # than a set of numbers that all say the same thing about the
+            # building. A phrase of short notes cannot measure a room itself
+            # (`Room.gated`); one long-note take in the same set gives every
+            # other take its IR, so this is a set without one.
+            print(f"  {take.id}: skipped — the reference carries a room and no take in this "
+                  f"run measured one to put the model in (run without --only, or add a "
+                  f"phrase that holds a note)", file=sys.stderr)
+            continue
         if not model or not any(ref_rows):
             # Almost always a phrase with no tail to measure rather than a
             # broken render: a take whose pedal lifts on the last note-off, or
@@ -1826,16 +1977,28 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
         elif nominal and clipped[1] < nominal[1] - 0.05:
             print(f"    (tail read {clipped[0]:.1f}-{clipped[1]:.1f} s: the references run "
                   f"out {nominal[1] - clipped[1]:.1f} s before the phrase does)")
+        if wet:
+            placed = ", ".join(f"RT60 {room_irs[n][0].rt60_s:.1f}s"
+                               for n in refs if n in room_irs)
+            missing = (f"; {len(unplaced)} reference(s) left out, no room measured"
+                       if unplaced else "")
+            print(f"    (model placed in {placed}{missing})")
         for key, label in TAKE_LABELS.items():
             vals = [r[key] for r in ref_rows if key in r]
-            if key not in model or not vals:
+            got = [r[key] for r in model_rows if key in r]
+            if not got or not vals:
                 continue
             lo, hi = min(vals), max(vals)
-            flag = "" if lo <= model[key] <= hi else "*"
-            print(f"    {label:<58}{lo:>8.1f}..{hi:<8.1f}{model[key]:>9.1f}{flag}")
+            # Outside their range in EVERY room it was placed in, or it is not
+            # the model that is outside — it is which building it was read in.
+            flag = "" if any(lo <= g <= hi for g in got) else "*"
+            shown = (f"{got[0]:>9.1f}" if max(got) - min(got) < 0.05
+                     else f"{min(got):>9.1f}..{max(got):<.1f}")
+            print(f"    {label:<58}{lo:>8.1f}..{hi:<8.1f}{shown}{flag}")
         print()
     if not measured:
-        print("no take had an archived reference to compare against", file=sys.stderr)
+        print("nothing measured — see the reason printed against each take above",
+              file=sys.stderr)
         return 2
     return 0
 
@@ -2524,7 +2687,9 @@ def main() -> int:
                             ("takes", "measure the phrase takes, which is where the couplings "
                                       "between notes live and where a note grid is blind"),
                             ("status", "what an instrument has, what it is missing, and what "
-                                       "the next round needs — the entry point of a loop")):
+                                       "the next round needs — the entry point of a loop"),
+                            ("room-match", "what libsonare's own CC91 send and GS tank would "
+                                           "have to be to sit in the reference's room")):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--config", default=str(DEFAULT_CONFIG))
         p.add_argument("--corpus", default="", help="corpus directory (default: the capture output)")
@@ -2544,6 +2709,12 @@ def main() -> int:
                               help="every shipped capture rather than one")
     status_group.add_argument("--archive", default="", dest="status_archive",
                               help="phrase-take reference archive (default: the audition one)")
+    room_group = sub.choices["room-match"]
+    room_group.add_argument("--take", default="", help="phrase to measure the room on "
+                            "(default: the first the archive holds a reference for)")
+    room_group.add_argument("--archive", default="", help="reference archive (default: the "
+                            "audition one)")
+    room_group.add_argument("--verbose", action="store_true", help="print every search point")
     takes_group = sub.choices["takes"]
     takes_group.add_argument("--only", default="", help="comma-separated take ids")
     takes_group.add_argument(
@@ -2584,6 +2755,22 @@ def main() -> int:
                       archive=Path(args.status_archive).expanduser().resolve()
                       if args.status_archive else DEFAULT_REFERENCE_ARCHIVE,
                       reference_dir=REFERENCE_DIR, every=bool(args.every))
+    if args.cmd == "room-match":
+        from make_audition import DEFAULT_REFERENCE_ARCHIVE
+        archive = (Path(args.archive).expanduser().resolve() if args.archive
+                   else DEFAULT_REFERENCE_ARCHIVE)
+        program = int(cfg.get("program", 0))
+        take_id = args.take
+        if not take_id:
+            held = archived_take_ids(archive, cfg["id"])
+            ordered = [t.id for t in build_takes(cfg.get("takes") or "", program)
+                       ] if cfg.get("takes") in TAKE_SETS else []
+            take_id = next((t for t in ordered if t in held), "")
+            if not take_id:
+                print(f"no archived phrase reference for {cfg['id']}", file=sys.stderr)
+                return 2
+        return room_match(cfg, archive=archive, take_id=take_id, program=program,
+                          verbose=bool(args.verbose))
     if args.cmd == "takes":
         from make_audition import DEFAULT_REFERENCE_ARCHIVE
         return takes(cfg,
