@@ -2875,8 +2875,6 @@
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [
-        "perc-second",
-        "perc-fast",
         "perc-quiet",
         "perc-loud"
       ],

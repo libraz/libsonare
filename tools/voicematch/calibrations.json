@@ -62,16 +62,6 @@
   "p017-percussive-organ": {
     "variants": [
       {
-        "name": "perc-second",
-        "overrides": "percussive_organ.additive.percussion_harmonic=2",
-        "note": "the second harmonic instead of the third - the instrument offers exactly these two and nothing but the ear decides between them"
-      },
-      {
-        "name": "perc-fast",
-        "overrides": "percussive_organ.additive.percussion_decay_ms=140",
-        "note": "the instrument's fast decay position against its normal one at 340 ms"
-      },
-      {
         "name": "perc-quiet",
         "overrides": "percussive_organ.additive.percussion_level=0.3",
         "note": "half the shipped level: whether the ping sits under the registration or on top of it"
