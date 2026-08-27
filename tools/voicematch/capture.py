@@ -65,7 +65,7 @@ from au_oracle import (  # noqa: E402
     resolve_preset,
 )
 from metrics import analyze_hit, harmonic_share, midi_to_hz, to_mono  # noqa: E402
-from smf import Note  # noqa: E402
+from smf import Note, write_smf  # noqa: E402
 from wavio import read_wav  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -279,16 +279,48 @@ def out_root(cfg: dict, cli_out: str) -> Path:
 # calibrate
 
 
-def _note_argv(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int) -> list[str]:
+def config_sends(cfg: dict) -> tuple[int, int, int] | None:
+    """The capture's `sends`, or None where it declares none.
+
+    Present, the grid is rendered from a generated score carrying those CC91 /
+    CC93 / CC94 values; absent, from aubounce's own note arguments, which write
+    no controllers at all. The opt-in exists because it changes what a render
+    IS: a plugin whose effect sections are not advertised as parameters cannot
+    be dried by `dry`, and a GM-compatible one can still be dried by sending it
+    a zero reverb. Every reference measured before this field existed was taken
+    through the note arguments, and those files are the ground truth rather
+    than something regenerable, so the default has to leave that path alone.
+    """
+    sends = cfg.get("sends")
+    if sends is None:
+        return None
+    if len(sends) != 3:
+        raise ValueError(f"{cfg['id']}: sends takes three values (reverb, chorus, delay)")
+    return tuple(int(v) for v in sends)  # type: ignore[return-value]
+
+
+def _note_argv(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
+               *, sends: tuple[int, int, int] | None = None) -> list[str]:
+    if sends is not None:
+        # A file supplies its own channel, and aubounce refuses `--channel`
+        # beside `--midi` rather than dropping it, so the slot goes in here.
+        midi = out.with_suffix(".mid")
+        midi.parent.mkdir(parents=True, exist_ok=True)
+        midi.write_bytes(write_smf(
+            [Note(note, velocity, 0.0, gate_ms / 1000.0)],
+            program=-1, channel=source.channel - 1, sends=sends,
+        ))
+        return source.argv(out, midi=midi)
     argv = source.argv(out)
     # `argv` builds a render with no notes in it; a single note is what a
     # calibration probe needs and what the corpus grid is made of.
     return argv[:3] + ["--note", str(note), "--velocity", str(velocity), "--gate-ms", str(gate_ms)] + argv[3:]
 
 
-def _probe(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int) -> dict:
+def _probe(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
+           *, sends: tuple[int, int, int] | None = None) -> dict:
     """One calibration render. Returns aubounce's summary, or the refusal as data."""
-    argv = _note_argv(source, out, note, velocity, gate_ms)
+    argv = _note_argv(source, out, note, velocity, gate_ms, sends=sends)
     started = time.monotonic()
     proc = subprocess.run(argv, capture_output=True, text=True)
     wall = time.monotonic() - started
@@ -311,6 +343,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     """
     timbre = cfg["timbres"][0]
     base = source_for(cfg, timbre, tail="2s")
+    sends = config_sends(cfg)
     scratch = out / "_calibration"
     scratch.mkdir(parents=True, exist_ok=True)
     gate_ms = 2000
@@ -321,6 +354,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
         "timbre": timbre.get("id", ""),
         "preset": str(resolve_preset(timbre["preset"])) if timbre.get("preset") else "",
         "params": list(base.params),
+        "sends": list(sends) if sends else None,
         "probe": {"note": note, "velocity": velocity, "gate_ms": gate_ms},
     }
 
@@ -330,7 +364,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     rt_rows = []
     for realtime in (True, False):
         s = _probe(replace(base, realtime=realtime, settle_ms=max(4000, base.settle_ms)),
-                   scratch / f"rt_{realtime}.wav", note, velocity, gate_ms)
+                   scratch / f"rt_{realtime}.wav", note, velocity, gate_ms, sends=sends)
         rt_rows.append({"realtime": realtime, **{k: s.get(k) for k in
                                                  ("peak", "dropout_ms", "seconds", "wall_s", "error")}})
         print(f"  realtime={str(realtime):5s} peak={s.get('peak', 0):.4f} "
@@ -345,7 +379,8 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     settle_rows = []
 
     def sounds(ms: int) -> bool:
-        s = _probe(replace(src, settle_ms=ms), scratch / f"settle_{ms}.wav", note, velocity, gate_ms)
+        s = _probe(replace(src, settle_ms=ms), scratch / f"settle_{ms}.wav", note, velocity,
+                   gate_ms, sends=sends)
         peak, drop = float(s.get("peak", 0.0)), s.get("dropout_ms", 0)
         ok = peak >= src.min_peak and not drop
         settle_rows.append({"settle_ms": ms, "peak": peak, "dropout_ms": drop,
@@ -380,8 +415,8 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     print("== determinism ==", file=sys.stderr)
     rec = report["settle_recommended_ms"]
     det = replace(src, settle_ms=rec)
-    a = _probe(det, scratch / "det_a.wav", note, velocity, gate_ms)
-    b = _probe(det, scratch / "det_b.wav", note, velocity, gate_ms)
+    a = _probe(det, scratch / "det_a.wav", note, velocity, gate_ms, sends=sends)
+    b = _probe(det, scratch / "det_b.wav", note, velocity, gate_ms, sends=sends)
     same = False
     if "error" not in a and "error" not in b:
         wa, _ = read_wav(scratch / "det_a.wav")
@@ -476,6 +511,7 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         "settle_ms": cfg["settle_ms"],
         "realtime": cfg["realtime"],
         "params": list(config_params(cfg)),
+        "sends": list(config_sends(cfg)) if config_sends(cfg) else None,
         "timbres": list(cfg["timbres"]) + foreign,
         "notes": cfg["notes"],
         "velocities": cfg["velocities"],
@@ -505,7 +541,7 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         src = source_for(cfg, timbre, tail=tail_for(cfg, note))
         try:
             summary = _render_note(
-                src, out / rel, note, vel, int(cfg["gate_ms"]),
+                src, out / rel, note, vel, int(cfg["gate_ms"]), sends=config_sends(cfg),
                 floor_peak=loudest.get((timbre["id"], note), 0.0),
                 preroll_ms=float(cfg["preroll_ms"]),
                 sample_rate=int(cfg["sample_rate"]),
@@ -599,7 +635,8 @@ def _onset_ms(path: Path, sr: int) -> float | None:
 
 def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
                  *, floor_peak: float, preroll_ms: float = 0.0,
-                 sample_rate: int = 48000, attempts: int = 5) -> dict:
+                 sample_rate: int = 48000, attempts: int = 5,
+                 sends: tuple[int, int, int] | None = None) -> dict:
     """One corpus render, retried while it comes back too quiet to be the note.
 
     The failure this catches is a race inside the plugin rather than a setting:
@@ -619,7 +656,8 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
     last = ""
     for attempt in range(attempts):
         proc = subprocess.run(
-            _note_argv(src, out, note, vel, gate_ms), capture_output=True, text=True,
+            _note_argv(src, out, note, vel, gate_ms, sends=sends),
+            capture_output=True, text=True,
         )
         if proc.returncode != 0:
             last = proc.stderr.strip()[:400]

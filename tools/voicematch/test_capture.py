@@ -186,6 +186,46 @@ def test_a_slot_is_asked_for_by_channel_only_when_the_notes_are_ours(monkeypatch
     assert source.argv(Path("/tmp/o.wav"), midi=Path("/tmp/probe.mid")).count("--channel") == 0
 
 
+def test_a_capture_declaring_no_sends_renders_exactly_as_it_always_did(monkeypatch, tmp_path):
+    """The opt-in has to leave every reference measured before it existed alone.
+
+    Those files are ground truth rather than something regenerable, so a change
+    that quietly moved the render path would redefine what they contain without
+    touching them.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    source = AuSource(plugin="x:y:z", channel=3)
+    argv = capture._note_argv(source, tmp_path / "o.wav", 60, 100, 2000)
+    assert "--midi" not in argv
+    assert argv[argv.index("--note") + 1] == "60"
+    assert argv[argv.index("--channel") + 1] == "3"
+
+
+def test_a_capture_declaring_sends_carries_them_and_its_slot_in_the_score(monkeypatch, tmp_path):
+    """A plugin that advertises no effect parameter can still be dried by CC.
+
+    The score is the only path that reaches a controller, and it is also the
+    only one that can carry the slot, since aubounce refuses `--channel` beside
+    `--midi`.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    source = AuSource(plugin="x:y:z", channel=3)
+    argv = capture._note_argv(source, tmp_path / "o.wav", 60, 100, 2000, sends=(0, 0, 0))
+    assert "--note" not in argv
+    assert "--channel" not in argv
+    score = Path(argv[argv.index("--midi") + 1]).read_bytes()
+    # Status nibble 0xB is control change; the slot is channel 3, so 0xB2.
+    assert bytes([0xB2, 91, 0]) in score
+    assert bytes([0x92, 60, 100]) in score
+
+
+def test_sends_must_name_all_three_controllers():
+    with pytest.raises(ValueError):
+        capture.config_sends({"id": "x", "sends": [0, 0]})
+    assert capture.config_sends({"id": "x"}) is None
+    assert capture.config_sends({"id": "x", "sends": [0, 0, 0]}) == (0, 0, 0)
+
+
 # --------------------------------------------------------------------------- #
 # A render that arrived late is not the note
 # --------------------------------------------------------------------------- #
