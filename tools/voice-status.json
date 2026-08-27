@@ -2535,43 +2535,40 @@
       "tone_class": "sustained",
       "patch": "drawbar_organ",
       "engine": "additive",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "drawbar_organ",
+      "stage": 0.6,
+      "stage_name": "covered",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
         "patch": "drawbar_organ",
-        "timbres": 0,
-        "profile_rows": 0,
-        "gate_state": null,
+        "timbres": 2,
+        "profile_rows": 44,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
-          "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+          "gated": 9,
+          "excused": [
+            "attack"
           ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
-          "inside": 0,
-          "total": 0,
-          "unjudgeable": []
+          "inside": 4,
+          "total": 9,
+          "outside": {
+            "vel_range": 42.71,
+            "balance": 3.37,
+            "stereo": 1.2,
+            "register": 1.02,
+            "stretch": 1.01
+          }
         },
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "outside the reference spread: vel_range 42.71x, balance 3.37x, stereo 1.2x"
     },
     {
       "slug": "p016b001-drawbar-organ",
