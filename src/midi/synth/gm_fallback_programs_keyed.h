@@ -1,10 +1,67 @@
 #pragma once
 
-#include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/gm_fallback_families.h"
 
 namespace sonare::midi::synth::detail {
 
-constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
+SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexcept {
+  // Same reason as configure_variation_programs: this table is
+  // constant-initialised, so the family patches come from the builder rather
+  // than from the accessor's function-local static.
+  const std::array<NativeSynthPatch, 16> fam = build_family_patches();
+
+  // Programs 1-3 are the concert grand of program 0 with one thing changed, so
+  // like the GS variations they are written as factors on it rather than as
+  // absolute values -- the grand is fitted against a reference, and a sibling
+  // stated absolutely drifts away from it at every refit. Program 0 keeps the
+  // family patch itself, which is what holds the piano's calibration (and its
+  // `fam0.piano.*` tuning keys) on one voice for all four.
+
+  // Bright Acoustic Piano (GM 1): the same instrument voiced hard -- the felt
+  // needled stiff, so the hammer leaves the string sooner and the string's own
+  // loop damping is opened to match. Voicing is what the name names; nothing
+  // about the body or the strings is different.
+  o.bright_piano = fam[0];
+  o.bright_piano.piano.hammer_contact_ms = fam[0].piano.hammer_contact_ms * 0.72f;
+  o.bright_piano.piano.brightness = fam[0].piano.brightness * 1.09f;
+
+  // Electric Grand Piano (GM 2): the CP-style short-string grand, whose whole
+  // difference is that a piezo under the bridge takes the string directly.
+  // There is no board, so what a board would have radiated is simply absent and
+  // what the string does is heard raw; the short strings drop the aftersound
+  // the board used to carry. The plate's extra inharmonicity cannot be voiced
+  // here -- `dispersion` is already at its ceiling on the grand.
+  o.electric_grand = fam[0];
+  o.electric_grand.piano.soundboard = fam[0].piano.soundboard * 0.06f;
+  o.electric_grand.piano.decay_slow_s = fam[0].piano.decay_slow_s * 0.55f;
+  o.electric_grand.piano.brightness = fam[0].piano.brightness * 1.06f;
+  o.electric_grand.stereo_spread = 0.15f;
+  // The only one of the four that is levelled. An amplified instrument has no
+  // acoustic output level -- the player sets it at the amp -- so leaving it
+  // 4.4 dB under its siblings would be keeping a number nobody chose. The other
+  // three keep whatever the physics gives them: a hard-voiced grand really does
+  // project more and a small upright really is quieter. Matched on a held C4;
+  // the low register is still 1.3 dB under, because the board it lost carried
+  // more there.
+  o.electric_grand.gain = fam[0].gain * 1.66f;
+
+  // Honky-tonk Piano (GM 3): the detune is the instrument. The unison strings
+  // are pulled apart far enough to beat audibly, which is the one thing every
+  // rendering of this program agrees on; the small upright body and the harder
+  // hammers behind it are the rest of the same instrument.
+  //
+  // Wider is not more beat. Measured as the residual of the log envelope after
+  // its decay is fitted out, C4 gives 2.68 dB at 6 cents, 2.62 here, 2.06 at 20
+  // and 1.47 at 30 -- past a point the strings simply decouple and sum, and the
+  // deep beat needs them near each other. This value is the far end of that
+  // plateau, which is where the beat is still fast enough to read as a shimmer
+  // rather than as a slow swell (1.8 Hz at C4).
+  o.honky_tonk = fam[0];
+  o.honky_tonk.piano.detune_cents = fam[0].piano.detune_cents * 12.0f;
+  o.honky_tonk.piano.soundboard = fam[0].piano.soundboard * 0.7f;
+  o.honky_tonk.piano.decay_slow_s = fam[0].piano.decay_slow_s * 0.7f;
+  o.honky_tonk.piano.hammer_contact_ms = fam[0].piano.hammer_contact_ms * 0.85f;
+
   // FM e-piano (Rhodes/Wurli sketch): body pair at 1:1 with a velocity-driven
   // index plus a fast-decaying 14:1 "tine" pair — the exponential index
   // fall-off is what reads as an electric piano.
@@ -223,7 +280,7 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   // already; naming it is what lets the two move apart, and today they do not.
   o.steel_guitar = steel;
 
-  // Harmonics (GM 32): a finger resting at the twelfth fret, which is the node
+  // Harmonics (GM 31): a finger resting at the twelfth fret, which is the node
   // at half the string. The touch is the whole of it — the loop halves and the
   // odd partials die with the fundamental — so the rest is the same steel
   // string plucked lightly: a duller loop, a shorter ring, barely any tension

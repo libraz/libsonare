@@ -382,12 +382,12 @@ TEST_CASE("a GS variation bank reaches its own patch and falls back to the capit
     const char* what;
   };
   constexpr Variation kVariations[] = {
-      // The three grands above program 0 are one patch in this synth, so their
-      // wide voicings are one patch too.
+      // Each of the four pianos above program 0 is voiced apart, so each one's
+      // wide voicing hangs under its own capital.
       {0, 8, 1, "piano_wide", "Piano 1w"},
-      {1, 8, 1, "piano_wide", "Piano 2w"},
-      {2, 8, 1, "piano_wide", "Piano 3w"},
-      {3, 8, 1, "piano_wide", "HonkyTonk w"},
+      {1, 8, 1, "bright_piano_wide", "Piano 2w"},
+      {2, 8, 1, "electric_grand_wide", "Piano 3w"},
+      {3, 8, 1, "honky_tonk_wide", "HonkyTonk w"},
       {0, 16, 2, "piano_dark", "Piano 1d"},
       {4, 8, 1, "ep_detuned_1", "Detuned EP1"},
       {4, 16, 2, "ep_velocity_1", "E.Piano 1v"},

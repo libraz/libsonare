@@ -1170,3 +1170,95 @@ TEST_CASE("the metallic pad is a band, not a roll-off", "[midi][synth]") {
   const double warm_low = 1.0 - high_fraction(warm, 40000, 800.0, 4096);
   REQUIRE(metallic_low < 0.25 * warm_low);
 }
+
+namespace {
+
+/// Depth of whatever modulates the envelope of @p buf, in dB: the RMS residual
+/// of the log envelope after its decay has been fitted out with a straight
+/// line. A smoothly decaying note leaves almost nothing; beating unisons leave
+/// the beat. Windows are 25 ms over the following two seconds.
+double beat_depth(const std::vector<float>& buf, size_t from) {
+  constexpr size_t kWin = 1200;
+  constexpr int kCount = 80;
+  std::vector<double> log_env;
+  for (int w = 0; w < kCount; ++w) {
+    double sum = 0.0;
+    const size_t start = from + static_cast<size_t>(w) * kWin;
+    for (size_t i = start; i < start + kWin; ++i) sum += double(buf[i]) * double(buf[i]);
+    log_env.push_back(std::log(std::sqrt(sum / double(kWin)) + 1e-12));
+  }
+  double sx = 0.0, sy = 0.0, sxx = 0.0, sxy = 0.0;
+  for (int w = 0; w < kCount; ++w) {
+    sx += w;
+    sy += log_env[static_cast<size_t>(w)];
+    sxx += double(w) * w;
+    sxy += double(w) * log_env[static_cast<size_t>(w)];
+  }
+  const double slope = (kCount * sxy - sx * sy) / (kCount * sxx - sx * sx);
+  const double intercept = (sy - slope * sx) / kCount;
+  double residual = 0.0;
+  for (int w = 0; w < kCount; ++w) {
+    const double d = log_env[static_cast<size_t>(w)] - (intercept + slope * w);
+    residual += d * d;
+  }
+  return std::sqrt(residual / kCount) * 8.6858896;  // nepers -> dB
+}
+
+/// RMS of a 100 ms window three seconds in, where a grand is carrying its
+/// aftersound and nothing else.
+double aftersound_rms(const std::vector<float>& buf) {
+  double sum = 0.0;
+  for (size_t i = 144000; i < 148800; ++i) sum += double(buf[i]) * double(buf[i]);
+  return std::sqrt(sum / 4800.0);
+}
+
+}  // namespace
+
+TEST_CASE("programs 0-3 are four pianos, not one", "[midi][synth]") {
+  // All four answered to the family patch, so Bright, Electric Grand and
+  // Honky-tonk each rendered the concert grand. Each derives from it and changes
+  // the one thing its GM name names, and each of those is measurable.
+  const std::vector<float> grand = render_program(0, 60, 240000);
+  const std::vector<float> bright = render_program(1, 60, 240000);
+  const std::vector<float> electric = render_program(2, 60, 240000);
+  const std::vector<float> honky = render_program(3, 60, 240000);
+  REQUIRE(bright != grand);
+  REQUIRE(electric != grand);
+  REQUIRE(honky != grand);
+
+  // Bright: a stiffer felt leaves the string sooner, so the sustained tone
+  // keeps high partials the grand has damped. Measured 4.4x.
+  REQUIRE(high_fraction(bright, 40000, 3000.0, 1024) >
+          2.5 * high_fraction(grand, 40000, 3000.0, 1024));
+
+  // Electric grand: no board, so the aftersound the board carried is gone
+  // (measured -7.3 dB at three seconds), and the level is the grand's because
+  // an amplified instrument's is not its own.
+  REQUIRE(aftersound_rms(electric) < 0.6 * aftersound_rms(grand));
+  REQUIRE(peak(electric) > 0.94f * peak(grand));
+  REQUIRE(peak(electric) < 1.06f * peak(grand));
+
+  // Honky-tonk: the beat is the instrument. It shows in both registers, and
+  // most clearly low, where the grand's near-unison strings barely move at all.
+  REQUIRE(beat_depth(honky, 24000) > 1.4 * beat_depth(grand, 24000));
+  const std::vector<float> honky_low = render_program(3, 40, 240000);
+  const std::vector<float> grand_low = render_program(0, 40, 240000);
+  REQUIRE(beat_depth(honky_low, 24000) > 3.0 * beat_depth(grand_low, 24000));
+}
+
+TEST_CASE("each piano's wide variation hangs under its own capital", "[midi][synth]") {
+  // Programs 1-3 all pointed their variation-8 bank at the grand's wide patch,
+  // which was harmless while their capitals were the grand too. Now it would
+  // make Bright Piano wide duller than Bright Piano.
+  using sonare::midi::synth::gm_fallback_patch;
+  using sonare::midi::synth::NativeSynthPatch;
+  for (uint8_t program = 1; program <= 3; ++program) {
+    const NativeSynthPatch& capital = gm_fallback_patch(0, program);
+    const NativeSynthPatch& wide = gm_fallback_patch(8, program);
+    INFO("program " << int(program));
+    REQUIRE(wide.piano.brightness == capital.piano.brightness);
+    REQUIRE(wide.piano.soundboard == capital.piano.soundboard);
+    REQUIRE(wide.gain == capital.gain);
+    REQUIRE(wide.stereo_spread > capital.stereo_spread);
+  }
+}

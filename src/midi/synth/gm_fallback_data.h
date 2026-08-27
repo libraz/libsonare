@@ -18,6 +18,9 @@ constexpr DahdsrConfig fallback_env(float attack_ms, float decay_ms, float susta
 }
 
 struct ProgramOverrides {
+  NativeSynthPatch bright_piano;        // program 1 (the grand voiced hard)
+  NativeSynthPatch electric_grand;      // program 2 (short strings, piezo, no board)
+  NativeSynthPatch honky_tonk;          // program 3 (beating unisons)
   NativeSynthPatch e_piano;             // programs 4-5 (Electric Piano 1/2)
   NativeSynthPatch harpsichord;         // program 6 bank 0 (Harpsichord 8', KS)
   NativeSynthPatch harpsichord_octave;  // program 6 bank 1 (octave mix, 8'+4')
@@ -138,6 +141,9 @@ struct ProgramOverrides {
   // which is the GS rule a real module follows for a variation it does not have.
   NativeSynthPatch piano_wide;            // program 0 variation 8 (two-choir spread)
   NativeSynthPatch piano_dark;            // program 0 variation 16 (mellow lid-down)
+  NativeSynthPatch bright_piano_wide;     // program 1 variation 8
+  NativeSynthPatch electric_grand_wide;   // program 2 variation 8
+  NativeSynthPatch honky_tonk_wide;       // program 3 variation 8
   NativeSynthPatch vibraphone_wide;       // program 11 variation 8
   NativeSynthPatch marimba_wide;          // program 12 variation 8
   NativeSynthPatch church_bell;           // program 14 variation 8 (cast bell, not tube)
@@ -168,6 +174,9 @@ struct ProgramOverrides {
 /// once; the count assertion below fires if a member is added to the struct
 /// without being added here.
 #define SONARE_GM_OVERRIDE_PATCHES(X) \
+  X(bright_piano)                     \
+  X(electric_grand)                   \
+  X(honky_tonk)                       \
   X(e_piano)                          \
   X(harpsichord)                      \
   X(harpsichord_octave)               \
@@ -271,6 +280,9 @@ struct ProgramOverrides {
   X(ocarina)                          \
   X(piano_wide)                       \
   X(piano_dark)                       \
+  X(bright_piano_wide)                \
+  X(electric_grand_wide)              \
+  X(honky_tonk_wide)                  \
   X(vibraphone_wide)                  \
   X(marimba_wide)                     \
   X(church_bell)                      \

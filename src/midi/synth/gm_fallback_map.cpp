@@ -104,12 +104,12 @@ constexpr GsVariationPatch kGsVariationPatches[] = {
     // Piano 2w / Piano 3w / HonkyTonk w. Their capitals are the one family-0
     // grand, so their wide voicings are the one wide grand too; listing them
     // here is what makes the variation bank reach it at all.
-    {1, 8, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
-    {1, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
-    {2, 8, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
-    {2, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
-    {3, 8, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
-    {3, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {1, 8, GsToneMap::kSc55, &ProgramOverrides::bright_piano_wide},
+    {1, 1, GsToneMap::kSc55, &ProgramOverrides::bright_piano_wide},
+    {2, 8, GsToneMap::kSc55, &ProgramOverrides::electric_grand_wide},
+    {2, 1, GsToneMap::kSc55, &ProgramOverrides::electric_grand_wide},
+    {3, 8, GsToneMap::kSc55, &ProgramOverrides::honky_tonk_wide},
+    {3, 1, GsToneMap::kSc55, &ProgramOverrides::honky_tonk_wide},
     // Detuned EP 1/2, E.Piano 1v/2v, 60's E.Piano.
     {4, 8, GsToneMap::kSc55, &ProgramOverrides::e_piano_detuned_1},
     {4, 1, GsToneMap::kSc55, &ProgramOverrides::e_piano_detuned_1},
@@ -201,6 +201,15 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
     return *variation;
   }
   switch (program & 0x7Fu) {
+    // Program 0 is deliberately absent: the concert grand stays on the family
+    // patch, which is where the piano's fit lives and what these three derive
+    // from.
+    case 1:  // Bright Acoustic Piano (the same grand, voiced hard)
+      return program_overrides().bright_piano;
+    case 2:  // Electric Grand Piano (short strings, piezo pickup, no board)
+      return program_overrides().electric_grand;
+    case 3:  // Honky-tonk Piano (unisons pulled apart until they beat)
+      return program_overrides().honky_tonk;
     case 4:  // Electric Piano 1
     case 5:  // Electric Piano 2
       return program_overrides().e_piano;

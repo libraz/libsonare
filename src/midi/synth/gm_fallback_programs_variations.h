@@ -47,6 +47,22 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.piano_dark.piano.hammer_contact_ms = fam[0].piano.hammer_contact_ms * 1.7f;
   o.piano_dark.piano.soundboard = fam[0].piano.soundboard * 0.85f;
 
+  // Piano 2w / 3w / 4w: the same wide miking on programs 1-3. Each derives from
+  // its own capital rather than from the grand -- sharing one wide patch across
+  // four capitals would have made a variation quieter, duller or in tune than
+  // the tone it hangs under, which is not what `w` means.
+  o.bright_piano_wide = o.bright_piano;
+  o.bright_piano_wide.stereo_spread = 0.55f;
+  o.bright_piano_wide.piano.detune_cents = o.bright_piano.piano.detune_cents * 2.2f;
+  o.electric_grand_wide = o.electric_grand;
+  o.electric_grand_wide.stereo_spread = 0.45f;
+  o.electric_grand_wide.piano.detune_cents = o.electric_grand.piano.detune_cents * 2.2f;
+  // The honky-tonk's unisons are already far apart, so widening it is the pan
+  // alone: another factor of two on a beat this deep is a different instrument,
+  // not a wider one.
+  o.honky_tonk_wide = o.honky_tonk;
+  o.honky_tonk_wide.stereo_spread = 0.55f;
+
   // --- Electric piano (capital: programs 4-5, one FM voice) ----------------
   // Detuned EP 1 / 2: two tine assemblies a few cents apart. The beat between
   // them is the effect, so it is voiced as per-voice pitch drift plus a stereo
