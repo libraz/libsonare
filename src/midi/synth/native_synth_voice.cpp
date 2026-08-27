@@ -19,6 +19,15 @@ namespace {
 /// each asks for on its own is 0.80 and 1.46, and this is the midpoint.
 SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 
+/// Exponent of the same curve on the tonewheel generator.
+///
+/// A key closes contacts on wheels that are already turning, so the instrument
+/// has no velocity response at all; a reference module gives it a little
+/// anyway, and that is what this is fitted to. Two registrations swing 4.0 and
+/// 4.4 dB from velocity 48 to 127 where the spec's 2.0 swings 16.9, and the
+/// exponent each asks for is 0.47 and 0.52.
+SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
+
 /// Exponent of the SoundFont velocity-to-amplitude curve for @p mode, 0 = off.
 ///
 /// `sf2_velocity_gain` exists because a sampled note was recorded at one force
@@ -40,7 +49,10 @@ SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 /// The kit is the case where neither end is right: with the curve the model
 /// swings 19.5 dB from velocity 48 to 127 where two reference kits swing 5.8 to
 /// 13.6, and without it the percussion engine's own response is under 3 dB,
-/// which is less than either. So it takes an exponent instead of a switch.
+/// which is less than either. So it takes an exponent instead of a switch. The
+/// tonewheel organ is the same shape from the other side: the instrument has no
+/// velocity response to spend, so the curve is not doubling a dynamic but
+/// inventing one.
 ///
 /// An engine opts out only once it has been measured against a reference corpus.
 /// Every other physical engine was voiced with the curve in place and would
@@ -48,6 +60,7 @@ SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 float sampler_velocity_exponent(SynthEngineMode mode) noexcept {
   if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord) return 0.0f;
   if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
+  if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
   return 2.0f;
 }
 

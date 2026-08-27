@@ -279,6 +279,24 @@ TEST_CASE("drawbar percussion is a decaying tone at the harmonic it names",
   REQUIRE(rms(second, 19200, 21600) < 0.05f * rms(second, 0, 2400));
 }
 
+TEST_CASE("the drawbar organ barely moves with velocity, as a tonewheel does not",
+          "[midi][synth][additive]") {
+  // A key closes contacts on wheels that are already turning, so the instrument
+  // has no velocity response to spend. Two reference registrations give it 4.0
+  // and 4.4 dB anyway; the SoundFont curve on its own would give 16.9.
+  const NativeSynthPatch& organ = gm_fallback_patch(0, 16);
+  const int n = static_cast<int>(kRate) / 2;
+  const size_t from = static_cast<size_t>(kRate) / 10;
+  auto level_db = [&](uint8_t v) {
+    return 20.0f * std::log10(rms(render_patch(organ, 57, v, n), from, static_cast<size_t>(n)));
+  };
+  const float span = level_db(127) - level_db(48);
+  const float sampler_curve_db = 40.0f * std::log10(127.0f / 48.0f);
+  REQUIRE(span < 0.4f * sampler_curve_db);
+  REQUIRE(span > 3.4f);
+  REQUIRE(span < 5.0f);
+}
+
 TEST_CASE("the shipped percussive organ's ping is spent inside a beat", "[midi][synth][additive]") {
   // Every other case here sets its own decay, so none of them sees the bank's.
   // Reading the field as a time to inaudibility rather than as a time constant

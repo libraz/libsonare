@@ -3,7 +3,7 @@
   "timbre": "drawbar-dark",
   "margin": 1.25,
   "reference_measured_utc": "2026-08-27T15:34:48+00:00",
-  "recorded_utc": "2026-08-27T15:37:06+00:00",
+  "recorded_utc": "2026-08-27T15:42:02+00:00",
   "reference_spread": {
     "balance": 19.335,
     "body": 22.41,
@@ -45,11 +45,11 @@
       "abs_median": 22.41
     },
     "vel_range": {
-      "median": 16.55,
-      "abs_median": 16.55
+      "median": 0.7,
+      "abs_median": 0.7
     },
     "register": {
-      "median": 1.45,
+      "median": 1.456,
       "abs_median": 1.869
     }
   }
