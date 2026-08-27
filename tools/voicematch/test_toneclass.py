@@ -35,7 +35,9 @@ from metrics import (  # noqa: E402
     channel_correlation,
     hit_tone,
     ladder_present,
+    band_edges_by_timbre,
     measure_band_edge,
+    shared_band_edge,
     modulation_note,
     pitch_drop,
     to_mono,
@@ -501,6 +503,34 @@ def test_a_band_with_energy_but_no_separation_is_past_the_edge():
         rows.append({"bands_db": bands + [-20.0, -25.0, -30.0]})
     assert all(r["bands_db"][-1] > BAND_REFERENCE_FLOOR_DB for r in rows)
     assert measure_band_edge(rows) == THIRD_OCTAVE_CENTERS[n_bands - 4]
+
+
+def test_a_wider_second_reference_does_not_raise_the_capture_s_ceiling():
+    """A bandwidth belongs to a recording, so two references have two of them.
+
+    Measured on the two-kit drum capture: one kit's across-instrument spread
+    collapses to 0.0 dB at 12.5 kHz and the other holds 60.0 there. Pooled, the
+    wide one carries the spread past the narrow one's ceiling and the capture
+    reads as having none — which un-floors bands where the narrow reference has
+    nothing but its own roll-off, and leaves the reference SPREAD up there being
+    one kit's floor against the other's real value. A gate written from that
+    holds the model to a bound the measurement invented.
+    """
+    narrow = [dict(r, timbre="kit-a") for r in _kit(7000.0)]
+    wide = [dict(r, timbre="kit-b") for r in _kit(20000.0)]
+
+    per_timbre = band_edges_by_timbre(narrow + wide)
+    assert per_timbre["kit-a"] is not None
+    assert per_timbre["kit-b"] is None
+
+    # Pooling is what goes wrong, and it is the thing being fixed.
+    assert measure_band_edge(narrow + wide) is None
+    # The most restrictive ceiling wins; a reference with none does not raise it.
+    assert shared_band_edge(narrow + wide) == per_timbre["kit-a"]
+    assert shared_band_edge(narrow) == per_timbre["kit-a"]
+    # No reference showing a ceiling still means no ceiling.
+    assert shared_band_edge(wide) is None
+    assert shared_band_edge([]) is None
 
 
 def test_too_few_rows_to_read_a_spread_from_reports_no_edge():

@@ -1874,6 +1874,38 @@ def measure_band_edge(rows: list[dict]) -> float | None:
     return None
 
 
+def band_edges_by_timbre(rows: list[dict]) -> dict[str, float | None]:
+    """Each reference's own measurable ceiling, one per timbre."""
+    timbres = sorted({str(r.get("timbre", "")) for r in rows})
+    return {t: measure_band_edge([r for r in rows if str(r.get("timbre", "")) == t])
+            for t in timbres}
+
+
+def shared_band_edge(rows: list[dict]) -> float | None:
+    """The highest band EVERY reference in this capture can still resolve.
+
+    A bandwidth belongs to a recording, not to a capture: two references from
+    different products are two recording chains, and one of them can be wider.
+    Measured over the pooled rows the wider one carries the spread past the
+    narrower one's ceiling, which un-floors bands where the narrow reference has
+    nothing but its own roll-off — the artefact `measure_band_edge` exists to
+    prevent, arriving from the other side.
+
+    That matters most for the thing the edge is for. Above the narrow
+    reference's ceiling the spread BETWEEN references is its floor against the
+    other's real value, so a gate written from it holds the model to a bound
+    that the measurement manufactured, and passes anything up there. Measured on
+    the two-kit drum capture: one kit's across-instrument spread collapses to
+    0.0 dB at 12.5 kHz while the other holds 60.0, and pooling them removed the
+    ceiling entirely.
+
+    So the most restrictive ceiling wins, and a reference with no measurable one
+    does not raise it. `None` throughout means no reference showed a ceiling.
+    """
+    known = [e for e in band_edges_by_timbre(rows).values() if e is not None]
+    return min(known) if known else None
+
+
 def band_edge_index(max_band_hz: float | None) -> int:
     """How many 1/3-octave bands sit at or below `max_band_hz`."""
     if max_band_hz is None:

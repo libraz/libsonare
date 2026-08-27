@@ -79,7 +79,7 @@ from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
     INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
     THIRD_OCTAVE_CENTERS, _db, _peak_near, _rms_envelope, _spectrum, analyze_hit,
-    fit_partial_series, measure_band_edge, midi_to_hz, partial_hz, to_mono,
+    band_edges_by_timbre, fit_partial_series, midi_to_hz, partial_hz, shared_band_edge, to_mono,
 )
 from phrases import TAKE_SETS, build_takes  # noqa: E402
 from _repo import REPO_ROOT  # noqa: E402
@@ -711,7 +711,17 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     # what the instrument does. A band profile is normalised to its own loudest
     # band, so the edge cannot be applied to a measured profile after the fact —
     # the whole sweep is taken again against it. See `measure_band_edge`.
-    band_edge = measure_band_edge(rows) if percussion else None
+    band_edge = shared_band_edge(rows) if percussion else None
+    if percussion:
+        # Named per reference rather than as one number: when they differ, the
+        # capture is held to the narrowest, and a reader who is not told which
+        # one set the ceiling cannot tell a wide reference from a wasted one.
+        per_timbre = band_edges_by_timbre(rows)
+        if len(per_timbre) > 1:
+            for tid, edge in per_timbre.items():
+                print(f"  {tid}: bandwidth "
+                      f"{'no measurable ceiling' if edge is None else f'{edge / 1000.0:.1f} kHz'}",
+                      file=sys.stderr)
     if band_edge is not None:
         print(f"\ncapture bandwidth: {band_edge / 1000.0:.1f} kHz — re-measuring so "
               f"the band profile is normalised over what this capture carries",
@@ -1243,6 +1253,85 @@ def print_kit_relations(kit_rows: list[tuple[dict, dict]],
           "rows, never declared.")
 
 
+def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:
+    """One hit against another, on the dimensions a kit is judged on.
+
+    Factored out so the model-against-reference comparison and the
+    reference-against-reference spread run the identical arithmetic. A spread
+    computed any other way would be a different ruler, and the ratio between
+    them is the whole point of having one.
+    """
+    tilt_m, tilt_r = band_tilt_db(m.get("bands_db")), band_tilt_db(r.get("bands_db"))
+    return {
+        "band_tilt": None if tilt_m is None or tilt_r is None else tilt_m - tilt_r,
+        "band_shape": band_shape_error_db(m.get("bands_db"), r.get("bands_db")),
+        "band_decay": mean_band_decay_delta(m.get("band_decay_db_s"),
+                                            r.get("band_decay_db_s")),
+        "attack": m["attack_ms"] - r["attack_ms"],
+        "crest": m["crest_db"] - r["crest_db"],
+        "centroid_pct": (100.0 * (m["centroid_hz"] / r["centroid_hz"] - 1.0)
+                         if r.get("centroid_hz") else None),
+        # How loud the hit actually is. Every other column here is normalised —
+        # a band profile against its own loudest band, a crest against its own
+        # RMS, a decay against its own peak — which is what makes them measure
+        # timbre, and which also makes all of them blind to gain. Rewriting
+        # eighteen of the kit's output levels moved not one of them by a digit.
+        # `vel_range` is a span and cancels an offset by construction, so it is
+        # not this either.
+        "level": (m["peak_dbfs"] - r["peak_dbfs"]
+                  if m.get("peak_dbfs") is not None
+                  and r.get("peak_dbfs") is not None else None),
+    }
+
+
+def percussion_reference_spread(profile: dict,
+                                dimensions: list[str] | None = None) -> dict[str, float]:
+    """How far a kit's references sit from EACH OTHER, dimension by dimension.
+
+    The percussion counterpart of `reference_spread`, which computes the pitched
+    dimensions only — stretch, inharmonicity, a partial stack — none of which a
+    kit has. Without this a percussion gate carries no `reference_spread` at
+    all, so `status.coverage`'s agreement step has nothing to judge against and
+    every dimension reads unjudgeable however many kits were captured. Capturing
+    a second reference is necessary for a kit to be scored and was never
+    sufficient on its own.
+
+    Runs `percussion_row_deltas` over the (note, velocity) keys two references
+    share, pooled over every pair of them, taking the median absolute value —
+    the same reduction the model's own error goes through.
+    """
+    rows = profile.get("rows", [])
+    timbres = sorted({r["timbre"] for r in rows})
+    if len(timbres) < 2:
+        return {}
+    by_key: dict[str, dict[tuple[int, int], dict]] = {}
+    for r in rows:
+        by_key.setdefault(r["timbre"], {})[(r["note"], r["velocity"])] = r
+
+    pooled: dict[str, list[float]] = {}
+    for i, a in enumerate(timbres):
+        for b in timbres[i + 1:]:
+            peaks: dict[str, dict[int, dict[int, float]]] = {}
+            for key in sorted(set(by_key[a]) & set(by_key[b])):
+                x, y = by_key[a][key], by_key[b][key]
+                for k, v in percussion_row_deltas(x, y).items():
+                    if v is not None and np.isfinite(v):
+                        pooled.setdefault(k, []).append(abs(float(v)))
+                for side, src in ((a, x), (b, y)):
+                    if src.get("peak_dbfs") is not None:
+                        peaks.setdefault(side, {}).setdefault(key[0], {})[key[1]] = \
+                            src["peak_dbfs"]
+            for note, pa in sorted(peaks.get(a, {}).items()):
+                pb = peaks.get(b, {}).get(note, {})
+                both = sorted(set(pa) & set(pb))
+                if len(both) >= 2:
+                    pooled.setdefault("vel_range", []).append(abs(
+                        (max(pa[v] for v in both) - min(pa[v] for v in both))
+                        - (max(pb[v] for v in both) - min(pb[v] for v in both))))
+    spread = {k: float(np.median(v)) for k, v in pooled.items() if v}
+    return {k: v for k, v in spread.items() if not dimensions or k in dimensions}
+
+
 def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
                        gate_path: str, write_gate: str, margin: float) -> int:
     """Score the model against a captured kit, one instrument per note.
@@ -1315,27 +1404,7 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
                   f"{SILENT_HIT_DBFS:.0f} dBFS")
             continue
 
-        tilt_m, tilt_r = band_tilt_db(m.get("bands_db")), band_tilt_db(r.get("bands_db"))
-        row = {
-            "band_tilt": None if tilt_m is None or tilt_r is None else tilt_m - tilt_r,
-            "band_shape": band_shape_error_db(m.get("bands_db"), r.get("bands_db")),
-            "band_decay": mean_band_decay_delta(m.get("band_decay_db_s"),
-                                                r.get("band_decay_db_s")),
-            "attack": m["attack_ms"] - r["attack_ms"],
-            "crest": m["crest_db"] - r["crest_db"],
-            "centroid_pct": (100.0 * (m["centroid_hz"] / r["centroid_hz"] - 1.0)
-                             if r.get("centroid_hz") else None),
-            # How loud the hit actually is. Every other column here is
-            # normalised — a band profile against its own loudest band, a crest
-            # against its own RMS, a decay against its own peak — which is what
-            # makes them measure timbre, and which also makes all of them blind
-            # to gain. Rewriting eighteen of the kit's output levels moved not
-            # one of them by a digit. `vel_range` is a span and cancels an
-            # offset by construction, so it is not this either.
-            "level": (m["peak_dbfs"] - r["peak_dbfs"]
-                      if m.get("peak_dbfs") is not None
-                      and r.get("peak_dbfs") is not None else None),
-        }
+        row = percussion_row_deltas(m, r)
         for k, v in row.items():
             if v is not None and np.isfinite(v):
                 deltas.setdefault(k, []).append(float(v))
@@ -1368,14 +1437,31 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
             (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
         )
     summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [])
-    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'rows':>5}")
+    spread = percussion_reference_spread(profile, list(summary))
+    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'spread':>8} "
+          f"{'x spread':>9} {'rows':>5}")
     for k, row in summary.items():
+        s_k = spread.get(k)
+        ratio = (row["abs_median"] / s_k) if s_k and s_k > 0 else None
         print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
-              f"{row['abs_median']:9.2f} {row['n']:5d}")
+              f"{row['abs_median']:9.2f} "
+              f"{(f'{s_k:8.2f}' if s_k is not None else '       -')} "
+              f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} {row['n']:5d}")
     print("\n  A kit has no register to average along: every row is a different "
           "instrument,\n  so the signed median says only how the kit leans as a whole and the "
           "absolute\n  one is the column to read. `band shape` is a magnitude already and its "
           "two\n  columns are the same number by construction.")
+    if spread:
+        print("\n  `spread` is how far the REFERENCE KITS sit from each other on the same "
+              "dimension,\n  by the same arithmetic, so `x spread` reads the same in dB, "
+              "milliseconds and\n  percent: 1.0x is as close to them as they are to one "
+              "another, which is as close\n  as this corpus can define. A gate cannot say this "
+              "— its bounds come from what\n  the voice measured the day they were written. "
+              "The largest ratio is where the\n  next round belongs.")
+    else:
+        print("\n  No `spread`: this capture has one reference kit, so no dimension can be "
+              "judged\n  against anything but itself. A second kit is what makes the column "
+              "exist.")
 
     print_kit_relations(kit_rows, note_groups(cfg))
 
@@ -1383,7 +1469,7 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
     if write_gate:
         return write_gate_file(summary, Path(write_gate), timbre, margin,
-                               profile.get("measured_utc", ""))
+                               profile.get("measured_utc", ""), spread)
     return 0
 
 
