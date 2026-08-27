@@ -50,6 +50,7 @@ const state = {
   loop: false,
   region: null,        // [a, b] in seconds
   blind: false,
+  failed: false,       // a load error is on the title and stays there
   blindOrder: [],      // slot -> real version index
   picks: {},           // itemId -> { slot, key, revealed }
   notes: {},
@@ -262,8 +263,12 @@ const notesKey = () => `audition:notes:${state.setId || 'untitled'}`;
 const picksKey = () => `audition:picks:${state.setId || 'untitled'}`;
 
 const SET_KEY = 'audition:set';
+const VIEW_KEY = 'audition:view';
 
 function fail(msg) {
+  // Held, because the bank view clears the title otherwise: the one failure a
+  // fresh clone hits leaves it on the bank, which is the view worth being in.
+  state.failed = true;
   $('title').textContent = msg;
   $('crumbs').replaceChildren();
   $('identPath').textContent = '';
@@ -272,6 +277,9 @@ function fail(msg) {
 async function boot() {
   state.sets = await (await fetch('sets.json')).json();
   wireBank();
+  // Loaded up front rather than on the first switch to the bank: the listening
+  // surface's own header line reads from it too.
+  await loadBank();
   if (!state.sets.length) {
     fail('No renders found. Generate a set with tools/voicematch/make_audition.py '
        + '— --model-only needs no plugin — then reload.');
@@ -294,6 +302,9 @@ async function boot() {
   if (route.t !== null && state.take) {
     state.startOffset = Math.max(0, Math.min(route.t, state.take.duration));
   }
+  // An address names a render and is therefore a request to listen to it; with
+  // none, the view is whichever one the last session was left on.
+  if (!route.set && localStorage.getItem(VIEW_KEY) === 'bank') await setView('bank');
 }
 
 /* The take's schedule as numbered strikes, which is what a listening note has
@@ -363,6 +374,7 @@ async function loadSet(id, want) {
   state.notes = JSON.parse(localStorage.getItem(notesKey()) || '{}');
   state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');
   $('setSelect').value = state.setId;
+  renderHeadStage();
 
   const wanted = want || {};
   if (wanted.ver) state.wantKey = wanted.ver;
@@ -785,14 +797,22 @@ function drawWave() {
     // count, and a count has to be reconciled against the phrase set by hand at
     // the other end -- which is a step where "the second one" silently becomes
     // a different instrument.
+    // Every strike gets a tick; a label only where the last one has cleared.
+    // The musical take is seventy-six strikes in thirteen seconds and labelling
+    // all of them writes one illegible band across the top of the waveform,
+    // which loses the sparse takes' labels as well as its own.
     c.font = '10px ui-monospace, SFMono-Regular, monospace';
     c.textBaseline = 'top';
+    let freeAt = 0;
     for (const hit of takeHits()) {
       const x = (hit.start / state.take.duration) * w;
       c.strokeStyle = 'rgba(232,226,212,0.30)';
       c.beginPath(); c.moveTo(x, 0); c.lineTo(x, 14); c.stroke();
+      const text = `#${hit.n} ${hit.notes.map((n) => n.note).join('+')}`;
+      if (x < freeAt) continue;
       c.fillStyle = 'rgba(232,226,212,0.72)';
-      c.fillText(`#${hit.n} ${hit.notes.map((n) => n.note).join('+')}`, x + 3, 2);
+      c.fillText(text, x + 3, 2);
+      freeAt = x + 3 + c.measureText(text).width + 8;
     }
   });
   g.clearRect(0, 0, w, h);
@@ -1068,12 +1088,14 @@ function wire() {
 
   document.addEventListener('keydown', (ev) => {
     const tag = ev.target.tagName;
+    // The find box is the one field with a way out: escape drops back to the
+    // rows, which is where every other key does something.
+    if (tag === 'INPUT' && ev.key === 'Escape') { ev.target.blur(); return; }
     if (tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'INPUT'
         || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-    // Every shortcut below acts on what is sounding. On the bank there is
-    // nothing sounding, and space would scroll a list of 188 rows by a page
-    // while starting a take nobody is looking at.
-    if (document.body.classList.contains('bank-view')) return;
+    // Every shortcut below acts on what is sounding, and on the bank there is
+    // nothing sounding. It has its own set: the rows are what is navigated.
+    if (document.body.classList.contains('bank-view')) { bankKey(ev); return; }
     const k = ev.key;
     if (k === ' ') { ev.preventDefault(); togglePlay(); return; }
     if (!state.take) return;
@@ -1148,9 +1170,15 @@ function exportNotes() {
  * where all of them stand, which is the half of the work that is otherwise only
  * visible to whoever remembers what has been captured.
  *
+ * Three bands, because one list of 188 rows answers only the question you were
+ * already on. The masthead is the overview — totals and the distribution across
+ * the six stages — the toolbar narrows, and the table lists beside an inspector
+ * that holds what a row cannot: the coverage denominator, which dimensions sit
+ * outside the reference spread and by how much, and the ladder in full.
+ *
  * Sixteen engines, three methods. What the eye is being asked here is "physical
  * model, FM, or neither" — sixteen hues would answer nothing, and the engine's
- * own name is on the row for anyone who wants it. */
+ * own name is on the row. */
 const METHODS = {
   fm: 'fm',
   subtractive: 'classic',
@@ -1159,7 +1187,53 @@ const METHODS = {
 
 const methodOf = (engine) => (engine ? (METHODS[engine] || 'physical') : 'classic');
 
-const bank = { voices: [], loaded: false };
+const METHOD_PICKS = [
+  ['', 'any'],
+  ['physical', 'physical'],
+  ['fm', 'FM'],
+  ['classic', 'subtractive'],
+];
+
+const FILTER_PICKS = [
+  ['oracle', 'has an oracle'],
+  ['no-oracle', 'needs one'],
+  ['unwritten', 'unwritten'],
+  ['page', 'rendered'],
+];
+
+/* The ladder, with each step's predicate. The same wording as
+ * `tools/voicematch/docs/status.md`, which is where it is argued. */
+const LADDER = [
+  ['0.0', 'untouched', 'no deliberate patch: a famN family fallback on subtractive'],
+  ['0.2', 'voiced', 'a deliberate engine and patch answer it'],
+  ['0.4', 'measured', 'two or more reference timbres, a profile, a current gate'],
+  ['0.6', 'covered', 'every canonical dimension gated, or excused with a reason'],
+  ['0.8', 'agreeing', 'most gated dimensions sit inside the reference spread'],
+  ['1.0', 'settled', 'no structural residual, and the musical take signed off'],
+];
+
+const stageIndex = (v) => Math.max(0, Math.min(5, Math.round(v.stage * 5)));
+const stageColor = (i) => `var(--s${i})`;
+
+const bank = {
+  voices: [],
+  loaded: false,
+  method: '',
+  filter: '',
+  stage: null,     // a rung index, or null for every rung
+  sort: 'address',
+  shown: [],
+  cursor: -1,      // index into `shown`; the selection and the keyboard cursor
+};
+
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.append(text);
+  return n;
+};
+
+const hasPage = (slug) => state.sets.some((s) => s.id === slug);
 
 async function loadBank() {
   if (bank.loaded) return;
@@ -1173,14 +1247,13 @@ async function loadBank() {
 }
 
 function bankMatches(v) {
-  const method = $('bankMethod').value;
-  const filter = $('bankFilter').value;
   const find = $('bankFind').value.trim().toLowerCase();
-  if (method && methodOf(v.engine) !== method) return false;
-  if (filter === 'oracle' && !v.capture) return false;
-  if (filter === 'no-oracle' && v.capture) return false;
-  if (filter === 'unwritten' && !(v.open_candidates || []).length) return false;
-  if (filter === 'page' && !state.sets.some((s) => s.id === v.slug)) return false;
+  if (bank.method && methodOf(v.engine) !== bank.method) return false;
+  if (bank.stage !== null && stageIndex(v) !== bank.stage) return false;
+  if (bank.filter === 'oracle' && !v.capture) return false;
+  if (bank.filter === 'no-oracle' && v.capture) return false;
+  if (bank.filter === 'unwritten' && !(v.open_candidates || []).length) return false;
+  if (bank.filter === 'page' && !hasPage(v.slug)) return false;
   if (find) {
     const hay = [v.name, v.engine, v.patch, v.slug, v.tone_class].join(' ').toLowerCase();
     if (!hay.includes(find)) return false;
@@ -1188,132 +1261,375 @@ function bankMatches(v) {
   return true;
 }
 
+const addressOf = (v) =>
+  (v.kit ? `kit ${v.program}` : `${v.program}${v.bank ? `:${v.bank}` : ''}`);
+
+/* ---- the small repeated readouts ---- */
+
+const dotEl = (engine) => el('span', `dot ${methodOf(engine)}`);
+
+function stageBar(v) {
+  const bar = el('span', 'bar');
+  const filled = stageIndex(v);
+  bar.style.setProperty('--sc', stageColor(filled));
+  for (let i = 0; i < 5; i += 1) bar.append(el('span', i < filled ? 'seg on' : 'seg'));
+  return bar;
+}
+
 function stageEl(v) {
-  const wrap = document.createElement('span');
-  wrap.className = 'stage';
-  const bar = document.createElement('span');
-  bar.className = 'bar';
-  const filled = Math.round(v.stage * 5);
-  for (let i = 0; i < 5; i += 1) {
-    const seg = document.createElement('span');
-    seg.className = i < filled ? 'seg on' : 'seg';
-    bar.append(seg);
-  }
-  const num = document.createElement('span');
-  num.textContent = v.stage.toFixed(1);
-  wrap.append(bar, num);
+  const wrap = el('span', 'stage');
+  wrap.append(stageBar(v), el('span', '', v.stage.toFixed(1)));
   wrap.title = `${v.stage_name} — ${v.next}`;
   return wrap;
 }
 
-function bankRow(v) {
-  const hasPage = state.sets.some((s) => s.id === v.slug);
-  const row = document.createElement(hasPage ? 'button' : 'div');
-  row.className = `bank-row${hasPage ? ' has-page' : ''}`;
-  if (hasPage) {
-    row.type = 'button';
-    row.addEventListener('click', () => {
-      setView('listen');
-      loadSet(v.slug, { set: v.slug, take: '', ver: '', t: null });
+/// A proportional bar over a set of voices. One count in six is 1 of 188, so the
+/// segments carry a floor width and the countable numbers live in the chips.
+function distBar(into, voices) {
+  into.replaceChildren();
+  const total = voices.length || 1;
+  for (let i = 0; i < 6; i += 1) {
+    const n = voices.filter((v) => stageIndex(v) === i).length;
+    if (!n) continue;
+    const seg = el('span');
+    seg.style.flex = `${n} 1 0`;
+    seg.style.background = stageColor(i);
+    seg.title = `${n} ${LADDER[i][1]} (${Math.round((n / total) * 100)}%)`;
+    into.append(seg);
+  }
+}
+
+/* ---- masthead ---- */
+
+function figure(label, value, onClick, warn) {
+  const b = el('button', `fig${onClick ? ' act' : ''}${warn ? ' warn' : ''}`);
+  b.type = 'button';
+  b.append(el('span', 'num', String(value)), el('span', 'lab', label));
+  if (onClick) b.addEventListener('click', onClick);
+  else b.disabled = true;
+  return b;
+}
+
+function renderMasthead() {
+  const vs = bank.voices;
+  const withOracle = vs.filter((v) => v.capture).length;
+  const unwritten = vs.reduce((n, v) => n + (v.open_candidates || []).length, 0);
+  const pages = vs.filter((v) => hasPage(v.slug)).length;
+  const pick = (name) => () => {
+    bank.filter = bank.filter === name ? '' : name;
+    renderBank();
+  };
+
+  $('bankFigures').replaceChildren(
+    figure('voices', vs.length, null),
+    figure('with an oracle', withOracle, pick('oracle')),
+    figure('unwritten', unwritten, unwritten ? pick('unwritten') : null, unwritten > 0),
+    figure('rendered', pages, pages ? pick('page') : null),
+  );
+
+  distBar($('bankDist'), vs);
+
+  const keys = $('bankStageKeys');
+  keys.replaceChildren();
+  LADDER.forEach(([at, name, of], i) => {
+    const n = vs.filter((v) => stageIndex(v) === i).length;
+    const b = el('button', 'skey');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(bank.stage === i));
+    b.title = `${at} — ${of}`;
+    const dot = el('span', 'dot');
+    dot.style.background = stageColor(i);
+    b.append(dot, el('span', '', name), el('span', n ? 'n' : 'n z', String(n)));
+    b.addEventListener('click', () => {
+      bank.stage = bank.stage === i ? null : i;
+      renderBank();
     });
-  }
+    keys.append(b);
+  });
+}
 
-  const addr = document.createElement('span');
-  addr.className = 'addr';
-  addr.textContent = v.kit ? `kit ${v.program}` : `${v.program}${v.bank ? `:${v.bank}` : ''}`;
+/* ---- rows ---- */
 
-  const who = document.createElement('span');
-  who.className = 'who';
-  who.append(v.name);
-  if (v.patch) {
-    const patch = document.createElement('span');
-    patch.className = 'patch';
-    patch.textContent = `  ${v.patch}`;
-    who.append(patch);
-  }
+function bankRow(v, index) {
+  const row = el('div', 'bank-row');
+  row.id = `v-${v.slug}`;
+  row.setAttribute('role', 'option');
+  row.setAttribute('aria-selected', 'false');
+  row.addEventListener('click', () => { $('bankRows').focus(); selectRow(index); });
+  row.addEventListener('dblclick', () => openVoice(v));
 
-  const engine = document.createElement('span');
-  engine.className = `engine ${methodOf(v.engine)}`;
-  engine.textContent = v.engine || 'not reported';
+  const who = el('span', 'who', v.name);
+  if (v.patch) who.append(el('span', 'patch', `  ${v.patch}`));
+
+  const engine = el('span', 'engine');
+  engine.append(dotEl(v.engine), el('span', '', v.engine || 'not reported'));
   engine.title = v.engine
     ? `${methodOf(v.engine)} — ${v.tone_class}`
     : 'no tuning build was available when the bank view was generated';
 
-  const oracle = document.createElement('span');
-  oracle.className = `oracle${v.capture ? '' : ' absent'}`;
-  oracle.textContent = v.capture || 'not captured';
+  const oracle = el('span', `oracle${v.capture ? '' : ' absent'}`, v.capture || 'no oracle');
 
-  const flags = document.createElement('span');
+  const tail = el('span', 'bank-tail');
   const open = v.open_candidates || [];
   if (open.length) {
-    const badge = document.createElement('span');
-    badge.className = 'badge warn';
-    badge.textContent = `${open.length} unwritten`;
+    const badge = el('span', 'badge warn', `${open.length} unwritten`);
     badge.title = open.join(', ');
-    flags.append(badge);
+    tail.append(badge);
   }
-
-  row.append(addr, who, engine, stageEl(v), oracle, flags);
-  // Only past the oracle step. Below it every voice says the same sentence, and
+  // Only past the oracle step: below it every voice says the same sentence, and
   // 150 copies of it bury the four that say something.
-  if (v.stage > 0.2 && v.stage < 1) {
-    const next = document.createElement('p');
-    next.className = 'bank-next';
-    next.textContent = `→ ${v.next}`;
-    row.append(next);
-  }
+  if (v.stage > 0.2 && v.stage < 1) tail.append(el('span', 'next', v.next));
+
+  row.append(el('span', 'addr', addressOf(v)), who, engine, stageEl(v), oracle, tail);
   return row;
 }
+
+const SORTS = {
+  address: null,   // the generated order, which is already program order
+  stage: (a, b) => b.stage - a.stage || a.program - b.program,
+  name: (a, b) => a.name.localeCompare(b.name),
+};
 
 function renderBank() {
   const rows = $('bankRows');
   rows.replaceChildren();
   if (!bank.voices.length) {
-    const p = document.createElement('p');
-    p.className = 'bank-empty';
-    p.textContent = 'No bank view generated. Run `make voice-status-refresh` '
-      + '(it needs a -DBUILD_TUNING=ON build) and reload.';
-    rows.append(p);
+    rows.append(el('p', 'bank-empty',
+      'No bank view generated. Run `make voice-status-refresh` '
+      + '(it needs a -DBUILD_TUNING=ON build) and reload.'));
     $('bankCount').textContent = '';
-    $('bankSummary').textContent = '';
+    $('bankFigures').replaceChildren();
+    $('bankStageKeys').replaceChildren();
+    bank.shown = [];
+    bank.cursor = -1;
+    renderInspect();
     return;
   }
-  const shown = bank.voices.filter(bankMatches);
+  renderMasthead();
+  markToolbar();
+
+  const held = bank.shown[bank.cursor] ? bank.shown[bank.cursor].slug : null;
+  const cmp = SORTS[bank.sort];
+  bank.shown = bank.voices.filter(bankMatches);
+  if (cmp) bank.shown = [...bank.shown].sort(cmp);
+
+  // The GM families are the address order's own headings; under any other sort
+  // they would be sixteen headings interleaved at random.
+  const grouped = bank.sort === 'address';
   let group = null;
-  for (const v of shown) {
-    if (v.group !== group) {
+  bank.shown.forEach((v, i) => {
+    if (grouped && v.group !== group) {
       group = v.group;
-      const h = document.createElement('h2');
-      h.className = 'bank-group';
-      h.textContent = group;
+      const mine = bank.shown.filter((x) => x.group === group);
+      const mini = el('span', 'mini');
+      distBar(mini, mine);
+      const h = el('h2', 'bank-group');
+      h.append(el('span', '', group), el('span', 'n', String(mine.length)), mini);
       rows.append(h);
     }
-    rows.append(bankRow(v));
-  }
-  if (!shown.length) {
-    const p = document.createElement('p');
-    p.className = 'bank-empty';
-    p.textContent = 'Nothing matches.';
-    rows.append(p);
-  }
-  $('bankCount').textContent = `${shown.length} / ${bank.voices.length}`;
+    rows.append(bankRow(v, i));
+  });
+  if (!bank.shown.length) rows.append(el('p', 'bank-empty', 'Nothing matches.'));
 
-  const counts = new Map();
-  for (const v of bank.voices) counts.set(v.stage_name, (counts.get(v.stage_name) || 0) + 1);
-  const order = ['untouched', 'voiced', 'measured', 'covered', 'agreeing', 'settled'];
-  const parts = order.filter((s) => counts.get(s)).map((s) => `${counts.get(s)} ${s}`);
-  const noOracle = bank.voices.filter((v) => !v.capture).length;
-  const unwritten = bank.voices.reduce((n, v) => n + (v.open_candidates || []).length, 0);
-  const tail = [];
-  if (noOracle) tail.push(`${noOracle} with no oracle captured`);
-  if (unwritten) tail.push(`${unwritten} recorded setting(s) not written back`);
-  $('bankSummary').textContent = `${parts.join(', ')}. ${tail.join('; ')}`;
+  $('bankCount').textContent = `${bank.shown.length} / ${bank.voices.length}`;
+  // The selection follows the voice rather than the row number: a filter change
+  // that leaves it on screen should not move the inspector to whatever slid
+  // into its place.
+  const back = held ? bank.shown.findIndex((v) => v.slug === held) : -1;
+  selectRow(back >= 0 ? back : (bank.shown.length ? 0 : -1), true);
 }
+
+function markToolbar() {
+  for (const b of $('bankMethod').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.method === bank.method));
+  }
+  for (const b of $('bankFilter').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.filter === bank.filter));
+  }
+}
+
+/// Move the cursor, which is also the selection: one row is focused, inspected
+/// and openable, so there is never a question of which one an action lands on.
+function selectRow(i, quiet) {
+  bank.cursor = i;
+  const rows = [...$('bankRows').querySelectorAll('.bank-row')];
+  rows.forEach((r, at) => {
+    const on = at === i;
+    r.setAttribute('aria-selected', String(on));
+    if (on) r.setAttribute('aria-current', 'true');
+    else r.removeAttribute('aria-current');
+  });
+  const cur = rows[i];
+  $('bankRows').setAttribute('aria-activedescendant', cur ? cur.id : '');
+  if (cur && !quiet) cur.scrollIntoView({ block: 'nearest' });
+  renderInspect();
+}
+
+function moveCursor(delta) {
+  if (!bank.shown.length) return;
+  const n = bank.shown.length;
+  selectRow((bank.cursor + delta + n) % n);
+}
+
+function openVoice(v) {
+  if (!v || !hasPage(v.slug)) return;
+  setView('listen');
+  loadSet(v.slug, { set: v.slug, take: '', ver: '', t: null });
+}
+
+/* ---- inspector ---- */
+
+/* Always present, so selecting a row never resizes the table beside it, and it
+ * holds the legend when nothing is selected rather than sitting blank. What is
+ * in it is what a 188-row table has no width for: the coverage denominator, the
+ * dimensions outside the references' own spread and by how much, and the rung
+ * this voice is on with the predicate that would raise it. */
+
+function fact(dl, term, value, aside, warn) {
+  dl.append(el('dt', '', term));
+  const dd = el('dd', warn ? 'warn' : '', value);
+  if (aside) dd.append(el('span', 'aside', `  ${aside}`));
+  dl.append(dd);
+}
+
+function methodLegend() {
+  const legend = el('div', 'legend');
+  for (const [m, text] of [['physical', 'physical model'], ['fm', 'FM'],
+    ['classic', 'subtractive / additive']]) {
+    const row = el('div');
+    row.append(el('span', `dot ${m}`), el('span', '', text));
+    legend.append(row);
+  }
+  return legend;
+}
+
+function inspectLegend(box) {
+  box.append(el('span', 'lab', 'the ladder'));
+  const ladder = el('div', 'ladder');
+  LADDER.forEach(([at, name, of]) => {
+    const r = el('div', 'rung done');
+    r.append(el('span', 'mark', '·'), el('span', 'at', at), el('span', '', name));
+    r.title = of;
+    ladder.append(r);
+  });
+  box.append(ladder, el('span', 'lab', 'method'), methodLegend());
+  box.append(el('p', 'hint', 'Select a voice for its coverage and where it sits '
+    + 'against the references’ own spread.'), keyHint());
+}
+
+/// Kept on the panel rather than behind `options`, which is the listening
+/// surface's and is off in this view.
+const keyHint = () => el('p', 'key-hint', '↑ ↓ move   enter listen   / find');
+
+function inspectVoice(box, v) {
+  box.append(el('h2', '', v.name));
+  box.append(el('p', 'addr-line',
+    [addressOf(v), v.patch, v.tone_class].filter(Boolean).join('  ·  ')));
+
+  const engine = el('p', 'addr-line engine');
+  engine.append(dotEl(v.engine),
+    el('span', '', `${v.engine || 'not reported'}  ·  ${methodOf(v.engine)}`));
+  box.append(engine);
+
+  box.append(el('span', 'lab', `stage ${v.stage.toFixed(1)} — ${v.stage_name}`));
+  // Names only, with the rung marked. The predicate is the tooltip, and the one
+  // move that would raise it is spelled out below — six wrapped predicates here
+  // would be the tallest thing in the panel and the least actionable.
+  const ladder = el('div', 'ladder');
+  const here = stageIndex(v);
+  LADDER.forEach(([at, name, of], i) => {
+    const r = el('div', `rung${i === here ? ' here' : i < here ? ' done' : ''}`);
+    r.append(el('span', 'mark', i === here ? '▸' : ' '),
+      el('span', 'at', at), el('span', '', name));
+    r.title = of;
+    ladder.append(r);
+  });
+  box.append(ladder);
+
+  box.append(el('span', 'lab', 'measurement'));
+  const dl = el('dl', 'facts');
+  const ax = v.axes || {};
+  if (v.capture) {
+    fact(dl, 'oracle', v.capture, `${ax.timbres} timbre(s), ${ax.profile_rows} rows, `
+      + `gate ${ax.gate_state || 'not recorded'}`);
+  } else {
+    fact(dl, 'oracle', 'not captured', '', true);
+  }
+
+  const cov = ax.coverage || {};
+  if (cov.canonical) {
+    const excused = cov.excused || [];
+    fact(dl, 'coverage', `${cov.gated} of ${cov.canonical} gated`,
+      excused.length ? `${excused.length} excused: ${excused.join(', ')}` : '',
+      !cov.complete);
+    if ((cov.gaps || []).length) {
+      fact(dl, 'gaps', String(cov.gaps.length), cov.gaps.join(', '), true);
+    }
+  }
+
+  const ag = ax.agreement || {};
+  if (ag.total) {
+    const outside = Object.entries(ag.outside || {}).map(([d, m]) => `${d} ${m}×`);
+    fact(dl, 'agreement', `${ag.inside} of ${ag.total} inside the spread`,
+      outside.join(', '));
+  } else if ((ag.unjudgeable || []).length) {
+    fact(dl, 'agreement', 'no spread',
+      `${ag.unjudgeable.length} dimension(s) unjudgeable — one reference timbre`, true);
+  }
+
+  const open = v.open_candidates || [];
+  if (open.length) fact(dl, 'unwritten', String(open.length), open.join(', '), true);
+  box.append(dl);
+
+  box.append(el('span', 'lab', 'next'), el('p', 'next-text', v.next));
+
+  if (hasPage(v.slug)) {
+    const go = el('button', 'go', 'listen →');
+    go.type = 'button';
+    go.addEventListener('click', () => openVoice(v));
+    box.append(go);
+  }
+  box.append(keyHint());
+}
+
+function renderInspect() {
+  const box = $('bankInspect');
+  box.replaceChildren();
+  const v = bank.shown[bank.cursor];
+  if (v) inspectVoice(box, v);
+  else inspectLegend(box);
+}
+
+/* ---- the listening surface's own bank line ---- */
+
+/// Without it a page says what a voice sounds like and nothing about why it is
+/// open: which rung it is on, whether it has an oracle, what is unadopted.
+function renderHeadStage() {
+  const box = $('headStage');
+  box.replaceChildren();
+  const v = bank.voices.find((x) => x.slug === state.setId);
+  if (!v) return;
+  box.append(dotEl(v.engine), el('span', '', v.engine || 'not reported'),
+    stageBar(v), el('span', '', `${v.stage.toFixed(1)} ${v.stage_name}`));
+  const open = v.open_candidates || [];
+  if (open.length) {
+    const badge = el('span', 'badge warn', `${open.length} unwritten`);
+    badge.title = open.join(', ');
+    box.append(badge);
+  }
+  box.title = v.next;
+}
+
+/* ---- views and wiring ---- */
 
 async function setView(view) {
   const wantBank = view === 'bank';
   document.body.classList.toggle('bank-view', wantBank);
   $('bank').hidden = !wantBank;
+  localStorage.setItem(VIEW_KEY, view);
+  // The manifest title names the set being listened to, which says nothing here
+  // and reads as a claim about the bank. `loadSet` puts it back.
+  if (wantBank && !state.failed) $('title').textContent = '';
   for (const b of $('viewToggle').querySelectorAll('button')) {
     b.setAttribute('aria-selected', String(b.dataset.view === view));
   }
@@ -1321,16 +1637,50 @@ async function setView(view) {
     if (state.playing) pause();
     await loadBank();
     renderBank();
+    $('bankRows').focus();
   }
+}
+
+function bankKey(ev) {
+  const k = ev.key;
+  if (k === '/') { ev.preventDefault(); $('bankFind').focus(); return; }
+  if (k === 'ArrowDown' || k === 'j') { ev.preventDefault(); moveCursor(1); return; }
+  if (k === 'ArrowUp' || k === 'k') { ev.preventDefault(); moveCursor(-1); return; }
+  if (k === 'Home') { ev.preventDefault(); selectRow(0); return; }
+  if (k === 'End') { ev.preventDefault(); selectRow(bank.shown.length - 1); return; }
+  if (k === 'Enter') { ev.preventDefault(); openVoice(bank.shown[bank.cursor]); }
 }
 
 function wireBank() {
   for (const b of $('viewToggle').querySelectorAll('button')) {
     b.addEventListener('click', () => setView(b.dataset.view));
   }
-  for (const id of ['bankMethod', 'bankFilter']) {
-    $(id).addEventListener('change', renderBank);
+
+  const method = $('bankMethod');
+  for (const [value, label] of METHOD_PICKS) {
+    const b = el('button', '', label);
+    b.type = 'button';
+    b.dataset.method = value;
+    b.addEventListener('click', () => { bank.method = value; renderBank(); });
+    method.append(b);
   }
+
+  const filter = $('bankFilter');
+  for (const [value, label] of FILTER_PICKS) {
+    const b = el('button', 'chip', label);
+    b.type = 'button';
+    b.dataset.filter = value;
+    b.addEventListener('click', () => {
+      bank.filter = bank.filter === value ? '' : value;
+      renderBank();
+    });
+    filter.append(b);
+  }
+
+  $('bankSort').addEventListener('change', () => {
+    bank.sort = $('bankSort').value;
+    renderBank();
+  });
   $('bankFind').addEventListener('input', renderBank);
 }
 

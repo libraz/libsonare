@@ -1,16 +1,40 @@
+/* A measurement bench: hairlines and columns rather than boxes and cards, one
+   accent that means signal and one that means attention, and no decoration at
+   all. Data is set in the monospace so 188 rows align into columns the eye can
+   run down; the sans is for prose only. */
+
 :root {
-  --bg: #14161a;
-  --panel: #1b1e24;
-  --panel-2: #232830;
-  --line: #2f353f;
-  --ink: #d7dbe2;
-  --ink-dim: #858d9b;
-  --accent: #6fb3a0;
-  --accent-ink: #0f1416;
-  --warn: #d09a5a;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --bg: #101216;
+  --panel: #171a20;
+  --panel-2: #1e222a;
+  --line: #282d36;
+  --line-soft: #1f232b;
+  --ink: #dbe0e8;
+  --ink-dim: #7f8899;
+  --ink-faint: #59616e;
+  --accent: #64c0a4;
+  --accent-ink: #0c1512;
+  --fm: #7fa3cc;
+  --warn: #d8a15f;
+
+  /* Ordered single hue, dark to bright: further along the ladder reads as
+     brighter without asking anyone to decode a hue. */
+  --s0: #3b4351;
+  --s1: #3d5a56;
+  --s2: #467a6b;
+  --s3: #519c82;
+  --s4: #64c0a4;
+  --s5: #a9e4ce;
+
+  --sans: "SF Pro Text", -apple-system, BlinkMacSystemFont,
+          "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "SF Mono", ui-monospace, SFMono-Regular, "JetBrains Mono",
+          "IBM Plex Mono", Menlo, Consolas, monospace;
+
   --tint: color-mix(in srgb, var(--accent) 10%, var(--panel));
   --tint-line: color-mix(in srgb, var(--accent) 28%, var(--line));
+  --warn-tint: color-mix(in srgb, var(--warn) 11%, var(--panel));
+  --warn-line: color-mix(in srgb, var(--warn) 34%, var(--line));
 }
 
 * { box-sizing: border-box; }
@@ -20,15 +44,42 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 13.5px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
 }
 
+/* The column is clamped, not `auto`: an auto track is sized to its widest item's
+   max-content, so one long path in the identity strip widens the whole page and
+   the header stretches with it. */
 body {
   display: grid;
   grid-template-rows: auto auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
 }
 
-.grow { flex: 1; }
+/* Figures line up down a column everywhere, which is most of what makes a long
+   table scannable. */
+.mono, code, kbd, input, select, textarea, .addr, .num {
+  font-variant-numeric: tabular-nums;
+}
+
+.grow { flex: 1; min-width: 0; }
+
+.lab {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  max-width: 72ch;
+}
 
 /* ---- header ---- */
 
@@ -36,17 +87,20 @@ header {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 10px 18px;
+  padding: 9px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
 
+/* Takes the slack and gives it back first: the set's own prose title is the
+   least load-bearing thing in the strip, so it is what a narrow window eats. */
 h1 {
+  flex: 1 1 0;
+  min-width: 0;
   margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--ink-dim);
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--ink-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -56,26 +110,58 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .pick-lab {
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
 }
 
 select {
-  padding: 6px 10px;
-  border: 1px solid var(--tint-line);
-  border-radius: 6px;
-  background: var(--tint);
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
   color: var(--ink);
-  font: 500 13px/1.2 var(--mono);
+  font: 500 12.5px/1.2 var(--mono);
   cursor: pointer;
+  min-width: 0;
   max-width: 42ch;
 }
+
+select:hover { border-color: var(--ink-faint); }
+
+/* The voice being listened to is the page's subject, so its picker is set as
+   the title rather than sitting beside one. */
+#setSelect {
+  min-width: 9rem;
+  border-color: var(--tint-line);
+  background: var(--tint);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Where this voice stands, carried from the bank into the listening surface —
+   without it a page says what it sounds like and nothing about why it is open. */
+.head-stage {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+
+.head-stage:empty { display: none; }
 
 /* ---- options ---- */
 
@@ -83,7 +169,7 @@ select {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 10px 32px;
-  padding: 16px 18px 18px;
+  padding: 15px 16px 17px;
   border-bottom: 1px solid var(--line);
   background: var(--panel-2);
 }
@@ -92,11 +178,11 @@ select {
 
 .options h2 {
   margin: 0 0 8px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
 }
 
 .opt-col { min-width: 0; }
@@ -127,18 +213,11 @@ select {
 
 .keys dt, .keys dd { margin: 0; }
 
-.hint {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: var(--ink-dim);
-  max-width: 72ch;
-}
-
-/* ---- layout ---- */
+/* ---- listen layout ---- */
 
 main {
   display: grid;
-  grid-template-columns: 250px 1fr;
+  grid-template-columns: 244px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -146,23 +225,28 @@ nav {
   border-right: 1px solid var(--line);
   overflow-y: auto;
   background: var(--panel);
-  padding: 8px 0 16px;
+  padding: 6px 0 16px;
 }
 
 nav .group {
-  padding: 12px 16px 4px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  position: sticky;
+  top: 0;
+  padding: 12px 15px 5px;
+  background: var(--panel);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
 }
 
 nav button {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 7px 16px;
+  padding: 6px 15px;
   border: 0;
+  border-left: 2px solid transparent;
   background: none;
   color: var(--ink);
   font: inherit;
@@ -171,19 +255,21 @@ nav button {
 
 nav button:hover { background: var(--panel-2); }
 
+/* The take list is a flat-edged rail, which is where a one-sided marker
+   belongs; nothing rounded carries one. */
 nav button[aria-current="true"] {
+  border-left-color: var(--accent);
   background: var(--tint);
   color: var(--accent);
   font-weight: 600;
 }
 
-/* One line, clipped. The id leads it because that is what a link carries; the
-   rest is a description and a take list that grows to three lines an entry
-   stops being a list you can scan. */
+/* One line, clipped. The id leads it because that is what a link carries; an
+   entry that grows to three lines stops being a list you can scan. */
 nav .sub {
   display: block;
-  color: var(--ink-dim);
-  font-size: 11.5px;
+  color: var(--ink-faint);
+  font-size: 11px;
   font-family: var(--mono);
   font-weight: 400;
   white-space: nowrap;
@@ -194,10 +280,30 @@ nav .sub {
 #stage {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px 18px 20px;
   min-width: 0;
   overflow-y: auto;
+}
+
+/* The console: what is sounding, the switch, and the transport, in one block
+   that stays put. The switch and the play button are the listening loop and
+   they were four hundred pixels apart with two canvases between them. */
+.console {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 16px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.stage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 14px 16px 22px;
 }
 
 /* ---- identity strip ---- */
@@ -206,10 +312,6 @@ nav .sub {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--tint-line);
-  border-radius: 6px;
-  background: var(--tint);
   min-width: 0;
 }
 
@@ -218,19 +320,23 @@ nav .sub {
   align-items: baseline;
   gap: 7px;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ink-dim);
   min-width: 0;
   flex-wrap: wrap;
 }
 
-.crumbs .sep { opacity: 0.45; }
+.crumbs .sep { color: var(--ink-faint); }
 .crumbs .now { color: var(--accent); font-weight: 600; }
 
+/* Yields long before the breadcrumbs do: the path is a detail anyone can widen
+   the window for, and the crumbs are what says which render is sounding. */
 .path {
+  flex: 0 8 auto;
+  min-width: 0;
   font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--ink-dim);
+  font-size: 11px;
+  color: var(--ink-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -243,12 +349,12 @@ nav .sub {
 .versions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .vrow {
   display: grid;
-  grid-template-columns: 78px 1fr;
+  grid-template-columns: 68px 1fr;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -258,10 +364,11 @@ nav .sub {
 .vrow.unlabelled { grid-template-columns: minmax(0, 1fr); }
 
 .vrow > .role {
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
   text-align: right;
 }
 
@@ -272,13 +379,13 @@ nav .sub {
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
   min-width: 0;
 }
 
 .segmented button {
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: 0;
   border-radius: 0;
   background: var(--panel);
@@ -289,9 +396,10 @@ nav .sub {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  transition: background 110ms ease, color 110ms ease;
 }
 
-.segmented button:hover { color: var(--ink); }
+.segmented button:hover { background: var(--panel-2); color: var(--ink); }
 
 .segmented button[aria-pressed="true"] {
   background: var(--accent);
@@ -308,9 +416,9 @@ nav .sub {
 .detail {
   margin: 0;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.6;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
   word-break: break-word;
 }
 
@@ -325,20 +433,20 @@ canvas {
   width: 100%;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: crosshair;
 }
 
 /* The layout height has to come from CSS: the canvas is resized in script to
- * the device pixel ratio, and with the height left to the element's own
- * attribute each resize would feed back into the next one. */
-#wave { height: 150px; }
-#spec { height: 220px; }
+   the device pixel ratio, and with the height left to the element's own
+   attribute each resize would feed back into the next one. */
+#wave { height: 142px; }
+#spec { height: 212px; }
 
 figcaption {
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--ink-dim);
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-faint);
 }
 
 /* ---- transport ---- */
@@ -346,20 +454,21 @@ figcaption {
 #transport {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
 }
 
 button {
-  padding: 7px 14px;
+  padding: 6px 13px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--panel-2);
   color: var(--ink);
   font: inherit;
   cursor: pointer;
+  transition: border-color 110ms ease, background 110ms ease, color 110ms ease;
 }
 
-button:hover { border-color: var(--ink-dim); }
+button:hover { border-color: var(--ink-faint); }
 
 button[aria-pressed="true"] {
   background: var(--accent);
@@ -368,31 +477,32 @@ button[aria-pressed="true"] {
 }
 
 button.ghost {
-  padding: 5px 11px;
+  padding: 5px 10px;
   background: none;
+  border-color: transparent;
   color: var(--ink-dim);
-  font-size: 12.5px;
+  font-size: 12px;
   flex: none;
 }
 
-button.ghost:hover { color: var(--ink); }
-button.ghost[aria-expanded="true"] { background: var(--panel); color: var(--ink); }
+button.ghost:hover { border-color: var(--line); color: var(--ink); }
+button.ghost[aria-expanded="true"] { background: var(--panel-2); color: var(--ink); }
 
-.play { min-width: 78px; font-weight: 600; }
+.play { min-width: 74px; font-weight: 600; }
 
-.mono { font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); }
+.mono { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
 
 /* ---- per-take notes ---- */
 
 details {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--panel);
 }
 
 summary {
   padding: 7px 12px;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--ink-dim);
   cursor: pointer;
   user-select: none;
@@ -403,7 +513,7 @@ summary:hover { color: var(--ink); }
 textarea {
   display: block;
   width: 100%;
-  min-height: 74px;
+  min-height: 72px;
   resize: vertical;
   padding: 9px 11px;
   border: 0;
@@ -414,7 +524,7 @@ textarea {
 }
 
 textarea:focus, button:focus-visible, nav button:focus-visible,
-select:focus-visible, summary:focus-visible {
+select:focus-visible, summary:focus-visible, input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
@@ -426,7 +536,7 @@ kbd {
   border-radius: 4px;
   background: var(--panel);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--ink);
 }
 
@@ -446,16 +556,17 @@ body.no-compare .compare-only { display: none; }
   display: flex;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
   background: var(--bg);
 }
 
 .toggle button {
-  padding: 4px 12px;
+  padding: 4px 13px;
   border: 0;
+  border-radius: 0;
   background: transparent;
-  color: var(--ink-dim);
+  color: var(--ink-faint);
   font: inherit;
   cursor: pointer;
 }
@@ -466,108 +577,352 @@ body.no-compare .compare-only { display: none; }
 .toggle button[aria-selected="true"] {
   background: var(--panel-2);
   color: var(--ink);
+  font-weight: 600;
 }
 
 body.bank-view main,
 body.bank-view .listen-only,
 body.bank-view .options { display: none; }
 
+/* Two children left in flow, and the table takes the rest of the window: the
+   toolbar has to stay put over 188 rows. */
+body.bank-view { grid-template-rows: auto 1fr; }
+
 body:not(.bank-view) .bank { display: none; }
 
 /* ---- bank ---- */
 
 .bank {
-  overflow: auto;
-  padding: 16px 18px 40px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 0;
+  overflow: hidden;
+  animation: rise 160ms ease-out;
 }
 
-.bank-bar {
+@keyframes rise {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bank { animation: none; }
+  * { transition-duration: 1ms !important; }
+}
+
+/* ---- bank masthead ---- */
+
+.bank-head {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding-bottom: 12px;
+  align-items: flex-end;
+  gap: 34px;
+  padding: 15px 16px 14px;
   border-bottom: 1px solid var(--line);
 }
 
-.bank-bar input[type="search"] {
-  width: 100%;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-}
+.figures { display: flex; gap: 26px; flex: none; }
 
-#bankSummary { margin: 10px 0 18px; }
-
-.bank-group {
-  margin: 0 0 6px;
-  padding-top: 14px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-}
-
-.bank-row {
-  display: grid;
-  grid-template-columns: 4.5rem minmax(11rem, 1fr) 9.5rem 5.5rem 6rem auto;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
+.fig {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
   text-align: left;
   cursor: default;
 }
 
-.bank-row.has-page { cursor: pointer; }
-.bank-row.has-page:hover,
-.bank-row:focus-visible {
-  border-color: var(--line);
+.fig.act { cursor: pointer; }
+.fig.act:hover .num { color: var(--accent); }
+
+.fig .num {
+  font-family: var(--mono);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  transition: color 110ms ease;
+}
+
+.fig.warn .num { color: var(--warn); }
+
+/* The distribution, and the same six steps as a filter. Proportion above,
+   countable numbers below: neither answers on its own at 188 to 1. */
+.dist { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
+
+.dist-bar {
+  display: flex;
+  gap: 2px;
+  height: 7px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.dist-bar span { min-width: 3px; }
+
+.dist-keys { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.skey {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.skey:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+.skey[aria-pressed="true"] {
+  border-color: var(--tint-line);
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.skey .dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.skey .n { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+.skey .z { color: var(--ink-faint); font-weight: 400; }
+
+/* ---- bank toolbar ---- */
+
+/* Wraps rather than overflowing: an overflowing toolbar widens the grid track
+   under it, and the table and the masthead then scroll sideways with it. */
+.bank-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
 
-.bank-row .addr { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+.bank-bar .pick.grow { min-width: 13rem; }
+
+/* Four options and a primary picker, so the segments are equal-width: a
+   segmented control whose width tracks its labels reads as unfinished. */
+.seg4 {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 1px;
+  width: 372px;
+  flex: none;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.seg4 button {
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 0;
+  background: var(--panel-2);
+  color: var(--ink-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seg4 button:hover { color: var(--ink); }
+
+.seg4 button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.chips { display: flex; gap: 6px; flex: none; }
+
+.chip {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+
+.chip:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+.chip[aria-pressed="true"] {
+  border-color: var(--tint-line);
+  background: var(--tint);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.bank-bar input[type="search"] {
+  width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 12.5px/1.2 var(--mono);
+}
+
+.bank-bar input[type="search"]::placeholder { color: var(--ink-faint); }
+
+/* ---- bank body: table beside an inspector that is always there ---- */
+
+/* The inspector holds the legend when nothing is selected, so selecting a row
+   never resizes the table beside it. */
+.bank-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 336px;
+  min-height: 0;
+}
+
+.bank-table {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  min-width: 0;
+}
+
+#bankRows { overflow-y: auto; padding-bottom: 30px; }
+
+.bank-row, .bank-cols {
+  display: grid;
+  grid-template-columns:
+    4.2rem minmax(8rem, 1.3fr) 8.4rem 5.2rem 6.4rem minmax(0, 1.4fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 5px 16px;
+  text-align: left;
+}
+
+.bank-cols {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* The addresses are right-aligned so the three digits stack; the label follows
+   them rather than the column's left edge. */
+.bank-cols > :first-child { text-align: right; }
+
+.bank-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 13px 16px 5px;
+  background: linear-gradient(var(--bg) 72%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.bank-group .n { color: var(--ink-faint); font-family: var(--mono); }
+
+/* Per family, over what is displayed: sixteen headings each say how their own
+   eight voices are doing rather than only naming them. */
+.bank-group .mini {
+  display: flex;
+  gap: 1px;
+  width: 64px;
+  height: 4px;
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.bank-row {
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: background 90ms ease;
+}
+
+.bank-row:hover { background: var(--panel); }
+
+.bank-row[aria-current="true"] {
+  background: var(--tint);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.bank-row .addr {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  text-align: right;
+}
+
 .bank-row .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bank-row .who .patch { color: var(--ink-dim); font-family: var(--mono); font-size: 11.5px; }
+.bank-row .who .patch {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
 
 .engine {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  min-width: 0;
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--ink-dim);
 }
 
+.engine span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Three methods rather than sixteen engines: what the eye is asked for here is
    "physical model, FM, or neither", and sixteen hues would answer nothing. */
-.engine::before {
-  content: "";
+.dot {
   width: 7px;
   height: 7px;
   flex: none;
   border-radius: 50%;
-  background: var(--ink-dim);
+  background: var(--ink-faint);
 }
 
-.engine.physical::before { background: var(--accent); }
-.engine.fm::before { background: #6f8fb3; }
-.engine.classic::before { background: var(--line); }
+.dot.physical { background: var(--accent); }
+.dot.fm { background: var(--fm); }
+.dot.classic { background: var(--line); box-shadow: inset 0 0 0 1px var(--ink-faint); }
 
-/* Five segments, the same shape the CLI table prints, so a number quoted from
-   one is recognisable in the other. */
+/* Five segments, the shape the CLI table prints, so a number quoted from one is
+   recognisable in the other. The fill is the row's own stage colour, which is
+   what ties it to the chip it was filtered by. */
 .stage {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--ink-dim);
@@ -576,24 +931,42 @@ body:not(.bank-view) .bank { display: none; }
 .stage .bar { display: flex; gap: 2px; }
 
 .stage .seg {
-  width: 8px;
+  width: 7px;
   height: 8px;
-  border-radius: 2px;
-  background: var(--line);
+  border-radius: 1px;
+  background: var(--line-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
-.stage .seg.on { background: var(--accent); }
+.stage .seg.on { background: var(--sc, var(--accent)); box-shadow: none; }
 
+/* Present is a fact worth reading; absent is 184 rows of the same word, so it
+   stays quiet and the four that say something are the ones the eye finds. */
 .oracle {
   font-family: var(--mono);
   font-size: 11.5px;
-  color: var(--ink-dim);
+  color: var(--accent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.oracle.absent { color: var(--warn); }
+.oracle.absent { color: var(--ink-faint); opacity: 0.5; }
+
+.bank-tail {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.bank-tail .next {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* A full border plus a tint, never a one-sided stripe: the straight edge of a
    stripe fights the rounded corner. */
@@ -603,21 +976,123 @@ body:not(.bank-view) .bank { display: none; }
   border-radius: 999px;
   background: var(--tint);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--ink);
   white-space: nowrap;
+  flex: none;
 }
 
-.badge.warn {
-  border-color: color-mix(in srgb, var(--warn) 34%, var(--line));
-  background: color-mix(in srgb, var(--warn) 11%, var(--panel));
+.badge.warn { border-color: var(--warn-line); background: var(--warn-tint); }
+
+.bank-empty { padding: 30px 16px; color: var(--ink-dim); }
+
+/* ---- inspector ---- */
+
+.inspect {
+  overflow-y: auto;
+  padding: 15px 16px 30px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
 }
 
-.bank-next {
-  grid-column: 2 / -1;
-  margin: 2px 0 0;
-  color: var(--ink-dim);
+.inspect h2 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.inspect .addr-line {
+  margin: 0 0 5px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.key-hint {
+  margin: 18px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.inspect .lab { display: block; margin: 16px 0 6px; }
+.inspect .lab:first-child { margin-top: 0; }
+
+/* The ladder in full, with the step this voice is on marked: a bar says how
+   far, and this says what the next predicate actually is. */
+.ladder { display: flex; flex-direction: column; gap: 1px; }
+
+.rung {
+  display: grid;
+  grid-template-columns: 12px 2.2rem 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 6px;
+  border-radius: 3px;
   font-size: 12px;
+  color: var(--ink-faint);
 }
 
-.bank-empty { padding: 30px 8px; color: var(--ink-dim); }
+.rung .mark { color: transparent; font-family: var(--mono); }
+.rung .at { font-family: var(--mono); font-size: 11px; }
+.rung.done { color: var(--ink-dim); }
+.rung.here { background: var(--tint); color: var(--ink); font-weight: 600; }
+.rung.here .mark { color: var(--accent); }
+
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; }
+.facts dt { margin: 0; font-size: 11.5px; color: var(--ink-faint); }
+.facts dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.facts dd .aside { color: var(--ink-faint); }
+.facts dd.warn { color: var(--warn); }
+
+.inspect .next-text {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.inspect .go {
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px;
+  border-color: var(--tint-line);
+  background: var(--tint);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.inspect .go:hover { background: var(--accent); color: var(--accent-ink); }
+
+.legend { display: flex; flex-direction: column; gap: 5px; }
+
+.legend div {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  align-items: baseline;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.legend .dot { align-self: center; }
+
+@media (max-width: 1120px) {
+  .bank-body { grid-template-columns: minmax(0, 1fr); }
+  .inspect { display: none; }
+  .bank-head { flex-wrap: wrap; gap: 16px 26px; }
+}
