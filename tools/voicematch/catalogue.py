@@ -18,7 +18,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from _repo import REPO_ROOT
@@ -91,8 +91,9 @@ class Catalogue:
 
     `defaults` maps every key it consulted to the value it would have used;
     `programs` maps a (GM program, GS variation bank) pair to the patch that
-    voices it; `bounds` maps a patch field *path* (no patch prefix — a bound
-    belongs to the field) to the interval `clamp_synth_patch` accepts.
+    voices it; `modes` maps a patch to the engine voicing it; `bounds` maps a
+    patch field *path* (no patch prefix — a bound belongs to the field) to the
+    interval `clamp_synth_patch` accepts.
 
     Keyed by bank as well as program because a variation is a separate patch
     with separate knobs — program 19 is a six-rank principal chorus at bank 0, a
@@ -104,10 +105,18 @@ class Catalogue:
     defaults: dict[str, float]
     programs: dict[tuple[int, int], str]
     bounds: dict[str, tuple[float, float]]
+    #: Patch key to engine name. Empty when the library predates the `#mode`
+    #: line, which reads as "not reported" rather than as "subtractive".
+    modes: dict[str, str] = field(default_factory=dict)
 
     def patch_for(self, program: int, bank: int = 0) -> str | None:
         """The patch voicing a (program, bank), falling back to the capital tone."""
         return self.programs.get((program, bank)) or self.programs.get((program, 0))
+
+    def mode_for(self, program: int, bank: int = 0) -> str | None:
+        """The engine voicing a (program, bank), via the patch that answers it."""
+        patch = self.patch_for(program, bank)
+        return self.modes.get(patch) if patch else None
 
     def banks_for(self, program: int) -> list[int]:
         """Every variation bank of @p program the library voices apart, in order."""
@@ -164,15 +173,18 @@ def dump_catalogue(
         defaults: dict[str, float] = {}
         programs: dict[tuple[int, int], str] = {}
         bounds: dict[str, tuple[float, float]] = {}
+        modes: dict[str, str] = {}
         for line in dump.read_text().splitlines():
             parts = line.split("\t")
             if parts[0] == "#program" and len(parts) == 4:
                 programs[(int(parts[1]), int(parts[2]))] = parts[3]
+            elif parts[0] == "#mode" and len(parts) == 3:
+                modes[parts[1]] = parts[2]
             elif parts[0] == "#bound" and len(parts) == 4:
                 bounds[parts[1]] = (float(parts[2]), float(parts[3]))
             elif len(parts) == 2:
                 defaults[parts[0]] = float(parts[1])
-    return Catalogue(defaults, programs, bounds)
+    return Catalogue(defaults, programs, bounds, modes)
 
 
 # A drum note's patch is keyed by note number rather than by a name, because a

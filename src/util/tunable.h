@@ -54,6 +54,19 @@ float tunable_keyed(const char* key, float default_value);
 /// knobs, whatever bank the render selected.
 void note_program_key(int program, int bank, const char* key);
 
+/// Record that the patch addressed as @p key is voiced by engine @p mode, for
+/// the `SONARE_TUNING_DUMP` catalogue. @p mode is the engine's name rather than
+/// its enum value, so the catalogue survives a renumbering and this header stays
+/// free of the synth enum.
+///
+/// Keyed by patch, not by program: one patch commonly voices several programs,
+/// and the engine is a property of the patch. It is also the one fact about a
+/// voice the rest of the catalogue cannot express — `#program` says which patch
+/// answers a program and `#bound` says what a field accepts, but neither says
+/// whether the voice is a waveguide, an FM stack or a subtractive default. No-op
+/// unless a dump was requested.
+void note_patch_mode(const char* key, const char* mode);
+
 /// Record the admissible range of the patch field addressed as @p path (the
 /// key without its patch prefix, e.g. `bowed_string.bow_force`), for the
 /// `SONARE_TUNING_DUMP` catalogue.

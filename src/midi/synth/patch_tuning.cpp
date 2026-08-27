@@ -537,6 +537,47 @@ void walk_fields(NativeSynthPatch& p, const Fields& f) {
   }
 }
 
+/// The engine's name for the catalogue. Written here rather than in `tunable.h`
+/// so the util layer stays free of the synth enum, and as names rather than enum
+/// values so a renumbering cannot silently relabel a voice.
+const char* mode_name(SynthEngineMode mode) {
+  switch (mode) {
+    case SynthEngineMode::kSubtractive:
+      return "subtractive";
+    case SynthEngineMode::kFm:
+      return "fm";
+    case SynthEngineMode::kKarplusStrong:
+      return "karplus_strong";
+    case SynthEngineMode::kModal:
+      return "modal";
+    case SynthEngineMode::kAdditive:
+      return "additive";
+    case SynthEngineMode::kPercussion:
+      return "percussion";
+    case SynthEngineMode::kPiano:
+      return "piano";
+    case SynthEngineMode::kPipeOrgan:
+      return "pipe_organ";
+    case SynthEngineMode::kBowedString:
+      return "bowed_string";
+    case SynthEngineMode::kReed:
+      return "reed";
+    case SynthEngineMode::kBrass:
+      return "brass";
+    case SynthEngineMode::kFlute:
+      return "flute";
+    case SynthEngineMode::kPluckedString:
+      return "plucked_string";
+    case SynthEngineMode::kVocal:
+      return "vocal";
+    case SynthEngineMode::kFreeReed:
+      return "free_reed";
+    case SynthEngineMode::kHarpsichord:
+      return "harpsichord";
+  }
+  return "subtractive";
+}
+
 /// Report each of this engine's fields' admissible range to the knob catalogue.
 ///
 /// The range is not written down anywhere a fitter could read: it lives in
@@ -571,6 +612,7 @@ void record_engine_bounds(const NativeSynthPatch& patch) {
 void apply_patch_tuning(NativeSynthPatch& patch, const char* prefix) noexcept {
   const std::string owned(prefix == nullptr ? "" : prefix);
   if (owned.empty()) return;
+  ::sonare::tuning::note_patch_mode(owned.c_str(), mode_name(patch.mode));
   record_engine_bounds(patch);
   walk_fields(patch, Fields{owned});
   // The override map is arbitrary text: it can name a non-finite value or one
