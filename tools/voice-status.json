@@ -2876,7 +2876,12 @@
       "capture": null,
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "perc-second",
+        "perc-fast",
+        "perc-quiet",
+        "perc-loud"
+      ],
       "axes": {
         "engine": "additive",
         "patch": "percussive_organ",
@@ -3116,7 +3121,11 @@
       "capture": null,
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "drive-least",
+        "drive-mild",
+        "drive-hard"
+      ],
       "axes": {
         "engine": "additive",
         "patch": "rock_organ",
@@ -9184,8 +9193,8 @@
       "patch": null,
       "engine": "percussion",
       "capture": "drums",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.6,
+      "stage_name": "covered",
       "open_candidates": [
         "refit-metallic",
         "refit-hats"
@@ -9193,8 +9202,8 @@
       "axes": {
         "engine": "percussion",
         "patch": null,
-        "timbres": 1,
-        "profile_rows": 282,
+        "timbres": 2,
+        "profile_rows": 564,
         "gate_state": "current",
         "coverage": {
           "canonical": 8,
@@ -9204,23 +9213,20 @@
           "complete": true
         },
         "agreement": {
-          "inside": 0,
-          "total": 0,
-          "unjudgeable": [
-            "attack",
-            "band_decay",
-            "band_shape",
-            "band_tilt",
-            "centroid_pct",
-            "crest",
-            "level",
-            "vel_range"
-          ]
+          "inside": 3,
+          "total": 8,
+          "outside": {
+            "band_decay": 5.63,
+            "vel_range": 3.06,
+            "level": 1.87,
+            "band_shape": 1.73,
+            "band_tilt": 1.03
+          }
         },
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "outside the reference spread: band_decay 5.63x, vel_range 3.06x, level 1.87x"
     }
   ]
 }
