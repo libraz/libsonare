@@ -1,0 +1,77 @@
+{
+  "id": "drawbar_organ",
+  "label": "Drawbar organ, tonewheel generator, two registrations",
+  "program": 16,
+  "bank": 0,
+  "_takes": "`sustained` is the set for anything that holds until the key is released, and its phrases land on the player's controls rather than on a wind player's. On this instrument the expression phrase is a swell pedal moved by the foot and the repeated note is a key attack, which is the same reading the church organ takes. What the set has no phrase for is a chord, and a tonewheel generator is where that matters most: its wheels are geared to one shaft, so the intervals inside a chord are the gear ratios and cannot drift, while the model's partials are computed per voice and can. The musical take is what carries chords here.",
+  "takes": "sustained",
+  "_music": "A three-part chorale with a pedal line rather than the class default of one line across a wide compass. A drawbar organ is played in chords under a bass, and a single line asks a registration nothing about how its own partials sit against another voice's.",
+  "music": "bwv639-chorale",
+  "audition_title": "libsonare drawbar organ vs the sampled reference",
+  "_registration": "The property nothing downstream can recover from, and on a tonewheel organ it is nine numbers rather than a stop list. libsonare's program 16 is 88 8402 001 and its `drawbars` array is fittable in full, so unlike the church organ's fixed rank count there is no structural asymmetry here — every footage the reference can draw, the model can draw. That makes the registration a fitting target rather than a constraint, and it also makes it the easiest thing in the capture to overfit: a fitter given nine free drawbars will land on whatever additive stack fits eleven notes. What holds it honest is that a drawbar is a physical stop at one of nine detents, so a fitted value between them is describing the reference's samples rather than a registration anyone could pull.\n\nOn a SAMPLED reference the registration was chosen when the samples were recorded and no control reaches it, so the requirement is met by selecting a slot and measuring it. Select it on the partial ladder: a tonewheel organ has energy at exactly the nine drawbar ratios (1/2, 1 1/2, 1, 2, 3, 4, 5, 6, 8 times the played pitch) and nothing between them, and the 7th harmonic is the tell — no drawbar produces it, so a slot carrying one is not a tonewheel.",
+  "registration": "Two sampled tonewheel registrations, selected on their partial ladders and their speech time rather than set. `drawbar-dark` puts its weight on the sub-octave and has nothing above 4f; `drawbar-bright` draws through to 8f. Both speak in under 12 ms, which is a key contact rather than a pipe or a sample envelope. Neither is claimed to be exactly 88 8402 001; what is claimed is that no ratio in either lies off the drawbar ladder.",
+  "_dry": "`dry` switches off every effect section the plugin advertises as a parameter, and this one advertises none — its reverb lives inside the state chunk, so the flag is a measured no-op here (the same RT60 with it on and off, to four decimal places of peak). What does reach it is a controller, which is what `sends` is for.\n\nThe instrument wants to be dry, unlike the church organ. A tonewheel organ has no room of its own — it is a generator plus a cabinet plus whatever room it is put in — so a preset's reverb is a choice the preset made and not part of what is being measured. Left in, it reads as an RT60 of 0.69 s that the model would have to be convolved to match before any metric could be taken, and `damper` would be measuring it rather than the release.",
+  "dry": false,
+  "_sends": "Zero reverb, chorus and delay, written into the score at tick 0. The grid renders through a generated score rather than through the host's own note arguments because a controller is the only thing that reaches this plugin's effects; the field is opt-in for that reason, since every reference measured before it existed was taken through the note arguments and those files are the ground truth rather than something regenerable. Measured: the release falls from -25.1 dB at note-off to -120.6 dB 200 ms later, which is a key contact breaking and no room at all.",
+  "sends": [
+    0,
+    0,
+    0
+  ],
+  "params": [],
+  "_calibration": "From `capture.py calibrate`: the reference renders identically in real time and faster than it, and the same note twice is bit-identical, so there is no round robin to put a floor under the loss. The measured settle minimum is 250 ms, which is a rack already resident rather than a library streaming from disk. `realtime` is kept on anyway — the grid is 44 renders and the saving is about four minutes, while a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_stimulus": "A tonewheel holds a constant level for as long as the key is down, so the gate only has to outlast the key click and give the steady state somewhere to be measured; the metrics take their sustain window between 0.6 s and 1.8 s after onset. The release is the other end, and on this instrument it is nearly instant — the key contacts break and the wheels are still turning, so there is no decay to capture, only whatever the preset's own effects add.",
+  "gate_ms": 3000,
+  "tail": "2s",
+  "_timbres": "One registration per timbre, and two rather than one because a single reference has no spread and a gate written from it can only say `no worse than the day it was written`. They are named for what was measured — where the weight sits on the ladder — and not for a player or a style: which registration a sampled organ was recorded at is not something the samples say, and a label claiming it would be the one unverifiable line in a file whose whole point is that every number in it was measured.",
+  "timbres": [
+    {
+      "id": "drawbar-dark",
+      "label": "Tonewheel registration, sub-octave-forward"
+    },
+    {
+      "id": "drawbar-bright",
+      "label": "Tonewheel registration, drawn through to the top"
+    }
+  ],
+  "_notes": "Every sixth semitone across the 61-key manual, C2 to C7. The compass is the instrument's rather than MIDI's on purpose: a tonewheel generator folds back at both ends — it runs out of wheels, so the top octave repeats the one below it and the 16' drawbar stops descending — and a grid running past the manual would measure the sampler's transposition rather than the organ.",
+  "notes": [
+    36,
+    42,
+    48,
+    54,
+    60,
+    66,
+    72,
+    78,
+    84,
+    90,
+    96
+  ],
+  "_velocities": "Two, where the church organ took one. A tonewheel organ has no velocity response at all — the key closes nine contacts and the wheels are already turning — so the expected answer is that both points read the same. That is worth measuring rather than assuming, because the model does not get it for free: the additive engine goes through the same SoundFont velocity curve as every other voice, which swings it 16.9 dB from 48 to 127. If the reference is flat, that gap is a defect the second velocity point is the only thing that can see.",
+  "velocities": [
+    48,
+    127
+  ],
+  "_dimensions": "One exclusion, measured rather than assumed, and nine gated. `attack` is out because the envelope peak of a note that holds a level is wherever the level happened to be highest rather than where the note started: on the sub-octave registration it lands 1.4 to 2.2 s into a 3 s note, and the two references disagree by up to 1.8 s on the same key. The cause is in the registration rather than in the measurement — a drawn 5 1/3' sits at a ratio a gear train only approximates, so its partial beats against the others and the level wanders by a decibel across the sustain, where the fully-drawn registration reads a decay of -0.0 dB/s on every note in the grid. That flatness is the tonewheel's signature and it is what makes every other dimension here readable.\n\nWorth knowing about two that ARE gated. `damper` is meaningful only because the capture is dry: with the preset's reverb left in it would have measured the send's tail, which is the trap the church organ could not get out of. And `stereo` is gated at a spread of 0.17 against a model error of 0.21, so it is the one bound a small change can move.",
+  "_dimensions_na": "The exclusions above, as data. Coverage is read against `toneclass.canonical_dimensions`, and a canonical dimension is either gated, or excused here with its reason, or a gap — so an exclusion argued only in prose reads as a gap however good the argument.",
+  "dimensions_na": {
+    "attack": "a note that holds a level has its envelope peak wherever the level happened to be highest: on the sub-octave registration that is 1.4 to 2.2 s into a 3 s note, and the two references disagree by up to 1.8 s on the same key"
+  },
+  "dimensions": [
+    "stretch",
+    "tnr",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "register",
+    "stereo",
+    "vel_range",
+    "body"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `drawbar_organ.local.json`: the plugin's component triple and each timbre's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/drawbar_organ.json` and need nothing."
+}
