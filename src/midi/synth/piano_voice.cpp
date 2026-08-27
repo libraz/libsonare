@@ -180,34 +180,21 @@ SONARE_TUNABLE(kContactPeriodsPerBlowMax, 1.0f);
 /// and it is worth 16 dB more than the family gain can even express (that field
 /// clamps at 4).
 SONARE_TUNABLE(kOutputLevel, 5.7f);
-/// Where the aftersound taper starts, in octaves above C4. The taper is not a
-/// slope running up from the middle of the keyboard: measured on three concert
-/// grands the aftersound t60 has no trend to speak of from A0 to note 90 — 20 s
-/// at A0, a broad maximum of 60 to 145 s around C2, and 15 to 20 s again by C6 —
-/// so the whole span sits inside the scatter of one register. Starting the taper
-/// at C4 gave C6 a t60 of 1.6 s against a measured 15, which is a note that dies
-/// while the key is still down.
-SONARE_TUNABLE(kTrebleDecayKneeOct, 2.5f);
+/// Where the aftersound taper starts, in octaves above C4. Read on the note's
+/// own partial rows, three concert grands hold a flat -4.5 to -6.3 dB/s from A0
+/// to C5 and steepen past it. The broadband envelope this was first taken from
+/// reports no trend anywhere, because above the middle it stops describing the
+/// string at all — see `_late_bed` in the capture definition.
+SONARE_TUNABLE(kTrebleDecayKneeOct, 1.25f);
 /// Halvings of the aftersound stage per octave past that knee, applied to the
-/// slow stage only — the prompt-sound rate is set by the polarization/unison
-/// coupling, which has its own register profile below. What it describes is a
-/// narrowing rather than a cliff: the same three grands put C7 and C8 at 11 to
-/// 18 s against 12 to 145 in the middle, so the top of the keyboard gives up a
-/// factor of two and no more. Fitted on C7 and C8 across all three, the C7/C8
-/// aftersound error falls from 8.5 dB/s to 1.2 — which is the spread the three
-/// references have between themselves on that dimension, so it is as close as
-/// this corpus can define.
-///
-/// The one phrase take that reaches this register reads the change as mixed,
-/// and it is worth knowing why before treating that as a contradiction: after
-/// an A0-to-C8 sweep the references leave a tail that is loud and bottom-heavy
-/// — the undamped bass still ringing — while this voice leaves one 11 to 20 dB
-/// quieter whose energy sits at the top. Lengthening C8 makes the top a larger
-/// share of a tail that is missing its bass, so the take moves against the note
-/// grid while measuring a deficit somewhere else entirely.
-SONARE_TUNABLE(kTrebleDecayOct, 2.0f);
-/// Where that narrowing bottoms out, in octaves above C4. The measurement is
-/// flat again past C7 (11 to 18 s there and 12 to 18 at C8), so the taper stops
+/// slow stage only — the prompt rate is the polarization/unison coupling's, and
+/// has its own register profile below. The same three put C7 and C8 at -13 dB/s
+/// against -6 in the middle, a factor of two across two octaves; at this the
+/// worst note's error falls from 6.0 to 1.7 times their own disagreement, and
+/// the late on-partial level from 34 dB over the reference at C8 to 4.
+SONARE_TUNABLE(kTrebleDecayOct, 1.4f);
+/// Where that narrowing bottoms out, in octaves above C4. The partials are flat
+/// again past C7 (-13.4 dB/s there against -12.8 at C8), so the taper stops
 /// instead of running on and leaving the top octave a click.
 SONARE_TUNABLE(kTrebleDecayFloorOct, 3.0f);
 /// Register profile of the prompt-vs-aftersound contrast. The double decay is
