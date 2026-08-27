@@ -155,6 +155,10 @@ All four: `--config` (default `capture/piano.json`), `--out` (default `.cache/vo
 
 **Leave the capture's own timbre channels in the probe.** They are the control, and they score 0.00 dB by construction — without a number for a slot that *is* the kit, a table of distances says nothing about what a small one means.
 
+**A timbre's `channel` says what its note numbers MEAN; `slot_channel` says where the rack keeps it.** Channel 10 is what makes a note number select an instrument rather than a pitch, and `profile.is_percussion` reads it to choose the metric set for the whole capture. The two coincide right up until a rack holds a kit somewhere other than slot 10, and then no single field can serve: addressing the slot on 10 records whatever else lives there, and declaring the kit on 15 sends a drum map through the pitched measurements and reports it as a successful capture. Where a rack keeps a slot is a property of the product rather than of the method, so `slot_channel` goes in the untracked overlay beside the preset. Absent, `channel` addresses the slot, which is what every capture written before the split does.
+
+**The `layout` column is the question a distance cannot answer: a kit, or one instrument mapped across the keys?** It counts how many distinct peak bands the diagnostic notes land on. A slot holding nothing but congas sits some number of decibels from the kit exactly as a rival kit does, so a table of distances alone will happily nominate it — and taking it as a second timbre would score a whole map against one drum. Stage one has already removed anything pitched, so a slot answering most of its notes with their own band is a kit and a slot answering all of them with one or two is a single piece. On the rack this was written against, all sixteen slots read as kits, which is not what the distances suggested when read on their own.
+
 It reports and never edits the capture definition. Which slot becomes a second timbre is a decision, and the evidence for it belongs in front of a person.
 
 ## `profile.py` — corpus → reference profile, and the comparison against it

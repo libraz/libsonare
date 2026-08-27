@@ -393,7 +393,8 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         # The model keeps the take's own channel, which is what makes a note
         # number a drum rather than a pitch; a reference gets its timbre's,
         # one-based in the capture definition and zero-based in the file.
-        ref_channel = int(timbre.get("channel", channel + 1)) - 1
+        ref_channel = int(timbre.get("slot_channel",
+                                     timbre.get("channel", channel + 1))) - 1
         timbre_smf = smf if ref_channel == channel else write_smf(
             take.notes, program=voice.program, bank=voice.bank, end_pad=take.tail_s,
             cc_events=take.cc_events, channel=ref_channel,

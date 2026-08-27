@@ -316,6 +316,46 @@ def test_channel_spec_reads_ranges_and_singles_without_repeats():
     assert capture.parse_channels("") == ()
 
 
+def test_where_a_rack_slot_sits_is_separate_from_what_its_notes_mean():
+    """A kit on a slot other than 10 must still measure as a kit.
+
+    One field cannot be both: addressing the slot on channel 10 plays whatever
+    the rack happens to keep there, and declaring the kit on channel 15 sends
+    the whole drum map through the pitched metric set, which reads as a
+    successful measurement of the wrong instrument.
+    """
+    # Absent, the semantic channel addresses the slot — every capture written
+    # before the split behaves exactly as it did.
+    assert capture.slot_channel({"channel": 10}) == 10
+    assert capture.slot_channel({"channel": 2}) == 2
+    assert capture.slot_channel({}) == 1
+    # Present, it addresses the slot and leaves the meaning alone.
+    import profile as profile_module
+
+    kit_b = {"channel": 10, "slot_channel": 15}
+    assert capture.slot_channel(kit_b) == 15
+    assert int(kit_b["channel"]) == profile_module.PERCUSSION_CHANNEL
+    assert profile_module.is_percussion({"timbres": [{"channel": 10}, kit_b]})
+
+
+def test_a_slot_is_a_kit_when_its_notes_land_on_their_own_peak_bands():
+    # The rack this was written against: every percussion slot reads 8 to 13
+    # distinct bands over thirteen diagnostic notes, so each is a whole map.
+    assert capture.holds_a_whole_kit(10, 13)
+    assert capture.holds_a_whole_kit(8, 13)
+    # A single drum mapped across the keys answers every one of them the same
+    # way. Taking one as a reference would score a whole kit against one piece,
+    # which the band distance on its own cannot warn about.
+    assert not capture.holds_a_whole_kit(1, 13)
+    assert not capture.holds_a_whole_kit(2, 13)
+    # The floor of three outranks the halving rule on a short probe, so four
+    # notes reading two bands is not a kit even though two is half of four.
+    assert not capture.holds_a_whole_kit(2, 4)
+    assert capture.holds_a_whole_kit(3, 4)
+    # Nothing measured is not a verdict.
+    assert not capture.holds_a_whole_kit(0, 0)
+
+
 def _harmonic(f0: float, partials: int = 8, sr: int = SR, seconds: float = 1.0) -> np.ndarray:
     t = np.arange(int(sr * seconds)) / sr
     y = np.zeros_like(t)

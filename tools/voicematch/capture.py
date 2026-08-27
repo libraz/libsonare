@@ -234,6 +234,23 @@ def note_groups(cfg: dict) -> dict[str, tuple[int, ...]]:
             for name, notes in (cfg.get("groups") or {}).items()}
 
 
+def slot_channel(timbre: dict) -> int:
+    """Which MIDI channel this timbre's rack slot answers on.
+
+    Separate from the timbre's `channel`, which says what its note numbers MEAN
+    — channel 10 is what makes a note number select an instrument rather than a
+    pitch, on the reference as much as in libsonare, and `profile.is_percussion`
+    reads it. The two coincide until a rack puts a kit somewhere other than
+    slot 10, and then one field cannot be both: addressing the slot on 10 plays
+    the wrong instrument, and declaring the kit on 15 measures a drum map with
+    the pitched metric set. Where a rack keeps its slots is a property of the
+    product rather than of the method, so `slot_channel` belongs in the
+    untracked overlay; absent, the semantic channel addresses it, which is what
+    every capture written before this did.
+    """
+    return int(timbre.get("slot_channel", timbre.get("channel", 1)))
+
+
 def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
     """The `AuSource` that records one timbre of a capture definition."""
     src = AuSource(
@@ -241,7 +258,7 @@ def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
         preset=timbre.get("preset", ""),
         # A rack selects its timbres by channel rather than by preset: one file
         # is loaded and each channel plays a different slot of it.
-        channel=int(timbre.get("channel", 1)),
+        channel=slot_channel(timbre),
         params=config_params(cfg),
         settle_ms=int(cfg["settle_ms"]),
         realtime=bool(cfg["realtime"]),
@@ -710,6 +727,20 @@ def _reference_bands(ident: str) -> tuple[dict[tuple[int, int], list[float]], fl
     return rows, (profile.get("capture") or {}).get("band_edge_hz")
 
 
+def holds_a_whole_kit(distinct_peak_bands: int, notes_measured: int) -> bool:
+    """Whether a slot's diagnostic hits are a kit rather than one instrument.
+
+    Stage one has already excluded anything that plays pitches, so what is left
+    to separate is a rack slot holding a whole General MIDI map from one holding
+    a single drum that answers every key with the same sound. Half the notes
+    landing on their own peak band is a kit; a floor of three keeps a capture
+    whose families are few from reading as a kit on two notes alone.
+    """
+    if notes_measured <= 0:
+        return False
+    return distinct_peak_bands >= max(3, notes_measured // 2)
+
+
 def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, ...],
                   velocity: int, gate_ms: int, sample_rate: int,
                   reference: dict[tuple[int, int], list[float]],
@@ -720,6 +751,15 @@ def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, 
     one note per declared family. The capture's own timbre channel is measured
     through this same path as the control: without a number for a slot that IS
     the kit, a table of distances says nothing about what a small one means.
+
+    Also counts how many DISTINCT peak bands the slot's notes land on, which is
+    the difference between a kit and one instrument mapped across the keys. A
+    distance alone cannot say: a slot holding nothing but congas sits some
+    number of decibels from the kit exactly as a rival kit does, and taking it
+    as a second reference would score a whole map against one drum. Stage one
+    has already excluded anything that plays pitches, so a slot answering the
+    diagnostic notes with one or two peak bands is a single percussion
+    instrument and a slot answering with most of them is a kit.
     """
     per_note, distances = {}, []
     for note in notes:
@@ -744,8 +784,11 @@ def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, 
         per_note[note] = {"peak_band_hz": hit.peak_band_hz,
                           "attack_ms": round(hit.attack_ms, 2),
                           "band_delta_db": round(delta, 2)}
+    bands = [e["peak_band_hz"] for e in per_note.values() if e.get("peak_band_hz")]
     return {"notes": per_note,
-            "band_delta_db": round(float(np.median(distances)), 2) if distances else None}
+            "band_delta_db": round(float(np.median(distances)), 2) if distances else None,
+            "distinct_peak_bands": len(set(bands)),
+            "notes_measured": len(bands)}
 
 
 def parse_channels(spec: str) -> tuple[int, ...]:
@@ -783,7 +826,7 @@ def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
     """
     timbre = cfg["timbres"][0]
     base = source_for(cfg, timbre, tail="2s")
-    claimed = {int(t.get("channel", 1)) for t in cfg["timbres"]}
+    claimed = {slot_channel(t) for t in cfg["timbres"]}
     probe = tuple(channels) or tuple(sorted(claimed))
     scratch = out / "_identify"
     scratch.mkdir(parents=True, exist_ok=True)
@@ -813,7 +856,7 @@ def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
 
     _write(scratch / "report.json", report)
     print(f"\n{cfg['id']}: {len(probe)} slot(s), velocity {velocity}\n")
-    print("  ch   pitch share   verdict        band delta vs the measured kit")
+    print("  ch   pitch share   verdict        band delta   layout")
     for channel in probe:
         e = report["channels"][str(channel)]
         pitch, kit = e["pitch"], e.get("kit") or {}
@@ -827,8 +870,14 @@ def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
         else:
             verdict = "no pitch"
         delta = kit.get("band_delta_db")
+        measured = kit.get("notes_measured") or 0
+        distinct = kit.get("distinct_peak_bands") or 0
+        layout = "-" if not measured else (
+            f"{distinct}/{measured} bands"
+            f"{'  a kit' if holds_a_whole_kit(distinct, measured) else '  ONE INSTRUMENT'}")
         print(f"  {channel:2d}   {'-' if share is None else f'{share:10.3f}'}"
               f"   {verdict:<14} {'-' if delta is None else f'{delta:6.2f} dB'}"
+              f"   {layout}"
               f"{'   <- the kit already captured' if e['control'] else ''}")
     print(f"\n  {scratch / 'report.json'}")
     return 0
