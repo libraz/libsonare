@@ -250,6 +250,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   common *= drum_pitch_ratio;
 
   float sample = 0.0f;
+  // Percussion only; summed past the envelope at the foot of this function.
+  float contact = 0.0f;
   if (patch->mode == SynthEngineMode::kFm) {
     sample = fm.render(common);
   } else if (patch->mode == SynthEngineMode::kKarplusStrong) {
@@ -260,6 +262,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = additive.render(common);
   } else if (patch->mode == SynthEngineMode::kPercussion) {
     sample = percussion.render(common);
+    contact = percussion.next_contact();
   } else if (patch->mode == SynthEngineMode::kPiano) {
     sample = piano.render(common);
   } else if (patch->mode == SynthEngineMode::kPipeOrgan) {
@@ -305,7 +308,13 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   }
 
   // --- amplitude (wind_gain is the shared tremulant/sag level; 1.0 otherwise) ---
-  return sample * level * velocity_gain * patch->gain * mod.gain * offsets.amp_gain * wind_gain;
+  // The contact transient joins here rather than upstream: it is the strike
+  // radiating directly, so none of the drive, the filter or the amplitude
+  // envelope applies to it, and each of the three removes it outright — the
+  // drive's tanh is already saturated by the layers it shapes, and a patch with
+  // an envelope pre-delay gates the whole pulse away before it starts.
+  return (sample * level + contact) * velocity_gain * patch->gain * mod.gain * offsets.amp_gain *
+         wind_gain;
 }
 
 void NativeSynthVoice::release() noexcept {

@@ -715,6 +715,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.percussion.mode_decay_s, 0.3f), 0.005f, 30.0f);
   p.percussion.tone_gain =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.tone_gain, 1.0f), 0.0f, 4.0f);
+  // A share, so the interval is the whole of it: 0 and 1 are both real
+  // settings and a fit has to be able to reach either end.
+  p.percussion.tone_direct =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.tone_direct, 1.0f), 0.0f, 1.0f);
   p.percussion.base_freq_hz =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.base_freq_hz, 0.0f), 0.0f, 20000.0f);
   p.percussion.pitch_drop =
@@ -766,6 +770,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.percussion.shimmer_attack_ms, 40.0f), 1.0f, 2000.0f);
   p.percussion.shimmer_cutoff_hz = std::clamp(
       patch_clamp_detail::sanitize(p.percussion.shimmer_cutoff_hz, 8000.0f), 20.0f, 20000.0f);
+  p.percussion.contact =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.contact, 0.0f), 0.0f, 4.0f);
+  // The ceiling is a felt mallet and the floor is the sample period at 96 kHz,
+  // below which the pulse is a single sample whatever is asked for.
+  p.percussion.contact_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.contact_ms, 0.3f), 0.02f, 20.0f);
   p.percussion.plate_gain =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_gain, 0.0f), 0.0f, 4.0f);
   // A cymbal rings for tens of seconds and a gong for longer, so the upper

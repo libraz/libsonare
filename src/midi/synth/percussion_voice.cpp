@@ -132,11 +132,29 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   // Dense inharmonic plate. Off when the gain is zero (no delay lines cleared,
   // no state advanced, bit-identical to the voicing that predates the field).
   plate_gain_ = std::max(0.0f, params.plate_gain);
+  // The split is between two radiation paths, so with no plate there is no
+  // second path and the field is inert. Left live it would be a second name
+  // for tone_gain on every membrane piece, and a fit handed two knobs for one
+  // quantity trades them against each other.
+  tone_direct_ = plate_gain_ > 0.0f ? params.tone_direct : 1.0f;
   if (plate_gain_ > 0.0f) {
     plate_.start(sr, params.plate_low_hz, params.plate_t60_s, params.plate_hf_ratio,
                  params.plate_air_hz);
   } else {
     plate_.reset();
+  }
+
+  // Direct contact radiation. Harder strikes press harder, so the level takes
+  // the velocity; the contact time is the patch's, since what shortens it with
+  // velocity is a fifth-root and worth less than the octave the knob spans.
+  contact_ = std::max(0.0f, params.contact) * vel01;
+  contact_i_ = 0;
+  contact_len_ = 0;
+  if (contact_ > 0.0f) {
+    // One more sample than the period: the pulse spans [0, 1] inclusive, so the
+    // period it voices is contact_len_ - 1 samples and the knob keeps its unit.
+    const float period = std::max(0.001f, params.contact_ms) * 0.001f * static_cast<float>(sr);
+    contact_len_ = std::max(2, 1 + static_cast<int>(std::lround(period)));
   }
 
   // Snare wire rattle: gated noise driven by the membrane crossing the wire
@@ -208,6 +226,9 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
 
 float PercussionVoiceCore::render(float pitch_ratio) noexcept {
   float mix = 0.0f;
+  // The share of the tone layer that reaches the plate without radiating
+  // directly. Zero unless tone_direct is below one.
+  float plate_drive = 0.0f;
 
   if (num_modes_ > 0) {
     // Tone layer with the descending strike pitch folded into the ratio.
@@ -236,7 +257,12 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
       mode.y1 = y;
       tone += y;
     }
-    mix += tone_gain_ * tone;
+    // Split so the plate keeps the whole modal field while the direct path
+    // takes only its share: what the plate re-radiates arrives a delay line
+    // later, which is where the reference puts it.
+    const float voiced_tone = tone_gain_ * tone;
+    mix += voiced_tone * tone_direct_;
+    plate_drive = voiced_tone * (1.0f - tone_direct_);
 
     // Snare wire rattle: while the membrane swing exceeds the contact
     // threshold the wires buzz against the bottom head. The gate scales with
@@ -331,7 +357,7 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
   // dry hit rather than blended with it — the strike is the noisy half of the
   // sound and the plate is the dense half, and metal needs both.
   if (plate_gain_ > 0.0f) {
-    const float strike = mix;
+    const float strike = mix + plate_drive;
     mix += plate_gain_ * plate_.process(strike);
   }
 
@@ -356,6 +382,10 @@ void PercussionVoiceCore::kill() noexcept {
   shell_.reset();
   plate_gain_ = 0.0f;
   plate_.reset();
+  tone_direct_ = 1.0f;
+  contact_ = 0.0f;
+  contact_len_ = 0;
+  contact_i_ = 0;
   wire_buzz_ = 0.0f;
   wire_filter_.reset();
   shimmer_ = 0.0f;

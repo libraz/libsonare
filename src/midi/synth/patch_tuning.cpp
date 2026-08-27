@@ -421,6 +421,7 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   }
   F(percussion.mode_decay_s);
   F(percussion.tone_gain);
+  F(percussion.tone_direct);
   F(percussion.base_freq_hz);
   F(percussion.pitch_drop);
   F(percussion.pitch_drop_ms);
@@ -447,6 +448,8 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.shimmer);
   F(percussion.shimmer_attack_ms);
   F(percussion.shimmer_cutoff_hz);
+  F(percussion.contact);
+  F(percussion.contact_ms);
   F(percussion.plate_gain);
   F(percussion.plate_t60_s);
   F(percussion.plate_hf_ratio);

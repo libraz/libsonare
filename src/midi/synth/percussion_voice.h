@@ -22,6 +22,7 @@
 /// bit-identical while distinct strikes still decorrelate.
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 
 #include "midi/synth/body_resonator.h"
@@ -29,6 +30,7 @@
 #include "midi/synth/filter_models.h"
 #include "midi/synth/svf.h"
 #include "midi/synth/voice_random.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -58,6 +60,20 @@ struct PercussionPatchParams {
   float mode_decay_s = 0.3f;
   /// Tone layer mix gain.
   float tone_gain = 1.0f;
+  /// Share of the tone layer that radiates straight to the listener. The rest
+  /// still drives the plate at full strength, so lowering this moves the modal
+  /// field later without making it quieter — it arrives only once the plate has
+  /// responded, which is its shortest delay line (sr / plate_low_hz) after the
+  /// strike. 1 = every mode radiates directly, which is the voicing that
+  /// predates the field and what a piece with no plate keeps.
+  ///
+  /// It exists because level and arrival were one quantity. On a closed hat the
+  /// tone bank was the ONLY thing putting 250-500 Hz into the first five
+  /// milliseconds, 10.7 dB over the reference, while its level across the whole
+  /// strike sat 1.0 dB out — and every knob that moved the early excess
+  /// (tone_gain, mode_decay_s) took the sustained field down with it, one for
+  /// one. Two properties a struck plate has independently cannot share a knob.
+  float tone_direct = 1.0f;
   /// Base frequency override in Hz (0 = the struck key's frequency).
   float base_freq_hz = 0.0f;
   /// Strike pitch overshoot: the tone starts (1 + pitch_drop) x the base
@@ -152,6 +168,35 @@ struct PercussionPatchParams {
   /// High-pass cutoff of the shimmer band.
   float shimmer_cutoff_hz = 8000.0f;
 
+  // --- direct contact radiation ---
+  /// Level of the contact transient radiated straight from the strike, without
+  /// passing through any resonator (0 = off, bit-identical).
+  ///
+  /// Every other layer here is a resonator or a filtered burst excited at t = 0,
+  /// and each needs time to speak: a mode rises over its own period, and the
+  /// plate is silent until its shortest delay line comes round — 5 ms at a
+  /// 200 Hz `plate_low_hz`. So the model's first milliseconds hold the tone
+  /// bank and nothing else, and a struck piece is at its dullest exactly where
+  /// the instrument is at its brightest. Measured on a closed hi-hat, the first
+  /// 5 ms sat 17.5 dB under the reference in 2-8 kHz against 250-500, and the
+  /// two ran in opposite directions from there — the reference darkening from
+  /// the contact, the model brightening into it.
+  ///
+  /// Parallel to the modal radiation rather than in front of it: the strike is
+  /// already the plate's excitation, and feeding this in as well would count the
+  /// same contact twice.
+  float contact = 0.0f;
+  /// Contact time (ms). The pulse is one period of a sine over this length — the
+  /// derivative of a raised-cosine contact force, which is what a contact
+  /// radiates — so its energy peaks at 1 / contact_ms and a harder, shorter
+  /// contact is brighter. A stick on a cymbal is a few tenths of a millisecond;
+  /// a felt mallet is an order of magnitude longer.
+  ///
+  /// The voice's own amplitude attack has to be able to pass it: a 9 ms attack
+  /// leaves a 0.3 ms contact at a few percent of its level, so this and
+  /// `amp_env.attack_ms` are one decision.
+  float contact_ms = 0.3f;
+
   // --- dense inharmonic plate (cymbals, gongs, bells) ---
   /// Level of the plate resonator over the dry hit (0 = off, bit-identical).
   /// The strike — tone, noise burst, rattle and wash together — is fed through
@@ -236,6 +281,19 @@ class PercussionVoiceCore {
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (multiplied with the internal descending pitch envelope).
   float render(float pitch_ratio) noexcept;
+  /// The direct contact radiation for this sample, taken out of render() rather
+  /// than summed into it: it reaches the listener without passing through the
+  /// voice's drive, filter or amplitude envelope, and each of those three
+  /// swallows it. Call once per sample, alongside render().
+  float next_contact() noexcept {
+    if (contact_i_ >= contact_len_) return 0.0f;
+    // Spanning [0, 1] inclusive, so the pulse both starts and ends on a zero.
+    // Dividing by the length instead leaves the last sample short of the
+    // period and the step it ends on is a click with energy to Nyquist, which
+    // lands nowhere near the contact time it is supposed to be voiced at.
+    const float p = static_cast<float>(contact_i_++) / static_cast<float>(contact_len_ - 1);
+    return contact_ * std::sin(sonare::constants::kTwoPi * p);
+  }
   /// Immediate silence.
   void kill() noexcept;
 
@@ -253,6 +311,7 @@ class PercussionVoiceCore {
   std::array<Mode, kMaxPercussionModes> modes_{};
   int num_modes_ = 0;
   float tone_gain_ = 1.0f;
+  float tone_direct_ = 1.0f;
   // Descending pitch envelope: ratio = 1 + drop_state_ (one-pole decay).
   float drop_state_ = 0.0f;
   float drop_coeff_ = 0.0f;
@@ -278,6 +337,13 @@ class PercussionVoiceCore {
   TptSvf shimmer_air_;
 
   BodyResonator shell_;
+
+  // Direct contact radiation: one period of a sine over the contact time,
+  // counted out in samples so the shape costs a sine per sample for a few dozen
+  // samples and nothing at all thereafter.
+  float contact_ = 0.0f;
+  int contact_i_ = 0;
+  int contact_len_ = 0;
 
   // Dense inharmonic plate, driven by the summed strike. Its delay lines are
   // the largest member of the voice, so it is the one layer whose cost is
