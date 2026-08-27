@@ -85,3 +85,26 @@ def test_a_generic_set_follows_the_program_compass():
 def test_the_drum_set_stays_on_channel_ten():
     for take in build_takes("drums", 0):
         assert take.channel == DRUM_CHANNEL
+
+
+@pytest.mark.parametrize("name", sorted(TAKE_SETS))
+def test_a_set_keeps_each_group_in_one_run(name):
+    """Takes sharing a group are adjacent, in every set and with the music take.
+
+    The listening page opens a heading whenever the group changes, so a group
+    that reappears after another one has intervened prints its heading twice
+    with different takes under each — two headings that read as two subjects and
+    are one.
+    """
+    for program in (0, 6, 40, 73):
+        seen: list[str] = []
+        for take in build_takes(name, program, music="bwv846-prelude"):
+            if not take.group:
+                continue
+            if seen and seen[-1] == take.group:
+                continue
+            assert take.group not in seen, (
+                f"{name}/{program}: group {take.group!r} reappears after "
+                f"{seen[-1]!r}"
+            )
+            seen.append(take.group)

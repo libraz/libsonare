@@ -311,8 +311,12 @@ def drum_takes(program: int = 0) -> list[Take]:
         channel=DRUM_CHANNEL,
     ))
 
+    # The kit's musical take: no Bach excerpt fits a kit, so a bar of eights is
+    # what stands in. Its own group, both because that is what the melodic
+    # voices' musical take gets and because a group repeated after another one
+    # has intervened prints its heading twice in the take list.
     out.append(Take(
-        "groove", "Groove — a bar of eights", "the kit as a kit",
+        "groove", "Groove — a bar of eights", "a real line",
         "kick, snare, closed hat, 100 bpm",
         [Note(42, 92 if i % 2 else 104, 0.3 + i * 0.3, 0.05) for i in range(8)]
         + [Note(36, 110, 0.3, 0.05), Note(36, 100, 1.5, 0.05)]
@@ -343,23 +347,6 @@ def sustained_takes(program: int = 40) -> list[Take]:
         [Note(mid, 96, 0.3, 6.0)], tail_s=2.5,
     ))
 
-    # A slur is one continuous sound with the pitch changed inside it. A model
-    # that retriggers its excitation on every note-on produces a series of
-    # separate notes, which is audible immediately and invisible to every
-    # measurement here.
-    out.append(Take(
-        "legato-scale", "Legato — a scale, slurred", "between notes",
-        "overlapping note-ons, no gap anywhere",
-        [Note(mid + d, 92, 0.3 + i * 0.38, 0.44)
-         for i, d in enumerate((0, 2, 4, 5, 7, 9, 11, 12))], tail_s=2.5,
-    ))
-
-    out.append(Take(
-        "tongued", "Repeated notes — separated", "between notes",
-        "the same pitch eight times, each articulated",
-        [Note(mid, 100, 0.3 + i * 0.35, 0.22) for i in range(8)], tail_s=2.5,
-    ))
-
     # The floor is 16 rather than 0, which is about -18 dB, because that is what
     # the gesture is: a swell box closed attenuates a chorus by 15 to 20 dB and
     # a player at the bottom of a diminuendo is still sounding. Expression taken
@@ -375,6 +362,23 @@ def sustained_takes(program: int = 40) -> list[Take]:
         [Note(mid, 100, 0.3, 6.0)], tail_s=2.5,
         cc_events=tuple((0.3 + i * 0.25, EXPRESSION, v) for i, v in enumerate(
             list(range(16, 128, 11)) + list(range(127, 15, -11)))),
+    ))
+
+    # A slur is one continuous sound with the pitch changed inside it. A model
+    # that retriggers its excitation on every note-on produces a series of
+    # separate notes, which is audible immediately and invisible to every
+    # measurement here.
+    out.append(Take(
+        "legato-scale", "Legato — a scale, slurred", "between notes",
+        "overlapping note-ons, no gap anywhere",
+        [Note(mid + d, 92, 0.3 + i * 0.38, 0.44)
+         for i, d in enumerate((0, 2, 4, 5, 7, 9, 11, 12))], tail_s=2.5,
+    ))
+
+    out.append(Take(
+        "tongued", "Repeated notes — separated", "between notes",
+        "the same pitch eight times, each articulated",
+        [Note(mid, 100, 0.3 + i * 0.35, 0.22) for i in range(8)], tail_s=2.5,
     ))
 
     out.append(Take(
