@@ -2558,17 +2558,17 @@
           "inside": 4,
           "total": 9,
           "outside": {
-            "vel_range": 42.71,
             "balance": 3.37,
+            "vel_range": 1.81,
             "stereo": 1.2,
-            "register": 1.02,
+            "register": 1.03,
             "stretch": 1.01
           }
         },
         "structure": null,
         "music": null
       },
-      "next": "outside the reference spread: vel_range 42.71x, balance 3.37x, stereo 1.2x"
+      "next": "outside the reference spread: balance 3.37x, vel_range 1.81x, stereo 1.2x"
     },
     {
       "slug": "p016b001-drawbar-organ",
