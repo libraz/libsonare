@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from corpus import load_corpus  # noqa: E402
 
-from . import admittance, probes, purity, struck, takes  # noqa: E402
+from . import admittance, attack, probes, purity, struck, takes  # noqa: E402
 from .bed import Bed  # noqa: E402
 from profile import PERCUSSION_CHANNEL, is_percussion  # noqa: E402
 
@@ -229,6 +229,41 @@ def cmd_struck(args):
             print(f"{label:>10}" + "".join(
                 f"{c:>7.0f}/{p:<5.0f}" if o and a else f"{'-':>13}"
                 for c, o, p, a in zip(counts, ok, prompt, alive)))
+
+
+def cmd_attack(args):
+    """Per band: how far into the strike each band's energy sits.
+
+    What `struck` reads over the whole aftersound, this reads over the first
+    quarter second, and it is the reading that says a piece with every band at
+    the right level still arrives in the wrong order. A closed hat scored well
+    on every band level while putting 10 dB too much of its 250-500 Hz field
+    into its first 5 ms; nothing that averages over the strike can see that,
+    and the ratio one is tempted to reach for instead cannot say which of the
+    two bands moved.
+
+    Read a column, not a row: a band whose early cells are positive and whose
+    late cells are near zero is front-loaded, which is a mechanism finding
+    about how the excitation reaches that mode rather than a gain to trim.
+    """
+    _cap, _corpus, sigs, loss, notes = build(args)
+    ov = ""
+    if args.overrides:
+        ov = ",".join(f"{k}={v!r}" for k, v in sorted(
+            read_overrides(Path(args.overrides).read_text()).items()))
+    vel = loss.velocities[len(loss.velocities) // 2]
+    pairs = [(n, vel) for n in notes]
+    ref, mod = sigs(pairs, ref=True), sigs(pairs, ov=ov)
+    sr = loss.spectro.sample_rate
+
+    print(f"velocity {vel}. Model minus reference, dB, in onset-anchored windows.")
+    print(f"Each side is normalised by its own energy over {attack.NORM_SPAN_S * 1000:.0f} ms, "
+          "so a cell is a position in time and not a level.")
+    print("Positive = the model puts that band earlier in the strike than the "
+          "reference does.")
+    for n in notes:
+        print(f"\nnote {n}")
+        print(attack.format_table(attack.compare(mod[(n, vel)], ref[(n, vel)], sr)))
 
 
 def cmd_probe(args):
@@ -522,6 +557,10 @@ def main(argv=None):
     s = sub.add_parser("struck", parents=[common])
     s.add_argument("--overrides", default="")
     s.set_defaults(fn=cmd_struck)
+
+    s = sub.add_parser("attack", parents=[common])
+    s.add_argument("--overrides", default="")
+    s.set_defaults(fn=cmd_attack)
 
     s = sub.add_parser("purity", parents=[common])
     s.add_argument("--overrides", default="")

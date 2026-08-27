@@ -123,6 +123,17 @@ finds the stretch between the piece's t60 and the last non-zero sample instead,
 and a term nothing could be read for is left out of the total and **named** in
 the score line rather than entered at zero.
 
+### Where in the strike a band arrives
+
+`attack.py` reads the first quarter second the way `struck.py` reads the aftersound: per band, on windows anchored at each side's own onset, with every cell normalised by that side's energy over one fixed span so a cell is a position in time rather than a level. A piece can hold every band level it is scored on and still assemble them in the wrong order, and nothing that averages over the strike can see it — a closed hat put 10.7 dB too much of its 250–500 Hz field into its first 5 ms while its 250 ms level sat 1.0 dB from the reference.
+
+Two failures the arrangement exists to prevent, both of which produced a confident wrong answer first:
+
+- **A tilt is a ratio, and a ratio can be held by a defect in either band.** The same hat measured 17.5 dB of high-minus-low error at 5 ms. Split into bands, 10.7 dB of it was a low-frequency excess and 6 was a high-frequency deficit — and the mechanism each half asks for is a different one, so a mechanism chosen from the ratio addresses at most half of it. The bands are reported separately and the ratio is left to the reader.
+- **Windows of different lengths do not share an axis.** Normalising a 5 ms window by the same side's 250 ms window folds in the ratio of the two lengths and what a Hann window costs a short segment, which read as the reference having nothing whatsoever in its first 5 ms. It has −5 dB of its peak there. One fixed normalising span, and a row only ever compares the two sides at the same window length.
+
+Read a column rather than a row. A band whose early cells are positive and whose late cells sit near zero is front-loaded, which is a question about how the excitation reaches that mode; a column that is uniformly off is a level or a spectrum, and belongs to the terms that already price one.
+
 ## Three analysis scales, and what each one is for
 
 `spectro.DEFAULT_SCALES` carries 8192, 1024 and 32768 samples. The first two divide the usual way — one resolves partials, the other resolves the attack — and the third exists for a question neither can answer.

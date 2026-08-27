@@ -32,7 +32,7 @@ from shape.density import (  # noqa: E402
     envelope_diffuseness,
     modal_density,
 )
-from shape import struck  # noqa: E402
+from shape import attack, struck  # noqa: E402
 from shape.__main__ import holdout  # noqa: E402
 from shape.search import split_velocities  # noqa: E402
 from shape.loss import (  # noqa: E402
@@ -1491,3 +1491,62 @@ def test_a_floor_recorded_into_the_sample_is_caught_by_its_own_infrasound():
     assert vals[bands.index((30, 60))] is None
     assert vals[bands.index((125, 250))] is None
     assert vals[bands.index((500, 1000))] is not None
+
+
+def test_attack_finds_the_strike_in_a_take_with_lead_in_silence():
+    """The onset anchor is a fraction of the envelope PEAK, not a fixed floor.
+
+    A captured note commonly starts a tenth of a second into the file, and an
+    absolute threshold finds the room rather than the strike.
+    """
+    sr = 48000
+    lead = int(0.1 * sr)
+    t = np.arange(int(0.5 * sr)) / sr
+    hit = np.sin(2 * np.pi * 400 * t) * np.exp(-t / 0.05)
+    sig = np.concatenate([np.zeros(lead), hit]).astype(np.float32)
+    assert abs(attack.onset_index(sig, sr) - lead) < int(0.002 * sr)
+
+
+def test_attack_reads_a_band_that_builds_against_the_rest_of_its_own_strike():
+    """Anchoring on the onset nulls a whole-signal delay by design.
+
+    What is left, and what this is for, is one band arriving late relative to
+    the other bands of the SAME strike -- which is what a front-loaded modal
+    field looks like and what no band level can show.
+    """
+    sr = 48000
+    t = np.arange(int(0.4 * sr)) / sr
+    decay = np.exp(-t / 0.12)
+    high = np.sin(2 * np.pi * 5000 * t) * decay
+    low = np.sin(2 * np.pi * 350 * t) * decay
+    together = high + low
+    builds = high + low * (1.0 - np.exp(-t / 0.03))
+    diff = attack.compare(together, builds, sr)
+    band = [i for i, (lo, hi) in enumerate(attack.ATTACK_BANDS) if lo <= 350 < hi][0]
+    top = [i for i, (lo, hi) in enumerate(attack.ATTACK_BANDS) if lo <= 5000 < hi][0]
+    early = attack.ATTACK_WINDOWS.index(0.005)
+    late = attack.ATTACK_WINDOWS.index(0.250)
+    # The low band is present at once in one and not the other...
+    assert diff[early][band] > 6.0
+    # ...while the band that did not change reads flat, and both agree by the
+    # end: it is a position in time, not a level.
+    assert abs(diff[early][top]) < 3.0
+    assert abs(diff[late][band]) < 3.0
+
+
+def test_attack_normalises_every_window_by_one_span():
+    """Two rows of a column are comparable only if one span normalised both.
+
+    Normalising each row by its own window folds the length ratio and the
+    window's own loss into the cell, which read as a reference with nothing at
+    all in its first five milliseconds.
+    """
+    sr = 48000
+    t = np.arange(int(0.4 * sr)) / sr
+    # float64: at 1e-2 scaling a float32 band 110 dB down is inside its own
+    # quantisation, and the test would be measuring that rather than the metric.
+    sig = np.sin(2 * np.pi * 350 * t) * np.exp(-t / 0.12)
+    # Scaling a signal moves no cell: the normaliser scales with it.
+    a = attack.profile(sig, sr)
+    b = attack.profile(sig * 0.01, sr)
+    assert np.nanmax(np.abs(a - b)) < 1e-3
