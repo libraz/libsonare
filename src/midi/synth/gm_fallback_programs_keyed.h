@@ -404,6 +404,26 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   o.koto.plucked_string.pick_position = 0.22f;
   o.koto.gain = 0.85f;
 
+  // Kalimba (GM 108): a plucked steel tine over a wooden box. A tine is a
+  // clamped-free cantilever, so its partials are the 1 : 6.27 : 17.5 series the
+  // music box's comb tooth already voices and not a harmonic one — which is why
+  // this is a bar rather than a string. The differences from the comb are a
+  // longer softer tine plucked with the thumb, a much shorter ring, and a box
+  // that is most of what a listener actually hears.
+  NativeSynthPatch& ka = o.kalimba;
+  ka = bar;
+  ka.modal.num_modes = 3;
+  ka.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  ka.modal.modes[1] = {6.267f, 0.3f, 0.5f};
+  ka.modal.modes[2] = {17.55f, 0.1f, 0.3f};
+  ka.modal.decay_s = 1.1f;
+  ka.modal.decay_stretch = 0.4f;
+  ka.modal.strike_brightness = 0.55f;  // a thumbnail, not a mallet
+  ka.modal.release_damp_s = 0.5f;      // the tine rings on after the thumb leaves
+  ka.amp_env.release_ms = 400.0f;
+  ka.body = BodyType::kWoodTube;
+  ka.body_mix = 0.45f;
+
   // Harpsichord (GM 6): the jack-and-plectrum engine, voiced as a single 8'
   // choir — one string per key at written pitch. Decay and stretch are regressed
   // on the captured reference's sustained slope over eleven notes (the first
@@ -480,6 +500,30 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   // Bank 3 — with key off: the jack dropping back and the damper landing.
   o.harpsichord_keyoff = o.harpsichord;
   o.harpsichord_keyoff.harpsichord.jack_noise = 0.5f;
+
+  // Drawbar Organ (GM 16): the tonewheel generator at 88 8000 000, the base
+  // registration. A patch of its own rather than the organ family's, which is
+  // what makes the registration addressable and gives 18 something to differ
+  // from; the values are the family's, moved rather than changed.
+  NativeSynthPatch& dr = o.drawbar_organ;
+  dr.mode = SynthEngineMode::kAdditive;
+  dr.amp_env = fallback_env(2.0f, 0.0f, 1.0f, 60.0f);
+  dr.cutoff_hz = 20000.0f;
+  dr.additive.drawbars = {8.0f, 8.0f, 8.0f, 4.0f, 0.0f, 2.0f, 0.0f, 0.0f, 1.0f};
+  dr.additive.key_click = 0.4f;
+  dr.stereo_spread = 0.2f;
+  dr.gain = 0.7f;
+
+  // Rock Organ (GM 18): the same generator drawn fuller and struck harder — the
+  // upper drawbars the base registration leaves in, and the key click that comes
+  // with playing them. What separates a rock organ from a jazz one on the real
+  // instrument is also the amplifier it is driven through, and that is NOT set
+  // here: `drive` is a cliff (0.001 already reads as a peak compressor), so it
+  // is a listening decision rather than a fitted one.
+  o.rock_organ = dr;
+  o.rock_organ.additive.drawbars = {8.0f, 8.0f, 8.0f, 6.0f, 4.0f, 4.0f, 2.0f, 2.0f, 6.0f};
+  o.rock_organ.additive.key_click = 0.6f;
+  o.rock_organ.gain = dr.gain * 0.85f;  // nine drawbars sounding, not six
 
   // Church organ: a principal chorus of self-oscillating jet flue pipes. Each
   // rank locks its pitch and holds a solid, endless tone while keyed (no decay,

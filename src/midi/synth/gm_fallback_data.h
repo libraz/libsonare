@@ -47,6 +47,9 @@ struct ProgramOverrides {
   NativeSynthPatch sitar;               // program 104 (buzzing jawari bridge)
   NativeSynthPatch shamisen;            // program 106 (sawari buzzing bridge)
   NativeSynthPatch koto;                // program 107 (bridge-buzz plucked)
+  NativeSynthPatch kalimba;             // program 108 (plucked steel tine, modal)
+  NativeSynthPatch drawbar_organ;       // program 16 (tonewheel, 88 8000 000)
+  NativeSynthPatch rock_organ;          // program 18 (fuller registration, driven)
   NativeSynthPatch church_organ;        // program 19 (Church Organ, flue pipe)
   NativeSynthPatch reed_organ;          // programs 20-21 (Reed Organ / Accordion, free reed)
   NativeSynthPatch harmonica;           // program 22 (free reed, bright hand vibrato)
@@ -73,23 +76,32 @@ struct ProgramOverrides {
   // find_synth_preset() on purpose: build_presets() itself calls
   // gm_fallback_patch() to voice several of its presets, so having this table
   // depend on the preset catalog would form a static-initialisation cycle.
-  NativeSynthPatch violin;         // program 40
-  NativeSynthPatch viola;          // program 41
-  NativeSynthPatch cello;          // program 42
-  NativeSynthPatch contrabass;     // program 43
-  NativeSynthPatch trumpet;        // program 56
-  NativeSynthPatch trombone;       // program 57
-  NativeSynthPatch tuba;           // program 58
-  NativeSynthPatch muted_trumpet;  // program 59
-  NativeSynthPatch french_horn;    // program 60
-  NativeSynthPatch soprano_sax;    // program 64
-  NativeSynthPatch alto_sax;       // program 65
-  NativeSynthPatch tenor_sax;      // program 66
-  NativeSynthPatch baritone_sax;   // program 67
-  NativeSynthPatch oboe;           // program 68
-  NativeSynthPatch english_horn;   // program 69
-  NativeSynthPatch bassoon;        // program 70
-  NativeSynthPatch clarinet;       // program 71
+  NativeSynthPatch violin;      // program 40
+  NativeSynthPatch viola;       // program 41
+  NativeSynthPatch cello;       // program 42
+  NativeSynthPatch contrabass;  // program 43
+  // 110 is the violin family again, played the other way; 48-49 are the same
+  // string in section, where the players' spread is most of the timbre.
+  NativeSynthPatch fiddle;             // program 110
+  NativeSynthPatch string_ensemble_1;  // program 48
+  NativeSynthPatch string_ensemble_2;  // program 49
+  NativeSynthPatch trumpet;            // program 56
+  NativeSynthPatch trombone;           // program 57
+  NativeSynthPatch tuba;               // program 58
+  NativeSynthPatch muted_trumpet;      // program 59
+  NativeSynthPatch french_horn;        // program 60
+  NativeSynthPatch brass_section;      // program 61 (lip reeds in section)
+  NativeSynthPatch soprano_sax;        // program 64
+  NativeSynthPatch alto_sax;           // program 65
+  NativeSynthPatch tenor_sax;          // program 66
+  NativeSynthPatch baritone_sax;       // program 67
+  NativeSynthPatch oboe;               // program 68
+  NativeSynthPatch english_horn;       // program 69
+  NativeSynthPatch bassoon;            // program 70
+  NativeSynthPatch clarinet;           // program 71
+  // The two double reeds outside the orchestral family, both on the same cone.
+  NativeSynthPatch bag_pipe;       // program 109
+  NativeSynthPatch shanai;         // program 111
   NativeSynthPatch piccolo;        // program 72
   NativeSynthPatch concert_flute;  // program 73
   NativeSynthPatch recorder;       // program 74
@@ -166,6 +178,9 @@ struct ProgramOverrides {
   X(sitar)                            \
   X(shamisen)                         \
   X(koto)                             \
+  X(kalimba)                          \
+  X(drawbar_organ)                    \
+  X(rock_organ)                       \
   X(church_organ)                     \
   X(reed_organ)                       \
   X(harmonica)                        \
@@ -189,11 +204,15 @@ struct ProgramOverrides {
   X(viola)                            \
   X(cello)                            \
   X(contrabass)                       \
+  X(fiddle)                           \
+  X(string_ensemble_1)                \
+  X(string_ensemble_2)                \
   X(trumpet)                          \
   X(trombone)                         \
   X(tuba)                             \
   X(muted_trumpet)                    \
   X(french_horn)                      \
+  X(brass_section)                    \
   X(soprano_sax)                      \
   X(alto_sax)                         \
   X(tenor_sax)                        \
@@ -202,6 +221,8 @@ struct ProgramOverrides {
   X(english_horn)                     \
   X(bassoon)                          \
   X(clarinet)                         \
+  X(bag_pipe)                         \
+  X(shanai)                           \
   X(piccolo)                          \
   X(concert_flute)                    \
   X(recorder)                         \

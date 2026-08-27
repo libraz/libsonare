@@ -447,10 +447,16 @@ TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi]
   // Bowed string family (GM 40-43) now voices the friction waveguide.
   REQUIRE(gm_fallback_patch(0, 40).mode == SynthEngineMode::kBowedString);  // Violin
   REQUIRE(gm_fallback_patch(0, 43).mode == SynthEngineMode::kBowedString);  // Contrabass
-  // Brass family (GM 56-60); Brass Section (61) + SynthBrass (62-63) stay FM.
+  // Brass family (GM 56-61); SynthBrass (62-63) stays FM.
   REQUIRE(gm_fallback_patch(0, 56).mode == SynthEngineMode::kBrass);  // Trumpet
   REQUIRE(gm_fallback_patch(0, 60).mode == SynthEngineMode::kBrass);  // French Horn
+  REQUIRE(gm_fallback_patch(0, 61).mode == SynthEngineMode::kBrass);  // Brass Section
   REQUIRE(gm_fallback_patch(0, 62).mode == SynthEngineMode::kFm);     // Synth Brass 1
+  // String Ensemble 1/2 (GM 48-49) are the bowed waveguide in section; the two
+  // Synth Strings above them stay on the family's supersaw.
+  REQUIRE(gm_fallback_patch(0, 48).mode == SynthEngineMode::kBowedString);
+  REQUIRE(gm_fallback_patch(0, 49).mode == SynthEngineMode::kBowedString);
+  REQUIRE(gm_fallback_patch(0, 50).mode == SynthEngineMode::kSubtractive);
   // Reed family (GM 64-71); the clarinet is the only cylinder, the saxes cones.
   REQUIRE(gm_fallback_patch(0, 64).mode == SynthEngineMode::kReed);  // Soprano Sax
   REQUIRE(gm_fallback_patch(0, 71).mode == SynthEngineMode::kReed);  // Clarinet
@@ -472,8 +478,16 @@ TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi]
   REQUIRE(gm_fallback_patch(0, 104).mode == SynthEngineMode::kPluckedString);  // Sitar
   REQUIRE(gm_fallback_patch(0, 106).mode == SynthEngineMode::kPluckedString);  // Shamisen
   REQUIRE(gm_fallback_patch(0, 107).mode == SynthEngineMode::kPluckedString);  // Koto
+  // The rest of the ethnic family is plucked only by GM's filing. A kalimba is a
+  // bar, a fiddle is bowed and the two double reeds are blown, so none of them
+  // belongs on the family's Karplus-Strong string; 105 Banjo does and stays.
+  REQUIRE(gm_fallback_patch(0, 105).mode == SynthEngineMode::kKarplusStrong);  // Banjo
+  REQUIRE(gm_fallback_patch(0, 108).mode == SynthEngineMode::kModal);          // Kalimba
+  REQUIRE(gm_fallback_patch(0, 109).mode == SynthEngineMode::kReed);           // Bag pipe
+  REQUIRE(gm_fallback_patch(0, 109).reed.vel_to_breath == 0.0f);  // the bag, not the player
+  REQUIRE(gm_fallback_patch(0, 110).mode == SynthEngineMode::kBowedString);  // Fiddle
+  REQUIRE(gm_fallback_patch(0, 111).mode == SynthEngineMode::kReed);         // Shanai
   // Neighbours that intentionally stay on the signal-model family sketch.
-  REQUIRE(gm_fallback_patch(0, 48).mode == SynthEngineMode::kSubtractive);  // String Ensemble 1
   REQUIRE(gm_fallback_patch(0, 80).mode == SynthEngineMode::kSubtractive);  // Square Lead
 }
 
@@ -493,7 +507,8 @@ TEST_CASE("model-first program set matches the GM fallback routing", "[midi][syn
       24,  25,  26,  27,  28,  29,  30,  31,   // guitars (KS)
       32,  33,  34,  35,  36,  37,             // acoustic / electric basses (KS)
       40,  41,  42,  43,  45,  46,  47,        // bowed strings + pizz / harp / timpani
-      56,  57,  58,  59,  60,                  // brass (lip reed)
+      48,  49,                                 // string ensembles (bowed, in section)
+      56,  57,  58,  59,  60,  61,             // brass (lip reed), section included
       64,  65,  66,  67,  68,  69,  70,  71,   // reeds (sax / oboe / clarinet ...)
       72,  73,  74,  75,  76,  77,  78,  79,   // air-jet flutes
       104, 105, 106, 107, 108, 109, 110, 111,  // ethnic plucked / bowed / reed

@@ -224,6 +224,10 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().tubular_bells;
     case 15:  // Dulcimer (hammered string, KS)
       return program_overrides().dulcimer;
+    case 16:  // Drawbar Organ (tonewheel, base registration)
+      return program_overrides().drawbar_organ;
+    case 18:  // Rock Organ (fuller registration, harder click)
+      return program_overrides().rock_organ;
     case 19:  // Church Organ (flue pipe)
       return program_overrides().church_organ;
     case 20:  // Reed Organ (harmonium free reed)
@@ -281,8 +285,14 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().cello;
     case 43:  // Contrabass
       return program_overrides().contrabass;
-    // Brass family (physical lip reed). Brass Section (61) + SynthBrass (62-63)
-    // stay on the FM family sketch.
+    case 110:  // Fiddle (the violin family, bowed the folk way)
+      return program_overrides().fiddle;
+    case 48:  // String Ensemble 1
+      return program_overrides().string_ensemble_1;
+    case 49:  // String Ensemble 2 (slower, warmer)
+      return program_overrides().string_ensemble_2;
+    // Brass family (physical lip reed). SynthBrass (62-63) stays on the FM
+    // family sketch.
     case 56:  // Trumpet
       return program_overrides().trumpet;
     case 57:  // Trombone
@@ -293,6 +303,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().muted_trumpet;
     case 60:  // French Horn
       return program_overrides().french_horn;
+    case 61:  // Brass Section (the same lip reed, in section)
+      return program_overrides().brass_section;
     // Reed woodwind family (physical single-reed waveguide).
     case 64:  // Soprano Sax
       return program_overrides().soprano_sax;
@@ -310,6 +322,10 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().bassoon;
     case 71:  // Clarinet
       return program_overrides().clarinet;
+    case 109:  // Bag pipe (chanter double reed, fixed bag pressure)
+      return program_overrides().bag_pipe;
+    case 111:  // Shanai (double reed into a metal bell)
+      return program_overrides().shanai;
     // Air-jet flute family (physical edge-tone waveguide).
     case 72:  // Piccolo
       return program_overrides().piccolo;
@@ -334,6 +350,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().shamisen;
     case 107:  // Koto
       return program_overrides().koto;
+    case 108:  // Kalimba (a plucked steel tine is a bar, not a string)
+      return program_overrides().kalimba;
     // Pitched percussion family (membrane / struck-idiophone cores, key-tracked).
     case 112:  // Tinkle Bell
       return program_overrides().tinkle_bell;

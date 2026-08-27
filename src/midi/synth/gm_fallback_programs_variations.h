@@ -81,29 +81,34 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.e_piano_sixties.amp_env.decay_ms = 1800.0f;
   o.e_piano_sixties.fm.ops[0].env.decay_ms = 1800.0f;
 
-  // --- Drawbar organ (capital: programs 16-17, the family-2 tonewheel) ------
+  // --- Drawbar organ (capitals: program 16's own patch, program 17's family-2
+  // tonewheel) ---------------------------------------------------------------
   // Detuned Or.1 / 2: the chorus/vibrato scanner. A tonewheel generator is
   // fixed-pitch, so what moves is the scanner's delay, heard as a slow beat
   // across the drawbars — per-voice drift plus a wider image, and the second
-  // organ's darker registration under it.
-  o.organ_detuned_1 = fam[2];
+  // organ's darker registration under it. Only 16's variations hang under the
+  // named capital; 17 has no patch of its own yet and its two still derive from
+  // the family.
+  o.organ_detuned_1 = o.drawbar_organ;
   o.organ_detuned_1.drift_cents = 6.0f;
   o.organ_detuned_1.drift_rate_hz = 0.7f;
   o.organ_detuned_1.stereo_spread = 0.45f;
-  o.organ_detuned_2 = o.organ_detuned_1;
-  o.organ_detuned_2.additive.drawbars = {8.0f, 8.0f, 6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 4.0f};
+  o.organ_detuned_2 = fam[2];
   o.organ_detuned_2.drift_cents = 8.0f;
+  o.organ_detuned_2.drift_rate_hz = 0.7f;
+  o.organ_detuned_2.stereo_spread = 0.45f;
+  o.organ_detuned_2.additive.drawbars = {8.0f, 8.0f, 6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 4.0f};
 
   // 60's Organ 1: the registration of the decade — the first three drawbars
   // fully out with nothing above them, and the key click hard.
-  o.organ_sixties = fam[2];
+  o.organ_sixties = o.drawbar_organ;
   o.organ_sixties.additive.drawbars = {8.0f, 8.0f, 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   o.organ_sixties.additive.key_click = 0.7f;
 
   // Organ 4: every drawbar out — the full, hooting tutti.
-  o.organ_4 = fam[2];
+  o.organ_4 = o.drawbar_organ;
   o.organ_4.additive.drawbars = {8.0f, 8.0f, 8.0f, 8.0f, 8.0f, 8.0f, 8.0f, 8.0f, 8.0f};
-  o.organ_4.gain = fam[2].gain * 0.8f;  // nine partials at full, not five
+  o.organ_4.gain = o.drawbar_organ.gain * 0.8f;  // nine partials at full, not five
 
   // Organ 5: the bright end drawn instead of the fundamental — the thin,
   // upper-partial registration that cuts through a band.
