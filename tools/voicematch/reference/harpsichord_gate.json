@@ -3,7 +3,7 @@
   "timbre": "gm007",
   "margin": 1.25,
   "reference_measured_utc": "2026-08-23T04:40:56+00:00",
-  "recorded_utc": "2026-08-26T10:36:52+00:00",
+  "recorded_utc": "2026-08-26T15:37:34+00:00",
   "reference_spread": {
     "attack": 15.0,
     "balance": 4.029,
@@ -20,8 +20,8 @@
       "abs_median": 0.211
     },
     "tnr": {
-      "median": 5.463,
-      "abs_median": 8.719
+      "median": 3.78,
+      "abs_median": 6.675
     },
     "damper": {
       "median": 330.0,
@@ -29,23 +29,23 @@
     },
     "attack": {
       "median": 15.0,
-      "abs_median": 18.75
+      "abs_median": 15.0
     },
     "stereo": {
       "median": 0.347,
       "abs_median": 0.347
     },
     "balance": {
-      "median": 4.029,
-      "abs_median": 4.029
+      "median": 6.519,
+      "abs_median": 7.33
     },
     "centroid_pct": {
       "median": 14.519,
-      "abs_median": 17.219
+      "abs_median": 16.899
     },
     "vel_range": {
-      "median": 3.638,
-      "abs_median": 3.638
+      "median": 3.625,
+      "abs_median": 3.625
     }
   }
 }
