@@ -241,6 +241,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().bandoneon;
     case 24:  // Acoustic Guitar (nylon)
       return program_overrides().nylon_guitar;
+    case 25:  // Acoustic Guitar (steel)
+      return program_overrides().steel_guitar;
     case 26:  // Electric Guitar (jazz)
     case 27:  // Electric Guitar (clean)
       return program_overrides().electric_guitar;
@@ -250,6 +252,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().overdriven;
     case 30:  // Distortion Guitar
       return program_overrides().distortion;
+    case 31:  // Guitar Harmonics (a touched node, not the open string)
+      return program_overrides().guitar_harmonics;
     case 32:  // Acoustic Bass
       return program_overrides().bass_acoustic;
     case 33:  // Electric Bass (finger)

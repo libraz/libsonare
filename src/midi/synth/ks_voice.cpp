@@ -59,6 +59,12 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   const float f0 = note_to_hz(note);
   const float base_period = static_cast<float>(sr) / f0;
 
+  // A finger at 1/N forces a node, so the string sounds in N segments and every
+  // loop below shortens with it. The pluck still grips the full string, which is
+  // why the excitation keeps base_period.
+  const float node = std::floor(std::clamp(params.harmonic_node, 0.0f, 8.0f));
+  const float loop_period = node >= 2.0f ? base_period / node : base_period;
+
   // Loop lowpass: brightness -> feedback coefficient a (y += (1-a)(x-y)).
   const float a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
 
@@ -72,20 +78,20 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   // by compensating the EXACT phase delay of the loop filter at the fundamental
   // (not just its DC group delay) plus the one-sample feedback path, so the
   // sounding pitch matches the note to a few cents.
-  string_.configure(slab_, capacity_, base_period, sr, a, t60, damped_t60);
+  string_.configure(slab_, capacity_, loop_period, sr, a, t60, damped_t60);
 
   // Stiff-string dispersion (steel strings). 0 disables the allpass cascade so
   // the loop stays a harmonic string, bit-identical. Otherwise scale the steel
   // inharmonicity into an in-loop allpass (the shared piano dispersion solver)
   // and fold its phase delay into the loop compensation so f0 tuning holds.
-  const float omega = kTwoPi / base_period;
+  const float omega = kTwoPi / loop_period;
   const float tau_lp = onepole_group_delay_samples(a, omega);
   disp_a_ = 0.0f;
   for (float& s : disp_state_) s = 0.0f;
   const float dispersion = std::clamp(params.dispersion, 0.0f, 1.0f);
   if (dispersion > 0.0f) {
     const float b_coeff = dispersion * ks_steel_inharmonicity_b(note);
-    const float phase_budget = base_period - 4.0f - tau_lp;
+    const float phase_budget = loop_period - 4.0f - tau_lp;
     disp_a_ = rt::dispersion_allpass_a(b_coeff, omega, a, kKsDispersionStages, phase_budget);
     if (disp_a_ != 0.0f) {
       string_.loop_comp +=
@@ -139,7 +145,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     // the period makes the comb delay between the two taps pickup * period: a
     // pickup near the bridge (small pickup) combs at a short delay (its first
     // peak high = bright), a neck pickup at a longer delay (rounder).
-    const float offset = std::clamp((1.0f - pickup) * base_period, 4.0f, base_period);
+    const float offset = std::clamp((1.0f - pickup) * loop_period, 4.0f, loop_period);
     pickup_delay_q8_ = static_cast<int>(offset * 256.0f);
     pickup_depth_ = 0.85f;  // near-full comb notch depth
     pickup_mag_ = 0.18f;    // gentle even-harmonic nonlinearity
@@ -172,7 +178,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   // planes beat and the faster line dies first (two-stage decay).
   const float polarization = std::clamp(params.polarization, 0.0f, 1.0f);
   if (polarization > 0.0f && slab_ != nullptr) {
-    const float pol_period = base_period / std::exp2(kPolDetuneCents / 1200.0f);
+    const float pol_period = loop_period / std::exp2(kPolDetuneCents / 1200.0f);
     // A darker loop filter: the horizontal plane loses its highs faster, and a
     // faster decay (a fraction of the primary t60) gives the two-stage decay.
     const float a2 = std::min(0.97f, a + 0.12f);
@@ -220,7 +226,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   if (octave_mix > 0.0f && slab_ != nullptr) {
     // Same loop brightness as the primary; configure() recomputes the phase-delay
     // compensation at the octave-up fundamental so the 4' pitch is accurate.
-    oct_.configure(slab_ + 2 * capacity_, capacity_, 0.5f * base_period, sr, a, t60, damped_t60);
+    oct_.configure(slab_ + 2 * capacity_, capacity_, 0.5f * loop_period, sr, a, t60, damped_t60);
     oct_exc_ = 0.7f;  // the 4' jack grips its string a touch less than the 8'
     oct_couple_ = octave_mix;
   } else {

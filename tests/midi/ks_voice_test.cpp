@@ -654,3 +654,54 @@ TEST_CASE("GM harp fallback is a stretched KS string", "[midi][synth][ks]") {
   const double estimated = estimate_frequency(tone, 4000, 20000, 261.6256);
   REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.005);
 }
+
+TEST_CASE("a touched node halves the string and takes the fundamental with it",
+          "[midi][synth][ks]") {
+  NativeSynthPatch open = ks_base_patch();
+  open.ks.decay_s = 3.0f;
+  open.gain = 0.8f;
+  // 0 and 1 both mean an untouched string: the same render, to the sample.
+  NativeSynthPatch first_mode = open;
+  first_mode.ks.harmonic_node = 1.0f;
+  REQUIRE(render_patch(first_mode, 52, 110, 24000) == render_patch(open, 52, 110, 24000));
+
+  NativeSynthPatch touched = open;
+  touched.ks.harmonic_node = 2.0f;
+  const std::vector<float> tone = render_patch(touched, 52, 110, 24000);
+  // E3 fingered; a node at half the string sounds E4 an octave above it.
+  const double e3 = 164.8138;
+  REQUIRE(std::fabs(estimate_frequency(tone, 4000, 20000, 2.0 * e3) / (2.0 * e3) - 1.0) < 0.006);
+  // The modes without a node at the touch are gone, not merely quieter: E3
+  // itself sits below the surviving octave by far more than the open string's
+  // own second harmonic sits below its first.
+  const std::vector<double> power = power_spectrum(tone, 4000);
+  const std::vector<double> open_power = power_spectrum(render_patch(open, 52, 110, 24000), 4000);
+  const double killed = harmonic_power(power, e3, 1) / harmonic_power(power, e3, 2);
+  const double kept = harmonic_power(open_power, e3, 2) / harmonic_power(open_power, e3, 1);
+  REQUIRE(killed < 0.05 * kept);
+}
+
+TEST_CASE("the shipped guitar harmonics program is a flageolet, not the open string",
+          "[midi][synth][ks]") {
+  // 25 steel and 31 harmonics shared one family patch, so the two rendered the
+  // same audio; 31 sounding an octave above what it is asked for is the whole
+  // difference between a touched string and an untouched one.
+  const NativeSynthPatch& steel = gm_fallback_patch(0, 25);
+  const NativeSynthPatch& flageolet = gm_fallback_patch(0, 31);
+  REQUIRE(flageolet.mode == SynthEngineMode::kKarplusStrong);
+  REQUIRE(steel.ks.harmonic_node == 0.0f);
+  REQUIRE(flageolet.ks.harmonic_node == 2.0f);
+  const double e3 = 164.8138;
+  const std::vector<float> tone = render_patch(flageolet, 52, 100, 24000);
+  REQUIRE(std::fabs(estimate_frequency(tone, 4000, 20000, 2.0 * e3) / (2.0 * e3) - 1.0) < 0.006);
+  REQUIRE(estimate_frequency(render_patch(steel, 52, 100, 24000), 4000, 20000, e3) / e3 < 1.006);
+  // A flageolet is quieter than the open string and still has to be playable
+  // beside its siblings: 0.13 against the family's 0.15-0.21 on the same note.
+  float peak = 0.0f;
+  for (float s : tone) peak = std::max(peak, std::fabs(s));
+  float steel_peak = 0.0f;
+  for (float s : render_patch(steel, 52, 100, 24000))
+    steel_peak = std::max(steel_peak, std::fabs(s));
+  REQUIRE(peak < steel_peak);
+  REQUIRE(peak > 0.5f * steel_peak);
+}

@@ -313,6 +313,7 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.dispersion);
   F(ks.tension_mod);
   F(ks.octave_mix);
+  F(ks.harmonic_node);
   F(ks.keyoff_noise);
 }
 

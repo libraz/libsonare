@@ -189,8 +189,9 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   du.body_mix = 0.3f;
   du.gain = 1.3f;
 
-  // KS guitar variants: all share the family-3 steel string and differ in
-  // pick position / loop brightness / decay (the Jaffe-Smith knobs).
+  // KS guitar variants: all derive from the one steel string below, which
+  // family 3 duplicates, and differ in pick position / loop brightness / decay
+  // (the Jaffe-Smith knobs) — except harmonics, which touches a node instead.
   NativeSynthPatch steel{};
   steel.mode = SynthEngineMode::kKarplusStrong;
   steel.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 250.0f);
@@ -218,6 +219,21 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   steel.body = BodyType::kGuitar;
   steel.body_mix = 0.35f;
   steel.gain = 1.5f;
+  // The steel string is also family 3's default, so program 25 sounded it
+  // already; naming it is what lets the two move apart, and today they do not.
+  o.steel_guitar = steel;
+
+  // Harmonics (GM 32): a finger resting at the twelfth fret, which is the node
+  // at half the string. The touch is the whole of it — the loop halves and the
+  // odd partials die with the fundamental — so the rest is the same steel
+  // string plucked lightly: a duller loop, a shorter ring, barely any tension
+  // bend. Those four are heard, not measured.
+  o.guitar_harmonics = steel;
+  o.guitar_harmonics.ks.harmonic_node = 2.0f;
+  o.guitar_harmonics.ks.brightness = 0.45f;
+  o.guitar_harmonics.ks.decay_s = 2.2f;
+  o.guitar_harmonics.ks.exc_brightness = 0.6f;
+  o.guitar_harmonics.ks.tension_mod = 0.1f;
 
   // Nylon: soft finger pluck near the middle of the string, dull loop. Keeps the
   // sympathetic halo (classical guitars sing with open-string resonance) but

@@ -33,10 +33,12 @@ struct ProgramOverrides {
   NativeSynthPatch tubular_bells;       // program 14 (long-ringing bell, modal)
   NativeSynthPatch dulcimer;            // program 15 (hammered string, KS)
   NativeSynthPatch nylon_guitar;        // program 24
+  NativeSynthPatch steel_guitar;        // program 25 (Acoustic Guitar, steel)
   NativeSynthPatch electric_guitar;     // programs 26-27 (jazz / clean)
   NativeSynthPatch muted_guitar;        // program 28 (palm mute)
   NativeSynthPatch overdriven;          // program 29
   NativeSynthPatch distortion;          // program 30
+  NativeSynthPatch guitar_harmonics;    // program 31 (touched node, flageolet)
   NativeSynthPatch bass_acoustic;       // program 32 (Acoustic Bass)
   NativeSynthPatch bass_fingered;       // program 33 (Electric Bass, finger)
   NativeSynthPatch bass_picked;         // program 34 (Electric Bass, pick)
@@ -165,10 +167,12 @@ struct ProgramOverrides {
   X(tubular_bells)                    \
   X(dulcimer)                         \
   X(nylon_guitar)                     \
+  X(steel_guitar)                     \
   X(electric_guitar)                  \
   X(muted_guitar)                     \
   X(overdriven)                       \
   X(distortion)                       \
+  X(guitar_harmonics)                 \
   X(bass_acoustic)                    \
   X(bass_fingered)                    \
   X(bass_picked)                      \

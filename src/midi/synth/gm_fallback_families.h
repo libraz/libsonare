@@ -160,8 +160,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[2].gain = 0.7f;
 
   // 24-31 guitar: Karplus-Strong steel-string pluck (method (3)); the string
-  // itself decays, so the amp envelope just gates note-off. Program-level
-  // overrides voice the nylon/electric/muted/driven variants.
+  // itself decays, so the amp envelope just gates note-off. All eight programs
+  // now name their own patch, so nothing in the octet reaches this one; it
+  // stays as the octet's default, duplicating the `steel` override.
   t[3].mode = SynthEngineMode::kKarplusStrong;
   t[3].amp_env = fallback_env(1.0f, 0.0f, 1.0f, 250.0f);
   t[3].cutoff_hz = 20000.0f;

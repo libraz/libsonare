@@ -695,6 +695,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.ks.release_damp_s, 0.08f), 0.01f, 10.0f);
   p.ks.slap = std::clamp(patch_clamp_detail::sanitize(p.ks.slap, 0.0f), 0.0f, 1.0f);
   p.ks.polarization = std::clamp(patch_clamp_detail::sanitize(p.ks.polarization, 0.0f), 0.0f, 1.0f);
+  // Bounded here rather than only at use, so the touched node reports its real
+  // range: a sweep over an unbounded divisor is a sweep over nothing.
+  p.ks.harmonic_node =
+      std::clamp(patch_clamp_detail::sanitize(p.ks.harmonic_node, 0.0f), 0.0f, 8.0f);
   p.modal.num_modes = std::clamp(p.modal.num_modes, 0, kMaxModalModes);
   for (ModalMode& mode : p.modal.modes) {
     mode.ratio = std::clamp(patch_clamp_detail::sanitize(mode.ratio, 1.0f), 0.01f, 64.0f);

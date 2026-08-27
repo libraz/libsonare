@@ -150,6 +150,14 @@ struct KsPatchParams {
   /// period, sharing the pluck and summed into the output, reinforces the octave
   /// like a real coupled 4' register. The blend is the mix level of the 4' line.
   float octave_mix = 0.0f;
+  /// Touched-node harmonic in [0,8] (off-by-default; 0 or 1 = the open string,
+  /// render bit-identical). A finger resting lightly at 1/N of the string forces
+  /// a node there, so the string sounds in N segments: every loop shortens to
+  /// 1/N of the period and only the modes with a node at the touch survive.
+  /// That is the whole of a flageolet — the pluck still grips the full string,
+  /// so the excitation burst and its pick-position comb stay on the open-string
+  /// period. Rounded to an integer; a fraction is not a node.
+  float harmonic_node = 0.0f;
   /// Key-off / damper noise in [0,1] (off-by-default; 0 = no burst, render
   /// bit-identical). When a harpsichord key is released the jack falls and the
   /// felt damper drops onto the string, a soft mechanical "thunk"/chiff. A short
