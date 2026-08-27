@@ -531,8 +531,9 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   // upper drawbars the base registration leaves in, and the key click that comes
   // with playing them. What separates a rock organ from a jazz one on the real
   // instrument is also the amplifier it is driven through, and that is NOT set
-  // here: `drive` is a cliff (0.001 already reads as a peak compressor), so it
-  // is a listening decision rather than a fitted one.
+  // here: any drive over zero steps straight to tanh(x)/tanh(1), which on this
+  // registration buys 1.7 dB of level for 0.5 dB of crest — a step, not a
+  // gradient, so it is a listening decision rather than a fitted one.
   o.rock_organ = dr;
   o.rock_organ.additive.drawbars = {8.0f, 8.0f, 8.0f, 6.0f, 4.0f, 4.0f, 2.0f, 2.0f, 6.0f};
   o.rock_organ.additive.key_click = 0.6f;
