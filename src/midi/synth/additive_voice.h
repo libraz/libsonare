@@ -13,6 +13,11 @@
 ///     "sine pad". Level and decay are patch parameters.
 ///   - Seeded per-partial start phases, so stacked voices do not
 ///     phase-align into a static buzz.
+///   - PERCUSSION: a decaying sine at the second or third harmonic, fired
+///     once per phrase rather than once per note. The single-shot is what
+///     distinguishes percussion from a fast envelope, and the arming lives on
+///     the channel (see the hosts' ChannelState), not here: this core is told
+///     at start() whether this note is the one that takes it.
 /// Partials above Nyquist are dropped, mirroring tonewheel top-octave
 /// behaviour closely enough for a sketch. Chorus/Leslie movement is a
 /// track-level modulation insert, not voice state.
@@ -39,13 +44,23 @@ struct AdditivePatchParams {
   float key_click = 0.4f;
   /// Key-click decay time constant (ms).
   float click_decay_ms = 6.0f;
+  /// Percussion harmonic: 0 = off, 2 = second (4'), 3 = third (2-2/3').
+  /// A Hammond offers those two and nothing else, and off is the default so a
+  /// registration that does not ask for percussion renders as it always did.
+  int percussion_harmonic = 0;
+  /// Percussion decay time constant (ms). The instrument's two positions are
+  /// roughly 340 (normal) and 140 (fast).
+  float percussion_decay_ms = 340.0f;
+  /// Percussion level, as a fraction of the normalized drawbar sum.
+  float percussion_level = 0.6f;
 };
 
 /// Per-voice additive state, embedded in NativeSynthVoice.
 class AdditiveVoiceCore {
  public:
+  /// @p percussion fires the single-shot on this note; the channel decides.
   void start(const AdditivePatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
-             uint64_t seed) noexcept;
+             uint64_t seed, bool percussion = false) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor.
   float render(float pitch_ratio) noexcept;
   /// Immediate silence (note-off is the wrapper amp envelope's job — the
@@ -65,6 +80,11 @@ class AdditiveVoiceCore {
   float click_level_ = 0.0f;
   float click_coeff_ = 0.0f;
   uint64_t click_index_ = 0;
+  // Percussion: one decaying sine, outside the drawbar sum and its normalizer.
+  double perc_phase_ = 0.0;
+  float perc_base_inc_ = 0.0f;
+  float perc_level_ = 0.0f;
+  float perc_coeff_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

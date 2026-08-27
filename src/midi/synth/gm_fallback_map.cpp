@@ -226,6 +226,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().dulcimer;
     case 16:  // Drawbar Organ (tonewheel, base registration)
       return program_overrides().drawbar_organ;
+    case 17:  // Percussive Organ (the single-shot on the first key of a phrase)
+      return program_overrides().percussive_organ;
     case 18:  // Rock Organ (fuller registration, harder click)
       return program_overrides().rock_organ;
     case 19:  // Church Organ (flue pipe)

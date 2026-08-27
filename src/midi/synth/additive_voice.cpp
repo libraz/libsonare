@@ -26,7 +26,7 @@ float drawbar_gain(float level) noexcept {
 }  // namespace
 
 void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_rate, uint8_t note,
-                              uint8_t velocity, uint64_t seed) noexcept {
+                              uint8_t velocity, uint64_t seed, bool percussion) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float f0 = note_to_hz(note);
   noise_ = VoiceRandomSequence(seed);
@@ -57,6 +57,19 @@ void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_r
   const float decay_ms = std::max(0.5f, params.click_decay_ms);
   click_coeff_ = std::exp(-1.0f / (decay_ms * 0.001f * static_cast<float>(sr)));
   click_index_ = 0;
+
+  perc_phase_ = 0.0;
+  perc_base_inc_ = 0.0f;
+  perc_level_ = 0.0f;
+  perc_coeff_ = 0.0f;
+  const int harmonic = params.percussion_harmonic >= 3 ? 3 : 2;
+  const float perc_freq = f0 * static_cast<float>(harmonic);
+  if (percussion && params.percussion_harmonic >= 2 && perc_freq < 0.45f * static_cast<float>(sr)) {
+    perc_base_inc_ = static_cast<float>(static_cast<double>(perc_freq) / sr);
+    perc_level_ = std::clamp(params.percussion_level, 0.0f, 1.0f);
+    const float perc_ms = std::max(1.0f, params.percussion_decay_ms);
+    perc_coeff_ = std::exp(-1.0f / (perc_ms * 0.001f * static_cast<float>(sr)));
+  }
 }
 
 float AdditiveVoiceCore::render(float pitch_ratio) noexcept {
@@ -71,12 +84,19 @@ float AdditiveVoiceCore::render(float pitch_ratio) noexcept {
     mix += click_level_ * noise_.bipolar_at((1ull << 16) + click_index_++);
     click_level_ *= click_coeff_;
   }
+  if (perc_level_ > 1.0e-5f) {
+    mix += std::sin(kTwoPi * static_cast<float>(perc_phase_)) * perc_level_;
+    perc_phase_ += static_cast<double>(perc_base_inc_ * pitch_ratio);
+    if (perc_phase_ >= 1.0) perc_phase_ -= std::floor(perc_phase_);
+    perc_level_ *= perc_coeff_;
+  }
   return mix;
 }
 
 void AdditiveVoiceCore::kill() noexcept {
   for (Partial& partial : partials_) partial.gain = 0.0f;
   click_level_ = 0.0f;
+  perc_level_ = 0.0f;
 }
 
 }  // namespace sonare::midi::synth

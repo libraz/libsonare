@@ -393,6 +393,12 @@ void apply_modal(NativeSynthPatch& p, const Fields& f) {
 void apply_additive(NativeSynthPatch& p, const Fields& f) {
   F(additive.key_click);
   F(additive.click_decay_ms);
+  // The harmonic comes first because it decides whether the two under it do
+  // anything: 0 is percussion switched off, and sweeping its decay there reads
+  // as "the percussion cannot reach this measurement".
+  I(additive.percussion_harmonic);
+  F(additive.percussion_decay_ms);
+  F(additive.percussion_level);
   for (int i = 0; i < kAdditivePartials; ++i) {
     float& d = p.additive.drawbars[static_cast<size_t>(i)];
     d = f(("additive.drawbars" + std::to_string(i)).c_str(), d);

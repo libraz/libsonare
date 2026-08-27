@@ -299,10 +299,12 @@ struct NativeSynthVoice : VoiceState {
   /// @p drum_kit != 0 applies a GS kit variation (Room/Power/808/...) to the
   /// resolved drum patch at note-on (percussion mode only; see apply_gs_drum_kit).
   /// @p drum_mod carries GS per-note drum NRPN edits (pitch coarse / level /
-  /// pan); default is a no-op.
+  /// pan); default is a no-op. @p organ_percussion fires the drawbar organ's
+  /// single-shot on this note (additive mode only; the channel decides which
+  /// note gets it).
   void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
              float glide_from_hz = 0.0f, bool una_corda = false, uint8_t drum_kit = 0,
-             DrumVoiceMod drum_mod = {}) noexcept;
+             DrumVoiceMod drum_mod = {}, bool organ_percussion = false) noexcept;
   /// True when the patch's filter stage cannot colour this voice: a wide-open
   /// static SVF lowpass, no resonance, no envelope depth and no negative
   /// static offset. Read from the LIVE patch on every sample rather than
@@ -434,6 +436,12 @@ class NativeSynth final : public MidiInstrument {
     /// the press, which is the opposite of what the pedal means.
     bool sostenuto_down = false;
     bool una_corda = false;  // CC67 soft pedal
+    /// Drawbar-organ percussion: charged, and spent by the next note-on that
+    /// takes it. Recharges only when the channel has no key held, which is what
+    /// makes percussion sound on the first note of a phrase and not on the ones
+    /// played under it. Per channel rather than per voice (a voice cannot see
+    /// its neighbours) and rather than per patch (a patch outlives the phrase).
+    bool percussion_armed = true;
     /// Rhythm part: resolves through the drum map instead of the melodic
     /// programs. Channel 10 by default (GM), matching Sf2Player.
     bool drums = false;
@@ -485,6 +493,8 @@ class NativeSynth final : public MidiInstrument {
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
+  /// Recharges the channel's drawbar-organ percussion if no key is still held.
+  void recharge_percussion(uint8_t channel) noexcept;
   /// Pushes the channel's live bowed-string controllers (CC11 bow speed, CC2
   /// bow force, CC74 bow position) to its sounding bowed voices.
   void push_bow_control(uint8_t channel) noexcept;
@@ -707,6 +717,11 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.additive.key_click, 0.4f), 0.0f, 1.0f);
   p.additive.click_decay_ms =
       std::clamp(patch_clamp_detail::sanitize(p.additive.click_decay_ms, 6.0f), 0.5f, 100.0f);
+  p.additive.percussion_harmonic = std::clamp(p.additive.percussion_harmonic, 0, 3);
+  p.additive.percussion_decay_ms = std::clamp(
+      patch_clamp_detail::sanitize(p.additive.percussion_decay_ms, 340.0f), 20.0f, 4000.0f);
+  p.additive.percussion_level =
+      std::clamp(patch_clamp_detail::sanitize(p.additive.percussion_level, 0.6f), 0.0f, 1.0f);
   p.percussion.num_modes = std::clamp(p.percussion.num_modes, 0, kMaxPercussionModes);
   for (float& ratio : p.percussion.mode_ratios) {
     ratio = std::clamp(patch_clamp_detail::sanitize(ratio, 0.0f), 0.0f, 64.0f);

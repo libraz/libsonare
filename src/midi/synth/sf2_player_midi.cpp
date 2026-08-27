@@ -202,7 +202,13 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
       drum_mod.pan_units = (static_cast<float>(gd.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
     }
   }
-  voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod);
+  // Drawbar percussion spends the channel's charge; note_off recharges it once
+  // the last key is up.
+  const bool organ_percussion = patch.mode == SynthEngineMode::kAdditive &&
+                                patch.additive.percussion_harmonic >= 2 && ch.percussion_armed;
+  if (organ_percussion) channels_[channel & 0x0Fu].percussion_armed = false;
+  voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod,
+               organ_percussion);
 
   // Pipe-organ patches share a per-part wind chest (tremulant / wind sag).
   // Re-prepare only when the parameters change so the tremulant phase stays
@@ -276,6 +282,20 @@ void Sf2Player::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id
       }
     }
   }
+  recharge_percussion(ch);
+}
+
+void Sf2Player::recharge_percussion(uint8_t ch) noexcept {
+  // The keys, not the voices: a percussion charge returns when the player's
+  // hands leave the manual, and a released note whose tail is still sounding
+  // (or whose damper the sustain pedal is holding) has left it.
+  for (const Sf2Voice& v : pool_) {
+    if (v.active && v.channel == ch && v.key_down) return;
+  }
+  for (const NativeSynthVoice& v : fallback_pool_) {
+    if (v.active && v.channel == ch && v.key_down) return;
+  }
+  channels_[ch].percussion_armed = true;
 }
 
 void Sf2Player::sustain_pedal(uint8_t channel, bool down) noexcept {
@@ -361,6 +381,7 @@ void Sf2Player::all_notes_off(uint8_t channel) noexcept {
       v.release();
     }
   }
+  recharge_percussion(ch);
 }
 
 void Sf2Player::all_sound_off(uint8_t channel) noexcept {
@@ -377,6 +398,7 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == ch) v.kill();
   }
+  recharge_percussion(ch);
   // All Sound Off means silence NOW, and the part's bus resonators are part of
   // its output: the piano soundboard and sympathetic bank ring for ~1.5 s and
   // the wind chest holds its tremulant/sag state, so killing the voices alone

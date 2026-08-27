@@ -15,6 +15,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
 
@@ -26,6 +27,8 @@ using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
+using sonare::midi::synth::Sf2Player;
+using sonare::midi::synth::Sf2PlayerConfig;
 using sonare::midi::synth::SynthEngineMode;
 
 using sonare::test::kFft;
@@ -37,12 +40,22 @@ MidiEvent event(const sonare::midi::Ump& ump) {
   return e;
 }
 
-std::vector<float> render_left(NativeSynth& synth, int num_samples) {
+template <typename Instrument>
+std::vector<float> render_left(Instrument& instrument, int num_samples) {
   std::vector<float> left(static_cast<size_t>(num_samples), 0.0f);
   std::vector<float> right(static_cast<size_t>(num_samples), 0.0f);
   float* chans[2] = {left.data(), right.data()};
-  synth.process(chans, 2, num_samples);
+  instrument.process(chans, 2, num_samples);
   return left;
+}
+
+/// Sf2Player with no SoundFont: every note resolves through the GM fallback.
+Sf2Player make_fallback_player() {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player player(cfg);
+  player.prepare(kRate, 256);
+  return player;
 }
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
@@ -217,6 +230,134 @@ TEST_CASE("the drawbar organ stacks its registration partials with a key click",
   for (size_t i = 0; i < tone.size(); ++i) click[i] = tone[i] - clean[i];
   REQUIRE(rms(click, 0, 480) > 0.002f);
   REQUIRE(rms(click, 0, 480) > 10.0f * rms(click, 2400, 2880));
+}
+
+TEST_CASE("drawbar percussion is switched off by the harmonic, not by its level",
+          "[midi][synth][additive]") {
+  // The off value has to reproduce the render exactly, or every value fitted
+  // with the percussion in place is measured against a moved baseline.
+  const NativeSynthPatch& organ = gm_fallback_patch(0, 16);
+  REQUIRE(organ.additive.percussion_harmonic == 0);
+  NativeSynthPatch loud = organ;
+  loud.additive.percussion_level = 1.0f;
+  loud.additive.percussion_decay_ms = 4000.0f;
+
+  const std::vector<float> base = render_patch(organ, 57, 100, 24000);
+  const std::vector<float> unchanged = render_patch(loud, 57, 100, 24000);
+  REQUIRE(base == unchanged);
+}
+
+TEST_CASE("drawbar percussion is a decaying tone at the harmonic it names",
+          "[midi][synth][additive]") {
+  const NativeSynthPatch& organ = gm_fallback_patch(0, 16);
+  const double f0 = 220.0;  // note 57
+  const std::vector<float> plain = render_patch(organ, 57, 100, 24000);
+
+  // Same seed, same registration, so subtracting the plain render leaves the
+  // percussion alone — the registration's own energy at the same harmonic
+  // cancels with it.
+  auto shot = [&](int harmonic) {
+    NativeSynthPatch p = organ;
+    p.additive.percussion_harmonic = harmonic;
+    p.additive.percussion_decay_ms = 100.0f;
+    const std::vector<float> tone = render_patch(p, 57, 100, 24000);
+    std::vector<float> diff(tone.size());
+    for (size_t i = 0; i < tone.size(); ++i) diff[i] = tone[i] - plain[i];
+    return diff;
+  };
+
+  const std::vector<float> second = shot(2);
+  const std::vector<float> third = shot(3);
+  const std::vector<double> second_power = power_spectrum(second, 0);
+  const std::vector<double> third_power = power_spectrum(third, 0);
+  REQUIRE(band_power(second_power, f0 * 2.0) > 100.0 * band_power(second_power, f0 * 3.0));
+  REQUIRE(band_power(third_power, f0 * 3.0) > 100.0 * band_power(third_power, f0 * 2.0));
+
+  // Four time constants of 100 ms is 35 dB, and the tonewheels under it do not
+  // decay at all — so a shot that did not decay would read as no shot.
+  REQUIRE(rms(second, 0, 2400) > 0.01f);
+  REQUIRE(rms(second, 19200, 21600) < 0.05f * rms(second, 0, 2400));
+}
+
+TEST_CASE("drawbar percussion sounds once per phrase and recharges when the keys are up",
+          "[midi][synth][additive]") {
+  NativeSynthConfig cfg;
+  cfg.patch = gm_fallback_patch(0, 16);
+  cfg.patch.additive.percussion_harmonic = 2;
+  cfg.patch.additive.percussion_decay_ms = 150.0f;
+  cfg.patch.additive.percussion_level = 0.8f;
+  const int hold = static_cast<int>(kRate) / 2;  // the second key arrives 0.5 s in
+
+  // Two notes half a second apart, the second either struck under the first or
+  // after it. The percussion is the difference against the same phrase with the
+  // percussion off, which shares every seed with it.
+  auto phrase = [&](bool legato, bool percussion) {
+    NativeSynthConfig c = cfg;
+    if (!percussion) c.patch.additive.percussion_harmonic = 0;
+    NativeSynth synth(c);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 57, 100)));
+    std::vector<float> out = render_left(synth, hold);
+    if (!legato) synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 57, 0)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 64, 100)));
+    const std::vector<float> tail = render_left(synth, hold);
+    out.insert(out.end(), tail.begin(), tail.end());
+    return out;
+  };
+  auto shot = [&](bool legato) {
+    const std::vector<float> with = phrase(legato, true);
+    const std::vector<float> without = phrase(legato, false);
+    std::vector<float> diff(with.size());
+    for (size_t i = 0; i < with.size(); ++i) diff[i] = with[i] - without[i];
+    return diff;
+  };
+
+  const size_t window = static_cast<size_t>(kRate) / 20;  // 50 ms after each key
+  const std::vector<float> under = shot(true);
+  const std::vector<float> after = shot(false);
+  const float first = rms(under, 0, window);
+  REQUIRE(first > 0.01f);
+  REQUIRE(rms(after, 0, window) == first);  // the phrases share their first key
+
+  // Held under the first key the charge is spent, so what is left at the second
+  // key is only the first shot's tail — three time constants down. Released and
+  // struck again it recharges, and the second key sounds like the first.
+  const size_t second_key = static_cast<size_t>(hold);
+  REQUIRE(rms(under, second_key, second_key + window) < 0.2f * first);
+  REQUIRE(rms(after, second_key, second_key + window) > 0.8f * first);
+}
+
+TEST_CASE("the GM percussive organ carries its percussion through the fallback bank",
+          "[midi][sf2][synth][additive]") {
+  // The GM path runs through Sf2Player rather than NativeSynth, so the channel
+  // bit exists on both hosts: wiring only NativeSynth leaves the percussion
+  // silent for every MIDI file.
+  const NativeSynthPatch& percussive = gm_fallback_patch(0, 17);
+  REQUIRE(percussive.mode == SynthEngineMode::kAdditive);
+  REQUIRE(percussive.additive.percussion_harmonic == 3);
+
+  auto phrase = [](bool legato) {
+    Sf2Player player = make_fallback_player();
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 17)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 57, 100)));
+    std::vector<float> out = render_left(player, static_cast<int>(kRate) / 2);
+    if (!legato) player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 57, 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 64, 100)));
+    const std::vector<float> tail = render_left(player, static_cast<int>(kRate) / 2);
+    out.insert(out.end(), tail.begin(), tail.end());
+    return out;
+  };
+
+  // The percussion is the only thing that differs between the two phrases at
+  // the second key: same patch, same registration, same note.
+  const std::vector<float> under = phrase(true);
+  const std::vector<float> after = phrase(false);
+  const size_t second_key = static_cast<size_t>(kRate) / 2;
+  const size_t window = static_cast<size_t>(kRate) / 20;
+  const double at_second_key = band_power(power_spectrum(after, second_key), 3.0 * 329.6);
+  const double under_first = band_power(power_spectrum(under, second_key), 3.0 * 329.6);
+  REQUIRE(rms(after, second_key, second_key + window) > 0.0f);
+  REQUIRE(at_second_key > 4.0 * under_first);
 }
 
 TEST_CASE("the GM kick pitch falls after the strike", "[midi][synth][percussion]") {

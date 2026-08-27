@@ -514,6 +514,19 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   dr.stereo_spread = 0.2f;
   dr.gain = 0.7f;
 
+  // Percussive Organ (GM 17): the same generator with the percussion tab down.
+  // The registration goes back to the bare first three drawbars because that is
+  // what the percussion is played against — it borrows the top wheel, so a
+  // drawn upper register would fight it. The third harmonic is the identifiable
+  // one; the decay is the instrument's "normal" position rather than its fast
+  // one. Level and decay are heard rather than measured, and stand until the
+  // drawbar reference is captured.
+  o.percussive_organ = dr;
+  o.percussive_organ.additive.drawbars = {8.0f, 8.0f, 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  o.percussive_organ.additive.percussion_harmonic = 3;
+  o.percussive_organ.additive.percussion_decay_ms = 340.0f;
+  o.percussive_organ.additive.percussion_level = 0.6f;
+
   // Rock Organ (GM 18): the same generator drawn fuller and struck harder — the
   // upper drawbars the base registration leaves in, and the key click that comes
   // with playing them. What separates a rock organ from a jazz one on the real

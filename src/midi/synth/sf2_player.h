@@ -224,6 +224,12 @@ class Sf2Player final : public MidiInstrument {
     uint8_t sustain_level = 0;
     bool sostenuto_down = false;  // CC66 pedal state (edge-triggered capture)
     bool una_corda = false;       // CC67; softens piano fallback voices at start
+    /// Drawbar-organ percussion: charged, and spent by the next note-on that
+    /// takes it. Recharges only when the channel has no key held, which is what
+    /// makes percussion sound on the first note of a phrase and not on the ones
+    /// played under it. The GM fallback bank reaches its organs through here,
+    /// so the bit has to exist on this host as well as on NativeSynth's.
+    bool percussion_armed = true;
     // Default-modulator controller state.
     uint8_t volume = 100;      // CC7
     uint8_t expression = 127;  // CC11
@@ -258,6 +264,8 @@ class Sf2Player final : public MidiInstrument {
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
+  /// Recharges the channel's drawbar-organ percussion if no key is still held.
+  void recharge_percussion(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   /// Routes a data-entry value (CC6 MSB) to the active GS NRPN.
   void apply_nrpn(uint8_t channel, uint8_t value) noexcept;

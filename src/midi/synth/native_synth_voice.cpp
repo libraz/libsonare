@@ -42,7 +42,8 @@ bool needs_sampler_velocity_curve(SynthEngineMode mode) noexcept {
 
 void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity,
                              uint32_t voice_index, float glide_from_hz, bool una_corda,
-                             uint8_t drum_kit, DrumVoiceMod drum_mod) noexcept {
+                             uint8_t drum_kit, DrumVoiceMod drum_mod,
+                             bool organ_percussion) noexcept {
   patch = &p;
   key_down = true;
   releasing = false;
@@ -74,7 +75,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     modal.start(p.modal, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   if (p.mode == SynthEngineMode::kAdditive) {
-    additive.start(p.additive, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    additive.start(p.additive, sample_rate, note, velocity, voice_seed(voice_index, note, age),
+                   organ_percussion);
   }
   if (p.mode == SynthEngineMode::kPercussion) {
     PercussionPatchParams kit_perc = p.percussion;

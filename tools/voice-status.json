@@ -2871,7 +2871,7 @@
       "name": "Percussive Organ",
       "group": "16-23 Organ",
       "tone_class": "sustained",
-      "patch": "fam2",
+      "patch": "percussive_organ",
       "engine": "additive",
       "capture": null,
       "stage": 0.2,
@@ -2879,7 +2879,7 @@
       "open_candidates": [],
       "axes": {
         "engine": "additive",
-        "patch": "fam2",
+        "patch": "percussive_organ",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,

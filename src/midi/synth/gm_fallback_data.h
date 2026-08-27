@@ -49,6 +49,7 @@ struct ProgramOverrides {
   NativeSynthPatch koto;                // program 107 (bridge-buzz plucked)
   NativeSynthPatch kalimba;             // program 108 (plucked steel tine, modal)
   NativeSynthPatch drawbar_organ;       // program 16 (tonewheel, 88 8000 000)
+  NativeSynthPatch percussive_organ;    // program 17 (the same tonewheel plus percussion)
   NativeSynthPatch rock_organ;          // program 18 (fuller registration, driven)
   NativeSynthPatch church_organ;        // program 19 (Church Organ, flue pipe)
   NativeSynthPatch reed_organ;          // programs 20-21 (Reed Organ / Accordion, free reed)
@@ -180,6 +181,7 @@ struct ProgramOverrides {
   X(koto)                             \
   X(kalimba)                          \
   X(drawbar_organ)                    \
+  X(percussive_organ)                 \
   X(rock_organ)                       \
   X(church_organ)                     \
   X(reed_organ)                       \

@@ -81,19 +81,17 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.e_piano_sixties.amp_env.decay_ms = 1800.0f;
   o.e_piano_sixties.fm.ops[0].env.decay_ms = 1800.0f;
 
-  // --- Drawbar organ (capitals: program 16's own patch, program 17's family-2
-  // tonewheel) ---------------------------------------------------------------
+  // --- Drawbar organ (capitals: programs 16 and 17) -------------------------
   // Detuned Or.1 / 2: the chorus/vibrato scanner. A tonewheel generator is
   // fixed-pitch, so what moves is the scanner's delay, heard as a slow beat
   // across the drawbars — per-voice drift plus a wider image, and the second
-  // organ's darker registration under it. Only 16's variations hang under the
-  // named capital; 17 has no patch of its own yet and its two still derive from
-  // the family.
+  // organ's darker registration under it. 17's two variations carry its
+  // percussion, which is what a detuned or bright percussive organ is.
   o.organ_detuned_1 = o.drawbar_organ;
   o.organ_detuned_1.drift_cents = 6.0f;
   o.organ_detuned_1.drift_rate_hz = 0.7f;
   o.organ_detuned_1.stereo_spread = 0.45f;
-  o.organ_detuned_2 = fam[2];
+  o.organ_detuned_2 = o.percussive_organ;
   o.organ_detuned_2.drift_cents = 8.0f;
   o.organ_detuned_2.drift_rate_hz = 0.7f;
   o.organ_detuned_2.stereo_spread = 0.45f;
@@ -112,7 +110,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
 
   // Organ 5: the bright end drawn instead of the fundamental — the thin,
   // upper-partial registration that cuts through a band.
-  o.organ_5 = fam[2];
+  o.organ_5 = o.percussive_organ;
   o.organ_5.additive.drawbars = {6.0f, 4.0f, 8.0f, 4.0f, 8.0f, 4.0f, 6.0f, 6.0f, 8.0f};
   o.organ_5.additive.key_click = 0.55f;
 

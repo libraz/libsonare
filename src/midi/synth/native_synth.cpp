@@ -316,7 +316,13 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   }
   // Portamento: glide from the channel's previous note when enabled.
   const float glide_from = patch->glide_ms > 0.0f ? st.last_freq_hz : 0.0f;
-  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, st.una_corda, drum_kit);
+  // Drawbar percussion spends the channel's charge; note_off recharges it once
+  // the last key is up.
+  const bool organ_percussion = patch->mode == SynthEngineMode::kAdditive &&
+                                patch->additive.percussion_harmonic >= 2 && st.percussion_armed;
+  if (organ_percussion) channels_[ch].percussion_armed = false;
+  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, st.una_corda, drum_kit,
+               DrumVoiceMod{}, organ_percussion);
   // Seed a bowed voice at the channel's current bow controllers (no glide on the
   // first sample) so a note struck mid-phrase starts at the live bow position /
   // force / expression rather than gliding in from the preset.
@@ -407,6 +413,17 @@ void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_
       // else (full pedal): the string rings on freely.
     }
   }
+  recharge_percussion(ch);
+}
+
+void NativeSynth::recharge_percussion(uint8_t ch) noexcept {
+  // The keys, not the voices: a percussion charge returns when the player's
+  // hands leave the manual, and a released note whose tail is still sounding
+  // (or whose damper the sustain pedal is holding) has left it.
+  for (const NativeSynthVoice& v : pool_) {
+    if (v.active && v.channel == ch && v.key_down) return;
+  }
+  channels_[ch].percussion_armed = true;
 }
 
 void NativeSynth::sustain_cc(uint8_t channel, uint8_t value) noexcept {
@@ -469,6 +486,7 @@ void NativeSynth::all_notes_off(uint8_t channel) noexcept {
       v.release();
     }
   }
+  recharge_percussion(ch);
 }
 
 void NativeSynth::all_sound_off(uint8_t channel) noexcept {
@@ -479,6 +497,7 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch) v.kill();
   }
+  recharge_percussion(ch);
   if (pool_.active_count() == 0) {
     // All Sound Off means silence NOW, and the instrument's bus resonators are
     // part of its output: the piano soundboard and sympathetic bank ring for
