@@ -75,7 +75,16 @@
     112,
     127
   ],
-  "_dimensions": "Empty means all of them, and here that is a decision rather than a default. A kit gets the percussion dimensions - band tilt, band profile error, per-octave decay, attack, crest, brightness and velocity range - because the pitched ones are built on a fundamental (the harmonic ladder, the intonation error, the tone-to-noise ratio) and a drum hit does not have one. Which of them a gate can hold was measured rather than judged: for each dimension, the spread of the delta across the six velocities of one instrument against the spread across the 47 instruments. A dimension where the first approaches the second is measuring the measurement. That reading was taken against the corpus as it stood before `_late_renders`, so its numbers described a grid a seventh of which was not the instrument, and it has not been retaken - it needs a model render, which measuring the reference does not. Retake it in the same change as the gate.",
-  "dimensions": [],
+  "_dimensions": "A kit gets the percussion dimensions - band tilt, band profile error, per-octave decay, attack, crest, brightness, level and velocity range - because the pitched ones are built on a fundamental (the harmonic ladder, the intonation error, the tone-to-noise ratio) and a drum hit does not have one. All eight are named rather than left empty, and the difference is what the list asserts: empty means 'whatever was measured', so the gate's eight bounds were a byproduct of the measurement rather than a claim about what this kit is judged on, and a dimension that quietly stopped being produced would read as one fewer bound and nothing else. Named, the eight are the denominator, and one that cannot be reached has to be argued in `dimensions_na` instead of vanishing - the same discipline the parity allowlist runs on. Nothing is excused here: the reference profile carries a column for every one of the eight. Which of them a gate can hold is a different question and was measured rather than judged: for each dimension, the spread of the delta across the six velocities of one instrument against the spread across the 47 instruments. A dimension where the first approaches the second is measuring the measurement. That reading was taken against the corpus as it stood before `_late_renders`, so its numbers described a grid a seventh of which was not the instrument, and it has not been retaken - it needs a model render, which measuring the reference does not. Retake it in the same change as the gate.",
+  "dimensions": [
+    "band_tilt",
+    "band_shape",
+    "band_decay",
+    "attack",
+    "crest",
+    "centroid_pct",
+    "level",
+    "vel_range"
+  ],
   "_identity": "Which product this is captured from lives in the untracked sibling `drums.local.json`: the plugin's component triple and each timbre's preset. Everything here is the method. Re-capturing needs the overlay; scoring and fitting read the rendered corpus and need nothing."
 }
