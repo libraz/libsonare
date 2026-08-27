@@ -135,6 +135,42 @@ def test_hf_brighter_than_lf_is_rejected():
     assert estimate_room(wet, SR, spans).is_dry()
 
 
+def test_a_skirt_far_below_the_note_is_not_a_room():
+    """The failure a real reference produced: a dry organ reported a 0.69 s room.
+
+    A room reverberates the whole signal, so its decay is in the broadband
+    envelope as well as in the bands. What a band fit can find without one is a
+    skirt tens of dB below the note — on the dry drawbar organ the broadband
+    tail was gone 50 ms after note-off while the 500 Hz band fell from -54 dB to
+    -97 over 1.2 s. The high-frequency ratio cannot see it, because a skirt is
+    longer at the bottom exactly as a room's decay is.
+
+    Reproduced here rather than described: this signal reads 1.15 s at 500 Hz
+    against 0.19 s broadband, where the reference read 1.28 against 0.02.
+    """
+    total = int(4.6 * SR)
+    mono = np.zeros(total)
+    held = int(2.0 * SR)
+    t = np.arange(held) / SR
+    tone = np.zeros_like(t)
+    for k in (0.5, 1.0, 1.5, 2.0, 3.0, 4.0):
+        tone += (1.0 / k) * np.sin(2 * np.pi * 261.63 * k * t)
+    tone *= 0.15
+    on = int(0.1 * SR)
+    mono[on : on + held] = tone
+    # The note itself is gone within 50 ms of the key coming up.
+    rel = int(0.05 * SR)
+    mono[on + held : on + held + rel] = tone[-rel:] * np.exp(-np.arange(rel) / SR / (0.05 / 6.9))
+    # Under it, a skirt 45 dB down that takes 1.2 s to go.
+    left = total - (on + held)
+    ts = np.arange(left) / SR
+    mono[on + held :] += 10 ** (-45 / 20) * np.sin(2 * np.pi * 500.0 * ts) * np.exp(-ts * 6.9 / 1.2)
+    audio = np.stack([mono, mono], axis=1).astype(np.float32)
+
+    room = estimate_room(audio, SR, [(0.1, 2.1)])
+    assert room.is_dry(), f"a skirt 45 dB down reported a room: {room}"
+
+
 def test_dry_room_ir_is_a_passthrough():
     audio, _ = _score(SR)
     out = apply_room(audio, synth_room_ir(DRY, SR))

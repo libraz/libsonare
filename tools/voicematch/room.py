@@ -250,6 +250,20 @@ def estimate_room(audio: np.ndarray, sr: int, notes: list[tuple[float, float]]) 
     if hf_ratio >= 0.9:
         return DRY
 
+    # The gate a dry reference needs, and the one the ratio above cannot give.
+    # A room reverberates the whole signal, so a real decay is in the broadband
+    # envelope as well as in the bands. What the bands can find without it is a
+    # skirt far below the note: on a dry drawbar organ the broadband tail was
+    # gone 50 ms after note-off while the 500 Hz band fell gradually from -54 dB
+    # to -97 over 1.2 s, and the band fit -- which reads its own -5..-25 dB span
+    # -- returned that as a 0.69 s room. Nothing 45 dB down is a space the model
+    # needs convolving into. Measured across the captured corpora the broadband
+    # figure sits at 0.85 and 0.99 of the band one where the room is real, and
+    # at 0.03 where it is not.
+    broad = [t for t in (_t20_from_tail(tail, sr) for tail in tails) if t > 0.0]
+    if broad and float(np.median(broad)) < 0.5 * rt60:
+        return DRY
+
     tail_energy = sum(float(np.sum(t**2)) for t in tails)
     tail_db = 10.0 * np.log10(max(note_energy, 1e-20) / max(tail_energy, 1e-20))
 
