@@ -256,6 +256,11 @@ def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
     src = AuSource(
         plugin=cfg["plugin"],
         preset=timbre.get("preset", ""),
+        # The other route to a timbre, for a plugin whose audio-unit build keeps
+        # its state under its own keys rather than Steinberg's: a `.vstpreset`
+        # reaches those two keys only, so such a plugin takes one without
+        # complaint and ignores it. A saved class-info dictionary reaches it.
+        state=timbre.get("state", ""),
         # A rack selects its timbres by channel rather than by preset: one file
         # is loaded and each channel plays a different slot of it.
         channel=slot_channel(timbre),

@@ -216,6 +216,12 @@ class AuSource:
         # re-render for captures whose sound did not move.
         if self.channel != 1:
             identity["channel"] = self.channel
+        # A saved state is a file like a preset, so it needs the same digest for
+        # the same reason: edited in place it is a different sound at the same
+        # path. Added only when set, so no capture that predates it re-renders.
+        if self.state:
+            state = Path(self.state).expanduser()
+            identity["state_sha256"] = _sha256_file(state) if state.is_file() else ""
         return identity
 
     def argv(self, out_wav: Path, *, midi: Path | None = None) -> list[str]:

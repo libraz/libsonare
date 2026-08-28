@@ -88,6 +88,20 @@ voicematch.py compare --programs 0 \
 
 The binary is found via `AUBOUNCE`, then `PATH`, then a sibling `../aubounce` checkout.
 
+### A plugin whose state is not where Steinberg keeps it
+
+**`--au-preset` reaches a timbre only in a plugin whose audio-unit build stores its state under `Processor State` and `Controller State`.** Those two keys are one vendor's convention, not a property of audio units. A plugin that keeps its state elsewhere accepts the dictionary and ignores what was put in it — so a `.vstpreset` produces an empty rack that renders silence, or worse, whatever the plugin loads by default. **Nothing reports a failure**, which is why `aubounce info <plugin>` lists the keys a plugin actually uses and why that is worth reading before authoring a capture.
+
+A sampler that hosts third-party libraries typically keeps everything in one blob of its own. Where that is the case the route is a **saved class-info dictionary** — an `.aupreset` is exactly that — passed through the capture definition's `state` field rather than `preset`. `AuSource` digests it for the cache key on the same terms as a preset, since one edited in place is a different sound at the same path.
+
+Getting that file needs a host, and the host that can save the plugin state is not always the one that can load the instrument:
+
+- A VST-only DAW can save the plugin's **`.vstpreset`**, whose `Comp` chunk is the component state the plugin itself produced.
+- That chunk is usually byte-compatible with what the audio-unit build keeps in its own state key, because both are the plugin's `getState()` output under different wrappers. **Converting is then a matter of substituting one value in a plist** — take an `.aupreset` saved from an empty instance for its skeleton, replace the state blob, keep the other keys as the plugin wrote them.
+- **Verify the conversion took rather than assuming it.** Load the converted file and read the state size back: a plugin that ingested it re-serialises to a size that differs from both the default and the input, while one that ignored it comes back at exactly the default. An empty-rack round trip settles the format question without the content question confusing it.
+
+**Confirm the slot map after any of this, by rendering.** Two timbres that come back byte-identical mean the channel is not selecting anything, and that failure has no other symptom: every render is the right length, at a normal level, with an instrument audible in it.
+
 ### Five ways a plugin produces a plausible file rather than an error
 
 None of them announces itself. Three are detected:
