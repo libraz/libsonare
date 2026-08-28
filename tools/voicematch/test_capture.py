@@ -400,6 +400,103 @@ def test_a_silent_render_is_a_failure_rather_than_an_unmeasurable_share(tmp_path
                              floor_peak=0.237, preroll_ms=100.0, sample_rate=SR)
 
 
+def _calibration_cfg(tmp_path) -> Path:
+    """A capture definition thin enough for `calibrate` and complete enough to load."""
+    path = tmp_path / "probe.json"
+    path.write_text(json.dumps({
+        "id": "probe", "plugin": "aumu:test:test", "program": 0, "dry": False,
+        "sample_rate": SR, "settle_ms": 8000, "realtime": True, "preroll_ms": 100,
+        "gate_ms": 2000, "tail": "500ms", "notes": [60], "velocities": [100],
+        "timbres": [{"id": "one", "channel": 1}],
+    }))
+    return path
+
+
+def _settling_plugin(out_root: Path, *, needs_ms: int, weak: float = 0.12,
+                     late_ms: float = 2800.0):
+    """A fake host whose plugin is only intact once it has had `needs_ms` to load.
+
+    Under that it renders the failure this rack really produced: the note arrives
+    late and far below the level it reaches once settled, but nowhere near silent.
+    """
+    def fake_run(argv, **kwargs):
+        wav = Path(argv[argv.index("-o") + 1])
+        settle = int(argv[argv.index("--settle-ms") + 1])
+        intact = settle >= needs_ms
+        peak = 0.1733 if intact else 0.1733 * weak
+        onset = 100.0 if intact else late_ms
+        _body_file(wav, _harmonic(midi_to_hz(60), seconds=1.2) * peak, onset_ms=onset)
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": peak, "seconds": 2.6, "dropout_ms": 0}),
+            stderr="")
+    return fake_run
+
+
+def test_calibrate_will_not_recommend_a_settle_that_degrades_the_render(tmp_path, monkeypatch):
+    """The failure this guard exists for, and the one it used to recommend.
+
+    An under-settled render is weak rather than silent, so a floor set to catch
+    silence passes it: 0.0209 against a settled 0.1733 is 18 dB down and still
+    three times the floor. Recommending that settle sets every grid built after
+    it on broken audio.
+    """
+    cfg = _calibration_cfg(tmp_path)
+    monkeypatch.setattr(capture.subprocess, "run", _settling_plugin(tmp_path, needs_ms=8000))
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    report = capture.calibrate(capture.load_config(cfg), tmp_path / "out",
+                               note=60, velocity=100, verbose=False)
+    assert report["settle_min_ms"] >= 8000
+    assert report["settle_recommended_ms"] >= 8000
+    quiet = [r for r in report["settle"] if r["settle_ms"] < 8000]
+    assert quiet, "the bisection has to have tried a settle under the plugin's need"
+    assert not any(r["ok"] for r in quiet)
+
+
+def test_calibrate_still_accepts_a_plugin_that_loads_at_once(tmp_path, monkeypatch):
+    """The null: without it the comparison could be rejecting every settle.
+
+    A plugin intact from the first probe must still bisect down to a small
+    minimum, or the check has replaced one wrong answer with another.
+    """
+    cfg = _calibration_cfg(tmp_path)
+    monkeypatch.setattr(capture.subprocess, "run", _settling_plugin(tmp_path, needs_ms=0))
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    report = capture.calibrate(capture.load_config(cfg), tmp_path / "out",
+                               note=60, velocity=100, verbose=False)
+    assert report["settle_min_ms"] <= 500
+    assert all(r["ok"] for r in report["settle"])
+
+
+def test_calibrate_rejects_a_settle_whose_render_is_merely_late(tmp_path, monkeypatch):
+    """Level and timing are separate failures, and only one is a level.
+
+    A render that reaches the right peak but starts seconds in is the note the
+    plugin owed the previous probe, and the settle that produced it is not one
+    to recommend.
+    """
+    cfg = _calibration_cfg(tmp_path)
+    monkeypatch.setattr(capture.subprocess, "run",
+                        _settling_plugin(tmp_path, needs_ms=8000, weak=1.0, late_ms=2800.0))
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    report = capture.calibrate(capture.load_config(cfg), tmp_path / "out",
+                               note=60, velocity=100, verbose=False)
+    assert report["settle_min_ms"] >= 8000
+    late = [r for r in report["settle"] if r["settle_ms"] < 8000]
+    assert late and not any(r["ok"] for r in late)
+    assert all(r["onset_ms"] and r["onset_ms"] > 1000 for r in late)
+
+
+def test_the_settle_peak_ratio_sits_between_the_two_measured_readings():
+    """Both ends are a measurement, so the constant is not free to drift.
+
+    The rack that forced this reads 0.0209 under-settled against 0.1733 settled,
+    a ratio of 0.12, and reads the settled figure repeatably once it is there.
+    Under that ratio the check admits the broken render; at 1.0 it rejects any
+    plugin that is not bit-repeatable across settle times.
+    """
+    assert 0.12 < capture.SETTLE_PEAK_RATIO < 1.0
+
+
 def test_the_quiet_rescue_sits_between_the_two_measured_populations():
     """Both bounds are a measurement, so neither is free to drift.
 

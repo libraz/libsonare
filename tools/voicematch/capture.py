@@ -378,20 +378,43 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     realtime_required = bool(next(r for r in rt_rows if not r["realtime"])["dropout_ms"])
     report["realtime_required"] = realtime_required
 
-    # 2. Settle time, by bisection on "does a note come out at all".
+    # 2. Settle time, by bisection on "does the note come out INTACT".
+    #
+    # Not "at all": an absolute floor only catches the failure at its extreme.
+    # Under-settling degrades before it silences, and on one rack here the
+    # degraded render peaks 0.0209 against a correct 0.1733 -- 18 dB down, three
+    # times louder than the floor, and reported ok. The recipe that came out of
+    # it was a settle at which the rack renders silence or a note arriving
+    # nearly three seconds late, so every grid built on it would have been built
+    # on broken audio.
+    #
+    # So a settle is judged against the render step 1 already took at a generous
+    # settle, on the two ways it goes wrong: the note comes out quiet, or it
+    # comes out late. Both are compared rather than thresholded absolutely.
     print("== settle ==", file=sys.stderr)
     src = replace(base, realtime=True)
     settle_rows = []
+    # What this plugin reaches when it has had time. Step 1 renders at
+    # `max(4000, base.settle_ms)`, so it is the intact reading to measure against.
+    reference_peak = max((float(r["peak"] or 0.0) for r in rt_rows), default=0.0)
 
     def sounds(ms: int) -> bool:
-        s = _probe(replace(src, settle_ms=ms), scratch / f"settle_{ms}.wav", note, velocity,
-                   gate_ms, sends=sends)
+        wav = scratch / f"settle_{ms}.wav"
+        s = _probe(replace(src, settle_ms=ms), wav, note, velocity, gate_ms, sends=sends)
         peak, drop = float(s.get("peak", 0.0)), s.get("dropout_ms", 0)
-        ok = peak >= src.min_peak and not drop
+        onset = _onset_ms(wav, int(cfg["sample_rate"])) if wav.exists() else None
+        quiet = reference_peak > 0.0 and peak < reference_peak * SETTLE_PEAK_RATIO
+        late = onset is not None and onset > float(src.preroll_ms) + ONSET_SLACK_MS
+        ok = peak >= src.min_peak and not drop and not quiet and not late
+        why = ("ok" if ok else
+               "SILENT" if peak < src.min_peak else
+               "DROPOUT" if drop else
+               f"QUIET ({peak / reference_peak:.2f}x the settled peak)" if quiet else
+               f"LATE ({onset:.0f} ms)" if late else "not ok")
         settle_rows.append({"settle_ms": ms, "peak": peak, "dropout_ms": drop,
+                            "onset_ms": None if onset is None else round(onset, 2),
                             "seconds": s.get("seconds"), "wall_s": s.get("wall_s"), "ok": ok})
-        print(f"  settle={ms:6d} peak={peak:.4f} dropout={drop}ms -> {'ok' if ok else 'SILENT'}",
-              file=sys.stderr)
+        print(f"  settle={ms:6d} peak={peak:.4f} dropout={drop}ms -> {why}", file=sys.stderr)
         return ok
 
     lo, hi = 0, 500
@@ -648,6 +671,14 @@ ONSET_SLACK_MS = 10.0
 #: Absolute level that counts as the render having begun. Well under anything an
 #: instrument radiates and well over a silent preroll, which is exactly zero.
 ONSET_FLOOR_DBFS = -80.0
+
+#: How far under the settled peak a calibration render may sit and still count as
+#: that plugin loaded. An under-settled render is not silent, it is weak: on the
+#: rack that forced this, the same note reads 0.0209 at a half-second settle and
+#: 0.1733 at eight, and reads the latter three times running once it is there.
+#: Half leaves room for a plugin less repeatable than these while rejecting a
+#: miss of that size, which is 0.12 of the settled peak.
+SETTLE_PEAK_RATIO = 0.5
 
 
 def _onset_ms(path: Path, sr: int) -> float | None:
