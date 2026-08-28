@@ -287,6 +287,10 @@ def test_a_late_render_is_retried_rather_than_recorded(tmp_path, monkeypatch):
                                              "seconds": 2.0}), stderr="")
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    # The argv is built but never executed, so the binary only has to be
+    # nameable: without this the case passes on a checkout with an aubounce
+    # sibling beside it and fails everywhere else.
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
     src = AuSource(plugin="aumu:test:test")
     summary = capture._render_note(src, out, 42, 127, 50, floor_peak=0.0,
                                    preroll_ms=100.0, sample_rate=SR)
@@ -307,6 +311,7 @@ def test_a_render_on_time_is_taken_first_try(tmp_path, monkeypatch):
                                stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr="")
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
     summary = capture._render_note(AuSource(plugin="aumu:test:test"), out, 38, 100, 50,
                                    floor_peak=0.0, preroll_ms=100.0, sample_rate=SR)
     assert len(calls) == 1
