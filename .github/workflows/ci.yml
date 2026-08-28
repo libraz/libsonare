@@ -73,36 +73,52 @@ jobs:
           python3 -m pip install --disable-pip-version-check ruff==0.15.14
           python3 -m ruff check bindings/python/src bindings/python/tests
       - name: Drift gates
-        # The mechanical cross-surface gates. All are stdlib-only and read-only.
-        # `gen_abi_layout.py --check` is the only one needing a compiler, and it
-        # builds a small probe from the public C headers rather than the
-        # project, so this job stays build-free. Invoked directly rather than
-        # through `make ci-local`, whose layout target wraps the same script in
-        # rye -- which the runner does not have and the script does not need.
+        # The mechanical cross-surface gates, all stdlib-only and read-only.
+        # Invoked through the Makefile so this list cannot drift from it: a
+        # hand-copied one silently omits whatever gate is added to `conformance`
+        # next, and reports green while doing it.
         #
-        # The layout check is the load-bearing one: it compares every ctypes
-        # Structure against sizeof/alignof/offsetof taken from the C headers,
-        # and a desync there segfaults the Python binding rather than failing a
-        # test.
+        # `gen_abi_layout.py --check` stays a direct call, because the Makefile
+        # wraps it in rye -- which the runner does not have and the script does
+        # not need. It is the only gate needing a compiler, and it builds a
+        # small probe from the public C headers rather than the project, so this
+        # job stays build-free. It is also the load-bearing one: it compares
+        # every ctypes Structure against sizeof/alignof/offsetof taken from the
+        # C headers, and a desync there segfaults the Python binding rather than
+        # failing a test.
+        #
+        # `parity` depends on `conformance`, whose closing live-CLI comparison
+        # skips itself when no built CLI is present, as it is here.
         working-directory: .
         run: |
-          python3 tools/abi/check_abi_versions.py
-          python3 tools/generate_processor_types.py --check
           python3 tools/abi/gen_abi_layout.py --check
-          python3 tools/conformance/check_public_contracts.py
-          python3 tools/api/check_request_object_coverage.py
-          python3 tools/conformance/check_cli_contract.py --schema
-          python3 -m unittest tests/conformance/test_cli_contract.py
-          python3 tools/parity/check_parity.py
-          python3 tools/parity/test_handle_gating.py
-          python3 tools/parity/test_record_shape.py
-          python3 tools/parity/test_ts_reexport.py
-          python3 tools/parity/test_surface_coverage.py
-          python3 tools/parity/test_allowlist_audit.py
-          python3 tools/eval/test_summarize_accuracy.py
-          python3 tools/audition/test_serve.py
-          python3 tools/parity/surface_coverage.py --check
-          python3 tools/parity/check_parity.py --audit-allowlist
+          make check-abi-version
+          make processor-types-check
+          make parity
+
+  voicematch:
+    name: Calibration harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the calibration harness self-tests
+        # `tools/` sits outside ctest and outside the drift gates, and this
+        # workflow runs ctest directly rather than `make test`, so nothing else
+        # here exercises the harness the instrument bank is calibrated with.
+        #
+        # The cases read only the tracked capture definitions and reference
+        # profiles -- no rendered corpus, no plugin, no built library -- so this
+        # job stays build-free. Two skip themselves when there is no shared
+        # library to render with.
+        #
+        # Invoked directly rather than through `make test-voicematch`, which
+        # wraps the same command in rye for a dylib these cases do not need.
+        # Both versions are the ones resolved in requirements-dev.lock, pinned
+        # for the reason ruff is: an unpinned install lets a new release fail an
+        # unrelated pull request.
+        run: |
+          python3 -m pip install --disable-pip-version-check pytest==9.0.2 numpy==2.4.6
+          python3 -m pytest tools/voicematch -q
 
   build-and-test:
     name: Native C++ (${{ matrix.os }})
