@@ -20,6 +20,11 @@
 ///
 /// RT contract: everything here is POD + pure functions — usable from the
 /// audio thread without allocation.
+///
+/// The compatibility contract this implements is docs/gs.md: the target
+/// device, the level every address carries, the parameters reachable from
+/// more than one direction, and the extensions on top. It is a specification
+/// rather than a guide.
 
 #include <array>
 #include <cstddef>

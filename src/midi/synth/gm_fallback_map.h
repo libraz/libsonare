@@ -12,6 +12,12 @@
 /// dedicated modes (FM e-pianos, KS guitars, modal mallets, ...) by changing
 /// table entries only. The returned references point at static const data —
 /// safe to keep in a voice for its whole life and on the audio thread.
+///
+/// What belongs in a patch and what belongs after it is docs/voicing.md: the
+/// voice is the instrument, and a cabinet, an amplifier or a room is a stage
+/// the bank binds by default rather than something baked into the patch. The
+/// send weights here are the other kind — they multiply a send the file
+/// controls, so CC 0 stays dry, which is the test that separates the two.
 
 #include <cstdint>
 
