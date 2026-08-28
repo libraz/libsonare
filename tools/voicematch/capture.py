@@ -582,6 +582,30 @@ def _job_id(timbre: dict, note: int, vel: int) -> str:
 # around -24 dB, and a render whose samples did not arrive sits at -42 dB.
 QUIET_RATIO = 1.0 / 40.0  # -32 dB
 
+# The ratio above is a piano's dynamic range, and an instrument with a wider one
+# runs off the bottom of it. A clarinet reads 49 dB from velocity 16 to 127 while
+# its centroid moves 574 Hz to 1625, so velocity is a change of timbre rather
+# than of level -- and its softest layer sits below -32 dB at every note from 62
+# up, which rejected seven legitimate cells five attempts each at a stable value.
+#
+# Level cannot separate the two populations there, so this asks the other
+# question: not how loud the render is, but whether it is the note. A quiet real
+# note still puts all of its energy on the series of the key that was pressed,
+# and a render whose samples never arrived has no series to put it on.
+#
+# Measured on both populations rather than chosen. Across six slots of one rack
+# -- including the breathy ones, flute and piccolo -- and 40 dB of level, a real
+# note reads 0.9996 to 1.0000. Broadband noise reads 0.43 at both -42 and -60
+# dBFS, which is the fraction a flat spectrum puts inside the partial bands by
+# construction and so does not drift with level; digital silence and a lone click
+# report nothing at all. The threshold sits between the two with room for an
+# instrument noisier than any measured here.
+#
+# It needs no percussion exemption, because it cannot fire for percussion: a kit
+# answers a key with an instrument whose partials have no relation to it, reads
+# far below this, and keeps exactly today's behaviour.
+QUIET_TONE_SHARE = 0.8
+
 # The other failure, and the one the ratio above is structurally unable to see:
 # the note arrives LATE, and louder than it should be.
 #
@@ -633,6 +657,20 @@ def _onset_ms(path: Path, sr: int) -> float | None:
     return float(np.argmax(over)) / float(file_sr or sr) * 1000.0
 
 
+def _tone_share(path: Path, note: int, sr: int, preroll_ms: float) -> float | None:
+    """How much of the written render sits on the series of the key that was pressed.
+
+    `None` where there is nothing to measure — a silent render, or one too short
+    to resolve the tolerance.
+    """
+    audio, file_sr = read_wav(path)
+    if audio.size == 0:
+        return None
+    rate = int(file_sr or sr)
+    mono = to_mono(audio)[int(rate * preroll_ms / 1000.0):]
+    return harmonic_share(mono, rate, midi_to_hz(note))
+
+
 def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
                  *, floor_peak: float, preroll_ms: float = 0.0,
                  sample_rate: int = 48000, attempts: int = 5,
@@ -650,6 +688,12 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
     same note, not an absolute floor: the real notes at the top of the keyboard
     at velocity 24 are quiet enough that any fixed threshold either lets a
     failure through down there or rejects real notes.
+
+    A relative floor is still a level test, and on an instrument whose dynamic
+    range is wider than the one it was measured on it cuts into real notes. So
+    falling under it is a suspicion rather than a verdict: what settles it is
+    whether the render carries the series of the key that was pressed. See
+    QUIET_TONE_SHARE.
     """
     out.parent.mkdir(parents=True, exist_ok=True)
     floor = max(src.min_peak, floor_peak * QUIET_RATIO)
@@ -677,8 +721,14 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
             continue
         peak = float(summary.get("peak", 0.0))
         if peak < floor:
-            last = f"peak {peak:.5f} against a floor of {floor:.5f}: the samples did not arrive"
-            continue
+            # Quiet is not the same as absent. See QUIET_TONE_SHARE.
+            share = _tone_share(out, note, sample_rate, preroll_ms)
+            if share is None or share < QUIET_TONE_SHARE:
+                heard = "no tone at all" if share is None else f"a tone share of {share:.3f}"
+                last = (f"peak {peak:.5f} against a floor of {floor:.5f} and {heard}: "
+                        f"the samples did not arrive")
+                continue
+            summary["quiet_tone_share"] = round(share, 4)
         onset = _onset_ms(out, sample_rate)
         summary["onset_ms"] = None if onset is None else round(onset, 2)
         if onset is not None and onset > preroll_ms + ONSET_SLACK_MS:

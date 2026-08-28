@@ -318,6 +318,100 @@ def test_a_render_on_time_is_taken_first_try(tmp_path, monkeypatch):
     assert summary["attempts"] == 1
 
 
+def _body_file(path: Path, body: np.ndarray, *, onset_ms: float = 100.0, sr: int = SR) -> Path:
+    """A capture-shaped WAV: digital silence, then `body`."""
+    start = int(onset_ms / 1000.0 * sr)
+    audio = np.zeros((start + len(body), 2), dtype=np.float32)
+    audio[start:, 0] = body
+    audio[start:, 1] = body
+    write_wav(path, audio, sr)
+    return path
+
+
+def test_a_quiet_render_that_carries_the_note_is_kept(tmp_path, monkeypatch):
+    """A level test alone cuts into instruments louder-ranged than the piano.
+
+    The floor is a ratio measured from a piano's 24 dB of velocity range. A
+    clarinet's is 49, so its softest layer sits under the floor at every note
+    from 62 up, and seven legitimate cells were rejected five attempts each at a
+    stable value. What separates them is not level: this render is 40 dB below
+    its own note's loudest and every bit of its energy is on that note's series.
+    """
+    out = tmp_path / "n086_v032.wav"
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(len(calls))
+        _body_file(out, _harmonic(midi_to_hz(86), seconds=1.0) * 0.0024)
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.0024, "seconds": 1.1}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    summary = capture._render_note(AuSource(plugin="aumu:test:test"), out, 86, 32, 50,
+                                   floor_peak=0.237, preroll_ms=100.0, sample_rate=SR)
+    assert len(calls) == 1
+    assert summary["attempts"] == 1
+    assert summary["quiet_tone_share"] >= capture.QUIET_TONE_SHARE
+
+
+def test_a_quiet_render_with_no_note_in_it_still_fails(tmp_path, monkeypatch):
+    """The positive control: the rescue above must still be able to reject.
+
+    Same level as the case above and the same floor, differing only in carrying
+    no series — which is what a render whose samples never arrived looks like.
+    Without this the rescue would be indistinguishable from deleting the guard.
+    """
+    out = tmp_path / "n086_v032.wav"
+    calls = []
+    noise = (np.random.default_rng(11).standard_normal(SR) * 0.0008).astype(np.float32)
+
+    def fake_run(argv, **kwargs):
+        calls.append(len(calls))
+        _body_file(out, noise)
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.0024, "seconds": 1.1}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    with pytest.raises(capture.AuRenderError, match="the samples did not arrive"):
+        capture._render_note(AuSource(plugin="aumu:test:test"), out, 86, 32, 50,
+                             floor_peak=0.237, preroll_ms=100.0, sample_rate=SR)
+    assert len(calls) == 5
+
+
+def test_a_silent_render_is_a_failure_rather_than_an_unmeasurable_share(tmp_path, monkeypatch):
+    """`harmonic_share` reports None on silence, and None must not read as pass.
+
+    Silence is the original failure this guard was written for, so the one
+    answer it may never give is the benefit of the doubt.
+    """
+    out = tmp_path / "n086_v032.wav"
+
+    def fake_run(argv, **kwargs):
+        write_wav(out, np.zeros((SR, 2), dtype=np.float32), SR)
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.0, "seconds": 1.0}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    with pytest.raises(capture.AuRenderError, match="no tone at all"):
+        capture._render_note(AuSource(plugin="aumu:test:test"), out, 86, 32, 50,
+                             floor_peak=0.237, preroll_ms=100.0, sample_rate=SR)
+
+
+def test_the_quiet_rescue_sits_between_the_two_measured_populations():
+    """Both bounds are a measurement, so neither is free to drift.
+
+    A real note reads 0.9996 to 1.0000 across six slots of one rack and 40 dB of
+    level; broadband noise reads 0.43 at both -42 and -60 dBFS, which is the
+    fraction a flat spectrum lands inside the partial bands by construction. Set
+    under the noise figure this admits failed loads, and up at the real one it
+    rejects any instrument noisier than the ones it was measured on.
+    """
+    assert 0.5 < capture.QUIET_TONE_SHARE < 0.99
+
+
 # --------------------------------------------------------------------------
 # the per-note tail, and the sides that have to render over it
 
