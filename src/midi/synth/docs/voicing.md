@@ -68,6 +68,20 @@ A program change on a part changes which rig that part should carry, and buildin
 - **A rig swapped under a sounding note loses that note's tail through the old rig.** The same is true of an EFX change on the hardware, and making it seamless would mean running both rigs during the crossover for an effect nobody asked for. Accepted, and stated so it is not rediscovered as a bug.
 - **Offline renders resolve inline.** The bounce path already realises a pending change at the top of a block rather than waiting for a control-thread pump, so a program change mid-render takes effect in the same block it arrived in — and the render stays deterministic, which is what the bit-identical contract needs.
 
+## A reference is on one side of the boundary or the other, and which one decides what it may be used for
+
+**A dry reference is not a DI one.** Dryness is measured by looking for a tail, and a cabinet has none — it is a filter, not a space. So a close-mic'd amplified guitar passes every dryness test there is and is still on the far side of the boundary, with the whole rig inside it.
+
+The distinction has to be recorded per capture, because nothing downstream can infer it: a reference that carries a rig looks exactly like one that does not, until a model fitted against it acquires a cabinet it was never supposed to have.
+
+**A reference that carries a rig is an acceptance target. It is never a fit target.**
+
+- **Fit the instrument against a reference at the instrument's own boundary.** For an electric string that means a DI.
+- **Check the instrument-plus-rig against a reference that carries one.** This is the only measurement that says the separation closed end to end, and it is worth more than a second same-side reference: the two are measuring different quantities, so they cannot form a spread, but together they bracket the whole chain.
+- **Fitting the instrument directly against a rigged reference is the failure this whole page exists to prevent.** It produces a model that reproduces an amplifier with string parameters — the fit closes, every metric improves, and the work is lost the moment the rig is put back where it belongs. The hazard is not hypothetical or rare: the rigged reference is usually the one that already exists, and the fitter will run against it without complaint.
+
+This is the same shape as the room rule and the opposite conclusion, for a reason worth stating: a room can be measured and convolved onto the model, so a wet reference is usable after correction. **A rig cannot be undone that way** — it is nonlinear, so there is no inverse to apply and nothing to correct with.
+
 ## Fitting
 
 **Never let one optimiser move both sides.** The instrument's brightness and the rig's tone control reach the same measurement; a fit given both will trade them against each other and settle somewhere that transfers to neither.
@@ -91,3 +105,4 @@ So a binding is reported by the library in the tuning dump and carries a unit in
 - **A spec-compliant file must come out sounding complete without asking.** That is the acceptance criterion for any change to how a rig is bound.
 - **One implementation per rig component.** Reuse the calibrated one; do not write a lightweight second copy inside the synth.
 - **Capture the instrument at its own boundary.** A reference that bakes in a rig is fitted as instrument-and-rig together, and the model's own boundary is then unmeasured.
+- **A capture records whether its reference carries a rig, and dryness does not answer that.** A rigged reference is an acceptance target and never a fit target; a rig has no inverse, so unlike a room it cannot be corrected for.
