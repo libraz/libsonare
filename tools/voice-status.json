@@ -3647,15 +3647,15 @@
       "tone_class": "plucked-string",
       "patch": "nylon_guitar",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "nylon_guitar",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "nylon_guitar",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -3686,7 +3686,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p024b001-acoustic-guitar-nylon",
@@ -3902,15 +3902,15 @@
       "tone_class": "plucked-string",
       "patch": "steel_guitar",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "steel_guitar",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "steel_guitar",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -3941,7 +3941,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p025b001-acoustic-guitar-steel",
@@ -4259,15 +4259,15 @@
       "tone_class": "plucked-string",
       "patch": "muted_guitar",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "muted_guitar",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "muted_guitar",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -4298,7 +4298,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p029-overdriven-guitar",
@@ -4310,15 +4310,15 @@
       "tone_class": "plucked-string",
       "patch": "overdriven",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "overdriven_guitar",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "overdriven",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -4349,7 +4349,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p030-distortion-guitar",
@@ -4361,15 +4361,15 @@
       "tone_class": "plucked-string",
       "patch": "distortion",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "distortion_guitar",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "distortion",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -4400,7 +4400,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p031-guitar-harmonics",
@@ -4412,15 +4412,15 @@
       "tone_class": "plucked-string",
       "patch": "guitar_harmonics",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "guitar_harmonics",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "guitar_harmonics",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -4451,7 +4451,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p032-acoustic-bass",
@@ -4463,20 +4463,22 @@
       "tone_class": "plucked-string",
       "patch": "bass_acoustic",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "acoustic_bass",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_acoustic",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4484,7 +4486,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4502,7 +4503,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p033-electric-bass-finger",
@@ -4514,20 +4515,22 @@
       "tone_class": "plucked-string",
       "patch": "bass_fingered",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "bass_fingered",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_fingered",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4535,7 +4538,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4553,7 +4555,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p034-electric-bass-pick",
@@ -4565,20 +4567,22 @@
       "tone_class": "plucked-string",
       "patch": "bass_picked",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "bass_picked",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_picked",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4586,7 +4590,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4604,7 +4607,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p035-fretless-bass",
@@ -4616,20 +4619,22 @@
       "tone_class": "plucked-string",
       "patch": "bass_fretless",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "bass_fretless",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_fretless",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4637,7 +4642,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4655,7 +4659,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p036-slap-bass-1",
@@ -4718,20 +4722,22 @@
       "tone_class": "plucked-string",
       "patch": "bass_pop",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "bass_pop",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_pop",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4739,7 +4745,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4757,7 +4762,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p038-synth-bass-1",
@@ -4769,28 +4774,29 @@
       "tone_class": "plucked-string",
       "patch": "fam4",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "synth_bass_1",
       "stage": 0.0,
       "stage_name": "untouched",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fam4",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "aftersound",
+            "decay",
+            "doubling",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4820,28 +4826,29 @@
       "tone_class": "plucked-string",
       "patch": "fam4",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "synth_bass_2",
       "stage": 0.0,
       "stage_name": "untouched",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fam4",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "aftersound",
+            "decay",
+            "doubling",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5259,20 +5266,22 @@
       "tone_class": "plucked-string",
       "patch": "harp",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "orchestral_harp",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "harp",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -5280,7 +5289,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5298,7 +5306,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p047-timpani",

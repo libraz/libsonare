@@ -1,0 +1,64 @@
+{
+  "id": "nylon_guitar",
+  "label": "Nylon-string guitar, sampled, close and dry",
+  "program": 24,
+  "takes": "sustained",
+  "audition_title": "libsonare nylon guitar vs the sampled reference",
+  "_notes": "Every fourth semitone across the compass this program is probed on, 40 to 64, and no further. Both ends were rendered before the grid was written and both speak: the peaks run 0.245, 0.270, 0.255 at the low, middle and high probe notes, and the share of energy on the played key's own series is 0.987 or better at all three. A note outside the compass is left out rather than transposed, because there the reference is stretching a sample and a model fitted against it would be fitted against the sampler.",
+  "notes": [
+    40,
+    44,
+    48,
+    52,
+    56,
+    60,
+    64
+  ],
+  "_velocities": "Five. On a plucked string velocity is the pluck itself rather than a volume control, so it moves the partial stack as much as the level: on this slot velocity 32 sits -12.2 dB under velocity 100 at the middle probe note. The softest row is kept because it is the most distinct timbre the instrument has, not because the level is interesting.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed. Not one of the plugin's advertised parameters matches `reverb` with this rack loaded, and the render agrees: the note goes to the numerical floor within a fifth of a second of the key lifting, with no tail behind it. `dry` therefore has no section to act on and is left off rather than claiming an effect was disabled, which makes this a dry anchor.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "A plucked string is stopped by the player rather than by running out, so the gate is long and the tail is short - the opposite of a voice whose interest is what follows the release. The free fall happens while the key is still down, -19 dBFS a quarter of a second in and -50 at six seconds, which is what the long gate is for: a decay measured over a gate shorter than the fall is a slope fitted to its own first moments. The key lifting then damps it to the numerical floor within a fifth of a second, so half a second of tail records the whole of the stop.",
+  "gate_ms": 6000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack: the reference renders identically in real time and faster than it, the same note twice is bit-identical - so there is no round robin to put a floor under the loss - and the settle minimum is a quarter of a second. `realtime` is kept on anyway, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. The rack holds one slot per GM program, so there is no second of this instrument in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference buys is a measured target for `autofit` and `--diagnose` where the voice could previously only be fitted by ear.",
+  "timbres": [
+    {
+      "id": "gm025",
+      "label": "GM nylon guitar, rack slot 9",
+      "channel": 9
+    }
+  ],
+  "_dimensions": "The slot is a plucked nylon string source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. `stereo` is gated rather than excused because this slot does render an image: its two channels are not identical.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so anything not gated here has to be argued here.",
+  "dimensions_na": {},
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `nylon_guitar.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/nylon_guitar.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 9, and it was rendered at its own three probe notes before anything else was written, reading 0.987 or better of its energy on the series of the key pressed. The same renders are what say the slot rings at all: four slots of these racks hold a sample that is at the numerical floor half a second into a six-second key, and a grid written for one of those would take every measurement on silence."
+}
