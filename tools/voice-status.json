@@ -5111,25 +5111,26 @@
       "tone_class": "sustained",
       "patch": "contrabass",
       "engine": "bowed_string",
-      "capture": null,
+      "capture": "contrabass",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "contrabass",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5147,7 +5148,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p044-tremolo-strings",
@@ -5745,25 +5746,26 @@
       "tone_class": "sustained",
       "patch": "trumpet",
       "engine": "brass",
-      "capture": null,
+      "capture": "trumpet",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "trumpet",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5781,7 +5783,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p057-trombone",
@@ -5793,25 +5795,26 @@
       "tone_class": "sustained",
       "patch": "trombone",
       "engine": "brass",
-      "capture": null,
+      "capture": "trombone",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "trombone",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5829,7 +5832,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p058-tuba",
@@ -5937,15 +5940,15 @@
       "tone_class": "sustained",
       "patch": "french_horn",
       "engine": "brass",
-      "capture": null,
+      "capture": "french_horn",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "french_horn",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -5973,7 +5976,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p061-brass-section",
@@ -5985,15 +5988,15 @@
       "tone_class": "sustained",
       "patch": "brass_section",
       "engine": "brass",
-      "capture": null,
+      "capture": "brass_section",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "brass_section",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -6021,7 +6024,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p062-synth-brass-1",
@@ -6033,15 +6036,15 @@
       "tone_class": "sustained",
       "patch": "fam7",
       "engine": "fm",
-      "capture": null,
+      "capture": "synth_brass_1",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "fam7",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -6069,7 +6072,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p063-synth-brass-2",
@@ -6081,15 +6084,15 @@
       "tone_class": "sustained",
       "patch": "fam7",
       "engine": "fm",
-      "capture": null,
+      "capture": "synth_brass_2",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "fam7",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -6117,7 +6120,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p064-soprano-sax",
