@@ -1,0 +1,61 @@
+{
+  "id": "tango_accordion",
+  "label": "Tango accordion, sampled, close and dry",
+  "program": 23,
+  "takes": "sustained",
+  "audition_title": "libsonare tango accordion vs the sampled reference",
+  "_notes": "Every sixth semitone across the compass this program is probed on, 53 to 84, which is the step the other organ captures here use: a keyboard voice's compass is the point of it, and a wide one asks for reach rather than resolution. Both ends were rendered before the grid was written and both speak, the peaks running 0.115, 0.117, 0.113 at the low, middle and high probe notes.",
+  "notes": [
+    53,
+    59,
+    65,
+    71,
+    77,
+    83,
+    84
+  ],
+  "_velocities": "Five. The slot does respond: velocity 32 sits -10.4 dB under velocity 100 at the middle probe note. That is a narrower span than a blown or plucked voice and it is the instrument's, so the softest row is kept rather than dropped for being close to the loudest.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed. Not one of the plugin's advertised parameters matches `reverb` with this rack loaded, and the render agrees: the note is 90 dB down a tenth of a second after the key lifts, with no room behind it. `dry` therefore has no section to act on and is left off rather than claiming an effect was disabled.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "A key holds this voice open and releasing it shuts the sound off rather than letting it fall, so the gate only has to outlast the metrics' sustain window - 30 to 90 per cent of the note, capped at 0.6 to 1.8 s - and the tail only has to catch the shut-off. The render was traced before the gate was chosen: it is still sounding at six seconds and at the numerical floor a tenth of a second after the key lifts.",
+  "gate_ms": 3000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, run against it rather than carried over from another: the reference renders identically in real time and faster than it, the same note twice is bit-identical, and the settle minimum is a quarter of a second. `realtime` is kept on anyway, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. The rack holds one slot per GM program, so there is no second registration of this instrument in it to disagree with. What the reference buys is a measured target for `autofit` and `--diagnose` where the voice could previously only be fitted by ear.",
+  "timbres": [
+    {
+      "id": "gm024",
+      "label": "GM tango accordion, rack slot 8",
+      "channel": 8
+    }
+  ],
+  "_dimensions": "The slot is a free reed. `damper` matters here in the way it does on anything whose key is a valve rather than a hammer: the sound stops when the key does, and a model that lets it fall instead gives itself away there. `stereo` is gated rather than excused because this slot does render an image - its two channels are not identical, which is not true of every rack here.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a sustained voice already drops `decay`, `aftersound` and `doubling` - a voice fed continuously has no free fall for them to describe - so those are not listed here.",
+  "dimensions_na": {},
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `tango_accordion.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/tango_accordion.json`.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 8, and it was rendered at its own three probe notes before anything else was written, reading 0.999 of its energy on the series of the key pressed. The same renders are what say the slot sustains: several slots of these racks hold a sample that is gone within half a second of a held key, and this one is still sounding at six."
+}
