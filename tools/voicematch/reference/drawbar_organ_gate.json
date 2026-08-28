@@ -3,7 +3,7 @@
   "timbre": "drawbar-dark",
   "margin": 1.25,
   "reference_measured_utc": "2026-08-27T15:34:48+00:00",
-  "recorded_utc": "2026-08-27T15:42:02+00:00",
+  "recorded_utc": "2026-08-28T09:43:02+00:00",
   "reference_spread": {
     "balance": 19.335,
     "body": 22.41,
@@ -17,8 +17,8 @@
   },
   "bounds": {
     "stretch": {
-      "median": 1.584,
-      "abs_median": 1.584
+      "median": 1.597,
+      "abs_median": 1.597
     },
     "tnr": {
       "median": 16.495,
@@ -33,8 +33,8 @@
       "abs_median": 0.258
     },
     "balance": {
-      "median": 81.328,
-      "abs_median": 81.328
+      "median": 38.15,
+      "abs_median": 39.667
     },
     "centroid_pct": {
       "median": 177.172,
@@ -49,8 +49,8 @@
       "abs_median": 0.7
     },
     "register": {
-      "median": 1.456,
-      "abs_median": 1.869
+      "median": 1.135,
+      "abs_median": 1.887
     }
   }
 }

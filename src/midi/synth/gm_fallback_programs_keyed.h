@@ -594,15 +594,17 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harpsichord_keyoff = o.harpsichord;
   o.harpsichord_keyoff.harpsichord.jack_noise = 0.5f;
 
-  // Drawbar Organ (GM 16): the tonewheel generator at 88 8402 001, the base
-  // registration. A patch of its own rather than the organ family's, which is
-  // what makes the registration addressable and gives 18 something to differ
-  // from; the values are the family's, moved rather than changed.
+  // Drawbar Organ (GM 16): the tonewheel generator at 88 5642 000. A patch of
+  // its own rather than the organ family's, which is what makes the
+  // registration addressable and gives 18 something to differ from.
+  // The stops are the reference's own ladder measured at each drawbar ratio and
+  // snapped to the nearest detent: its sub-octaves stand 8.7 dB over the 8',
+  // which no registration can express until the 8' itself comes down to 5.
   NativeSynthPatch& dr = o.drawbar_organ;
   dr.mode = SynthEngineMode::kAdditive;
   dr.amp_env = fallback_env(2.0f, 0.0f, 1.0f, 60.0f);
   dr.cutoff_hz = 20000.0f;
-  dr.additive.drawbars = {8.0f, 8.0f, 8.0f, 4.0f, 0.0f, 2.0f, 0.0f, 0.0f, 1.0f};
+  dr.additive.drawbars = {8.0f, 8.0f, 5.0f, 6.0f, 4.0f, 2.0f, 0.0f, 0.0f, 0.0f};
   dr.additive.key_click = 0.4f;
   dr.stereo_spread = 0.2f;
   dr.gain = 0.7f;

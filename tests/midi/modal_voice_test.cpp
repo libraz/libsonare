@@ -209,13 +209,15 @@ TEST_CASE("the drawbar organ stacks its registration partials with a key click",
   const double f0 = 220.0;
   const std::vector<float> tone = render_patch(organ, 57, 100, 24000);
 
-  // Registration pitches present (16' = 0.5, 8' = 1, 5-1/3' = 1.5, 4' = 2);
-  // unpulled drawbars (2-2/3' = 3) carry no energy.
+  // Registration pitches present (16' = 0.5, 5-1/3' = 1.5, 8' = 1, 4' = 2,
+  // 2-2/3' = 3); unpulled drawbars (1-3/5' = 5, 1' = 8) carry no energy.
   const std::vector<double> power = power_spectrum(tone, 8192);
   REQUIRE(band_power(power, f0 * 0.5) > 0.01 * band_power(power, f0));
   REQUIRE(band_power(power, f0 * 1.5) > 0.01 * band_power(power, f0));
   REQUIRE(band_power(power, f0 * 2.0) > 0.005 * band_power(power, f0));
-  REQUIRE(band_power(power, f0 * 3.0) < 0.002 * band_power(power, f0));
+  REQUIRE(band_power(power, f0 * 3.0) > 0.005 * band_power(power, f0));
+  REQUIRE(band_power(power, f0 * 5.0) < 0.002 * band_power(power, f0));
+  REQUIRE(band_power(power, f0 * 8.0) < 0.002 * band_power(power, f0));
 
   // Tonewheels sustain: no decay between 0.2 s and 0.45 s.
   REQUIRE(rms(tone, 9600, 12000) > 0.7f * rms(tone, 4800, 7200));

@@ -2536,8 +2536,8 @@
       "patch": "drawbar_organ",
       "engine": "additive",
       "capture": "drawbar_organ",
-      "stage": 0.6,
-      "stage_name": "covered",
+      "stage": 0.8,
+      "stage_name": "agreeing",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
@@ -2555,20 +2555,19 @@
           "complete": true
         },
         "agreement": {
-          "inside": 4,
+          "inside": 5,
           "total": 9,
           "outside": {
-            "balance": 3.37,
             "vel_range": 1.81,
+            "balance": 1.58,
             "stereo": 1.2,
-            "register": 1.03,
-            "stretch": 1.01
+            "stretch": 1.02
           }
         },
         "structure": null,
         "music": null
       },
-      "next": "outside the reference spread: balance 3.37x, vel_range 1.81x, stereo 1.2x"
+      "next": "record a structural residual with autofit --diagnose, then sign off a musical take"
     },
     {
       "slug": "p016b001-drawbar-organ",
