@@ -1078,13 +1078,18 @@ TEST_CASE("Native and SF2 synths preserve source-track voice attribution", "[mid
 namespace {
 
 /// Held note from a GM fallback program, left channel.
-std::vector<float> render_program(uint8_t program, uint8_t note, int num_samples) {
+std::vector<float> render_patch(const sonare::midi::synth::NativeSynthPatch& patch, uint8_t note,
+                                int num_samples) {
   NativeSynthConfig cfg;
-  cfg.patch = sonare::midi::synth::gm_fallback_patch(0, program);
+  cfg.patch = patch;
   NativeSynth synth(cfg);
   synth.prepare(kOutRate, 256);
   synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
   return render(synth, num_samples).left;
+}
+
+std::vector<float> render_program(uint8_t program, uint8_t note, int num_samples) {
+  return render_patch(sonare::midi::synth::gm_fallback_patch(0, program), note, num_samples);
 }
 
 /// Fraction of spectral power above @p split_hz in a window of @p fft samples
@@ -1125,6 +1130,69 @@ TEST_CASE("the synth leads and pads are sixteen voices, not two", "[midi][synth]
     for (size_t j = i + 1; j < tones.size(); ++j) REQUIRE(tones[i] != tones[j]);
   }
   REQUIRE(loudest < 1.42f * quietest);  // inside 3 dB
+}
+
+TEST_CASE("the FX and SFX octets have dedicated subtractive voices", "[midi][synth]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  using sonare::midi::synth::detail::family_patches;
+  static constexpr std::array<uint8_t, 16> kPrograms = {
+      96, 97, 98, 99, 100, 101, 102, 103, 120, 121, 122, 123, 124, 125, 126, 127,
+  };
+
+  std::vector<std::vector<float>> tones;
+  tones.reserve(kPrograms.size());
+  for (const uint8_t program : kPrograms) {
+    const auto& patch = gm_fallback_patch(0, program);
+    INFO("GM program " << int(program));
+    REQUIRE(patch.mode == SynthEngineMode::kSubtractive);
+    // The old family patch remains available as a default, but no member of
+    // either octet should resolve to it after receiving a named voice.
+    REQUIRE(&patch != &family_patches()[program >> 3]);
+    tones.push_back(render_program(program, 60, 96000));
+    REQUIRE(peak(tones.back()) > 0.001f);
+  }
+
+  // Pointer inequality proves table dispatch; rendered inequality proves the
+  // new patches are not merely names wrapped around the former family defaults.
+  for (size_t i = 0; i < kPrograms.size(); ++i) {
+    const auto& family = family_patches()[kPrograms[i] >> 3];
+    REQUIRE(tones[i] != render_patch(family, 60, 96000));
+    for (size_t j = i + 1; j < kPrograms.size(); ++j) REQUIRE(tones[i] != tones[j]);
+  }
+}
+
+TEST_CASE("the bird tweet uses an amplitude-envelope pitch sweep", "[midi][synth]") {
+  using sonare::midi::synth::evaluate_mod_matrix;
+  using sonare::midi::synth::gm_fallback_patch;
+  using sonare::midi::synth::ModDestination;
+  using sonare::midi::synth::ModSource;
+  using sonare::midi::synth::ModSourceValues;
+
+  const auto& bird = gm_fallback_patch(0, 123);
+  const auto& route = bird.mod_matrix.routes[0];
+  REQUIRE(route.source == ModSource::kAmpEnv);
+  REQUIRE(route.destination == ModDestination::kPitchCents);
+  REQUIRE(route.depth > 600.0f);
+
+  ModSourceValues quiet;
+  quiet.amp_env = 0.0f;
+  ModSourceValues open;
+  open.amp_env = 1.0f;
+  REQUIRE(evaluate_mod_matrix(bird.mod_matrix, quiet).pitch_cents == 0.0f);
+  REQUIRE(evaluate_mod_matrix(bird.mod_matrix, open).pitch_cents > 600.0f);
+
+  // Remove the route from an otherwise identical patch. The rendered change
+  // guards against a vacuous declaration that never reaches the oscillator.
+  auto without_sweep = bird;
+  without_sweep.mod_matrix.routes[0] = {};
+  const std::vector<float> swept = render_patch(bird, 60, 24000);
+  const std::vector<float> static_pitch = render_patch(without_sweep, 60, 24000);
+  REQUIRE(swept != static_pitch);
+  float max_difference = 0.0f;
+  for (size_t i = 0; i < swept.size(); ++i) {
+    max_difference = std::max(max_difference, std::fabs(swept[i] - static_pitch[i]));
+  }
+  REQUIRE(max_difference > 0.01f);
 }
 
 TEST_CASE("the chiff lead's brightness is in its onset", "[midi][synth]") {

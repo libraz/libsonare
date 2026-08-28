@@ -4,20 +4,22 @@
 
 namespace sonare::midi::synth::detail {
 
-/// GM 80-95, the synth leads and pads. Sixteen programs that shared two family
+/// GM 80-103, the synth leads, pads and effects. Twenty-four programs that shared
 /// patches: subtractive is the right engine for all of them, so what was
 /// missing was not a model but a voice each. Each one is voiced from what its
 /// GM name names — the waveform for `square` and `sawtooth`, the attack
 /// transient for `chiff`, the resonant formant bank for `voice` and `choir`,
-/// the modulation for `sweep` — rather than by taste, because the names are the
-/// only specification these programs have.
+/// the modulation for `sweep`, and noise/filter motion for the effects — rather
+/// than by taste, because the names are the only specification these programs
+/// have. The effects have no sample or delay line in this engine, so the patches
+/// use the closest oscillator, envelope and filter gesture available.
 ///
-/// The sixteen gains are levelled rather than voiced: a synthetic program has
+/// The lead/pad gains are levelled rather than voiced: a synthetic program has
 /// no physical output level, and with each patch's filter and stack chosen
 /// independently the block spanned 9.6 dB before they were set. Measured on a
-/// held C4 at velocity 100 they now sit inside 2.2 dB, leads a little over
-/// pads. That says nothing about the rest of the bank, which spans 22 dB on the
-/// same note and is its own question.
+/// held C4 at velocity 100 they now sit inside 2.2 dB, leads a little over pads.
+/// That says nothing about the rest of the bank, which spans 22 dB on the same
+/// note and is its own question.
 ///
 /// Two of them cannot be finished here. `fifths` and `bass + lead` are layers
 /// at a fixed interval, and the oscillator section has no interval: unison
@@ -243,6 +245,112 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_sweep.lfo2_rate_hz = 0.3f;
   o.pad_sweep.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 2600.0f};
   o.pad_sweep.gain = 0.38f;
+
+  // --- Synth effects (GM 96-103) -------------------------------------------
+  // Sample-like GM gestures use the closest source, envelope, filter and modulation available.
+  NativeSynthPatch fx{};
+  fx.filter_model = SynthFilterModel::kSvf;
+  fx.gain = 0.5f;
+
+  // FX 1 Rain: a high-passed noise wash with a granular-looking decay.
+  o.fx_rain = fx;
+  o.fx_rain.waveform = VaWaveform::kNoise;
+  o.fx_rain.amp_env = fallback_env(2.0f, 260.0f, 0.05f, 160.0f);
+  o.fx_rain.filter_output = SynthFilterOutput::kHighpass;
+  o.fx_rain.cutoff_hz = 6200.0f;
+  o.fx_rain.resonance_q = 1.1f;
+  o.fx_rain.gain = 0.68f;
+
+  // FX 2 Soundtrack: a broad saw stack and long envelope make the score-like wash.
+  o.fx_soundtrack = fx;
+  o.fx_soundtrack.waveform = VaWaveform::kSaw;
+  o.fx_soundtrack.unison = 5;
+  o.fx_soundtrack.detune_cents = 22.0f;
+  o.fx_soundtrack.drift_cents = 4.0f;
+  o.fx_soundtrack.amp_env = fallback_env(700.0f, 1200.0f, 0.7f, 1400.0f);
+  o.fx_soundtrack.cutoff_hz = 2400.0f;
+  o.fx_soundtrack.resonance_q = 1.2f;
+  o.fx_soundtrack.stereo_spread = 0.6f;
+  o.fx_soundtrack.gain = 0.43f;
+
+  // FX 3 Crystal: a narrow, high-Q triangle band makes upper partials speak first.
+  o.fx_crystal = fx;
+  o.fx_crystal.waveform = VaWaveform::kTriangle;
+  o.fx_crystal.unison = 2;
+  o.fx_crystal.detune_cents = 4.0f;
+  o.fx_crystal.amp_env = fallback_env(1.0f, 1800.0f, 0.05f, 500.0f);
+  o.fx_crystal.filter_output = SynthFilterOutput::kBandpass;
+  o.fx_crystal.cutoff_hz = 5200.0f;
+  o.fx_crystal.resonance_q = 8.0f;
+  o.fx_crystal.filter_env = fallback_env(1.0f, 900.0f, 0.0f, 300.0f);
+  o.fx_crystal.env_to_cutoff_cents = 1800.0f;
+  o.fx_crystal.gain = 0.58f;
+
+  // FX 4 Atmosphere: wide drift supplies the motion possible in a one-note voice.
+  o.fx_atmosphere = fx;
+  o.fx_atmosphere.waveform = VaWaveform::kSaw;
+  o.fx_atmosphere.unison = 7;
+  o.fx_atmosphere.detune_cents = 35.0f;
+  o.fx_atmosphere.drift_cents = 12.0f;
+  o.fx_atmosphere.amp_env = fallback_env(1200.0f, 1800.0f, 0.75f, 1800.0f);
+  o.fx_atmosphere.cutoff_hz = 1300.0f;
+  o.fx_atmosphere.resonance_q = 1.0f;
+  o.fx_atmosphere.stereo_spread = 0.9f;
+  o.fx_atmosphere.gain = 0.52f;
+
+  // FX 5 Brightness: square-wave and high-pass edge with a little brittle drive.
+  o.fx_brightness = fx;
+  o.fx_brightness.waveform = VaWaveform::kSquare;
+  o.fx_brightness.unison = 3;
+  o.fx_brightness.detune_cents = 8.0f;
+  o.fx_brightness.amp_env = fallback_env(4.0f, 550.0f, 0.35f, 260.0f);
+  o.fx_brightness.filter_output = SynthFilterOutput::kHighpass;
+  o.fx_brightness.cutoff_hz = 7600.0f;
+  o.fx_brightness.resonance_q = 2.0f;
+  o.fx_brightness.filter_env = fallback_env(1.0f, 180.0f, 0.0f, 150.0f);
+  o.fx_brightness.env_to_cutoff_cents = 1200.0f;
+  o.fx_brightness.drive = 0.15f;
+  o.fx_brightness.gain = 0.5f;
+
+  // FX 6 Goblins: detune, drift and seeded random pitch make a deterministic twitch.
+  o.fx_goblins = fx;
+  o.fx_goblins.waveform = VaWaveform::kSquare;
+  o.fx_goblins.unison = 2;
+  o.fx_goblins.detune_cents = 48.0f;
+  o.fx_goblins.drift_cents = 8.0f;
+  o.fx_goblins.amp_env = fallback_env(40.0f, 250.0f, 0.55f, 350.0f);
+  o.fx_goblins.cutoff_hz = 1900.0f;
+  o.fx_goblins.resonance_q = 3.0f;
+  o.fx_goblins.filter_env = fallback_env(2.0f, 160.0f, 0.1f, 200.0f);
+  o.fx_goblins.env_to_cutoff_cents = 2600.0f;
+  o.fx_goblins.mod_matrix.routes[0] = {ModSource::kRandom, ModDestination::kPitchCents, 80.0f};
+  o.fx_goblins.gain = 0.54f;
+
+  // FX 7 Echoes: without a delay line, slow LFO gain pulses mimic repeats.
+  o.fx_echoes = fx;
+  o.fx_echoes.waveform = VaWaveform::kTriangle;
+  o.fx_echoes.unison = 4;
+  o.fx_echoes.detune_cents = 9.0f;
+  o.fx_echoes.amp_env = fallback_env(8.0f, 1400.0f, 0.45f, 900.0f);
+  o.fx_echoes.cutoff_hz = 4200.0f;
+  o.fx_echoes.resonance_q = 1.2f;
+  o.fx_echoes.lfo2_rate_hz = 1.8f;
+  o.fx_echoes.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, -0.65f};
+  o.fx_echoes.stereo_spread = 0.55f;
+  o.fx_echoes.gain = 0.55f;
+
+  // FX 8 Sci-Fi: an opening resonant radio band with a slow synthetic sweep.
+  o.fx_sci_fi = fx;
+  o.fx_sci_fi.waveform = VaWaveform::kNoise;
+  o.fx_sci_fi.amp_env = fallback_env(20.0f, 1000.0f, 0.2f, 500.0f);
+  o.fx_sci_fi.filter_output = SynthFilterOutput::kBandpass;
+  o.fx_sci_fi.cutoff_hz = 900.0f;
+  o.fx_sci_fi.resonance_q = 12.0f;
+  o.fx_sci_fi.filter_env = fallback_env(1.0f, 500.0f, 0.0f, 250.0f);
+  o.fx_sci_fi.env_to_cutoff_cents = 4800.0f;
+  o.fx_sci_fi.lfo2_rate_hz = 1.1f;
+  o.fx_sci_fi.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 800.0f};
+  o.fx_sci_fi.gain = 0.6f;
 }
 
 }  // namespace sonare::midi::synth::detail

@@ -279,7 +279,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[11].cutoff_hz = 2800.0f;
   t[11].stereo_spread = 0.6f;
 
-  // 96-103 synth FX: drifting detuned triangles.
+  // 96-103 synth FX: drifting detuned triangles. Every program in this octet
+  // now resolves to its own subtractive override, so this family entry is kept
+  // only as the default for the family and no program falls through to it.
   t[12].waveform = VaWaveform::kTriangle;
   t[12].unison = 3;
   t[12].detune_cents = 15.0f;
@@ -311,7 +313,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[14].env_to_cutoff_cents = 2000.0f;
   t[14].key_track = 0.5f;
 
-  // 120-127 SFX: resonant band-passed noise wash.
+  // 120-127 SFX: resonant band-passed noise wash. Every program in this octet
+  // now resolves to its own subtractive override, so this family entry is kept
+  // only as the default for the family and no program falls through to it.
   t[15].waveform = VaWaveform::kNoise;
   t[15].filter_output = SynthFilterOutput::kBandpass;
   t[15].amp_env = fallback_env(50.0f, 600.0f, 0.5f, 400.0f);

@@ -87,11 +87,27 @@ struct ProgramOverrides {
   NativeSynthPatch pad_metallic;        // program 93 (Pad 6, metallic)
   NativeSynthPatch pad_halo;            // program 94 (Pad 7, halo)
   NativeSynthPatch pad_sweep;           // program 95 (Pad 8, sweep)
+  NativeSynthPatch fx_rain;             // program 96 (FX 1, rain)
+  NativeSynthPatch fx_soundtrack;       // program 97 (FX 2, soundtrack)
+  NativeSynthPatch fx_crystal;          // program 98 (FX 3, crystal)
+  NativeSynthPatch fx_atmosphere;       // program 99 (FX 4, atmosphere)
+  NativeSynthPatch fx_brightness;       // program 100 (FX 5, brightness)
+  NativeSynthPatch fx_goblins;          // program 101 (FX 6, goblins)
+  NativeSynthPatch fx_echoes;           // program 102 (FX 7, echoes)
+  NativeSynthPatch fx_sci_fi;           // program 103 (FX 8, sci-fi)
   NativeSynthPatch woodblock;           // program 115 (struck wood block)
   NativeSynthPatch taiko;               // program 116 (large struck membrane)
   NativeSynthPatch melodic_tom;         // program 117 (pitched tom membrane)
   NativeSynthPatch synth_drum;          // program 118 (synthetic decaying-sine tom)
   NativeSynthPatch reverse_cymbal;      // program 119 (noise-swell approximation)
+  NativeSynthPatch sfx_guitar_fret;     // program 120 (guitar fret noise)
+  NativeSynthPatch sfx_breath;          // program 121 (breath noise)
+  NativeSynthPatch sfx_seashore;        // program 122 (seashore)
+  NativeSynthPatch sfx_bird_tweet;      // program 123 (bird tweet)
+  NativeSynthPatch sfx_telephone_ring;  // program 124 (telephone ring)
+  NativeSynthPatch sfx_helicopter;      // program 125 (helicopter)
+  NativeSynthPatch sfx_applause;        // program 126 (applause)
+  NativeSynthPatch sfx_gunshot;         // program 127 (gunshot)
 
   // Physical-model acoustic families (bowed string / reed / brass / air-jet
   // flute). These mirror the calibration of the like-named entries in the synth
@@ -244,11 +260,27 @@ struct ProgramOverrides {
   X(pad_metallic)                     \
   X(pad_halo)                         \
   X(pad_sweep)                        \
+  X(fx_rain)                          \
+  X(fx_soundtrack)                    \
+  X(fx_crystal)                       \
+  X(fx_atmosphere)                    \
+  X(fx_brightness)                    \
+  X(fx_goblins)                       \
+  X(fx_echoes)                        \
+  X(fx_sci_fi)                        \
   X(woodblock)                        \
   X(taiko)                            \
   X(melodic_tom)                      \
   X(synth_drum)                       \
   X(reverse_cymbal)                   \
+  X(sfx_guitar_fret)                  \
+  X(sfx_breath)                       \
+  X(sfx_seashore)                     \
+  X(sfx_bird_tweet)                   \
+  X(sfx_telephone_ring)               \
+  X(sfx_helicopter)                   \
+  X(sfx_applause)                     \
+  X(sfx_gunshot)                      \
   X(violin)                           \
   X(viola)                            \
   X(cello)                            \

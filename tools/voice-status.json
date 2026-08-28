@@ -7664,15 +7664,15 @@
       "name": "FX 1 (rain)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_rain",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_rain",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7702,7 +7702,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p097-fx-2-soundtrack",
@@ -7712,15 +7712,15 @@
       "name": "FX 2 (soundtrack)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_soundtrack",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_soundtrack",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7750,7 +7750,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p098-fx-3-crystal",
@@ -7760,15 +7760,15 @@
       "name": "FX 3 (crystal)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_crystal",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_crystal",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7798,7 +7798,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p099-fx-4-atmosphere",
@@ -7808,15 +7808,15 @@
       "name": "FX 4 (atmosphere)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_atmosphere",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_atmosphere",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7846,7 +7846,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p100-fx-5-brightness",
@@ -7856,15 +7856,15 @@
       "name": "FX 5 (brightness)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_brightness",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_brightness",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7894,7 +7894,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p101-fx-6-goblins",
@@ -7904,15 +7904,15 @@
       "name": "FX 6 (goblins)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_goblins",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_goblins",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7942,7 +7942,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p102-fx-7-echoes",
@@ -7952,15 +7952,15 @@
       "name": "FX 7 (echoes)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_echoes",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_echoes",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -7990,7 +7990,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p103-fx-8-sci-fi",
@@ -8000,15 +8000,15 @@
       "name": "FX 8 (sci-fi)",
       "group": "96-103 Synth effects",
       "tone_class": "sustained",
-      "patch": "fam12",
+      "patch": "fx_sci_fi",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam12",
+        "patch": "fx_sci_fi",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -8038,7 +8038,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p104-sitar",
@@ -8839,15 +8839,15 @@
       "name": "Guitar Fret Noise",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_guitar_fret",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_guitar_fret",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -8872,7 +8872,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p121-breath-noise",
@@ -8882,15 +8882,15 @@
       "name": "Breath Noise",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_breath",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_breath",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -8915,7 +8915,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p122-seashore",
@@ -8925,15 +8925,15 @@
       "name": "Seashore",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_seashore",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_seashore",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -8958,7 +8958,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p123-bird-tweet",
@@ -8968,15 +8968,15 @@
       "name": "Bird Tweet",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_bird_tweet",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_bird_tweet",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -9001,7 +9001,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p124-telephone-ring",
@@ -9011,15 +9011,15 @@
       "name": "Telephone Ring",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_telephone_ring",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_telephone_ring",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -9044,7 +9044,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p125-helicopter",
@@ -9054,15 +9054,15 @@
       "name": "Helicopter",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_helicopter",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_helicopter",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -9087,7 +9087,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p126-applause",
@@ -9097,15 +9097,15 @@
       "name": "Applause",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_applause",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_applause",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -9130,7 +9130,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "p127-gunshot",
@@ -9140,15 +9140,15 @@
       "name": "Gunshot",
       "group": "120-127 Sound effects",
       "tone_class": "noise",
-      "patch": "fam15",
+      "patch": "sfx_gunshot",
       "engine": "subtractive",
       "capture": null,
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam15",
+        "patch": "sfx_gunshot",
         "timbres": 0,
         "profile_rows": 0,
         "gate_state": null,
@@ -9173,7 +9173,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture an oracle: no reference exists for this voice"
     },
     {
       "slug": "kit000-standard-kit",

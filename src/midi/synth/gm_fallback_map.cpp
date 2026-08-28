@@ -402,6 +402,23 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().pad_halo;
     case 95:  // Pad 8 (sweep)
       return program_overrides().pad_sweep;
+    // Synth effects (subtractive, one named gesture per GM program).
+    case 96:  // FX 1 (rain)
+      return program_overrides().fx_rain;
+    case 97:  // FX 2 (soundtrack)
+      return program_overrides().fx_soundtrack;
+    case 98:  // FX 3 (crystal)
+      return program_overrides().fx_crystal;
+    case 99:  // FX 4 (atmosphere)
+      return program_overrides().fx_atmosphere;
+    case 100:  // FX 5 (brightness)
+      return program_overrides().fx_brightness;
+    case 101:  // FX 6 (goblins)
+      return program_overrides().fx_goblins;
+    case 102:  // FX 7 (echoes)
+      return program_overrides().fx_echoes;
+    case 103:  // FX 8 (sci-fi)
+      return program_overrides().fx_sci_fi;
     // Pitched percussion family (membrane / struck-idiophone cores, key-tracked).
     case 112:  // Tinkle Bell
       return program_overrides().tinkle_bell;
@@ -419,6 +436,23 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().synth_drum;
     case 119:  // Reverse Cymbal
       return program_overrides().reverse_cymbal;
+    // Sound effects (subtractive approximations of GM sample names).
+    case 120:  // Guitar Fret Noise
+      return program_overrides().sfx_guitar_fret;
+    case 121:  // Breath Noise
+      return program_overrides().sfx_breath;
+    case 122:  // Seashore
+      return program_overrides().sfx_seashore;
+    case 123:  // Bird Tweet
+      return program_overrides().sfx_bird_tweet;
+    case 124:  // Telephone Ring
+      return program_overrides().sfx_telephone_ring;
+    case 125:  // Helicopter
+      return program_overrides().sfx_helicopter;
+    case 126:  // Applause
+      return program_overrides().sfx_applause;
+    case 127:  // Gunshot
+      return program_overrides().sfx_gunshot;
     default:
       break;
   }
