@@ -74,6 +74,8 @@ A program change on a part changes which rig that part should carry, and buildin
 
 The distinction has to be recorded per capture, because nothing downstream can infer it: a reference that carries a rig looks exactly like one that does not, until a model fitted against it acquires a cabinet it was never supposed to have.
 
+**Absence of that record means unclassified, never "no rig".** The dangerous reading is the one a missing field would otherwise default to, and captures predate the question — so a capture that does not say is one nobody has answered for yet. Comparing and auditioning proceed unchanged; **fitting is what the answer gates**, and only for a family where a rig is possible at all. A wind or a piano is not waiting on anyone.
+
 **A reference that carries a rig is an acceptance target. It is never a fit target.**
 
 - **Fit the instrument against a reference at the instrument's own boundary.** For an electric string that means a DI.
