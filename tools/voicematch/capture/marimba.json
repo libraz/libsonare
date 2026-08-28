@@ -1,0 +1,64 @@
+{
+  "id": "marimba",
+  "label": "Marimba, sampled, close and dry",
+  "program": 12,
+  "takes": "sustained",
+  "audition_title": "libsonare marimba vs the sampled reference",
+  "_notes": "Every sixth semitone across the compass this program is probed on, 45 to 79, and no further - each of these instruments has its own, and they barely overlap. Both ends were rendered before the grid was written and both speak, the peaks running 0.082, 0.086, 0.092 at the low, middle and high probe notes.",
+  "notes": [
+    45,
+    51,
+    57,
+    63,
+    69,
+    75,
+    79
+  ],
+  "_velocities": "Five. A struck bar's velocity is the mallet, so it moves the partial stack rather than only the level: on this slot velocity 32 sits -16.1 dB under velocity 100 at the middle probe note. ",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed. Not one of the plugin's advertised parameters matches `reverb` with this rack loaded, and the render agrees: what follows the strike is the bar's own fall to the numerical floor with no room behind it.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "A struck bar is not stopped by the player, so what the gate has to contain is the fall itself. It is done well before the key lifts, -25 dBFS a quarter of a second in and at the numerical floor by 2 seconds, which is the instrument and not a slot that stopped early - a bar this short is what the name means. Six seconds holds it either way, and half a second of tail catches what the key release does to whatever is left.",
+  "gate_ms": 6000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, run against it rather than carried over from another - and it is the one rack here where that mattered. At a two-second settle this slot renders silence, or the note arriving nearly three seconds late; at eight it renders the same peak three times running with the onset on the preroll. A probe taken at the shorter settle read this instrument eighteen decibels quiet and would have set the whole grid from a broken render.",
+  "realtime": true,
+  "settle_ms": 8000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. The rack holds one slot per GM program, so there is no second of this instrument in it to disagree with. What the reference buys is a measured target for `autofit` and `--diagnose` where the voice could previously only be fitted by ear.",
+  "timbres": [
+    {
+      "id": "gm013",
+      "label": "GM marimba, rack slot 13",
+      "channel": 13
+    }
+  ],
+  "_dimensions": "The slot is a struck wooden bar over a tube. `decay` and its two stages are what a struck voice lives on, since everything after the strike is a fall, and they are read off a gate long enough to contain one. `stretch` is not among the dimensions a modal voice is judged on at all - a bar has no series equal temperament predicts - so it is the class that drops it rather than this file.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a modal voice is every melodic dimension except `stretch`, so anything not gated here has to be argued here.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
+  },
+  "dimensions": [
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `marimba.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/marimba.json`.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 13, and it was rendered at its own three probe notes before anything else was written, reading 0.995 of its energy on the played key's series."
+}
