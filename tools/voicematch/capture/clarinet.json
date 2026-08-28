@@ -1,0 +1,66 @@
+{
+  "id": "clarinet",
+  "label": "Bb clarinet, sampled, close and dry",
+  "program": 71,
+  "takes": "sustained",
+  "audition_title": "libsonare clarinet vs the sampled reference",
+  "_register_break": "The single property this capture exists to measure. A cylindrical bore closed at the reed end sounds odd harmonics only, and that is the clarinet's whole identity - but it is a property of the chalumeau register, not of the instrument. Measured on this reference at velocity 100, the mean of h3/h5 over the mean of h2/h4 runs +23.7 dB at note 50, +13.9 at 62, +3.5 at 74 and is gone by 82 (+0.6) and 86 (-0.1). That is correct behaviour rather than a sampling artefact: in the clarion the played note is itself the third mode of the tube, so the sounding spectrum has no odd-only pattern left to show. A grid confined to the midrange would report a model that gets the transition backwards as correct, so the notes below span all three registers and the transition is the thing to read them for.",
+  "_notes": "Every fourth semitone from 50 to 86, which is the sounding compass of a Bb clarinet and no more. 50 is the bottom (written E3) and 86 the practical top. Note 46 renders at full level and keeps the odd-harmonic character, and is excluded anyway: it is below the instrument and the reference is transposing a sample down there, so a model fitted against it would be fitted against the sampler. The step is four rather than six so the register break near 70 is straddled by points on both sides of it rather than jumped.",
+  "notes": [
+    50,
+    54,
+    58,
+    62,
+    66,
+    70,
+    74,
+    78,
+    82,
+    86
+  ],
+  "_velocities": "Five, and the axis is timbre rather than level. Measured at note 62, the sustain runs 49.0 dB from velocity 16 to 127 while the spectral centroid moves 574 Hz to 1625 Hz - so a reed's dynamic is a change of what the note is made of, and a model given a level-only velocity map is wrong about brightness at both ends whatever its gain does. For scale: a harpsichord reads 5.9 to 6.6 dB on the same measurement and a piano about thirty, and it is that width which makes the softest row here sit 40 dB under its own note's loudest. The bottom point is 32 rather than 16 because 32 is a playable pianissimo across the whole compass while 16 is under it at the top, where the profile already reads 40.0 dB of range from 32 alone.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured twice rather than assumed. With the rack loaded the plugin advertises 1473 parameters and not one of them matches `reverb`, and the render agrees: 50 ms after note-off the signal is 18.4 dB below its own sustain, 100 ms after it is 50 dB down, and by 200 ms it is at the numerical floor. There is no room and no tail, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. The consequence downstream is the useful one: this is a dry anchor, and every level, release and decay measured against it is the instrument alone.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The metrics take their sustain window between 0.6 s and 1.8 s after onset, so the gate has to outlast that with margin. The other end needs almost nothing: the release reaches the numerical floor 200 ms after the key lifts, so half a second of tail records all of it and anything longer is silence on disk.",
+  "gate_ms": 3000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate`: the reference renders identically in real time and faster than it, the same note twice is bit-identical - so there is no round robin to put a floor under the loss - and the measured settle minimum is 250 ms. `realtime` is kept on anyway: the grid is 50 renders and the saving is about three and a half minutes, while a note streamed late is caught only by `verify` and would otherwise be committed as a measurement. The independent reading worth keeping is the last line of it, RT60 0.00 s, which is the dryness above measured a second way.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack it comes from holds one slot per GM program, so there is no second clarinet in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before - a measured target for `autofit` and `--diagnose`, in place of fitting this voice by ear. A second timbre needs a rack authored with an alternative clarinet in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm072",
+      "label": "GM clarinet, rack slot 8",
+      "channel": 8
+    }
+  ],
+  "_dimensions": "Nine of the ten a sustained voice can be judged on. `damper` is kept and is the load-bearing one here: a wind stops when the breath stops, the reference does it in about 100 ms to -50 dB, and a model whose release is a decay rather than a stop gives itself away on that dimension before any other. `vel_range` is kept for the 49 dB measured above. `stretch` is kept with the caveat that in the chalumeau the even partials sit 30 dB down, so their frequencies are read off a weak peak and the tuning column is noisier there than at the top.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a sustained voice already drops `decay`, `aftersound` and `doubling` - a voice fed continuously has no free fall for them to describe - so those are not listed here.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
+  },
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `clarinet.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/clarinet.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. The rack this comes from is addressed by MIDI channel, and four channels rendered at note 60 came back with four different hashes, so the channel does select the slot. Which slot is which is then read off the note: channel 8 puts h2 at -34.4 dB and h4 at -31.4 while h3 sits at -4.2 and h7 at -7.1, which is a cylindrical bore and nothing else. The neighbours confirm the numbering rather than the numbering confirming them - channel 1 has a full ladder and the highest centroid of the four, which is a conical reed, and channel 16 falls to -85.8 dB by h8, which is a vessel flute. Channel 9 is a reminder rather than a check: at note 60 it reads darker than either reed because note 60 is fourteen semitones below its compass and the sampler is stretching its lowest sample, which is why the grid above is the instrument's own and not a shared one."
+}
