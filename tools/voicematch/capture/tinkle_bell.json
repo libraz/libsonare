@@ -1,0 +1,64 @@
+{
+  "id": "tinkle_bell",
+  "label": "Tinkle bell, sampled, close and dry",
+  "program": 112,
+  "takes": "sustained",
+  "audition_title": "libsonare tinkle bell vs the sampled reference",
+  "_notes": "Every 4th semitone across the compass this program is probed on, 72 to 96. Both ends were rendered before the grid was written and both speak, the peaks running 0.196, 0.173, 0.159 at the low, middle and high probe notes.",
+  "notes": [
+    72,
+    76,
+    80,
+    84,
+    88,
+    92,
+    96
+  ],
+  "_velocities": "Five. Velocity is the pluck or the mallet rather than a volume control, so it moves the partial stack as well as the level: on this slot velocity 32 sits -11.7 dB under velocity 100 at the middle probe note.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed. Not one of the plugin's advertised parameters matches `reverb` with this rack loaded, and the render agrees: what follows is the instrument's own fall with no room behind it.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The gate is the instrument's own fall rather than a fixed number, because the sustain window is 30 to 90 per cent of the note capped at 0.6 to 1.8 s: on a six-second gate that window would land after this slot had finished and every measurement would be taken on silence. Measured at 1460 ms to fall 60 dB, so a 1600 ms gate puts the window inside the fall where the sound is.",
+  "gate_ms": 1600,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, run against it rather than carried over. The settle is kept generous: the rack next to this one renders silence or a note seconds late at two seconds of settle, and a probe taken there read one instrument eighteen decibels quiet, so a settle that costs time is preferred to one that costs a measurement.",
+  "realtime": true,
+  "settle_ms": 8000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. The rack holds one slot per GM program, so there is no second of this instrument in it to disagree with. What the reference buys is a measured target for `autofit` and `--diagnose` where the voice could previously only be fitted by ear.",
+  "timbres": [
+    {
+      "id": "gm113",
+      "label": "GM tinkle bell, rack slot 1",
+      "channel": 1
+    }
+  ],
+  "_dimensions": "The slot is a small struck bell. What it is judged on is the fall, read off a gate cut to the fall's own length. `stretch` is not among the dimensions a modal voice is judged on at all - a bar or a membrane has no series equal temperament predicts - so it is the class that drops it rather than this file.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, so anything not gated here has to be argued here.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
+    "damper": "the gate is set to this slot's own fall, so the key lifts on a note already 60 dB down - there is nothing left for a damper to stop, and what the measurement would read is the length of the sample rather than how the instrument is silenced"
+  },
+  "dimensions": [
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `tinkle_bell.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/tinkle_bell.json`.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. This program answers on channel 1, rendered at its own three probe notes before anything else was written, reading 0.998 of its energy on the played key's series. The same renders are what say the slot is usable at all: four slots of these two racks are a cliff rather than a decay, reproducing bit-identically at a fifth of a second, and are not captured."
+}

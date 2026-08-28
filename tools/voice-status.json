@@ -719,20 +719,22 @@
       "tone_class": "struck-string",
       "patch": "e_piano",
       "engine": "fm",
-      "capture": null,
+      "capture": "electric_piano_1",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "e_piano",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 45,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -740,7 +742,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -758,7 +759,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p004b001-electric-piano-1",
@@ -1076,20 +1077,22 @@
       "tone_class": "struck-string",
       "patch": "e_piano",
       "engine": "fm",
-      "capture": null,
+      "capture": "electric_piano_2",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "e_piano",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 45,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -1097,7 +1100,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -1115,7 +1117,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p005b001-electric-piano-2",
@@ -1683,20 +1685,22 @@
       "tone_class": "struck-string",
       "patch": "clav",
       "engine": "fm",
-      "capture": null,
+      "capture": "clavi",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "clav",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 45,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -1704,7 +1708,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -1722,7 +1725,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p008-celesta",
@@ -8136,20 +8139,23 @@
       "tone_class": "plucked-string",
       "patch": "banjo",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "banjo",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "banjo",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -8157,8 +8163,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -8175,7 +8179,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p106-shamisen",
@@ -8187,20 +8191,23 @@
       "tone_class": "plucked-string",
       "patch": "shamisen",
       "engine": "plucked_string",
-      "capture": null,
+      "capture": "shamisen",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "plucked_string",
         "patch": "shamisen",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -8208,8 +8215,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -8226,7 +8231,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p107-koto",
@@ -8238,20 +8243,23 @@
       "tone_class": "plucked-string",
       "patch": "koto",
       "engine": "plucked_string",
-      "capture": null,
+      "capture": "koto",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "plucked_string",
         "patch": "koto",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -8259,8 +8267,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -8277,7 +8283,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p108-kalimba",
@@ -8289,28 +8295,29 @@
       "tone_class": "modal",
       "patch": "kalimba",
       "engine": "modal",
-      "capture": null,
+      "capture": "kalimba",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "kalimba",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -8327,7 +8334,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p109-bag-pipe",
@@ -8339,25 +8346,29 @@
       "tone_class": "sustained",
       "patch": "bag_pipe",
       "engine": "reed",
-      "capture": null,
+      "capture": "bagpipe",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "bag_pipe",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 25,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "aftersound",
+            "decay",
+            "doubling",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -8375,7 +8386,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p110-fiddle",
@@ -8435,25 +8446,29 @@
       "tone_class": "sustained",
       "patch": "shanai",
       "engine": "reed",
-      "capture": null,
+      "capture": "shanai",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "shanai",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 30,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "aftersound",
+            "decay",
+            "doubling",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -8471,7 +8486,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p112-tinkle-bell",
@@ -8483,28 +8498,29 @@
       "tone_class": "modal",
       "patch": "tinkle_bell",
       "engine": "percussion",
-      "capture": null,
+      "capture": "tinkle_bell",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "tinkle_bell",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -8521,7 +8537,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p113-agogo",
@@ -8533,28 +8549,29 @@
       "tone_class": "modal",
       "patch": "agogo",
       "engine": "percussion",
-      "capture": null,
+      "capture": "agogo",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "agogo",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 25,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -8571,7 +8588,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p114-steel-drums",
@@ -8583,28 +8600,29 @@
       "tone_class": "modal",
       "patch": "steel_drums",
       "engine": "percussion",
-      "capture": null,
+      "capture": "steel_drums",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "steel_drums",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 30,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -8621,7 +8639,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p115-woodblock",
@@ -8683,20 +8701,23 @@
       "tone_class": "modal",
       "patch": "taiko",
       "engine": "percussion",
-      "capture": null,
+      "capture": "taiko",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "taiko",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 25,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "tnr"
+          ],
           "gaps": [
             "decay",
             "aftersound",
@@ -8704,10 +8725,8 @@
             "body",
             "attack",
             "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
             "vel_range",
             "register"
           ],
@@ -8721,7 +8740,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p117-melodic-tom",
@@ -8733,20 +8752,23 @@
       "tone_class": "modal",
       "patch": "melodic_tom",
       "engine": "percussion",
-      "capture": null,
+      "capture": "melodic_tom",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "melodic_tom",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 30,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "tnr"
+          ],
           "gaps": [
             "decay",
             "aftersound",
@@ -8754,10 +8776,8 @@
             "body",
             "attack",
             "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
             "vel_range",
             "register"
           ],
@@ -8771,7 +8791,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p118-synth-drum",
@@ -8783,20 +8803,23 @@
       "tone_class": "modal",
       "patch": "synth_drum",
       "engine": "percussion",
-      "capture": null,
+      "capture": "synth_drum",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "synth_drum",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "tnr"
+          ],
           "gaps": [
             "decay",
             "aftersound",
@@ -8804,10 +8827,8 @@
             "body",
             "attack",
             "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
             "vel_range",
             "register"
           ],
@@ -8821,7 +8842,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p119-reverse-cymbal",
