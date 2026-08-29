@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -30,6 +31,7 @@
 
 namespace {
 
+using Catch::Approx;
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::GsMasterEq;
 using sonare::midi::synth::GsSystemEffects;
@@ -467,6 +469,27 @@ TEST_CASE("a REVERB TIME write lengthens the measured decay monotonically", "[mi
   REQUIRE(shortest > 0.0);
   REQUIRE(middle > shortest * 1.5);
   REQUIRE(longest > middle * 1.5);
+}
+
+TEST_CASE("a REVERB LEVEL write scales the return, and its reset value is inert",
+          "[midi][synth][gs]") {
+  // The identity that decides the mapping: writing the reset value must render
+  // exactly what never writing it renders. If it did not, wiring the level
+  // would have moved every instrument whose ambience weight was fitted through
+  // this bus (gm_fallback_sends), because the unit is linear and scaling the
+  // return is the same as scaling every send into it.
+  const double untouched = wet_tail({});
+  const double at_reset = wet_tail({dt1(0x40, 0x01, 0x33, {0x40})});
+  INFO("untouched " << untouched << ", at reset " << at_reset);
+  REQUIRE(at_reset == untouched);
+
+  const double half = wet_tail({dt1(0x40, 0x01, 0x33, {0x20})});
+  const double full = wet_tail({dt1(0x40, 0x01, 0x33, {0x7F})});
+  const double silent = wet_tail({dt1(0x40, 0x01, 0x33, {0x00})});
+  INFO("32 " << half << ", 64 " << at_reset << ", 127 " << full << ", 0 " << silent);
+  REQUIRE(half == Approx(at_reset * 0.5).epsilon(0.02));
+  REQUIRE(full == Approx(at_reset * 127.0 / 64.0).epsilon(0.02));
+  REQUIRE(silent == 0.0);
 }
 
 TEST_CASE("the reverb macros select distinguishable rooms", "[midi][synth][gs]") {

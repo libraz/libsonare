@@ -527,13 +527,55 @@ TEST_CASE("GS macro selection overwrites the parameters, and a later write wins"
 
 #if defined(SONARE_MIDI_WITH_FX)
 
+TEST_CASE("a return level is unity at its reset value, not at full scale", "[midi][synth][gs]") {
+  using sonare::midi::synth::gs_effect_level;
+  using sonare::midi::synth::gs_return_level;
+
+  // A send is a fraction of a part, so 127 is all of it. A return has no such
+  // anchor and the manual gives none: 0-127, no unit, reset 64. Reading 127 as
+  // unity would put the state a file never writes 6 dB under the bus this synth
+  // was voiced at, which is a claim about our own nominal rather than the
+  // manual's. The two mappings must therefore stay distinct functions.
+  CHECK(gs_return_level(64) == Approx(1.0f));
+  CHECK(gs_effect_level(127) == Approx(1.0f));
+  CHECK(gs_return_level(0) == Approx(0.0f));
+  CHECK(gs_return_level(127) == Approx(127.0f / 64.0f));  // ~+5.95 dB
+
+  // Strictly monotone over the whole byte, so no part of the range is inert.
+  for (int v = 0; v < 127; ++v) {
+    INFO("value " << v);
+    CHECK(gs_return_level(static_cast<uint8_t>(v)) < gs_return_level(static_cast<uint8_t>(v + 1)));
+  }
+
+  // The three that are returns use it; the cross-sends stay on the send map.
+  const GsSystemEffects fx;
+  CHECK(fx.reverb_level == 64);
+  CHECK(fx.chorus_level == 64);
+  CHECK(fx.delay_level == 0x40);
+
+#if defined(SONARE_MIDI_WITH_FX)
+  // The assertion the reference point actually rests on, and the one a render
+  // cannot make: the reset state has to map to the gains the bus shipped with.
+  // Comparing a written reset value against an unwritten one cannot see this —
+  // both go through the same mapping, so they agree wherever unity is put.
+  using sonare::midi::synth::gs_effects_config_from;
+  using sonare::midi::synth::GsEffectsConfig;
+  const GsEffectsConfig shipped;
+  const GsEffectsConfig from_reset = gs_effects_config_from(fx);
+  CHECK(from_reset.reverb_level == Approx(shipped.reverb_level));
+  CHECK(from_reset.chorus_level == Approx(shipped.chorus_level));
+  CHECK(from_reset.delay_level == Approx(shipped.delay_level));
+#endif
+}
+
 TEST_CASE("GS system effects bridge onto the effect bus config", "[midi][synth][gs]") {
   using sonare::midi::synth::gs_effects_config_from;
   using sonare::midi::synth::GsEffectsConfig;
 
   SECTION("a default config is still what the bus shipped with") {
-    // Nothing constructs a GsEffectBus through gs_effects_config_from yet, so
-    // the audible behaviour is pinned here rather than by a render.
+    // The bus now runs what gs_effects_config_from produces, so these are the
+    // values a file that writes nothing hears. A separate case checks that the
+    // reset state maps onto exactly them.
     const GsEffectsConfig cfg;
     CHECK(cfg.enable_reverb);
     CHECK(cfg.enable_chorus);

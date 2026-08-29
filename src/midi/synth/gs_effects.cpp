@@ -65,7 +65,7 @@ GsEffectsConfig gs_effects_config_from(const GsSystemEffects& fx) noexcept {
   GsEffectsConfig cfg;
   cfg.reverb_decay = tank_decay_from_rt60(gs_reverb_time_seconds(fx.reverb_time));
   cfg.reverb_damping = gs_reverb_character_damping(fx.reverb_character);
-  cfg.reverb_level = gs_effect_level(fx.reverb_level);
+  cfg.reverb_level = gs_return_level(fx.reverb_level);
   cfg.reverb_predelay_ms = gs_reverb_predelay_ms(fx.reverb_predelay);
   cfg.reverb_pre_lpf_hz = gs_pre_lpf_cutoff_hz(fx.reverb_pre_lpf);
 
@@ -73,7 +73,7 @@ GsEffectsConfig gs_effects_config_from(const GsSystemEffects& fx) noexcept {
   cfg.chorus_depth_ms = gs_chorus_depth_ms(fx.chorus_depth);
   cfg.chorus_delay_ms = gs_chorus_delay_ms(fx.chorus_delay);
   cfg.chorus_feedback = gs_chorus_feedback_coefficient(fx.chorus_feedback);
-  cfg.chorus_level = gs_effect_level(fx.chorus_level);
+  cfg.chorus_level = gs_return_level(fx.chorus_level);
   cfg.chorus_pre_lpf_hz = gs_pre_lpf_cutoff_hz(fx.chorus_pre_lpf);
   cfg.chorus_send_to_reverb = gs_effect_level(fx.chorus_send_to_reverb);
   cfg.chorus_send_to_delay = gs_effect_level(fx.chorus_send_to_delay);
@@ -82,7 +82,7 @@ GsEffectsConfig gs_effects_config_from(const GsSystemEffects& fx) noexcept {
   cfg.delay_time_ratio_left = gs_delay_time_ratio_percent(fx.delay_time_ratio_left) / 100.0f;
   cfg.delay_time_ratio_right = gs_delay_time_ratio_percent(fx.delay_time_ratio_right) / 100.0f;
   cfg.delay_feedback = gs_delay_feedback_coefficient(fx.delay_feedback);
-  cfg.delay_level = gs_effect_level(fx.delay_level);
+  cfg.delay_level = gs_return_level(fx.delay_level);
   cfg.delay_level_center = gs_effect_level(fx.delay_level_center);
   cfg.delay_level_left = gs_effect_level(fx.delay_level_left);
   cfg.delay_level_right = gs_effect_level(fx.delay_level_right);
@@ -146,28 +146,35 @@ void GsEffectBus::begin_chunk() noexcept {
 void GsEffectBus::render_returns(float* out_l, float* out_r, int n) noexcept {
   if (n <= 0) return;
   n = std::min(n, kBlockFrames);
+  // Each unit's LEVEL scales its return. A unit is linear, so this is the same
+  // as scaling everything sent to it -- including the per-program ambience
+  // weights of gm_fallback_sends, which is why unity has to be the reset value
+  // and not full scale (gs_return_level).
   if (config_.enable_reverb) {
     float* bus[2] = {reverb_bus_[0].data(), reverb_bus_[1].data()};
     reverb_.process(bus, 2, n);
+    const float g = config_.reverb_level;
     for (int i = 0; i < n; ++i) {
-      out_l[i] += bus[0][i];
-      out_r[i] += bus[1][i];
+      out_l[i] += bus[0][i] * g;
+      out_r[i] += bus[1][i] * g;
     }
   }
   if (config_.enable_chorus) {
     float* bus[2] = {chorus_bus_[0].data(), chorus_bus_[1].data()};
     chorus_.process(bus, 2, n);
+    const float g = config_.chorus_level;
     for (int i = 0; i < n; ++i) {
-      out_l[i] += bus[0][i];
-      out_r[i] += bus[1][i];
+      out_l[i] += bus[0][i] * g;
+      out_r[i] += bus[1][i] * g;
     }
   }
   if (config_.enable_delay) {
     float* bus[2] = {delay_bus_[0].data(), delay_bus_[1].data()};
     delay_.process(bus, 2, n);
+    const float g = config_.delay_level;
     for (int i = 0; i < n; ++i) {
-      out_l[i] += bus[0][i];
-      out_r[i] += bus[1][i];
+      out_l[i] += bus[0][i] * g;
+      out_r[i] += bus[1][i] * g;
     }
   }
 }

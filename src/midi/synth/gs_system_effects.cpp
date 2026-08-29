@@ -9,6 +9,9 @@ namespace {
 
 constexpr float kMax7Bit = 127.0f;
 
+/// The reset value of the three return levels, which is where unity sits.
+constexpr float kReturnLevelUnity = 64.0f;
+
 /// Largest coefficient a feedback byte reaches. Matches the clamp the delay
 /// bus already applies, so a full-scale byte saturates nowhere downstream.
 constexpr float kMaxDelayFeedback = 0.9f;
@@ -104,6 +107,10 @@ float gs_chorus_feedback_coefficient(uint8_t value) noexcept {
 
 float gs_effect_level(uint8_t value) noexcept {
   return static_cast<float>(value & 0x7Fu) / kMax7Bit;
+}
+
+float gs_return_level(uint8_t value) noexcept {
+  return static_cast<float>(value & 0x7Fu) / kReturnLevelUnity;
 }
 
 float gs_pre_lpf_cutoff_hz(uint8_t value) noexcept { return table_entry(kPreLpfCutoffHz, value); }

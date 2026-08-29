@@ -48,23 +48,23 @@ struct GsEffectsConfig {
   float delay_time_ms = 340.0f;
   float delay_feedback = 0.25f;  ///< [-0.9, 0.9]; the bus clamps negatives to 0 for now.
 
-  float reverb_level = 1.0f;                  ///< Return gain, [0, 1].
-  float reverb_predelay_ms = 0.0f;            ///< Input pre-delay.
+  float reverb_level = 1.0f;        ///< Return gain; the reset value is unity, full scale ~+6 dB.
+  float reverb_predelay_ms = 0.0f;  ///< Input pre-delay.
   float reverb_pre_lpf_hz = kGsPreLpfThruHz;  ///< Input LPF cutoff.
-  float chorus_level = 1.0f;                  ///< Return gain, [0, 1].
-  float chorus_feedback = 0.0f;               ///< [0, 0.95]; flangers need it.
-  float chorus_delay_ms = 14.0f;              ///< Centre delay (ChorusConfig's default).
+  float chorus_level = 1.0f;      ///< Return gain; the reset value is unity, full scale ~+6 dB.
+  float chorus_feedback = 0.0f;   ///< [0, 0.95]; flangers need it.
+  float chorus_delay_ms = 14.0f;  ///< Centre delay (ChorusConfig's default).
   float chorus_pre_lpf_hz = kGsPreLpfThruHz;  ///< Input LPF cutoff.
   float chorus_send_to_reverb = 0.0f;         ///< Chorus return into the reverb bus.
   float chorus_send_to_delay = 0.0f;          ///< Chorus return into the delay bus.
-  float delay_level = 1.0f;                   ///< Return gain, [0, 1].
-  float delay_pre_lpf_hz = kGsPreLpfThruHz;   ///< Input LPF cutoff.
-  float delay_time_ratio_left = 1.0f;         ///< Left tap, as a ratio of delay_time_ms.
-  float delay_time_ratio_right = 1.0f;        ///< Right tap, same.
-  float delay_level_center = 1.0f;            ///< Centre tap gain — today's single tap.
-  float delay_level_left = 0.0f;              ///< Left tap gain.
-  float delay_level_right = 0.0f;             ///< Right tap gain.
-  float delay_send_to_reverb = 0.0f;          ///< Delay return into the reverb bus.
+  float delay_level = 1.0f;  ///< Return gain; the reset value is unity, full scale ~+6 dB.
+  float delay_pre_lpf_hz = kGsPreLpfThruHz;  ///< Input LPF cutoff.
+  float delay_time_ratio_left = 1.0f;        ///< Left tap, as a ratio of delay_time_ms.
+  float delay_time_ratio_right = 1.0f;       ///< Right tap, same.
+  float delay_level_center = 1.0f;           ///< Centre tap gain — today's single tap.
+  float delay_level_left = 0.0f;             ///< Left tap gain.
+  float delay_level_right = 0.0f;            ///< Right tap gain.
+  float delay_send_to_reverb = 0.0f;         ///< Delay return into the reverb bus.
 };
 
 /// The effect-unit settings a GS system-effect block asks for. This is what the

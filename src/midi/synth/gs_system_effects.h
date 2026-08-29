@@ -141,6 +141,17 @@ float gs_chorus_feedback_coefficient(uint8_t value) noexcept;
 /// A LEVEL / SEND byte 0-127 → linear gain, [0, 1].
 float gs_effect_level(uint8_t value) noexcept;
 
+/// A RETURN level byte 0-127 -> linear gain with the power-on 64 at unity, so
+/// full scale is about +6 dB.
+///
+/// A send is a fraction of a part and 127 is all of it, but a return has no
+/// such anchor: the manual gives 0-127 and no unit, and the reset value is 64.
+/// Reading 127 as unity would make the state a file never writes sit 6 dB below
+/// the bus this synth was voiced and fitted at, which is a claim about our own
+/// nominal that no source makes. Anchoring on the reset value instead leaves an
+/// untouched file exactly where it was and still spends the whole range.
+float gs_return_level(uint8_t value) noexcept;
+
 /// Cutoff a PRE-LPF of 0 (THRU) reports: above the audio band, so a filter set
 /// to it is transparent and callers need no special case.
 inline constexpr float kGsPreLpfThruHz = 20000.0f;
