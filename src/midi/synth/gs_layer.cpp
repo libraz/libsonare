@@ -246,6 +246,8 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
     case 0x0123:  // Stereo Flanger
     case 0x0124:  // Step Flanger (a flanger variant -> the same insert)
       return "effects.modulation.flanger";
+    case 0x0125:  // Tremolo -> the ring modulator driven as amplitude modulation.
+      return "effects.modulation.ringModulator";
     case 0x0126:  // Auto Pan
       return "stereo.autoPan";
     case 0x0130:  // Compressor
@@ -254,7 +256,7 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
       return "dynamics.limiter";
     case 0x0140:  // Hexa Chorus -> the six-voice ensemble (its richer voicing).
       return "effects.modulation.ensemble";
-    case 0x0141:  // Tremolo Chorus -> the stereo chorus (its tremolo layer is deferred).
+    case 0x0141:  // Tremolo Chorus -> the chorus block; its tremolo is a chain stage.
     case 0x0142:  // Stereo Chorus
     case 0x0143:  // Space-D (an unmodulated stereo chorus)
     case 0x0144:  // 3D Chorus (the widened chorus, without the binaural stage)
@@ -276,17 +278,26 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
     case 0x0173:  // Lo-Fi 2 -> the bit-depth / sample-rate reducer.
       return "saturation.bitcrusher";
     default:
-      // Types with no faithful stock insert stay unmapped (bypass): Humanizer
-      // (0x0103, a vowel-formant filter), Tremolo (0x0125, an amplitude LFO) and
-      // 3D Auto / 3D Manual (0x0170/0x0171, binaural panners). The SC-88Pro has
-      // no standalone Ring Modulator type; that DSP appears only bundled inside
-      // Keyboard Multi (0x0500), where gs_efx_insert_chain realises it via the
-      // ringModulator insert.
+      // A single-effect type is refused when its identity is carried by
+      // something this tree cannot supply — DSP that does not exist, or a
+      // parameter whose position the transcribed manual does not give:
+      //   0x0103 Humanizer: a vowel formant filter whose identity IS the vowel,
+      //     and no parameter position for the vowel is transcribed. A fixed
+      //     vowel would be a strong resonant filter chosen at random.
+      //   0x0170 3D Auto / 0x0171 3D Manual: binaural panners, no stock insert.
+      //     3D Chorus (0x0144) and 3D Delay (0x0157) map because their 3D stage
+      //     sits on an effect that exists; here the 3D stage IS the effect.
+      // The SC-88Pro has no standalone Ring Modulator type; that DSP is reached
+      // as Tremolo (0x0125, amplitude modulation) and inside Keyboard Multi.
       return {};
   }
 }
 
 namespace {
+
+/// Tremolo voicing, shared by the standalone type (0x0125) and the Tremolo
+/// Chorus chain (0x0141) so the two cannot drift: ~5 Hz at a ~10 dB depth.
+constexpr const char* kGsTremoloJson = "{\"carrierHz\":5.0,\"dryWet\":0.35}";
 
 /// Pitch-shifter parameter translation (SC-88Pro 2-voice / feedback pitch
 /// shifter). Coarse Pitch is EFX PARAMETER 1 — a 64-centred semitone offset
@@ -341,6 +352,13 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
       const float amp_drive = std::clamp(0.45f + 0.55f * drive, 0.0f, 1.0f);
       return "{\"ampModel\":2,\"drive\":" + std::to_string(amp_drive) + level_db() + "}";
     }
+    case 0x0125:
+      // Tremolo. The ring modulator computes dry*x + wet*x*sin = x*(dry + wet*
+      // sin), which IS sinusoidal amplitude modulation, so the type is realised
+      // exactly rather than approximated; wet 0.35 is a ~10 dB depth. Rate and
+      // depth read no EFX parameter: the Effect list that gives the Tremolo's
+      // parameter positions is not transcribed (see gs_efx_insert_chain).
+      return kGsTremoloJson;
     case 0x0160:  // 2-voice Pitch Shifter -> Coarse Pitch + Balance translated.
     case 0x0161:  // Feedback Pitch Shifter (feedback approximated as a plain shift).
       return gs_pitch_shift_json(efx);
@@ -407,7 +425,10 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
   const auto rm = [] { return GsEfxStage{"effects.modulation.ringModulator", "{}"}; };
   const auto ps = [] { return GsEfxStage{"effects.modulation.pitchShifter", "{}"}; };
   const auto eq3 = [] { return GsEfxStage{"eq.parametric", "{}"}; };
+  const auto trem = [] { return GsEfxStage{"effects.modulation.ringModulator", kGsTremoloJson}; };
   switch (efx.type) {
+    case 0x0141:  // Tremolo Chorus: the chorus with its output amplitude-modulated.
+      return {cf(), trem()};
     // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
     case 0x0200:  // OD -> Chorus
       return {od(false), cf()};
@@ -457,6 +478,11 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
       return {rm(), eq3(), ps(), ph(), delay()};
     default: {
       // Single-effect types: a one-stage chain from the name/param mapping.
+      // The parallel-2 types (MSB 11) fall through here to the empty chain and
+      // stay there. They split the signal into two effects and sum them, which
+      // a series the realiser runs in order cannot express; folding one into a
+      // series would deliver a different effect under the right type name, and
+      // unlike a bypass — which the caller logs — that is invisible.
       const std::string_view name = gs_efx_insert_name(efx.type);
       if (name.empty()) return {};
       return {{std::string(name), gs_efx_insert_params(efx)}};

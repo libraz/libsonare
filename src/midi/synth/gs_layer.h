@@ -149,9 +149,11 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
 
 /// Insertion-effect adapter name for a GS EFX @p type: the `insert_factory`
 /// processor name an adapter drives, or an empty view for a type this layer
-/// does not yet map (the caller bypasses it and logs — no silent drop). The
-/// mapping is intentionally partial; layer-3 promotion adds entries here (and
-/// the matching DSP) without touching the parser, ABI or bindings.
+/// does not map (the caller bypasses it and logs — no silent drop). Covers the
+/// single-effect types only; a composite type has no single name and is read
+/// through gs_efx_insert_chain, which is the authority on what a type realises.
+/// A promotion adds an entry here (and the matching DSP) without touching the
+/// parser, ABI or bindings.
 std::string_view gs_efx_insert_name(uint16_t type) noexcept;
 
 /// JSON param object (for `insert_factory` / make_insert) translating the raw
@@ -161,10 +163,15 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept;
 /// PARAMETER 1 is the OD/Dist selector, redundant with the EFX type). The basic
 /// OD/Dist has no tone/EQ parameters — the tone comes from the amp voicing. The
 /// pitch-shifter families (2-voice / feedback) translate EFX PARAMETER 1 as the
-/// coarse semitone shift and PARAMETER 16 as the dry/effect balance. Every other
-/// type (mapped or not) returns "{}" so the insert plays its own defaults until a
-/// per-type translation lands (a layer-3 refinement — the type is already
-/// honoured, only its parameter voicing is approximate).
+/// coarse semitone shift and PARAMETER 16 as the dry/effect balance. Tremolo
+/// returns a fixed rate/depth voicing rather than a translation. Every other
+/// type (mapped or not) returns "{}" so the insert plays its own defaults.
+///
+/// A type is translated only where the parameter's position in the block is
+/// confirmed. The manual's Effect list names all 20 parameters of every type,
+/// but it is not transcribed in this repository, so for the remaining types the
+/// block STRUCTURE is honoured and the parameter voicing is a stated default —
+/// never a guessed position.
 std::string gs_efx_insert_params(const GsEfx& efx);
 
 /// One stage of a realised EFX chain: an `insert_factory` processor name and
@@ -185,6 +192,14 @@ struct GsEfxStage {
 /// faithful to the hardware; per-block parameter voicing is translated where
 /// the parameter positions are confirmed (the EQ Low/Hi Gain) and left at the
 /// insert defaults otherwise.
+///
+/// The chain is a SERIES: the realiser runs the stages in order. The GS
+/// parallel-2 types (0x1100–0x1108) split the signal into two effects and sum
+/// them, which this shape cannot express, so they stay unmapped rather than
+/// being folded into a series that would sound like a different effect under
+/// the right type name. tests/midi/gs_efx_types_test.cpp enumerates all 64 types
+/// and carries the reason for each one left unmapped, so a refusal is a table
+/// row rather than a claim in a comment.
 std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx);
 
 // --- NRPN offset scalings (documented approximations, see file header) ---

@@ -400,12 +400,11 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
   REQUIRE(gs_efx_insert_name(0x0172) == "saturation.bitcrusher");            // Lo-Fi 1
   REQUIRE(gs_efx_insert_name(0x0173) == "saturation.bitcrusher");            // Lo-Fi 2
   REQUIRE(gs_efx_insert_name(0x0000).empty());                               // Thru
-  // Types with no faithful stock insert stay unmapped: 3D Auto (0x0170, a
-  // binaural panner) and Tremolo (0x0125, an amplitude LFO). The SC-88Pro has
-  // no standalone Ring Modulator type — that DSP is reachable only bundled in
-  // Keyboard Multi (0x0500), realised there as a chain stage.
+  // Tremolo is the ring modulator run as amplitude modulation; the full
+  // per-type coverage and the reason for each unmapped type (3D Auto here) are
+  // in gs_efx_types_test.cpp.
+  REQUIRE(gs_efx_insert_name(0x0125) == "effects.modulation.ringModulator");
   REQUIRE(gs_efx_insert_name(0x0170).empty());
-  REQUIRE(gs_efx_insert_name(0x0125).empty());
 }
 
 TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][sf2][gslayer]") {
