@@ -209,6 +209,9 @@ void Sf2Player::reset() {
 void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept {
   channels_ = {};
   drum_params_ = {};
+  // Every GsMasterParams field default-constructs to its GS power-on value, so
+  // the reset is the default-construct.
+  master_ = {};
   // GS/GM reset selects EFX "Thru" and clears the part EFX switches. The EFX
   // mirror is owned by whichever thread realises it: offline (inline) clears it
   // here on the render thread; live leaves it to the control thread's

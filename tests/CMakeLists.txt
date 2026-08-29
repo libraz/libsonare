@@ -442,6 +442,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_address_table_test.cpp
     midi/gs_address_census_test.cpp
     midi/gs_master_eq_test.cpp
+    midi/gs_master_params_test.cpp
     midi/gs_part_params_test.cpp
     midi/gs_efx_types_test.cpp
     midi/gs_system_effects_test.cpp

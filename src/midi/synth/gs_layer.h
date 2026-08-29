@@ -90,6 +90,29 @@ struct GsPartParams {
   }
 };
 
+/// The GS system parameters at 40 00 xx that are not the effect block. Every
+/// field holds its GS power-on value, so a default-constructed instance is the
+/// reset state and a render that never saw one of these writes is untouched.
+struct GsMasterParams {
+  /// MASTER TUNE (40 00 00-03) as its four nibbles; 00 04 00 00 is 0 cents.
+  std::array<uint8_t, 4> tune{{0x00, 0x04, 0x00, 0x00}};
+  uint8_t volume = 0x7F;  ///< MASTER VOLUME (40 00 04).
+  uint8_t pan = 0x40;     ///< MASTER PAN (40 00 06).
+};
+
+/// MASTER TUNE as a pitch offset in cents. The four nibbles make one 0018-07E8
+/// word centred on 0400, in 0.1-cent steps, so the range is -100 to +100.
+float gs_master_tune_cents(const GsMasterParams& master) noexcept;
+
+/// MASTER VOLUME as a linear gain, on the same square law CC7, velocity and the
+/// drum-note level already use.
+float gs_master_volume_gain(uint8_t value) noexcept;
+
+/// MASTER PAN as the two output-leg gains. It is a balance on the finished mix
+/// rather than a re-pan — the legs already carry each part's own position — so
+/// the centre 40 leaves both at 1 and a hard side silences the other.
+void gs_master_pan_gains(uint8_t value, float* left, float* right) noexcept;
+
 /// Number of TONE MODIFY parameters (GS address 40 1x 30-37), which is also the
 /// number of GsPartParams fields: the two are the same set reached from two
 /// directions, so a field added to one without the other is a defect.

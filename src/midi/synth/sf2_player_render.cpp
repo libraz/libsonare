@@ -49,14 +49,23 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       if (target[ch] != nullptr) target[ch][sample] += kInvSqrt2 * (l + r);
     }
   };
-  // Master tuning (RPN 00 01 fine / 00 02 coarse) is a static per-part pitch
-  // offset, and both voice hosts take pitch offsets through Sf2ChannelMod; fold
-  // it in once per chunk rather than per voice. Zero at the power-on defaults,
-  // which leaves a render that was never tuned bit-identical.
+  // Master tuning (RPN 00 01 fine / 00 02 coarse, and GS MASTER TUNE at
+  // 40 00 00) is a static per-part pitch offset, and both voice hosts take pitch
+  // offsets through Sf2ChannelMod; fold it in once per chunk rather than per
+  // voice. Zero at the power-on defaults, which leaves a render that was never
+  // tuned bit-identical.
+  const float master_cents = gs_master_tune_cents(master_);
   std::array<Sf2ChannelMod, 16> mods = channel_mods_;
   for (size_t part = 0; part < mods.size(); ++part) {
-    mods[part].pitch_cents += channels_[part].tune_cents();
+    mods[part].pitch_cents += channels_[part].tune_cents() + master_cents;
   }
+  // GS MASTER VOLUME (40 00 04) and MASTER PAN (40 00 06) are a master, so they
+  // multiply everything the host's own gain does — including the per-source-
+  // track legs, or a source render would attribute the whole difference to the
+  // residual. Both are 1 at the power-on values.
+  float out_gain_l = 1.0f;
+  float out_gain_r = 1.0f;
+  output_gains(&out_gain_l, &out_gain_r);
   // Read the realised-EFX routing for this block from the snapshot the control
   // thread published (adopted in process() via acquire()). A null snapshot (none
   // published yet) or an all-dry one routes everything straight to the dry mix.
@@ -182,8 +191,8 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           eq_byp_r[i] += r;
         }
         if (source_render) {
-          add_output(target_for(v.source_track_id), output_offset + i, l * config_.gain,
-                     r * config_.gain);
+          add_output(target_for(v.source_track_id), output_offset + i, l * out_gain_l,
+                     r * out_gain_r);
           attributed_l[i] += l;
           attributed_r[i] += r;
         }
@@ -244,8 +253,8 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           eq_byp_r[i] += r;
         }
         if (source_render) {
-          add_output(target_for(v.source_track_id), output_offset + i, l * config_.gain,
-                     r * config_.gain);
+          add_output(target_for(v.source_track_id), output_offset + i, l * out_gain_l,
+                     r * out_gain_r);
           attributed_l[i] += l;
           attributed_r[i] += r;
         }
@@ -437,8 +446,8 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     // the sum of all targets equal to the ordinary player render.
     for (int i = 0; i < n; ++i) {
       add_output(source_outputs[0].channels, output_offset + i,
-                 (mix_l_[static_cast<size_t>(i)] - attributed_l[i]) * config_.gain,
-                 (mix_r_[static_cast<size_t>(i)] - attributed_r[i]) * config_.gain);
+                 (mix_l_[static_cast<size_t>(i)] - attributed_l[i]) * out_gain_l,
+                 (mix_r_[static_cast<size_t>(i)] - attributed_r[i]) * out_gain_r);
     }
   }
 }
@@ -494,14 +503,19 @@ void Sf2Player::process_impl(float* const* channels,
   float* right = !source_render && num_channels > 1 ? channels[1] : nullptr;
   const bool mono = right == nullptr;
 
+  float out_gain_l = 1.0f;
+  float out_gain_r = 1.0f;
   int offset = 0;
   while (offset < num_samples) {
     const int n = std::min(kChunkFrames, num_samples - offset);
     render_chunk(n, source_outputs, source_output_count, offset, num_channels);
+    // Re-read per block rather than once: a SysEx dispatched between blocks
+    // moves them, and the chunk that follows it has to hear that.
+    output_gains(&out_gain_l, &out_gain_r);
     if (!source_render) {
       for (int i = 0; i < n; ++i) {
-        const float mix_l = mix_l_[static_cast<size_t>(i)] * config_.gain;
-        const float mix_r = mix_r_[static_cast<size_t>(i)] * config_.gain;
+        const float mix_l = mix_l_[static_cast<size_t>(i)] * out_gain_l;
+        const float mix_r = mix_r_[static_cast<size_t>(i)] * out_gain_r;
         if (left != nullptr) {
           // Mono host: fold both pan legs so centre-panned voices keep level.
           left[offset + i] += mono ? kInvSqrt2 * (mix_l + mix_r) : mix_l;

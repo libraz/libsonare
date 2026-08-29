@@ -379,6 +379,10 @@ class Sf2Player final : public MidiInstrument {
 
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
+  /// GS master tuning, volume and pan (40 00 00-06). Unlike the effect blocks
+  /// these are scalars the render loop reads directly, so they stay on the
+  /// render thread in both modes, alongside the part parameters they resemble.
+  GsMasterParams master_{};
   /// GS insertion-effect (EFX) unit state, captured from the 40 03 xx SysEx
   /// block. The single SC-55/88 EFX unit; parsed and stored raw here so an
   /// adapter layer can realise it. Cleared on GS/GM reset.
@@ -593,6 +597,20 @@ class Sf2Player final : public MidiInstrument {
   /// storage rather than a parallel copy (docs/gs.md). Returns true when the
   /// message wrote at least one part parameter.
   bool apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept;
+  /// Apply the GS master writes (40 00 00-06) @p data carries. Returns true when
+  /// the message wrote at least one of them.
+  bool apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept;
+  /// The two output-leg gains: the host's own gain times GS MASTER VOLUME and
+  /// MASTER PAN. Every path that leaves the player passes through these, and
+  /// both are exactly config_.gain at the GS power-on values.
+  void output_gains(float* left, float* right) const noexcept {
+    float pan_l = 1.0f;
+    float pan_r = 1.0f;
+    gs_master_pan_gains(master_.pan, &pan_l, &pan_r);
+    const float gain = config_.gain * gs_master_volume_gain(master_.volume);
+    *left = gain * pan_l;
+    *right = gain * pan_r;
+  }
   /// Re-aim the effect bus and the master EQ at @p fx / @p eq / @p eq_part.
   /// Coefficients only: allocation-free, and the effect tails survive.
   void apply_gs_system_state(const GsSystemEffects& fx, const GsMasterEq& eq,

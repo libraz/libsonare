@@ -64,6 +64,30 @@ float gs_vib_depth_cents(int8_t offset) noexcept {
   return 3.0f * static_cast<float>(clamp_offset(offset));
 }
 
+float gs_master_tune_cents(const GsMasterParams& master) noexcept {
+  uint32_t word = 0;
+  for (const uint8_t nibble : master.tune) word = (word << 4) | (nibble & 0x0Fu);
+  return (static_cast<float>(word) - 0x0400) * 0.1f;
+}
+
+float gs_master_volume_gain(uint8_t value) noexcept {
+  const float v = static_cast<float>(value & 0x7Fu) / 127.0f;
+  return v * v;
+}
+
+void gs_master_pan_gains(uint8_t value, float* left, float* right) noexcept {
+  // 01-7F reads as -63..+63 around 40. Attenuating only the far leg keeps the
+  // centre at exactly 1 on both, which is what makes an untouched render
+  // bit-identical; a constant-power law would move it by 3 dB.
+  // Clamped because 00 is below the row's range and would otherwise come out as
+  // a small NEGATIVE right gain, which is a phase flip rather than a pan. The
+  // apply layer drops the value before it arrives, so this is a second line.
+  const float balance =
+      std::clamp((static_cast<float>(value & 0x7Fu) - 64.0f) / 63.0f, -1.0f, 1.0f);
+  if (left != nullptr) *left = balance > 0.0f ? 1.0f - balance : 1.0f;
+  if (right != nullptr) *right = balance < 0.0f ? 1.0f + balance : 1.0f;
+}
+
 void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexcept {
   const int8_t offset = static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64);
   // The manual names each of the eight and the NRPN it shares, so the order is

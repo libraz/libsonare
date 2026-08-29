@@ -45,6 +45,8 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   // Part parameters (40 1x xx). These alias controllers the render thread
   // already owns, so unlike the effect blocks they apply here in both modes.
   if (apply_gs_part_sysex(data, size)) return true;
+  // Master tuning / volume / pan (40 00 00-06), on the same thread split.
+  if (apply_gs_master_sysex(data, size)) return true;
   // GS insertion-effect (EFX) block writes (address 40 03 xx). Offline captures
   // the raw wire into the mirror so process() can realise it inline; live routes
   // realisation through the control thread (on_control_sysex), so the audio
@@ -232,6 +234,35 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
     if ((dirty & (1u << ch)) != 0) refresh_channel_mod(ch);
   }
   return dirty != 0;
+}
+
+bool Sf2Player::apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept {
+  // MASTER TUNE is four nibbles, so a run of up to seven bytes reaches every
+  // address in the block.
+  constexpr size_t kMaxWrites = 16;
+  GsWrite writes[kMaxWrites];
+  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
+  bool touched = false;
+  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
+    const GsWrite& w = writes[i];
+    const GsAddressEntry* entry = gs_lookup_address(w.addr);
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    switch (w.param) {
+      case GsParam::kMasterTune:
+        master_.tune[w.index & 0x03u] = w.value;
+        break;
+      case GsParam::kMasterVolume:
+        master_.volume = w.value;
+        break;
+      case GsParam::kMasterPan:
+        master_.pan = w.value;
+        break;
+      default:
+        continue;
+    }
+    touched = true;
+  }
+  return touched;
 }
 
 void Sf2Player::apply_gs_system_state(const GsSystemEffects& fx, const GsMasterEq& eq,
