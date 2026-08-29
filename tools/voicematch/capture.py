@@ -56,12 +56,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import au_oracle  # noqa: E402
 from _repo import REPO_ROOT  # noqa: E402
 from au_oracle import (  # noqa: E402
     AuRenderError,
     AuSource,
     dry_params,
-    find_aubounce,
     resolve_preset,
 )
 from metrics import analyze_hit, harmonic_share, midi_to_hz, to_mono  # noqa: E402
@@ -416,7 +416,9 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     report: dict = {
         "config": cfg["_path"],
         "plugin": cfg["plugin"],
-        "aubounce": str(find_aubounce()),
+        # Resolved through the module so the report names the binary the render
+        # itself will find, rather than one bound at import.
+        "aubounce": str(au_oracle.find_aubounce()),
         "timbre": timbre.get("id", ""),
         "preset": str(resolve_preset(timbre["preset"])) if timbre.get("preset") else "",
         "params": list(base.params),
