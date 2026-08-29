@@ -253,39 +253,53 @@ TEST_CASE("GS drum NRPNs override pitch, level and pan per note", "[midi][sf2][g
   }
 }
 
-TEST_CASE("a GS drum note send maps like the same value on CC91/93", "[midi][sf2][gslayer]") {
-  // A 0..127 send amount has to mean one depth whichever message carried it,
-  // or a GS kit addressed through the drum block comes out drier than the
-  // melodic parts addressed through the controllers.
+TEST_CASE("a GS drum note send scales its part's, it does not add to it", "[midi][sf2][gslayer]") {
+  // docs/gs.md, deliberate divergences: the manual calls 41 m5/m6/m9 a
+  // "Multiplicand of the part reverb level" over 0.0-1.0, so a drum note's send
+  // scales what its part is already sending. The consequence is the point of
+  // the rule: taking a part's send to zero silences its drum notes in the
+  // reverb, which adding does not.
   using sonare::midi::synth::apply_gs_drum_params;
   using sonare::midi::synth::GsDrumNoteParams;
-  using sonare::midi::synth::kCcSendDepth;
   using sonare::midi::synth::Sf2VoiceParams;
 
-  Sf2VoiceParams params;
-  params.reverb_send = 0.0f;
-  params.chorus_send = 0.0f;
   GsDrumNoteParams drum;
   drum.flags = GsDrumNoteParams::kReverb | GsDrumNoteParams::kChorus;
   drum.reverb = 80;
   drum.chorus = 80;
-  apply_gs_drum_params(params, drum);
 
-  const float cc_depth = kCcSendDepth * 80.0f / 127.0f;
-  REQUIRE(params.reverb_send == Approx(cc_depth));
-  REQUIRE(params.chorus_send == Approx(cc_depth));
+  SECTION("it scales the part's send") {
+    Sf2VoiceParams params;
+    params.reverb_send = 0.5f;
+    params.chorus_send = 0.4f;
+    apply_gs_drum_params(params, drum);
+    REQUIRE(params.reverb_send == Approx(0.5f * 80.0f / 127.0f));
+    REQUIRE(params.chorus_send == Approx(0.4f * 80.0f / 127.0f));
+  }
 
-  // Full scale saturates at unity rather than exceeding the send bus range.
-  Sf2VoiceParams full;
-  full.reverb_send = 0.9f;
-  full.chorus_send = 0.9f;
-  GsDrumNoteParams max_drum;
-  max_drum.flags = GsDrumNoteParams::kReverb | GsDrumNoteParams::kChorus;
-  max_drum.reverb = 127;
-  max_drum.chorus = 127;
-  apply_gs_drum_params(full, max_drum);
-  REQUIRE(full.reverb_send <= 1.0f);
-  REQUIRE(full.chorus_send <= 1.0f);
+  SECTION("a silent part stays silent however loud the note's own send") {
+    Sf2VoiceParams params;
+    params.reverb_send = 0.0f;
+    params.chorus_send = 0.0f;
+    GsDrumNoteParams loud = drum;
+    loud.reverb = 127;
+    loud.chorus = 127;
+    apply_gs_drum_params(params, loud);
+    REQUIRE(params.reverb_send == 0.0f);
+    REQUIRE(params.chorus_send == 0.0f);
+  }
+
+  SECTION("a multiplicand of 127 is unity, so it cannot exceed the bus range") {
+    Sf2VoiceParams params;
+    params.reverb_send = 0.9f;
+    params.chorus_send = 0.9f;
+    GsDrumNoteParams full = drum;
+    full.reverb = 127;
+    full.chorus = 127;
+    apply_gs_drum_params(params, full);
+    REQUIRE(params.reverb_send == Approx(0.9f));
+    REQUIRE(params.chorus_send == Approx(0.9f));
+  }
 }
 
 TEST_CASE("parse_gs_sysex recognises the GS/GM messages", "[midi][sf2][gslayer]") {
