@@ -431,6 +431,7 @@ if(BUILD_ARRANGEMENT)
     midi/brass_voice_test.cpp
     midi/flute_voice_test.cpp
     midi/new_engines_voice_test.cpp
+    midi/patch_sections_test.cpp
     midi/voice_polish_test.cpp
     midi/synth_toolkit_test.cpp
     midi/sf2_file_test.cpp
@@ -438,6 +439,7 @@ if(BUILD_ARRANGEMENT)
     midi/sf2_fidelity_test.cpp
     midi/sf2_effects_test.cpp
     midi/sf2_gs_layer_test.cpp
+    midi/gs_address_table_test.cpp
     midi/gs_efx_send_routing_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
