@@ -6,9 +6,9 @@ const std::array<NativeSynthPatch, 16>& family_patches() noexcept {
 #if defined(SONARE_TUNING) && SONARE_TUNING
   // The tuning build reads overrides from the environment, so the table can
   // only be built once the process is running.
-  static const std::array<NativeSynthPatch, 16> kTable = build_family_patches();
+  static const std::array<NativeSynthPatch, 16> kTable = build_family_table();
 #else
-  static constexpr std::array<NativeSynthPatch, 16> kTable = build_family_patches();
+  static constexpr std::array<NativeSynthPatch, 16> kTable = build_family_table();
 #endif
   return kTable;
 }

@@ -1,4 +1,5 @@
 #include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/patch_sections.h"
 #include "midi/synth/patch_tuning.h"
 #include "util/tunable.h"
 
@@ -911,6 +912,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
     apply_patch_tuning(t[static_cast<size_t>(n)], key);
   }
 #endif
+  for (auto& p : t) p = strip_unvoiced_sections(p);
   return t;
 }
 

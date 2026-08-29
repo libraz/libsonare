@@ -1,6 +1,7 @@
 #pragma once
 
 #include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/patch_sections.h"
 #include "midi/synth/patch_tuning.h"
 #include "util/tunable.h"
 
@@ -342,6 +343,15 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
     apply_patch_tuning(t[static_cast<size_t>(i)], key);
   }
 #endif
+  return t;
+}
+
+/// The family table as it is stored. Separate from `build_family_patches()`
+/// because the program builders start from that one and go on to set a section
+/// of their own; only what is kept blanks its unvoiced sections.
+SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_table() noexcept {
+  std::array<NativeSynthPatch, 16> t = build_family_patches();
+  for (NativeSynthPatch& p : t) p = strip_unvoiced_sections(p);
   return t;
 }
 

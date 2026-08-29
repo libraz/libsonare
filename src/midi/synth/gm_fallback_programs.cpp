@@ -5,6 +5,7 @@
 #include "midi/synth/gm_fallback_programs_sfx.h"
 #include "midi/synth/gm_fallback_programs_synth.h"
 #include "midi/synth/gm_fallback_programs_variations.h"
+#include "midi/synth/patch_sections.h"
 #include "midi/synth/patch_tuning.h"
 
 namespace sonare::midi::synth::detail {
@@ -40,6 +41,12 @@ SONARE_TUNED_CONSTEXPR ProgramOverrides build_program_overrides() noexcept {
   SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_TUNE_ONE)
 #undef SONARE_GM_TUNE_ONE
 #endif
+
+  // Last, so the clamp above still bounds every field for the tuning catalogue
+  // and an override still reaches the section it names.
+#define SONARE_GM_STRIP_ONE(name) o.name = strip_unvoiced_sections(o.name);
+  SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_STRIP_ONE)
+#undef SONARE_GM_STRIP_ONE
 
   return o;
 }
