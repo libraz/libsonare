@@ -36,6 +36,7 @@ effects::modulation::ChorusConfig chorus_config(const GsEffectsConfig& cfg) {
   effects::modulation::ChorusConfig cc;
   cc.rate_hz = std::max(0.0f, cfg.chorus_rate_hz);
   cc.depth_ms = std::max(0.0f, cfg.chorus_depth_ms);
+  cc.center_delay_ms = std::max(0.0f, cfg.chorus_delay_ms);
   cc.dry_wet = 1.0f;
   return cc;
 }
@@ -105,6 +106,26 @@ void GsEffectBus::prepare(double sample_rate) {
   reverb_.prepare(sample_rate, kBlockFrames);
   chorus_.prepare(sample_rate, kBlockFrames);
   delay_.prepare(sample_rate, kBlockFrames);
+}
+
+void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
+  const bool enable_reverb = config_.enable_reverb;
+  const bool enable_chorus = config_.enable_chorus;
+  const bool enable_delay = config_.enable_delay;
+  config_ = config;
+  config_.enable_reverb = enable_reverb;
+  config_.enable_chorus = enable_chorus;
+  config_.enable_delay = enable_delay;
+  // Automatable parameter ids, from each unit's header. Everything reached here
+  // is a coefficient: nothing resizes a buffer or clears a delay line.
+  const effects::reverb::DattorroReverbConfig rc = reverb_config(config_);
+  reverb_.set_parameter(0, rc.decay);
+  reverb_.set_parameter(1, rc.damping);
+  const effects::modulation::ChorusConfig cc = chorus_config(config_);
+  chorus_.set_parameter(0, cc.rate_hz);
+  chorus_.set_parameter(1, cc.depth_ms);
+  chorus_.set_parameter(2, cc.center_delay_ms);
+  delay_.set_config(delay_config(config_));
 }
 
 void GsEffectBus::reset() {

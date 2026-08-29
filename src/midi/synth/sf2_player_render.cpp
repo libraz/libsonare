@@ -67,6 +67,21 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   if (any_bussed && !part_bus_.empty()) {
     std::memset(part_bus_.data(), 0, sizeof(float) * part_bus_.size());
   }
+  // Master EQ (GS 40 02 xx) is one stage on the output; a part switched out of
+  // it (40 4x 20) accumulates into the bypass bus as well as into the mix, so
+  // the EQ runs on the difference and that part passes through. Both are skipped
+  // while the EQ is flat — the power-on state, and therefore bit-exact.
+  float* eq_byp_l = nullptr;
+  float* eq_byp_r = nullptr;
+  if (eq_.active() && !eq_bypass_bus_.empty()) {
+    for (const bool bypassed : eq_bypassed_) {
+      if (!bypassed) continue;
+      eq_byp_l = eq_bypass_bus_.data();
+      eq_byp_r = eq_byp_l + kChunkFrames;
+      std::memset(eq_byp_l, 0, sizeof(float) * eq_bypass_bus_.size());
+      break;
+    }
+  }
 
 #if defined(SONARE_MIDI_WITH_FX)
   // GS EFX -> system FX send routing. A part bussed through the single GS
@@ -162,6 +177,10 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       } else {
         mix_l_[static_cast<size_t>(i)] += l;
         mix_r_[static_cast<size_t>(i)] += r;
+        if (eq_byp_l != nullptr && eq_bypassed_[part]) {
+          eq_byp_l[i] += l;
+          eq_byp_r[i] += r;
+        }
         if (source_render) {
           add_output(target_for(v.source_track_id), output_offset + i, l * config_.gain,
                      r * config_.gain);
@@ -220,6 +239,10 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       } else {
         mix_l_[static_cast<size_t>(i)] += l;
         mix_r_[static_cast<size_t>(i)] += r;
+        if (eq_byp_l != nullptr && eq_bypassed_[part]) {
+          eq_byp_l[i] += l;
+          eq_byp_r[i] += r;
+        }
         if (source_render) {
           add_output(target_for(v.source_track_id), output_offset + i, l * config_.gain,
                      r * config_.gain);
@@ -276,6 +299,10 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         } else {
           mix_l_[static_cast<size_t>(i)] += add + side;
           mix_r_[static_cast<size_t>(i)] += add - side;
+          if (eq_byp_l != nullptr && eq_bypassed_[static_cast<size_t>(part)]) {
+            eq_byp_l[i] += add + side;
+            eq_byp_r[i] += add - side;
+          }
         }
 #if defined(SONARE_MIDI_WITH_FX)
         // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
@@ -342,9 +369,16 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         }
       }
 #endif
+      // A bussed part reaches the EQ bypass bus post-insert: what the mix gets
+      // is what has to pass through unfiltered.
+      const bool eq_bypass_part = eq_byp_l != nullptr && eq_bypassed_[static_cast<size_t>(part)];
       for (int i = 0; i < n; ++i) {
         mix_l_[static_cast<size_t>(i)] += bus_l[i];
         mix_r_[static_cast<size_t>(i)] += bus_r[i];
+        if (eq_bypass_part) {
+          eq_byp_l[i] += bus_l[i];
+          eq_byp_r[i] += bus_r[i];
+        }
       }
     }
   }
@@ -361,6 +395,23 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   for (int i = 0; i < n; ++i) {
     if (!std::isfinite(mix_l_[static_cast<size_t>(i)])) mix_l_[static_cast<size_t>(i)] = 0.0f;
     if (!std::isfinite(mix_r_[static_cast<size_t>(i)])) mix_r_[static_cast<size_t>(i)] = 0.0f;
+  }
+  // Master EQ, ahead of the DC blocker so a low-shelf boost cannot leave the bus
+  // with an offset the blocker was there to remove.
+  if (eq_.active()) {
+    if (eq_byp_l != nullptr) {
+      for (int i = 0; i < n; ++i) {
+        mix_l_[static_cast<size_t>(i)] -= eq_byp_l[i];
+        mix_r_[static_cast<size_t>(i)] -= eq_byp_r[i];
+      }
+      eq_.process(mix_l_.data(), mix_r_.data(), n);
+      for (int i = 0; i < n; ++i) {
+        mix_l_[static_cast<size_t>(i)] += eq_byp_l[i];
+        mix_r_[static_cast<size_t>(i)] += eq_byp_r[i];
+      }
+    } else {
+      eq_.process(mix_l_.data(), mix_r_.data(), n);
+    }
   }
   if (config_.dc_block) {
     // The fallback floor renders physical-model voices, which can carry a small
@@ -421,6 +472,15 @@ void Sf2Player::process_impl(float* const* channels,
   // allocates, so it is gated to single-threaded/offline use; the live engine
   // realises on the control thread via on_control_sysex instead.
   if (config_.realize_efx_inline && gs_efx_dirty_) realize_gs_efx();
+  // GS system-effect / master-EQ state. Offline the render thread owns the
+  // mirror and re-aims the units here; live the control thread hands the newest
+  // state over through the queue. Both are coefficient-only, so an edit mid-note
+  // keeps the reverb and delay tails it was already ringing.
+  if (config_.realize_efx_inline && gs_system_dirty_) {
+    gs_system_dirty_ = false;
+    apply_gs_system_state(sys_fx_, master_eq_, eq_part_bypassed_);
+  }
+  drain_gs_system_updates();
   // Adopt the newest realised-EFX snapshot for this block (wait-free, no alloc).
   // Offline this picks up the inline publish just above; live it picks up the
   // control thread's on_control_sysex publish.

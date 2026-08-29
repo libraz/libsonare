@@ -42,12 +42,15 @@
 #include "midi/instrument.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_layer.h"
+#include "midi/synth/gs_master_eq.h"
+#include "midi/synth/gs_system_effects.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
+#include "rt/spsc_queue.h"
 #include "util/constants.h"
 #if defined(SONARE_MIDI_WITH_FX)
 #include "midi/synth/gs_effects.h"
@@ -208,6 +211,19 @@ class Sf2Player final : public MidiInstrument {
   /// Captured GS insertion-effect (EFX) unit state (the raw 40 03 xx wire).
   /// Exposed for the adapter layer that realises it and for diagnostics.
   const GsEfx& gs_efx() const noexcept { return efx_; }
+
+  /// Captured GS system-effect block (the raw 40 01 30-5A wire) and master EQ
+  /// block (40 02 00-03), at the GS power-on defaults until a file writes them.
+  /// This is the realise mirror, so it reads back what arrived rather than what
+  /// the units are currently running (test/diagnostic).
+  const GsSystemEffects& gs_system_effects() const noexcept { return sys_fx_; }
+  const GsMasterEq& gs_master_eq() const noexcept { return master_eq_; }
+
+  /// Whether @p channel is routed through the master EQ (GS 40 4x 20). Powers
+  /// on ON for every part (test/diagnostic).
+  bool gs_part_eq_enabled(uint8_t channel) const noexcept {
+    return !eq_part_bypassed_[channel & 0x0Fu];
+  }
 
   /// True when the captured EFX unit or a part's EFX on/off switch changed
   /// since the last realise_gs_efx(). handle_sysex() (audio-thread safe) only
@@ -373,6 +389,20 @@ class Sf2Player final : public MidiInstrument {
   /// realise_gs_efx(). Lets the audio-safe SysEx path defer the allocating
   /// insert rebuild to the control thread.
   bool gs_efx_dirty_ = false;
+  /// GS system-effect block (40 01 30-5A), master EQ (40 02 00-03) and per-part
+  /// EQ switch (40 4x 20) as they arrived on the wire. Same thread ownership as
+  /// the EFX mirror above: the render thread offline, the control thread live.
+  /// Every member default-constructs to its GS power-on value, so a reset is a
+  /// default-construct — which is why the switch is stored bypassed-side-up.
+  GsSystemEffects sys_fx_{};
+  GsMasterEq master_eq_{};
+  std::array<bool, 16> eq_part_bypassed_{};
+  /// Raised when the mirror above changes on the offline path; process() applies
+  /// it to the units at the top of the next block.
+  bool gs_system_dirty_ = false;
+  /// AUDIO thread: the master EQ stage and the parts switched out of it.
+  GsMasterEqFilter eq_;
+  std::array<bool, 16> eq_bypassed_{};
   /// GS drum-kit per-note overrides (NRPN 18/1A/1C/1D/1E), per channel.
   std::array<std::array<GsDrumNoteParams, 128>, 16> drum_params_{};
   VoicePool<Sf2Voice> pool_;
@@ -446,6 +476,11 @@ class Sf2Player final : public MidiInstrument {
   std::vector<float> mix_r_;
   /// 16 parts x stereo x kChunkFrames; only used when a part insert is set.
   std::vector<float> part_bus_;
+  /// Master-EQ bypass bus, stereo x kChunkFrames. A part switched out of the EQ
+  /// (GS 40 4x 20) accumulates here as well as into the mix, so the EQ runs on
+  /// the difference and that part's audio passes through untouched. Only used
+  /// when the EQ is off flat and some part is switched out.
+  std::vector<float> eq_bypass_bus_;
   /// True once the player is EFX-capable (a config insert exists or a factory is
   /// injected), so the per-part bus buffer is allocated. This only governs
   /// allocation — the actual per-part routing is decided by `part_bussed_`, so
@@ -530,6 +565,34 @@ class Sf2Player final : public MidiInstrument {
     alignas(64) std::atomic<size_t> tail_{0};  // audio thread (consumer)
   };
   std::unique_ptr<EfxParamQueue> efx_param_queue_ = std::make_unique<EfxParamQueue>();
+
+  /// One GS system-effect / master-EQ state handed from the control thread to
+  /// the audio thread. Both blocks are coefficient-only, so the audio thread
+  /// applies the newest snapshot to the running units in place and the reverb
+  /// and delay tails survive a live edit.
+  struct GsSystemUpdate {
+    GsSystemEffects fx;
+    GsMasterEq eq;
+    std::array<bool, 16> eq_part_bypassed;
+  };
+  /// Wait-free single-producer (control thread) / single-consumer (audio thread)
+  /// ring of pending system states. The state is absolute rather than
+  /// incremental, so a drop or an overtake costs nothing: the audio thread
+  /// applies the newest entry and discards the rest. Held by unique_ptr because
+  /// SpscQueue is non-movable while Sf2Player stays movable.
+  std::unique_ptr<rt::SpscQueue<GsSystemUpdate>> sys_queue_ =
+      std::make_unique<rt::SpscQueue<GsSystemUpdate>>();
+
+  /// Apply the GS system-effect / master-EQ block writes @p data carries to the
+  /// realise mirror (sys_fx_ / master_eq_ / eq_part_bypassed_). Returns true when
+  /// the message wrote at least one of them. Touches no unit and no audio state.
+  bool apply_gs_system_sysex(const uint8_t* data, size_t size) noexcept;
+  /// Re-aim the effect bus and the master EQ at @p fx / @p eq / @p eq_part.
+  /// Coefficients only: allocation-free, and the effect tails survive.
+  void apply_gs_system_state(const GsSystemEffects& fx, const GsMasterEq& eq,
+                             const std::array<bool, 16>& eq_part) noexcept;
+  /// AUDIO thread: adopt the newest system state the control thread published.
+  void drain_gs_system_updates() noexcept;
 
   /// CONTROL thread: resolve a parameter-only GS EFX edit against the live
   /// published chain (reading only the const parameter-descriptor bridge) and

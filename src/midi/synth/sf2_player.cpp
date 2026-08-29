@@ -166,9 +166,16 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   dc_x1_ = {};
   dc_y1_ = {};
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
+  eq_bypass_bus_.assign(2 * static_cast<size_t>(kChunkFrames), 0.0f);
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->prepare(sample_rate_);
 #endif
+  // The effect bus and the master EQ start on the GS power-on defaults, so a
+  // file that sends GS Reset and nothing else gets the state it is entitled to
+  // (docs/gs.md, "Reset defaults are part of the contract").
+  eq_.prepare(sample_rate_);
+  sys_queue_->reserve(8);
+  apply_gs_system_state(sys_fx_, master_eq_, eq_part_bypassed_);
   recompute_tail();
   prepared_ = true;
   // Publish the initial realised-EFX snapshot (the config static inserts; no GS
@@ -196,6 +203,7 @@ void Sf2Player::reset() {
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
 #endif
+  eq_.reset();
 }
 
 void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept {
@@ -210,6 +218,12 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
     efx_ = {};
     efx_part_enabled_ = {};
     gs_efx_dirty_ = true;
+    // The system-effect and master-EQ mirror splits the same way, and every one
+    // of its fields defaults to its GS power-on value.
+    sys_fx_ = {};
+    master_eq_ = {};
+    eq_part_bypassed_ = {};
+    gs_system_dirty_ = true;
   }
   for (uint8_t ch = 0; ch < 16; ++ch) {
     channels_[ch].drums = ch == kDrumChannel;

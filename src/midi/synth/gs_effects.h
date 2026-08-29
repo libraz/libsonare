@@ -67,13 +67,9 @@ struct GsEffectsConfig {
   float delay_send_to_reverb = 0.0f;          ///< Delay return into the reverb bus.
 };
 
-/// The effect-unit settings a GS system-effect block asks for.
-///
-/// This is the value layer's terminus, not a live path: nothing constructs a
-/// GsEffectBus through it yet. The GS reset defaults mapped through here do not
-/// equal the hand-picked defaults above, so switching the bus over moves the
-/// goldens and belongs in its own change (docs/gs.md, "Reset defaults are part
-/// of the contract").
+/// The effect-unit settings a GS system-effect block asks for. This is what the
+/// player hands the bus, so the GS reset defaults — not the hand-picked ones
+/// above — are what a file that sends GS Reset and nothing else hears.
 ///
 /// A REVERB CHARACTER of 6 or 7 sounds the delay unit instead of the reverb —
 /// a routing change rather than a coefficient, so it stays with whoever owns
@@ -91,6 +87,12 @@ class GsEffectBus {
   /// CONTROL thread: prepares the effect units and chunk buses.
   void prepare(double sample_rate);
   void reset();
+
+  /// Re-aim the running units at @p config. Coefficients only — allocation-free
+  /// and no state reset, so a GS system-effect edit keeps the reverb and delay
+  /// tails it was already ringing. The enable flags stay as the host built the
+  /// bus with; GS has no address for them.
+  void set_config(const GsEffectsConfig& config) noexcept;
 
   /// AUDIO thread: zero the send buses for the next chunk.
   void begin_chunk() noexcept;

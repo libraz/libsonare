@@ -9,6 +9,7 @@
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gs_address_table.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 
@@ -49,7 +50,155 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
     gs_efx_dirty_ = true;
     return true;
   }
+  // System-effect (40 01 30-5A), master-EQ (40 02 00-03) and part EQ switch
+  // (40 4x 20) writes, on the same thread split as the EFX block above.
+  if (config_.realize_efx_inline && apply_gs_system_sysex(data, size)) {
+    gs_system_dirty_ = true;
+    return true;
+  }
   return false;
+}
+
+bool Sf2Player::apply_gs_system_sysex(const uint8_t* data, size_t size) noexcept {
+  // A file writes these blocks as multi-byte runs — the census finds up to 11
+  // data bytes at 40 01 50 — so every decoded byte is applied, not just the
+  // first. gs_decode_sysex reports one write per byte with its own address.
+  constexpr size_t kMaxWrites = 64;
+  GsWrite writes[kMaxWrites];
+  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
+  bool touched = false;
+  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
+    const GsWrite& w = writes[i];
+    // An out-of-range value is ignored rather than clamped (docs/gs.md).
+    const GsAddressEntry* entry = gs_lookup_address(w.addr);
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    switch (w.param) {
+      // A macro is a one-shot write of the parameters it covers, so it lands
+      // through gs_apply_*_macro rather than on a field of its own.
+      case GsParam::kReverbMacro:
+        gs_apply_reverb_macro(sys_fx_, w.value);
+        break;
+      case GsParam::kReverbCharacter:
+        sys_fx_.reverb_character = w.value;
+        break;
+      case GsParam::kReverbPreLpf:
+        sys_fx_.reverb_pre_lpf = w.value;
+        break;
+      case GsParam::kReverbLevel:
+        sys_fx_.reverb_level = w.value;
+        break;
+      case GsParam::kReverbTime:
+        sys_fx_.reverb_time = w.value;
+        break;
+      case GsParam::kReverbDelayFeedback:
+        sys_fx_.reverb_delay_feedback = w.value;
+        break;
+      case GsParam::kReverbPredelay:
+        sys_fx_.reverb_predelay = w.value;
+        break;
+      case GsParam::kChorusMacro:
+        gs_apply_chorus_macro(sys_fx_, w.value);
+        break;
+      case GsParam::kChorusPreLpf:
+        sys_fx_.chorus_pre_lpf = w.value;
+        break;
+      case GsParam::kChorusLevel:
+        sys_fx_.chorus_level = w.value;
+        break;
+      case GsParam::kChorusFeedback:
+        sys_fx_.chorus_feedback = w.value;
+        break;
+      case GsParam::kChorusDelay:
+        sys_fx_.chorus_delay = w.value;
+        break;
+      case GsParam::kChorusRate:
+        sys_fx_.chorus_rate = w.value;
+        break;
+      case GsParam::kChorusDepth:
+        sys_fx_.chorus_depth = w.value;
+        break;
+      case GsParam::kChorusSendToReverb:
+        sys_fx_.chorus_send_to_reverb = w.value;
+        break;
+      case GsParam::kChorusSendToDelay:
+        sys_fx_.chorus_send_to_delay = w.value;
+        break;
+      case GsParam::kDelayMacro:
+        gs_apply_delay_macro(sys_fx_, w.value);
+        break;
+      case GsParam::kDelayPreLpf:
+        sys_fx_.delay_pre_lpf = w.value;
+        break;
+      case GsParam::kDelayTimeCenter:
+        sys_fx_.delay_time_center = w.value;
+        break;
+      case GsParam::kDelayTimeRatioLeft:
+        sys_fx_.delay_time_ratio_left = w.value;
+        break;
+      case GsParam::kDelayTimeRatioRight:
+        sys_fx_.delay_time_ratio_right = w.value;
+        break;
+      case GsParam::kDelayLevelCenter:
+        sys_fx_.delay_level_center = w.value;
+        break;
+      case GsParam::kDelayLevelLeft:
+        sys_fx_.delay_level_left = w.value;
+        break;
+      case GsParam::kDelayLevelRight:
+        sys_fx_.delay_level_right = w.value;
+        break;
+      case GsParam::kDelayLevel:
+        sys_fx_.delay_level = w.value;
+        break;
+      case GsParam::kDelayFeedback:
+        sys_fx_.delay_feedback = w.value;
+        break;
+      case GsParam::kDelaySendToReverb:
+        sys_fx_.delay_send_to_reverb = w.value;
+        break;
+      case GsParam::kEqLowFreq:
+        master_eq_.low_freq = w.value;
+        break;
+      case GsParam::kEqLowGain:
+        master_eq_.low_gain = w.value;
+        break;
+      case GsParam::kEqHighFreq:
+        master_eq_.high_freq = w.value;
+        break;
+      case GsParam::kEqHighGain:
+        master_eq_.high_gain = w.value;
+        break;
+      case GsParam::kPartEqSwitch:
+        eq_part_bypassed_[w.part & 0x0Fu] = w.value == 0;
+        break;
+      default:
+        continue;
+    }
+    touched = true;
+  }
+  return touched;
+}
+
+void Sf2Player::apply_gs_system_state(const GsSystemEffects& fx, const GsMasterEq& eq,
+                                      const std::array<bool, 16>& eq_part) noexcept {
+#if defined(SONARE_MIDI_WITH_FX)
+  if (effects_ != nullptr) effects_->set_config(gs_effects_config_from(fx));
+#else
+  (void)fx;
+#endif
+  eq_.set(eq);
+  eq_bypassed_ = eq_part;
+  // REVERB TIME and DELAY TIME move the ring-out an offline bounce has to
+  // capture; the recomputation is table lookups and arithmetic, no allocation.
+  if (prepared_) recompute_tail();
+}
+
+void Sf2Player::drain_gs_system_updates() noexcept {
+  GsSystemUpdate update;
+  bool pending = false;
+  while (sys_queue_->pop(update)) pending = true;
+  // The state is absolute, so only the newest entry means anything.
+  if (pending) apply_gs_system_state(update.fx, update.eq, update.eq_part_bypassed);
 }
 
 namespace {
@@ -243,6 +392,18 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
   if (apply_efx_sysex(data, size)) {
     realize_gs_efx();
   }
+  // The system-effect and master-EQ blocks are control-owned in a live engine
+  // for the same reason the EFX mirror is. They need no rebuild: the new state
+  // goes to the audio thread as coefficients through the queue.
+  const GsSysEx msg = parse_gs_sysex(data, size);
+  bool changed = msg.kind == GsSysExKind::kGsReset || msg.kind == GsSysExKind::kGmReset;
+  if (changed) {
+    sys_fx_ = {};
+    master_eq_ = {};
+    eq_part_bypassed_ = {};
+  }
+  changed = apply_gs_system_sysex(data, size) || changed;
+  if (changed) sys_queue_->push({sys_fx_, master_eq_, eq_part_bypassed_});
 }
 
 void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
