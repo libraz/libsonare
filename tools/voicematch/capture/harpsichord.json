@@ -23,25 +23,25 @@
     {
       "id": "gm007",
       "label": "GM harpsichord, slot 1",
-      "channel": 1,
+      "slot_channel": 1,
       "_note": "The dry anchor. Mono, and silent to the numerical floor two and a half seconds after note-off, so nothing here is a room. Modest as an instrument, decisive as a reference: every level and every decay measured against it is the instrument alone."
     },
     {
       "id": "baroque",
       "label": "Baroque registration, slot 3",
-      "channel": 3,
+      "slot_channel": 3,
       "_note": "The main reference. A plain 8' registration in the baroque style, and the shortest decay of the eight slots."
     },
     {
       "id": "concert-8-4",
       "label": "8ft + 4ft registration, slot 4",
-      "channel": 4,
+      "slot_channel": 4,
       "_note": "The 8'+4' registration, and the evidence for it: this is the only slot whose second harmonic outweighs its first, which is the octave rank sounding as a rank rather than as a brighter tone."
     },
     {
       "id": "room",
       "label": "The same instrument in a space, slot 7",
-      "channel": 7,
+      "slot_channel": 7,
       "_note": "The same instrument in a space, kept as the check on the room correction rather than as a timbre target."
     }
   ],

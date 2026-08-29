@@ -37,7 +37,7 @@
     {
       "id": "gm112",
       "label": "GM shanai, rack slot 16",
-      "channel": 16
+      "slot_channel": 16
     }
   ],
   "_dimensions": "The slot is a double reed. Its GM family is a plucked one and this voice is not: it holds rather than falls, so the three free-decay dimensions are excused with that measurement rather than gated on a flat line.",

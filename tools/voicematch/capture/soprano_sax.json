@@ -38,7 +38,7 @@
     {
       "id": "gm065",
       "label": "GM soprano sax, rack slot 1",
-      "channel": 1
+      "slot_channel": 1
     }
   ],
   "_dimensions": "Nine of the ten a sustained voice can be judged on. `damper` is the load-bearing one on a wind: the note stops when the breath stops, and a model whose release is a decay rather than a stop gives itself away there before anywhere else. The slot is a conical reed source, and the partial ladder `balance` reads is where that shows.",

@@ -41,7 +41,7 @@ harmonic series and a probe rendered by both sides:
   hardest, and whether it moves monotonically. On a plucked instrument this is
   most of the instrument's identity and no timbre metric can see it.
 
-A capture whose timbres sit on MIDI channel 10 is measured with none of that.
+A capture whose timbres declare MIDI channel 10 is measured with none of that.
 There its note numbers select instruments rather than pitches, so there is no
 fundamental for any of the six to be about, and what is measured instead is the
 1/3-octave band profile, the per-octave decay of it, the attack, the crest and
@@ -73,7 +73,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from capture import (  # noqa: E402
-    DEFAULT_CONFIG, load_config, note_groups, note_map, out_root, tail_seconds,
+    DEFAULT_CONFIG, PERCUSSION_CHANNEL, load_config, note_groups, note_map, out_root,
+    tail_seconds,
 )
 from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
@@ -99,9 +100,6 @@ CAPTURE_DIR = Path(__file__).resolve().parent / "capture"
 # string with one ruler. They were the same numbers when they were written twice;
 # a quantity defined in two places only stays equal until one of them is tuned.
 MAX_PARTIALS = MAX_FIT_PARTIALS
-# One-based MIDI channel 10, on which a note number selects an instrument
-# instead of a pitch. `write_smf` counts channels from zero.
-PERCUSSION_CHANNEL = 10
 # The 1/3-octave band centres `analyze_hit` reports, split into the two ends the
 # tilt is taken between. The middle is left out on purpose: a kit's body lives
 # there and every piece of it puts energy there, so including it averages the
@@ -132,9 +130,20 @@ def is_percussion(cap: dict) -> bool:
     an instrument, on the reference as much as in libsonare — and a second field
     saying the same thing is a field that can disagree with it.
 
+    What CAN disagree with it is an address. A rack selects its slots by channel
+    too, and a slot number written into this field claims a meaning it was never
+    about: five melodic instruments that happened to sit in slot 10 were measured
+    as drum maps, and the profiles came back with a band tilt and a crest for
+    every note and a fundamental for none. So the slot has its own name,
+    `capture.slot_channel`, and this field stays the semantic one.
+
     All timbres or none: a capture holding a kit on channel 10 and a melodic
     slot on channel 1 has no single answer, and guessing one would measure half
     of it with the wrong metric set.
+
+    Tolerant of a channel outside `capture.NOTE_CHANNELS`, which `load_config`
+    refuses — a reference profile carries the timbre block it was measured with,
+    so this also reads capture definitions written before the slot had a name.
     """
     timbres = cap.get("timbres") or []
     if not timbres:

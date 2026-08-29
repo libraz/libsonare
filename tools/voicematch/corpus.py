@@ -27,11 +27,19 @@ rule.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
+from capture import (
+    RIG_BAKED,
+    RIG_NONE,
+    RIG_UNCLASSIFIED,
+    RIG_VALUES,
+    rig_capable,
+)
 from patterns import Pattern
 from smf import Note
 from wavio import read_wav
@@ -62,10 +70,18 @@ class Corpus:
     #: capture is the instrument; a wet one has a room baked in that the model
     #: has to be placed in before any decay metric means anything.
     dry: bool = False
-    #: One-based MIDI channel the timbre was captured on. 10 is the drum
-    #: channel, where a note number selects an instrument rather than a pitch —
-    #: which decides both the channel the model's probe is written on and which
-    #: metric set can measure it.
+    #: What the capture config answered about a rig — an amplifier, a cabinet, a
+    #: rotary speaker — standing between the instrument and the microphone.
+    #: `unclassified` where nobody has answered, which is not `none`. A different
+    #: question from `dry`, which is about a room and cannot see a cabinet.
+    #: `check_rig` is what reads it.
+    rig: str = RIG_UNCLASSIFIED
+    #: One-based MIDI channel saying what this timbre's note numbers MEAN. 10 is
+    #: the drum channel, where a note number selects an instrument rather than a
+    #: pitch — which decides both the channel the model's probe is written on and
+    #: which metric set can measure it. Not the rack slot the timbre was
+    #: addressed at, which is `capture.slot_channel` and says nothing about the
+    #: instrument. `_note_channel` is what keeps the two apart here.
     channel: int = 1
     #: The capture's own families of notes — the tom series, the hi-hat trio —
     #: as sets of note numbers. Empty for a capture that named none, which is
@@ -159,10 +175,62 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         velocities=tuple(sorted({v for _, v in renders})),
         label=label,
         dry=_dryness(manifest),
-        channel=int(entry.get("channel", 1)),
+        rig=_rig(manifest),
+        channel=_note_channel(manifest, entry),
         groups=_groups(manifest),
         slots=slots,
     )
+
+
+def _note_channel(manifest: dict, entry: dict) -> int:
+    """What one timbre's note numbers mean, as a one-based MIDI channel.
+
+    A manifest's timbre block is copied from the capture definition, so a corpus
+    captured before the rack slot had a name of its own carries the slot under
+    `channel` — and believing it makes a banjo in slot 10 a drum map.
+
+    `slot_channel` in the block is what says the two were separated when it was
+    written, so `channel` beside it is the meaning. Without it the copy cannot
+    answer and the definition the manifest names does, which is the same two-step
+    as `_dryness`; from its tracked half alone, since a clone has no overlay. A
+    definition that cannot be read leaves only the block, which is every manifest
+    written by hand or by a test.
+    """
+    import json
+
+    if "slot_channel" in entry:
+        return int(entry.get("channel", 1))
+    for candidate in _config_paths(manifest.get("config", "")):
+        try:
+            tracked = json.loads(candidate.read_text())
+        except (OSError, ValueError):
+            continue
+        for timbre in tracked.get("timbres") or []:
+            if timbre.get("id") == entry.get("id"):
+                return int(timbre.get("channel", 1))
+    return int(entry.get("channel", 1))
+
+
+def _config_paths(config: str):
+    """The capture definition a manifest names, found from any directory.
+
+    A manifest records the path repo-relative, so a bare `Path.exists()` answers
+    differently depending on where the harness was invoked from. `_dryness` is
+    not resolved this way and its miss is safe — an unread config reads wet, and
+    a dry reference measured wet still comes back dry — while a miss here
+    restores the ambiguity the lookup exists to resolve.
+    """
+    if not config:
+        return
+    path = Path(config)
+    if path.exists():
+        yield path
+    if not path.is_absolute():
+        from _repo import REPO_ROOT
+
+        rooted = Path(REPO_ROOT) / path
+        if rooted.exists():
+            yield rooted
 
 
 def _dryness(manifest: dict) -> bool:
@@ -189,6 +257,77 @@ def _dryness(manifest: dict) -> bool:
         return bool(json.loads(path.read_text()).get("dry", False))
     except (OSError, ValueError):
         return False
+
+
+def _rig(manifest: dict) -> str:
+    """What the capture answered about a rig, from the manifest or from its config.
+
+    Same two-step as `_dryness`, and for the same reason. Absent, unreadable and
+    unrecognised all come back `unclassified`, which is the only safe direction:
+    that is the answer a fit refuses to run on where a rig is possible, and
+    `none` is the one that would let a rigged reference through.
+    """
+    import json
+
+    if "rig" in manifest:
+        value = manifest.get("rig")
+    else:
+        config = manifest.get("config", "")
+        path = Path(config) if config else None
+        if path is None or not path.exists():
+            return RIG_UNCLASSIFIED
+        try:
+            value = json.loads(path.read_text()).get("rig")
+        except (OSError, ValueError):
+            return RIG_UNCLASSIFIED
+    return str(value) if value in RIG_VALUES else RIG_UNCLASSIFIED
+
+
+def check_rig(corpus: Corpus, program: int, *, allow: bool = False) -> None:
+    """Refuse a fit whose reference carries an amplifier, or might.
+
+    A rig is nonlinear, so unlike a room there is no inverse to correct with: a
+    fit run against a rigged reference reproduces the amplifier with the
+    instrument's own parameters, closes cleanly on every metric, and is lost the
+    moment the rig is put back where it belongs.
+
+    `none` is a reference captured at the instrument's own boundary and is what a
+    fit is for. `baked` is an acceptance target and never a fit target. The
+    absence of an answer stops a fit only where the family could carry a rig at
+    all — a piano or a wind is not waiting on anyone — because there the missing
+    record is a question nobody has answered rather than a "no".
+
+    Comparing, auditioning and `--diagnose` are unaffected; they read the
+    reference rather than moving the voice towards it.
+    """
+    if corpus.rig == RIG_NONE:
+        return
+    what = corpus.label or corpus.timbre
+    if corpus.rig == RIG_BAKED:
+        why = (
+            f"the {what} reference carries a rig: the amplifier and the cabinet are in "
+            f"the recording, and a rig has no inverse, so nothing can take them back out "
+            f"the way a room is measured and convolved. Fitting program {program} against "
+            f"it would reproduce an amplifier with the instrument's own parameters. Fit "
+            f"against a reference captured at the instrument's boundary — a DI for an "
+            f"electric string — and keep this one as the acceptance check"
+        )
+    elif rig_capable(program):
+        why = (
+            f"nothing says whether the {what} reference carries a rig, and program "
+            f"{program} is a family that can: a cabinet is a filter rather than a space, "
+            f"so an amplified take passes every dryness test with the whole rig inside it. "
+            f"Answer it in the capture definition — \"rig\": \"none\" for a reference "
+            f"captured at the instrument's boundary, \"baked\" for one recorded through an "
+            f"amplifier, which stays an acceptance target — and re-run"
+        )
+    else:
+        return
+    if allow:
+        print(f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
+              f"transfer to nothing once the rig is a stage of its own.", file=sys.stderr)
+        return
+    raise ValueError(f"{why}. --allow-rigged-oracle overrides.")
 
 
 def _groups(manifest: dict) -> dict[str, tuple[int, ...]]:

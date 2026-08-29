@@ -38,7 +38,7 @@
     {
       "id": "gm035",
       "label": "GM bass picked, rack slot 3",
-      "channel": 3
+      "slot_channel": 3
     }
   ],
   "_dimensions": "The slot is a pick-plucked electric bass source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",

@@ -42,7 +42,7 @@
     {
       "id": "gm072",
       "label": "GM clarinet, rack slot 8",
-      "channel": 8
+      "slot_channel": 8
     }
   ],
   "_dimensions": "Nine of the ten a sustained voice can be judged on. `damper` is kept and is the load-bearing one here: a wind stops when the breath stops, the reference does it in about 100 ms to -50 dB, and a model whose release is a decay rather than a stop gives itself away on that dimension before any other. `vel_range` is kept for the 49 dB measured above. `stretch` is kept with the caveat that in the chalumeau the even partials sit 30 dB down, so their frequencies are read off a weak peak and the tuning column is noisier there than at the top.",

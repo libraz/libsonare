@@ -235,7 +235,7 @@ from build_lib import build_shared, configure_build, dylib_path  # noqa: E402
 from catalogue import Catalogue, drum_patch_key, dump_catalogue  # noqa: E402
 from corpus import (  # noqa: E402
     PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
-    Corpus, corpus_oracle, corpus_pattern, describe, load_corpus,
+    Corpus, check_rig, corpus_oracle, corpus_pattern, describe, load_corpus,
 )
 from knobs import (  # noqa: E402
     at_bound,
@@ -268,6 +268,7 @@ from patterns import DRUM_GATE_HELP, build_pattern, pattern_length  # noqa: E402
 from render_model import render_model  # noqa: E402
 from render_oracle import (  # noqa: E402
     add_oracle_args,
+    check_oracle_rig,
     obtain_oracle,
     oracle_may_carry_room,
 )
@@ -411,7 +412,21 @@ def resolve_probe(args) -> None:
                 "--corpus and --oracle-wav both name the reference; a corpus run assembles "
                 "its oracle from the capture, so drop one of them"
             )
+        # A reference that carries a rig is an acceptance target and never a fit
+        # target, so the refusal comes before anything is built rather than hours
+        # in. `--diagnose` measures which knobs reach which term rather than
+        # moving any of them towards the reference, and is exempt; `--grid`
+        # evaluates the same objective a fit would search and is not.
+        if not getattr(args, "diagnose", False):
+            check_rig(corpus, args.program,
+                      allow=getattr(args, "allow_rigged_oracle", False))
         args.pattern = "corpus"
+    elif not getattr(args, "diagnose", False):
+        # No capture, so no record of a rig — and the hazard is the same size.
+        # What the route means by carrying no record is not the same for all
+        # three of them, which is what `check_oracle_rig` sorts out.
+        check_oracle_rig(args, args.program,
+                         allow=getattr(args, "allow_rigged_oracle", False))
     pattern, _, analysis_notes = _score(
         args.program, args.pattern, args.notes, args.velocities, corpus=corpus,
         gate_ms=getattr(args, "drum_gate_ms", 0),
@@ -1485,6 +1500,15 @@ def main() -> int:
     parser.add_argument("--corpus-timbre", default="", dest="corpus_timbre",
                         help="which timbre of the corpus to fit against (default: the first "
                              "the manifest lists)")
+    parser.add_argument("--allow-rigged-oracle", action="store_true",
+                        dest="allow_rigged_oracle",
+                        help="fit against a reference that carries a rig — an amplifier, a "
+                             "cabinet, a rotary speaker — or one nobody has classified on a "
+                             "family that could carry one. The instrument's knobs then "
+                             "absorb the amplifier: every metric improves and the values "
+                             "transfer to nothing once the rig is a stage of its own. "
+                             "Answer the capture's `rig` field instead wherever that is "
+                             "possible")
     add_oracle_args(parser)
     parser.add_argument("--max-evals", type=int, default=30, dest="max_evals",
                         help="total evaluations (default: 30; raise it well past this "

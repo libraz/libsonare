@@ -38,7 +38,7 @@
     {
       "id": "gm109",
       "label": "GM kalimba, rack slot 13",
-      "channel": 13
+      "slot_channel": 13
     }
   ],
   "_dimensions": "The slot is a plucked metal tine. What it is judged on is the fall, read off a gate cut to the fall's own length.",

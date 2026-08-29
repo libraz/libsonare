@@ -52,6 +52,7 @@ from loss import (  # noqa: E402
 )
 import json  # noqa: E402
 import profile as profile_module  # noqa: E402
+from capture import RIG_BAKED, RIG_NONE, RIG_UNCLASSIFIED  # noqa: E402
 from corpus import corpus_oracle, corpus_pattern, load_corpus  # noqa: E402
 from knobs import at_bound, load_spec, load_spec_weights  # noqa: E402
 from loss import (  # noqa: E402
@@ -1342,7 +1343,7 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
 # --------------------------------------------------------------------------- #
 def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
                   gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True,
-                  channel=1, groups=None) -> Path:
+                  channel=1, groups=None, rig=None) -> Path:
     """A miniature capture: one short tone per slot, plus the manifest beside it.
 
     `seconds` is a number for a grid captured at one flat tail, or a note-keyed
@@ -1376,6 +1377,11 @@ def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
     }
     if groups is not None:
         header["groups"] = groups
+    # Left out entirely unless asked for, so a manifest that never answered the
+    # rig question can be written — which is what every corpus captured before
+    # the field looks like.
+    if rig is not None:
+        header["rig"] = rig
     (root / "manifest.json").write_text(json.dumps(header))
     return root
 
@@ -1499,6 +1505,111 @@ def test_a_corpus_probe_reports_its_dryness_from_the_capture_config(tmp_path):
     """A wet capture has to be measured; a dry one must not have a room invented for it."""
     assert load_corpus(_write_corpus(tmp_path / "dry", dry=True)).dry is True
     assert load_corpus(_write_corpus(tmp_path / "wet", dry=False)).dry is False
+
+
+def test_a_corpus_carries_what_its_capture_answered_about_a_rig(tmp_path):
+    """And a manifest that never answered reads as unclassified, not as `none`."""
+    assert load_corpus(_write_corpus(tmp_path / "u")).rig == RIG_UNCLASSIFIED
+    assert load_corpus(_write_corpus(tmp_path / "n", rig=RIG_NONE)).rig == RIG_NONE
+    assert load_corpus(_write_corpus(tmp_path / "b", rig=RIG_BAKED)).rig == RIG_BAKED
+    # Dry and rigged together is the pair the record exists for: a close-mic'd
+    # amplifier has no tail, so dryness reads clean with the whole rig in it.
+    rigged = load_corpus(_write_corpus(tmp_path / "amp", dry=True, rig=RIG_BAKED))
+    assert rigged.dry is True and rigged.rig == RIG_BAKED
+    # An answer nothing understands is an unanswered one. `load_config` refuses a
+    # misspelling outright; a hand-edited manifest never goes through it, and
+    # reading "DI" as `none` would let a rigged reference into a fit.
+    assert load_corpus(_write_corpus(tmp_path / "typo", rig="DI")).rig == RIG_UNCLASSIFIED
+
+
+def test_a_fit_against_a_rigged_reference_is_refused(tmp_path):
+    """A rig has no inverse, so unlike a room it cannot be measured out of the
+    reference; the fit would reproduce an amplifier with the instrument's own
+    parameters and lose the values the moment the rig became a stage."""
+    root = _write_corpus(tmp_path / "amp", rig=RIG_BAKED)
+    with pytest.raises(ValueError, match="carries a rig"):
+        resolve_probe(_probe_args(program=30, corpus=str(root)))
+    # `baked` is an answer wherever it is written, so the family table does not
+    # get to overrule one.
+    with pytest.raises(ValueError, match="carries a rig"):
+        resolve_probe(_probe_args(program=0, corpus=str(root)))
+
+
+def test_an_unanswered_rig_stops_a_fit_only_where_a_rig_is_possible(tmp_path):
+    """Seventy captures predate the question, and answering them all is not the
+    price of fitting a flute. Where a rig IS possible the silence is the hazard:
+    the rigged reference is usually the one that already exists."""
+    root = _write_corpus(tmp_path / "u")
+    with pytest.raises(ValueError, match="nothing says whether"):
+        resolve_probe(_probe_args(program=30, corpus=str(root)))
+    for program in (0, 19, 73):  # a piano, a church organ's building, a flute
+        args = _probe_args(program=program, corpus=str(root))
+        resolve_probe(args)
+        assert args.pattern == "corpus"
+
+
+def test_a_reference_captured_at_the_instrument_s_boundary_fits(tmp_path):
+    """`none` is the answer a fit is for, on the family that could have said otherwise."""
+    args = _probe_args(program=30, corpus=str(_write_corpus(tmp_path / "di", rig=RIG_NONE)))
+    resolve_probe(args)
+    assert args.pattern == "corpus"
+
+
+def test_comparing_and_diagnosing_a_rigged_reference_are_unaffected(tmp_path):
+    """The gate is on the fit alone. Checking the instrument-and-rig against a
+    reference that carries one is the acceptance measurement the rule asks for,
+    and a diagnosis reports which knobs reach which term rather than moving any
+    of them towards the reference."""
+    root = _write_corpus(tmp_path / "amp", rig=RIG_BAKED)
+    args = _probe_args(program=30, corpus=str(root), diagnose=True)
+    resolve_probe(args)
+    assert args.pattern == "corpus"
+    corpus = load_corpus(root)
+    assert corpus_oracle(corpus, corpus_pattern(corpus), 48000).size
+
+
+def test_the_rig_refusal_can_be_pushed_through_and_says_so(tmp_path, capsys):
+    """Explicitly, and loudly: the values a forced run produces transfer to nothing."""
+    args = _probe_args(program=30, allow_rigged_oracle=True,
+                       corpus=str(_write_corpus(tmp_path / "amp", rig=RIG_BAKED)))
+    resolve_probe(args)
+    assert args.pattern == "corpus"
+    assert "--allow-rigged-oracle" in capsys.readouterr().err
+
+
+def test_an_oracle_route_with_no_rig_record_warns_where_a_rig_is_possible(capsys):
+    """`--oracle-wav` and `--au` cannot answer the question a capture answers,
+    and the hazard is the same size. Warned rather than refused, since nothing on
+    this route knows the answer — but not silent, because being unclassifiable
+    and being safe are different things."""
+    for route in ({"oracle_wav": "amp.wav"}, {"au": "SomeAmpSim"}):
+        resolve_probe(_probe_args(program=30, **route))
+        assert "carries no record of a rig" in capsys.readouterr().err
+    # Not on a family nobody is waiting on.
+    resolve_probe(_probe_args(program=73, oracle_wav="flute.wav"))
+    assert "rig" not in capsys.readouterr().err
+
+
+def test_the_built_in_gm_oracle_is_refused_on_a_family_it_cannot_be_a_di_for():
+    """Not "unclassified" — known. General MIDI defines these programs by the
+    sound of an amplified instrument, so a sample set's recording of one has the
+    cabinet in it, and no capture field can change that answer."""
+    with pytest.raises(ValueError, match="cannot be a DI"):
+        resolve_probe(_probe_args(program=30))
+    with pytest.raises(ValueError, match="cannot be a DI"):
+        resolve_probe(_probe_args(program=33, sf2="general.sf2"))
+    # A flute is not waiting on anyone, here as everywhere.
+    resolve_probe(_probe_args(program=73))
+
+
+def test_the_gm_oracle_refusal_takes_the_same_override_as_the_capture_one(capsys):
+    """One flag, because the certainty is not uniform across the family — 29 and
+    30 are definitional while 33-37 are only usual — and a second table splitting
+    the sure from the likely is the thing that drifts."""
+    args = _probe_args(program=33, allow_rigged_oracle=True)
+    resolve_probe(args)
+    err = capsys.readouterr().err
+    assert "--allow-rigged-oracle" in err and "cannot be a DI" in err
 
 
 def test_a_corpus_carries_the_families_its_capture_identified(tmp_path):

@@ -36,7 +36,7 @@
     {
       "id": "gm023",
       "label": "GM harmonica, rack slot 7",
-      "channel": 7
+      "slot_channel": 7
     }
   ],
   "_dimensions": "The slot is a free reed. `damper` matters here in the way it does on anything whose key is a valve rather than a hammer: the sound stops when the key does, and a model that lets it fall instead gives itself away there. `stereo` is gated rather than excused because this slot does render an image - its two channels are not identical, which is not true of every rack here.",

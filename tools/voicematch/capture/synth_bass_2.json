@@ -38,7 +38,7 @@
     {
       "id": "gm040",
       "label": "GM synth bass 2, rack slot 8",
-      "channel": 8
+      "slot_channel": 8
     }
   ],
   "_dimensions": "The slot is a synthetic bass source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",

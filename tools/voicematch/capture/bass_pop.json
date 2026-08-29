@@ -38,7 +38,7 @@
     {
       "id": "gm038",
       "label": "GM bass pop, rack slot 6",
-      "channel": 6
+      "slot_channel": 6
     }
   ],
   "_dimensions": "The slot is a popped electric bass source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",

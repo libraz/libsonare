@@ -38,7 +38,7 @@
     {
       "id": "gm076",
       "label": "GM pan flute, rack slot 12",
-      "channel": 12
+      "slot_channel": 12
     }
   ],
   "_dimensions": "Nine of the ten a sustained voice can be judged on. `damper` is the load-bearing one on a wind: the note stops when the breath stops, and a model whose release is a decay rather than a stop gives itself away there before anywhere else. The slot is a air jet source, and the partial ladder `balance` reads is where that shows.",

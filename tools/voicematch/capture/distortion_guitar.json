@@ -38,7 +38,7 @@
     {
       "id": "gm031",
       "label": "GM distortion guitar, rack slot 15",
-      "channel": 15
+      "slot_channel": 15
     }
   ],
   "_dimensions": "The slot is a distorted electric string source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. `stereo` is gated rather than excused because this slot does render an image: its two channels are not identical.",

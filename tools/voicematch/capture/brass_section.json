@@ -38,7 +38,7 @@
     {
       "id": "gm062",
       "label": "GM brass section, rack slot 14",
-      "channel": 14
+      "slot_channel": 14
     }
   ],
   "_dimensions": "All ten a sustained voice can be judged on. `damper` is the load-bearing one on a blown or bowed voice: the note stops when the energy stops, and a model whose release is a decay rather than a stop gives itself away there before anywhere else. The slot is a lip-reed brass, sectional source, and the partial ladder `balance` reads is where that shows. `stereo` is gated rather than excused here because this slot does render an image: its two channels are not identical.",

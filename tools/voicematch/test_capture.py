@@ -560,10 +560,11 @@ def test_where_a_rack_slot_sits_is_separate_from_what_its_notes_mean():
     the whole drum map through the pitched metric set, which reads as a
     successful measurement of the wrong instrument.
     """
-    # Absent, the semantic channel addresses the slot — every capture written
-    # before the split behaves exactly as it did.
+    # Absent, the semantic channel addresses the slot, which `load_config` keeps
+    # safe by holding `channel` to `NOTE_CHANNELS`: the fallback reaches slot 1
+    # or slot 10 and no other.
     assert capture.slot_channel({"channel": 10}) == 10
-    assert capture.slot_channel({"channel": 2}) == 2
+    assert capture.slot_channel({"channel": 1}) == 1
     assert capture.slot_channel({}) == 1
     # Present, it addresses the slot and leaves the meaning alone.
     import profile as profile_module

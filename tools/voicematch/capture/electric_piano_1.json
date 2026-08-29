@@ -40,7 +40,7 @@
     {
       "id": "gm005",
       "label": "GM electric piano 1, rack slot 5",
-      "channel": 5
+      "slot_channel": 5
     }
   ],
   "_dimensions": "The slot is a struck metal tine read by a pickup. A struck string is measured on everything its class names - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so `decay` and its two stages carry the weight here, read off a gate long enough to contain a fall.",

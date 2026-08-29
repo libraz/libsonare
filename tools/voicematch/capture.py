@@ -80,6 +80,38 @@ CORPUS_ROOT = Path(
 ).expanduser()
 DEFAULT_OUT_ROOT = CORPUS_ROOT / "capture"
 
+#: One-based MIDI channel 10, on which a note number selects an instrument
+#: instead of a pitch. `write_smf` counts channels from zero.
+PERCUSSION_CHANNEL = 10
+
+#: What a timbre's `channel` may say, and the whole of it. MIDI answers "what
+#: does a note number mean here" two ways and no more, so a `channel` of 7 is an
+#: address that has been written into the field deciding which metric set
+#: measures the capture. A rack slot is addressed by `slot_channel`.
+NOTE_CHANNELS = (1, PERCUSSION_CHANNEL)
+
+#: What a capture's `rig` may answer. `dry` asks about a room and cannot stand in
+#: for it: dryness is looked for as a tail and a cabinet has none, so a close-mic'd
+#: amplified guitar reads dry with the whole rig inside it. Absent is
+#: `unclassified` and never "no rig" — a capture that does not say is one nobody
+#: has answered for.
+RIG_UNCLASSIFIED = "unclassified"
+RIG_NONE = "none"
+RIG_BAKED = "baked"
+RIG_VALUES = (RIG_UNCLASSIFIED, RIG_NONE, RIG_BAKED)
+
+#: The GM programs whose reference may have an amplifier, a cabinet or a rotary
+#: speaker inside it. An unanswered capture is a fit hazard here and nowhere else;
+#: a wind or a piano is not waiting on anyone. A building is deliberately absent —
+#: it is a room, and a room is measured and convolved onto the model rather than
+#: refused (`src/midi/synth/docs/voicing.md`).
+RIG_CAPABLE_PROGRAMS = frozenset(
+    {4, 5, 7}              # electric pianos and the clavinet, played through an amp
+    | {16, 17, 18}         # drawbar, percussive and rock organ, through a rotary cabinet
+    | set(range(26, 32))   # electric guitars, jazz through harmonics
+    | set(range(33, 38))   # electric basses, fingered through slap
+)
+
 
 # --------------------------------------------------------------------------
 # config
@@ -137,6 +169,15 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("tail_by_note", {})
     cfg.setdefault("preroll_ms", 100)
     cfg.setdefault("dry", True)
+    # Whether the reference this capture produces carries a rig between the
+    # instrument and the microphone. `dry` cannot answer it (see RIG_VALUES), and
+    # the answer is what gates fitting: `corpus.check_rig`.
+    cfg.setdefault("rig", RIG_UNCLASSIFIED)
+    if cfg["rig"] not in RIG_VALUES:
+        raise ValueError(
+            f"{cfg.get('id', path.name)}: rig is one of {', '.join(RIG_VALUES)}, "
+            f"not {cfg['rig']!r}"
+        )
     cfg.setdefault("params", [])
     # Which instrument this capture is a reference for. The capture is the only
     # place that knows: the plugin, the phrase set, the GM program the model
@@ -146,6 +187,16 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("program", 0)
     cfg.setdefault("takes", "")
     cfg.setdefault("dimensions", [])
+    for timbre in cfg.get("timbres") or []:
+        channel = int(timbre.get("channel", 1))
+        if channel not in NOTE_CHANNELS:
+            raise ValueError(
+                f"{cfg.get('id', path.name)}: timbre {timbre.get('id', '?')!r} declares "
+                f"channel {channel}, which is a rack slot in the field that says what a "
+                f"note number MEANS. Write it as `slot_channel`; `channel` answers "
+                f"{PERCUSSION_CHANNEL} (a note selects an instrument) or 1 (a note "
+                f"selects a pitch)"
+            )
     cfg["_path"] = str(path)
     return cfg
 
@@ -156,6 +207,11 @@ def config_params(cfg: dict) -> tuple[str, ...]:
     if cfg.get("dry", True):
         params = tuple(dict.fromkeys(dry_params(cfg["plugin"]) + params))
     return params
+
+
+def rig_capable(program: int) -> bool:
+    """Whether a reference for this GM program could have a rig recorded into it."""
+    return int(program) in RIG_CAPABLE_PROGRAMS
 
 
 def tail_for(cfg: dict, note: int) -> str:
@@ -237,16 +293,21 @@ def note_groups(cfg: dict) -> dict[str, tuple[int, ...]]:
 def slot_channel(timbre: dict) -> int:
     """Which MIDI channel this timbre's rack slot answers on.
 
-    Separate from the timbre's `channel`, which says what its note numbers MEAN
-    — channel 10 is what makes a note number select an instrument rather than a
-    pitch, on the reference as much as in libsonare, and `profile.is_percussion`
-    reads it. The two coincide until a rack puts a kit somewhere other than
-    slot 10, and then one field cannot be both: addressing the slot on 10 plays
-    the wrong instrument, and declaring the kit on 15 measures a drum map with
-    the pitched metric set. Where a rack keeps its slots is a property of the
-    product rather than of the method, so `slot_channel` belongs in the
-    untracked overlay; absent, the semantic channel addresses it, which is what
-    every capture written before this did.
+    An address, and nothing but one. The timbre's `channel` is the other
+    quantity: what its note numbers MEAN, which `profile.is_percussion` reads to
+    choose the metric set for the whole capture. One name carried both until a
+    rack slot number reached that field, and then a banjo in slot 10 was measured
+    as a drum map — every note reported a band profile and none reported a pitch.
+
+    They part company in both directions: addressing a kit's slot on 10 when the
+    rack keeps it on 15 plays whatever else lives there, and declaring the kit on
+    15 sends a drum map through the pitched measurements. So a rack capture
+    declares `slot_channel` and leaves `channel` alone.
+
+    Absent, the semantic channel addresses the slot. That is safe rather than
+    historical: `load_config` holds `channel` to `NOTE_CHANNELS`, so the fallback
+    can only ever reach slot 1 or slot 10 — the plugin that is not a rack, and
+    the rack that does keep its kit where GM puts it.
     """
     return int(timbre.get("slot_channel", timbre.get("channel", 1)))
 
@@ -547,6 +608,7 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         # note list and the velocities are. `corpus.py` falls back to the config
         # this header names for a manifest written before the block existed.
         "groups": cfg.get("groups", {}),
+        "rig": cfg["rig"],
     }
 
     todo = [j for j in jobs if _job_id(*j) not in done or not (out / done[_job_id(*j)]["path"]).exists()]

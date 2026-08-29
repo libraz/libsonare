@@ -199,6 +199,52 @@ def test_a_capture_declares_the_program_the_model_answers_with(tmp_path):
     assert load_config(cfg_path)["program"] == 6
 
 
+def _rig_config(tmp_path: Path, **extra) -> Path:
+    cfg_path = tmp_path / "c.json"
+    cfg_path.write_text(json.dumps({"id": "x", "label": "x", "plugin": "a:b:c",
+                                    "timbres": [], "notes": [60], "velocities": [100],
+                                    **extra}))
+    return cfg_path
+
+
+def test_a_capture_that_says_nothing_about_a_rig_reads_as_unclassified(tmp_path):
+    """Not as "no rig". Nothing downstream can tell them apart from the audio —
+    a cabinet is a filter and leaves no tail — so the missing record is a
+    question nobody has answered rather than an answer of no."""
+    from capture import RIG_NONE, RIG_UNCLASSIFIED, load_config
+
+    cfg = load_config(_rig_config(tmp_path))
+    assert cfg["rig"] == RIG_UNCLASSIFIED
+    assert cfg["rig"] != RIG_NONE
+
+
+def test_each_rig_answer_survives_the_loader(tmp_path):
+    from capture import RIG_VALUES, load_config
+
+    for value in RIG_VALUES:
+        assert load_config(_rig_config(tmp_path, rig=value))["rig"] == value
+
+
+def test_a_rig_answer_the_loader_does_not_know_is_refused(tmp_path):
+    """A misspelling would otherwise read as unclassified, which for a family
+    that can carry a rig silently turns a declared `none` back into a refusal —
+    and for one that cannot, turns a declared `baked` into a fit target."""
+    from capture import load_config
+
+    with pytest.raises(ValueError, match="rig is one of"):
+        load_config(_rig_config(tmp_path, rig="DI"))
+
+
+def test_every_shipped_capture_answers_the_rig_question_legibly():
+    """Whatever they say, the loader has to understand it."""
+    from capture import RIG_VALUES, load_config
+
+    shipped = shipped_captures()
+    assert shipped, "no capture definitions found to check"
+    for name in shipped:
+        assert load_config(CAPTURE_DIR / f"{name}.json")["rig"] in RIG_VALUES
+
+
 def test_the_identity_overlay_matches_timbres_by_id(tmp_path):
     """The tracked half holds the method, the untracked half holds the product.
 
@@ -206,12 +252,12 @@ def test_the_identity_overlay_matches_timbres_by_id(tmp_path):
     config that loads, reports no error, and captures every slot with an empty
     preset — which on a rack is slot 1, four times over.
     """
-    from capture import load_config
+    from capture import load_config, slot_channel
 
     (tmp_path / "c.json").write_text(json.dumps({
         "id": "c", "label": "Concert grands, close", "notes": [60], "velocities": [100],
-        "timbres": [{"id": "grand-227", "label": "227 cm concert grand", "channel": 1},
-                    {"id": "grand-274", "label": "274 cm concert grand", "channel": 2}],
+        "timbres": [{"id": "grand-227", "label": "227 cm concert grand", "slot_channel": 1},
+                    {"id": "grand-274", "label": "274 cm concert grand", "slot_channel": 2}],
     }))
     (tmp_path / "c.local.json").write_text(json.dumps({
         "plugin": "aumu:xxxx:Vend",
@@ -222,7 +268,7 @@ def test_the_identity_overlay_matches_timbres_by_id(tmp_path):
     assert cfg["plugin"] == "aumu:xxxx:Vend"
     assert [t["preset"] for t in cfg["timbres"]] == ["A/Close", "B/Close"]
     # The tracked side still owns everything it declared.
-    assert [t["channel"] for t in cfg["timbres"]] == [1, 2]
+    assert [slot_channel(t) for t in cfg["timbres"]] == [1, 2]
     assert [t["label"] for t in cfg["timbres"]] == ["227 cm concert grand",
                                                     "274 cm concert grand"]
 
@@ -337,6 +383,155 @@ def test_a_capture_that_mixes_a_kit_with_a_melodic_slot_is_refused():
         profile_module.is_percussion(
             {"timbres": [{"id": "kit", "channel": 10}, {"id": "lead", "channel": 1}]}
         )
+
+
+def test_a_rack_slot_numbered_ten_holds_an_instrument_rather_than_a_kit():
+    """The slot a rack keeps an instrument in says nothing about the instrument.
+
+    A rack answers on sixteen channels and its tenth slot is a slot like any
+    other, so whatever is loaded there is whatever was put there. Read as a
+    semantic channel it is a drum map, and five melodic references were measured
+    that way: a banjo, a flute, a glockenspiel, a steel guitar and a trombone
+    came back with a band tilt and a crest per note and a fundamental for none.
+    """
+    from capture import load_config, slot_channel
+
+    here = Path(__file__).resolve().parent / "capture"
+    for name in ("banjo", "concert_flute", "glockenspiel", "steel_guitar", "trombone"):
+        cfg = load_config(here / f"{name}.json")
+        assert [slot_channel(t) for t in cfg["timbres"]] == [10], name
+        assert not profile_module.is_percussion(cfg), name
+
+
+def test_a_slot_number_written_as_the_semantic_channel_is_refused(tmp_path):
+    """The guard on the field, rather than on the five captures that tripped it.
+
+    Every rack capture here was written before the slot had a name of its own,
+    so the same address was in the same field sixty-nine times over and only the
+    five on slot 10 were measurably wrong. What the loader refuses is the shape:
+    a channel that is neither of MIDI's two answers is an address.
+    """
+    from capture import load_config
+
+    def written(**timbre) -> Path:
+        path = tmp_path / "c.json"
+        path.write_text(json.dumps({"id": "c", "label": "x", "notes": [60],
+                                    "velocities": [100],
+                                    "timbres": [{"id": "t", **timbre}]}))
+        return path
+
+    with pytest.raises(ValueError, match="slot_channel"):
+        load_config(written(channel=7))
+    # The two MIDI does answer, and the address under its own name, all pass.
+    assert not profile_module.is_percussion(load_config(written(channel=1)))
+    assert profile_module.is_percussion(load_config(written(channel=10)))
+    assert not profile_module.is_percussion(load_config(written(slot_channel=7)))
+
+
+def test_every_shipped_capture_reads_as_one_kind_of_instrument():
+    """All seventy, because the misread was found in five of them by hand.
+
+    A capture that raises here is one whose timbres disagree about what a note
+    number means; a melodic capture reading as percussion is measured with the
+    kit metric set and reports it as a successful measurement.
+    """
+    from capture import load_config
+
+    here = Path(__file__).resolve().parent / "capture"
+    percussion = sorted(name for name in shipped_captures()
+                        if profile_module.is_percussion(load_config(here / f"{name}.json")))
+    assert len(shipped_captures()) >= 70
+    assert percussion == ["drums"]
+
+
+def _corpus_manifest(root: Path, timbres: list[dict], *, config: str = "") -> Path:
+    """A manifest thin enough for `load_corpus`, with no audio behind it.
+
+    `load_corpus` resolves render paths and never opens them, so a grid of one
+    slot per timbre is enough to ask what the corpus thinks its notes mean.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "manifest.json"
+    path.write_text(json.dumps({
+        "id": "m", "config": config, "sample_rate": 48000, "gate_ms": 1000,
+        "tail": "2s", "preroll_ms": 100, "notes": [60], "velocities": [100],
+        "timbres": timbres,
+        "renders": [{"id": f"{t['id']}/n060_v100", "timbre": t["id"], "note": 60,
+                     "velocity": 100, "path": f"{t['id']}/n060_v100.wav",
+                     "seconds": 1.1} for t in timbres],
+    }))
+    return path
+
+
+def _tracked_capture(path: Path, timbres: list[dict]) -> str:
+    path.write_text(json.dumps({"id": path.stem, "label": "x", "notes": [60],
+                                "velocities": [100], "timbres": timbres}))
+    return str(path)
+
+
+def test_a_corpus_captured_before_the_slot_had_a_name_reads_its_meaning_from_the_definition(tmp_path):
+    """The manifest's copy is ambiguous where the definition is not.
+
+    A manifest's timbre block is copied from the capture definition as it stood,
+    so every corpus captured before the slot had a name of its own carries the
+    rack slot under `channel`. Believing it makes the model's probe a drum probe
+    and pairs the fit against the kit metric set — the same misread as the
+    profile's, one file further on, and re-rendering 8.7 GB is not the fix.
+    """
+    from corpus import load_corpus
+
+    config = _tracked_capture(tmp_path / "banjo.json",
+                              [{"id": "gm106", "label": "y", "slot_channel": 10}])
+    manifest = _corpus_manifest(tmp_path / "banjo",
+                                [{"id": "gm106", "label": "y", "channel": 10}],
+                                config=config)
+    assert not load_corpus(manifest).percussive()
+
+    # And a kit is still a kit, from the same ambiguous block.
+    config = _tracked_capture(tmp_path / "drums.json",
+                              [{"id": "kit-a", "label": "y", "channel": 10}])
+    manifest = _corpus_manifest(tmp_path / "drums",
+                                [{"id": "kit-a", "label": "y", "channel": 10}],
+                                config=config)
+    assert load_corpus(manifest).percussive()
+
+
+def test_a_corpus_captured_since_the_split_answers_from_its_own_manifest(tmp_path):
+    """`slot_channel` in the block is what says the two were separated when it
+    was written, so `channel` beside it is the meaning and no definition has to
+    be found to read it."""
+    from corpus import load_corpus
+
+    melodic = _corpus_manifest(tmp_path / "a", [{"id": "t", "slot_channel": 10}])
+    assert not load_corpus(melodic).percussive()
+
+    kit = _corpus_manifest(tmp_path / "b", [{"id": "t", "channel": 10,
+                                             "slot_channel": 15}])
+    assert load_corpus(kit).percussive()
+
+
+def test_a_corpus_whose_definition_cannot_be_found_falls_back_to_its_own_block(tmp_path):
+    """Which is every manifest written by hand or by a test, and the only answer
+    left when a capture definition has been renamed out from under a corpus."""
+    from corpus import load_corpus
+
+    assert load_corpus(_corpus_manifest(tmp_path / "a",
+                                        [{"id": "t", "channel": 10}])).percussive()
+    assert load_corpus(_corpus_manifest(tmp_path / "b", [{"id": "t", "channel": 10}],
+                                        config="nowhere/gone.json")).percussive()
+
+
+def test_the_definition_a_manifest_names_is_found_from_any_directory(monkeypatch, tmp_path):
+    """A manifest records the path repo-relative, so a bare `Path.exists()`
+    answers differently depending on where the harness was invoked from — and a
+    miss here restores the ambiguity the lookup exists to resolve."""
+    from corpus import _config_paths
+
+    relative = "tools/voicematch/capture/drums.json"
+    monkeypatch.chdir(tmp_path)
+    assert not Path(relative).exists()
+    assert [p.name for p in _config_paths(relative)] == ["drums.json"]
+    assert list(_config_paths("")) == []
 
 
 def test_the_band_comparisons_report_a_direction_and_a_magnitude_separately():

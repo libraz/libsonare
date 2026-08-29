@@ -38,7 +38,7 @@
     {
       "id": "gm036",
       "label": "GM bass fretless, rack slot 4",
-      "channel": 4
+      "slot_channel": 4
     }
   ],
   "_dimensions": "The slot is a fretless electric bass source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",

@@ -38,7 +38,7 @@
     {
       "id": "gm106",
       "label": "GM banjo, rack slot 10",
-      "channel": 10
+      "slot_channel": 10
     }
   ],
   "_dimensions": "The slot is a plucked skin-headed string. What it is judged on is the fall, read off a gate cut to the fall's own length.",

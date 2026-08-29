@@ -38,7 +38,7 @@
     {
       "id": "gm108",
       "label": "GM koto, rack slot 12",
-      "channel": 12
+      "slot_channel": 12
     }
   ],
   "_dimensions": "The slot is a plucked bridged string. What it is judged on is the fall, read off a gate cut to the fall's own length.",

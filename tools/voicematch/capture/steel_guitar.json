@@ -38,7 +38,7 @@
     {
       "id": "gm026",
       "label": "GM steel guitar, rack slot 10",
-      "channel": 10
+      "slot_channel": 10
     }
   ],
   "_dimensions": "The slot is a plucked steel string source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. `stereo` is gated rather than excused because this slot does render an image: its two channels are not identical.",

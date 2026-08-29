@@ -38,7 +38,7 @@
     {
       "id": "gm107",
       "label": "GM shamisen, rack slot 11",
-      "channel": 11
+      "slot_channel": 11
     }
   ],
   "_dimensions": "The slot is a plectrum-struck skin-headed string. What it is judged on is the fall, read off a gate cut to the fall's own length.",

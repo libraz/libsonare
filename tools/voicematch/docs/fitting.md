@@ -24,6 +24,33 @@ screening: 39/49 knobs move the loss by at least 0.002 over their range
 
 The objective is [loss.md](loss.md); the oracle is [oracles.md](oracles.md); the probe is [probes.md](probes.md). This page is everything else.
 
+## The reference has to be on the instrument's own side of the boundary
+
+A model whose boundary matches its reference can be fitted against it directly. One fitted against a reference recorded through an amplifier cannot: the string's brightness and the amplifier's treble reach the same measurement, so the search settles somewhere that transfers to neither, and the values are lost the moment the rig goes back to being a stage of its own ([voicing.md](../../../src/midi/synth/docs/voicing.md)).
+
+**`dry` does not answer this.** Dryness is looked for as a tail and a cabinet has none, so a close-mic'd amplified guitar reads dry with the whole rig inside it. The capture answers it separately, as `rig` ([capture.md](capture.md#fields)), and a corpus fit reads that answer:
+
+| the capture says | what a fit does |
+|---|---|
+| `none` — captured at the instrument's own boundary, a DI for an electric string | runs |
+| `baked` — recorded through an amplifier | **refused** whatever the program: it is an acceptance target and never a fit target |
+| nothing — the answer nobody has given | **refused** on a family that could carry a rig (the electric guitars and basses, the electric keyboards, the rotary organs); runs everywhere else, since a piano or a wind is not waiting on anyone |
+
+The refusal is right because **a rig has no inverse.** A room can be measured off the reference and convolved onto the model, which is why a wet reference is usable after correction; a rig is nonlinear, so there is nothing to correct with and no order of operations that recovers the instrument.
+
+`--allow-rigged-oracle` pushes past both refusals and says so on stderr. What it costs is not the run — every metric will improve — it is the result: the fitted values describe an instrument and an amplifier together, and none of them is the instrument's. Answer the capture's `rig` field instead wherever that is possible.
+
+`--diagnose` is exempt, along with `profile.py compare` and the auditions: they read the reference rather than moving the voice towards it, and checking the instrument-plus-rig against a reference that carries one is the acceptance measurement the rule asks for. `--grid` is **not** exempt — it evaluates the same objective a fit would search, and a minimum read off it and written into a spec is a fit done by hand.
+
+**The routes with no capture behind them carry no record at all, and they do not all mean the same thing by that** ([oracles.md](oracles.md)). On a rig-capable program:
+
+| route | why | what happens |
+|---|---|---|
+| `--oracle-wav`, `--au` | **unknown.** The reference was rendered elsewhere and nothing on the route can say what its chain was | warned, not stopped — unclassifiable and safe are different things, and only a capture can settle it |
+| the built-in GM oracle (default, `--sf2`) | **known.** General MIDI defines these programs by the sound of an amplified instrument, so a sample set's recording of one has the cabinet in it by construction | **refused**, on the same terms as a `baked` capture, because it is one |
+
+No capture field changes the second answer — it does not come from a missing record. The certainty is not uniform across the family (29 and 30 are definitional, 33–37 only usual), and it is deliberately one rule rather than two: a second table splitting the sure from the likely would drift, and erring strict costs one `--allow-rigged-oracle`.
+
 ## Every instrument is already addressable
 
 Ask the library what it has, rather than reading the source for knob names:

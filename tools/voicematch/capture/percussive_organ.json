@@ -36,7 +36,7 @@
     {
       "id": "gm018",
       "label": "GM percussive organ, rack slot 2",
-      "channel": 2
+      "slot_channel": 2
     }
   ],
   "_dimensions": "The slot is a drawbar registration with a percussion attack. `damper` matters here in the way it does on anything whose key is a valve rather than a hammer: the sound stops when the key does, and a model that lets it fall instead gives itself away there. `stereo` is gated rather than excused because this slot does render an image - its two channels are not identical, which is not true of every rack here.",

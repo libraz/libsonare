@@ -38,7 +38,7 @@
     {
       "id": "gm030",
       "label": "GM overdriven guitar, rack slot 14",
-      "channel": 14
+      "slot_channel": 14
     }
   ],
   "_dimensions": "The slot is a overdriven electric string source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. `stereo` is gated rather than excused because this slot does render an image: its two channels are not identical.",

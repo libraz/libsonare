@@ -168,6 +168,58 @@ def oracle_may_carry_room(args) -> bool:
     return bool(getattr(args, "au", "")) and not getattr(args, "au_dry", False)
 
 
+def check_oracle_rig(args, program: int, *, allow: bool = False) -> None:
+    """What each captureless oracle route may be fitted against, on a rig-capable family.
+
+    A capture answers the rig question in its own definition and a fit is refused
+    on any answer but `none` (`corpus.check_rig`). None of the three routes here
+    carries that record, and they do not all mean the same thing by not carrying
+    it — so they are not treated the same.
+
+    Routes B and C are **unknown**: a cabinet is a filter rather than a space, so
+    an amplified take passes every dryness test with the whole rig inside it, and
+    nothing downstream can recover what the chain was. Warned, not refused —
+    there is no ground to stop on — but not passed over in silence either, since
+    being unclassifiable and being safe are different things.
+
+    Route A is **known**, and that is the difference. General MIDI defines these
+    programs by the sound of an amplified instrument, so a GM sample set's
+    recording of one has a cabinet in it by construction. Refused on the same
+    terms as a `baked` capture, since it is one.
+
+    The certainty is not uniform across the family — 29 and 30 are definitional
+    while 33-37 are only usual — but a second table splitting the sure from the
+    likely would drift, and erring strict costs one `--allow-rigged-oracle`.
+    """
+    from capture import rig_capable
+
+    if not rig_capable(program):
+        return
+    external = ("--oracle-wav" if getattr(args, "oracle_wav", "")
+                else f"--au {getattr(args, 'au', '')}" if getattr(args, "au", "") else "")
+    if external:
+        print(f"{external} carries no record of a rig, and program {program} is a family "
+              f"that can have one: if this reference was recorded through an amplifier, the "
+              f"fit reproduces the amplifier with the instrument's own parameters and the "
+              f"values are lost the moment the rig becomes a stage of its own. Only a "
+              f"capture can answer this.", file=sys.stderr)
+        return
+    why = (
+        f"the built-in GM oracle cannot be a DI for program {program}: general MIDI defines "
+        f"these programs by the sound of an amplified instrument, so a sample set's "
+        f"recording of one has the cabinet in it — known from what the program IS rather "
+        f"than merely unrecorded, which is why no capture field can change this answer. A "
+        f"rig has no inverse, so the fit would reproduce the amplifier with the "
+        f"instrument's own parameters. Fit against a reference captured at the instrument's "
+        f"own boundary instead (`--corpus` on a capture that says \"rig\": \"none\")"
+    )
+    if allow:
+        print(f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
+              f"transfer to nothing once the rig is a stage of its own.", file=sys.stderr)
+        return
+    raise ValueError(f"{why}. --allow-rigged-oracle overrides.")
+
+
 def obtain_oracle(args, smf_bytes: bytes, total_seconds: float, sr: int, onsets_s) -> np.ndarray:
     """Resolve the oracle audio from whichever route the flags select.
 
