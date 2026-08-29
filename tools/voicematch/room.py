@@ -434,7 +434,17 @@ def place_model_in(
     return apply_room(model, fitted), fitted
 
 
-GS_DEFAULT_REVERB_DECAY = 0.7  # GsEffectsConfig::reverb_decay
+# The shipped tank decay, i.e. gs_effects_config_from(GsSystemEffects{}).
+# It must track that value: every decay this module reports is a MULTIPLIER on
+# it, so a stale number here silently redefines what a recorded multiplier
+# means rather than failing.
+#
+# It moved from the hand-picked 0.700 to 0.723 when the GS system-effect block
+# was wired onto the bus and the power-on REVERB TIME (64) began setting it.
+# Candidates in calibrations.json recorded before that were measured against
+# 0.700: multiply one by 0.968 to keep the absolute decay it was heard at, or
+# re-measure.
+GS_DEFAULT_REVERB_DECAY = 0.723
 GS_POWER_ON_CC91 = 40  # what gs_reset()/gm_reset() leave CC91 at
 
 # Search grid for `match_sends`. The tank decay is swept as a multiplier on the
