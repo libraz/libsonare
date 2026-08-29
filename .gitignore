@@ -136,5 +136,8 @@ AGENT.md
 .mcp.json
 .serena/
 
+# codehelion's local scan/artifact database
+.codehelion/
+
 # Benchmark fixtures are generated locally (audio + its ground truth)
 benchmarks/fixtures/
