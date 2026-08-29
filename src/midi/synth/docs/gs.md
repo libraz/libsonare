@@ -6,6 +6,15 @@ Per-address detail — offsets, ranges, defaults — is not restated here. It co
 
 **This page is normative and says nothing about progress.** It describes what must be true, not what is true today; an item here that the code does not yet do is work outstanding rather than a documentation error. Coverage is a number the address table and its test produce, not a status section that would drift the moment it was written.
 
+## What is being made compatible is the control protocol, not the sound
+
+**GS is implemented here as a way to control physical-model instruments, and the resemblance to a sound module stops at the wire.** The voices are physical models fitted against modern references (`voicing.md`, `tools/voicematch/`); sounding like an SC-88Pro is explicitly out of scope, and a report that a program's timbre differs from the hardware's is not a defect against this page. What is owed is that a file's messages arrive, are understood, and move the parameter they name in the direction and by the amount the manual gives.
+
+Two things follow, and both are load-bearing:
+
+- **`AUDIBLE` is a relative claim.** Its test is that changing the value produces a measurable difference of the right sign and rough magnitude — never that the resulting audio matches a reference recording. There is no reference recording, and there is not going to be one.
+- **A parameter with no physical-model counterpart still has to arrive.** Where the hardware's mechanism has no analogue in the model, the address takes the closest control the model does have, and where there is none at all it takes a row with a reason. It does not take silence.
+
 ## The target is the SC-8850, and that includes the SC-88Pro
 
 The GS address space is identical between the two machines except at six points, and the SC-8850 is the superset. Targeting it therefore *includes* SC-88Pro compatibility rather than trading against it: an SC-88Pro file selects the SC-88Pro tone map (`40 4x 00` = `03`) and plays.
@@ -90,7 +99,11 @@ The hardware allows exactly one insertion effect for the whole module — "you c
 - **Units 1–15 live at `40 3u xx`** (`u` = `1`–`F`), each with the identical `00`–`1F` layout. `40 30`–`40 3F` carries no row in either the SC-88Pro or the SC-8850 map, so nothing collides.
 - **Routing extends the value range of an existing address rather than adding one.** `40 4x 22` PART EFX ASSIGN is specified as `00` = BYPASS, `01` = EFX; `02`–`10` select units 1–15. `00` and `01` keep their exact meanings.
 - **Parts assigned to the same unit sum into that unit's single instance**, as on the hardware. The unit count changes; the summing does not.
+
+**Two different things wear the phrase "what the hardware does", and collapsing them is the failure this paragraph exists to prevent.** *One unit for the whole module* is a resource limit — a property of the machine that was built, not of GS, and it is lifted. *Parts on one unit sum into it* is not a limit at all: it is what an effect is. Two guitars into one distortion pedal intermodulate because that is what a pedal does, and a file that routes two parts through one unit was written for that sound. So "restore the summing" never means "cap the units", and any change that reduces the reachable unit count to satisfy a compatibility argument has misread this. The reachable range lives in the `40 4x 22` row of the address table (`00`–`10`), not in prose, so narrowing it is a diff on a row rather than a reading.
 - Real hardware ignores an unknown address and will treat an out-of-range `40 4x 22` as its own business, so a file using the extension still plays there, with one insertion effect.
+
+**Out-of-range `40 4x 22` values exist in real files, and the extension is what they now reach.** A census of 2 233 SC-55/SC-88/SC-88Pro files (`tools/gs/docs/census.md`) finds 1 678 writes of `00` or `01` and **six writes of `02`, `03`, `04`, `06` and `11`** across five files. Those files are not spec-compliant — the manual gives `00`/`01` — so the rule below is not broken, but it is worth stating that it is not vacuous either: the five will route a part to a unit instead of bypassing it. That is accepted rather than guarded. They already diverge from the hardware today (any non-zero switches the part on), the values look like authoring slips, and a part hearing the module's own EFX is closer to the intent than silence. Gating the extension behind a flag to protect five files would cost the property that makes it usable.
 
 **Restoring the summing is a prerequisite, not an afterthought.** The current implementation builds one chain per EFX-enabled part and runs each on that part's own bus, which is already past the hardware's limit — accidentally, and in a way that diverges: two parts through one distortion intermodulate on the hardware and do not here, and one shared delay line becomes N independent ones. Until the spec behaviour is the default there is no baseline to describe an extension against. Fixing it also reduces the instance count, which is where the headroom for extra units comes from.
 
@@ -105,5 +118,6 @@ This is stated because the code currently makes them exclusive — a part with a
 - **An address is added to the table in the same change that implements it.** A parameter that works but has no row is invisible to the coverage test, which is the only thing that can say the space is covered.
 - **Never widen the space to silence an unknown.** An address that turns up in real data and is not in the manual is either a row with a reason or a defect to investigate; it is not an `ACCEPT` added to make a counter go to zero.
 - **An extension must be unreachable from a spec-compliant file.** If a proposed extension can be triggered by a message a real GS sequencer emits, it is a divergence rather than an extension and does not belong here.
+- **A resource limit is not a behaviour, and only behaviour is owed fidelity.** Before matching the hardware, say which of the two a rule is: could the machine have done otherwise with more voices, more units, more memory? Then it is a limit and libsonare is free of it. Does it follow from what the signal path *is*? Then it is behaviour and it is binding. The one-insertion-effect ceiling is the first kind; parts summing into the unit they share is the second.
 - **Behavioural fidelity beats convenience when the two conflict.** The double-amp a file gets by selecting a guitar multi over an already-amped part is what the hardware does; suppressing it automatically would make the sound depend on a hidden rule.
 - **Reset defaults are part of the contract.** They are not implementation detail: a file that sends GS Reset and then nothing else is entitled to the hardware's state. Changing one moves the goldens and belongs in its own change.
