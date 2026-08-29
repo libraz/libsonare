@@ -2,7 +2,9 @@
 
 The synth answers Roland GS. This page is the specification of what that means here: which device defines the target, what every address in the space is promised to do, which parts of the space libsonare adds to, and the rules that keep the two from contaminating each other.
 
-Per-address detail — offsets, ranges, defaults — is not restated here. It comes from the **Roland SC-8850 Owner's Manual, Appendices, "Parameter Address Map"** (`cdn.roland.com/assets/media/pdf/SC-8850_OM.pdf`), which is the source of record. What this page holds is what the manual cannot: the decisions, the places libsonare diverges from it deliberately, and the extensions.
+Per-address detail — offsets, ranges, defaults — is not restated here. It comes from the **Roland SC-8850 Owner's Manual, Appendices, "Parameter Address Map"** (p.235 onward; `cdn.roland.com/assets/media/pdf/SC-8850_OM.pdf`), which is the source of record. What this page holds is what the manual cannot: the decisions, the places libsonare diverges from it deliberately, and the extensions.
+
+**A row in the address table came from the SC-88Pro manual unless it says otherwise, and the two are not the same document.** The transcription the table was built from is the SC-88Pro Owner's Manual, and the SC-8850's own map has been checked only where a row of this page names a difference. That is a gap in provenance rather than a known error — the sampled points agree — but "the manual says" about an untouched row means the SC-88Pro's, and the SC-8850's is the one that decides.
 
 **This page is normative and says nothing about progress.** It describes what must be true, not what is true today; an item here that the code does not yet do is work outstanding rather than a documentation error. Coverage is a number the address table and its test produce, not a status section that would drift the moment it was written.
 
@@ -23,7 +25,7 @@ Where the two differ:
 
 | | SC-88Pro | SC-8850 |
 |---|---|---|
-| `00 00 7F` SYSTEM MODE SET | `00`/`01` — Mode-1 / Mode-2 | **`00` only**, treated as GS Reset. **No Mode-2** |
+| `00 00 7F` SYSTEM MODE SET | `00`/`01` — Mode-1 / Mode-2 | Range `00`–`01`, but **only `00` acts**: "the same processing will be carried out as when GS Reset is received. Other values are ignored." Mode-1, single module, Rx only |
 | Mode-2 restrictions | seven parameters unusable in Mode-2 | none |
 | `00 01 xx` CHANNEL MSG RX PORT | 32 blocks, ports A/B | 64 blocks, ports A–D |
 | `40 4x 00` TONE MAP NUMBER | `00`–`03` | `00`–`04` |
