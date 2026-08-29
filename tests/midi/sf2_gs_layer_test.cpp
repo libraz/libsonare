@@ -661,6 +661,98 @@ TEST_CASE("GS reset restores power-on state", "[midi][sf2][gslayer]") {
   REQUIRE(estimate_frequency(out.left, 4800) == Approx(500.0).margin(5.0));
 }
 
+TEST_CASE("the reset sends come up at the values the map gives", "[midi][sf2][gslayer]") {
+  // docs/gs.md: reset defaults are part of the contract, not implementation
+  // detail. Nothing pinned these, so 40 1x 21 CHORUS SEND LEVEL sat at 8 where
+  // the map says 0 and 40 03 17 EFX SEND TO REVERB at 0 where it says 40, and
+  // moving either was invisible.
+  const auto render_note = [](Sf2Player& player) {
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    return render(player, 12000);
+  };
+
+  SECTION("chorus send is silent until a file asks for it") {
+    // The reset default is only reachable through a reset: a freshly built
+    // player initialises its channel state to zero whatever the default is, so
+    // a case that skips the reset measures the initialiser and not the
+    // contract. This one was written that way first and passed against the
+    // wrong value.
+    const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
+    // make_player() switches the send-return units off so spectral cases stay
+    // dry, which also makes a chorus send unobservable; this case needs one.
+    const auto make_wet_player = []() {
+      Sf2PlayerConfig cfg;
+      cfg.gain = 1.0f;
+      Sf2Player player(cfg);
+      player.set_soundfont(make_fixture());
+      player.prepare(kOutRate, 256);
+      return player;
+    };
+    const auto after_reset = [&](int chorus_cc) {
+      Sf2Player player = make_wet_player();
+      REQUIRE(player.handle_sysex(gs_reset, sizeof(gs_reset)));
+      if (chorus_cc >= 0) {
+        player.on_event(0, event(sonare::midi::make_midi1_control_change(
+                               0, 0, 93, static_cast<uint8_t>(chorus_cc))));
+      }
+      return render_note(player).left;
+    };
+    // Identical to the same reset told to send 0 explicitly means the default
+    // already was 0; the second comparison is what says the first could have
+    // told them apart.
+    REQUIRE(after_reset(-1) == after_reset(0));
+    REQUIRE_FALSE(after_reset(-1) == after_reset(8));
+  }
+
+  SECTION("the EFX reverb send comes up at 40") {
+    Sf2Player player = make_player();
+    REQUIRE(player.gs_efx().send_reverb == 40);
+    const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
+    REQUIRE(player.handle_sysex(gs_reset, sizeof(gs_reset)));
+    REQUIRE(player.gs_efx().send_reverb == 40);
+    const uint8_t gm_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+    REQUIRE(player.handle_sysex(gm_on, sizeof(gm_on)));
+    REQUIRE(player.gs_efx().send_reverb == 40);
+  }
+}
+
+TEST_CASE("SYSTEM MODE SET resets, and only on the value the target accepts",
+          "[midi][sf2][gslayer]") {
+  // 00 00 7F is the second address that resets on the SC-8850, which has no
+  // Mode-2 (docs/gs.md). A census of 4 026 real files writes it in 1 899 of
+  // them, with value 00 in 1 988 messages and the SC-88Pro's Mode-2 request in
+  // three; ignoring the second is what the target does.
+  const auto bend_up = [](Sf2Player& player) {
+    player.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, 16383)));
+  };
+  const auto sounded_frequency = [](Sf2Player& player) {
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    const StereoRender out = render(player, 24000);
+    return estimate_frequency(out.left, 4800);
+  };
+
+  SECTION("value 00 resets") {
+    Sf2Player player = make_player();
+    bend_up(player);
+    const uint8_t sms[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x00, 0x00, 0x7F, 0x00, 0x01, 0xF7};
+    REQUIRE(player.handle_sysex(sms, sizeof(sms)));
+    REQUIRE(sounded_frequency(player) == Approx(500.0).margin(5.0));
+  }
+
+  SECTION("value 01, the Mode-2 request, changes nothing") {
+    // Asserted on state that would visibly have been cleared, not on a return
+    // value: a message that is merely unrecognised and one that resets both
+    // report the same thing to the caller.
+    Sf2Player player = make_player();
+    bend_up(player);
+    const uint8_t mode2[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x00, 0x00, 0x7F, 0x01, 0x00, 0xF7};
+    player.handle_sysex(mode2, sizeof(mode2));
+    // The default bend range is two semitones, so a full bend puts the 500 Hz
+    // note at 561 Hz; a reset would have put it back at 500.
+    REQUIRE(sounded_frequency(player) == Approx(561.0).margin(6.0));
+  }
+}
+
 TEST_CASE("GS drum kit names", "[midi][sf2][gslayer]") {
   REQUIRE(gs_drum_kit_name(0) == "Standard");
   REQUIRE(gs_drum_kit_name(25) == "TR-808");

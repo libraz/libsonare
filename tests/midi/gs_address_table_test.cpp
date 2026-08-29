@@ -680,8 +680,10 @@ const std::vector<ParseCase>& parse_value_cases() {
        GsSysExKind::kNone,
        0,
        0},
+      // SYSTEM MODE SET with value 00. The target has no Mode-2, so it is a GS
+      // Reset (docs/gs.md); every other value on this address stays kNone.
       {{0xF0, 0x41, 0x10, 0x42, 0x12, 0x00, 0x00, 0x7F, 0x00, 0x01, 0xF7},
-       GsSysExKind::kNone,
+       GsSysExKind::kGsReset,
        0,
        0},
       {{0x41, 0x10, 0x42, 0x12, 0x40, 0x10, 0x14, 0x11, 0x0B}, GsSysExKind::kNone, 0, 0},

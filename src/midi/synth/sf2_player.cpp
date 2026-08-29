@@ -158,7 +158,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // Power-on matches GS defaults (reverb send 40): a bare SMF that never
   // sends a reset SysEx should still land in the default room, as on
   // hardware, instead of rendering bone dry.
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   // Mix-bus polish: the same ~8 Hz DC blocker pole the NativeSynth host uses.
@@ -192,7 +192,7 @@ void Sf2Player::reset() {
   // reset means the next block starts from silence, so it goes with the voices.
   dc_x1_ = {};
   dc_y1_ = {};
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
   // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
   // clean DSP state (the discontinuity's equivalent of resetting them), and the
   // old snapshot is retired/freed by the control thread, never the audio thread.
@@ -243,7 +243,7 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
 void Sf2Player::gs_reset() noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) all_sound_off(ch);
   // GS power-on: reverb send 40 (Roland default), everything else cleared.
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
 }
 
 void Sf2Player::gm_reset() noexcept {
@@ -251,7 +251,7 @@ void Sf2Player::gm_reset() noexcept {
   // GM Level 1 specifies no effect controls, but real GM devices (SC-55 in
   // GM mode) keep their power-on reverb level; match that rather than the
   // paper reading so plain GM files keep the default room.
-  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
 }
 
 }  // namespace sonare::midi::synth

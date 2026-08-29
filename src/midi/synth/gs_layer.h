@@ -121,7 +121,10 @@ struct GsEfx {
   uint16_t type = 0;
   /// EFX PARAMETER 1..20 (GS address 40 03 03..16), raw 0..127.
   std::array<uint8_t, 20> params{};
-  uint8_t send_reverb = 0;  ///< EFX -> reverb send (40 03 17).
+  /// EFX -> reverb send (40 03 17). Its reset default is 40, not 0: the address
+  /// table's row carries the same value, and a file that selects a type without
+  /// writing the sends is entitled to it (docs/gs.md, reset defaults).
+  uint8_t send_reverb = 40;
   uint8_t send_chorus = 0;  ///< EFX -> chorus send (40 03 18).
   uint8_t send_delay = 0;   ///< EFX -> delay send (40 03 19).
   /// True once any EFX-block write has arrived (so an all-zero Thru that was

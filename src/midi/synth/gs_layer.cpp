@@ -130,8 +130,12 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
   if (gs_decode_sysex(data, size, &write, 1, nullptr) == 0) return out;
 
   switch (write.param) {
-    case GsParam::kModeSet: {
-      // GS Reset is MODE SET with value 00; the row accepts no other value.
+    case GsParam::kModeSet:
+    case GsParam::kSystemModeSet: {
+      // Both reset on value 00 and on nothing else. SYSTEM MODE SET reaches the
+      // same place because the target has no Mode-2 (docs/gs.md): its row is
+      // lo = hi = 00, so an SC-88Pro Mode-2 request falls outside and is
+      // ignored rather than resetting or clamping.
       const GsAddressEntry* entry = gs_lookup_address(write.addr);
       if (entry != nullptr && gs_value_in_range(*entry, write.value)) {
         out.kind = GsSysExKind::kGsReset;
