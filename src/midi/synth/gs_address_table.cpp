@@ -108,4 +108,9 @@ size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
   return produced;
 }
 
+size_t gs_decode_sysex(const uint8_t* data, size_t size, GsWrite* out, size_t capacity,
+                       uint32_t* unknown_writes) noexcept {
+  return gs_decode_writes(gs_sysex_frame(data, size), out, capacity, unknown_writes);
+}
+
 }  // namespace sonare::midi::synth

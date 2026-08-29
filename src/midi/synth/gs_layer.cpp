@@ -1,7 +1,11 @@
 #include "midi/synth/gs_layer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <tuple>
+
+#include "midi/synth/gs_address_table.h"
 
 namespace sonare::midi::synth {
 
@@ -9,25 +13,21 @@ namespace {
 
 int8_t clamp_offset(int8_t v) noexcept { return static_cast<int8_t>(std::clamp<int>(v, -64, 63)); }
 
-/// GS part-parameter block nibble -> zero-based channel: block 0 = part 10
-/// (channel 9), blocks 1..9 = parts 1..9 (0..8), blocks A..F = parts 11..16.
-uint8_t gs_block_to_channel(uint8_t block) noexcept {
-  if (block == 0) return 9;
-  if (block <= 9) return static_cast<uint8_t>(block - 1);
-  return block;
+/// The EFX block is 40 03 00-1F, so a run reaching past its 0x20th byte carries
+/// only addresses outside the block.
+constexpr size_t kGsEfxBlockSize = 0x20;
+
+/// The size the EFX PARAMETER row claims, so the table and GsEfx::params cannot
+/// fall out of step.
+constexpr uint8_t gs_efx_parameter_row_size() noexcept {
+  for (const GsAddressEntry& entry : kGsAddressTable) {
+    if (entry.param == GsParam::kEfxParameter) return entry.size;
+  }
+  return 0;
 }
 
-bool valid_roland_dt1_checksum(const uint8_t* data, size_t size) noexcept {
-  // Framing has already been stripped. Roland DT1 payload:
-  // 41 dd 42 12 aa bb cc <data...> sum
-  if (data == nullptr || size < 9) return false;
-  uint32_t sum = 0;
-  for (size_t i = 4; i + 1 < size; ++i) {
-    sum += data[i];
-  }
-  const uint8_t expected = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
-  return data[size - 1] == expected;
-}
+static_assert(gs_efx_parameter_row_size() == std::tuple_size<decltype(GsEfx::params)>::value,
+              "EFX PARAMETER row and GsEfx::params disagree on the parameter count");
 
 }  // namespace
 
@@ -106,46 +106,55 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
 GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
   GsSysEx out;
   if (data == nullptr || size < 4) return out;
-  // Strip optional F0 ... F7 framing.
-  if (data[0] == 0xF0) {
-    ++data;
-    --size;
-  }
-  if (size > 0 && data[size - 1] == 0xF7) --size;
-  if (size < 3) return out;
 
-  // GM System On / GM2 System On: 7E 7F 09 01 / 03.
-  if (size >= 4 && data[0] == 0x7E && data[2] == 0x09 && (data[3] == 0x01 || data[3] == 0x03)) {
+  // GM System On / GM2 System On is Universal SysEx rather than a Roland frame,
+  // so it is matched ahead of the address table: 7E dd 09 01 / 03.
+  const uint8_t* body = data;
+  size_t body_size = size;
+  if (body[0] == 0xF0) {
+    ++body;
+    --body_size;
+  }
+  if (body_size > 0 && body[body_size - 1] == 0xF7) --body_size;
+  if (body_size >= 4 && body[0] == 0x7E && body[2] == 0x09 &&
+      (body[3] == 0x01 || body[3] == 0x03)) {
     out.kind = GsSysExKind::kGmReset;
     return out;
   }
 
-  // Roland GS DT1: 41 dd 42 12 aa bb cc <data...> sum.
-  if (size >= 9 && data[0] == 0x41 && data[2] == 0x42 && data[3] == 0x12) {
-    if (!valid_roland_dt1_checksum(data, size)) return out;
-    const uint8_t addr_hi = data[4];
-    const uint8_t addr_mid = data[5];
-    const uint8_t addr_lo = data[6];
-    // GS Reset: 40 00 7F, data 00.
-    if (addr_hi == 0x40 && addr_mid == 0x00 && addr_lo == 0x7F && data[7] == 0x00) {
-      out.kind = GsSysExKind::kGsReset;
-      return out;
+  // Everything else is a Roland frame the address table names. The kind comes
+  // from the FIRST data byte only: the message's start address is what a caller
+  // selects on, so a run that reaches one of these addresses partway through is
+  // not one of these messages.
+  GsWrite write;
+  if (gs_decode_sysex(data, size, &write, 1, nullptr) == 0) return out;
+
+  switch (write.param) {
+    case GsParam::kModeSet: {
+      // GS Reset is MODE SET with value 00; the row accepts no other value.
+      const GsAddressEntry* entry = gs_lookup_address(write.addr);
+      if (entry != nullptr && gs_value_in_range(*entry, write.value)) {
+        out.kind = GsSysExKind::kGsReset;
+      }
+      break;
     }
-    // Use for rhythm part: 40 1x 15, data mm (0 off / 1 map1 / 2 map2).
-    if (addr_hi == 0x40 && (addr_mid & 0xF0u) == 0x10 && addr_lo == 0x15 && size >= 8) {
+    case GsParam::kUseForRhythmPart:
       out.kind = GsSysExKind::kUseForRhythm;
-      out.channel = gs_block_to_channel(addr_mid & 0x0Fu);
-      out.value = static_cast<uint8_t>(data[7] <= 2 ? data[7] : 1);
-      return out;
-    }
-    // Per-part EFX on/off: 40 4x 22, data 00/01 (route the part through the
-    // single insertion effect).
-    if (addr_hi == 0x40 && (addr_mid & 0xF0u) == 0x40 && addr_lo == 0x22 && size >= 8) {
+      out.channel = write.part;
+      // 0 off / 1 map1 / 2 map2; an unmapped value reads as map 1 rather than
+      // being ignored, which is wider than the row's range.
+      out.value = static_cast<uint8_t>(write.value <= 2 ? write.value : 1);
+      break;
+    case GsParam::kPartEfxAssign:
       out.kind = GsSysExKind::kEfxPartSwitch;
-      out.channel = gs_block_to_channel(addr_mid & 0x0Fu);
-      out.value = static_cast<uint8_t>(data[7] != 0 ? 1 : 0);
-      return out;
-    }
+      out.channel = write.part;
+      // Any non-zero assignment routes the part through insertion unit 0. The
+      // row accepts 02-10 for units 1-15 (docs/gs.md); nothing realises them,
+      // so they read as unit 0 rather than as a part with no effect.
+      out.value = static_cast<uint8_t>(write.value != 0 ? 1 : 0);
+      break;
+    default:
+      break;
   }
   return out;
 }
@@ -154,54 +163,51 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
                         bool* out_type_changed) noexcept {
   if (out_type_changed != nullptr) *out_type_changed = false;
   if (data == nullptr || size < 4) return false;
-  // Strip optional F0 ... F7 framing.
-  if (data[0] == 0xF0) {
-    ++data;
-    --size;
-  }
-  if (size > 0 && data[size - 1] == 0xF7) --size;
-  // Roland GS DT1 addressing the EFX block: 41 dd 42 12 40 03 lo <data...> sum.
-  if (size < 9 || data[0] != 0x41 || data[2] != 0x42 || data[3] != 0x12) return false;
-  if (data[4] != 0x40 || data[5] != 0x03) return false;
-  if (!valid_roland_dt1_checksum(data, size)) return false;
 
-  const uint8_t start_lo = data[6];
+  const GsFrame frame = gs_sysex_frame(data, size);
+  if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return false;
+  // Insertion unit 0, address 40 03 xx. A run starting anywhere else belongs to
+  // another parameter group.
+  if ((frame.addr & 0xFFFF00u) != 0x400300u) return false;
+
+  std::array<GsWrite, kGsEfxBlockSize> writes{};
+  const size_t decoded =
+      std::min(gs_decode_writes(frame, writes.data(), writes.size(), nullptr), writes.size());
+
   const uint16_t old_type = efx.type;
   uint8_t type_msb = static_cast<uint8_t>(efx.type >> 8);
   uint8_t type_lsb = static_cast<uint8_t>(efx.type & 0x7Fu);
   bool touched = false;
-  // Data bytes run from index 7 to size-2 (size-1 is the checksum), each landing
-  // on a consecutive EFX sub-address from start_lo. Reserved/out-of-range
-  // offsets are ignored (preserved), never dropping the whole message.
-  for (size_t i = 7; i + 1 < size; ++i) {
-    const uint8_t value = static_cast<uint8_t>(data[i] & 0x7Fu);
-    const unsigned addr = static_cast<unsigned>(start_lo) + static_cast<unsigned>(i - 7);
-    switch (addr) {
-      case 0x00:
-        type_msb = value;
+  // A byte landing on a reserved offset, or on a block address GsEfx holds no
+  // field for, is ignored (preserved) rather than dropping the whole message.
+  for (size_t i = 0; i < decoded; ++i) {
+    const GsWrite& write = writes[i];
+    switch (write.param) {
+      case GsParam::kEfxType:
+        if (write.index == 0) {
+          type_msb = write.value;
+        } else {
+          type_lsb = write.value;
+        }
         touched = true;
         break;
-      case 0x01:
-        type_lsb = value;
+      case GsParam::kEfxParameter:
+        efx.params[write.index] = write.value;
         touched = true;
         break;
-      case 0x17:
-        efx.send_reverb = value;
+      case GsParam::kEfxSendToReverb:
+        efx.send_reverb = write.value;
         touched = true;
         break;
-      case 0x18:
-        efx.send_chorus = value;
+      case GsParam::kEfxSendToChorus:
+        efx.send_chorus = write.value;
         touched = true;
         break;
-      case 0x19:
-        efx.send_delay = value;
+      case GsParam::kEfxSendToDelay:
+        efx.send_delay = write.value;
         touched = true;
         break;
       default:
-        if (addr >= 0x03 && addr <= 0x16) {
-          efx.params[addr - 0x03] = value;
-          touched = true;
-        }
         break;
     }
   }

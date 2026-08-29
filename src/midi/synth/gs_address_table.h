@@ -46,6 +46,38 @@ enum class GsLevel : uint8_t {
   X(kMasterKeyShift)        \
   X(kMasterPan)             \
   X(kModeSet)               \
+  X(kPatchName)             \
+  X(kReverbMacro)           \
+  X(kReverbCharacter)       \
+  X(kReverbPreLpf)          \
+  X(kReverbLevel)           \
+  X(kReverbTime)            \
+  X(kReverbDelayFeedback)   \
+  X(kReverbPredelay)        \
+  X(kChorusMacro)           \
+  X(kChorusPreLpf)          \
+  X(kChorusLevel)           \
+  X(kChorusFeedback)        \
+  X(kChorusDelay)           \
+  X(kChorusRate)            \
+  X(kChorusDepth)           \
+  X(kChorusSendToReverb)    \
+  X(kChorusSendToDelay)     \
+  X(kDelayMacro)            \
+  X(kDelayPreLpf)           \
+  X(kDelayTimeCenter)       \
+  X(kDelayTimeRatioLeft)    \
+  X(kDelayTimeRatioRight)   \
+  X(kDelayLevelCenter)      \
+  X(kDelayLevelLeft)        \
+  X(kDelayLevelRight)       \
+  X(kDelayLevel)            \
+  X(kDelayFeedback)         \
+  X(kDelaySendToReverb)     \
+  X(kEqLowFreq)             \
+  X(kEqLowGain)             \
+  X(kEqHighFreq)            \
+  X(kEqHighGain)            \
   X(kEfxType)               \
   X(kEfxParameter)          \
   X(kEfxSendToReverb)       \
@@ -55,7 +87,10 @@ enum class GsLevel : uint8_t {
   X(kEfxControlDepth1)      \
   X(kEfxControlSource2)     \
   X(kEfxControlDepth2)      \
-  X(kEfxSendEqSwitch)
+  X(kEfxSendEqSwitch)       \
+  X(kUseForRhythmPart)      \
+  X(kPartEqSwitch)          \
+  X(kPartEfxAssign)
 
 /// The parameter a decoded byte addresses. kUnknown means no table row claimed
 /// the address; kUndefined means a range-table row did (an address the manual
@@ -110,7 +145,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 18> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 53> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -128,6 +163,54 @@ inline constexpr std::array<GsAddressEntry, 18> kGsAddressTable = {{
     {0x400006, 0, GsParam::kMasterPan, GsLevel::kAudible, 1, 0x01, 0x7F, 0x40, nullptr},
     {0x40007F, 0, GsParam::kModeSet, GsLevel::kAudible, 1, 0x00, 0x00, 0x00, nullptr},
 
+    // Patch common (40 01 xx). PATCH NAME is one 16-byte ASCII field; the row
+    // bounds a character and the index says which one.
+    {0x400100, 0, GsParam::kPatchName, GsLevel::kState, 16, 0x20, 0x7F, 0x20, nullptr},
+
+    // Reverb (40 01 30-37). The defaults are the Hall 2 macro, so they and
+    // kGsReverbMacros[4] in gs_system_effects.h say the same thing.
+    {0x400130, 0, GsParam::kReverbMacro, GsLevel::kAudible, 1, 0x00, 0x07, 0x04, nullptr},
+    {0x400131, 0, GsParam::kReverbCharacter, GsLevel::kAudible, 1, 0x00, 0x07, 0x04, nullptr},
+    {0x400132, 0, GsParam::kReverbPreLpf, GsLevel::kAudible, 1, 0x00, 0x07, 0x00, nullptr},
+    {0x400133, 0, GsParam::kReverbLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    {0x400134, 0, GsParam::kReverbTime, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    {0x400135, 0, GsParam::kReverbDelayFeedback, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x400137, 0, GsParam::kReverbPredelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+
+    // Chorus (40 01 38-40). The defaults are the Chorus 3 macro.
+    {0x400138, 0, GsParam::kChorusMacro, GsLevel::kAudible, 1, 0x00, 0x07, 0x02, nullptr},
+    {0x400139, 0, GsParam::kChorusPreLpf, GsLevel::kAudible, 1, 0x00, 0x07, 0x00, nullptr},
+    {0x40013A, 0, GsParam::kChorusLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    {0x40013B, 0, GsParam::kChorusFeedback, GsLevel::kAudible, 1, 0x00, 0x7F, 0x08, nullptr},
+    {0x40013C, 0, GsParam::kChorusDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x50, nullptr},
+    {0x40013D, 0, GsParam::kChorusRate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x03, nullptr},
+    {0x40013E, 0, GsParam::kChorusDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x13, nullptr},
+    {0x40013F, 0, GsParam::kChorusSendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x400140, 0, GsParam::kChorusSendToDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+
+    // Delay (40 01 50-5A). The defaults are the Delay 1 macro.
+    {0x400150, 0, GsParam::kDelayMacro, GsLevel::kAudible, 1, 0x00, 0x09, 0x00, nullptr},
+    {0x400151, 0, GsParam::kDelayPreLpf, GsLevel::kAudible, 1, 0x00, 0x07, 0x00, nullptr},
+    // 00 is out of range: the time table starts at 01 (0.1 ms).
+    {0x400152, 0, GsParam::kDelayTimeCenter, GsLevel::kAudible, 1, 0x01, 0x73, 0x61, nullptr},
+    {0x400153, 0, GsParam::kDelayTimeRatioLeft, GsLevel::kAudible, 1, 0x01, 0x78, 0x01, nullptr},
+    {0x400154, 0, GsParam::kDelayTimeRatioRight, GsLevel::kAudible, 1, 0x01, 0x78, 0x01, nullptr},
+    {0x400155, 0, GsParam::kDelayLevelCenter, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
+    {0x400156, 0, GsParam::kDelayLevelLeft, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x400157, 0, GsParam::kDelayLevelRight, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x400158, 0, GsParam::kDelayLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    // 00-7F reads as -64..+63, so the default 50 is +16 and not the centre. The
+    // signedness belongs to gs_delay_feedback_signed; the row bounds the byte.
+    {0x400159, 0, GsParam::kDelayFeedback, GsLevel::kAudible, 1, 0x00, 0x7F, 0x50, nullptr},
+    {0x40015A, 0, GsParam::kDelaySendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+
+    // Master EQ (40 02 xx). The two FREQ addresses select one of two corners,
+    // and the two GAIN addresses are 34-4C around a centred 40 (+-12 dB).
+    {0x400200, 0, GsParam::kEqLowFreq, GsLevel::kAudible, 1, 0x00, 0x01, 0x00, nullptr},
+    {0x400201, 0, GsParam::kEqLowGain, GsLevel::kAudible, 1, 0x34, 0x4C, 0x40, nullptr},
+    {0x400202, 0, GsParam::kEqHighFreq, GsLevel::kAudible, 1, 0x00, 0x01, 0x00, nullptr},
+    {0x400203, 0, GsParam::kEqHighGain, GsLevel::kAudible, 1, 0x34, 0x4C, 0x40, nullptr},
+
     // EFX (40 03 xx), insertion unit 0.
     {0x400300, 0, GsParam::kEfxType, GsLevel::kAudible, 2, 0x00, 0x7F, 0x00, nullptr},
     {0x400303, 0, GsParam::kEfxParameter, GsLevel::kAudible, 20, 0x00, 0x7F, 0x00, nullptr},
@@ -139,10 +222,34 @@ inline constexpr std::array<GsAddressEntry, 18> kGsAddressTable = {{
     {0x40031D, 0, GsParam::kEfxControlSource2, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x40031E, 0, GsParam::kEfxControlDepth2, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
     {0x40031F, 0, GsParam::kEfxSendEqSwitch, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+
+    // Part parameters (40 1x xx).
+    // Part 10 powers on at 01 (drum map 1) and every other part at 00, which one
+    // def cannot say; the row carries the melodic default and the reset owns the
+    // exception.
+    {0x401015, 0x000F00, GsParam::kUseForRhythmPart, GsLevel::kAudible, 1, 0x00, 0x02, 0x00,
+     nullptr},
+
+    // Part EQ switch (40 4x 20): whether the master EQ at 40 02 xx reaches this
+    // part. Powers on ON, so a file that never writes it still gets the EQ.
+    {0x404020, 0x000F00, GsParam::kPartEqSwitch, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+
+    // Part EFX assign (40 4x 22).
+    // The manual specifies 00 BYPASS / 01 EFX; 02-10 select insertion units 1-15,
+    // the libsonare extension (docs/gs.md). Narrowing hi back to 01 to restore
+    // spec compliance makes the extension unreachable.
+    {0x404022, 0x000F00, GsParam::kPartEfxAssign, GsLevel::kAudible, 1, 0x00, 0x10, 0x00, nullptr},
 }};
 
 /// The undefined regions covered so far.
-inline constexpr std::array<GsAddressRange, 2> kGsUndefinedRanges = {{
+inline constexpr std::array<GsAddressRange, 7> kGsUndefinedRanges = {{
+    {0x400110, 0x40012F,
+     "no row between PATCH NAME and REVERB MACRO; the SC-55/SC-88 PARTIAL RESERVE the SC-8850 "
+     "dropped arrives here"},
+    {0x400136, 0x400136, "no row between REVERB DELAY FEEDBACK and PREDELAY; a run crosses it"},
+    {0x400141, 0x40014F, "no row between the chorus block and DELAY MACRO; a run crosses it"},
+    {0x40015B, 0x40017F, "no row past DELAY SEND TO REVERB; a run from the delay block crosses it"},
+    {0x400204, 0x40027F, "no row past EQ HIGH GAIN; a run from the EQ block crosses it"},
     {0x400302, 0x400302, "no row between EFX TYPE and PARAMETER 1; a run from the type crosses it"},
     {0x40031A, 0x40031A, "no row between the EFX sends and CONTROL SOURCE 1; a run crosses it"},
 }};
@@ -234,6 +341,12 @@ struct GsWrite {
 ///   table row claimed. Those bytes are still emitted, as GsParam::kUnknown.
 size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
                         uint32_t* unknown_writes) noexcept;
+
+/// gs_sysex_frame followed by gs_decode_writes, so a caller holding a raw SysEx
+/// payload does not re-derive the framing. Returns 0 for anything the frame
+/// layer refuses.
+size_t gs_decode_sysex(const uint8_t* data, size_t size, GsWrite* out, size_t capacity,
+                       uint32_t* unknown_writes) noexcept;
 
 // --- Table self-checks ---
 
