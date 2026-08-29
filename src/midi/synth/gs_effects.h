@@ -26,11 +26,17 @@
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
 #include "effects/reverb/dattorro_reverb.h"
+#include "midi/synth/gs_system_effects.h"
 
 namespace sonare::midi::synth {
 
 /// System effect parameters (GS-flavoured defaults: a plate-ish hall, a
 /// gentle chorus and the SC-88 style single delay).
+///
+/// The fields below the first block carry the rest of the GS system-effect
+/// address range so gs_effects_config_from() has somewhere to land. Each
+/// defaults to what the bus already does, so a default-constructed config is
+/// the behaviour that shipped before they existed.
 struct GsEffectsConfig {
   bool enable_reverb = true;
   bool enable_chorus = true;
@@ -40,8 +46,39 @@ struct GsEffectsConfig {
   float chorus_rate_hz = 0.8f;
   float chorus_depth_ms = 6.0f;
   float delay_time_ms = 340.0f;
-  float delay_feedback = 0.25f;  ///< [0, 0.9].
+  float delay_feedback = 0.25f;  ///< [-0.9, 0.9]; the bus clamps negatives to 0 for now.
+
+  float reverb_level = 1.0f;                  ///< Return gain, [0, 1].
+  float reverb_predelay_ms = 0.0f;            ///< Input pre-delay.
+  float reverb_pre_lpf_hz = kGsPreLpfThruHz;  ///< Input LPF cutoff.
+  float chorus_level = 1.0f;                  ///< Return gain, [0, 1].
+  float chorus_feedback = 0.0f;               ///< [0, 0.95]; flangers need it.
+  float chorus_delay_ms = 14.0f;              ///< Centre delay (ChorusConfig's default).
+  float chorus_pre_lpf_hz = kGsPreLpfThruHz;  ///< Input LPF cutoff.
+  float chorus_send_to_reverb = 0.0f;         ///< Chorus return into the reverb bus.
+  float chorus_send_to_delay = 0.0f;          ///< Chorus return into the delay bus.
+  float delay_level = 1.0f;                   ///< Return gain, [0, 1].
+  float delay_pre_lpf_hz = kGsPreLpfThruHz;   ///< Input LPF cutoff.
+  float delay_time_ratio_left = 1.0f;         ///< Left tap, as a ratio of delay_time_ms.
+  float delay_time_ratio_right = 1.0f;        ///< Right tap, same.
+  float delay_level_center = 1.0f;            ///< Centre tap gain — today's single tap.
+  float delay_level_left = 0.0f;              ///< Left tap gain.
+  float delay_level_right = 0.0f;             ///< Right tap gain.
+  float delay_send_to_reverb = 0.0f;          ///< Delay return into the reverb bus.
 };
+
+/// The effect-unit settings a GS system-effect block asks for.
+///
+/// This is the value layer's terminus, not a live path: nothing constructs a
+/// GsEffectBus through it yet. The GS reset defaults mapped through here do not
+/// equal the hand-picked defaults above, so switching the bus over moves the
+/// goldens and belongs in its own change (docs/gs.md, "Reset defaults are part
+/// of the contract").
+///
+/// A REVERB CHARACTER of 6 or 7 sounds the delay unit instead of the reverb —
+/// a routing change rather than a coefficient, so it stays with whoever owns
+/// the bus. gs_reverb_character_is_delay() is what reports it.
+GsEffectsConfig gs_effects_config_from(const GsSystemEffects& fx) noexcept;
 
 class GsEffectBus {
  public:

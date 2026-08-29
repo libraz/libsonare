@@ -20,6 +20,10 @@ namespace {
 SONARE_TUNABLE(kReverbDecayScale, 1.0f);
 SONARE_TUNABLE(kReverbDampingScale, 1.0f);
 
+/// One circulation of the figure-8 tank. Shared by the RT60 -> tank-feedback
+/// conversion and the ring-out bound so the two cannot drift apart.
+constexpr double kTankPassSeconds = 0.15;
+
 effects::reverb::DattorroReverbConfig reverb_config(const GsEffectsConfig& cfg) {
   effects::reverb::DattorroReverbConfig rc;
   rc.decay = std::clamp(cfg.reverb_decay * kReverbDecayScale, 0.0f, 0.98f);
@@ -46,7 +50,45 @@ effects::delay::StereoDelayConfig delay_config(const GsEffectsConfig& cfg) {
   return dc;
 }
 
+/// RT60 seconds -> tank feedback, the inverse of the ring-out bound below:
+/// -60 dB after t / kTankPassSeconds passes.
+float tank_decay_from_rt60(float seconds) noexcept {
+  if (!(seconds > 0.0f)) return 0.0f;
+  const double decay = std::pow(10.0, -3.0 * kTankPassSeconds / seconds);
+  return static_cast<float>(std::clamp(decay, 0.0, 0.98));
+}
+
 }  // namespace
+
+GsEffectsConfig gs_effects_config_from(const GsSystemEffects& fx) noexcept {
+  GsEffectsConfig cfg;
+  cfg.reverb_decay = tank_decay_from_rt60(gs_reverb_time_seconds(fx.reverb_time));
+  cfg.reverb_damping = gs_reverb_character_damping(fx.reverb_character);
+  cfg.reverb_level = gs_effect_level(fx.reverb_level);
+  cfg.reverb_predelay_ms = gs_reverb_predelay_ms(fx.reverb_predelay);
+  cfg.reverb_pre_lpf_hz = gs_pre_lpf_cutoff_hz(fx.reverb_pre_lpf);
+
+  cfg.chorus_rate_hz = gs_chorus_rate_hz(fx.chorus_rate);
+  cfg.chorus_depth_ms = gs_chorus_depth_ms(fx.chorus_depth);
+  cfg.chorus_delay_ms = gs_chorus_delay_ms(fx.chorus_delay);
+  cfg.chorus_feedback = gs_chorus_feedback_coefficient(fx.chorus_feedback);
+  cfg.chorus_level = gs_effect_level(fx.chorus_level);
+  cfg.chorus_pre_lpf_hz = gs_pre_lpf_cutoff_hz(fx.chorus_pre_lpf);
+  cfg.chorus_send_to_reverb = gs_effect_level(fx.chorus_send_to_reverb);
+  cfg.chorus_send_to_delay = gs_effect_level(fx.chorus_send_to_delay);
+
+  cfg.delay_time_ms = gs_delay_time_ms(fx.delay_time_center);
+  cfg.delay_time_ratio_left = gs_delay_time_ratio_percent(fx.delay_time_ratio_left) / 100.0f;
+  cfg.delay_time_ratio_right = gs_delay_time_ratio_percent(fx.delay_time_ratio_right) / 100.0f;
+  cfg.delay_feedback = gs_delay_feedback_coefficient(fx.delay_feedback);
+  cfg.delay_level = gs_effect_level(fx.delay_level);
+  cfg.delay_level_center = gs_effect_level(fx.delay_level_center);
+  cfg.delay_level_left = gs_effect_level(fx.delay_level_left);
+  cfg.delay_level_right = gs_effect_level(fx.delay_level_right);
+  cfg.delay_pre_lpf_hz = gs_pre_lpf_cutoff_hz(fx.delay_pre_lpf);
+  cfg.delay_send_to_reverb = gs_effect_level(fx.delay_send_to_reverb);
+  return cfg;
+}
 
 GsEffectBus::GsEffectBus(const GsEffectsConfig& config)
     : config_(config),
@@ -113,11 +155,11 @@ int64_t GsEffectBus::tail_samples(double sample_rate) const noexcept {
   if (!(sample_rate > 0.0)) return 0;
   double tail_s = 0.0;
   if (config_.enable_reverb) {
-    // The figure-8 tank circulates in roughly 150 ms; energy falls by `decay`
-    // per pass. Ring-out to -80 dB: n = ln(1e-4) / ln(decay) passes.
+    // Energy falls by `decay` per tank pass. Ring-out to -80 dB takes
+    // n = ln(1e-4) / ln(decay) passes.
     const double decay = std::clamp(static_cast<double>(config_.reverb_decay), 0.05, 0.98);
     const double passes = std::log(1.0e-4) / std::log(decay);
-    tail_s = std::max(tail_s, 0.15 * passes);
+    tail_s = std::max(tail_s, kTankPassSeconds * passes);
   }
   if (config_.enable_delay) {
     const double fb = std::clamp(static_cast<double>(config_.delay_feedback), 0.0, 0.9);

@@ -777,6 +777,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/sf2_player_render.cpp
     midi/synth/gs_layer.cpp
     midi/synth/gs_address_table.cpp
+    midi/synth/gs_system_effects.cpp
   )
   target_include_directories(sonare_midi PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
