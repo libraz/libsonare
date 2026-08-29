@@ -6,6 +6,8 @@ Per-address detail — offsets, ranges, defaults — is not restated here. It co
 
 **A row in the address table came from the SC-88Pro manual unless it says otherwise, and the two are not the same document.** The transcription the table was built from is the SC-88Pro Owner's Manual, and the SC-8850's own map has been checked only where a row of this page names a difference. That is a gap in provenance rather than a known error — the sampled points agree — but "the manual says" about an untouched row means the SC-88Pro's, and the SC-8850's is the one that decides.
 
+Two blocks have since been read out of the SC-8850's own map rather than inherited: the **part parameters `40 1x 00`–`4B`**, where the two machines turn out to list address for address the same set, and the six difference points above. Closing the gap elsewhere is reading the map, not re-deriving anything.
+
 **This page is normative and says nothing about progress.** It describes what must be true, not what is true today; an item here that the code does not yet do is work outstanding rather than a documentation error. Coverage is a number the address table and its test produce, not a status section that would drift the moment it was written.
 
 ## What is being made compatible is the control protocol, not the sound
@@ -85,9 +87,10 @@ The mapping is verified by a round-trip test over every pair: written from eithe
 
 These are decisions, not gaps. Each one is here because it would otherwise be re-litigated or re-discovered.
 
-- **`40 1x 1C` = `00` and `41 m4 rr` = `00` mean random pan on the hardware. libsonare treats them as centre.** Randomness breaks the bit-identical bounce contract, and a deterministic pseudo-random substitute would not match the hardware either, so it would buy divergence without buying fidelity. Centre matches what the overwhelming majority of files that never write the address get, and it fails quietly rather than loudly.
+- **`40 1x 1C` = `00` and `41 m4 rr` = `00` mean random pan on the hardware. libsonare treats them as centre.** Randomness breaks the bit-identical bounce contract, and a deterministic pseudo-random substitute would not match the hardware either, so it would buy divergence without buying fidelity. Centre matches what the overwhelming majority of files that never write the address get, and it fails quietly rather than loudly. This is also the one value at which `40 1x 1C` and CC10 part company, and they are still one storage location: the manual's own note on the address reads "(=CC# 10, except RANDOM)", so `00` is hard left through the controller and centre through the address.
 - **EFX type 47 (Rotary Multi) is accepted at both `02 0C` and `03 00`.** The SC-88Pro manual contradicts itself — its Effect list table says `02 0C` while its Insertion Effect List says `03 00` — and the SC-8850 says `03 00` in both places. Files written against either table exist.
 - **A drum note's reverb, chorus and delay sends are multiplicands of the part's send, not additions to it.** The manual is explicit (`0.0 – 1.0`, "Multiplicand of the part reverb level"). Multiplying gives the hardware behaviour that taking a part's send to zero silences its drum notes' sends too; adding does not.
+- **An out-of-range `40 1x 15` USE FOR RHYTHM PART reads as drum map 1, where every other address ignores a value it does not accept.** The row accepts `00`–`02`, and the corpus reaches `03` at `40 1A 15` — an address 1 059 files write. A file asking for a map the machine does not have still means the part to be drums, and map 1 sounds it as drums where ignoring the write leaves it melodic. This is the one departure from "ignored, never clamped", and it is one because the parameter selects a resource rather than sets a value.
 - **`40 4x 01` TONE MAP-0 NUMBER survives every reset.** Power-on, GS Reset, GM System On and System Mode Set all leave it alone. It is the one part field that a blanket re-initialisation must skip.
 - **A drum set change re-initialises that map's setup parameters.** Program change on a rhythm part clears the `41 mn rr` state for that map.
 

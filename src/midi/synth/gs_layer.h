@@ -90,6 +90,17 @@ struct GsPartParams {
   }
 };
 
+/// Number of TONE MODIFY parameters (GS address 40 1x 30-37), which is also the
+/// number of GsPartParams fields: the two are the same set reached from two
+/// directions, so a field added to one without the other is a defect.
+inline constexpr uint8_t kGsToneModifyCount = 8;
+
+/// TONE MODIFY @p index (0-7, GS address 40 1x 30-37) onto the part parameter it
+/// shares with its NRPN — the single storage location the alias table promises
+/// (docs/gs.md). @p value is the raw 0-127 byte, centred on 64. An index past
+/// the block is ignored.
+void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexcept;
+
 /// Per-note drum overrides (GS NRPN msb 18/1A/1C/1D/1E, lsb = drum note).
 struct GsDrumNoteParams {
   enum Flag : uint8_t {

@@ -109,7 +109,8 @@ void check_row(uint32_t addr, uint8_t value, GsParam param, uint8_t index = 0, u
     g_covered[static_cast<size_t>(entry - kGsAddressTable.data())] = true;
   }
   for (size_t i = 0; i < kGsUndefinedRanges.size(); ++i) {
-    if (addr >= kGsUndefinedRanges[i].lo_addr && addr <= kGsUndefinedRanges[i].hi_addr) {
+    const uint32_t base = addr & ~kGsUndefinedRanges[i].mask;
+    if (base >= kGsUndefinedRanges[i].lo_addr && base <= kGsUndefinedRanges[i].hi_addr) {
       g_range_covered[i] = true;
     }
   }
@@ -202,6 +203,22 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   // block 0 comes back as part 10.
   check_row(0x401015, 0x01, GsParam::kUseForRhythmPart, 0, 9);
   check_row(0x401215, 0x02, GsParam::kUseForRhythmPart, 0, 1);
+  check_row(0x401119, 0x64, GsParam::kPartLevel, 0, 0);
+  check_row(0x40101C, 0x40, GsParam::kPartPanpot, 0, 9);
+  check_row(0x401F21, 0x00, GsParam::kPartChorusSend, 0, 15);
+  check_row(0x401022, 0x28, GsParam::kPartReverbSend, 0, 9);
+  check_row(0x401025, 0x00, GsParam::kUndefined);
+  // PITCH FINE TUNE is one 14-bit word: the two bytes come back as one param
+  // with the byte position as the index, like MASTER TUNE.
+  check_row(0x40102A, 0x40, GsParam::kPartPitchFineTune, 0, 9);
+  check_row(0x40102B, 0x00, GsParam::kPartPitchFineTune, 1, 9);
+  check_row(0x40102C, 0x00, GsParam::kPartDelaySend, 0, 9);
+  check_row(0x40102D, 0x00, GsParam::kUndefined);
+  // TONE MODIFY 1-8 share one row, so the index is which of the eight.
+  check_row(0x401030, 0x40, GsParam::kPartToneModify, 0, 9);
+  check_row(0x401237, 0x40, GsParam::kPartToneModify, 7, 1);
+  check_row(0x401038, 0x00, GsParam::kUndefined);
+  check_row(0x40104C, 0x00, GsParam::kUndefined);
   check_row(0x404020, 0x01, GsParam::kPartEqSwitch, 0, 9);
   check_row(0x404320, 0x00, GsParam::kPartEqSwitch, 0, 2);
   check_row(0x404022, 0x01, GsParam::kPartEfxAssign, 0, 9);

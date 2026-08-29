@@ -64,7 +64,8 @@ const GsAddressEntry* gs_lookup_address(uint32_t addr) noexcept {
 
 const GsAddressRange* gs_lookup_range(uint32_t addr) noexcept {
   for (const GsAddressRange& range : kGsUndefinedRanges) {
-    if (addr >= range.lo_addr && addr <= range.hi_addr) return &range;
+    const uint32_t base = addr & ~range.mask;
+    if (base >= range.lo_addr && base <= range.hi_addr) return &range;
   }
   return nullptr;
 }

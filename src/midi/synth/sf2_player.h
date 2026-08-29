@@ -587,6 +587,12 @@ class Sf2Player final : public MidiInstrument {
   /// realise mirror (sys_fx_ / master_eq_ / eq_part_bypassed_). Returns true when
   /// the message wrote at least one of them. Touches no unit and no audio state.
   bool apply_gs_system_sysex(const uint8_t* data, size_t size) noexcept;
+  /// Apply the GS part-parameter block writes (40 1x xx) @p data carries onto
+  /// channel state. Every address here is a second name for a controller that
+  /// already arrives on the render thread, so this writes the controller's own
+  /// storage rather than a parallel copy (docs/gs.md). Returns true when the
+  /// message wrote at least one part parameter.
+  bool apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept;
   /// Re-aim the effect bus and the master EQ at @p fx / @p eq / @p eq_part.
   /// Coefficients only: allocation-free, and the effect tails survive.
   void apply_gs_system_state(const GsSystemEffects& fx, const GsMasterEq& eq,

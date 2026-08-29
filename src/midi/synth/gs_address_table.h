@@ -89,6 +89,13 @@ enum class GsLevel : uint8_t {
   X(kEfxControlDepth2)      \
   X(kEfxSendEqSwitch)       \
   X(kUseForRhythmPart)      \
+  X(kPartLevel)             \
+  X(kPartPanpot)            \
+  X(kPartChorusSend)        \
+  X(kPartReverbSend)        \
+  X(kPartPitchFineTune)     \
+  X(kPartDelaySend)         \
+  X(kPartToneModify)        \
   X(kPartEqSwitch)          \
   X(kPartEfxAssign)
 
@@ -140,12 +147,15 @@ static_assert(sizeof(GsAddressEntry) <= 24, "GsAddressEntry grew");
 struct GsAddressRange {
   uint32_t lo_addr;
   uint32_t hi_addr;
+  /// Variable nibbles, as on GsAddressEntry. A gap inside a per-part block is
+  /// one gap in sixteen places, and without this it would be a row per part.
+  uint32_t mask;
   const char* why;
 };
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 53> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 60> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -229,6 +239,25 @@ inline constexpr std::array<GsAddressEntry, 53> kGsAddressTable = {{
     // exception.
     {0x401015, 0x000F00, GsParam::kUseForRhythmPart, GsLevel::kAudible, 1, 0x00, 0x02, 0x00,
      nullptr},
+    // The rest of this block is the CC/SysEx/NRPN alias set (docs/gs.md): each
+    // row writes the one storage location its controller already owns, so the
+    // default here is the controller's own power-on value rather than a second.
+    {0x401019, 0x000F00, GsParam::kPartLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x64, nullptr},
+    // 00 is RANDOM on the hardware and centre here — a deliberate divergence
+    // (docs/gs.md), so it stays inside the accepted range rather than becoming
+    // an out-of-range value the apply layer would drop.
+    {0x40101C, 0x000F00, GsParam::kPartPanpot, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    {0x401021, 0x000F00, GsParam::kPartChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    // The reverb send's 28 is the GS power-on 40 the reset already installs.
+    {0x401022, 0x000F00, GsParam::kPartReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28, nullptr},
+    // Two bytes making one 14-bit word centred on 40 00, which is RPN 00 01's
+    // 8192. The row bounds a byte; index 0 is the MSB.
+    {0x40102A, 0x000F00, GsParam::kPartPitchFineTune, GsLevel::kAudible, 2, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x40102C, 0x000F00, GsParam::kPartDelaySend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    // TONE MODIFY 1-8 in one row: same range, same default, and the index is
+    // which of the eight (gs_apply_tone_modify).
+    {0x401030, 0x000F00, GsParam::kPartToneModify, GsLevel::kAudible, 8, 0x00, 0x7F, 0x40, nullptr},
 
     // Part EQ switch (40 4x 20): whether the master EQ at 40 02 xx reaches this
     // part. Powers on ON, so a file that never writes it still gets the EQ.
@@ -242,16 +271,29 @@ inline constexpr std::array<GsAddressEntry, 53> kGsAddressTable = {{
 }};
 
 /// The undefined regions covered so far.
-inline constexpr std::array<GsAddressRange, 7> kGsUndefinedRanges = {{
-    {0x400110, 0x40012F,
+inline constexpr std::array<GsAddressRange, 11> kGsUndefinedRanges = {{
+    {0x400110, 0x40012F, 0,
      "no row between PATCH NAME and REVERB MACRO; the SC-55/SC-88 PARTIAL RESERVE the SC-8850 "
      "dropped arrives here"},
-    {0x400136, 0x400136, "no row between REVERB DELAY FEEDBACK and PREDELAY; a run crosses it"},
-    {0x400141, 0x40014F, "no row between the chorus block and DELAY MACRO; a run crosses it"},
-    {0x40015B, 0x40017F, "no row past DELAY SEND TO REVERB; a run from the delay block crosses it"},
-    {0x400204, 0x40027F, "no row past EQ HIGH GAIN; a run from the EQ block crosses it"},
-    {0x400302, 0x400302, "no row between EFX TYPE and PARAMETER 1; a run from the type crosses it"},
-    {0x40031A, 0x40031A, "no row between the EFX sends and CONTROL SOURCE 1; a run crosses it"},
+    {0x400136, 0x400136, 0, "no row between REVERB DELAY FEEDBACK and PREDELAY; a run crosses it"},
+    {0x400141, 0x40014F, 0, "no row between the chorus block and DELAY MACRO; a run crosses it"},
+    {0x40015B, 0x40017F, 0,
+     "no row past DELAY SEND TO REVERB; a run from the delay block crosses it"},
+    {0x400204, 0x40027F, 0, "no row past EQ HIGH GAIN; a run from the EQ block crosses it"},
+    {0x400302, 0x400302, 0,
+     "no row between EFX TYPE and PARAMETER 1; a run from the type crosses it"},
+    {0x40031A, 0x40031A, 0, "no row between the EFX sends and CONTROL SOURCE 1; a run crosses it"},
+    // Part block. The SC-8850 and SC-88Pro maps agree on 40 1x address for
+    // address, so these four gaps are the manual's own and not a transcription
+    // difference between the two.
+    {0x401025, 0x401029, 0x000F00,
+     "no row between RX BANK SELECT LSB and PITCH FINE TUNE; a run crosses it"},
+    {0x40102D, 0x40102F, 0x000F00,
+     "no row between DELAY SEND LEVEL and TONE MODIFY 1; a run crosses it"},
+    {0x401038, 0x40103F, 0x000F00,
+     "no row between TONE MODIFY 8 and SCALE TUNING C; a run crosses it"},
+    {0x40104C, 0x40107F, 0x000F00,
+     "no row past SCALE TUNING B; a run from the scale-tuning block crosses it"},
 }};
 
 // --- Frame layer ---
@@ -391,20 +433,40 @@ constexpr bool gs_table_is_consistent() noexcept {
   return true;
 }
 
+/// Concrete regions a range row stands for: one per part block when its mask
+/// carries the part nibble, otherwise the row itself.
+constexpr uint32_t gs_range_block_count(const GsAddressRange& r) noexcept {
+  return (r.mask & 0x000F00u) != 0 ? 16u : 1u;
+}
+
 constexpr bool gs_ranges_are_consistent() noexcept {
   for (size_t i = 0; i < kGsUndefinedRanges.size(); ++i) {
     const GsAddressRange& r = kGsUndefinedRanges[i];
     if (r.why == nullptr || r.why[0] == '\0') return false;
     if (r.lo_addr > r.hi_addr) return false;
+    if ((r.lo_addr & r.mask) != 0 || (r.hi_addr & r.mask) != 0) return false;
+    // Both checks below expand the mask into the blocks it reaches rather than
+    // comparing masked bases: the variable nibble is the LOW nibble of the mid
+    // byte, so clearing it in an unmasked address destroys which block that
+    // address was in and a comparison across two different masks silently means
+    // something else.
+    const uint32_t blocks = gs_range_block_count(r);
     for (size_t j = 0; j < i; ++j) {
-      if (r.lo_addr <= kGsUndefinedRanges[j].hi_addr &&
-          kGsUndefinedRanges[j].lo_addr <= r.hi_addr) {
-        return false;
+      const GsAddressRange& o = kGsUndefinedRanges[j];
+      for (uint32_t b = 0; b < blocks; ++b) {
+        for (uint32_t ob = 0; ob < gs_range_block_count(o); ++ob) {
+          if ((r.lo_addr | (b << 8)) <= (o.hi_addr | (ob << 8)) &&
+              (o.lo_addr | (ob << 8)) <= (r.hi_addr | (b << 8))) {
+            return false;
+          }
+        }
       }
     }
-    for (uint32_t addr = r.lo_addr; addr <= r.hi_addr; ++addr) {
-      for (const GsAddressEntry& e : kGsAddressTable) {
-        if (gs_row_claims(e, addr)) return false;
+    for (uint32_t block = 0; block < blocks; ++block) {
+      for (uint32_t addr = r.lo_addr; addr <= r.hi_addr; ++addr) {
+        for (const GsAddressEntry& e : kGsAddressTable) {
+          if (gs_row_claims(e, addr | (block << 8))) return false;
+        }
       }
     }
   }

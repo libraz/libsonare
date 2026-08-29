@@ -42,6 +42,9 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
     case GsSysExKind::kNone:
       break;
   }
+  // Part parameters (40 1x xx). These alias controllers the render thread
+  // already owns, so unlike the effect blocks they apply here in both modes.
+  if (apply_gs_part_sysex(data, size)) return true;
   // GS insertion-effect (EFX) block writes (address 40 03 xx). Offline captures
   // the raw wire into the mirror so process() can realise it inline; live routes
   // realisation through the control thread (on_control_sysex), so the audio
@@ -177,6 +180,58 @@ bool Sf2Player::apply_gs_system_sysex(const uint8_t* data, size_t size) noexcept
     touched = true;
   }
   return touched;
+}
+
+bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
+  constexpr size_t kMaxWrites = 64;
+  GsWrite writes[kMaxWrites];
+  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
+  // One bit per part written, so a run over several parts refreshes each once
+  // instead of once per byte.
+  uint16_t dirty = 0;
+  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
+    const GsWrite& w = writes[i];
+    const GsAddressEntry* entry = gs_lookup_address(w.addr);
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    ChannelState& st = channels_[w.part & 0x0Fu];
+    switch (w.param) {
+      case GsParam::kPartLevel:
+        st.volume = w.value;
+        break;
+      case GsParam::kPartPanpot:
+        // The manual's own "= CC#10, except RANDOM": 00 is RANDOM at this
+        // address and hard left at the controller. Randomness has no place in a
+        // bit-identical bounce, so it answers centre (docs/gs.md).
+        st.pan = w.value == 0 ? 0x40 : w.value;
+        break;
+      case GsParam::kPartChorusSend:
+        st.chorus_send = w.value;
+        break;
+      case GsParam::kPartReverbSend:
+        st.reverb_send = w.value;
+        break;
+      case GsParam::kPartDelaySend:
+        st.delay_send = w.value;
+        break;
+      case GsParam::kPartPitchFineTune:
+        // The same 14-bit word RPN 00 01 writes, MSB first.
+        st.pitch_fine_tune = w.index == 0
+                                 ? static_cast<uint16_t>((static_cast<uint16_t>(w.value) << 7) |
+                                                         (st.pitch_fine_tune & 0x7Fu))
+                                 : static_cast<uint16_t>((st.pitch_fine_tune & 0x3F80u) | w.value);
+        break;
+      case GsParam::kPartToneModify:
+        gs_apply_tone_modify(st.gs, w.index, w.value);
+        break;
+      default:
+        continue;
+    }
+    dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+  }
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if ((dirty & (1u << ch)) != 0) refresh_channel_mod(ch);
+  }
+  return dirty != 0;
 }
 
 void Sf2Player::apply_gs_system_state(const GsSystemEffects& fx, const GsMasterEq& eq,

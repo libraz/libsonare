@@ -29,6 +29,17 @@ constexpr uint8_t gs_efx_parameter_row_size() noexcept {
 static_assert(gs_efx_parameter_row_size() == std::tuple_size<decltype(GsEfx::params)>::value,
               "EFX PARAMETER row and GsEfx::params disagree on the parameter count");
 
+/// The size the TONE MODIFY row claims, for the same reason.
+constexpr uint8_t gs_tone_modify_row_size() noexcept {
+  for (const GsAddressEntry& entry : kGsAddressTable) {
+    if (entry.param == GsParam::kPartToneModify) return entry.size;
+  }
+  return 0;
+}
+
+static_assert(gs_tone_modify_row_size() == kGsToneModifyCount,
+              "TONE MODIFY row and GsPartParams disagree on the parameter count");
+
 }  // namespace
 
 float gs_cutoff_offset_cents(int8_t offset) noexcept {
@@ -51,6 +62,40 @@ float gs_vib_rate_scale(int8_t offset) noexcept {
 
 float gs_vib_depth_cents(int8_t offset) noexcept {
   return 3.0f * static_cast<float>(clamp_offset(offset));
+}
+
+void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexcept {
+  const int8_t offset = static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64);
+  // The manual names each of the eight and the NRPN it shares, so the order is
+  // the address order and not a choice made here.
+  switch (index) {
+    case 0:
+      gs.vibrato_rate = offset;  // NRPN 01 08
+      break;
+    case 1:
+      gs.vibrato_depth = offset;  // NRPN 01 09
+      break;
+    case 2:
+      gs.tvf_cutoff = offset;  // NRPN 01 20
+      break;
+    case 3:
+      gs.tvf_resonance = offset;  // NRPN 01 21
+      break;
+    case 4:
+      gs.eg_attack = offset;  // NRPN 01 63
+      break;
+    case 5:
+      gs.eg_decay = offset;  // NRPN 01 64
+      break;
+    case 6:
+      gs.eg_release = offset;  // NRPN 01 66
+      break;
+    case 7:
+      gs.vibrato_delay = offset;  // NRPN 01 0A
+      break;
+    default:
+      break;
+  }
 }
 
 void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept {
