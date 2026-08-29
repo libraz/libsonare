@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import struct
@@ -155,6 +156,7 @@ class Census:
         self.files_with_gs = 0
         self.messages = collections.Counter()
         self.unparsed_files = 0
+        self.duplicate_files = 0
 
     def observe(self, addr: int, payload: bytes, file_key: int) -> None:
         key = addr
@@ -251,6 +253,7 @@ class Census:
         return {
             "source": source,
             "files_scanned": self.files_scanned,
+            "files_duplicate": self.duplicate_files,
             "files_with_gs": self.files_with_gs,
             "files_unparsed": self.unparsed_files,
             "messages": dict(sorted(self.messages.items())),
@@ -295,6 +298,24 @@ def main() -> int:
             if name.lower().endswith((".mid", ".midi", ".smf")):
                 paths.append(os.path.join(root, name))
     paths.sort()
+    # A corpus assembled from a distribution that ships the same tune both loose
+    # and inside an archive holds each of those twice, and a file counted twice
+    # is not two files: it would weight the coverage ratchet by how a collection
+    # was packaged. Deduplicate by content, keeping the first path.
+    seen_digests: set[str] = set()
+    unique = []
+    for path in paths:
+        try:
+            with open(path, "rb") as handle:
+                digest = hashlib.sha256(handle.read()).hexdigest()
+        except OSError:
+            continue
+        if digest in seen_digests:
+            continue
+        seen_digests.add(digest)
+        unique.append(path)
+    census.duplicate_files = len(paths) - len(unique)
+    paths = unique
     if not paths:
         print("no MIDI files under %s" % args.corpus, file=sys.stderr)
         return 1
@@ -307,9 +328,11 @@ def main() -> int:
         handle.write("\n")
 
     print(
-        "scanned %d files (%d carry GS, %d unparsed) -> %d distinct addresses"
+        "scanned %d unique files (%d duplicates dropped, %d carry GS, %d unparsed)"
+        " -> %d distinct addresses"
         % (
             payload["files_scanned"],
+            payload["files_duplicate"],
             payload["files_with_gs"],
             payload["files_unparsed"],
             payload["distinct_addresses"],

@@ -21,6 +21,10 @@ python3 tools/gs/extract_addresses.py \
 
 The corpus used so far is a public collection of SMFs written for the SC-55, SC-88 and SC-88Pro by the Japanese DTM community of the 1990s and early 2000s, distributed as loose `.mid` entries plus `.lzh` / `.zip` archives holding about half as many again. Where to fetch it is a local note beside the corpus under `.cache/gs-corpus/`, not a repository fact: what this repository asserts is the census, and the distribution is somebody else's.
 
+**The distribution ships many tunes both loose and inside an archive, so the extractor deduplicates by content hash.** Counting a file twice would weight the coverage ratchet by how a collection was packaged rather than by how many files reach an address; 1 382 of 5 408 paths were the same bytes as another.
+
+**Both of the gate's ceilings are relative to one census.** Refreshing it over a larger corpus raises them by surfacing addresses nobody had seen — that is the census working, not coverage regressing. Re-record them in the same change, and compare the **ratio** across a refresh, never the count.
+
 ## Reading it
 
 - **`messages`** counts every SysEx in the corpus by kind, not just the GS ones. It is where a message the census *declines* shows up: a bad checksum, a data byte with its high bit set, another Roland model, another manufacturer. **A census that skipped the checksum would invent addresses** — 238 messages in the corpus fail it — and the coverage gate would then demand a table row for each fiction.

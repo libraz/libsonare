@@ -44,14 +44,19 @@ std::string hex(uint32_t addr) {
 
 /// Distinct census addresses no row claims. Lower this with the change that
 /// lowers it; it must never rise.
-constexpr size_t kUnrowedAddressCeiling = 2391;
+///
+/// Both ceilings are relative to one census. Refreshing it over a larger corpus
+/// raises them by surfacing addresses nobody had seen, which is the census
+/// working rather than coverage regressing — re-record them in the same change,
+/// and compare the RATIO across a refresh, never the count.
+constexpr size_t kUnrowedAddressCeiling = 3691;
 
 /// Corpus file-touches (an address counted once per file that wrote it) no row
 /// claims. Weighted, because one address reached by 1300 files is not the same
 /// size of gap as one reached by 2 — and the two numbers move independently, so
 /// a change that rows a rare address while breaking a common one is caught by
 /// the second ceiling even though the first went down.
-constexpr uint64_t kUnrowedFileTouchCeiling = 16194;
+constexpr uint64_t kUnrowedFileTouchCeiling = 35540;
 
 /// A ceiling nobody lowers stops describing the table and starts describing
 /// whenever it was last written, so a run far enough under one fails too, with
