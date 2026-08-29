@@ -49,6 +49,14 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       if (target[ch] != nullptr) target[ch][sample] += kInvSqrt2 * (l + r);
     }
   };
+  // Master tuning (RPN 00 01 fine / 00 02 coarse) is a static per-part pitch
+  // offset, and both voice hosts take pitch offsets through Sf2ChannelMod; fold
+  // it in once per chunk rather than per voice. Zero at the power-on defaults,
+  // which leaves a render that was never tuned bit-identical.
+  std::array<Sf2ChannelMod, 16> mods = channel_mods_;
+  for (size_t part = 0; part < mods.size(); ++part) {
+    mods[part].pitch_cents += channels_[part].tune_cents();
+  }
   // Read the realised-EFX routing for this block from the snapshot the control
   // thread published (adopted in process() via acquire()). A null snapshot (none
   // published yet) or an all-dry one routes everything straight to the dry mix.
@@ -140,7 +148,7 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     for (Sf2Voice& v : pool_) {
       if (!v.active) continue;
       const uint8_t part = v.channel & 0x0Fu;
-      const Sf2ChannelMod& mod = channel_mods_[part];
+      const Sf2ChannelMod& mod = mods[part];
       // Same non-finite scrub as the fallback loop below: this leg feeds the
       // insert bus and the system effect sends, which are persistent IIR state.
       const float rendered = v.render(mod);
@@ -187,7 +195,7 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     for (NativeSynthVoice& v : fallback_pool_) {
       if (!v.active) continue;
       const uint8_t part = v.channel & 0x0Fu;
-      const Sf2ChannelMod& mod = channel_mods_[part];
+      const Sf2ChannelMod& mod = mods[part];
       const OrganWindSupply::State& wind = wind_state[part];
       // Scrub any non-finite voice sample before it reaches a shared IIR state:
       // a single NaN/Inf would persist in the part's body resonators, the
@@ -272,7 +280,7 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
 #if defined(SONARE_MIDI_WITH_FX)
         // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
         if (rev_l != nullptr && !efx_routed[part]) {
-          const Sf2ChannelMod& mod = channel_mods_[part];
+          const Sf2ChannelMod& mod = mods[part];
           if (mod.fallback_reverb_send > 0.0f) {
             rev_l[i] += add * mod.fallback_reverb_send;
             rev_r[i] += add * mod.fallback_reverb_send;

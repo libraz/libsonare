@@ -14,21 +14,73 @@
 
 namespace sonare::midi::synth {
 
+namespace {
+
+using ::sonare::constants::kCentsPerSemitone;
+
+/// Longest CC5 portamento glide, matching the ceiling clamp_synth_patch puts on
+/// a patch's own glide_ms.
+constexpr float kPortamentoMaxMs = 5000.0f;
+
+/// CC5 Portamento Time -> glide time in ms. GS fixes neither a unit nor a curve
+/// for this controller, so the mapping is chosen monotone and zero at 0 (the
+/// power-on value, i.e. no glide) with the useful few-hundred-ms range spread
+/// over the lower half of the controller.
+float portamento_time_ms(uint8_t value) noexcept {
+  const float v = static_cast<float>(value & 0x7Fu) / 127.0f;
+  return kPortamentoMaxMs * v * v;
+}
+
+/// RPN Null (7F 7F): leaves nothing selected, so later data entry is discarded.
+/// Selecting an RPN already dropped a selected NRPN — this makes the neutral
+/// state explicit rather than an RPN number nothing happens to answer.
+void deselect_on_rpn_null(ChannelParamState& params) noexcept {
+  if (params.rpn_msb == 0x7Fu && params.rpn_lsb == 0x7Fu) params.reset();
+}
+
+}  // namespace
+
+Sf2Player::Portamento Sf2Player::take_portamento(uint8_t channel, uint8_t note) noexcept {
+  ChannelState& st = channels_[channel & 0x0Fu];
+  const uint8_t key = note & 0x7Fu;
+  // CC84 names its own source note and outranks the previous key; CC65 glides
+  // from whatever this part played last. Either way the arming is spent here.
+  int source = -1;
+  if (st.portamento_armed) {
+    source = st.portamento_source;
+    st.portamento_armed = false;
+  } else if (st.portamento && st.last_note <= 127) {
+    source = st.last_note;
+  }
+  st.last_note = key;
+  Portamento porta;
+  if (source < 0 || source == key) return porta;
+  const float glide_ms = portamento_time_ms(st.portamento_time);
+  if (glide_ms <= 0.0f || sample_rate_ <= 0.0) return porta;
+  porta.cents = static_cast<float>(source - key) * kCentsPerSemitone;
+  // Same one-pole sizing as the NativeSynth voice's glide: the pitch lands
+  // within ~5% of the target in glide_ms.
+  porta.coeff =
+      static_cast<float>(std::exp(-3.0 / (static_cast<double>(glide_ms) * 0.001 * sample_rate_)));
+  return porta;
+}
+
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
+  const Portamento porta = take_portamento(channel, note);
   const ChannelState& ch = channels_[channel & 0x0Fu];
   const uint16_t bank = effective_bank(channel);
   const bool is_drum = bank == kDrumBank;
   if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&
       gm_program_has_dedicated_model(bank, ch.program)) {
-    fallback_note_on(channel, note, velocity, source_track_id);
+    fallback_note_on(channel, note, velocity, source_track_id, porta);
     return;
   }
   // No SoundFont / uncovered program -> the data-free synth floor.
   const int preset_idx = soundfont_ != nullptr ? resolve_preset(bank, ch.program) : -1;
   if (preset_idx < 0) {
-    if (config_.synth_fallback) fallback_note_on(channel, note, velocity, source_track_id);
+    if (config_.synth_fallback) fallback_note_on(channel, note, velocity, source_track_id, porta);
     return;
   }
   const Sf2Preset& preset = soundfont_->presets()[static_cast<size_t>(preset_idx)];
@@ -100,15 +152,17 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       Sf2Voice* voice = pool_.allocate(channel & 0x0Fu, note, source_track_id);
       if (voice == nullptr) continue;
       voice->start(pool_data, params, sample_rate_, vel_gain);
+      voice->glide_cents = porta.cents;
+      voice->glide_coeff = porta.coeff;
     }
   }
   if (!has_renderable_zone && config_.synth_fallback) {
-    fallback_note_on(channel, note, velocity, source_track_id);
+    fallback_note_on(channel, note, velocity, source_track_id, porta);
   }
 }
 
 void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity,
-                                 uint32_t source_track_id) noexcept {
+                                 uint32_t source_track_id, Portamento porta) noexcept {
   const ChannelState& ch = channels_[channel & 0x0Fu];
   const uint16_t bank = effective_bank(channel);
   const GsToneMap tone_map = gs_effective_tone_map(ch.bank_msb, ch.bank_lsb);
@@ -209,6 +263,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   if (organ_percussion) channels_[channel & 0x0Fu].percussion_armed = false;
   voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod,
                organ_percussion);
+  // This host passes no glide_from_hz, so start() leaves the voice's glide at
+  // rest; the CC5/65/84 portamento is what drives it here.
+  voice->glide_cents = porta.cents;
+  voice->glide_coeff = porta.coeff;
 
   // Pipe-organ patches share a per-part wind chest (tremulant / wind sag).
   // Re-prepare only when the parameters change so the tremulant phase stays
@@ -494,6 +552,11 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
   st.una_corda = false;
+  // RP-015 lists Portamento On/Off among the controllers it turns off, and a
+  // pending CC84 arming goes with it; Portamento Time is a setting, not a
+  // performance controller, and is left alone.
+  st.portamento = false;
+  st.portamento_armed = false;
   refresh_channel_mod(ch);
 }
 
@@ -515,20 +578,39 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       st.mod_wheel = value;
       refresh_channel_mod(ch);
       break;
-    case 6:  // Data entry MSB -> active RPN (bend range) or GS NRPN
+    case 5:  // Portamento time
+      st.portamento_time = value;
+      break;
+    case 6:  // Data entry MSB -> active RPN or GS NRPN
       if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents = 100.0f * static_cast<float>(value);
         refresh_channel_mod(ch);
+      } else if (st.params.selected_rpn(0, 1)) {
+        // Master fine tuning: 14-bit, MSB is the top 7 bits.
+        st.pitch_fine_tune = static_cast<uint16_t>((static_cast<uint16_t>(value) << 7) |
+                                                   (st.pitch_fine_tune & 0x7Fu));
+      } else if (st.params.selected_rpn(0, 2)) {
+        // Master coarse tuning: MSB only, centre 0x40, +-24 semitones. A value
+        // past the defined range is clamped rather than ignored — it is an
+        // out-of-range value, not a malformed message, and clamping keeps the
+        // parameter continuous at the boundary instead of leaving a stale one
+        // no later message corrects.
+        st.pitch_coarse_tune =
+            static_cast<int8_t>(std::clamp(static_cast<int>(value & 0x7Fu) - 64, -24, 24));
       } else if (st.params.selected_nrpn()) {
         apply_nrpn(ch, value);
       }
       break;
-    case 38:  // Data entry LSB -> bend range cents
+    case 38:  // Data entry LSB
       if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents =
             100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
         refresh_channel_mod(ch);
+      } else if (st.params.selected_rpn(0, 1)) {
+        st.pitch_fine_tune =
+            static_cast<uint16_t>((st.pitch_fine_tune & 0x3F80u) | (value & 0x7Fu));
       }
+      // Master coarse tuning has no LSB: the manual defines it as MSB only.
       break;
     case 7:
       st.volume = value;
@@ -562,12 +644,17 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       break;
     case 100:  // RPN LSB
       st.params.select_rpn_lsb(value);
+      deselect_on_rpn_null(st.params);
       break;
     case 101:  // RPN MSB
       st.params.select_rpn_msb(value);
+      deselect_on_rpn_null(st.params);
       break;
     case 64:
       sustain_cc(ch, value);
+      break;
+    case 65:  // Portamento on/off
+      st.portamento = value >= 64;
       break;
     case 66:
       sostenuto_pedal(ch, value >= 64);
@@ -577,6 +664,12 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       // down (the hammer strikes fewer strings); sample-playback voices keep
       // their recorded voicing.
       st.una_corda = value >= 64;
+      break;
+    case 84:
+      // Portamento control: the next note-on on this part glides from the
+      // source note this message carries, once, whatever CC65 says.
+      st.portamento_source = value & 0x7Fu;
+      st.portamento_armed = true;
       break;
     case 120:
       all_sound_off(ch);

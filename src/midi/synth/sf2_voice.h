@@ -227,6 +227,12 @@ struct Sf2Voice : VoiceState {
   /// Captured by the sostenuto pedal (CC66 down while the key was held): the
   /// note keeps ringing after note-off until the pedal lifts.
   bool sostenuto = false;
+  /// Portamento (CC5 / CC65 / CC84): pitch offset in cents from the glide
+  /// source note, decaying to zero through a one-pole. Same representation and
+  /// same decay law as the NativeSynth voice's glide, so a part sounds alike
+  /// whichever host plays it. Both zero = not gliding.
+  float glide_cents = 0.0f;
+  float glide_coeff = 0.0f;
   // Cached stereo gains for (zone pan + channel pan); recomputed on change.
   // Seeded centred, which under the constant-power law is 1/sqrt(2) a side.
   float cached_pan_units = 1.0e9f;

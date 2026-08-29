@@ -48,6 +48,7 @@
 #include "midi/synth/voice_pool.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 #if defined(SONARE_MIDI_WITH_FX)
 #include "midi/synth/gs_effects.h"
 #endif
@@ -187,6 +188,23 @@ class Sf2Player final : public MidiInstrument {
     return pool_.active_count() + fallback_pool_.active_count();
   }
 
+  /// RPN 00 01 Master Fine Tuning for @p channel as its raw 14-bit value
+  /// (8192 = centre, full scale +-100 cents); the same storage the GS SysEx
+  /// PITCH FINE TUNE parameter writes (test/diagnostic).
+  uint16_t pitch_fine_tune(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].pitch_fine_tune;
+  }
+  /// RPN 00 02 Master Coarse Tuning for @p channel in semitones, 0 = centre
+  /// (test/diagnostic).
+  int pitch_coarse_tune(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].pitch_coarse_tune;
+  }
+  /// The combined master tuning offset in cents the render applies to
+  /// @p channel (test/diagnostic).
+  float master_tune_cents(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].tune_cents();
+  }
+
   /// Captured GS insertion-effect (EFX) unit state (the raw 40 03 xx wire).
   /// Exposed for the adapter layer that realises it and for diagnostics.
   const GsEfx& gs_efx() const noexcept { return efx_; }
@@ -243,15 +261,53 @@ class Sf2Player final : public MidiInstrument {
     // data entry CCs (6/38) route to whichever was selected last.
     ChannelParamState params;
     float bend_range_cents = 200.0f;
+    // --- portamento (CC5 time / CC65 switch / CC84 control) ---
+    /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
+    /// which is no glide however the note-on was armed.
+    uint8_t portamento_time = 0;
+    bool portamento = false;  // CC65 >= 64; GS power-on is off
+    /// CC84 source note plus its one-shot arming. The manual defines Portamento
+    /// Control as gliding the NEXT note-on from the source note it carries, so
+    /// it fires once and does so with CC65 off as well as on.
+    uint8_t portamento_source = 0;
+    bool portamento_armed = false;
+    /// Last key started on this part (the CC65 glide source); 128 = none yet.
+    uint8_t last_note = 128;
+    // --- master tuning ---
+    /// RPN 00 01 Master Fine Tuning as its raw 14-bit value, 8192 = centre,
+    /// full scale = +-100 cents. This is the SAME parameter as GS SysEx
+    /// 40 1x 2A-2B PITCH FINE TUNE (one storage location per gs.md), so the
+    /// SysEx phase writes this field rather than adding a second copy.
+    uint16_t pitch_fine_tune = 8192;
+    /// RPN 00 02 Master Coarse Tuning in semitones, clamped to +-24. Its value
+    /// range coincides with GS SysEx 40 1x 16 PITCH KEY SHIFT, but the manual
+    /// does not state they are one parameter, so this field is its own.
+    int8_t pitch_coarse_tune = 0;
     /// GS layer: rhythm-part flag (drums resolve bank 128) and NRPN edits.
     bool drums = false;
     GsPartParams gs;
+
+    /// Combined master tuning as a pitch offset in cents (0 at the defaults).
+    float tune_cents() const noexcept {
+      return (static_cast<float>(pitch_fine_tune) - 8192.0f) * (100.0f / 8192.0f) +
+             static_cast<float>(pitch_coarse_tune) * ::sonare::constants::kCentsPerSemitone;
+    }
+  };
+
+  /// The pitch glide a note-on inherits from its part's portamento state.
+  struct Portamento {
+    float cents = 0.0f;  ///< Start offset from the glide source (0 = no glide).
+    float coeff = 0.0f;  ///< Per-sample one-pole decay (0 = no glide).
   };
 
   void note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id) noexcept;
   /// Data-free floor: plays the note through the GM fallback synth bank.
-  void fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity,
-                        uint32_t source_track_id) noexcept;
+  void fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id,
+                        Portamento porta) noexcept;
+  /// Resolves the glide a note-on on @p note inherits, consuming the channel's
+  /// CC84 arming and recording @p note as the next glide source. Called exactly
+  /// once per note-on, before the SoundFont / fallback split.
+  Portamento take_portamento(uint8_t channel, uint8_t note) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
   /// CC64 with half-pedal semantics: 0 releases held notes, 127 holds them

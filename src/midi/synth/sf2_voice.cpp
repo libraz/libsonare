@@ -224,6 +224,10 @@ void Sf2Voice::start(const float* pool_data, const Sf2VoiceParams& p, double sam
   // (the sample ended, or All Sound Off silenced it, with CC66 still down); the
   // stale capture would make the new note ignore its own note-off.
   sostenuto = false;
+  // The player installs the portamento glide after start(); a reused slot must
+  // not inherit the previous note's.
+  glide_cents = 0.0f;
+  glide_coeff = 0.0f;
   env.configure(sample_rate, p.volume_env);
   env.note_on();
   mod_env.configure(sample_rate, p.mod_env);
@@ -289,10 +293,20 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   const float mod_lfo_value = mod_lfo.next();
   const float vib_lfo_value = vib_lfo.next();
 
-  // --- pitch: bend + modEnv + LFOs (cents) ---
+  // --- portamento: one-pole decay of the source-note offset ---
+  if (glide_coeff > 0.0f) {
+    glide_cents *= glide_coeff;
+    if (std::fabs(glide_cents) < 0.5f) {
+      glide_cents = 0.0f;
+      glide_coeff = 0.0f;
+    }
+  }
+
+  // --- pitch: bend + modEnv + LFOs + portamento (cents) ---
   const float pitch_cents = mod.pitch_cents + mod_env_level * params.mod_env_to_pitch +
                             mod_lfo_value * params.mod_lfo_to_pitch +
-                            vib_lfo_value * (params.vib_lfo_to_pitch + mod.extra_vibrato_cents);
+                            vib_lfo_value * (params.vib_lfo_to_pitch + mod.extra_vibrato_cents) +
+                            glide_cents;
   if (pitch_cents != 0.0f) {
     pos += params.pitch_increment * std::exp2(static_cast<double>(pitch_cents) / 1200.0);
   } else {
