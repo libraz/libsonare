@@ -4,6 +4,7 @@
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
+       gs-census gs-census-header gs-census-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check \
@@ -318,6 +319,28 @@ surface-coverage:
 
 surface-coverage-check:
 	python3 tools/parity/surface_coverage.py --check
+
+# The GS address census: which addresses real Standard MIDI Files reach, and how
+# many files reach each. The corpus is not in the repository (see
+# tools/gs/docs/census.md), so `gs-census` needs one fetched first and
+# `gs-census-header` rerenders the committed test input from the committed JSON.
+# The coverage gate itself is a C++ case, gs_address_census_test.cpp.
+GS_CORPUS ?= .cache/gs-corpus/mid
+GS_CENSUS_SOURCE ?= regenerated locally
+
+gs-census:
+	python3 tools/gs/extract_addresses.py --corpus $(GS_CORPUS) \
+	    --out tools/gs/address-census.json --source "$(GS_CENSUS_SOURCE)"
+	$(MAKE) gs-census-header
+
+gs-census-header:
+	python3 tools/gs/gen_census_header.py --census tools/gs/address-census.json \
+	    --out tests/midi/gs_address_census.inc
+
+gs-census-check:
+	python3 tools/gs/gen_census_header.py --census tools/gs/address-census.json \
+	    --out /tmp/gs_address_census_check.inc
+	diff -u tests/midi/gs_address_census.inc /tmp/gs_address_census_check.inc
 
 # Shared public-input schema plus public streaming field/flag/default snapshot.
 # Also gates request-object coverage: every one-shot facade export keeps a

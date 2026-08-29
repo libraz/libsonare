@@ -440,6 +440,9 @@ if(BUILD_ARRANGEMENT)
     midi/sf2_effects_test.cpp
     midi/sf2_gs_layer_test.cpp
     midi/gs_address_table_test.cpp
+    midi/gs_address_census_test.cpp
+    midi/gs_system_effects_test.cpp
+    midi/gs_cc_rpn_test.cpp
     midi/gs_efx_send_routing_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
