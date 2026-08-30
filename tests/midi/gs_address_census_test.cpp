@@ -58,6 +58,23 @@ constexpr size_t kUnrowedAddressCeiling = 2926;
 /// the second ceiling even though the first went down.
 constexpr uint64_t kUnrowedFileTouchCeiling = 22747;
 
+/// Files reaching the single most widely written address no row claims — how
+/// deep the worst remaining gap is, where the two ceilings above measure how
+/// much of it there is.
+///
+/// It exists because the weighted ceiling turned out to be answerable by width.
+/// The corpus is steeply skewed: 35 addresses are written by 500 files or more
+/// and 87% of them by 20 or fewer, so a family that is broad and shallow — the
+/// 1067 user-drum-set addresses, ~110 files between them — carries 14 000
+/// touches while serving fewer files than one row of 40 00 xx. Rowing it would
+/// move the weighted number further than anything else available and leave what
+/// most files write no better understood.
+///
+/// Exact rather than a ceiling with slack, unlike the other two: it moves only
+/// when one specific address is rowed, and that move is far too small for their
+/// slack to notice, so nothing else would ever ask for it to be re-recorded.
+constexpr uint64_t kUnrowedWidestGap = 135;
+
 /// A ceiling nobody lowers stops describing the table and starts describing
 /// whenever it was last written, so a run far enough under one fails too, with
 /// the number to write. The slack is wide enough that a phase in progress does
@@ -106,6 +123,12 @@ TEST_CASE("GS address table coverage against a corpus of real files", "[midi][sy
 
   CHECK(unrowed <= kUnrowedAddressCeiling);
   CHECK(unrowed_touches <= kUnrowedFileTouchCeiling);
+
+  // worst is sorted by files, so the head is the deepest gap left. An empty
+  // list would be full coverage, which the ceilings above would have caught.
+  REQUIRE_FALSE(worst.empty());
+  INFO("deepest remaining gap: set kUnrowedWidestGap = " << worst.front().files);
+  CHECK(worst.front().files == kUnrowedWidestGap);
 
   INFO("coverage improved: set kUnrowedAddressCeiling = "
        << unrowed << " and kUnrowedFileTouchCeiling = " << unrowed_touches);
