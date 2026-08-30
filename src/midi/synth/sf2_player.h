@@ -346,6 +346,10 @@ class Sf2Player final : public MidiInstrument {
     uint8_t key_range_high = 0x7F;
     /// GS 40 1x 40-4B SCALE TUNING, one byte per pitch class from C.
     GsScaleTuning scale_tuning = kGsScaleTuningEqual;
+    /// GS 40 1x 02 RX CHANNEL: the MIDI channel this part listens to, or 16 for
+    /// a part that listens to none. Each part powers on to its own channel, so
+    /// the reset writes it rather than a member default.
+    uint8_t rx_channel = 0;
     /// GS layer: the part's NRPN / TONE MODIFY edits.
     GsPartParams gs;
 
@@ -414,6 +418,9 @@ class Sf2Player final : public MidiInstrument {
   void reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept;
   /// Recompute the cached Sf2ChannelMod for @p channel after a CC/bend change.
   void refresh_channel_mod(uint8_t channel) noexcept;
+  /// Rebuilds rx_parts_ from the parts' rx_channel. Called after any write to
+  /// one, so the dispatch table cannot fall out of step with the parts.
+  void refresh_rx_channels() noexcept;
   /// Effective SF2 bank for a channel (GS rhythm parts and GM2 CC0=120 -> 128).
   uint16_t effective_bank(uint8_t channel) const noexcept;
   /// The user drum set entry a strike on @p note reads, or nullptr when the part
@@ -458,6 +465,12 @@ class Sf2Player final : public MidiInstrument {
   static constexpr int kChunkFrames = 256;
 
   std::array<ChannelState, 16> channels_{};
+  /// Which parts each incoming MIDI channel reaches, one bit per part
+  /// (GS RX CHANNEL, 40 1x 02). Derived from the parts' own rx_channel by
+  /// refresh_rx_channels() so the dispatch reads one word instead of walking
+  /// sixteen parts per event; at the power-on map every word has exactly one
+  /// bit and it is the channel's own part.
+  std::array<uint16_t, 16> rx_parts_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
   /// GS master tuning, volume and pan (40 00 00-06). Unlike the effect blocks
   /// these are scalars the render loop reads directly, so they stay on the

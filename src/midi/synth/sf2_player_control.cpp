@@ -200,6 +200,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
   // One bit per part written, so a run over several parts refreshes each once
   // instead of once per byte.
   uint16_t dirty = 0;
+  bool rx_dirty = false;
   for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
     const GsWrite& w = writes[i];
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
@@ -214,6 +215,10 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         // address and hard left at the controller. Randomness has no place in a
         // bit-identical bounce, so it answers centre (docs/gs.md).
         st.pan = w.value == 0 ? 0x40 : w.value;
+        break;
+      case GsParam::kPartRxChannel:
+        st.rx_channel = w.value;
+        rx_dirty = true;
         break;
       case GsParam::kPartScaleTuning:
         if (w.index < st.scale_tuning.size()) st.scale_tuning[w.index] = w.value;
@@ -270,6 +275,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) {
     if ((dirty & (1u << ch)) != 0) refresh_channel_mod(ch);
   }
+  if (rx_dirty) refresh_rx_channels();
   return dirty != 0;
 }
 
@@ -655,6 +661,16 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
   }
   changed = apply_gs_system_sysex(data, size) || changed;
   if (changed) sys_queue_->push({sys_fx_, master_eq_, eq_part_bypassed_});
+}
+
+void Sf2Player::refresh_rx_channels() noexcept {
+  rx_parts_ = {};
+  for (uint8_t part = 0; part < 16; ++part) {
+    // 16 is RX CHANNEL OFF, and so is anything above it: the part is in no
+    // channel's word and therefore reached by nothing.
+    const uint8_t ch = channels_[part].rx_channel;
+    if (ch < 16) rx_parts_[ch] |= static_cast<uint16_t>(1u << part);
+  }
 }
 
 void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {

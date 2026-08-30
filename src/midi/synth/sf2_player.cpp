@@ -234,8 +234,12 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
     channels_[ch].drum_map = ch == kDrumChannel ? kGsDrumMap1 : kGsDrumMapNone;
     channels_[ch].reverb_send = reverb_send_default;
     channels_[ch].chorus_send = chorus_send_default;
+    // Every part powers on listening to its own channel, which is the slot it
+    // is stored in; one default cannot say sixteen different things.
+    channels_[ch].rx_channel = ch;
     refresh_channel_mod(ch);
   }
+  refresh_rx_channels();
   for (int part = 0; part < 16; ++part) {
     fallback_wind_[static_cast<size_t>(part)].reset();
     fallback_wind_params_[static_cast<size_t>(part)] = {};

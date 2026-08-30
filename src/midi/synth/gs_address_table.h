@@ -88,6 +88,7 @@ enum class GsLevel : uint8_t {
   X(kEfxControlSource2)     \
   X(kEfxControlDepth2)      \
   X(kEfxSendEqSwitch)       \
+  X(kPartRxChannel)         \
   X(kPartMonoPoly)          \
   X(kPartAssignMode)        \
   X(kUseForRhythmPart)      \
@@ -195,7 +196,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 124> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 125> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -339,6 +340,12 @@ inline constexpr std::array<GsAddressEntry, 124> kGsAddressTable = {{
      "one EQ stage, bypassed per part at 40 4x 20; an EFX return has no separate one to switch"},
 
     // Part parameters (40 1x xx).
+    // The MIDI channel the part listens to, 10 being none. The first address is
+    // part 10's, so this default is its channel; every part powers on to its own
+    // and the reset owns that. Real files use it to LAYER — 34 of the 40 corpus
+    // files that write it leave two parts on one channel — so a message reaches
+    // however many parts claim its channel, not one.
+    {0x401002, 0x000F00, GsParam::kPartRxChannel, GsLevel::kAudible, 1, 0x00, 0x10, 0x09, nullptr},
     // 00 Mono / 01 Poly, and the same storage location CC126 and CC127 write.
     {0x401013, 0x000F00, GsParam::kPartMonoPoly, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
     // 00 SINGLE / 01 LIMITED-MULTI / 02 FULL-MULTI. The default is 01 for every

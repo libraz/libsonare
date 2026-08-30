@@ -822,45 +822,53 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     }
     return;
   }
-  if (u.is_note_on()) {
-    const uint8_t vel7 =
-        u.message_type() == UmpMessageType::kMidi1ChannelVoice
-            ? u.data2_7bit()
-            : scale_note_on_velocity_16_to_7(static_cast<uint16_t>(u.words[1] >> 16));
-    note_on(u.channel(), u.note_number(), vel7, event.source_track_id);
-  } else if (u.is_note_off()) {
-    note_off(u.channel(), u.note_number(), event.source_track_id);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
-    const uint8_t ch = u.channel() & 0x0Fu;
-    if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-      channels_[ch].program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
-      if ((u.words[0] & 0x01u) != 0) {
-        channels_[ch].bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
-        channels_[ch].bank_lsb = static_cast<uint8_t>(u.words[1] & 0x7Fu);
+  // GS RX CHANNEL (40 1x 02): which parts a channel message reaches. At the
+  // power-on map this word carries the channel's own part and nothing else, so
+  // the loop is a direct index until a file says otherwise. Several parts on one
+  // channel is what real files use the parameter for — a layer — and a part set
+  // to RX CHANNEL OFF is in no word at all.
+  uint16_t parts = rx_parts_[u.channel() & 0x0Fu];
+  if (parts == 0) return;
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if ((parts & (1u << ch)) == 0) continue;
+    if (u.is_note_on()) {
+      const uint8_t vel7 =
+          u.message_type() == UmpMessageType::kMidi1ChannelVoice
+              ? u.data2_7bit()
+              : scale_note_on_velocity_16_to_7(static_cast<uint16_t>(u.words[1] >> 16));
+      note_on(ch, u.note_number(), vel7, event.source_track_id);
+    } else if (u.is_note_off()) {
+      note_off(ch, u.note_number(), event.source_track_id);
+    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
+      if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+        channels_[ch].program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
+        if ((u.words[0] & 0x01u) != 0) {
+          channels_[ch].bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
+          channels_[ch].bank_lsb = static_cast<uint8_t>(u.words[1] & 0x7Fu);
+        }
+      } else {
+        channels_[ch].program = u.note_number();
       }
-    } else {
-      channels_[ch].program = u.note_number();
+      // The fallback ambience floor is program-keyed; keep the mod snapshot
+      // in step with the new program.
+      refresh_channel_mod(ch);
+    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
+      if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
+        // MIDI 1.0: 14-bit value, LSB in data1 (bits 8..14), MSB in data2.
+        channels_[ch].pitch_bend =
+            static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number());
+      } else {
+        // MIDI 2.0: 32-bit value in word[1]; keep the top 14 bits.
+        channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
+      }
+      refresh_channel_mod(ch);
+    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
+      const uint8_t controller = u.note_number();
+      const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                                 ? u.data2_7bit()
+                                 : scale_cc_32_to_7(u.words[1]);
+      control_change(ch, controller, value7);
     }
-    // The fallback ambience floor is program-keyed; keep the mod snapshot
-    // in step with the new program.
-    refresh_channel_mod(ch);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
-    const uint8_t ch = u.channel() & 0x0Fu;
-    if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
-      // MIDI 1.0: 14-bit value, LSB in data1 (bits 8..14), MSB in data2.
-      channels_[ch].pitch_bend =
-          static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number());
-    } else {
-      // MIDI 2.0: 32-bit value in word[1]; keep the top 14 bits.
-      channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
-    }
-    refresh_channel_mod(ch);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
-    const uint8_t controller = u.note_number();
-    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                               ? u.data2_7bit()
-                               : scale_cc_32_to_7(u.words[1]);
-    control_change(u.channel(), controller, value7);
   }
 }
 

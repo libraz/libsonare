@@ -201,6 +201,10 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
 
   // Part parameters (40 1x / 40 4x): the block nibble resolves to a channel, so
   // block 0 comes back as part 10.
+  // RX CHANNEL's own value is a channel and its block still resolves to the
+  // part's default one, so the two numbers are visibly separate here.
+  check_row(0x401002, 0x09, GsParam::kPartRxChannel, 0, 9);
+  check_row(0x401F02, 0x10, GsParam::kPartRxChannel, 0, 15);
   check_row(0x401913, 0x00, GsParam::kPartMonoPoly, 0, 8);
   check_row(0x401514, 0x02, GsParam::kPartAssignMode, 0, 4);
   check_row(0x401015, 0x01, GsParam::kUseForRhythmPart, 0, 9);
