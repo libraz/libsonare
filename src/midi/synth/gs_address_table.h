@@ -89,6 +89,7 @@ enum class GsLevel : uint8_t {
   X(kEfxControlDepth2)      \
   X(kEfxSendEqSwitch)       \
   X(kUseForRhythmPart)      \
+  X(kPartKeyShift)          \
   X(kPartLevel)             \
   X(kPartPanpot)            \
   X(kPartChorusSend)        \
@@ -155,7 +156,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 60> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 61> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -239,6 +240,10 @@ inline constexpr std::array<GsAddressEntry, 60> kGsAddressTable = {{
     // exception.
     {0x401015, 0x000F00, GsParam::kUseForRhythmPart, GsLevel::kAudible, 1, 0x00, 0x02, 0x00,
      nullptr},
+    // PITCH KEY SHIFT is its own parameter and not RPN 00 02's alias, however
+    // exactly their ranges coincide: the map annotates every alias it has and
+    // annotates this one with nothing (docs/gs.md).
+    {0x401016, 0x000F00, GsParam::kPartKeyShift, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
     // The rest of this block is the CC/SysEx/NRPN alias set (docs/gs.md): each
     // row writes the one storage location its controller already owns, so the
     // default here is the controller's own power-on value rather than a second.

@@ -222,6 +222,11 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
                                                          (st.pitch_fine_tune & 0x7Fu))
                                  : static_cast<uint16_t>((st.pitch_fine_tune & 0x3F80u) | w.value);
         break;
+      case GsParam::kPartKeyShift:
+        // Held raw and decoded at the render, where the rhythm-part exclusion
+        // is: a part that becomes drums later still has to stop taking it.
+        st.pitch_key_shift = w.value;
+        break;
       case GsParam::kPartToneModify:
         gs_apply_tone_modify(st.gs, w.index, w.value);
         break;
@@ -253,6 +258,9 @@ bool Sf2Player::apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept
         break;
       case GsParam::kMasterVolume:
         master_.volume = w.value;
+        break;
+      case GsParam::kMasterKeyShift:
+        master_.key_shift = w.value;
         break;
       case GsParam::kMasterPan:
         master_.pan = w.value;

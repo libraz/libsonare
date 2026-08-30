@@ -203,6 +203,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   // block 0 comes back as part 10.
   check_row(0x401015, 0x01, GsParam::kUseForRhythmPart, 0, 9);
   check_row(0x401215, 0x02, GsParam::kUseForRhythmPart, 0, 1);
+  check_row(0x401A16, 0x4C, GsParam::kPartKeyShift, 0, 10);
   check_row(0x401119, 0x64, GsParam::kPartLevel, 0, 0);
   check_row(0x40101C, 0x40, GsParam::kPartPanpot, 0, 9);
   check_row(0x401F21, 0x00, GsParam::kPartChorusSend, 0, 15);
@@ -430,6 +431,15 @@ TEST_CASE("GS address table: values outside a row's range are not accepted",
   CHECK_FALSE(gs_value_in_range(*shift, 0x27));
   CHECK(gs_value_in_range(*shift, 0x40));
   CHECK_FALSE(gs_value_in_range(*shift, 0x59));
+
+  // PITCH KEY SHIFT bounds the same +/-24 semitones, one part at a time.
+  const GsAddressEntry* part_shift = gs_lookup_address(0x401A16);
+  REQUIRE(part_shift != nullptr);
+  CHECK_FALSE(gs_value_in_range(*part_shift, 0x27));
+  CHECK(gs_value_in_range(*part_shift, 0x28));
+  CHECK(gs_value_in_range(*part_shift, 0x40));
+  CHECK(gs_value_in_range(*part_shift, 0x58));
+  CHECK_FALSE(gs_value_in_range(*part_shift, 0x59));
 }
 
 TEST_CASE("GS address table: a variable nibble resolves to its entity", "[midi][gs][address]") {

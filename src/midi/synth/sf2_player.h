@@ -207,6 +207,14 @@ class Sf2Player final : public MidiInstrument {
   float master_tune_cents(uint8_t channel) const noexcept {
     return channels_[channel & 0x0Fu].tune_cents();
   }
+  /// GS 40 1x 16 PITCH KEY SHIFT for @p channel as its raw byte, 40 = centre
+  /// (test/diagnostic).
+  uint8_t pitch_key_shift(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].pitch_key_shift;
+  }
+  /// GS 40 00 05 MASTER KEY-SHIFT as its raw byte, 40 = centre
+  /// (test/diagnostic).
+  uint8_t master_key_shift() const noexcept { return master_.key_shift; }
 
   /// Captured GS insertion-effect (EFX) unit state (the raw 40 03 xx wire).
   /// Exposed for the adapter layer that realises it and for diagnostics.
@@ -299,11 +307,18 @@ class Sf2Player final : public MidiInstrument {
     /// range coincides with GS SysEx 40 1x 16 PITCH KEY SHIFT, but the manual
     /// does not state they are one parameter, so this field is its own.
     int8_t pitch_coarse_tune = 0;
+    /// GS SysEx 40 1x 16 PITCH KEY SHIFT as its raw 28-58 byte. It is not the
+    /// same parameter as the coarse tuning above however exactly their ranges
+    /// coincide, so it adds rather than overwriting; and unlike every other
+    /// tuning field it does not reach a rhythm part (docs/gs.md).
+    uint8_t pitch_key_shift = 0x40;
     /// GS layer: rhythm-part flag (drums resolve bank 128) and NRPN edits.
     bool drums = false;
     GsPartParams gs;
 
     /// Combined master tuning as a pitch offset in cents (0 at the defaults).
+    /// PITCH KEY SHIFT is deliberately not here: it is the one pitch offset a
+    /// rhythm part does not take, and this is read unconditionally.
     float tune_cents() const noexcept {
       return (static_cast<float>(pitch_fine_tune) - 8192.0f) * (100.0f / 8192.0f) +
              static_cast<float>(pitch_coarse_tune) * ::sonare::constants::kCentsPerSemitone;

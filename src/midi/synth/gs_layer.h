@@ -96,8 +96,9 @@ struct GsPartParams {
 struct GsMasterParams {
   /// MASTER TUNE (40 00 00-03) as its four nibbles; 00 04 00 00 is 0 cents.
   std::array<uint8_t, 4> tune{{0x00, 0x04, 0x00, 0x00}};
-  uint8_t volume = 0x7F;  ///< MASTER VOLUME (40 00 04).
-  uint8_t pan = 0x40;     ///< MASTER PAN (40 00 06).
+  uint8_t volume = 0x7F;     ///< MASTER VOLUME (40 00 04).
+  uint8_t key_shift = 0x40;  ///< MASTER KEY-SHIFT (40 00 05), 28-58 semitones.
+  uint8_t pan = 0x40;        ///< MASTER PAN (40 00 06).
 };
 
 /// MASTER TUNE as a pitch offset in cents. The four nibbles make one 0018-07E8
@@ -107,6 +108,11 @@ float gs_master_tune_cents(const GsMasterParams& master) noexcept;
 /// MASTER VOLUME as a linear gain, on the same square law CC7, velocity and the
 /// drum-note level already use.
 float gs_master_volume_gain(uint8_t value) noexcept;
+
+/// A key-shift byte as a pitch offset in cents: 28-58 around 40, one semitone
+/// per step. Shared by MASTER KEY-SHIFT and the part's own PITCH KEY SHIFT,
+/// which the manual gives the same range and the same centre.
+float gs_key_shift_cents(uint8_t value) noexcept;
 
 /// MASTER PAN as the two output-leg gains. It is a balance on the finished mix
 /// rather than a re-pan — the legs already carry each part's own position — so

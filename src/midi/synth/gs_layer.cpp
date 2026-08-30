@@ -6,6 +6,7 @@
 #include <tuple>
 
 #include "midi/synth/gs_address_table.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -73,6 +74,14 @@ float gs_master_tune_cents(const GsMasterParams& master) noexcept {
 float gs_master_volume_gain(uint8_t value) noexcept {
   const float v = static_cast<float>(value & 0x7Fu) / 127.0f;
   return v * v;
+}
+
+float gs_key_shift_cents(uint8_t value) noexcept {
+  using ::sonare::constants::kCentsPerSemitone;
+  // Clamped to the row's own 28-58: the apply layer already drops anything
+  // outside it, and the corpus does reach 6F at 40 00 05.
+  return static_cast<float>(std::clamp(static_cast<int>(value & 0x7Fu), 0x28, 0x58) - 0x40) *
+         kCentsPerSemitone;
 }
 
 void gs_master_pan_gains(uint8_t value, float* left, float* right) noexcept {

@@ -81,7 +81,17 @@ GS reaches the same parameter from up to three directions. **Holding a second co
 
 `41 m1 rr` (Play Note Number) is **not** the same parameter as NRPN `18 rr` (Drum Instrument Pitch Coarse). The first replaces which sample a note plays; the second shifts the pitch of the one it already plays. They are adjacent in the map and mean different things.
 
+`40 1x 16` PITCH KEY SHIFT is likewise **not** RPN `00 02` Master Coarse Tuning, however exactly their ranges coincide — both `28`–`58` around a centred `40`, both ±24 semitones, both MSB-only. The map annotates an alias inside the row that has one, which is where every entry in the table above comes from: `(=CC# 7)`, `(= RPN#1)`, `(=NRPN# 8/CC#76)`. It annotates this row with nothing. The manual settles the reading one step up, for the pair that is documented: RPN `00 01` and `40 00 00` MASTER TUNE "are added together to determine the actual pitch sounded by each Part". Two locations that add, then, not one that overwrites — and the same for the coarse pair.
+
 The mapping is verified by a round-trip test over every pair: written from either side, read back from either side, equal.
+
+## Key shift is the one pitch offset a rhythm part does not take
+
+MASTER TUNE, PITCH FINE TUNE and the coarse tuning all reach a rhythm part. `40 00 05` MASTER KEY-SHIFT and `40 1x 16` PITCH KEY SHIFT do not: the manual prints "Even if you adjust Key Shift for all Parts, the pitch of the Drum Part will not be affected" beside both of them, and prints nothing of the kind beside Fine Tune on the same page. That asymmetry is what makes it a statement rather than an omission.
+
+The shift is therefore held as the byte that was written and decoded at the render rather than at the write. A part can take a key shift and *become* a rhythm part afterwards, and it then has to stop being transposed; a value already folded into a cents offset cannot.
+
+Real files reach past the row here: `40 00 05` is written by 102 corpus files with values up to `6F`, well outside the `28`–`58` the parameter accepts. Those are ignored like any other out-of-range value.
 
 ## Deliberate divergences from the manual
 

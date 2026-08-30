@@ -55,9 +55,17 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   // voice. Zero at the power-on defaults, which leaves a render that was never
   // tuned bit-identical.
   const float master_cents = gs_master_tune_cents(master_);
+  // Key shift is the one pitch offset that stops at a rhythm part: "Even if you
+  // adjust Key Shift for all Parts, the pitch of the Drum Part will not be
+  // affected" is in the manual beside both the master and the part parameter.
+  const float master_key_shift_cents = gs_key_shift_cents(master_.key_shift);
   std::array<Sf2ChannelMod, 16> mods = channel_mods_;
   for (size_t part = 0; part < mods.size(); ++part) {
     mods[part].pitch_cents += channels_[part].tune_cents() + master_cents;
+    if (!channels_[part].drums) {
+      mods[part].pitch_cents +=
+          master_key_shift_cents + gs_key_shift_cents(channels_[part].pitch_key_shift);
+    }
   }
   // GS MASTER VOLUME (40 00 04) and MASTER PAN (40 00 06) are a master, so they
   // multiply everything the host's own gain does — including the per-source-
