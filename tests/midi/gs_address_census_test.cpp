@@ -63,7 +63,10 @@ constexpr uint64_t kUnrowedFileTouchCeiling = 25907;
 /// the number to write. The slack is wide enough that a phase in progress does
 /// not trip it and narrow enough that a finished phase does.
 constexpr size_t kUnrowedAddressSlack = 120;
-constexpr uint64_t kUnrowedFileTouchSlack = 1500;
+/// The heaviest single row still missing is 1344 touches, so 1500 let a whole
+/// row land without asking for a re-record. This slack's failure mode is
+/// silence, and the cost of tripping it is one number.
+constexpr uint64_t kUnrowedFileTouchSlack = 500;
 
 }  // namespace
 
