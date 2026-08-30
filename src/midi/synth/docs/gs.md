@@ -23,6 +23,8 @@ Two things follow, and both are load-bearing:
 
 The GS address space is identical between the two machines except at six points, and the SC-8850 is the superset. Targeting it therefore *includes* SC-88Pro compatibility rather than trading against it: an SC-88Pro file selects the SC-88Pro tone map (`40 4x 00` = `03`) and plays.
 
+**Both tone-map addresses are `IGNORE`, and structurally rather than provisionally.** libsonare voices one instrument bank, so there is no second generation for a map number to select, and reproducing a particular hardware generation's timbre is not a goal of this project — only its control protocol is. The accepted ranges are still the SC-8850's, so a file selecting any map, its own or a later one, is answered rather than rejected; what it does not get is a different sound.
+
 Where the two differ:
 
 | | SC-88Pro | SC-8850 |

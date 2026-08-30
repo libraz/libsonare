@@ -49,14 +49,14 @@ std::string hex(uint32_t addr) {
 /// raises them by surfacing addresses nobody had seen, which is the census
 /// working rather than coverage regressing — re-record them in the same change,
 /// and compare the RATIO across a refresh, never the count.
-constexpr size_t kUnrowedAddressCeiling = 2391;
+constexpr size_t kUnrowedAddressCeiling = 2354;
 
 /// Corpus file-touches (an address counted once per file that wrote it) no row
 /// claims. Weighted, because one address reached by 1300 files is not the same
 /// size of gap as one reached by 2 — and the two numbers move independently, so
 /// a change that rows a rare address while breaking a common one is caught by
 /// the second ceiling even though the first went down.
-constexpr uint64_t kUnrowedFileTouchCeiling = 20680;
+constexpr uint64_t kUnrowedFileTouchCeiling = 19053;
 
 /// Files reaching the single most widely written address no row claims — how
 /// deep the worst remaining gap is, where the two ceilings above measure how
@@ -73,16 +73,18 @@ constexpr uint64_t kUnrowedFileTouchCeiling = 20680;
 /// Exact rather than a ceiling with slack, unlike the other two: it moves only
 /// when one specific address is rowed, and that move is far too small for their
 /// slack to notice, so nothing else would ever ask for it to be re-recorded.
-constexpr uint64_t kUnrowedWidestGap = 112;
+constexpr uint64_t kUnrowedWidestGap = 111;
 
 /// A ceiling nobody lowers stops describing the table and starts describing
 /// whenever it was last written, so a run far enough under one fails too, with
 /// the number to write. The slack is wide enough that a phase in progress does
 /// not trip it and narrow enough that a finished phase does.
 constexpr size_t kUnrowedAddressSlack = 120;
-/// The heaviest single row still missing is 40 4x 01 at 1101 touches, so 1500
-/// lets a whole row land without asking for a re-record. This slack's failure
-/// mode is silence, and the cost of tripping it is one number.
+/// Deliberately smaller than what one row of a busy family is worth, so landing
+/// one asks for a re-record rather than being absorbed. Naming the row that
+/// currently sets that size would be a number going stale every time one lands.
+/// This slack's failure mode is silence, and the cost of tripping it is one
+/// number.
 constexpr uint64_t kUnrowedFileTouchSlack = 500;
 
 }  // namespace

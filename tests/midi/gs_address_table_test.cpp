@@ -282,6 +282,14 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x40255B, 0x00, GsParam::kUndefined);
   check_row(0x40267F, 0x00, GsParam::kUndefined);
 
+  // Tone map (40 4x 00-01), and the three gaps the block leaves around it.
+  check_row(0x404100, 0x00, GsParam::kPartToneMapNumber, 0, 0);
+  check_row(0x404A00, 0x00, GsParam::kPartToneMapNumber, 0, 10);
+  check_row(0x404001, 0x04, GsParam::kPartToneMap0Number, 0, 9);
+  check_row(0x404F01, 0x04, GsParam::kPartToneMap0Number, 0, 15);
+  check_row(0x404114, 0x00, GsParam::kUndefined);
+  check_row(0x404221, 0x00, GsParam::kUndefined);
+  check_row(0x404335, 0x00, GsParam::kUndefined);
   check_row(0x404020, 0x01, GsParam::kPartEqSwitch, 0, 9);
   check_row(0x404320, 0x00, GsParam::kPartEqSwitch, 0, 2);
   check_row(0x404022, 0x01, GsParam::kPartEfxAssign, 0, 9);
@@ -1203,7 +1211,14 @@ TEST_CASE("GS decode: the unknown counter separates a gap from a claimed address
   REQUIRE(gs_lookup_address(0x401023) == nullptr);
   REQUIRE(gs_lookup_range(0x401023) == nullptr);
   CHECK(unknowns(0x401023) == 1);
-  CHECK(unknowns(0x404021) == 1);
+  // A second one from another family, so the counter is not being shown to work
+  // in a single block. 41 m3 rr ASSIGN GROUP sits between the drum-setup rows
+  // and is likewise unwritten by the corpus. Both carry the lookup guards
+  // above, because an address that quietly acquires a row stops being a probe
+  // and the case would keep passing for the wrong reason.
+  REQUIRE(gs_lookup_address(0x410300) == nullptr);
+  REQUIRE(gs_lookup_range(0x410300) == nullptr);
+  CHECK(unknowns(0x410300) == 1);
 
   // The combined entry point refuses what the frame layer refuses.
   uint32_t unknown = 0;
