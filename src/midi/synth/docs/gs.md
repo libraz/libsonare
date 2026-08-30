@@ -71,6 +71,7 @@ GS reaches the same parameter from up to three directions. **Holding a second co
 
 | parameter | CC | SysEx | NRPN |
 |---|---|---|---|
+| Tone number | 0 + program change | `40 1x 00`–`01` | — |
 | Part level | 7 | `40 1x 19` | — |
 | Part panpot | 10 | `40 1x 1C` | — |
 | Reverb send | 91 | `40 1x 22` | — |

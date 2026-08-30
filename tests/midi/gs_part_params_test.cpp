@@ -37,6 +37,9 @@ constexpr double kTwoPi = 6.28318530717958647692;
 
 /// Part 1 = channel 0 = block nibble 1, so every address below is 40 11 xx.
 constexpr uint8_t kPartBlock = 0x11;
+/// The fixture's second program: the same sample without the vibrato, filter
+/// and envelope edits program 0 carries, so choosing it is plainly audible.
+constexpr uint8_t kSecondProgram = 40;
 
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
@@ -88,6 +91,14 @@ std::shared_ptr<Sf2File> make_fixture() {
   Sf2Builder::ZoneSpec pz;
   pz.target = inst;
   b.add_preset("Square", 0, 0, {pz});
+  // A second program, so the TONE NUMBER pair has one to choose. With one, the
+  // row would render inert however well it worked.
+  Sf2Builder::ZoneSpec plain;
+  plain.gens.push_back({54 /*sampleModes*/, 1});
+  plain.target = sq_id;
+  Sf2Builder::ZoneSpec plain_pz;
+  plain_pz.target = b.add_instrument("plaininst", {plain});
+  b.add_preset("Square plain", 0, kSecondProgram, {plain_pz});
 
   const auto bytes = b.build();
   auto sf2 = std::make_shared<Sf2File>();
@@ -168,6 +179,16 @@ struct Alias {
 
 std::vector<Alias> aliases() {
   return {
+      // Two bytes, and the CC0 half only means anything once the program half
+      // has chosen a program some variation bank answers differently.
+      {"TONE NUMBER = CC0 + program change",
+       0x00,
+       {0x00, kSecondProgram},
+       [](Sf2Player& p) {
+         send_cc(p, 0, 0x00);
+         p.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, kSecondProgram)));
+       },
+       false},
       {"PART LEVEL = CC7", 0x19, {30}, [](Sf2Player& p) { send_cc(p, 7, 30); }, false},
       // 00 is the RANDOM value CC10 has no equivalent for, so the pair is
       // checked away from it and the divergence has its own case below.

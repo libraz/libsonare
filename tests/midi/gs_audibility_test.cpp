@@ -388,6 +388,9 @@ std::shared_ptr<const Sf2File> fixture() {
     pz.target = sine_inst;
     b.add_preset("Sine", 0, 0, {pz});
     pz.target = burst_inst;
+    // A second melodic program, for the same reason the second kit below
+    // exists: a row that chooses a PROGRAM has nothing to choose with one.
+    b.add_preset("Burst", 0, 127, {pz});
     b.add_preset("Kit", 128, 0, {pz});
     // A second rhythm kit, voiced by the looped sine so it cannot be mistaken
     // for the first. resolve_preset falls every rhythm program back to program

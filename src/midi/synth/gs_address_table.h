@@ -88,6 +88,7 @@ enum class GsLevel : uint8_t {
   X(kEfxControlSource2)     \
   X(kEfxControlDepth2)      \
   X(kEfxSendEqSwitch)       \
+  X(kPartToneNumber)        \
   X(kPartRxChannel)         \
   X(kPartMonoPoly)          \
   X(kPartAssignMode)        \
@@ -196,7 +197,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 125> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 126> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -340,6 +341,11 @@ inline constexpr std::array<GsAddressEntry, 125> kGsAddressTable = {{
      "one EQ stage, bypassed per part at 40 4x 20; an EFX return has no separate one to switch"},
 
     // Part parameters (40 1x xx).
+    // Two bytes: the part's Bank Select MSB and its program — the pair CC0 and a
+    // program change already write, so this is the alias set's third entry point
+    // rather than a second storage location. Every corpus value is one: bank
+    // MSBs of 00, 01, 08, 0A, 10, 18 and 20, and no program byte above 7F.
+    {0x401000, 0x000F00, GsParam::kPartToneNumber, GsLevel::kAudible, 2, 0x00, 0x7F, 0x00, nullptr},
     // The MIDI channel the part listens to, 10 being none. The first address is
     // part 10's, so this default is its channel; every part powers on to its own
     // and the reset owns that. Real files use it to LAYER — 34 of the 40 corpus

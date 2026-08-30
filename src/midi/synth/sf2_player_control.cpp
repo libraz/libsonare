@@ -216,6 +216,16 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         // bit-identical bounce, so it answers centre (docs/gs.md).
         st.pan = w.value == 0 ? 0x40 : w.value;
         break;
+      case GsParam::kPartToneNumber:
+        // The same two storage locations CC0 and a program change write, so the
+        // byte lands on the controller's field rather than on a second copy.
+        // A file may write either byte alone; the index is which.
+        if (w.index == 0) {
+          st.bank_msb = w.value;
+        } else {
+          st.program = w.value;
+        }
+        break;
       case GsParam::kPartRxChannel:
         st.rx_channel = w.value;
         rx_dirty = true;
