@@ -111,12 +111,15 @@ enum class GsLevel : uint8_t {
   X(kPartToneMap0Number)    \
   X(kPartEqSwitch)          \
   X(kPartEfxAssign)         \
+  X(kDrumMapName)           \
   X(kDrumPlayNote)          \
   X(kDrumLevel)             \
   X(kDrumAssignGroup)       \
   X(kDrumPanpot)            \
   X(kDrumReverbSend)        \
   X(kDrumChorusSend)        \
+  X(kDrumRxNoteOff)         \
+  X(kDrumRxNoteOn)          \
   X(kDrumDelaySend)         \
   X(kOppositeGroupBlock)
 
@@ -176,7 +179,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 105> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 108> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -419,6 +422,8 @@ inline constexpr std::array<GsAddressEntry, 105> kGsAddressTable = {{
     // The manual gives these no power-on value: a drum set change re-initialises
     // them to what the kit specifies. So each def is the value at which the
     // parameter changes nothing, which is what an unwritten one has to mean.
+    {0x410000, 0x00F000, GsParam::kDrumMapName, GsLevel::kAccept, 12, 0x20, 0x7F, 0x20,
+     "a display string, and a renderer has nothing to display it on"},
     // PLAY NOTE NUMBER's identity value is the address's own note, which one def
     // byte cannot carry; 00 stands in and the flag is what an unwritten note
     // reads, as for the five rows below.
@@ -434,6 +439,14 @@ inline constexpr std::array<GsAddressEntry, 105> kGsAddressTable = {{
     {0x410400, 0x00F07F, GsParam::kDrumPanpot, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
     {0x410500, 0x00F07F, GsParam::kDrumReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
     {0x410600, 0x00F07F, GsParam::kDrumChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
+    // RX NOTE OFF is the one drum-setup parameter the two voice banks disagree
+    // about with nothing written: a sampled kit piece releases on note-off and a
+    // modelled one is a one-shot that never does. A written value cannot mean
+    // one thing until that is settled, so it is received and dropped.
+    {0x410700, 0x00F07F, GsParam::kDrumRxNoteOff, GsLevel::kAccept, 1, 0x00, 0x01, 0x01,
+     "the SoundFont and model banks differ on what an unwritten value means, so a written one "
+     "would mean two things"},
+    {0x410800, 0x00F07F, GsParam::kDrumRxNoteOn, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
     {0x410900, 0x00F07F, GsParam::kDrumDelaySend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
 
     // The opposite group's blocks (50 ** ** / 51 ** **). An SC-88Pro address

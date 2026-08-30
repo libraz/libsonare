@@ -91,6 +91,13 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   }
   const uint16_t bank = effective_bank(channel);
   const bool is_drum = bank == kDrumBank;
+  // GS RX NOTE ON (41 m8 rr): a note the map has switched off is not sounded at
+  // all, so this precedes every choice of bank below — a note refused here must
+  // not reach the model floor either.
+  if (is_drum) {
+    const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
+    if ((gd.flags & GsDrumNoteParams::kRxNoteOn) != 0 && gd.rx_note_on == 0) return;
+  }
   if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&
       gm_program_has_dedicated_model(bank, ch.program)) {
     fallback_note_on(channel, note, velocity, source_track_id, porta);

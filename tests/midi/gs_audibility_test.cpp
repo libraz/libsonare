@@ -599,12 +599,12 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   int probed = 0;
 
   for (const GsAddressEntry& row : kGsAddressTable) {
-    // Only a fixed address, a part block, a channel nibble, a drum-setup
-    // map+note or a whole-block mid byte appears in the table today. An
+    // Only a fixed address, a part block, a channel nibble, a drum map with or
+    // without a note, or a whole-block mid byte appears in the table today. An
     // EFX-unit (40 3u) row would need its own resolution and must not fall
     // through to an untested one.
     REQUIRE((row.mask == 0 || row.mask == 0x000F00u || row.mask == 0x00000Fu ||
-             row.mask == 0x00F07Fu || row.mask == 0x007F00u));
+             row.mask == 0x00F07Fu || row.mask == 0x00F000u || row.mask == 0x007F00u));
 
     const Probe probe = probe_for(row);
     const Setup setup = setup_for(row);

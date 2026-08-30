@@ -170,6 +170,7 @@ struct GsDrumNoteParams {
     kDelay = 1u << 5,
     kPlayNote = 1u << 6,
     kAssignGroup = 1u << 7,
+    kRxNoteOn = 1u << 8,
   };
   uint16_t flags = 0;
   int8_t pitch_coarse = 0;   // semitones (data - 64)
@@ -180,6 +181,7 @@ struct GsDrumNoteParams {
   uint8_t delay = 127;       // delay-send multiplicand (data)
   uint8_t play_note = 0;     // the note whose sound is played (data)
   uint8_t assign_group = 0;  // exclusive/mute group, 0 = none (data)
+  uint8_t rx_note_on = 1;    // 0 = the note is not sounded at all (data)
 
   bool any() const noexcept { return flags != 0; }
 };
