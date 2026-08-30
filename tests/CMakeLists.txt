@@ -449,6 +449,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_master_eq_test.cpp
     midi/gs_master_params_test.cpp
     midi/gs_key_range_test.cpp
+    midi/gs_scale_tuning_test.cpp
     midi/gs_key_shift_test.cpp
     midi/gs_part_params_test.cpp
     midi/gs_part_edit_banks_test.cpp

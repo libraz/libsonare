@@ -213,6 +213,9 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x40121D, 0x24, GsParam::kPartKeyRangeLow, 0, 1);
   check_row(0x40121E, 0x3C, GsParam::kPartKeyRangeHigh, 0, 1);
   check_row(0x401F21, 0x00, GsParam::kPartChorusSend, 0, 15);
+  // SCALE TUNING's index is the pitch class, so the twelfth byte is B.
+  check_row(0x401140, 0x40, GsParam::kPartScaleTuning, 0, 0);
+  check_row(0x40114B, 0x36, GsParam::kPartScaleTuning, 11, 0);
   check_row(0x401022, 0x28, GsParam::kPartReverbSend, 0, 9);
   check_row(0x401025, 0x00, GsParam::kUndefined);
   // PITCH FINE TUNE is one 14-bit word: the two bytes come back as one param

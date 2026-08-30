@@ -215,6 +215,9 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         // bit-identical bounce, so it answers centre (docs/gs.md).
         st.pan = w.value == 0 ? 0x40 : w.value;
         break;
+      case GsParam::kPartScaleTuning:
+        if (w.index < st.scale_tuning.size()) st.scale_tuning[w.index] = w.value;
+        break;
       case GsParam::kPartKeyRangeLow:
         st.key_range_low = w.value;
         break;

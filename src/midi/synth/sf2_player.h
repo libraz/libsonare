@@ -344,6 +344,8 @@ class Sf2Player final : public MidiInstrument {
     /// them is refused before anything else the note-on would do.
     uint8_t key_range_low = 0x00;
     uint8_t key_range_high = 0x7F;
+    /// GS 40 1x 40-4B SCALE TUNING, one byte per pitch class from C.
+    GsScaleTuning scale_tuning = kGsScaleTuningEqual;
     /// GS layer: the part's NRPN / TONE MODIFY edits.
     GsPartParams gs;
 

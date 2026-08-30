@@ -94,6 +94,22 @@ struct GsPartParams {
 /// @p gs as voice-applicable quantities (GsPartMod, channel_param_state.h).
 GsPartMod gs_part_mod(const GsPartParams& gs) noexcept;
 
+/// GS SCALE TUNING (40 1x 40-4B): one byte per pitch class from C, 40 = in tune
+/// and one cent a step. A temperament, so it is indexed by the key that was
+/// struck rather than by any note a GS parameter substituted for it.
+using GsScaleTuning = std::array<uint8_t, 12>;
+
+/// The twelve bytes that detune nothing, which is the reset state.
+inline constexpr GsScaleTuning kGsScaleTuningEqual{
+    {0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40}};
+
+/// The cents @p scale offsets @p note by. Both voice banks take the offset from
+/// here and apply it in their own idiom — a sample increment on one, a base
+/// frequency on the other — so neither can read the table its own way.
+constexpr float gs_scale_tuning_cents(const GsScaleTuning& scale, uint8_t note) noexcept {
+  return static_cast<float>(static_cast<int>(scale[(note & 0x7Fu) % 12u]) - 0x40);
+}
+
 /// The GS system parameters at 40 00 xx that are not the effect block. Every
 /// field holds its GS power-on value, so a default-constructed instance is the
 /// reset state and a render that never saw one of these writes is untouched.

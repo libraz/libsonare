@@ -112,6 +112,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   }
   const uint16_t bank = effective_bank(channel);
   const bool is_drum = bank == kDrumBank;
+  const float scale_cents = gs_scale_tuning_cents(ch.scale_tuning, note);
   const GsDrumNoteParams gd = drum_note_params(ch, is_drum, note);
   // GS RX NOTE ON (41 m8 rr / 21 d8 rr): a note the kit has switched off is not
   // sounded at all, so this precedes every choice of bank below — a note refused
@@ -194,6 +195,12 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       // GS layer: NRPN part edits + per-note drum-kit overrides.
       apply_gs_part_params(params, ch.gs);
       apply_gs_drum_params(params, gd);
+      // SCALE TUNING is the struck key's, not the sounding note's: it is a
+      // temperament of the keyboard, so a kit piece PLAY NOTE NUMBER redirected
+      // to keeps the tuning of the key that asked for it.
+      if (scale_cents != 0.0f) {
+        params.pitch_increment *= std::exp2(static_cast<double>(scale_cents) / 1200.0);
+      }
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
@@ -354,8 +361,13 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // GS melodic part edits (40 1x 30 TONE MODIFY and the part NRPNs), through
   // the same conversion the SoundFont bank's apply_gs_part_params uses: a
   // parameter must not do something different because this bank answered.
+  GsPartMod part_mod = gs_part_mod(ch.gs);
+  // SCALE TUNING is per note where the other eight are per part, so it is set
+  // on the way past rather than built with them; the struck key indexes it, as
+  // it does on the SoundFont bank.
+  part_mod.pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note);
   voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod,
-               organ_percussion, gs_part_mod(ch.gs));
+               organ_percussion, part_mod);
   // This host passes no glide_from_hz, so start() leaves the voice's glide at
   // rest; the CC5/65/84 portamento is what drives it here.
   voice->glide_cents = porta.cents;

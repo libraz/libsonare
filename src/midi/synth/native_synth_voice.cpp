@@ -101,6 +101,10 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   gs_resonance_gain = part_mod.resonance_gain;
   gs_vib_depth_cents = part_mod.vib_depth_cents;
   gs_filter_edited = part_mod.filter_edited;
+  // SCALE TUNING joins the render's pitch sum rather than base_freq_hz: every
+  // engine but the subtractive one is started from the note NUMBER, so a
+  // fractional offset folded into the frequency would reach one of thirteen.
+  gs_scale_cents = part_mod.pitch_cents;
 
   // A GS kit variation may retune the resolved drum patch's percussion + amp
   // envelope at note-on and scale its level (Standard patch stays shared; no
@@ -320,8 +324,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   const float vib = lfo1_value * (vib_depth + mod.extra_vibrato_cents);
   const float mode_pitch_offset =
       patch->mode == SynthEngineMode::kSubtractive ? 0.0f : patch->pitch_offset_cents;
-  const float pitch_cents =
-      mode_pitch_offset + mod.pitch_cents + vib + drift + offsets.pitch_cents + glide_cents;
+  const float pitch_cents = mode_pitch_offset + mod.pitch_cents + gs_scale_cents + vib + drift +
+                            offsets.pitch_cents + glide_cents;
   float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
   // Shared organ wind: the tremulant / wind-sag pitch factor (1.0 for every
   // non-pipe voice, which the host always passes through).

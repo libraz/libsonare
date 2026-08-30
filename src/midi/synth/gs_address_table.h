@@ -95,6 +95,7 @@ enum class GsLevel : uint8_t {
   X(kPartLevel)             \
   X(kPartKeyRangeLow)       \
   X(kPartKeyRangeHigh)      \
+  X(kPartScaleTuning)       \
   X(kPartPanpot)            \
   X(kPartChorusSend)        \
   X(kPartReverbSend)        \
@@ -194,7 +195,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 123> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 124> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -379,6 +380,10 @@ inline constexpr std::array<GsAddressEntry, 123> kGsAddressTable = {{
     // TONE MODIFY 1-8 in one row: same range, same default, and the index is
     // which of the eight (gs_apply_tone_modify).
     {0x401030, 0x000F00, GsParam::kPartToneModify, GsLevel::kAudible, 8, 0x00, 0x7F, 0x40, nullptr},
+    // Twelve bytes, one per pitch class from C, 40 in tune and one cent a step.
+    // The index is the pitch class, which is also how the note reads it.
+    {0x401040, 0x000F00, GsParam::kPartScaleTuning, GsLevel::kAudible, 12, 0x00, 0x7F, 0x40,
+     nullptr},
 
     // Controller destinations (40 2x xx): six sources, each with the same eleven
     // destinations, at +00 pitch / +01 TVF cutoff / +02 amplitude / +03-06 LFO1

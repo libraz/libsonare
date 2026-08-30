@@ -49,12 +49,17 @@ struct ChannelParamState {
   bool selected_nrpn() const noexcept { return mode == Mode::kNrpn; }
 };
 
-/// The eight GS part edits (40 1x 30 TONE MODIFY and the NRPNs it aliases)
-/// reduced to quantities a voice applies directly. Defaults are no-ops.
+/// The GS part edits — the eight at 40 1x 30 TONE MODIFY and the NRPNs they
+/// alias, plus the note's scale tuning — reduced to quantities a voice applies
+/// directly. Defaults are no-ops.
 ///
 /// It sits here, below either voice bank, so both consume one conversion
 /// instead of each making its own; gs_part_mod() in gs_layer.h builds it.
 struct GsPartMod {
+  /// SCALE TUNING (40 1x 40-4B) for the key this note-on struck, in cents. Not
+  /// one of the eight: it is per note rather than per part, so the caller sets
+  /// it after gs_part_mod() has built the rest.
+  float pitch_cents = 0.0f;
   float cutoff_cents = 0.0f;     ///< added to the voice's filter cutoff offset.
   float resonance_gain = 1.0f;   ///< multiplies filter Q (floored at 0.5 by the caller).
   float attack_scale = 1.0f;     ///< multiplies the amplitude envelope's attack.

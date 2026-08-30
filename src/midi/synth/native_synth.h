@@ -317,6 +317,10 @@ struct NativeSynthVoice : VoiceState {
   /// finished value here would freeze a sweep on a held note.
   float gs_resonance_gain = 1.0f;
   float gs_vib_depth_cents = 0.0f;
+  /// GS SCALE TUNING for the key that started this voice, in cents (0 = in
+  /// tune). Constant for the voice's life, and in the render's pitch sum rather
+  /// than in base_freq_hz so it reaches every engine.
+  float gs_scale_cents = 0.0f;
   /// Set by a cutoff or resonance edit; engages the filter stage the way the
   /// SoundFont bank's filter_bypass = false does.
   bool gs_filter_edited = false;
