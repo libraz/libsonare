@@ -441,6 +441,7 @@ if(BUILD_ARRANGEMENT)
     midi/sf2_gs_layer_test.cpp
     midi/gs_address_table_test.cpp
     midi/gs_assign_mode_test.cpp
+    midi/gs_mono_poly_test.cpp
     midi/gs_address_census_test.cpp
     midi/gs_master_eq_test.cpp
     midi/gs_master_params_test.cpp

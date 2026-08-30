@@ -123,6 +123,10 @@ void gs_master_pan_gains(uint8_t value, float* left, float* right) noexcept;
 /// have no constant because they are one behaviour here (docs/gs.md).
 inline constexpr uint8_t kGsAssignModeSingle = 0;
 
+/// MONO/POLY MODE (GS address 40 1x 13) Mono; 01 is Poly and is the default.
+inline constexpr uint8_t kGsMonoPolyMono = 0;
+inline constexpr uint8_t kGsMonoPolyPoly = 1;
+
 /// Number of TONE MODIFY parameters (GS address 40 1x 30-37), which is also the
 /// number of GsPartParams fields: the two are the same set reached from two
 /// directions, so a field added to one without the other is a defect.

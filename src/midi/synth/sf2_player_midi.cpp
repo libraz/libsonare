@@ -66,16 +66,15 @@ Sf2Player::Portamento Sf2Player::take_portamento(uint8_t channel, uint8_t note) 
   return porta;
 }
 
-void Sf2Player::choke_same_note(uint8_t channel, uint8_t note) noexcept {
+void Sf2Player::choke_part(uint8_t channel, int note) noexcept {
   const uint8_t part = channel & 0x0Fu;
-  const uint8_t key = note & 0x7Fu;
   // Both pools: a program change moves a part between the SoundFont and the
   // fallback bank, so the note still sounding can be in either one.
   for (Sf2Voice& v : pool_) {
-    if (v.active && v.channel == part && v.note == key) v.choke(sample_rate_);
+    if (v.active && v.channel == part && (note < 0 || v.note == note)) v.choke(sample_rate_);
   }
   for (NativeSynthVoice& v : fallback_pool_) {
-    if (v.active && v.channel == part && v.note == key) v.choke_fast(sample_rate_);
+    if (v.active && v.channel == part && (note < 0 || v.note == note)) v.choke_fast(sample_rate_);
   }
 }
 
@@ -84,7 +83,12 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   if (!prepared_) return;
   const Portamento porta = take_portamento(channel, note);
   const ChannelState& ch = channels_[channel & 0x0Fu];
-  if (ch.assign_mode == kGsAssignModeSingle) choke_same_note(channel, note);
+  // Mono already stops everything the part is sounding, so it subsumes SINGLE.
+  if (ch.mono_poly == kGsMonoPolyMono && !ch.drums) {
+    choke_part(channel, -1);
+  } else if (ch.assign_mode == kGsAssignModeSingle) {
+    choke_part(channel, note & 0x7F);
+  }
   const uint16_t bank = effective_bank(channel);
   const bool is_drum = bank == kDrumBank;
   if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&
@@ -695,8 +699,15 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
     case 123:
     case 124:
     case 125:
+      all_notes_off(ch);
+      break;
     case 126:
     case 127:
+      // Mono Mode On / Poly Mode On. Both are All Notes Off as well, which is
+      // why they keep the case above's call. They write the one storage
+      // location GS SysEx 40 1x 13 writes (docs/gs.md); CC126's data byte is a
+      // voice count and any value of it still means mono.
+      st.mono_poly = controller == 126 ? kGsMonoPolyMono : kGsMonoPolyPoly;
       all_notes_off(ch);
       break;
     default:

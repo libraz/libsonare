@@ -201,6 +201,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
 
   // Part parameters (40 1x / 40 4x): the block nibble resolves to a channel, so
   // block 0 comes back as part 10.
+  check_row(0x401913, 0x00, GsParam::kPartMonoPoly, 0, 8);
   check_row(0x401514, 0x02, GsParam::kPartAssignMode, 0, 4);
   check_row(0x401015, 0x01, GsParam::kUseForRhythmPart, 0, 9);
   check_row(0x401215, 0x02, GsParam::kUseForRhythmPart, 0, 1);
@@ -441,6 +442,13 @@ TEST_CASE("GS address table: values outside a row's range are not accepted",
   CHECK(gs_value_in_range(*part_shift, 0x40));
   CHECK(gs_value_in_range(*part_shift, 0x58));
   CHECK_FALSE(gs_value_in_range(*part_shift, 0x59));
+
+  // MONO/POLY MODE takes 00 Mono and 01 Poly and nothing above.
+  const GsAddressEntry* mono_poly = gs_lookup_address(0x401913);
+  REQUIRE(mono_poly != nullptr);
+  CHECK(gs_value_in_range(*mono_poly, 0x00));
+  CHECK(gs_value_in_range(*mono_poly, 0x01));
+  CHECK_FALSE(gs_value_in_range(*mono_poly, 0x02));
 
   // ASSIGN MODE takes 00 SINGLE, 01 LIMITED-MULTI and 02 FULL-MULTI, and the
   // same row bounds every part block.

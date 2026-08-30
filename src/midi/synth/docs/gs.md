@@ -73,6 +73,7 @@ GS reaches the same parameter from up to three directions. **Holding a second co
 | EG decay | 75 | `40 1x 35` | `01 64` |
 | EG release | 72 | `40 1x 36` | `01 66` |
 | Pitch fine tune | — | `40 1x 2A`–`2B` | RPN `00 01` |
+| Mono/poly mode | 126 / 127 | `40 1x 13` | — |
 | Drum level | — | `41 m2 rr` | `1A rr` |
 | Drum panpot | — | `41 m4 rr` | `1C rr` |
 | Drum reverb send | — | `41 m5 rr` | `1D rr` |
@@ -85,13 +86,17 @@ GS reaches the same parameter from up to three directions. **Holding a second co
 
 The mapping is verified by a round-trip test over every pair: written from either side, read back from either side, equal.
 
-## Key shift is the one pitch offset a rhythm part does not take
+Two rows in that table carry a reading that is not obvious from the map and is worth writing down once. `40 1x 13`'s annotation is `(=CC# 126 01/CC# 127 00)`, and those trailing bytes are the **controllers' data bytes rather than parameter values** — MIDI's Mono Mode On carries a voice count, of which `01` is the ordinary monophonic case, and Poly Mode On's data byte is always `00`. Read as parameter values they would invert the row's own default of `01` Poly. And the two controllers do something the SysEx does not: both are also All Notes Off. One storage location, two entry points, one of which silences the part on the way in.
 
-MASTER TUNE, PITCH FINE TUNE and the coarse tuning all reach a rhythm part. `40 00 05` MASTER KEY-SHIFT and `40 1x 16` PITCH KEY SHIFT do not: the manual prints "Even if you adjust Key Shift for all Parts, the pitch of the Drum Part will not be affected" beside both of them, and prints nothing of the kind beside Fine Tune on the same page. That asymmetry is what makes it a statement rather than an omission.
+## The parameters a rhythm part does not take
 
-The shift is therefore held as the byte that was written and decoded at the render rather than at the write. A part can take a key shift and *become* a rhythm part afterwards, and it then has to stop being transposed; a value already folded into a cents offset cannot.
+MASTER TUNE, PITCH FINE TUNE and the coarse tuning all reach a rhythm part. `40 00 05` MASTER KEY-SHIFT, `40 1x 16` PITCH KEY SHIFT and `40 1x 13` MONO/POLY MODE do not, each because the manual prints the exclusion beside it: "Even if you adjust Key Shift for all Parts, the pitch of the Drum Part will not be affected" for the first two, "For a Drum Part, changing the Mono/Poly Mode setting will not affect the sound" for the third. Fine Tune sits on the same page as the part-level Key Shift with no such note, and that asymmetry is what makes each of these a statement rather than an omission.
 
-Real files reach past the row here: `40 00 05` is written by 102 corpus files with values up to `6F`, well outside the `28`–`58` the parameter accepts. Those are ignored like any other out-of-range value.
+`40 1x 14` ASSIGN MODE is deliberately not in this list — the manual gives it no exemption, and its SC-55-map default is SINGLE *for the drum part specifically*, which is the opposite of an exemption.
+
+Each is held as the byte that was written and decoded at the note-on or the render rather than at the write. A part can take a key shift and *become* a rhythm part afterwards, and it then has to stop being transposed; a value already folded into a cents offset cannot.
+
+Real files reach past both rows. `40 00 05` is written by 102 corpus files with values up to `6F`, against an accepted `28`–`58`; `40 1x 13` is written by 92 files with a value of `64` on parts 1–4, against an accepted `00`–`01`. Both are single-byte writes rather than a run overshooting, and both are ignored like any other out-of-range value.
 
 ## Deliberate divergences from the manual
 

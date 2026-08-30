@@ -88,6 +88,7 @@ enum class GsLevel : uint8_t {
   X(kEfxControlSource2)     \
   X(kEfxControlDepth2)      \
   X(kEfxSendEqSwitch)       \
+  X(kPartMonoPoly)          \
   X(kPartAssignMode)        \
   X(kUseForRhythmPart)      \
   X(kPartKeyShift)          \
@@ -157,7 +158,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 62> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 63> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -236,6 +237,8 @@ inline constexpr std::array<GsAddressEntry, 62> kGsAddressTable = {{
     {0x40031F, 0, GsParam::kEfxSendEqSwitch, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
 
     // Part parameters (40 1x xx).
+    // 00 Mono / 01 Poly, and the same storage location CC126 and CC127 write.
+    {0x401013, 0x000F00, GsParam::kPartMonoPoly, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
     // 00 SINGLE / 01 LIMITED-MULTI / 02 FULL-MULTI. The default is 01 for every
     // part under the SC-8850 map; the per-part split the manual also prints
     // belongs to the SC-55 map, which is not the target.
