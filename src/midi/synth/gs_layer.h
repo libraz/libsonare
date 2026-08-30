@@ -119,6 +119,10 @@ float gs_key_shift_cents(uint8_t value) noexcept;
 /// the centre 40 leaves both at 1 and a hard side silences the other.
 void gs_master_pan_gains(uint8_t value, float* left, float* right) noexcept;
 
+/// ASSIGN MODE (GS address 40 1x 14) SINGLE. 01 LIMITED-MULTI and 02 FULL-MULTI
+/// have no constant because they are one behaviour here (docs/gs.md).
+inline constexpr uint8_t kGsAssignModeSingle = 0;
+
 /// Number of TONE MODIFY parameters (GS address 40 1x 30-37), which is also the
 /// number of GsPartParams fields: the two are the same set reached from two
 /// directions, so a field added to one without the other is a defect.

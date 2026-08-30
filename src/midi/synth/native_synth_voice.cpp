@@ -402,6 +402,17 @@ void NativeSynthVoice::kill() noexcept {
   releasing = false;
 }
 
+void NativeSynthVoice::choke_fast(double sample_rate) noexcept {
+  if (patch != nullptr) {
+    // configure() recomputes stage rates and touches neither the level nor the
+    // stage, so the fade starts from wherever the envelope already is.
+    DahdsrConfig fast = patch->amp_env;
+    fast.release_ms = kChokeReleaseMs;
+    amp_env.configure(sample_rate, fast);
+  }
+  choke();
+}
+
 void NativeSynthVoice::choke() noexcept {
   // Force the amp envelope into its release stage even for one-shot (drum)
   // voices, which otherwise ignore note-off. Same-group strikes use this to cut

@@ -330,6 +330,10 @@ struct NativeSynthVoice : VoiceState {
   /// cuts this ringing voice with a short fade instead of an abrupt kill. The
   /// fade length is the patch's amp release_ms.
   void choke() noexcept;
+  /// The same, over kChokeReleaseMs instead of the patch's own release. GS
+  /// ASSIGN MODE SINGLE needs this: on a sustaining patch the patch release runs
+  /// past a second, which would leave audible the note it was told to replace.
+  void choke_fast(double sample_rate) noexcept;
 };
 
 struct NativeSynthConfig {

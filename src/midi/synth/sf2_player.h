@@ -215,6 +215,10 @@ class Sf2Player final : public MidiInstrument {
   /// GS 40 00 05 MASTER KEY-SHIFT as its raw byte, 40 = centre
   /// (test/diagnostic).
   uint8_t master_key_shift() const noexcept { return master_.key_shift; }
+  /// GS 40 1x 14 ASSIGN MODE for @p channel (test/diagnostic).
+  uint8_t assign_mode(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].assign_mode;
+  }
 
   /// Captured GS insertion-effect (EFX) unit state (the raw 40 03 xx wire).
   /// Exposed for the adapter layer that realises it and for diagnostics.
@@ -312,6 +316,10 @@ class Sf2Player final : public MidiInstrument {
     /// coincide, so it adds rather than overwriting; and unlike every other
     /// tuning field it does not reach a rhythm part (docs/gs.md).
     uint8_t pitch_key_shift = 0x40;
+    /// GS SysEx 40 1x 14 ASSIGN MODE. Only 0 (SINGLE) branches: 1 and 2 differ
+    /// on the hardware in how many stale duplicates of a note it keeps before
+    /// stealing, which is a voice budget rather than a behaviour (docs/gs.md).
+    uint8_t assign_mode = 1;
     /// GS layer: rhythm-part flag (drums resolve bank 128) and NRPN edits.
     bool drums = false;
     GsPartParams gs;
@@ -339,6 +347,11 @@ class Sf2Player final : public MidiInstrument {
   /// CC84 arming and recording @p note as the next glide source. Called exactly
   /// once per note-on, before the SoundFont / fallback split.
   Portamento take_portamento(uint8_t channel, uint8_t note) noexcept;
+  /// GS ASSIGN MODE SINGLE: stops whatever is already sounding @p note on
+  /// @p channel, in both pools. Called once per note-on before the SoundFont /
+  /// fallback split, which is what lets it skip an age gate — nothing this
+  /// note-on allocates exists yet.
+  void choke_same_note(uint8_t channel, uint8_t note) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
   /// CC64 with half-pedal semantics: 0 releases held notes, 127 holds them

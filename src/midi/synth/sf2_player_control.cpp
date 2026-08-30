@@ -222,6 +222,9 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
                                                          (st.pitch_fine_tune & 0x7Fu))
                                  : static_cast<uint16_t>((st.pitch_fine_tune & 0x3F80u) | w.value);
         break;
+      case GsParam::kPartAssignMode:
+        st.assign_mode = w.value;
+        break;
       case GsParam::kPartKeyShift:
         // Held raw and decoded at the render, where the rhythm-part exclusion
         // is: a part that becomes drums later still has to stop taking it.

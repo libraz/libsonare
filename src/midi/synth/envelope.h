@@ -29,6 +29,12 @@ struct DahdsrConfig {
   float release_ms = 120.0f;
 };
 
+/// Release a voice takes when it is stopped to make room for the note that
+/// replaced it, instead of its own. Short enough to read as a cut, long enough
+/// that no discontinuity is left to click. The envelope snaps to idle three
+/// time constants past this, so the voice is silent inside about 15 ms.
+inline constexpr float kChokeReleaseMs = 5.0f;
+
 class DahdsrEnvelope {
  public:
   enum class Stage : uint8_t { kIdle = 0, kDelay, kAttack, kHold, kDecay, kSustain, kRelease };

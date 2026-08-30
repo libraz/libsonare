@@ -201,6 +201,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
 
   // Part parameters (40 1x / 40 4x): the block nibble resolves to a channel, so
   // block 0 comes back as part 10.
+  check_row(0x401514, 0x02, GsParam::kPartAssignMode, 0, 4);
   check_row(0x401015, 0x01, GsParam::kUseForRhythmPart, 0, 9);
   check_row(0x401215, 0x02, GsParam::kUseForRhythmPart, 0, 1);
   check_row(0x401A16, 0x4C, GsParam::kPartKeyShift, 0, 10);
@@ -440,6 +441,15 @@ TEST_CASE("GS address table: values outside a row's range are not accepted",
   CHECK(gs_value_in_range(*part_shift, 0x40));
   CHECK(gs_value_in_range(*part_shift, 0x58));
   CHECK_FALSE(gs_value_in_range(*part_shift, 0x59));
+
+  // ASSIGN MODE takes 00 SINGLE, 01 LIMITED-MULTI and 02 FULL-MULTI, and the
+  // same row bounds every part block.
+  const GsAddressEntry* assign_mode = gs_lookup_address(0x401514);
+  REQUIRE(assign_mode != nullptr);
+  CHECK(gs_value_in_range(*assign_mode, 0x00));
+  CHECK(gs_value_in_range(*assign_mode, 0x01));
+  CHECK(gs_value_in_range(*assign_mode, 0x02));
+  CHECK_FALSE(gs_value_in_range(*assign_mode, 0x03));
 }
 
 TEST_CASE("GS address table: a variable nibble resolves to its entity", "[midi][gs][address]") {
@@ -1101,10 +1111,14 @@ TEST_CASE("GS decode: the unknown counter separates a gap from a claimed address
   CHECK(unknowns(0x401015) == 0);
   CHECK(unknowns(0x400302) == 0);
   REQUIRE(gs_lookup_range(0x400302) != nullptr);
-  // The finding: 40 1x 14 sits beside USE FOR RHYTHM PART with no row of its
-  // own, so it counts.
-  REQUIRE(gs_lookup_address(0x401014) == nullptr);
-  CHECK(unknowns(0x401014) == 1);
+  // The finding: 40 1x 23 RX BANK SELECT sits above REVERB SEND LEVEL and below
+  // the undefined run at 40 1x 25 with no row and no range of its own, so it
+  // counts. The manual defines it, so the absence is a gap awaiting a row rather
+  // than a decision; this case wants any such address and no file writes this
+  // one, which is the only reason it was picked over a busier gap.
+  REQUIRE(gs_lookup_address(0x401023) == nullptr);
+  REQUIRE(gs_lookup_range(0x401023) == nullptr);
+  CHECK(unknowns(0x401023) == 1);
   CHECK(unknowns(0x404021) == 1);
 
   // The combined entry point refuses what the frame layer refuses.

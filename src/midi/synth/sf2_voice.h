@@ -248,6 +248,10 @@ struct Sf2Voice : VoiceState {
   float render(const Sf2ChannelMod& mod) noexcept;
   /// Note-off: release the envelopes; mode-3 loops stop looping.
   void release() noexcept;
+  /// Stop this voice now, over a fade short enough to read as a cut. Unlike
+  /// release() it does not use the zone's own release, which on a pad runs for
+  /// seconds and would leave a note it was told to silence audible.
+  void choke(double sample_rate) noexcept;
 };
 
 }  // namespace sonare::midi::synth

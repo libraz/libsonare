@@ -9,6 +9,7 @@
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 
@@ -65,11 +66,25 @@ Sf2Player::Portamento Sf2Player::take_portamento(uint8_t channel, uint8_t note) 
   return porta;
 }
 
+void Sf2Player::choke_same_note(uint8_t channel, uint8_t note) noexcept {
+  const uint8_t part = channel & 0x0Fu;
+  const uint8_t key = note & 0x7Fu;
+  // Both pools: a program change moves a part between the SoundFont and the
+  // fallback bank, so the note still sounding can be in either one.
+  for (Sf2Voice& v : pool_) {
+    if (v.active && v.channel == part && v.note == key) v.choke(sample_rate_);
+  }
+  for (NativeSynthVoice& v : fallback_pool_) {
+    if (v.active && v.channel == part && v.note == key) v.choke_fast(sample_rate_);
+  }
+}
+
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const Portamento porta = take_portamento(channel, note);
   const ChannelState& ch = channels_[channel & 0x0Fu];
+  if (ch.assign_mode == kGsAssignModeSingle) choke_same_note(channel, note);
   const uint16_t bank = effective_bank(channel);
   const bool is_drum = bank == kDrumBank;
   if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&

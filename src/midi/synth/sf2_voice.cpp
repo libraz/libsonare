@@ -245,6 +245,16 @@ void Sf2Voice::release() noexcept {
   mod_env.note_off();
 }
 
+void Sf2Voice::choke(double sample_rate) noexcept {
+  // configure() recomputes stage rates and touches neither the level nor the
+  // stage, so the fade starts from wherever the envelope already is and cannot
+  // click. A hard kill would.
+  DahdsrConfig fast = params.volume_env;
+  fast.release_ms = kChokeReleaseMs;
+  env.configure(sample_rate, fast);
+  release();
+}
+
 float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   if (!active || data == nullptr) return 0.0f;
 
