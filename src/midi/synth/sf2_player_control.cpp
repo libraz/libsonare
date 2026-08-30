@@ -278,6 +278,9 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartModLfo1Rate:
         st.mod_lfo_rate = w.value;
         break;
+      case GsParam::kPartModLfo1TvaDepth:
+        st.mod_tva_depth = gs_mod_tva_depth(w.value);
+        break;
       case GsParam::kPartBendPitchControl:
         // The same range RPN 00 00 writes, in whole semitones above 40; the
         // cents its LSB carries have no address of their own here.
@@ -699,6 +702,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
   mod.mod_cutoff_cents = st.mod_cutoff_cents * mod.mod_wheel01;
   mod.vib_rate_scale = gs_mod_lfo_rate_scale(st.mod_lfo_rate, mod.mod_wheel01);
+  mod.tremolo_depth01 = st.mod_tva_depth * mod.mod_wheel01;
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;

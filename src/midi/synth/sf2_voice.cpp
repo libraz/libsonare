@@ -341,6 +341,10 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   if (params.mod_lfo_to_volume_cb != 0.0f) {
     gain *= centibels_to_gain(mod_lfo_value * params.mod_lfo_to_volume_cb);
   }
+  if (mod.tremolo_depth01 != 0.0f) {
+    // The LFO's peak is the part's own level and the depth is spent below it.
+    gain *= 1.0f - mod.tremolo_depth01 * (1.0f - vib_lfo_value) * 0.5f;
+  }
   return sample * gain;
 }
 

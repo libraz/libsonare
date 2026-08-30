@@ -120,6 +120,12 @@ struct Sf2ChannelMod {
   /// is a multiplier rather than an added rate so the wheel scales the exponent
   /// and an unraised one is exactly inert.
   float vib_rate_scale = 1.0f;
+  /// CC1 mod wheel x the part's MODULATION LFO1 TVA DEPTH (40 2x 06), as the
+  /// fraction of the voice's amplitude the LFO's trough takes away. 0 is no
+  /// tremolo. The swing is spent below the part's level rather than around it:
+  /// a depth of 1 reaches silence, and no depth makes a part louder than the
+  /// volume it was given.
+  float tremolo_depth01 = 0.0f;
   /// CC1 itself in [0,1]. Carried rather than recovered from the line above,
   /// which stopped being a fixed multiple of it once the depth became a part
   /// parameter a file can write.

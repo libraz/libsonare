@@ -305,6 +305,9 @@ class Sf2Player final : public MidiInstrument {
     /// where the line above is held converted, because the wheel enters this
     /// one's exponent rather than scaling a full-scale amount.
     uint8_t mod_lfo_rate = 0x40;
+    /// MODULATION LFO1 TVA DEPTH (40 2x 06), the tremolo depth CC1 reaches at
+    /// full. The power-on 00 is no tremolo, so this starts at zero.
+    float mod_tva_depth = 0.0f;
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.

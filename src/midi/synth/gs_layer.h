@@ -378,6 +378,13 @@ float gs_mod_cutoff_cents(uint8_t value) noexcept;
 /// scales the exponent, which is what makes an unraised one exactly 1.
 float gs_mod_lfo_rate_scale(uint8_t value, float wheel01) noexcept;
 
+/// MODULATION LFO1 TVA DEPTH (40 2x 06) as the fraction of a part's amplitude a
+/// fully-raised mod wheel swings away, 0 for no tremolo and 1 for a swing to
+/// silence. The wheel scales it linearly, so an unraised one is exactly 0. The
+/// LFO is the same one 40 2x 03 retunes and 40 2x 04 gives its pitch depth:
+/// LFO1 is one oscillator with four destinations, not four of them.
+float gs_mod_tva_depth(uint8_t value) noexcept;
+
 /// Applies the melodic part offsets onto resolved voice parameters.
 void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept;
 

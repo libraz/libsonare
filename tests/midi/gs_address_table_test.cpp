@@ -245,7 +245,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x402403, 0x40, GsParam::kPartModLfo1Rate, 0, 3);
   check_row(0x402404, 0x0A, GsParam::kPartModLfo1PitchDepth, 0, 3);
   check_row(0x402505, 0x00, GsParam::kPartModDest, 0, 4);
-  check_row(0x402606, 0x00, GsParam::kPartModDest, 1, 5);
+  check_row(0x402606, 0x00, GsParam::kPartModLfo1TvaDepth, 0, 5);
   check_row(0x402707, 0x40, GsParam::kPartModDest, 0, 6);
   check_row(0x402808, 0x00, GsParam::kPartModDest, 0, 7);
   check_row(0x40290A, 0x00, GsParam::kPartModDest, 2, 8);

@@ -108,6 +108,7 @@ enum class GsLevel : uint8_t {
   X(kPartModTvfCutoff)      \
   X(kPartModLfo1Rate)       \
   X(kPartModLfo1PitchDepth) \
+  X(kPartModLfo1TvaDepth)   \
   X(kPartBendDest)          \
   X(kPartBendPitchControl)  \
   X(kPartCafDest)           \
@@ -199,7 +200,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 128> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 129> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -426,8 +427,12 @@ inline constexpr std::array<GsAddressEntry, 128> kGsAddressTable = {{
      nullptr},
     {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x0A,
      nullptr},
-    {0x402005, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 2, 0x00, 0x7F, 0x00,
+    {0x402005, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x00,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // The wheel's tremolo, on the LFO 40 2x 03 retunes and 40 2x 04 detunes with:
+    // one oscillator with four destinations, so the rate is heard here too.
+    {0x402006, 0x000F00, GsParam::kPartModLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
     {0x402007, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     {0x402008, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,

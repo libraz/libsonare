@@ -399,8 +399,11 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   // envelope applies to it, and each of the three removes it outright — the
   // drive's tanh is already saturated by the layers it shapes, and a patch with
   // an envelope pre-delay gates the whole pulse away before it starts.
+  // The LFO's peak is the part's own level and the depth is spent below it.
+  const float tremolo =
+      mod.tremolo_depth01 != 0.0f ? 1.0f - mod.tremolo_depth01 * (1.0f - lfo1_value) * 0.5f : 1.0f;
   return (sample * level + contact) * velocity_gain * patch->gain * mod.gain * offsets.amp_gain *
-         wind_gain;
+         wind_gain * tremolo;
 }
 
 void NativeSynthVoice::release() noexcept {

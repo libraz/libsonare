@@ -78,6 +78,10 @@ float gs_mod_cutoff_cents(uint8_t value) noexcept {
   return gs_cutoff_offset_cents(centred_offset(value));
 }
 
+float gs_mod_tva_depth(uint8_t value) noexcept {
+  return static_cast<float>(value & 0x7Fu) / 127.0f;
+}
+
 float gs_mod_lfo_rate_scale(uint8_t value, float wheel01) noexcept {
   // The wheel scales the exponent rather than the multiplier, so a wheel at
   // rest returns exactly 1 for every byte instead of something near it.
