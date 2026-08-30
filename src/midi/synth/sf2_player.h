@@ -296,6 +296,8 @@ class Sf2Player final : public MidiInstrument {
     // data entry CCs (6/38) route to whichever was selected last.
     ChannelParamState params;
     float bend_range_cents = 200.0f;
+    /// MODULATION LFO1 PITCH DEPTH (40 2x 04), the depth CC1 reaches at full.
+    float mod_depth_cents = gs_mod_depth_cents(kGsModDepthDefault);
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.

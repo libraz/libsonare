@@ -322,9 +322,8 @@ inline constexpr std::array<GsAddressEntry, 99> kGsAddressTable = {{
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     {0x402001, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
-    {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAccept, 1, 0x00, 0x7F, 0x0A,
-     "the modulation depth is kModWheelVibratoCents, a constant; this alias onto it "
-     "is not wired yet"},
+    {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x0A,
+     nullptr},
     {0x402005, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 2, 0x00, 0x7F, 0x00,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     {0x402007, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,

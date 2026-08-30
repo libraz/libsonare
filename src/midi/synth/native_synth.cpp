@@ -224,7 +224,8 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   Sf2ChannelMod& mod = channel_mods_[ch];
   mod.pitch_cents = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
   mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
-  mod.extra_vibrato_cents = kModWheelVibratoCents * static_cast<float>(st.mod_wheel) / 127.0f;
+  mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
+  mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
 }
 

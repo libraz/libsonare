@@ -504,6 +504,8 @@ class NativeSynth final : public MidiInstrument {
     uint8_t flute_bright = 255;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
+    /// MODULATION LFO1 PITCH DEPTH (40 2x 04), the depth CC1 reaches at full.
+    float mod_depth_cents = gs_mod_depth_cents(kGsModDepthDefault);
     /// Previous note's frequency (glide source; 0 = none yet).
     float last_freq_hz = 0.0f;
   };

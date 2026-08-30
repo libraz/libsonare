@@ -117,6 +117,7 @@ enum class Setup : uint8_t {
   kEqLifted,      ///< Both master-EQ bands off 0 dB, where the EQ is a no-op.
   kVolumeCut,     ///< MASTER VOLUME pulled down, for the reset-command rows.
   kBendApplied,   ///< The melodic part bent fully up, where a bend range scales.
+  kModWheelUp,    ///< The melodic part's CC1 raised, where a mod depth scales.
 };
 
 const char* setup_name(Setup setup) {
@@ -135,6 +136,8 @@ const char* setup_name(Setup setup) {
       return "volume-cut";
     case Setup::kBendApplied:
       return "bend-applied";
+    case Setup::kModWheelUp:
+      return "mod-wheel-up";
   }
   return "?";
 }
@@ -160,6 +163,7 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
     case Setup::kVolumeCut:
       return {dt1(0x400004, {0x20})};
     case Setup::kBendApplied:
+    case Setup::kModWheelUp:
       return {};
   }
   return {};
@@ -200,6 +204,9 @@ Setup setup_for(const GsAddressEntry& row) {
     // centred — which is where the stimulus leaves it.
     case GsParam::kPartBendPitchControl:
       return Setup::kBendApplied;
+    // Likewise a modulation depth, which scales CC1 and says nothing at zero.
+    case GsParam::kPartModLfo1PitchDepth:
+      return Setup::kModWheelUp;
     default:
       return Setup::kNone;
   }
@@ -361,11 +368,14 @@ void note_off(Sf2Player& p, uint8_t channel, uint8_t note) {
 /// its neutral position, and setup_writes goes through handle_sysex, which a
 /// channel message is not.
 void setup_channel_state(Sf2Player& p, Setup setup) {
-  if (setup != Setup::kBendApplied) return;
-  // Fully up, on the melodic part the stimulus plays: the widest separation
-  // between one bend range and another.
-  p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(
-                    0, gs_part_block_to_channel(kMelodicBlock), 16383)));
+  // Fully up in both cases, on the melodic part the stimulus plays: the widest
+  // separation between one depth and another.
+  const uint8_t ch = gs_part_block_to_channel(kMelodicBlock);
+  if (setup == Setup::kBendApplied) {
+    p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, ch, 16383)));
+  } else if (setup == Setup::kModWheelUp) {
+    cc(p, ch, 1, 127);
+  }
 }
 
 /// One stimulus, able to reveal every kind of row: a melodic part sustaining a

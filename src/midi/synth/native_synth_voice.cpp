@@ -267,8 +267,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     values.lfo2 = lfo2.next();
     values.velocity = velocity01;
     values.key_track = key_track_octaves;
-    // Recover CC1 [0,1] from the shared channel snapshot's vibrato mapping.
-    values.mod_wheel = mod.extra_vibrato_cents * (1.0f / kModWheelVibratoCents);
+    values.mod_wheel = mod.mod_wheel01;
     values.random = random_value;
     offsets = evaluate_mod_matrix(patch->mod_matrix, values);
   }

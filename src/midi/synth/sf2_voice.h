@@ -88,11 +88,19 @@ float abs_cents_to_hz(float cents) noexcept;
 /// message carried it, so a GS drum kit is not drier than the melodic parts.
 inline constexpr float kCcSendDepth = 0.35f;
 
-/// CC1 mod wheel depth at full scale, in cents of extra vibrato. Shared by both
-/// hosts so the fallback and SF2 voices respond alike; the mod matrix divides
-/// by it to recover the controller from `Sf2ChannelMod::extra_vibrato_cents`,
-/// so a second definition drifting from this one silently rescales that source.
-inline constexpr float kModWheelVibratoCents = 50.0f;
+/// MODULATION LFO1 PITCH DEPTH (40 2x 04) at full scale, from the manual's
+/// 0-600 cents over 0-127. It is a per-part quantity rather than a constant, so
+/// this is only the top of the range; the power-on 0A gives a fully-raised mod
+/// wheel 47.2 cents of vibrato until a file writes the address.
+inline constexpr float kGsModDepthMaxCents = 600.0f;
+
+/// The GS power-on MODULATION LFO1 PITCH DEPTH.
+inline constexpr uint8_t kGsModDepthDefault = 0x0A;
+
+/// The vibrato depth a MODULATION LFO1 PITCH DEPTH byte asks for, in cents.
+constexpr float gs_mod_depth_cents(uint8_t value) noexcept {
+  return kGsModDepthMaxCents * static_cast<float>(value) / 127.0f;
+}
 
 /// Per-channel modulation snapshot the player passes into voice rendering
 /// (recomputed when the channel's CC/bend state changes).
@@ -101,8 +109,12 @@ struct Sf2ChannelMod {
   float pitch_cents = 0.0f;
   /// CC7 volume x CC11 expression as linear gain ((cc/127)^2 each).
   float gain = 1.0f;
-  /// CC1 mod wheel -> additional vibrato LFO pitch depth in cents (max 50).
+  /// CC1 mod wheel x the part's MODULATION LFO1 PITCH DEPTH, in cents.
   float extra_vibrato_cents = 0.0f;
+  /// CC1 itself in [0,1]. Carried rather than recovered from the line above,
+  /// which stopped being a fixed multiple of it once the depth became a part
+  /// parameter a file can write.
+  float mod_wheel01 = 0.0f;
   /// CC10 pan offset in SF2 pan units (-500..500 added to the zone pan).
   float pan_units = 0.0f;
   /// CC91/CC93 -> effect send contribution in [0,1] (default mod: 200/1000
