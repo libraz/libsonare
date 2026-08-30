@@ -307,6 +307,14 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x41163C, 0x00, GsParam::kDrumChorusSend, 0x3C, 1);
   check_row(0x410926, 0x40, GsParam::kDrumDelaySend, 0x26, 0);
 
+  // The opposite group (50 ** ** / 51 ** **): one row over the whole block, so
+  // the mid byte comes back as the part and the low byte as the index, and an
+  // address deep inside it still resolves.
+  check_row(0x500000, 0x00, GsParam::kOppositeGroupBlock, 0x00, 0);
+  check_row(0x501119, 0x64, GsParam::kOppositeGroupBlock, 0x19, 1);
+  check_row(0x507F7F, 0x7F, GsParam::kOppositeGroupBlock, 0x7F, 0x0F);
+  check_row(0x510226, 0x00, GsParam::kOppositeGroupBlock, 0x26, 2);
+
   std::string untested;
   for (size_t i = 0; i < kGsAddressTable.size(); ++i) {
     if (g_covered[i]) continue;
@@ -570,6 +578,19 @@ TEST_CASE("GS address table: a masked row claims exactly its own addresses",
   CHECK(gs_row_claims(drum_level, 0x41123C));        // map 2
   CHECK_FALSE(gs_row_claims(drum_level, 0x41013C));  // a neighbouring parameter group
   CHECK_FALSE(gs_row_claims(drum_level, 0x40023C));  // another block entirely
+
+  // The shape of a whole-block row: every mid byte variable and the low byte
+  // spanning its own 128, which is the widest a row can be and still stop at
+  // the high byte it names.
+  const GsAddressEntry* group_row = gs_lookup_address(0x500000);
+  REQUIRE(group_row != nullptr);
+  const GsAddressEntry& group = *group_row;
+  CHECK(group.mask == 0x007F00u);
+  CHECK(group.size == 128);
+  CHECK(gs_row_claims(group, 0x500000));
+  CHECK(gs_row_claims(group, 0x507F7F));
+  CHECK_FALSE(gs_row_claims(group, 0x4F7F7F));  // the byte below
+  CHECK_FALSE(gs_row_claims(group, 0x510000));  // the sibling row's block
 
   // The two CHANNEL MSG RX PORT rows split one nibble-masked span, and each
   // claims only its own half.

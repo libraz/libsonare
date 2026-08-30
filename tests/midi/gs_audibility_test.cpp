@@ -256,6 +256,9 @@ constexpr uint32_t kProbeDrumNote = 38;
 uint32_t probe_address(const GsAddressEntry& row) {
   if (row.mask == 0x000F00u) return row.addr | (static_cast<uint32_t>(kMelodicBlock) << 8);
   if (row.mask == 0x00F07Fu) return row.addr | kProbeDrumNote;
+  // A whole-block row is probed at its part page rather than at mid byte 00, so
+  // the run writes what a file addressing that block actually writes.
+  if (row.mask == 0x007F00u) return row.addr | (uint32_t{0x11} << 8);
   return row.addr;
 }
 
@@ -576,11 +579,12 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   int probed = 0;
 
   for (const GsAddressEntry& row : kGsAddressTable) {
-    // Only a fixed address, a part block, a channel nibble or a drum-setup
-    // map+note appears in the table today. An EFX-unit (40 3u) row would need
-    // its own resolution and must not fall through to an untested one.
-    REQUIRE(
-        (row.mask == 0 || row.mask == 0x000F00u || row.mask == 0x00000Fu || row.mask == 0x00F07Fu));
+    // Only a fixed address, a part block, a channel nibble, a drum-setup
+    // map+note or a whole-block mid byte appears in the table today. An
+    // EFX-unit (40 3u) row would need its own resolution and must not fall
+    // through to an untested one.
+    REQUIRE((row.mask == 0 || row.mask == 0x000F00u || row.mask == 0x00000Fu ||
+             row.mask == 0x00F07Fu || row.mask == 0x007F00u));
 
     const Probe probe = probe_for(row);
     const Setup setup = setup_for(row);

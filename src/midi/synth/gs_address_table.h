@@ -116,7 +116,8 @@ enum class GsLevel : uint8_t {
   X(kDrumPanpot)            \
   X(kDrumReverbSend)        \
   X(kDrumChorusSend)        \
-  X(kDrumDelaySend)
+  X(kDrumDelaySend)         \
+  X(kOppositeGroupBlock)
 
 /// The parameter a decoded byte addresses. kUnknown means no table row claimed
 /// the address; kUndefined means a range-table row did (an address the manual
@@ -174,7 +175,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 102> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 104> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -428,6 +429,17 @@ inline constexpr std::array<GsAddressEntry, 102> kGsAddressTable = {{
     {0x410500, 0x00F07F, GsParam::kDrumReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
     {0x410600, 0x00F07F, GsParam::kDrumChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
     {0x410900, 0x00F07F, GsParam::kDrumDelaySend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
+
+    // The opposite group's blocks (50 ** ** / 51 ** **). An SC-88Pro address
+    // reaching the other sixteen parts and their drum setup; the SC-8850 does
+    // not have it, the port selecting the group instead, so 40 and 41 always
+    // mean the receiving one (docs/gs.md). One row each rather than a mirror of
+    // those two blocks: the statement is that a whole group is absent, and that
+    // is one statement however many parameters sit inside it.
+    {0x500000, 0x007F00, GsParam::kOppositeGroupBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "libsonare receives one port, so there is no second group of parts to address"},
+    {0x510000, 0x007F00, GsParam::kOppositeGroupBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "libsonare receives one port, so there is no second group's drum setup to address"},
 }};
 
 /// The undefined regions covered so far.
