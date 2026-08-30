@@ -86,6 +86,15 @@ const GsUserDrumSource* Sf2Player::user_drum_source(const ChannelState& ch, bool
   return &user_drum_sources_[static_cast<size_t>(set)][note & 0x7Fu];
 }
 
+GsDrumNoteParams Sf2Player::drum_note_params(const ChannelState& ch, bool is_drum,
+                                             uint8_t note) const noexcept {
+  if (!is_drum) return {};
+  const GsDrumNoteParams& live = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
+  const int set = ch.user_drum_set();
+  if (set < 0) return live;
+  return gs_layer_drum_note_params(user_drum_params_[static_cast<size_t>(set)][note & 0x7Fu], live);
+}
+
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
@@ -99,13 +108,11 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   }
   const uint16_t bank = effective_bank(channel);
   const bool is_drum = bank == kDrumBank;
-  // GS RX NOTE ON (41 m8 rr): a note the map has switched off is not sounded at
-  // all, so this precedes every choice of bank below — a note refused here must
-  // not reach the model floor either.
-  if (is_drum) {
-    const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
-    if ((gd.flags & GsDrumNoteParams::kRxNoteOn) != 0 && gd.rx_note_on == 0) return;
-  }
+  const GsDrumNoteParams gd = drum_note_params(ch, is_drum, note);
+  // GS RX NOTE ON (41 m8 rr / 21 d8 rr): a note the kit has switched off is not
+  // sounded at all, so this precedes every choice of bank below — a note refused
+  // here must not reach the model floor either.
+  if ((gd.flags & GsDrumNoteParams::kRxNoteOn) != 0 && gd.rx_note_on == 0) return;
   if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&
       gm_program_has_dedicated_model(bank, ch.program)) {
     fallback_note_on(channel, note, velocity, source_track_id, porta);
@@ -142,10 +149,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // choke and the voice's own note stay on the struck note. The map's edit sits
   // ON TOP of the user set's source note, which is the stored kit it edits.
   uint8_t sound_note = gs_user_drum_sound_note(us, note);
-  if (is_drum) {
-    const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
-    if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
-  }
+  if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
 
   bool has_renderable_zone = false;
   for (const Sf2Zone& pzone : preset.zones) {
@@ -185,9 +189,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
 
       // GS layer: NRPN part edits + per-note drum-kit overrides.
       apply_gs_part_params(params, ch.gs);
-      if (is_drum) {
-        apply_gs_drum_params(params, drum_params_[ch.drum_map_slot()][note & 0x7Fu]);
-      }
+      apply_gs_drum_params(params, gd);
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
@@ -220,19 +222,17 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // The per-note GS edits, read before the patch: PLAY NOTE NUMBER picks which
   // kit piece answers and ASSIGN GROUP which group it belongs to, and both are
   // needed before the choke below, let alone the voice.
-  const GsDrumNoteParams* gd = is_drum ? &drum_params_[ch.drum_map_slot()][note & 0x7Fu] : nullptr;
+  const GsDrumNoteParams gd = drum_note_params(ch, is_drum, note);
   // The user drum set under them: it says which stored kit and which note within
   // it this strike sounds, and the map's edits above are what edits that.
   const GsUserDrumSource* us = user_drum_source(ch, is_drum, note);
   uint8_t sound_note = gs_user_drum_sound_note(us, note);
-  if (gd != nullptr && (gd->flags & GsDrumNoteParams::kPlayNote) != 0) {
-    sound_note = gd->play_note;
-  }
+  if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
   const NativeSynthPatch& patch =
       is_drum ? gm_fallback_drum_patch(sound_note) : gm_fallback_patch(bank, ch.program, tone_map);
   uint8_t exclusive_class = is_drum ? patch.percussion.exclusive_class : 0;
-  if (gd != nullptr && (gd->flags & GsDrumNoteParams::kAssignGroup) != 0) {
-    exclusive_class = gd->assign_group & 0x7Fu;
+  if ((gd.flags & GsDrumNoteParams::kAssignGroup) != 0) {
+    exclusive_class = gd.assign_group & 0x7Fu;
   }
   // GM kit exclusive/mute groups (hi-hats etc.): choke the ringing group voice
   // on this channel before allocating the new strike. Compared against the
@@ -311,25 +311,25 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // send multiplicands), mirroring apply_gs_drum_params for the model floor: a
   // parameter must not do something different because this bank answered.
   DrumVoiceMod drum_mod;
-  if (gd != nullptr) {
-    if ((gd->flags & GsDrumNoteParams::kPitch) != 0 && gd->pitch_coarse != 0) {
-      drum_mod.pitch_ratio = std::exp2(static_cast<float>(gd->pitch_coarse) / 12.0f);
+  if (is_drum) {
+    if ((gd.flags & GsDrumNoteParams::kPitch) != 0 && gd.pitch_coarse != 0) {
+      drum_mod.pitch_ratio = std::exp2(static_cast<float>(gd.pitch_coarse) / 12.0f);
     }
-    if ((gd->flags & GsDrumNoteParams::kLevel) != 0) {
-      const float v = static_cast<float>(gd->level & 0x7Fu) / 127.0f;
+    if ((gd.flags & GsDrumNoteParams::kLevel) != 0) {
+      const float v = static_cast<float>(gd.level & 0x7Fu) / 127.0f;
       drum_mod.level_gain = v * v;  // same square law as CC7 / velocity
     }
-    if ((gd->flags & GsDrumNoteParams::kPan) != 0) {
-      drum_mod.pan_units = (static_cast<float>(gd->pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
+    if ((gd.flags & GsDrumNoteParams::kPan) != 0) {
+      drum_mod.pan_units = (static_cast<float>(gd.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
     }
-    if ((gd->flags & GsDrumNoteParams::kReverb) != 0) {
-      drum_mod.reverb_scale = static_cast<float>(gd->reverb & 0x7Fu) / 127.0f;
+    if ((gd.flags & GsDrumNoteParams::kReverb) != 0) {
+      drum_mod.reverb_scale = static_cast<float>(gd.reverb & 0x7Fu) / 127.0f;
     }
-    if ((gd->flags & GsDrumNoteParams::kChorus) != 0) {
-      drum_mod.chorus_scale = static_cast<float>(gd->chorus & 0x7Fu) / 127.0f;
+    if ((gd.flags & GsDrumNoteParams::kChorus) != 0) {
+      drum_mod.chorus_scale = static_cast<float>(gd.chorus & 0x7Fu) / 127.0f;
     }
-    if ((gd->flags & GsDrumNoteParams::kDelay) != 0) {
-      drum_mod.delay_scale = static_cast<float>(gd->delay & 0x7Fu) / 127.0f;
+    if ((gd.flags & GsDrumNoteParams::kDelay) != 0) {
+      drum_mod.delay_scale = static_cast<float>(gd.delay & 0x7Fu) / 127.0f;
     }
     // Resolved above, beside the choke that had to read it first.
     drum_mod.exclusive_class = static_cast<int16_t>(exclusive_class);

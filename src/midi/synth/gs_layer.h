@@ -228,6 +228,13 @@ constexpr uint8_t gs_user_drum_sound_note(const GsUserDrumSource* src, uint8_t s
   return struck & 0x7Fu;
 }
 
+/// @p stored with @p live over it: every field @p live wrote wins, and the rest
+/// stay as @p stored left them. A user drum set is the kit, the drum setup block
+/// at 41 mn rr is the edit on it, and layering them is what lets both hold the
+/// value that changes nothing (docs/gs.md).
+GsDrumNoteParams gs_layer_drum_note_params(const GsDrumNoteParams& stored,
+                                           const GsDrumNoteParams& live) noexcept;
+
 /// GS insertion effect (EFX) state, stored as the RAW GS wire so any adapter
 /// can interpret it without a typed per-effect struct. The SC-55/88 EFX is a
 /// single insertion unit whose type is a 14-bit number (two 7-bit SysEx bytes)

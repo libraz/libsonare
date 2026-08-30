@@ -459,3 +459,41 @@ TEST_CASE("21 dB/dC rr say which kit piece a user drum note sounds", "[midi][syn
     }
   }
 }
+
+TEST_CASE("21 d1-d9 rr are the drum setup parameters stored in the kit", "[midi][synth][gs]") {
+  const Writes empty_set = [](Sf2Player& player) {
+    program_change(player, kDrumChannel, sonare::midi::synth::kGsUserDrumSetProgram);
+  };
+  for (const Aliased& p : kAliased) {
+    INFO(p.name);
+    // Writing into the set and writing into the map are the same parameter, so
+    // with the other side unwritten they have to render the same. By identity:
+    // both moving the render is what a set that stored the value in the wrong
+    // field would also do.
+    const StereoRender in_set = render_one(kNoteA, kNoteA, true, [&](Sf2Player& player) {
+      empty_set(player);
+      sysex(player, dt1(user_drum_addr(0, p.param_nibble, kNoteA), {p.first}));
+    });
+    const StereoRender in_map = render_one(kNoteA, kNoteA, true, [&](Sf2Player& player) {
+      empty_set(player);
+      sysex(player, dt1(drum_addr(0, p.param_nibble, kNoteA), {p.first}));
+    });
+    CHECK_FALSE(identical(in_set, render_one(kNoteA, kNoteA, true, empty_set)));
+    CHECK(identical(in_set, in_map));
+
+    // The map is the live edit on the stored kit, so where both wrote it is the
+    // map's value that sounds — and the set's is not merely ignored, or the
+    // first equality above would hold for the wrong reason.
+    const StereoRender both = render_one(kNoteA, kNoteA, true, [&](Sf2Player& player) {
+      empty_set(player);
+      sysex(player, dt1(user_drum_addr(0, p.param_nibble, kNoteA), {p.first}));
+      sysex(player, dt1(drum_addr(0, p.param_nibble, kNoteA), {p.second}));
+    });
+    const StereoRender map_second = render_one(kNoteA, kNoteA, true, [&](Sf2Player& player) {
+      empty_set(player);
+      sysex(player, dt1(drum_addr(0, p.param_nibble, kNoteA), {p.second}));
+    });
+    CHECK_FALSE(identical(both, in_set));
+    CHECK(identical(both, map_second));
+  }
+}

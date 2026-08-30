@@ -171,6 +171,26 @@ void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexce
   }
 }
 
+GsDrumNoteParams gs_layer_drum_note_params(const GsDrumNoteParams& stored,
+                                           const GsDrumNoteParams& live) noexcept {
+  // Field by field behind the flag that owns it, so a parameter written on one
+  // side only survives whichever side wrote it. Both sides are one struct, and
+  // the per-parameter equivalence test walks the same list.
+  GsDrumNoteParams out = stored;
+  const uint16_t f = live.flags;
+  if ((f & GsDrumNoteParams::kPitch) != 0) out.pitch_coarse = live.pitch_coarse;
+  if ((f & GsDrumNoteParams::kLevel) != 0) out.level = live.level;
+  if ((f & GsDrumNoteParams::kPan) != 0) out.pan = live.pan;
+  if ((f & GsDrumNoteParams::kReverb) != 0) out.reverb = live.reverb;
+  if ((f & GsDrumNoteParams::kChorus) != 0) out.chorus = live.chorus;
+  if ((f & GsDrumNoteParams::kDelay) != 0) out.delay = live.delay;
+  if ((f & GsDrumNoteParams::kPlayNote) != 0) out.play_note = live.play_note;
+  if ((f & GsDrumNoteParams::kAssignGroup) != 0) out.assign_group = live.assign_group;
+  if ((f & GsDrumNoteParams::kRxNoteOn) != 0) out.rx_note_on = live.rx_note_on;
+  out.flags = static_cast<uint16_t>(stored.flags | f);
+  return out;
+}
+
 void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) noexcept {
   if (!drum.any()) return;
   if ((drum.flags & GsDrumNoteParams::kPitch) != 0 && drum.pitch_coarse != 0) {

@@ -111,6 +111,15 @@ enum class GsLevel : uint8_t {
   X(kPartToneMap0Number)    \
   X(kPartEqSwitch)          \
   X(kPartEfxAssign)         \
+  X(kUserDrumPlayNote)      \
+  X(kUserDrumLevel)         \
+  X(kUserDrumAssignGroup)   \
+  X(kUserDrumPanpot)        \
+  X(kUserDrumReverbSend)    \
+  X(kUserDrumChorusSend)    \
+  X(kUserDrumRxNoteOff)     \
+  X(kUserDrumRxNoteOn)      \
+  X(kUserDrumDelaySend)     \
   X(kUserDrumSourceMap)     \
   X(kUserDrumSourceProgram) \
   X(kUserDrumSourceNote)    \
@@ -182,7 +191,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 111> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 120> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -197,6 +206,27 @@ inline constexpr std::array<GsAddressEntry, 111> kGsAddressTable = {{
     // rr the note. Nibbles 1-9 repeat the drum setup block at 41 mn rr; A, B and
     // C are this block's own and say where each note's sound comes from — the
     // tone map, the rhythm program, and the note within that kit.
+    // Nibbles 1-9, parameter for parameter the drum setup block's, and carrying
+    // its levels and its defaults for the same reasons: each holds the value
+    // that changes nothing, and PLAY NOTE NUMBER has no such value so its def is
+    // a placeholder behind a flag.
+    {0x210100, 0x00F07F, GsParam::kUserDrumPlayNote, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x210200, 0x00F07F, GsParam::kUserDrumLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
+    {0x210300, 0x00F07F, GsParam::kUserDrumAssignGroup, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x210400, 0x00F07F, GsParam::kUserDrumPanpot, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    {0x210500, 0x00F07F, GsParam::kUserDrumReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F,
+     nullptr},
+    {0x210600, 0x00F07F, GsParam::kUserDrumChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F,
+     nullptr},
+    {0x210700, 0x00F07F, GsParam::kUserDrumRxNoteOff, GsLevel::kAccept, 1, 0x00, 0x01, 0x01,
+     "the SoundFont and model banks differ on what an unwritten value means, so a written one "
+     "would mean two things"},
+    {0x210800, 0x00F07F, GsParam::kUserDrumRxNoteOn, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x210900, 0x00F07F, GsParam::kUserDrumDelaySend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F,
+     nullptr},
     // The map narrows which generation the source program may come from, and
     // every kit kGsDrumKits voices is reachable without it, so a written map can
     // only take a kit away. It is held nowhere for that reason.

@@ -409,6 +409,11 @@ class Sf2Player final : public MidiInstrument {
   /// map field.
   const GsUserDrumSource* user_drum_source(const ChannelState& ch, bool is_drum,
                                            uint8_t note) const noexcept;
+  /// The per-note drum edits a strike on @p note reads: the user drum set's
+  /// stored ones under the map's live ones. The one place either bank asks, so a
+  /// note cannot be edited differently depending on which answered it.
+  GsDrumNoteParams drum_note_params(const ChannelState& ch, bool is_drum,
+                                    uint8_t note) const noexcept;
   /// Preset index for (bank, program) with GS-style fallbacks, or -1.
   int resolve_preset(uint16_t bank, uint8_t program) const noexcept;
   /// Recompute tail_samples_ from the SoundFont release scan, the synth
@@ -475,6 +480,9 @@ class Sf2Player final : public MidiInstrument {
   /// rr). Per SET, not per part or per map: a set is a stored kit, and every
   /// rhythm part that selects it with program 64/65 plays the same one.
   std::array<std::array<GsUserDrumSource, 128>, kGsUserDrumSetCount> user_drum_sources_{};
+  /// The per-note edits stored IN each user drum set (21 d1-d9 rr), which the
+  /// map's own edits at 41 mn rr are layered over.
+  std::array<std::array<GsDrumNoteParams, 128>, kGsUserDrumSetCount> user_drum_params_{};
   VoicePool<Sf2Voice> pool_;
   /// Synth-fallback voices (programs no SoundFont preset covers).
   VoicePool<NativeSynthVoice> fallback_pool_;

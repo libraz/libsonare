@@ -369,6 +369,7 @@ bool Sf2Player::apply_gs_user_drum_sysex(const uint8_t* data, size_t size) noexc
     if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
     if (w.part >= kGsUserDrumSetCount) continue;
     GsUserDrumSource& src = user_drum_sources_[w.part][w.index & 0x7Fu];
+    GsDrumNoteParams& d = user_drum_params_[w.part][w.index & 0x7Fu];
     switch (w.param) {
       case GsParam::kUserDrumSourceProgram:
         src.program = w.value;
@@ -376,6 +377,41 @@ bool Sf2Player::apply_gs_user_drum_sysex(const uint8_t* data, size_t size) noexc
       case GsParam::kUserDrumSourceNote:
         src.source_note = w.value;
         src.flags |= GsUserDrumSource::kSourceNote;
+        break;
+      // Nibbles 1-9 are the drum setup block's parameters stored in the set, so
+      // they land in the same struct and read the same way — including PANPOT's
+      // 00, which is RANDOM at an address and answers centre (docs/gs.md).
+      case GsParam::kUserDrumPlayNote:
+        d.play_note = w.value;
+        d.flags |= GsDrumNoteParams::kPlayNote;
+        break;
+      case GsParam::kUserDrumLevel:
+        d.level = w.value;
+        d.flags |= GsDrumNoteParams::kLevel;
+        break;
+      case GsParam::kUserDrumAssignGroup:
+        d.assign_group = w.value;
+        d.flags |= GsDrumNoteParams::kAssignGroup;
+        break;
+      case GsParam::kUserDrumPanpot:
+        d.pan = w.value == 0 ? 0x40 : w.value;
+        d.flags |= GsDrumNoteParams::kPan;
+        break;
+      case GsParam::kUserDrumReverbSend:
+        d.reverb = w.value;
+        d.flags |= GsDrumNoteParams::kReverb;
+        break;
+      case GsParam::kUserDrumChorusSend:
+        d.chorus = w.value;
+        d.flags |= GsDrumNoteParams::kChorus;
+        break;
+      case GsParam::kUserDrumRxNoteOn:
+        d.rx_note_on = w.value;
+        d.flags |= GsDrumNoteParams::kRxNoteOn;
+        break;
+      case GsParam::kUserDrumDelaySend:
+        d.delay = w.value;
+        d.flags |= GsDrumNoteParams::kDelay;
         break;
       default:
         continue;

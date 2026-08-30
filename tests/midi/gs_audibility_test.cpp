@@ -124,6 +124,9 @@ enum class Setup : uint8_t {
   /// The rhythm part switched to a user drum set, which is the only state in
   /// which anything reads the 21 dn rr block.
   kUserDrumSet,
+  /// That, and the set's SECOND note put in a group — what the drum setup's
+  /// assign-group row needs, needed again one layer down.
+  kUserDrumSetGroupPeer,
 };
 
 const char* setup_name(Setup setup) {
@@ -148,6 +151,8 @@ const char* setup_name(Setup setup) {
       return "drum-group-peer";
     case Setup::kUserDrumSet:
       return "user-drum-set";
+    case Setup::kUserDrumSetGroupPeer:
+      return "user-drum-set-group-peer";
   }
   return "?";
 }
@@ -180,6 +185,10 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
       // The stimulus's second drum note, put in the group the probe writes, so
       // the probe's note has something to be choked by.
       return {dt1(0x410300u | kProbeDrumPeerNote, {0x7F})};
+    case Setup::kUserDrumSetGroupPeer:
+      // The same peer the drum setup's group row needs, written into the set
+      // rather than into the map so the set's own storage is what is probed.
+      return {dt1(0x210300u | kProbeDrumPeerNote, {0x7F})};
     case Setup::kBendApplied:
     case Setup::kModWheelUp:
     case Setup::kUserDrumSet:
@@ -233,7 +242,17 @@ Setup setup_for(const GsAddressEntry& row) {
     // part has to have selected it before a note reads one.
     case GsParam::kUserDrumSourceProgram:
     case GsParam::kUserDrumSourceNote:
+    case GsParam::kUserDrumPlayNote:
+    case GsParam::kUserDrumLevel:
+    case GsParam::kUserDrumPanpot:
+    case GsParam::kUserDrumReverbSend:
+    case GsParam::kUserDrumChorusSend:
+    case GsParam::kUserDrumRxNoteOn:
+    case GsParam::kUserDrumDelaySend:
       return Setup::kUserDrumSet;
+    // And a group still needs its peer, one layer further down.
+    case GsParam::kUserDrumAssignGroup:
+      return Setup::kUserDrumSetGroupPeer;
     default:
       return Setup::kNone;
   }
@@ -415,7 +434,7 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
     p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, ch, 16383)));
   } else if (setup == Setup::kModWheelUp) {
     cc(p, ch, 1, 127);
-  } else if (setup == Setup::kUserDrumSet) {
+  } else if (setup == Setup::kUserDrumSet || setup == Setup::kUserDrumSetGroupPeer) {
     // Set 1, on the rhythm part the stimulus strikes. With nothing written to
     // the set this sounds the Standard kit, which is what the part was already
     // playing, so the baseline it renders is the probe's only difference.

@@ -297,6 +297,16 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
 
   // User drum sets (21 dn rr): the same shape as the drum setup block, so the
   // set nibble comes back as the part and the note as the index.
+  check_row(0x210126, 0x3C, GsParam::kUserDrumPlayNote, 0x26, 0);
+  check_row(0x211126, 0x3C, GsParam::kUserDrumPlayNote, 0x26, 1);
+  check_row(0x210226, 0x64, GsParam::kUserDrumLevel, 0x26, 0);
+  check_row(0x21032A, 0x7F, GsParam::kUserDrumAssignGroup, 0x2A, 0);
+  check_row(0x210426, 0x00, GsParam::kUserDrumPanpot, 0x26, 0);
+  check_row(0x21057F, 0x40, GsParam::kUserDrumReverbSend, 0x7F, 0);
+  check_row(0x211600, 0x00, GsParam::kUserDrumChorusSend, 0x00, 1);
+  check_row(0x210726, 0x00, GsParam::kUserDrumRxNoteOff, 0x26, 0);
+  check_row(0x210826, 0x01, GsParam::kUserDrumRxNoteOn, 0x26, 0);
+  check_row(0x210926, 0x14, GsParam::kUserDrumDelaySend, 0x26, 0);
   check_row(0x210A26, 0x03, GsParam::kUserDrumSourceMap, 0x26, 0);
   check_row(0x211A2A, 0x00, GsParam::kUserDrumSourceMap, 0x2A, 1);
   check_row(0x210B26, 0x19, GsParam::kUserDrumSourceProgram, 0x26, 0);
