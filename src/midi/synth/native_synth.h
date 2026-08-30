@@ -212,9 +212,10 @@ struct DrumVoiceMod {
   float reverb_scale = 1.0f;
   float chorus_scale = 1.0f;
   float delay_scale = 1.0f;
-  /// PLAY NOTE NUMBER (41 m1 rr): the note this strike SOUNDS. -1 = the struck
-  /// one. Carried here rather than substituted into the voice's own note, which
-  /// stays the struck one because that is what a note-off matches.
+  /// The note this strike SOUNDS, which PLAY NOTE NUMBER (41 m1 rr) and a user
+  /// drum set's SOURCE NOTE NUMBER (21 dC rr) both move. -1 = the struck one.
+  /// Carried here rather than substituted into the voice's own note, which stays
+  /// the struck one because that is what a note-off matches.
   int16_t play_note = -1;
   /// ASSIGN GROUP (41 m3 rr): the exclusive group this strike joins, 0 = none.
   /// -1 = the kit piece's own, which is what a host with no GS layer means.

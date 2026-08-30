@@ -209,6 +209,7 @@ void Sf2Player::reset() {
 void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept {
   channels_ = {};
   drum_params_ = {};
+  user_drum_sources_ = {};
   // Every GsMasterParams field default-constructs to its GS power-on value, so
   // the reset is the default-construct.
   master_ = {};

@@ -49,14 +49,14 @@ std::string hex(uint32_t addr) {
 /// raises them by surfacing addresses nobody had seen, which is the census
 /// working rather than coverage regressing — re-record them in the same change,
 /// and compare the RATIO across a refresh, never the count.
-constexpr size_t kUnrowedAddressCeiling = 1387;
+constexpr size_t kUnrowedAddressCeiling = 1028;
 
 /// Corpus file-touches (an address counted once per file that wrote it) no row
 /// claims. Weighted, because one address reached by 1300 files is not the same
 /// size of gap as one reached by 2 — and the two numbers move independently, so
 /// a change that rows a rare address while breaking a common one is caught by
 /// the second ceiling even though the first went down.
-constexpr uint64_t kUnrowedFileTouchCeiling = 15307;
+constexpr uint64_t kUnrowedFileTouchCeiling = 10528;
 
 /// Files reaching the single most widely written address no row claims — how
 /// deep the worst remaining gap is, where the two ceilings above measure how
@@ -65,15 +65,16 @@ constexpr uint64_t kUnrowedFileTouchCeiling = 15307;
 /// It exists because the weighted ceiling turned out to be answerable by width.
 /// The corpus is steeply skewed: 35 addresses are written by 500 files or more
 /// and 87% of them by 20 or fewer, so a family that is broad and shallow — the
-/// 1067 user-drum-set addresses, ~110 files between them — carries 14 000
-/// touches while serving fewer files than one row of 40 00 xx. Rowing it would
-/// move the weighted number further than anything else available and leave what
-/// most files write no better understood.
+/// user drum sets, a thousand addresses shared between about a hundred files —
+/// carries more touches than anything else available while serving fewer files
+/// than one row of 40 00 xx. Rowing such a family without implementing it moves
+/// the weighted number and leaves what most files write no better understood,
+/// which is what this number is here to expose.
 ///
 /// Exact rather than a ceiling with slack, unlike the other two: it moves only
 /// when one specific address is rowed, and that move is far too small for their
 /// slack to notice, so nothing else would ever ask for it to be re-recorded.
-constexpr uint64_t kUnrowedWidestGap = 111;
+constexpr uint64_t kUnrowedWidestGap = 110;
 
 /// A ceiling nobody lowers stops describing the table and starts describing
 /// whenever it was last written, so a run far enough under one fails too, with

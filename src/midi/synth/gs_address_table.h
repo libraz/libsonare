@@ -111,6 +111,9 @@ enum class GsLevel : uint8_t {
   X(kPartToneMap0Number)    \
   X(kPartEqSwitch)          \
   X(kPartEfxAssign)         \
+  X(kUserDrumSourceMap)     \
+  X(kUserDrumSourceProgram) \
+  X(kUserDrumSourceNote)    \
   X(kDrumMapName)           \
   X(kDrumPlayNote)          \
   X(kDrumLevel)             \
@@ -179,7 +182,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 108> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 111> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -188,6 +191,25 @@ inline constexpr std::array<GsAddressEntry, 108> kGsAddressTable = {{
      "libsonare receives one port, so a channel has no second port to be assigned to"},
     {0x000110, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x01, 0x01,
      "libsonare receives one port, so a channel has no second port to be assigned to"},
+
+    // User drum sets (21 dn rr): two kits a file builds note by note and a
+    // rhythm part selects with program 64 or 65. d is the set, n the parameter,
+    // rr the note. Nibbles 1-9 repeat the drum setup block at 41 mn rr; A, B and
+    // C are this block's own and say where each note's sound comes from — the
+    // tone map, the rhythm program, and the note within that kit.
+    // The map narrows which generation the source program may come from, and
+    // every kit kGsDrumKits voices is reachable without it, so a written map can
+    // only take a kit away. It is held nowhere for that reason.
+    {0x210A00, 0x00F07F, GsParam::kUserDrumSourceMap, GsLevel::kAccept, 1, 0x00, 0x03, 0x00,
+     "the source program reaches every kit on its own; the map can only narrow that to one "
+     "generation"},
+    {0x210B00, 0x00F07F, GsParam::kUserDrumSourceProgram, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    // The identity source note is the address's own, which one def byte cannot
+    // carry; 00 stands in and the flag is what an unwritten note reads, as for
+    // PLAY NOTE NUMBER at 41 m1 rr.
+    {0x210C00, 0x00F07F, GsParam::kUserDrumSourceNote, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
 
     // System parameters (40 00 xx).
     // MASTER TUNE is four nibbles making one 0018-07E8 word; the row bounds the

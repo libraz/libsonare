@@ -43,6 +43,9 @@ constexpr double kTwoPi = 6.28318530717958647692;
 constexpr uint8_t kDrumChannel = 9;
 constexpr uint8_t kNoteA = 38;
 constexpr uint8_t kNoteB = 42;
+/// The rhythm program a user drum note is pointed at, and a kit both banks
+/// voice apart from the Standard set a part powers on with: TR-808.
+constexpr uint8_t kSourceKitProgram = 25;
 /// Long enough for the power-on 340 ms delay tap to land inside the render, so
 /// a delay-send probe has something to move.
 constexpr int kHeld = 6000;
@@ -72,9 +75,24 @@ std::shared_ptr<Sf2File> make_fixture() {
   zone.target = sine_id;
   const int inst = b.add_instrument("sineinst", {zone});
 
+  // A second kit, voiced by a one-shot burst so it cannot be mistaken for the
+  // first. resolve_preset falls every rhythm program back to program 0, so with
+  // one kit a write that chooses BETWEEN kits has nothing to choose.
+  std::vector<float> burst(4096);
+  for (size_t i = 0; i < burst.size(); ++i) {
+    const float envl = 1.0f - static_cast<float>(i) / static_cast<float>(burst.size());
+    burst[i] = envl * static_cast<float>(std::sin(kTwoPi * static_cast<double>(i) / 7.0));
+  }
+  const int burst_id = b.add_sample("burst", burst, 48000, 60, 0, 4096);
+  Sf2Builder::ZoneSpec burst_zone;
+  burst_zone.target = burst_id;
+  const int burst_inst = b.add_instrument("burstinst", {burst_zone});
+
   Sf2Builder::ZoneSpec pz;
   pz.target = inst;
   b.add_preset("Kit", 128, 0, {pz});
+  pz.target = burst_inst;
+  b.add_preset("Kit 2", 128, kSourceKitProgram, {pz});
 
   const auto bytes = b.build();
   auto sf2 = std::make_shared<Sf2File>();
@@ -119,6 +137,17 @@ std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
 uint32_t drum_addr(uint8_t map, uint8_t param, uint8_t note) {
   return 0x410000u | (static_cast<uint32_t>(map) << 12) | (static_cast<uint32_t>(param) << 8) |
          note;
+}
+
+/// The 21 dn rr address for user drum set @p set, parameter nibble @p param,
+/// drum note @p note.
+uint32_t user_drum_addr(uint8_t set, uint8_t param, uint8_t note) {
+  return 0x210000u | (static_cast<uint32_t>(set) << 12) | (static_cast<uint32_t>(param) << 8) |
+         note;
+}
+
+void program_change(Sf2Player& p, uint8_t channel, uint8_t program) {
+  p.on_event(0, event(sonare::midi::make_midi1_program_change(0, channel, program)));
 }
 
 void sysex(Sf2Player& p, const std::vector<uint8_t>& msg) {
@@ -378,5 +407,55 @@ TEST_CASE("a GS drum send scales the part's send and 7F is unity", "[midi][synth
       sysex(player, dt1(drum_addr(0, p.param_nibble, kNoteA), {0x00}));
     });
     CHECK_FALSE(identical(silenced, untouched));
+  }
+}
+
+TEST_CASE("21 dB/dC rr say which kit piece a user drum note sounds", "[midi][synth][gs]") {
+  // Set 1, selected the way a file selects it. Written on its own it points at
+  // nothing, which is the state the set powers on in.
+  const Writes empty_set = [](Sf2Player& player) {
+    program_change(player, kDrumChannel, sonare::midi::synth::kGsUserDrumSetProgram);
+  };
+
+  SECTION("a set nobody wrote sounds what the part sounded without it") {
+    // The identity value of every source row at once: selecting a user drum set
+    // is audible only through what has been written into it.
+    for (const bool soundfont : {true, false}) {
+      INFO((soundfont ? "soundfont bank" : "model bank"));
+      CHECK(identical(render_one(kNoteA, kNoteA, soundfont, empty_set),
+                      render_one(kNoteA, kNoteA, soundfont, nullptr)));
+    }
+  }
+
+  SECTION("SOURCE NOTE NUMBER sounds the note it names") {
+    const Writes source_b = [&empty_set](Sf2Player& player) {
+      empty_set(player);
+      sysex(player, dt1(user_drum_addr(0, 0xC, kNoteA), {kNoteB}));
+    };
+    for (const bool soundfont : {true, false}) {
+      INFO((soundfont ? "soundfont bank" : "model bank"));
+      const StereoRender struck_b = render_one(kNoteB, kNoteB, soundfont, empty_set);
+      CHECK_FALSE(identical(render_one(kNoteA, kNoteA, soundfont, empty_set), struck_b));
+      // By identity, not by movement: A sourced from B has to BE B.
+      CHECK(identical(render_one(kNoteA, kNoteA, soundfont, source_b), struck_b));
+    }
+  }
+
+  SECTION("SOURCE DRUM SET sounds the kit it names") {
+    const Writes source_kit = [&empty_set](Sf2Player& player) {
+      empty_set(player);
+      sysex(player, dt1(user_drum_addr(0, 0xB, kNoteA), {kSourceKitProgram}));
+    };
+    // The same kit reached the ordinary way, which is what the note has to sound
+    // like: a source program is the rhythm program of a preset set.
+    const Writes preset_kit = [](Sf2Player& player) {
+      program_change(player, kDrumChannel, kSourceKitProgram);
+    };
+    for (const bool soundfont : {true, false}) {
+      INFO((soundfont ? "soundfont bank" : "model bank"));
+      const StereoRender direct = render_one(kNoteA, kNoteA, soundfont, preset_kit);
+      CHECK_FALSE(identical(render_one(kNoteA, kNoteA, soundfont, empty_set), direct));
+      CHECK(identical(render_one(kNoteA, kNoteA, soundfont, source_kit), direct));
+    }
   }
 }

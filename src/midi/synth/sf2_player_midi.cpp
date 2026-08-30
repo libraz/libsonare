@@ -78,6 +78,14 @@ void Sf2Player::choke_part(uint8_t channel, int note) noexcept {
   }
 }
 
+const GsUserDrumSource* Sf2Player::user_drum_source(const ChannelState& ch, bool is_drum,
+                                                    uint8_t note) const noexcept {
+  if (!is_drum) return nullptr;
+  const int set = ch.user_drum_set();
+  if (set < 0) return nullptr;
+  return &user_drum_sources_[static_cast<size_t>(set)][note & 0x7Fu];
+}
+
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
@@ -103,8 +111,13 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
     fallback_note_on(channel, note, velocity, source_track_id, porta);
     return;
   }
+  // GS user drum set (21 dn rr): rhythm programs 64 and 65 play a kit the file
+  // built note by note, so both the kit this strike sounds and the note within
+  // it come from the set rather than from the part and the key.
+  const GsUserDrumSource* us = user_drum_source(ch, is_drum, note);
+  const uint8_t kit_program = us != nullptr ? us->program : ch.program;
   // No SoundFont / uncovered program -> the data-free synth floor.
-  const int preset_idx = soundfont_ != nullptr ? resolve_preset(bank, ch.program) : -1;
+  const int preset_idx = soundfont_ != nullptr ? resolve_preset(bank, kit_program) : -1;
   if (preset_idx < 0) {
     if (config_.synth_fallback) fallback_note_on(channel, note, velocity, source_track_id, porta);
     return;
@@ -126,8 +139,9 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
 
   // GS PLAY NOTE NUMBER (41 m1 rr): the note whose SOUND this strike plays.
   // Zone selection and the resolved params follow it; the per-note slab, the
-  // choke and the voice's own note stay on the struck note.
-  uint8_t sound_note = note & 0x7Fu;
+  // choke and the voice's own note stay on the struck note. The map's edit sits
+  // ON TOP of the user set's source note, which is the stored kit it edits.
+  uint8_t sound_note = gs_user_drum_sound_note(us, note);
   if (is_drum) {
     const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
     if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
@@ -207,7 +221,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // kit piece answers and ASSIGN GROUP which group it belongs to, and both are
   // needed before the choke below, let alone the voice.
   const GsDrumNoteParams* gd = is_drum ? &drum_params_[ch.drum_map_slot()][note & 0x7Fu] : nullptr;
-  uint8_t sound_note = note & 0x7Fu;
+  // The user drum set under them: it says which stored kit and which note within
+  // it this strike sounds, and the map's edits above are what edits that.
+  const GsUserDrumSource* us = user_drum_source(ch, is_drum, note);
+  uint8_t sound_note = gs_user_drum_sound_note(us, note);
   if (gd != nullptr && (gd->flags & GsDrumNoteParams::kPlayNote) != 0) {
     sound_note = gd->play_note;
   }
@@ -286,7 +303,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   }
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
-  const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(ch.program, tone_map) : 0;
+  // A user drum set names the kit per note, so the program that picks the
+  // variation is the note's source rather than the part's.
+  const uint8_t kit_program = us != nullptr ? us->program : ch.program;
+  const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(kit_program, tone_map) : 0;
   // GS per-note drum edits (pitch coarse / TVA level / absolute pan / the three
   // send multiplicands), mirroring apply_gs_drum_params for the model floor: a
   // parameter must not do something different because this bank answered.
@@ -311,11 +331,16 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
     if ((gd->flags & GsDrumNoteParams::kDelay) != 0) {
       drum_mod.delay_scale = static_cast<float>(gd->delay & 0x7Fu) / 127.0f;
     }
-    if ((gd->flags & GsDrumNoteParams::kPlayNote) != 0) {
-      drum_mod.play_note = static_cast<int16_t>(gd->play_note & 0x7Fu);
-    }
     // Resolved above, beside the choke that had to read it first.
     drum_mod.exclusive_class = static_cast<int16_t>(exclusive_class);
+  }
+  // The note the voice is STARTED at. Both PLAY NOTE NUMBER and a user set's
+  // source note move it, and the patch above is already chosen by it, so it is
+  // carried from the resolved note rather than from either of them: leaving it
+  // on the struck note gives the right kit piece at the wrong pitch, which
+  // renders plausibly and is not the note that was asked for.
+  if (sound_note != (note & 0x7Fu)) {
+    drum_mod.play_note = static_cast<int16_t>(sound_note);
   }
   // Drawbar percussion spends the channel's charge; note_off recharges it once
   // the last key is up.

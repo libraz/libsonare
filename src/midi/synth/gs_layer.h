@@ -186,6 +186,48 @@ struct GsDrumNoteParams {
   bool any() const noexcept { return flags != 0; }
 };
 
+/// Rhythm-part programs selecting the two user drum sets at 21 dn rr: 64 is set
+/// 1 and 65 is set 2. They sit outside kGsDrumKits, which is what leaves them
+/// free to mean this.
+inline constexpr uint8_t kGsUserDrumSetProgram = 64;
+inline constexpr uint8_t kGsUserDrumSetCount = 2;
+
+/// The user drum set @p program selects on a rhythm part, or -1 for a program
+/// that selects a preset kit.
+constexpr int gs_user_drum_set(uint8_t program) noexcept {
+  const int index = static_cast<int>(program & 0x7Fu) - kGsUserDrumSetProgram;
+  return index >= 0 && index < kGsUserDrumSetCount ? index : -1;
+}
+
+/// Where one note of a user drum set takes its sound from (GS addresses
+/// 21 dB/dC rr): a rhythm program, and the note within that kit. The rest of a
+/// user drum note is GsDrumNoteParams, which the set shares with the drum setup
+/// block; 21 dA rr, the generation the program is read in, is held nowhere
+/// (docs/gs.md).
+///
+/// The program holds the value that changes nothing — the Standard kit a rhythm
+/// part already falls back to — so a set nobody wrote sounds as the part would
+/// without it. The source NOTE has no such value, its identity being the struck
+/// note, so it is read behind its flag.
+struct GsUserDrumSource {
+  enum Flag : uint8_t {
+    kSourceNote = 1u << 0,
+  };
+  uint8_t flags = 0;
+  uint8_t program = 0;      // rhythm-part program of the source kit (data)
+  uint8_t source_note = 0;  // the note within that kit (data)
+};
+
+/// The note @p src sounds for a strike on @p struck — the struck note itself
+/// where the set redirects nothing, and for @p src null, which is a part playing
+/// a preset kit.
+constexpr uint8_t gs_user_drum_sound_note(const GsUserDrumSource* src, uint8_t struck) noexcept {
+  if (src != nullptr && (src->flags & GsUserDrumSource::kSourceNote) != 0) {
+    return src->source_note & 0x7Fu;
+  }
+  return struck & 0x7Fu;
+}
+
 /// GS insertion effect (EFX) state, stored as the RAW GS wire so any adapter
 /// can interpret it without a typed per-effect struct. The SC-55/88 EFX is a
 /// single insertion unit whose type is a 14-bit number (two 7-bit SysEx bytes)

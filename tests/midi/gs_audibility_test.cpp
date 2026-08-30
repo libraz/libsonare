@@ -121,6 +121,9 @@ enum class Setup : uint8_t {
   /// The rhythm part's SECOND note put in a group, where an assign group only
   /// says something once two notes are in one.
   kDrumGroupPeer,
+  /// The rhythm part switched to a user drum set, which is the only state in
+  /// which anything reads the 21 dn rr block.
+  kUserDrumSet,
 };
 
 const char* setup_name(Setup setup) {
@@ -143,6 +146,8 @@ const char* setup_name(Setup setup) {
       return "mod-wheel-up";
     case Setup::kDrumGroupPeer:
       return "drum-group-peer";
+    case Setup::kUserDrumSet:
+      return "user-drum-set";
   }
   return "?";
 }
@@ -177,6 +182,7 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
       return {dt1(0x410300u | kProbeDrumPeerNote, {0x7F})};
     case Setup::kBendApplied:
     case Setup::kModWheelUp:
+    case Setup::kUserDrumSet:
       return {};
   }
   return {};
@@ -223,6 +229,11 @@ Setup setup_for(const GsAddressEntry& row) {
     // A group is a relation, so one note in it chokes nothing.
     case GsParam::kDrumAssignGroup:
       return Setup::kDrumGroupPeer;
+    // A user drum set is stored whether or not anything plays it; the rhythm
+    // part has to have selected it before a note reads one.
+    case GsParam::kUserDrumSourceProgram:
+    case GsParam::kUserDrumSourceNote:
+      return Setup::kUserDrumSet;
     default:
       return Setup::kNone;
   }
@@ -359,6 +370,12 @@ std::shared_ptr<const Sf2File> fixture() {
     b.add_preset("Sine", 0, 0, {pz});
     pz.target = burst_inst;
     b.add_preset("Kit", 128, 0, {pz});
+    // A second rhythm kit, voiced by the looped sine so it cannot be mistaken
+    // for the first. resolve_preset falls every rhythm program back to program
+    // 0, so with one kit a row that chooses BETWEEN kits has nothing to choose
+    // and reads as inert on this bank however well it works.
+    pz.target = sine_inst;
+    b.add_preset("Kit 2", 128, 127, {pz});
 
     const auto bytes = b.build();
     auto sf2 = std::make_shared<Sf2File>();
@@ -398,6 +415,12 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
     p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, ch, 16383)));
   } else if (setup == Setup::kModWheelUp) {
     cc(p, ch, 1, 127);
+  } else if (setup == Setup::kUserDrumSet) {
+    // Set 1, on the rhythm part the stimulus strikes. With nothing written to
+    // the set this sounds the Standard kit, which is what the part was already
+    // playing, so the baseline it renders is the probe's only difference.
+    p.on_event(0, event(sonare::midi::make_midi1_program_change(
+                      0, 9, sonare::midi::synth::kGsUserDrumSetProgram)));
   }
 }
 

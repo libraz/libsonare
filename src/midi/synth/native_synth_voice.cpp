@@ -108,9 +108,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   DahdsrConfig amp_cfg = p.amp_env;
   float kit_gain = 1.0f;
 
-  // Everything below voices the note rather than tracking the key, so a GS PLAY
-  // NOTE NUMBER substitution reaches all of it; `note` stays the struck one,
-  // which is what a note-off matches.
+  // Everything below voices the note rather than tracking the key, so a GS note
+  // substitution — PLAY NOTE NUMBER or a user drum set's source — reaches all of
+  // it; `note` stays the struck one, which is what a note-off matches.
   const uint8_t voiced_note =
       drum_mod.play_note >= 0 ? static_cast<uint8_t>(drum_mod.play_note) : note;
   exclusive_class = drum_mod.exclusive_class >= 0 ? static_cast<uint8_t>(drum_mod.exclusive_class)

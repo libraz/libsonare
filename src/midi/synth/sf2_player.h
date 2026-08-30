@@ -346,6 +346,11 @@ class Sf2Player final : public MidiInstrument {
     /// Index into the per-map drum-edit slabs. A part that reached the drum
     /// bank without a GS map (GM2 CC0=120) reads map 1's.
     size_t drum_map_slot() const noexcept { return drum_map > kGsDrumMap1 ? 1u : 0u; }
+    /// The user drum set this part's program selects, or -1. Derived rather than
+    /// stored, so a program change carries it with no second write to keep in
+    /// step. The caller gates it on the note's own rhythm test: whether a part
+    /// reached the drum bank is note_on's question, not the GS map field's.
+    int user_drum_set() const noexcept { return gs_user_drum_set(program); }
 
     /// Combined master tuning as a pitch offset in cents (0 at the defaults).
     /// PITCH KEY SHIFT is deliberately not here: it is the one pitch offset a
@@ -398,6 +403,12 @@ class Sf2Player final : public MidiInstrument {
   void refresh_channel_mod(uint8_t channel) noexcept;
   /// Effective SF2 bank for a channel (GS rhythm parts and GM2 CC0=120 -> 128).
   uint16_t effective_bank(uint8_t channel) const noexcept;
+  /// The user drum set entry a strike on @p note reads, or nullptr when the part
+  /// plays a preset kit. @p is_drum is the caller's own rhythm test — whether
+  /// the part resolved the drum bank, which a GM2 CC0=120 part does without a GS
+  /// map field.
+  const GsUserDrumSource* user_drum_source(const ChannelState& ch, bool is_drum,
+                                           uint8_t note) const noexcept;
   /// Preset index for (bank, program) with GS-style fallbacks, or -1.
   int resolve_preset(uint16_t bank, uint8_t program) const noexcept;
   /// Recompute tail_samples_ from the SoundFont release scan, the synth
@@ -460,6 +471,10 @@ class Sf2Player final : public MidiInstrument {
   std::array<bool, 16> eq_bypassed_{};
   /// GS drum-kit per-note overrides (NRPN 18/1A/1C/1D/1E), per drum map.
   std::array<std::array<GsDrumNoteParams, 128>, kGsDrumMapCount> drum_params_{};
+  /// Where each note of each user drum set takes its sound from (21 dA/dB/dC
+  /// rr). Per SET, not per part or per map: a set is a stored kit, and every
+  /// rhythm part that selects it with program 64/65 plays the same one.
+  std::array<std::array<GsUserDrumSource, 128>, kGsUserDrumSetCount> user_drum_sources_{};
   VoicePool<Sf2Voice> pool_;
   /// Synth-fallback voices (programs no SoundFont preset covers).
   VoicePool<NativeSynthVoice> fallback_pool_;
@@ -656,6 +671,7 @@ class Sf2Player final : public MidiInstrument {
   /// thread already writes, so this shares that storage (docs/gs.md). Returns
   /// true when the message wrote at least one drum note.
   bool apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept;
+  bool apply_gs_user_drum_sysex(const uint8_t* data, size_t size) noexcept;
   /// The two output-leg gains: the host's own gain times GS MASTER VOLUME and
   /// MASTER PAN. Every path that leaves the player passes through these, and
   /// both are exactly config_.gain at the GS power-on values.

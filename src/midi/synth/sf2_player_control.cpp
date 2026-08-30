@@ -53,6 +53,9 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   // above and for the same reason: the slab it writes is the one the drum NRPNs
   // already write from on_event, and a note-on reads it there.
   if (apply_gs_drum_sysex(data, size)) return true;
+  // User drum sets (21 dn rr), on the same thread split: a note-on reads them
+  // where it reads the drum setup slab.
+  if (apply_gs_user_drum_sysex(data, size)) return true;
   // GS insertion-effect (EFX) block writes (address 40 03 xx). Offline captures
   // the raw wire into the mirror so process() can realise it inline; live routes
   // realisation through the control thread (on_control_sysex), so the audio
@@ -344,6 +347,35 @@ bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kDrumDelaySend:
         d.delay = w.value;
         d.flags |= GsDrumNoteParams::kDelay;
+        break;
+      default:
+        continue;
+    }
+    touched = true;
+  }
+  return touched;
+}
+
+bool Sf2Player::apply_gs_user_drum_sysex(const uint8_t* data, size_t size) noexcept {
+  // Same run shape as the drum setup block above: a set is written note by note
+  // as one run per parameter, so the buffer holds a whole 128-note run.
+  constexpr size_t kMaxWrites = 128;
+  GsWrite writes[kMaxWrites];
+  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
+  bool touched = false;
+  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
+    const GsWrite& w = writes[i];
+    const GsAddressEntry* entry = gs_lookup_address(w.addr);
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    if (w.part >= kGsUserDrumSetCount) continue;
+    GsUserDrumSource& src = user_drum_sources_[w.part][w.index & 0x7Fu];
+    switch (w.param) {
+      case GsParam::kUserDrumSourceProgram:
+        src.program = w.value;
+        break;
+      case GsParam::kUserDrumSourceNote:
+        src.source_note = w.value;
+        src.flags |= GsUserDrumSource::kSourceNote;
         break;
       default:
         continue;

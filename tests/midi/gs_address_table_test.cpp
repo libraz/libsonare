@@ -295,6 +295,15 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x404022, 0x01, GsParam::kPartEfxAssign, 0, 9);
   check_row(0x404122, 0x10, GsParam::kPartEfxAssign, 0, 0);
 
+  // User drum sets (21 dn rr): the same shape as the drum setup block, so the
+  // set nibble comes back as the part and the note as the index.
+  check_row(0x210A26, 0x03, GsParam::kUserDrumSourceMap, 0x26, 0);
+  check_row(0x211A2A, 0x00, GsParam::kUserDrumSourceMap, 0x2A, 1);
+  check_row(0x210B26, 0x19, GsParam::kUserDrumSourceProgram, 0x26, 0);
+  check_row(0x211B7F, 0x7F, GsParam::kUserDrumSourceProgram, 0x7F, 1);
+  check_row(0x210C00, 0x2A, GsParam::kUserDrumSourceNote, 0x00, 0);
+  check_row(0x211C39, 0x23, GsParam::kUserDrumSourceNote, 0x39, 1);
+
   // Drum setup (41 mn rr): one row per parameter covers both maps and all 128
   // notes, so the map nibble comes back as the part and the note as the index.
   // The nibble is zero-based here, unlike 40 1x 15's value.
