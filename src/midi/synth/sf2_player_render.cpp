@@ -218,9 +218,12 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           cho_l[i] += l * cs;
           cho_r[i] += r * cs;
         }
-        if (mod.delay_send > 0.0f) {
-          dly_l[i] += l * mod.delay_send;
-          dly_r[i] += r * mod.delay_send;
+        // The part's own send, scaled by the drum note's multiplicand — unity
+        // for every voice carrying no 41 m9 rr / NRPN 1F edit.
+        const float ds = mod.delay_send * v.params.delay_send_scale;
+        if (ds > 0.0f) {
+          dly_l[i] += l * ds;
+          dly_r[i] += r * ds;
         }
       }
 #endif

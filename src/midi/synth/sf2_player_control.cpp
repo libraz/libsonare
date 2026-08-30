@@ -49,6 +49,10 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   if (apply_gs_part_sysex(data, size)) return true;
   // Master tuning / volume / pan (40 00 00-06), on the same thread split.
   if (apply_gs_master_sysex(data, size)) return true;
+  // Drum setup (41 mn rr). Render thread in both modes, like the part block
+  // above and for the same reason: the slab it writes is the one the drum NRPNs
+  // already write from on_event, and a note-on reads it there.
+  if (apply_gs_drum_sysex(data, size)) return true;
   // GS insertion-effect (EFX) block writes (address 40 03 xx). Offline captures
   // the raw wire into the mirror so process() can realise it inline; live routes
   // realisation through the control thread (on_control_sysex), so the audio
@@ -272,6 +276,54 @@ bool Sf2Player::apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept
         break;
       case GsParam::kMasterPan:
         master_.pan = w.value;
+        break;
+      default:
+        continue;
+    }
+    touched = true;
+  }
+  return touched;
+}
+
+bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
+  // A drum setup dump writes consecutive notes as one run, so every decoded byte
+  // is applied rather than the first (apply_gs_system_sysex's pattern) and the
+  // buffer holds one write per drum note, which is as long as a run can be.
+  constexpr size_t kMaxWrites = 128;
+  GsWrite writes[kMaxWrites];
+  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
+  bool touched = false;
+  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
+    const GsWrite& w = writes[i];
+    const GsAddressEntry* entry = gs_lookup_address(w.addr);
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    // The address nibble is zero-based, so it indexes the slabs directly — where
+    // 40 1x 15's value is one-based and goes through drum_map_slot(). A map the
+    // machine does not have is ignored like any other out-of-range write.
+    if (w.part >= kGsDrumMapCount) continue;
+    GsDrumNoteParams& d = drum_params_[w.part][w.index & 0x7Fu];
+    switch (w.param) {
+      case GsParam::kDrumLevel:
+        d.level = w.value;
+        d.flags |= GsDrumNoteParams::kLevel;
+        break;
+      case GsParam::kDrumPanpot:
+        // 00 is RANDOM at this address and hard left through NRPN 1C, the same
+        // split 40 1x 1C and CC10 have; randomness answers centre (docs/gs.md).
+        d.pan = w.value == 0 ? 0x40 : w.value;
+        d.flags |= GsDrumNoteParams::kPan;
+        break;
+      case GsParam::kDrumReverbSend:
+        d.reverb = w.value;
+        d.flags |= GsDrumNoteParams::kReverb;
+        break;
+      case GsParam::kDrumChorusSend:
+        d.chorus = w.value;
+        d.flags |= GsDrumNoteParams::kChorus;
+        break;
+      case GsParam::kDrumDelaySend:
+        d.delay = w.value;
+        d.flags |= GsDrumNoteParams::kDelay;
         break;
       default:
         continue;

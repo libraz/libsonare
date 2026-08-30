@@ -181,6 +181,9 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
   if ((drum.flags & GsDrumNoteParams::kChorus) != 0) {
     params.chorus_send *= static_cast<float>(drum.chorus & 0x7Fu) / 127.0f;
   }
+  if ((drum.flags & GsDrumNoteParams::kDelay) != 0) {
+    params.delay_send_scale *= static_cast<float>(drum.delay & 0x7Fu) / 127.0f;
+  }
 }
 
 GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {

@@ -227,6 +227,16 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x404022, 0x01, GsParam::kPartEfxAssign, 0, 9);
   check_row(0x404122, 0x10, GsParam::kPartEfxAssign, 0, 0);
 
+  // Drum setup (41 mn rr): one row per parameter covers both maps and all 128
+  // notes, so the map nibble comes back as the part and the note as the index.
+  // The nibble is zero-based here, unlike 40 1x 15's value.
+  check_row(0x410226, 0x00, GsParam::kDrumLevel, 0x26, 0);
+  check_row(0x411226, 0x7F, GsParam::kDrumLevel, 0x26, 1);
+  check_row(0x410400, 0x7F, GsParam::kDrumPanpot, 0x00, 0);
+  check_row(0x41057F, 0x00, GsParam::kDrumReverbSend, 0x7F, 0);
+  check_row(0x41163C, 0x00, GsParam::kDrumChorusSend, 0x3C, 1);
+  check_row(0x410926, 0x40, GsParam::kDrumDelaySend, 0x26, 0);
+
   std::string untested;
   for (size_t i = 0; i < kGsAddressTable.size(); ++i) {
     if (g_covered[i]) continue;
@@ -469,7 +479,7 @@ TEST_CASE("GS address table: a variable nibble resolves to its entity", "[midi][
   CHECK(gs_address_block_index(0x404F22, 0x000F00) == 15);
   // An EFX unit and a drum map are the raw nibble, in different positions.
   CHECK(gs_address_block_index(0x403500, 0x000F00) == 5);
-  CHECK(gs_address_block_index(0x41123C, 0x00F0FF) == 1);
+  CHECK(gs_address_block_index(0x41123C, 0x00F07F) == 1);
   // No variable nibble.
   CHECK(gs_address_block_index(0x400004, 0x000000) == 0);
 }
@@ -477,12 +487,16 @@ TEST_CASE("GS address table: a variable nibble resolves to its entity", "[midi][
 TEST_CASE("GS address table: a masked row claims exactly its own addresses",
           "[midi][gs][address]") {
   using sonare::midi::synth::detail::gs_row_claims;
-  // The shape a drum-setup row will take: a variable map nibble in the mid byte
-  // and a variable note in the low byte.
-  const GsAddressEntry drum_level{
-      0x410200, 0x00F0FF, GsParam::kUnknown, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr};
+  // The shape of a drum-setup row: a variable map nibble in the mid byte and a
+  // variable note in the low byte. The note mask is 7 bits, not 8 — a GS address
+  // byte carries no more, and a row is not allowed to reach past 7F.
+  const GsAddressEntry* drum_level_row = gs_lookup_address(0x410200);
+  REQUIRE(drum_level_row != nullptr);
+  const GsAddressEntry& drum_level = *drum_level_row;
+  CHECK(drum_level.mask == 0x00F07Fu);
   CHECK(gs_row_claims(drum_level, 0x410200));
   CHECK(gs_row_claims(drum_level, 0x41023C));
+  CHECK(gs_row_claims(drum_level, 0x41027F));
   CHECK(gs_row_claims(drum_level, 0x41123C));        // map 2
   CHECK_FALSE(gs_row_claims(drum_level, 0x41013C));  // a neighbouring parameter group
   CHECK_FALSE(gs_row_claims(drum_level, 0x40023C));  // another block entirely

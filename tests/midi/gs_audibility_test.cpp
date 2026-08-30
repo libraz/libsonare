@@ -221,11 +221,18 @@ Probe probe_for(const GsAddressEntry& row) {
   return {std::vector<uint8_t>(row.size, value), nullptr};
 }
 
+/// The note the rhythm part sounds first, and the one a drum-setup row is probed
+/// on: an edit to any other note is inaudible however well the row works.
+constexpr uint32_t kProbeDrumNote = 38;
+
 /// The concrete address a row is probed at: a part row resolves its block nibble
-/// to the melodic part the stimulus plays. A channel-nibble row (00 01 xx) is
-/// probed at channel 0, which its base address already carries.
+/// to the melodic part the stimulus plays, and a drum-setup row resolves to map
+/// 1 (the zero-based nibble 0, which channel 9 powers on reading) and a note the
+/// stimulus strikes. A channel-nibble row (00 01 xx) is probed at channel 0,
+/// which its base address already carries.
 uint32_t probe_address(const GsAddressEntry& row) {
   if (row.mask == 0x000F00u) return row.addr | (static_cast<uint32_t>(kMelodicBlock) << 8);
+  if (row.mask == 0x00F07Fu) return row.addr | kProbeDrumNote;
   return row.addr;
 }
 
@@ -294,6 +301,11 @@ std::shared_ptr<const Sf2File> fixture() {
     looped.target = sine_id;
     const int sine_inst = b.add_instrument("sine", {looped});
     Sf2Builder::ZoneSpec oneshot;
+    // The kit's own reverb and chorus sends, at half scale. A drum note's
+    // 41 m5 / 41 m6 send is a multiplicand of what the zone already sends, so
+    // without them those two rows have nothing to scale and read as unheard.
+    oneshot.gens.push_back({16 /*reverbEffectsSend*/, 500});
+    oneshot.gens.push_back({15 /*chorusEffectsSend*/, 500});
     oneshot.target = burst_id;
     const int burst_inst = b.add_instrument("burst", {oneshot});
 
@@ -490,10 +502,11 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   int probed = 0;
 
   for (const GsAddressEntry& row : kGsAddressTable) {
-    // Only a fixed address, a part block or a channel nibble appears in the
-    // table today. An EFX-unit (40 3u) or drum-map (41 mn) row would need its
-    // own resolution and must not fall through to an untested one.
-    REQUIRE((row.mask == 0 || row.mask == 0x000F00u || row.mask == 0x00000Fu));
+    // Only a fixed address, a part block, a channel nibble or a drum-setup
+    // map+note appears in the table today. An EFX-unit (40 3u) row would need
+    // its own resolution and must not fall through to an untested one.
+    REQUIRE(
+        (row.mask == 0 || row.mask == 0x000F00u || row.mask == 0x00000Fu || row.mask == 0x00F07Fu));
 
     const Probe probe = probe_for(row);
     const Setup setup = setup_for(row);

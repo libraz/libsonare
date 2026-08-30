@@ -649,6 +649,11 @@ class Sf2Player final : public MidiInstrument {
   /// Apply the GS master writes (40 00 00-06) @p data carries. Returns true when
   /// the message wrote at least one of them.
   bool apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept;
+  /// Apply the GS drum setup writes (41 mn rr) @p data carries onto the per-map
+  /// drum-note slabs. Each address is a second name for a drum NRPN the render
+  /// thread already writes, so this shares that storage (docs/gs.md). Returns
+  /// true when the message wrote at least one drum note.
+  bool apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept;
   /// The two output-leg gains: the host's own gain times GS MASTER VOLUME and
   /// MASTER PAN. Every path that leaves the player passes through these, and
   /// both are exactly config_.gain at the GS power-on values.

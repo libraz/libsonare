@@ -100,7 +100,12 @@ enum class GsLevel : uint8_t {
   X(kPartDelaySend)         \
   X(kPartToneModify)        \
   X(kPartEqSwitch)          \
-  X(kPartEfxAssign)
+  X(kPartEfxAssign)         \
+  X(kDrumLevel)             \
+  X(kDrumPanpot)            \
+  X(kDrumReverbSend)        \
+  X(kDrumChorusSend)        \
+  X(kDrumDelaySend)
 
 /// The parameter a decoded byte addresses. kUnknown means no table row claimed
 /// the address; kUndefined means a range-table row did (an address the manual
@@ -119,8 +124,8 @@ const char* gs_param_name(GsParam param) noexcept;
 struct GsAddressEntry {
   /// Base address, with every variable nibble zeroed.
   uint32_t addr;
-  /// The variable nibbles: part (0x000F00), drum map (0x00F000), drum note or
-  /// block number (0x0000FF). Zero for a fixed address.
+  /// The variable nibbles: part or EFX unit (0x000F00), drum map (0x00F000),
+  /// drum note (0x00007F). Zero for a fixed address.
   uint32_t mask;
   GsParam param;
   GsLevel level;
@@ -158,7 +163,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 63> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 68> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -304,6 +309,22 @@ inline constexpr std::array<GsAddressEntry, 63> kGsAddressTable = {{
     // the libsonare extension (docs/gs.md). Narrowing hi back to 01 to restore
     // spec compliance makes the extension unreachable.
     {0x404022, 0x000F00, GsParam::kPartEfxAssign, GsLevel::kAudible, 1, 0x00, 0x10, 0x00, nullptr},
+
+    // Drum setup (41 mn rr): the five parameters the alias table reaches from
+    // the NRPNs as well (docs/gs.md). The map nibble m is zero-based here — 41
+    // 0n rr is MAP1 — where 40 1x 15's VALUE is one-based, and the note is the
+    // whole low byte.
+    //
+    // The manual gives these no power-on value: a drum set change re-initialises
+    // them to what the kit specifies. So each def is the value at which the
+    // parameter changes nothing, which is what an unwritten one has to mean.
+    {0x410200, 0x00F07F, GsParam::kDrumLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
+    // 00 is RANDOM at this address and hard left through NRPN 1C, the same split
+    // 40 1x 1C and CC10 have; it stays in range and answers centre.
+    {0x410400, 0x00F07F, GsParam::kDrumPanpot, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    {0x410500, 0x00F07F, GsParam::kDrumReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
+    {0x410600, 0x00F07F, GsParam::kDrumChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
+    {0x410900, 0x00F07F, GsParam::kDrumDelaySend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
 }};
 
 /// The undefined regions covered so far.

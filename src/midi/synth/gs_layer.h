@@ -145,7 +145,13 @@ inline constexpr uint8_t kGsToneModifyCount = 8;
 /// the block is ignored.
 void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexcept;
 
-/// Per-note drum overrides (GS NRPN msb 18/1A/1C/1D/1E, lsb = drum note).
+/// Per-note drum overrides (GS NRPN msb 18/1A/1C/1D/1E/1F with the drum note as
+/// the lsb, and the drum setup addresses 41 m2/m4/m5/m6/m9 rr they alias).
+///
+/// Every field holds the value at which the parameter changes nothing. The
+/// manual gives these no power-on value because a drum set change re-initialises
+/// them to what the kit itself specifies, so an unwritten parameter has to mean
+/// "the kit's" — which is also why each field is read only behind its flag.
 struct GsDrumNoteParams {
   enum Flag : uint8_t {
     kPitch = 1u << 0,
@@ -153,13 +159,15 @@ struct GsDrumNoteParams {
     kPan = 1u << 2,
     kReverb = 1u << 3,
     kChorus = 1u << 4,
+    kDelay = 1u << 5,
   };
   uint8_t flags = 0;
   int8_t pitch_coarse = 0;  // semitones (data - 64)
   uint8_t level = 127;      // absolute TVA level (data)
   uint8_t pan = 64;         // absolute pan (data; 64 = centre)
-  uint8_t reverb = 0;       // absolute per-note reverb send (data)
-  uint8_t chorus = 0;       // absolute per-note chorus send (data)
+  uint8_t reverb = 127;     // reverb-send multiplicand (data)
+  uint8_t chorus = 127;     // chorus-send multiplicand (data)
+  uint8_t delay = 127;      // delay-send multiplicand (data)
 
   bool any() const noexcept { return flags != 0; }
 };
@@ -280,8 +288,9 @@ float gs_vib_depth_cents(int8_t offset) noexcept;
 void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept;
 
 /// Applies the per-note drum overrides onto resolved voice parameters.
-/// The reverb/chorus sends are additive contributions in [0, 0.2] (the same
-/// depth scale as the CC send default modulators).
+/// The three sends multiply what the part is already sending rather than adding
+/// to it (docs/gs.md); the delay one lands on delay_send_scale because SF2 has
+/// no delay generator for it to scale.
 void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) noexcept;
 
 // --- SysEx surface ---
