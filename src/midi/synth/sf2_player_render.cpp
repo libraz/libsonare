@@ -62,7 +62,7 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   std::array<Sf2ChannelMod, 16> mods = channel_mods_;
   for (size_t part = 0; part < mods.size(); ++part) {
     mods[part].pitch_cents += channels_[part].tune_cents() + master_cents;
-    if (!channels_[part].drums) {
+    if (!channels_[part].is_drum()) {
       mods[part].pitch_cents +=
           master_key_shift_cents + gs_key_shift_cents(channels_[part].pitch_key_shift);
     }

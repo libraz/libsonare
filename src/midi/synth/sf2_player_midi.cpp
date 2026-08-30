@@ -84,7 +84,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   const Portamento porta = take_portamento(channel, note);
   const ChannelState& ch = channels_[channel & 0x0Fu];
   // Mono already stops everything the part is sounding, so it subsumes SINGLE.
-  if (ch.mono_poly == kGsMonoPolyMono && !ch.drums) {
+  if (ch.mono_poly == kGsMonoPolyMono && !ch.is_drum()) {
     choke_part(channel, -1);
   } else if (ch.assign_mode == kGsAssignModeSingle) {
     choke_part(channel, note & 0x7F);
@@ -155,7 +155,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       // GS layer: NRPN part edits + per-note drum-kit overrides.
       apply_gs_part_params(params, ch.gs);
       if (is_drum) {
-        apply_gs_drum_params(params, drum_params_[channel & 0x0Fu][note & 0x7Fu]);
+        apply_gs_drum_params(params, drum_params_[ch.drum_map_slot()][note & 0x7Fu]);
       }
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
@@ -263,7 +263,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // on the SF2 path).
   DrumVoiceMod drum_mod;
   if (is_drum) {
-    const GsDrumNoteParams& gd = drum_params_[channel & 0x0Fu][note & 0x7Fu];
+    const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
     if ((gd.flags & GsDrumNoteParams::kPitch) != 0 && gd.pitch_coarse != 0) {
       drum_mod.pitch_ratio = std::exp2(static_cast<float>(gd.pitch_coarse) / 12.0f);
     }
@@ -530,10 +530,14 @@ void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
     }
     return;
   }
+  // A melodic part has no map for the edit to land in, so the write is dropped
+  // here rather than reaching a slab — the same guard as before the re-key.
   const bool is_drum = effective_bank(ch) == kDrumBank;
   if (!is_drum) return;
-  // GS drum-kit NRPNs: msb selects the parameter, lsb is the drum note.
-  GsDrumNoteParams& d = drum_params_[ch][st.params.nrpn_lsb & 0x7Fu];
+  // GS drum-kit NRPNs: msb selects the parameter, lsb is the drum note. The
+  // edit is stored under the writing part's map, so every part on that map
+  // sees it.
+  GsDrumNoteParams& d = drum_params_[st.drum_map_slot()][st.params.nrpn_lsb & 0x7Fu];
   switch (st.params.nrpn_msb) {
     case 0x18:
       d.pitch_coarse = offset;

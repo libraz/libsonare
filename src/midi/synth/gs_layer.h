@@ -127,6 +127,13 @@ inline constexpr uint8_t kGsAssignModeSingle = 0;
 inline constexpr uint8_t kGsMonoPolyMono = 0;
 inline constexpr uint8_t kGsMonoPolyPoly = 1;
 
+/// USE FOR RHYTHM PART (GS address 40 1x 15): 00 melodic, 01/02 drum map 1/2.
+/// The drum setup address 41 mn rr addresses a map and not a part, so per-note
+/// drum edits are stored per map and two parts on one map share them.
+inline constexpr uint8_t kGsDrumMapNone = 0;
+inline constexpr uint8_t kGsDrumMap1 = 1;
+inline constexpr uint8_t kGsDrumMapCount = 2;
+
 /// Number of TONE MODIFY parameters (GS address 40 1x 30-37), which is also the
 /// number of GsPartParams fields: the two are the same set reached from two
 /// directions, so a field added to one without the other is a defect.

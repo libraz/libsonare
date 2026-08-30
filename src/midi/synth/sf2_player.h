@@ -331,9 +331,19 @@ class Sf2Player final : public MidiInstrument {
     /// CC126 / CC127 (docs/gs.md), and like key shift it does not reach a
     /// rhythm part.
     uint8_t mono_poly = 1;
-    /// GS layer: rhythm-part flag (drums resolve bank 128) and NRPN edits.
-    bool drums = false;
+    /// GS 40 1x 15 USE FOR RHYTHM PART: 0 melodic, 1/2 drum map 1/2. A rhythm
+    /// part resolves bank 128, and the map is what its per-note drum edits are
+    /// keyed by, so two parts on one map share them (docs/gs.md). This carries
+    /// the VALUE's numbering; the m nibble of the 41 mn rr drum setup address
+    /// is zero-based (0 = MAP1), so it is this field minus one.
+    uint8_t drum_map = kGsDrumMapNone;
+    /// GS layer: the part's NRPN / TONE MODIFY edits.
     GsPartParams gs;
+
+    bool is_drum() const noexcept { return drum_map != kGsDrumMapNone; }
+    /// Index into the per-map drum-edit slabs. A part that reached the drum
+    /// bank without a GS map (GM2 CC0=120) reads map 1's.
+    size_t drum_map_slot() const noexcept { return drum_map > kGsDrumMap1 ? 1u : 0u; }
 
     /// Combined master tuning as a pitch offset in cents (0 at the defaults).
     /// PITCH KEY SHIFT is deliberately not here: it is the one pitch offset a
@@ -446,8 +456,8 @@ class Sf2Player final : public MidiInstrument {
   /// AUDIO thread: the master EQ stage and the parts switched out of it.
   GsMasterEqFilter eq_;
   std::array<bool, 16> eq_bypassed_{};
-  /// GS drum-kit per-note overrides (NRPN 18/1A/1C/1D/1E), per channel.
-  std::array<std::array<GsDrumNoteParams, 128>, 16> drum_params_{};
+  /// GS drum-kit per-note overrides (NRPN 18/1A/1C/1D/1E), per drum map.
+  std::array<std::array<GsDrumNoteParams, 128>, kGsDrumMapCount> drum_params_{};
   VoicePool<Sf2Voice> pool_;
   /// Synth-fallback voices (programs no SoundFont preset covers).
   VoicePool<NativeSynthVoice> fallback_pool_;

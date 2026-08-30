@@ -119,6 +119,18 @@ void send_nrpn(Sf2Player& player, uint8_t channel, uint8_t msb, uint8_t lsb, uin
   player.on_event(0, event(sonare::midi::make_midi1_control_change(0, channel, 6, value)));
 }
 
+/// 40 1x 15 USE FOR RHYTHM PART for @p channel with drum map @p map, carrying
+/// its checksum. Block 0 is part 10 and blocks 1-9 are parts 1-9, which is
+/// gs_part_block_to_channel read backwards.
+std::vector<uint8_t> use_for_rhythm_sysex(uint8_t channel, uint8_t map) {
+  const uint8_t block =
+      channel == 9 ? 0u : (channel < 9 ? static_cast<uint8_t>(channel + 1) : channel);
+  const uint8_t addr_mid = static_cast<uint8_t>(0x10 | block);
+  const uint8_t sum = static_cast<uint8_t>(0x40 + addr_mid + 0x15 + map);
+  const uint8_t checksum = static_cast<uint8_t>((0x80 - (sum & 0x7F)) & 0x7F);
+  return {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, addr_mid, 0x15, map, checksum, 0xF7};
+}
+
 double band_energy(const std::vector<float>& buf, size_t from, double freq) {
   const double w = kTwoPi * freq / kOutRate;
   const double coeff = 2.0 * std::cos(w);
@@ -646,6 +658,31 @@ TEST_CASE("use-for-rhythm SysEx turns a melodic channel into drums", "[midi][sf2
   player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 60, 127)));
   const StereoRender out = render(player, 24000);
   REQUIRE(estimate_frequency(out.left, 4800) == Approx(1000.0).margin(10.0));
+}
+
+TEST_CASE("drum-note edits belong to the map, not to the part", "[midi][sf2][gslayer]") {
+  // 40 1x 15 selects a drum MAP and the drum setup it keys is addressed per map
+  // (docs/gs.md), so two parts on one map read one set of per-note edits and a
+  // part on the other map reads its own.
+  const auto pitch_of = [](uint8_t play_channel) {
+    Sf2Player player = make_player();
+    const struct {
+      uint8_t channel;
+      uint8_t map;
+    } parts[] = {{1, 1}, {2, 1}, {3, 2}};
+    for (const auto& part : parts) {
+      const std::vector<uint8_t> bytes = use_for_rhythm_sysex(part.channel, part.map);
+      REQUIRE(player.handle_sysex(bytes.data(), bytes.size()));
+    }
+    // +12 semitones on drum note 60, written from part 2 (map 1).
+    send_nrpn(player, 1, 0x18, 60, 76);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, play_channel, 60, 127)));
+    return estimate_frequency(render(player, 24000).left, 4800);
+  };
+
+  CHECK(pitch_of(1) == Approx(1000.0).margin(10.0));  // the part that wrote it
+  CHECK(pitch_of(2) == Approx(1000.0).margin(10.0));  // same map: shares it
+  CHECK(pitch_of(3) == Approx(500.0).margin(10.0));   // map 2: untouched
 }
 
 TEST_CASE("GS reset restores power-on state", "[midi][sf2][gslayer]") {

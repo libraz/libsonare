@@ -25,7 +25,9 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
       gs_reset();
       return true;
     case GsSysExKind::kUseForRhythm:
-      channels_[msg.channel & 0x0Fu].drums = msg.value != 0;
+      // The map number is kept, not just its truth: it selects which drum-note
+      // edit slab the part reads (docs/gs.md).
+      channels_[msg.channel & 0x0Fu].drum_map = msg.value;
       // The part's effective bank just moved between melodic and rhythm, and
       // the fallback ambience floor is keyed on it.
       refresh_channel_mod(msg.channel & 0x0Fu);
@@ -527,7 +529,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
 
 uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
   const ChannelState& st = channels_[channel & 0x0Fu];
-  return gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums);
+  return gs_effective_bank(st.bank_msb, st.bank_lsb, st.is_drum());
 }
 
 int resolve_gs_preset(const Sf2File& soundfont, uint16_t bank, uint8_t program) noexcept {
