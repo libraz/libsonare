@@ -90,6 +90,32 @@ struct GsPartParams {
   }
 };
 
+/// The eight part edits reduced to quantities a voice can apply directly, so
+/// both voice banks share one reading of the offsets rather than each making
+/// its own. Defaults are no-ops.
+struct GsPartMod {
+  float cutoff_cents = 0.0f;     ///< added to the voice's filter cutoff offset.
+  float resonance_gain = 1.0f;   ///< multiplies filter Q (floored at 0.5 by the caller).
+  float attack_scale = 1.0f;     ///< multiplies the amplitude envelope's attack.
+  float decay_scale = 1.0f;      ///< ... its decay.
+  float release_scale = 1.0f;    ///< ... its release.
+  float vib_rate_scale = 1.0f;   ///< multiplies the vibrato LFO frequency.
+  float vib_depth_cents = 0.0f;  ///< added to the LFO's pitch depth (floored at 0).
+  float vib_delay_scale = 1.0f;  ///< feeds gs_vib_delay_seconds, which is not a plain scale.
+
+  /// True when the filter stage has been edited, which engages it: the manual
+  /// gives no way to ask for a filter and then not hear it.
+  bool filter_edited = false;
+};
+
+/// @p gs as voice-applicable quantities.
+GsPartMod gs_part_mod(const GsPartParams& gs) noexcept;
+
+/// The LFO onset delay after a vibrato-delay edit of @p scale on a voice whose
+/// own delay is @p base_s. Not a plain multiply: a base of zero would stay zero,
+/// so a positive edit gives it an onset instead of nothing.
+float gs_vib_delay_seconds(float base_s, float scale) noexcept;
+
 /// The GS system parameters at 40 00 xx that are not the effect block. Every
 /// field holds its GS power-on value, so a default-constructed instance is the
 /// reset state and a render that never saw one of these writes is untouched.

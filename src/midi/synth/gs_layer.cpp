@@ -131,31 +131,50 @@ void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexce
   }
 }
 
-void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept {
-  if (!gs.any()) return;
+GsPartMod gs_part_mod(const GsPartParams& gs) noexcept {
+  GsPartMod mod;
   if (gs.tvf_cutoff != 0) {
-    params.filter_fc_cents += gs_cutoff_offset_cents(gs.tvf_cutoff);
-    params.filter_bypass = false;  // an edited filter is always engaged
+    mod.cutoff_cents = gs_cutoff_offset_cents(gs.tvf_cutoff);
+    mod.filter_edited = true;
   }
   if (gs.tvf_resonance != 0) {
-    params.filter_q = std::max(0.5f, params.filter_q * gs_resonance_gain(gs.tvf_resonance));
-    params.filter_bypass = false;
+    mod.resonance_gain = gs_resonance_gain(gs.tvf_resonance);
+    mod.filter_edited = true;
   }
-  if (gs.eg_attack != 0) params.volume_env.attack_ms *= gs_time_scale(gs.eg_attack);
-  if (gs.eg_decay != 0) params.volume_env.decay_ms *= gs_time_scale(gs.eg_decay);
-  if (gs.eg_release != 0) params.volume_env.release_ms *= gs_time_scale(gs.eg_release);
-  if (gs.vibrato_rate != 0) params.vib_lfo_freq_hz *= gs_vib_rate_scale(gs.vibrato_rate);
-  if (gs.vibrato_depth != 0) {
-    params.vib_lfo_to_pitch =
-        std::max(0.0f, params.vib_lfo_to_pitch + gs_vib_depth_cents(gs.vibrato_depth));
+  if (gs.eg_attack != 0) mod.attack_scale = gs_time_scale(gs.eg_attack);
+  if (gs.eg_decay != 0) mod.decay_scale = gs_time_scale(gs.eg_decay);
+  if (gs.eg_release != 0) mod.release_scale = gs_time_scale(gs.eg_release);
+  if (gs.vibrato_rate != 0) mod.vib_rate_scale = gs_vib_rate_scale(gs.vibrato_rate);
+  if (gs.vibrato_depth != 0) mod.vib_depth_cents = gs_vib_depth_cents(gs.vibrato_depth);
+  // Positive offset lengthens the onset delay (same 75 tc/step scale).
+  if (gs.vibrato_delay != 0) mod.vib_delay_scale = gs_time_scale(gs.vibrato_delay);
+  return mod;
+}
+
+float gs_vib_delay_seconds(float base_s, float scale) noexcept {
+  const float delay_s = base_s * scale;
+  // A zero base delay still gains an audible onset when pushed up.
+  if (delay_s < 1.0e-3f && scale > 1.0f) return 0.05f * (scale - 1.0f);
+  return delay_s;
+}
+
+void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept {
+  if (!gs.any()) return;
+  const GsPartMod mod = gs_part_mod(gs);
+  if (mod.cutoff_cents != 0.0f) params.filter_fc_cents += mod.cutoff_cents;
+  if (mod.resonance_gain != 1.0f) {
+    params.filter_q = std::max(0.5f, params.filter_q * mod.resonance_gain);
   }
-  if (gs.vibrato_delay != 0) {
-    // Positive offset lengthens the onset delay (same 75 tc/step scale).
-    params.vib_lfo_delay_s *= gs_time_scale(gs.vibrato_delay);
-    if (params.vib_lfo_delay_s < 1.0e-3f && gs.vibrato_delay > 0) {
-      // A zero base delay still gains an audible onset when pushed up.
-      params.vib_lfo_delay_s = 0.05f * (gs_time_scale(gs.vibrato_delay) - 1.0f);
-    }
+  if (mod.filter_edited) params.filter_bypass = false;  // an edited filter is always engaged
+  params.volume_env.attack_ms *= mod.attack_scale;
+  params.volume_env.decay_ms *= mod.decay_scale;
+  params.volume_env.release_ms *= mod.release_scale;
+  params.vib_lfo_freq_hz *= mod.vib_rate_scale;
+  if (mod.vib_depth_cents != 0.0f) {
+    params.vib_lfo_to_pitch = std::max(0.0f, params.vib_lfo_to_pitch + mod.vib_depth_cents);
+  }
+  if (mod.vib_delay_scale != 1.0f) {
+    params.vib_lfo_delay_s = gs_vib_delay_seconds(params.vib_lfo_delay_s, mod.vib_delay_scale);
   }
 }
 
