@@ -440,6 +440,7 @@ if(BUILD_ARRANGEMENT)
     midi/sf2_effects_test.cpp
     midi/sf2_gs_layer_test.cpp
     midi/gs_address_table_test.cpp
+    midi/gs_audibility_test.cpp
     midi/gs_assign_mode_test.cpp
     midi/gs_mono_poly_test.cpp
     midi/gs_address_census_test.cpp

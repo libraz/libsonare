@@ -303,7 +303,7 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
   // that leaves the type value untouched is a parameter/send-only edit the
   // caller can apply to the live processors in place.
   if (out_type_changed != nullptr) *out_type_changed = touched && efx.type != old_type;
-  return true;
+  return touched;
 }
 
 std::string_view gs_efx_insert_name(uint16_t type) noexcept {

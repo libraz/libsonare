@@ -1008,17 +1008,19 @@ void check_efx_cases(const std::vector<EfxCase>& cases) {
     }
     const std::vector<uint8_t> msg = faulted_message(test.start, data, test.fault, test.framed);
     const bool addresses_efx = (test.start & 0xFFFF00u) == 0x400300u;
-    const bool expect_applied = test.fault == Fault::kNone && addresses_efx;
+    const bool reaches_block = test.fault == Fault::kNone && addresses_efx;
 
     for (const GsEfx& before : starts) {
       INFO("start " << hex24(test.start) << " len " << static_cast<int>(test.len) << " fault "
                     << static_cast<int>(test.fault) << (test.framed ? " framed" : " bare"));
-      const EfxOutcome expected = expect_applied ? expected_efx(before, test.start & 0xFFu, data)
-                                                 : EfxOutcome{before, false};
+      const EfxOutcome expected = reaches_block ? expected_efx(before, test.start & 0xFFu, data)
+                                                : EfxOutcome{before, false};
 
       GsEfx efx = before;
       bool type_changed = true;  // the call must clear it, whatever the outcome
-      CHECK(apply_gs_efx_sysex(efx, msg.data(), msg.size(), &type_changed) == expect_applied);
+      // The return is "a byte reached a field", not "the address was in the
+      // block": a run landing only on the block's IGNORE rows applies nothing.
+      CHECK(apply_gs_efx_sysex(efx, msg.data(), msg.size(), &type_changed) == expected.touched);
       CHECK(same_efx(efx, expected.efx));
       CHECK(type_changed == (expected.touched && expected.efx.type != before.type));
     }
@@ -1061,11 +1063,11 @@ TEST_CASE("GS EFX: every block offset lands where the layout says", "[midi][gs][
 
   SECTION("a run reaching past the block carries into the next address group") {
     // 40 03 7E + 4 bytes runs 7E, 7F, then carries to 40 04 00 and 40 04 01.
-    // The message still addressed the EFX block, and nothing in it is a block
-    // offset, so the unit is untouched.
+    // The message addressed the EFX block and no byte in it is a field offset,
+    // so the unit is untouched and the call reports nothing applied.
     GsEfx efx;
     const std::vector<uint8_t> msg = roland_message(0x40037E, {0x01, 0x02, 0x03, 0x04});
-    CHECK(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    CHECK_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
     CHECK_FALSE(efx.assigned);
   }
 
@@ -1145,55 +1147,52 @@ using sonare::midi::synth::GsSystemEffects;
 /// One row as the Parameter Address Map gives it. Transcribed from the manual
 /// rather than read back from the table, so a wrong number in the header is a
 /// disagreement between two sources instead of the header matching itself.
+///
+/// The level is deliberately not among these fields: the manual has no such
+/// column, so a copy of it here could only ever agree with whatever the table
+/// last said. It is measured instead, in gs_audibility_test.cpp.
 struct MapRow {
   uint32_t addr;
   const char* name;
   GsParam param;
-  GsLevel level;
   uint8_t lo, hi, def;
 };
 
 const std::vector<MapRow>& patch_common_map() {
   static const std::vector<MapRow> rows = {
-      {0x400100, "PATCH NAME", GsParam::kPatchName, GsLevel::kState, 0x20, 0x7F, 0x20},
-      {0x400130, "REVERB MACRO", GsParam::kReverbMacro, GsLevel::kAudible, 0, 7, 4},
-      {0x400131, "REVERB CHARACTER", GsParam::kReverbCharacter, GsLevel::kAudible, 0, 7, 4},
-      {0x400132, "REVERB PRE-LPF", GsParam::kReverbPreLpf, GsLevel::kAudible, 0, 7, 0},
-      {0x400133, "REVERB LEVEL", GsParam::kReverbLevel, GsLevel::kAudible, 0, 127, 64},
-      {0x400134, "REVERB TIME", GsParam::kReverbTime, GsLevel::kAudible, 0, 127, 64},
-      {0x400135, "REVERB DELAY FEEDBACK", GsParam::kReverbDelayFeedback, GsLevel::kAudible, 0, 127,
-       0},
-      {0x400137, "REVERB PREDELAY TIME", GsParam::kReverbPredelay, GsLevel::kAudible, 0, 127, 0},
-      {0x400138, "CHORUS MACRO", GsParam::kChorusMacro, GsLevel::kAudible, 0, 7, 2},
-      {0x400139, "CHORUS PRE-LPF", GsParam::kChorusPreLpf, GsLevel::kAudible, 0, 7, 0},
-      {0x40013A, "CHORUS LEVEL", GsParam::kChorusLevel, GsLevel::kAudible, 0, 127, 64},
-      {0x40013B, "CHORUS FEEDBACK", GsParam::kChorusFeedback, GsLevel::kAudible, 0, 127, 8},
-      {0x40013C, "CHORUS DELAY", GsParam::kChorusDelay, GsLevel::kAudible, 0, 127, 80},
-      {0x40013D, "CHORUS RATE", GsParam::kChorusRate, GsLevel::kAudible, 0, 127, 3},
-      {0x40013E, "CHORUS DEPTH", GsParam::kChorusDepth, GsLevel::kAudible, 0, 127, 19},
-      {0x40013F, "CHORUS SEND TO REVERB", GsParam::kChorusSendToReverb, GsLevel::kAudible, 0, 127,
-       0},
-      {0x400140, "CHORUS SEND TO DELAY", GsParam::kChorusSendToDelay, GsLevel::kAudible, 0, 127, 0},
-      {0x400150, "DELAY MACRO", GsParam::kDelayMacro, GsLevel::kAudible, 0x00, 0x09, 0x00},
-      {0x400151, "DELAY PRE-LPF", GsParam::kDelayPreLpf, GsLevel::kAudible, 0, 7, 0},
-      {0x400152, "DELAY TIME CENTER", GsParam::kDelayTimeCenter, GsLevel::kAudible, 0x01, 0x73,
-       0x61},
-      {0x400153, "DELAY TIME RATIO LEFT", GsParam::kDelayTimeRatioLeft, GsLevel::kAudible, 0x01,
-       0x78, 0x01},
-      {0x400154, "DELAY TIME RATIO RIGHT", GsParam::kDelayTimeRatioRight, GsLevel::kAudible, 0x01,
-       0x78, 0x01},
-      {0x400155, "DELAY LEVEL CENTER", GsParam::kDelayLevelCenter, GsLevel::kAudible, 0, 127, 0x7F},
-      {0x400156, "DELAY LEVEL LEFT", GsParam::kDelayLevelLeft, GsLevel::kAudible, 0, 127, 0x00},
-      {0x400157, "DELAY LEVEL RIGHT", GsParam::kDelayLevelRight, GsLevel::kAudible, 0, 127, 0x00},
-      {0x400158, "DELAY LEVEL", GsParam::kDelayLevel, GsLevel::kAudible, 0, 127, 0x40},
-      {0x400159, "DELAY FEEDBACK", GsParam::kDelayFeedback, GsLevel::kAudible, 0x00, 0x7F, 0x50},
-      {0x40015A, "DELAY SEND TO REVERB", GsParam::kDelaySendToReverb, GsLevel::kAudible, 0, 127,
-       0x00},
-      {0x400200, "EQ LOW FREQ", GsParam::kEqLowFreq, GsLevel::kAudible, 0, 1, 0},
-      {0x400201, "EQ LOW GAIN", GsParam::kEqLowGain, GsLevel::kAudible, 0x34, 0x4C, 0x40},
-      {0x400202, "EQ HIGH FREQ", GsParam::kEqHighFreq, GsLevel::kAudible, 0, 1, 0},
-      {0x400203, "EQ HIGH GAIN", GsParam::kEqHighGain, GsLevel::kAudible, 0x34, 0x4C, 0x40},
-      {0x404020, "EQ ON/OFF", GsParam::kPartEqSwitch, GsLevel::kAudible, 0, 1, 1},
+      {0x400100, "PATCH NAME", GsParam::kPatchName, 0x20, 0x7F, 0x20},
+      {0x400130, "REVERB MACRO", GsParam::kReverbMacro, 0, 7, 4},
+      {0x400131, "REVERB CHARACTER", GsParam::kReverbCharacter, 0, 7, 4},
+      {0x400132, "REVERB PRE-LPF", GsParam::kReverbPreLpf, 0, 7, 0},
+      {0x400133, "REVERB LEVEL", GsParam::kReverbLevel, 0, 127, 64},
+      {0x400134, "REVERB TIME", GsParam::kReverbTime, 0, 127, 64},
+      {0x400135, "REVERB DELAY FEEDBACK", GsParam::kReverbDelayFeedback, 0, 127, 0},
+      {0x400137, "REVERB PREDELAY TIME", GsParam::kReverbPredelay, 0, 127, 0},
+      {0x400138, "CHORUS MACRO", GsParam::kChorusMacro, 0, 7, 2},
+      {0x400139, "CHORUS PRE-LPF", GsParam::kChorusPreLpf, 0, 7, 0},
+      {0x40013A, "CHORUS LEVEL", GsParam::kChorusLevel, 0, 127, 64},
+      {0x40013B, "CHORUS FEEDBACK", GsParam::kChorusFeedback, 0, 127, 8},
+      {0x40013C, "CHORUS DELAY", GsParam::kChorusDelay, 0, 127, 80},
+      {0x40013D, "CHORUS RATE", GsParam::kChorusRate, 0, 127, 3},
+      {0x40013E, "CHORUS DEPTH", GsParam::kChorusDepth, 0, 127, 19},
+      {0x40013F, "CHORUS SEND TO REVERB", GsParam::kChorusSendToReverb, 0, 127, 0},
+      {0x400140, "CHORUS SEND TO DELAY", GsParam::kChorusSendToDelay, 0, 127, 0},
+      {0x400150, "DELAY MACRO", GsParam::kDelayMacro, 0x00, 0x09, 0x00},
+      {0x400151, "DELAY PRE-LPF", GsParam::kDelayPreLpf, 0, 7, 0},
+      {0x400152, "DELAY TIME CENTER", GsParam::kDelayTimeCenter, 0x01, 0x73, 0x61},
+      {0x400153, "DELAY TIME RATIO LEFT", GsParam::kDelayTimeRatioLeft, 0x01, 0x78, 0x01},
+      {0x400154, "DELAY TIME RATIO RIGHT", GsParam::kDelayTimeRatioRight, 0x01, 0x78, 0x01},
+      {0x400155, "DELAY LEVEL CENTER", GsParam::kDelayLevelCenter, 0, 127, 0x7F},
+      {0x400156, "DELAY LEVEL LEFT", GsParam::kDelayLevelLeft, 0, 127, 0x00},
+      {0x400157, "DELAY LEVEL RIGHT", GsParam::kDelayLevelRight, 0, 127, 0x00},
+      {0x400158, "DELAY LEVEL", GsParam::kDelayLevel, 0, 127, 0x40},
+      {0x400159, "DELAY FEEDBACK", GsParam::kDelayFeedback, 0x00, 0x7F, 0x50},
+      {0x40015A, "DELAY SEND TO REVERB", GsParam::kDelaySendToReverb, 0, 127, 0x00},
+      {0x400200, "EQ LOW FREQ", GsParam::kEqLowFreq, 0, 1, 0},
+      {0x400201, "EQ LOW GAIN", GsParam::kEqLowGain, 0x34, 0x4C, 0x40},
+      {0x400202, "EQ HIGH FREQ", GsParam::kEqHighFreq, 0, 1, 0},
+      {0x400203, "EQ HIGH GAIN", GsParam::kEqHighGain, 0x34, 0x4C, 0x40},
+      {0x404020, "EQ ON/OFF", GsParam::kPartEqSwitch, 0, 1, 1},
   };
   return rows;
 }
@@ -1248,7 +1247,6 @@ TEST_CASE("GS address table: the patch-common and EQ rows match the address map"
     const GsAddressEntry* entry = gs_lookup_address(row.addr);
     REQUIRE(entry != nullptr);
     CHECK(entry->param == row.param);
-    CHECK(entry->level == row.level);
     CHECK(entry->lo == row.lo);
     CHECK(entry->hi == row.hi);
     CHECK(entry->def == row.def);

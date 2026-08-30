@@ -163,8 +163,10 @@ inline constexpr std::array<GsAddressEntry, 63> kGsAddressTable = {{
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
     {0x00007F, 0, GsParam::kSystemModeSet, GsLevel::kAudible, 1, 0x00, 0x00, 0x00, nullptr},
-    {0x000100, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kState, 1, 0x00, 0x01, 0x00, nullptr},
-    {0x000110, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kState, 1, 0x00, 0x01, 0x01, nullptr},
+    {0x000100, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x01, 0x00,
+     "libsonare receives one port, so a channel has no second port to be assigned to"},
+    {0x000110, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x01, 0x01,
+     "libsonare receives one port, so a channel has no second port to be assigned to"},
 
     // System parameters (40 00 xx).
     // MASTER TUNE is four nibbles making one 0018-07E8 word; the row bounds the
@@ -178,44 +180,56 @@ inline constexpr std::array<GsAddressEntry, 63> kGsAddressTable = {{
 
     // Patch common (40 01 xx). PATCH NAME is one 16-byte ASCII field; the row
     // bounds a character and the index says which one.
-    {0x400100, 0, GsParam::kPatchName, GsLevel::kState, 16, 0x20, 0x7F, 0x20, nullptr},
+    {0x400100, 0, GsParam::kPatchName, GsLevel::kAccept, 16, 0x20, 0x7F, 0x20,
+     "a display string, and a renderer has nothing to display it on"},
 
     // Reverb (40 01 30-37). The defaults are the Hall 2 macro, so they and
     // kGsReverbMacros[4] in gs_system_effects.h say the same thing.
+    //
+    // kState from here to 40 01 5A marks a byte GsSystemEffects holds and the
+    // effect bus never asks for: the bus takes ten fields off GsEffectsConfig,
+    // and a parameter outside that set reaches the struct and stops. Raising one
+    // to kAudible means giving the engine the control, not editing the row.
     {0x400130, 0, GsParam::kReverbMacro, GsLevel::kAudible, 1, 0x00, 0x07, 0x04, nullptr},
     {0x400131, 0, GsParam::kReverbCharacter, GsLevel::kAudible, 1, 0x00, 0x07, 0x04, nullptr},
-    {0x400132, 0, GsParam::kReverbPreLpf, GsLevel::kAudible, 1, 0x00, 0x07, 0x00, nullptr},
+    {0x400132, 0, GsParam::kReverbPreLpf, GsLevel::kState, 1, 0x00, 0x07, 0x00, nullptr},
     {0x400133, 0, GsParam::kReverbLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
     {0x400134, 0, GsParam::kReverbTime, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
-    {0x400135, 0, GsParam::kReverbDelayFeedback, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
-    {0x400137, 0, GsParam::kReverbPredelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    // The one row that does not even reach GsEffectsConfig: the conversion exists
+    // (gs_reverb_delay_feedback_coefficient) and has no caller.
+    {0x400135, 0, GsParam::kReverbDelayFeedback, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x400137, 0, GsParam::kReverbPredelay, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
 
     // Chorus (40 01 38-40). The defaults are the Chorus 3 macro.
     {0x400138, 0, GsParam::kChorusMacro, GsLevel::kAudible, 1, 0x00, 0x07, 0x02, nullptr},
-    {0x400139, 0, GsParam::kChorusPreLpf, GsLevel::kAudible, 1, 0x00, 0x07, 0x00, nullptr},
+    {0x400139, 0, GsParam::kChorusPreLpf, GsLevel::kState, 1, 0x00, 0x07, 0x00, nullptr},
     {0x40013A, 0, GsParam::kChorusLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
-    {0x40013B, 0, GsParam::kChorusFeedback, GsLevel::kAudible, 1, 0x00, 0x7F, 0x08, nullptr},
+    {0x40013B, 0, GsParam::kChorusFeedback, GsLevel::kState, 1, 0x00, 0x7F, 0x08, nullptr},
     {0x40013C, 0, GsParam::kChorusDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x50, nullptr},
     {0x40013D, 0, GsParam::kChorusRate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x03, nullptr},
     {0x40013E, 0, GsParam::kChorusDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x13, nullptr},
-    {0x40013F, 0, GsParam::kChorusSendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
-    {0x400140, 0, GsParam::kChorusSendToDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    // The unit-to-unit sends: the bus runs reverb, chorus and delay in parallel
+    // off the part sends and does not feed one from another.
+    {0x40013F, 0, GsParam::kChorusSendToReverb, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x400140, 0, GsParam::kChorusSendToDelay, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
 
     // Delay (40 01 50-5A). The defaults are the Delay 1 macro.
     {0x400150, 0, GsParam::kDelayMacro, GsLevel::kAudible, 1, 0x00, 0x09, 0x00, nullptr},
-    {0x400151, 0, GsParam::kDelayPreLpf, GsLevel::kAudible, 1, 0x00, 0x07, 0x00, nullptr},
+    {0x400151, 0, GsParam::kDelayPreLpf, GsLevel::kState, 1, 0x00, 0x07, 0x00, nullptr},
     // 00 is out of range: the time table starts at 01 (0.1 ms).
     {0x400152, 0, GsParam::kDelayTimeCenter, GsLevel::kAudible, 1, 0x01, 0x73, 0x61, nullptr},
-    {0x400153, 0, GsParam::kDelayTimeRatioLeft, GsLevel::kAudible, 1, 0x01, 0x78, 0x01, nullptr},
-    {0x400154, 0, GsParam::kDelayTimeRatioRight, GsLevel::kAudible, 1, 0x01, 0x78, 0x01, nullptr},
-    {0x400155, 0, GsParam::kDelayLevelCenter, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
-    {0x400156, 0, GsParam::kDelayLevelLeft, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
-    {0x400157, 0, GsParam::kDelayLevelRight, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    // The three-tap delay is one tap here: both legs take the centre time and the
+    // centre level, so the ratios and the per-leg levels have nothing to reach.
+    {0x400153, 0, GsParam::kDelayTimeRatioLeft, GsLevel::kState, 1, 0x01, 0x78, 0x01, nullptr},
+    {0x400154, 0, GsParam::kDelayTimeRatioRight, GsLevel::kState, 1, 0x01, 0x78, 0x01, nullptr},
+    {0x400155, 0, GsParam::kDelayLevelCenter, GsLevel::kState, 1, 0x00, 0x7F, 0x7F, nullptr},
+    {0x400156, 0, GsParam::kDelayLevelLeft, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x400157, 0, GsParam::kDelayLevelRight, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x400158, 0, GsParam::kDelayLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
     // 00-7F reads as -64..+63, so the default 50 is +16 and not the centre. The
     // signedness belongs to gs_delay_feedback_signed; the row bounds the byte.
     {0x400159, 0, GsParam::kDelayFeedback, GsLevel::kAudible, 1, 0x00, 0x7F, 0x50, nullptr},
-    {0x40015A, 0, GsParam::kDelaySendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x40015A, 0, GsParam::kDelaySendToReverb, GsLevel::kState, 1, 0x00, 0x7F, 0x00, nullptr},
 
     // Master EQ (40 02 xx). The two FREQ addresses select one of two corners,
     // and the two GAIN addresses are 34-4C around a centred 40 (+-12 dB).
@@ -230,11 +244,20 @@ inline constexpr std::array<GsAddressEntry, 63> kGsAddressTable = {{
     {0x400317, 0, GsParam::kEfxSendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28, nullptr},
     {0x400318, 0, GsParam::kEfxSendToChorus, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x400319, 0, GsParam::kEfxSendToDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
-    {0x40031B, 0, GsParam::kEfxControlSource1, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
-    {0x40031C, 0, GsParam::kEfxControlDepth1, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
-    {0x40031D, 0, GsParam::kEfxControlSource2, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
-    {0x40031E, 0, GsParam::kEfxControlDepth2, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
-    {0x40031F, 0, GsParam::kEfxSendEqSwitch, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+    // The two control assignments let a controller move an EFX parameter while
+    // the effect runs. The chain here is realised from its type and its twenty
+    // parameters and is not re-parameterised afterwards, so there is nothing for
+    // a source to drive; implementing them means giving the chain that hook.
+    {0x40031B, 0, GsParam::kEfxControlSource1, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x00,
+     "the insertion chain is realised from its type and parameters and takes no live modulation"},
+    {0x40031C, 0, GsParam::kEfxControlDepth1, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x40,
+     "the depth of a control source that has nothing to drive"},
+    {0x40031D, 0, GsParam::kEfxControlSource2, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x00,
+     "the insertion chain is realised from its type and parameters and takes no live modulation"},
+    {0x40031E, 0, GsParam::kEfxControlDepth2, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x40,
+     "the depth of a control source that has nothing to drive"},
+    {0x40031F, 0, GsParam::kEfxSendEqSwitch, GsLevel::kIgnore, 1, 0x00, 0x01, 0x01,
+     "one EQ stage, bypassed per part at 40 4x 20; an EFX return has no separate one to switch"},
 
     // Part parameters (40 1x xx).
     // 00 Mono / 01 Poly, and the same storage location CC126 and CC127 write.

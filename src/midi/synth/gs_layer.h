@@ -186,9 +186,12 @@ struct GsEfx {
 /// handling a run of consecutive data bytes from the start address (a single
 /// parameter write or a full-block dump). Bytes addressing reserved/unknown
 /// offsets are preserved by being ignored, never dropping the message. Accepts
-/// the payload with or without F0/F7 framing. Returns true if the message
-/// addressed the EFX block (even if some bytes were ignored); false otherwise.
-/// Never crashes.
+/// the payload with or without F0/F7 framing. Never crashes.
+///
+/// Returns true when at least one byte reached a GsEfx field. A write landing
+/// entirely on the block's IGNORE rows — the two control-source assignments and
+/// the send EQ switch (docs/gs.md) — addresses the block and still returns
+/// false, because nothing was applied and there is nothing to rebuild for.
 ///
 /// @param out_type_changed  Optional out-flag: set to true when the write
 ///   changed the EFX TYPE (address 40 03 00/01), false when it touched only

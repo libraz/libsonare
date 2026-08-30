@@ -173,7 +173,12 @@ class Sf2Player final : public MidiInstrument {
   /// Feeds a SysEx payload (with or without F0/F7 framing) to the GS layer:
   /// GM System On, GS Reset and "use for rhythm part" are recognised. Hosts
   /// that own the SysEx store call this when a SysEx event is due. Safe on
-  /// the audio thread (allocation-free); returns true if recognised.
+  /// the audio thread (allocation-free).
+  ///
+  /// Returns true when an apply layer took the write, which is narrower than
+  /// "recognised": an address the table carries at ACCEPT or IGNORE is decoded
+  /// and deliberately dropped, so it returns false without being unknown
+  /// (docs/gs.md). Nothing in the tree branches on this — on_event discards it.
   bool handle_sysex(const uint8_t* data, size_t size) noexcept;
 
   /// GS Reset semantics (also reachable via handle_sysex): GS power-on
