@@ -208,6 +208,10 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x401A16, 0x4C, GsParam::kPartKeyShift, 0, 10);
   check_row(0x401119, 0x64, GsParam::kPartLevel, 0, 0);
   check_row(0x40101C, 0x40, GsParam::kPartPanpot, 0, 9);
+  check_row(0x40101D, 0x00, GsParam::kPartKeyRangeLow, 0, 9);
+  check_row(0x40101E, 0x7F, GsParam::kPartKeyRangeHigh, 0, 9);
+  check_row(0x40121D, 0x24, GsParam::kPartKeyRangeLow, 0, 1);
+  check_row(0x40121E, 0x3C, GsParam::kPartKeyRangeHigh, 0, 1);
   check_row(0x401F21, 0x00, GsParam::kPartChorusSend, 0, 15);
   check_row(0x401022, 0x28, GsParam::kPartReverbSend, 0, 9);
   check_row(0x401025, 0x00, GsParam::kUndefined);

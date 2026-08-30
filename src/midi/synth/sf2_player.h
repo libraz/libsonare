@@ -339,10 +339,21 @@ class Sf2Player final : public MidiInstrument {
     /// the VALUE's numbering; the m nibble of the 41 mn rr drum setup address
     /// is zero-based (0 = MAP1), so it is this field minus one.
     uint8_t drum_map = kGsDrumMapNone;
+    /// GS 40 1x 1D/1E KEY RANGE: the lowest and highest key the part receives.
+    /// Held as the written bytes and tested at the note-on, where a key outside
+    /// them is refused before anything else the note-on would do.
+    uint8_t key_range_low = 0x00;
+    uint8_t key_range_high = 0x7F;
     /// GS layer: the part's NRPN / TONE MODIFY edits.
     GsPartParams gs;
 
     bool is_drum() const noexcept { return drum_map != kGsDrumMapNone; }
+    /// Whether the part receives @p note at all (40 1x 1D/1E). A range whose low
+    /// is above its high receives nothing, which is what the two bytes say.
+    bool receives_key(uint8_t note) const noexcept {
+      const uint8_t key = note & 0x7Fu;
+      return key >= key_range_low && key <= key_range_high;
+    }
     /// Index into the per-map drum-edit slabs. A part that reached the drum
     /// bank without a GS map (GM2 CC0=120) reads map 1's.
     size_t drum_map_slot() const noexcept { return drum_map > kGsDrumMap1 ? 1u : 0u; }

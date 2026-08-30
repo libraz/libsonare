@@ -98,8 +98,12 @@ GsDrumNoteParams Sf2Player::drum_note_params(const ChannelState& ch, bool is_dru
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
-  const Portamento porta = take_portamento(channel, note);
   const ChannelState& ch = channels_[channel & 0x0Fu];
+  // GS KEY RANGE (40 1x 1D/1E): a key the part does not receive is not a silent
+  // note. It takes no voice, chokes nothing and does not spend the armed
+  // portamento, so the test precedes all three as well as both voice banks.
+  if (!ch.receives_key(note)) return;
+  const Portamento porta = take_portamento(channel, note);
   // Mono already stops everything the part is sounding, so it subsumes SINGLE.
   if (ch.mono_poly == kGsMonoPolyMono && !ch.is_drum()) {
     choke_part(channel, -1);

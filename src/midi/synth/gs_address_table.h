@@ -93,6 +93,8 @@ enum class GsLevel : uint8_t {
   X(kUseForRhythmPart)      \
   X(kPartKeyShift)          \
   X(kPartLevel)             \
+  X(kPartKeyRangeLow)       \
+  X(kPartKeyRangeHigh)      \
   X(kPartPanpot)            \
   X(kPartChorusSend)        \
   X(kPartReverbSend)        \
@@ -192,7 +194,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 121> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 123> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -359,6 +361,13 @@ inline constexpr std::array<GsAddressEntry, 121> kGsAddressTable = {{
     // (docs/gs.md), so it stays inside the accepted range rather than becoming
     // an out-of-range value the apply layer would drop.
     {0x40101C, 0x000F00, GsParam::kPartPanpot, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    // The lowest and highest key the part receives at all. A refused key is not
+    // a silent note: it takes no voice, chokes nothing and leaves the part as it
+    // was, so the test precedes everything else a note-on does (docs/gs.md).
+    {0x40101D, 0x000F00, GsParam::kPartKeyRangeLow, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x40101E, 0x000F00, GsParam::kPartKeyRangeHigh, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F,
+     nullptr},
     {0x401021, 0x000F00, GsParam::kPartChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     // The reverb send's 28 is the GS power-on 40 the reset already installs.
     {0x401022, 0x000F00, GsParam::kPartReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28, nullptr},
