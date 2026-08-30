@@ -16,6 +16,13 @@
 /// rows are audible only inside SONARE_MIDI_WITH_FX and the EFX rows only once
 /// a chain builds, so a build without either fails here rather than passing
 /// those rows dry.
+///
+/// Deliberately untagged at about six seconds, past the threshold where a case
+/// takes [.][slow]. That tag would take it out of the default run, and a gate
+/// that has to be asked for is most of the way to not existing — which is the
+/// state this file was written to end. Probing both voice banks is what costs
+/// the time and it is not optional: probing one is how a parameter reaching
+/// only half the voices passed.
 
 #include <algorithm>
 #include <array>
@@ -347,9 +354,45 @@ void note_off(Sf2Player& p, uint8_t channel, uint8_t note) {
 /// sends — both power on at zero, so without them neither unit carries signal
 /// and no chorus or delay row could move anything.
 ///
+/// Which voice bank answers the stimulus. A parameter must not do something
+/// different because one of them took the note (docs/gs.md, the ASSIGN MODE
+/// bullet), so every row is probed on both — and a row is only AUDIBLE if it
+/// moves both. Probing one alone is how the drum delay multiplicand shipped
+/// reaching the SoundFont voices and not the model ones: it moved the render,
+/// so the gate passed it, and half of it did nothing.
+enum class Bank : uint8_t {
+  kSoundFont,  ///< The fixture's presets answer every note.
+  kModel,      ///< No SoundFont at all, so the physical-model floor answers.
+};
+
+const char* bank_name(Bank bank) { return bank == Bank::kSoundFont ? "soundfont" : "model"; }
+
+/// A row known to reach one bank and not the other, with what is missing. The
+/// gate requires each of these to STILL fail, so an entry cannot outlive the
+/// gap it excuses — the discipline the parity allowlist has, for the same
+/// reason: a stale entry keeps blessing a defect nobody re-examined.
+struct BankGap {
+  GsParam param;
+  Bank silent;
+  const char* why;
+};
+
+constexpr std::array<BankGap, 1> kBankGaps = {{
+    {GsParam::kPartToneModify, Bank::kModel,
+     "apply_gs_part_params writes Sf2VoiceParams and the note-on that calls it is the SoundFont "
+     "one, so the eight part edits and the NRPNs they alias never reach a model voice"},
+}};
+
+const BankGap* bank_gap_for(const GsAddressEntry& row, Bank bank) {
+  for (const BankGap& gap : kBankGaps) {
+    if (gap.param == row.param && gap.silent == bank) return &gap;
+  }
+  return nullptr;
+}
+
 /// @param probe  DT1 messages under test; empty renders the baseline.
 /// @param accepted  Set false when the player refused one of them.
-StereoRender render(Setup setup, const std::vector<std::vector<uint8_t>>& probe,
+StereoRender render(Bank bank, Setup setup, const std::vector<std::vector<uint8_t>>& probe,
                     bool* accepted = nullptr) {
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
@@ -357,14 +400,14 @@ StereoRender render(Setup setup, const std::vector<std::vector<uint8_t>>& probe,
   // inline, which is the path a bounce takes and the only one handle_sysex
   // feeds for the 40 01 / 40 02 / 40 03 blocks.
   cfg.realize_efx_inline = true;
-  // Every note the stimulus plays has a preset, so the physical-model floor
-  // would only cost render time.
-  cfg.synth_fallback = false;
+  cfg.synth_fallback = bank == Bank::kModel;
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
   Sf2Player player(cfg);
-  player.set_soundfont(fixture());
+  // Withholding the SoundFont rather than choosing programs it misses: a preset
+  // the fixture does cover would answer from the wrong bank without saying so.
+  if (bank == Bank::kSoundFont) player.set_soundfont(fixture());
   player.prepare(kOutRate, 256);
 
   for (const uint8_t channel : {uint8_t{0}, uint8_t{9}}) {
@@ -460,9 +503,10 @@ Mirror mirror_state(const GsAddressEntry& row, const std::vector<uint8_t>& probe
   return (fx_moved || efx_moved) ? Mirror::kStored : Mirror::kNotStored;
 }
 
-std::string row_text(const GsAddressEntry& row, const Probe& probe, Setup setup) {
+std::string row_text(const GsAddressEntry& row, const Probe& probe, Setup setup, Bank bank) {
   std::string out = addr_text(probe_address(row)) + "  " + gs_param_name(row.param) + "  " +
-                    level_name(row.level) + "  probe=" + bytes_text(probe.bytes);
+                    level_name(row.level) + "  bank=" + bank_name(bank) +
+                    "  probe=" + bytes_text(probe.bytes);
   if (setup != Setup::kNone) out += "  setup=" + std::string(setup_name(setup));
   if (probe.why != nullptr) out += "\n      override: " + std::string(probe.why);
   return out;
@@ -479,10 +523,11 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   // rather than per row.
   REQUIRE(gs_part_block_to_channel(kMelodicBlock) == 0);
 
-  std::map<Setup, StereoRender> baselines;
-  auto baseline = [&baselines](Setup setup) -> const StereoRender& {
-    auto it = baselines.find(setup);
-    if (it == baselines.end()) it = baselines.emplace(setup, render(setup, {})).first;
+  std::map<std::pair<Bank, Setup>, StereoRender> baselines;
+  auto baseline = [&baselines](Bank bank, Setup setup) -> const StereoRender& {
+    const std::pair<Bank, Setup> key{bank, setup};
+    auto it = baselines.find(key);
+    if (it == baselines.end()) it = baselines.emplace(key, render(bank, setup, {})).first;
     return it->second;
   };
 
@@ -496,8 +541,9 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   std::vector<Finding> unheld;   ///< STATE, and nothing stored the byte.
   std::vector<Finding> held;     ///< ACCEPT / IGNORE, and something stored it.
   std::vector<Finding> faint;
-  std::vector<Finding> unapplied;  ///< AUDIBLE / STATE, and no apply layer took it.
-  std::vector<Finding> applied;    ///< ACCEPT / IGNORE, and one did.
+  std::vector<Finding> unapplied;   ///< AUDIBLE / STATE, and no apply layer took it.
+  std::vector<Finding> applied;     ///< ACCEPT / IGNORE, and one did.
+  std::vector<Finding> fixed_gaps;  ///< A kBankGaps entry whose gap is closed.
   int probed = 0;
 
   for (const GsAddressEntry& row : kGsAddressTable) {
@@ -509,42 +555,61 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
 
     const Probe probe = probe_for(row);
     const Setup setup = setup_for(row);
-    const StereoRender& base = baseline(setup);
-    const double base_peak = peak(base);
-    // A silent baseline scores every row as unheard for a reason that is not
-    // the row's.
-    INFO(row_text(row, probe, setup));
-    REQUIRE(base_peak > 1.0e-4);
-
-    bool accepted = true;
     const std::vector<uint8_t> message = dt1(probe_address(row), probe.bytes);
-    const StereoRender probed_render = render(setup, {message}, &accepted);
-    const double delta = max_difference(base, probed_render);
-    const double relative = delta / base_peak;
+    bool accepted = true;
     ++probed;
+
+    for (const Bank bank : {Bank::kSoundFont, Bank::kModel}) {
+      const StereoRender& base = baseline(bank, setup);
+      const double base_peak = peak(base);
+      // A silent baseline scores every row as unheard for a reason that is not
+      // the row's.
+      INFO(row_text(row, probe, setup, bank));
+      REQUIRE(base_peak > 1.0e-4);
+
+      const StereoRender probed_render = render(bank, setup, {message}, &accepted);
+      const double delta = max_difference(base, probed_render);
+      const double relative = delta / base_peak;
+      const Finding finding{probe_address(row), row_text(row, probe, setup, bank), relative};
+
+      const BankGap* gap = bank_gap_for(row, bank);
+      if (gap != nullptr) {
+        // The entry expires with the gap: once the row does reach this bank it
+        // has to be deleted, or the gate says so here.
+        if (delta != 0.0) {
+          fixed_gaps.push_back({finding.addr, finding.text + "\n      excused: " + gap->why, 0.0});
+        }
+        continue;
+      }
+
+      if (row.level == GsLevel::kAudible) {
+        if (delta == 0.0) {
+          unheard.push_back(finding);
+        } else if (relative < 1.0e-4) {
+          // Audible in the sense that something moved, but 80 dB under the
+          // render's own peak — worth naming rather than passing without
+          // comment.
+          faint.push_back(finding);
+        }
+      } else if (delta != 0.0) {
+        heard.push_back(finding);
+      }
+    }
 
     // handle_sysex answers "an apply layer took this", which the top two levels
     // owe and the bottom two owe the negation of — a discarded byte that an
     // apply layer took is not discarded. Being decoded rather than counted as
     // unknown is the separate, weaker claim all four make, asserted below.
-    const Finding finding{probe_address(row), row_text(row, probe, setup), relative};
+    // Neither this nor the mirror depends on which bank sounded the note.
+    const Finding finding{probe_address(row), row_text(row, probe, setup, Bank::kSoundFont), 0.0};
     const bool wants_apply = row.level == GsLevel::kAudible || row.level == GsLevel::kState;
     if (wants_apply && !accepted) unapplied.push_back(finding);
     if (!wants_apply && accepted) applied.push_back(finding);
 
-    if (row.level == GsLevel::kAudible) {
-      if (delta == 0.0) {
-        unheard.push_back(finding);
-      } else if (relative < 1.0e-4) {
-        // Audible in the sense that something moved, but 80 dB under the
-        // render's own peak — worth naming rather than passing without comment.
-        faint.push_back(finding);
-      }
-      continue;
-    }
+    // The rest is the STATE / ACCEPT / IGNORE split, which AUDIBLE has no part
+    // in; whether the audio moved was settled per bank above.
+    if (row.level == GsLevel::kAudible) continue;
 
-    // The other three levels all promise the audio does not move.
-    if (delta != 0.0) heard.push_back(finding);
     const Mirror mirror = mirror_state(row, message);
     if (row.level == GsLevel::kState) {
       // "Received and held": a byte nothing stores is not held, whatever the
@@ -582,6 +647,7 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   add("claiming ACCEPT / IGNORE while the byte is held", held);
   add("claiming AUDIBLE / STATE that no apply layer took", unapplied);
   add("claiming ACCEPT / IGNORE that an apply layer took", applied);
+  add("excused as reaching one bank only, and now reaching both — delete the entry", fixed_gaps);
   INFO(report);
   CHECK(unheard.empty());
   CHECK(heard.empty());
@@ -589,6 +655,7 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   CHECK(held.empty());
   CHECK(unapplied.empty());
   CHECK(applied.empty());
+  CHECK(fixed_gaps.empty());
 }
 
 #endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
