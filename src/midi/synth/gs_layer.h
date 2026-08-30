@@ -288,9 +288,9 @@ float gs_vib_depth_cents(int8_t offset) noexcept;
 void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept;
 
 /// Applies the per-note drum overrides onto resolved voice parameters.
-/// The three sends multiply what the part is already sending rather than adding
-/// to it (docs/gs.md); the delay one lands on delay_send_scale because SF2 has
-/// no delay generator for it to scale.
+/// The three sends land on the *_send_scale fields rather than on the zone's own
+/// send values: each multiplies everything the note sends into that unit rather
+/// than adding to it (docs/gs.md).
 void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) noexcept;
 
 // --- SysEx surface ---

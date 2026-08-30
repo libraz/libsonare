@@ -207,6 +207,11 @@ struct DrumVoiceMod {
   float pitch_ratio = 1.0f;  ///< 2^(pitch_coarse / 12)
   float level_gain = 1.0f;   ///< (level / 127)^2 (same square law as CC7)
   float pan_units = 1.0e9f;  ///< absolute pan units (1e9 = untouched: keep channel pan)
+  /// Send multiplicands over [0,1] (41 m5/m6/m9 rr): each scales this note's
+  /// whole contribution to that unit's bus.
+  float reverb_scale = 1.0f;
+  float chorus_scale = 1.0f;
+  float delay_scale = 1.0f;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -290,6 +295,11 @@ struct NativeSynthVoice : VoiceState {
   /// into velocity_gain at start). Defaults are no-ops.
   float drum_pitch_ratio = 1.0f;
   float drum_pan_units = 1.0e9f;
+  /// GS per-note drum send multiplicands; the mixer scales the channel's send
+  /// into each unit by them.
+  float drum_reverb_scale = 1.0f;
+  float drum_chorus_scale = 1.0f;
+  float drum_delay_scale = 1.0f;
 
   /// Starts the voice for @p p. note/channel/age must already be set (the
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
@@ -299,9 +309,8 @@ struct NativeSynthVoice : VoiceState {
   /// @p drum_kit != 0 applies a GS kit variation (Room/Power/808/...) to the
   /// resolved drum patch at note-on (percussion mode only; see apply_gs_drum_kit).
   /// @p drum_mod carries GS per-note drum NRPN edits (pitch coarse / level /
-  /// pan); default is a no-op. @p organ_percussion fires the drawbar organ's
-  /// single-shot on this note (additive mode only; the channel decides which
-  /// note gets it).
+  /// pan / the three send multiplicands); default is a no-op. @p organ_percussion fires the drawbar
+  /// organ's single-shot on this note (additive mode only; the channel decides which note gets it).
   void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
              float glide_from_hz = 0.0f, bool una_corda = false, uint8_t drum_kit = 0,
              DrumVoiceMod drum_mod = {}, bool organ_percussion = false) noexcept;

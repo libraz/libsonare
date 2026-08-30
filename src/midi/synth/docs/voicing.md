@@ -56,7 +56,7 @@ The bank already leans on this and it is easy to misread as the thing the rule f
 
 So the test is: **take the file's own control for that stage to zero. If the stage disappears, it is a weight. If it survives, it is baked in and the rule has been broken.**
 
-The same shape appears in GS itself: a drum note's send is a multiplicand of the part's send, not an addition to it (`gs.md`), for exactly this reason. Additive would mean a part taken to silence still sends.
+The same shape appears in GS itself: a drum note's send is a multiplicand of what that note sends into the unit, not an addition to it (`gs.md`), for exactly this reason. Additive would mean a note told to send nothing still sends.
 
 An amplifier is not expressible as a weight — there is no file-controlled "amp amount" for it to scale — so it takes the other form: a stage with a binding the host can clear. Both are bindings; they differ in what the file already had a handle on.
 

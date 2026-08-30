@@ -87,10 +87,14 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   key_down = true;
   releasing = false;
   sostenuto = false;
-  // GS per-note drum edits: pitch coarse and absolute pan carry into render;
-  // the TVA level folds into velocity_gain below. Defaults are no-ops.
+  // GS per-note drum edits: pitch coarse, absolute pan and the three send
+  // multiplicands carry into render; the TVA level folds into velocity_gain
+  // below. Defaults are no-ops.
   drum_pitch_ratio = drum_mod.pitch_ratio;
   drum_pan_units = drum_mod.pan_units;
+  drum_reverb_scale = drum_mod.reverb_scale;
+  drum_chorus_scale = drum_mod.chorus_scale;
+  drum_delay_scale = drum_mod.delay_scale;
 
   // A GS kit variation may retune the resolved drum patch's percussion + amp
   // envelope at note-on and scale its level (Standard patch stays shared; no

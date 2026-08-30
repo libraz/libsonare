@@ -55,9 +55,8 @@ MidiEvent event(const sonare::midi::Ump& ump) {
 }
 
 /// Bank 128 program 0 is a looped sine carrying its own reverb and chorus send
-/// generators. A drum note's 41 m5 / 41 m6 send is a multiplicand of what the
-/// zone already sends, so without them those two parameters have nothing to
-/// scale and every comparison over them would be vacuous.
+/// generators, so the 41 m5 / 41 m6 multiplicands have a send to scale whatever
+/// the part is sending.
 std::shared_ptr<Sf2File> make_fixture() {
   Sf2Builder b;
   std::vector<float> sine(96);

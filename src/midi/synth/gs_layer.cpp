@@ -171,15 +171,15 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
   if ((drum.flags & GsDrumNoteParams::kPan) != 0) {
     params.pan_units = (static_cast<float>(drum.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
   }
-  // A drum note's sends MULTIPLY the part's, they do not add to it (docs/gs.md;
-  // the manual calls the field a multiplicand over 0.0-1.0). Adding leaves a
-  // note audible in the reverb after its part's send is taken to zero, which the
-  // hardware does not.
+  // A drum note's sends MULTIPLY what the note sends into that unit, they do not
+  // add to it (docs/gs.md; the manual calls the field a multiplicand over
+  // 0.0-1.0). The scale is carried to the render, which applies it to the zone's
+  // send and the part's together.
   if ((drum.flags & GsDrumNoteParams::kReverb) != 0) {
-    params.reverb_send *= static_cast<float>(drum.reverb & 0x7Fu) / 127.0f;
+    params.reverb_send_scale *= static_cast<float>(drum.reverb & 0x7Fu) / 127.0f;
   }
   if ((drum.flags & GsDrumNoteParams::kChorus) != 0) {
-    params.chorus_send *= static_cast<float>(drum.chorus & 0x7Fu) / 127.0f;
+    params.chorus_send_scale *= static_cast<float>(drum.chorus & 0x7Fu) / 127.0f;
   }
   if ((drum.flags & GsDrumNoteParams::kDelay) != 0) {
     params.delay_send_scale *= static_cast<float>(drum.delay & 0x7Fu) / 127.0f;

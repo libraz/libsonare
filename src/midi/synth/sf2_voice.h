@@ -193,9 +193,13 @@ struct Sf2VoiceParams {
   // --- effect sends (consumed by the GS effect units) ---
   float reverb_send = 0.0f;  // [0,1] from reverbEffectsSend (0.1% units)
   float chorus_send = 0.0f;  // [0,1] from chorusEffectsSend
-  /// Per-note drum delay-send multiplicand (GS 41 m9 rr / NRPN 1F). Unlike the
-  /// two sends above it is a scale rather than a value: SF2 has no delay
-  /// generator, so the part's own CC94 send is the only thing to multiply.
+  /// Per-note drum send multiplicands (GS 41 m5/m6/m9 rr, NRPN 1D/1E/1F). Each
+  /// scales everything the note sends into that unit — the zone generator above
+  /// and the part's own CC send alike, after the render sums them. Delay is the
+  /// degenerate case: SF2 has no delay generator, so the part's CC94 send is
+  /// all there is to scale.
+  float reverb_send_scale = 1.0f;
+  float chorus_send_scale = 1.0f;
   float delay_send_scale = 1.0f;
 
   /// Exclusive class (hi-hat choke groups); 0 = none.

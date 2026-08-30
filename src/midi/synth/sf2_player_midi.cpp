@@ -258,10 +258,9 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
   const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(ch.program, tone_map) : 0;
-  // GS per-note drum edits (pitch coarse / TVA level / absolute pan), mirroring
-  // apply_gs_drum_params for the model floor. The three send multiplicands stay
-  // on the SF2 path: a fallback voice takes its sends from the channel, so
-  // scaling one per note would need a per-voice send this pool does not carry.
+  // GS per-note drum edits (pitch coarse / TVA level / absolute pan / the three
+  // send multiplicands), mirroring apply_gs_drum_params for the model floor: a
+  // parameter must not do something different because this bank answered.
   DrumVoiceMod drum_mod;
   if (is_drum) {
     const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
@@ -274,6 +273,15 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
     }
     if ((gd.flags & GsDrumNoteParams::kPan) != 0) {
       drum_mod.pan_units = (static_cast<float>(gd.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
+    }
+    if ((gd.flags & GsDrumNoteParams::kReverb) != 0) {
+      drum_mod.reverb_scale = static_cast<float>(gd.reverb & 0x7Fu) / 127.0f;
+    }
+    if ((gd.flags & GsDrumNoteParams::kChorus) != 0) {
+      drum_mod.chorus_scale = static_cast<float>(gd.chorus & 0x7Fu) / 127.0f;
+    }
+    if ((gd.flags & GsDrumNoteParams::kDelay) != 0) {
+      drum_mod.delay_scale = static_cast<float>(gd.delay & 0x7Fu) / 127.0f;
     }
   }
   // Drawbar percussion spends the channel's charge; note_off recharges it once

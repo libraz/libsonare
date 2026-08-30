@@ -442,6 +442,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_address_table_test.cpp
     midi/gs_audibility_test.cpp
     midi/gs_drum_setup_test.cpp
+    midi/gs_drum_send_test.cpp
     midi/gs_assign_mode_test.cpp
     midi/gs_mono_poly_test.cpp
     midi/gs_address_census_test.cpp

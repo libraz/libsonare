@@ -301,9 +301,8 @@ std::shared_ptr<const Sf2File> fixture() {
     looped.target = sine_id;
     const int sine_inst = b.add_instrument("sine", {looped});
     Sf2Builder::ZoneSpec oneshot;
-    // The kit's own reverb and chorus sends, at half scale. A drum note's
-    // 41 m5 / 41 m6 send is a multiplicand of what the zone already sends, so
-    // without them those two rows have nothing to scale and read as unheard.
+    // The kit's own reverb and chorus sends, at half scale, so the 41 m5 /
+    // 41 m6 rows have a send to scale whatever the part is sending.
     oneshot.gens.push_back({16 /*reverbEffectsSend*/, 500});
     oneshot.gens.push_back({15 /*chorusEffectsSend*/, 500});
     oneshot.target = burst_id;
