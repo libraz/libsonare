@@ -389,12 +389,14 @@ inline constexpr std::array<GsAddressEntry, 101> kGsAddressTable = {{
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
 
     // Tone map (40 4x 00-01): which generation of the sound set a part plays
-    // from. Both stay in range so an SC-55 or SC-88Pro file selecting its own
-    // map is answered rather than rejected; the ranges are the SC-8850's.
-    {0x404000, 0x000F00, GsParam::kPartToneMapNumber, GsLevel::kIgnore, 1, 0x00, 0x04, 0x00,
-     "libsonare voices one instrument bank, so a map number has no second generation to select"},
-    {0x404001, 0x000F00, GsParam::kPartToneMap0Number, GsLevel::kIgnore, 1, 0x01, 0x04, 0x04,
-     "libsonare voices one instrument bank, so a map number has no second generation to select"},
+    // from. The maps themselves exist and are audible through Bank Select LSB;
+    // what is missing is this route onto them. Ranges are the SC-8850's.
+    {0x404000, 0x000F00, GsParam::kPartToneMapNumber, GsLevel::kAccept, 1, 0x00, 0x04, 0x00,
+     "GsToneMap is selected by Bank Select LSB (gs_effective_tone_map); this route onto it is "
+     "not wired yet"},
+    {0x404001, 0x000F00, GsParam::kPartToneMap0Number, GsLevel::kAccept, 1, 0x01, 0x04, 0x04,
+     "GsToneMap is selected by Bank Select LSB (gs_effective_tone_map); this route onto it is "
+     "not wired yet"},
 
     // Part EQ switch (40 4x 20): whether the master EQ at 40 02 xx reaches this
     // part. Powers on ON, so a file that never writes it still gets the EQ.

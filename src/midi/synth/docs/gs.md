@@ -23,7 +23,7 @@ Two things follow, and both are load-bearing:
 
 The GS address space is identical between the two machines except at six points, and the SC-8850 is the superset. Targeting it therefore *includes* SC-88Pro compatibility rather than trading against it: an SC-88Pro file selects the SC-88Pro tone map (`40 4x 00` = `03`) and plays.
 
-**Both tone-map addresses are `IGNORE`, and structurally rather than provisionally.** libsonare voices one instrument bank, so there is no second generation for a map number to select, and reproducing a particular hardware generation's timbre is not a goal of this project — only its control protocol is. The accepted ranges are still the SC-8850's, so a file selecting any map, its own or a later one, is answered rather than rejected; what it does not get is a different sound.
+**The tone maps exist; the SysEx route onto them does not yet.** `GsToneMap` carries SC-55, SC-88 and SC-88Pro alongside the module default, and `gm_fallback_patch` and `gm_fallback_drum_kit` both take it, so which map a part plays from is audible — but it is selected by Bank Select LSB (`gs_effective_tone_map`), and `40 4x 00`/`01` are `ACCEPT` because nothing reads them. Whether the two are one parameter or two is the question that decides how they get wired, and it is the question `40 1x 16` versus RPN `00 02` below warns about: coinciding ranges are not an alias, and only an annotation in the map settles it. The accepted ranges are the SC-8850's meanwhile, so a file selecting any map is answered rather than rejected.
 
 Where the two differ:
 
