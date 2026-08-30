@@ -332,9 +332,8 @@ inline constexpr std::array<GsAddressEntry, 99> kGsAddressTable = {{
     {0x402008, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     // Bend as a source.
-    {0x402010, 0x000F00, GsParam::kPartBendPitchControl, GsLevel::kAccept, 1, 0x40, 0x58, 0x42,
-     "the part's bend range is RPN 00 00's bend_range_cents; this alias onto it is "
-     "not wired yet"},
+    {0x402010, 0x000F00, GsParam::kPartBendPitchControl, GsLevel::kAudible, 1, 0x40, 0x58, 0x42,
+     nullptr},
     {0x402011, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     {0x402014, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,

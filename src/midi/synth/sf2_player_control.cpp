@@ -242,6 +242,11 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartToneModify:
         gs_apply_tone_modify(st.gs, w.index, w.value);
         break;
+      case GsParam::kPartBendPitchControl:
+        // The same range RPN 00 00 writes, in whole semitones above 40; the
+        // cents its LSB carries have no address of their own here.
+        st.bend_range_cents = 100.0f * static_cast<float>(w.value - 0x40);
+        break;
       default:
         continue;
     }

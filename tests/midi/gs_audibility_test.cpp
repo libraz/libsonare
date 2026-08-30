@@ -116,6 +116,7 @@ enum class Setup : uint8_t {
   kEfxActive,     ///< Both, so an insertion chain is built and the part bussed.
   kEqLifted,      ///< Both master-EQ bands off 0 dB, where the EQ is a no-op.
   kVolumeCut,     ///< MASTER VOLUME pulled down, for the reset-command rows.
+  kBendApplied,   ///< The melodic part bent fully up, where a bend range scales.
 };
 
 const char* setup_name(Setup setup) {
@@ -132,6 +133,8 @@ const char* setup_name(Setup setup) {
       return "eq-lifted";
     case Setup::kVolumeCut:
       return "volume-cut";
+    case Setup::kBendApplied:
+      return "bend-applied";
   }
   return "?";
 }
@@ -156,6 +159,8 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
       return {dt1(0x400200, {0x00, 0x4C, 0x00, 0x34})};
     case Setup::kVolumeCut:
       return {dt1(0x400004, {0x20})};
+    case Setup::kBendApplied:
+      return {};
   }
   return {};
 }
@@ -191,6 +196,10 @@ Setup setup_for(const GsAddressEntry& row) {
     case GsParam::kSystemModeSet:
     case GsParam::kModeSet:
       return Setup::kVolumeCut;
+    // A bend range scales the bend, so it says nothing while the wheel is
+    // centred — which is where the stimulus leaves it.
+    case GsParam::kPartBendPitchControl:
+      return Setup::kBendApplied;
     default:
       return Setup::kNone;
   }
@@ -347,6 +356,18 @@ void note_off(Sf2Player& p, uint8_t channel, uint8_t note) {
   p.on_event(0, event(sonare::midi::make_midi1_note_off(0, channel, note, 0)));
 }
 
+/// The part of a setup that is channel messages rather than SysEx. A row whose
+/// value only scales a controller reads as inert until that controller is off
+/// its neutral position, and setup_writes goes through handle_sysex, which a
+/// channel message is not.
+void setup_channel_state(Sf2Player& p, Setup setup) {
+  if (setup != Setup::kBendApplied) return;
+  // Fully up, on the melodic part the stimulus plays: the widest separation
+  // between one bend range and another.
+  p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(
+                    0, gs_part_block_to_channel(kMelodicBlock), 16383)));
+}
+
 /// One stimulus, able to reveal every kind of row: a melodic part sustaining a
 /// chord (mono/poly, assign mode, tuning, level, pan), a rhythm part sounding
 /// drum notes, a retrigger of a held note (SINGLE assign mode), a release well
@@ -414,6 +435,7 @@ StereoRender render(Bank bank, Setup setup, const std::vector<std::vector<uint8_
   for (const std::vector<uint8_t>& msg : setup_writes(setup)) {
     REQUIRE(player.handle_sysex(msg.data(), msg.size()));
   }
+  setup_channel_state(player, setup);
   for (const std::vector<uint8_t>& msg : probe) {
     const bool ok = player.handle_sysex(msg.data(), msg.size());
     if (accepted != nullptr && !ok) *accepted = false;
