@@ -54,10 +54,15 @@ if(SONARE_USE_PFFFT)
   set_target_properties(pffft PROPERTIES OUTPUT_NAME sonare_pffft)
   target_include_directories(pffft SYSTEM PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/r8brain/fft>)
+  # PFFFT's output depends on the optimization level it was compiled at, so a
+  # Debug build and a Release build of the same source render different audio
+  # and only one of them can match a recorded golden. Pinning the level here is
+  # what makes the two agree; -ffp-contract=off does not, having been measured
+  # to leave a third result rather than join the other two.
   if(MSVC)
-    target_compile_options(pffft PRIVATE /W0)
+    target_compile_options(pffft PRIVATE /W0 /O2)
   else()
-    target_compile_options(pffft PRIVATE -w)
+    target_compile_options(pffft PRIVATE -w -O3)
   endif()
 endif()
 

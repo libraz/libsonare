@@ -1,3 +1,13 @@
+/// @file golden_hash_test.cpp
+/// @brief Built-in mastering presets hashed per preset and signal.
+///
+/// The four presets enabling denoise or dereverb run through the STFT, so their
+/// hashes are the ones an FFT rounding change moves. PFFFT renders differently
+/// depending on the optimization level it was compiled at, which would let a
+/// Debug and a Release build disagree here with neither being wrong; the pin in
+/// src/CMakeLists.txt is what keeps them together, and removing it fails these
+/// twelve alone.
+
 #include "support/golden_hash.h"
 
 #include <catch2/catch_test_macros.hpp>
