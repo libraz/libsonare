@@ -319,6 +319,10 @@ bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
         d.level = w.value;
         d.flags |= GsDrumNoteParams::kLevel;
         break;
+      case GsParam::kDrumAssignGroup:
+        d.assign_group = w.value;
+        d.flags |= GsDrumNoteParams::kAssignGroup;
+        break;
       case GsParam::kDrumPanpot:
         // 00 is RANDOM at this address and hard left through NRPN 1C, the same
         // split 40 1x 1C and CC10 have; randomness answers centre (docs/gs.md).

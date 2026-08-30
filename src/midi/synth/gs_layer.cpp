@@ -196,6 +196,12 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
   if ((drum.flags & GsDrumNoteParams::kDelay) != 0) {
     params.delay_send_scale *= static_cast<float>(drum.delay & 0x7Fu) / 127.0f;
   }
+  // ASSIGN GROUP replaces the kit's own exclusive class rather than adding to
+  // it, so 00 takes a note out of every group. The caller chokes on the value
+  // this leaves behind, which is why it is set before the choke and not after.
+  if ((drum.flags & GsDrumNoteParams::kAssignGroup) != 0) {
+    params.exclusive_class = drum.assign_group & 0x7Fu;
+  }
 }
 
 GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {

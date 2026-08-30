@@ -263,8 +263,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
     const uint8_t excl = patch->percussion.exclusive_class;
     for (NativeSynthVoice& v : pool_) {
       if (v.active && v.channel == ch && v.patch != nullptr &&
-          v.patch->mode == SynthEngineMode::kPercussion &&
-          v.patch->percussion.exclusive_class == excl) {
+          v.patch->mode == SynthEngineMode::kPercussion && v.exclusive_class == excl) {
         v.choke();
       }
     }

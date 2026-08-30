@@ -150,8 +150,9 @@ inline constexpr uint8_t kGsToneModifyCount = 8;
 void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexcept;
 
 /// Per-note drum overrides (GS NRPN msb 18/1A/1C/1D/1E/1F with the drum note as
-/// the lsb, and the drum setup addresses 41 m1/m2/m4/m5/m6/m9 rr — every one but
-/// PLAY NOTE NUMBER an alias of an NRPN).
+/// the lsb, and the drum setup addresses 41 m1/m2/m3/m4/m5/m6/m9 rr — PLAY NOTE
+/// NUMBER and ASSIGN GROUP reachable from the address alone, the rest from
+/// either side).
 ///
 /// Every field holds the value at which the parameter changes nothing. The
 /// manual gives these no power-on value because a drum set change re-initialises
@@ -160,7 +161,7 @@ void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexce
 /// NOTE NUMBER has no such value at all, its identity being the struck note, so
 /// the flag is the whole of what an unwritten one means.
 struct GsDrumNoteParams {
-  enum Flag : uint8_t {
+  enum Flag : uint16_t {
     kPitch = 1u << 0,
     kLevel = 1u << 1,
     kPan = 1u << 2,
@@ -168,15 +169,17 @@ struct GsDrumNoteParams {
     kChorus = 1u << 4,
     kDelay = 1u << 5,
     kPlayNote = 1u << 6,
+    kAssignGroup = 1u << 7,
   };
-  uint8_t flags = 0;
-  int8_t pitch_coarse = 0;  // semitones (data - 64)
-  uint8_t level = 127;      // absolute TVA level (data)
-  uint8_t pan = 64;         // absolute pan (data; 64 = centre)
-  uint8_t reverb = 127;     // reverb-send multiplicand (data)
-  uint8_t chorus = 127;     // chorus-send multiplicand (data)
-  uint8_t delay = 127;      // delay-send multiplicand (data)
-  uint8_t play_note = 0;    // the note whose sound is played (data)
+  uint16_t flags = 0;
+  int8_t pitch_coarse = 0;   // semitones (data - 64)
+  uint8_t level = 127;       // absolute TVA level (data)
+  uint8_t pan = 64;          // absolute pan (data; 64 = centre)
+  uint8_t reverb = 127;      // reverb-send multiplicand (data)
+  uint8_t chorus = 127;      // chorus-send multiplicand (data)
+  uint8_t delay = 127;       // delay-send multiplicand (data)
+  uint8_t play_note = 0;     // the note whose sound is played (data)
+  uint8_t assign_group = 0;  // exclusive/mute group, 0 = none (data)
 
   bool any() const noexcept { return flags != 0; }
 };

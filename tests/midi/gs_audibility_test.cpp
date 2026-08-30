@@ -118,6 +118,9 @@ enum class Setup : uint8_t {
   kVolumeCut,     ///< MASTER VOLUME pulled down, for the reset-command rows.
   kBendApplied,   ///< The melodic part bent fully up, where a bend range scales.
   kModWheelUp,    ///< The melodic part's CC1 raised, where a mod depth scales.
+  /// The rhythm part's SECOND note put in a group, where an assign group only
+  /// says something once two notes are in one.
+  kDrumGroupPeer,
 };
 
 const char* setup_name(Setup setup) {
@@ -138,9 +141,15 @@ const char* setup_name(Setup setup) {
       return "bend-applied";
     case Setup::kModWheelUp:
       return "mod-wheel-up";
+    case Setup::kDrumGroupPeer:
+      return "drum-group-peer";
   }
   return "?";
 }
+
+/// The other note the stimulus strikes, and the one a drum-setup row uses when
+/// it needs a second note to say anything.
+constexpr uint32_t kProbeDrumPeerNote = 42;
 
 std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
   // Overdrive (01 10) is a type gs_efx_insert_chain realises as one stage, so a
@@ -162,6 +171,10 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
       return {dt1(0x400200, {0x00, 0x4C, 0x00, 0x34})};
     case Setup::kVolumeCut:
       return {dt1(0x400004, {0x20})};
+    case Setup::kDrumGroupPeer:
+      // The stimulus's second drum note, put in the group the probe writes, so
+      // the probe's note has something to be choked by.
+      return {dt1(0x410300u | kProbeDrumPeerNote, {0x7F})};
     case Setup::kBendApplied:
     case Setup::kModWheelUp:
       return {};
@@ -207,6 +220,9 @@ Setup setup_for(const GsAddressEntry& row) {
     // Likewise a modulation depth, which scales CC1 and says nothing at zero.
     case GsParam::kPartModLfo1PitchDepth:
       return Setup::kModWheelUp;
+    // A group is a relation, so one note in it chokes nothing.
+    case GsParam::kDrumAssignGroup:
+      return Setup::kDrumGroupPeer;
     default:
       return Setup::kNone;
   }
@@ -307,6 +323,10 @@ MidiEvent event(const sonare::midi::Ump& ump) {
 
 /// Bank 0 program 0 is a looped sine (a sustaining melodic voice); bank 128
 /// program 0 is a one-shot burst, which is what channel 9 resolves to.
+///
+/// The burst runs several hundred milliseconds rather than the tens a kit piece
+/// would: the stimulus strikes its two drum notes a quarter of a second apart,
+/// and a choke between them is only visible while the first is still sounding.
 std::shared_ptr<const Sf2File> fixture() {
   static std::shared_ptr<const Sf2File> cached = [] {
     Sf2Builder b;
@@ -315,12 +335,12 @@ std::shared_ptr<const Sf2File> fixture() {
       sine[i] = 0.5f * static_cast<float>(std::sin(kTwoPi * static_cast<double>(i) / 32.0));
     }
     const int sine_id = b.add_sample("sine", sine, 32000, 60, 32, 96);
-    std::vector<float> burst(512);
+    std::vector<float> burst(12288);
     for (size_t i = 0; i < burst.size(); ++i) {
-      const float envl = 1.0f - static_cast<float>(i) / 512.0f;
+      const float envl = 1.0f - static_cast<float>(i) / static_cast<float>(burst.size());
       burst[i] = envl * static_cast<float>(std::sin(kTwoPi * static_cast<double>(i) / 7.0));
     }
-    const int burst_id = b.add_sample("burst", burst, 48000, 60, 0, 512);
+    const int burst_id = b.add_sample("burst", burst, 48000, 60, 0, 12288);
 
     Sf2Builder::ZoneSpec looped;
     looped.gens.push_back({54 /*sampleModes*/, 1});

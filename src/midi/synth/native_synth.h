@@ -216,6 +216,9 @@ struct DrumVoiceMod {
   /// one. Carried here rather than substituted into the voice's own note, which
   /// stays the struck one because that is what a note-off matches.
   int16_t play_note = -1;
+  /// ASSIGN GROUP (41 m3 rr): the exclusive group this strike joins, 0 = none.
+  /// -1 = the kit piece's own, which is what a host with no GS layer means.
+  int16_t exclusive_class = -1;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -229,6 +232,10 @@ struct NativeSynthVoice : VoiceState {
   float osc_norm = 1.0f;  // 1/sqrt(unison)
   float base_freq_hz = 440.0f;
   float velocity_gain = 1.0f;
+  /// The exclusive/mute group this voice was STARTED in, which a GS ASSIGN
+  /// GROUP write moves away from the kit piece's own. Held per voice because
+  /// one kit piece is shared by every note that resolves to it.
+  uint8_t exclusive_class = 0;
   /// Static cutoff offset precomputed at start (velocity + key tracking).
   float static_cutoff_cents = 0.0f;
   /// Pre-filter drive gain / makeup (precomputed from patch->drive; 0 = off).

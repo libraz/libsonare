@@ -319,6 +319,43 @@ TEST_CASE("a GS drum note send scales its part's, it does not add to it", "[midi
   }
 }
 
+TEST_CASE("a GS assign group replaces the kit piece's own class", "[midi][sf2][gslayer]") {
+  // The three sends above scale what the kit gave the note; this one overwrites
+  // it, so 00 is the value that says something rather than the value that says
+  // nothing. A file uses it to take a piece out of the group its kit put it in
+  // — an open hi-hat that should ring through the closed one — and adding or
+  // scaling would leave that unreachable.
+  using sonare::midi::synth::apply_gs_drum_params;
+  using sonare::midi::synth::GsDrumNoteParams;
+  using sonare::midi::synth::Sf2VoiceParams;
+
+  GsDrumNoteParams drum;
+  drum.flags = GsDrumNoteParams::kAssignGroup;
+
+  SECTION("an unwritten group leaves the kit's alone") {
+    Sf2VoiceParams params;
+    params.exclusive_class = 5;
+    apply_gs_drum_params(params, GsDrumNoteParams{});
+    REQUIRE(params.exclusive_class == 5);
+  }
+
+  SECTION("a written group replaces it") {
+    Sf2VoiceParams params;
+    params.exclusive_class = 5;
+    drum.assign_group = 9;
+    apply_gs_drum_params(params, drum);
+    REQUIRE(params.exclusive_class == 9);
+  }
+
+  SECTION("00 is OFF, and takes the note out of the kit's group") {
+    Sf2VoiceParams params;
+    params.exclusive_class = 5;
+    drum.assign_group = 0;
+    apply_gs_drum_params(params, drum);
+    REQUIRE(params.exclusive_class == 0);
+  }
+}
+
 TEST_CASE("parse_gs_sysex recognises the GS/GM messages", "[midi][sf2][gslayer]") {
   const uint8_t gm_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
   REQUIRE(parse_gs_sysex(gm_on, sizeof(gm_on)).kind == GsSysExKind::kGmReset);

@@ -301,6 +301,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x410126, 0x24, GsParam::kDrumPlayNote, 0x26, 0);
   check_row(0x41117F, 0x00, GsParam::kDrumPlayNote, 0x7F, 1);
   check_row(0x410226, 0x00, GsParam::kDrumLevel, 0x26, 0);
+  check_row(0x41032A, 0x7F, GsParam::kDrumAssignGroup, 0x2A, 0);
   check_row(0x411226, 0x7F, GsParam::kDrumLevel, 0x26, 1);
   check_row(0x410400, 0x7F, GsParam::kDrumPanpot, 0x00, 0);
   check_row(0x41057F, 0x00, GsParam::kDrumReverbSend, 0x7F, 0);
@@ -1235,13 +1236,15 @@ TEST_CASE("GS decode: the unknown counter separates a gap from a claimed address
   REQUIRE(gs_lookup_range(0x401023) == nullptr);
   CHECK(unknowns(0x401023) == 1);
   // A second one from another family, so the counter is not being shown to work
-  // in a single block. 41 m3 rr ASSIGN GROUP sits between the drum-setup rows
-  // and is likewise unwritten by the corpus. Both carry the lookup guards
-  // above, because an address that quietly acquires a row stops being a probe
-  // and the case would keep passing for the wrong reason.
-  REQUIRE(gs_lookup_address(0x410300) == nullptr);
-  REQUIRE(gs_lookup_range(0x410300) == nullptr);
-  CHECK(unknowns(0x410300) == 1);
+  // in a single block. 41 mA rr is a drum-setup parameter nibble the manual does
+  // not define — the block ends at m9 — so no file writes it and nothing is
+  // planned for it, where the previous choice here was a nibble the manual DOES
+  // define and stopped being a probe as soon as it was implemented. Both carry
+  // the lookup guards above, because an address that quietly acquires a row
+  // would keep the case passing for the wrong reason.
+  REQUIRE(gs_lookup_address(0x410A00) == nullptr);
+  REQUIRE(gs_lookup_range(0x410A00) == nullptr);
+  CHECK(unknowns(0x410A00) == 1);
 
   // The combined entry point refuses what the frame layer refuses.
   uint32_t unknown = 0;
