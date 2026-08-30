@@ -2,46 +2,53 @@
 /// @brief Golden decisions for the automatic key-detection candidate sweep.
 ///
 /// The corpus is rendered in code rather than loaded from disk, so this guards
-/// the whole `genre_hint = "auto"` path without any audio in the repository.
-/// Each row pins the detected key and mode plus a quantized hash of the
-/// confidence and the ranked candidate correlations, so a refactor that is
-/// meant to preserve behaviour either matches exactly or has to justify a
-/// golden move. A change that shifts the numbers without flipping a decision is
-/// the case a decision-only check waves through, and it is the case this
-/// catches: the hash columns move while the key columns do not.
+/// the `genre_hint = "auto"` path without any audio in the repository. Each row
+/// pins the detected key and mode plus the confidence and the ranked
+/// candidates, which is what catches the case a decision-only check waves
+/// through: the numbers move while the key columns do not.
 ///
-/// This is a bit-exactness golden, **not** an accuracy benchmark. The corpus is
-/// saturated — every row currently detects its own tonic — which is what makes
-/// a decision flip obvious in the diff, and which also means the pass rate says
-/// nothing about accuracy on real material. Accuracy is the optional-fixture
-/// harness's job (see tests/fixtures/music_eval/README.md).
+/// The floats are compared to kTolerance rather than hashed, because the
+/// pipeline does not reproduce bit-exactly across optimization levels — Debug
+/// and Release agree on every decision and every candidate ordering and differ
+/// on the values by up to 3.6e-7. A quantized hash makes that a coin toss: at a
+/// 1e-6 step 15 of these 96 rows flip, and coarsening the step is not
+/// monotonic, since a value can sit on a 1e-4 boundary while resting safely
+/// inside a 1e-5 one.
+///
+/// This is a stability golden, **not** an accuracy benchmark. The corpus is
+/// saturated — every row currently detects its own tonic — so the pass rate
+/// says nothing about accuracy on real material; that is the optional-fixture
+/// harness's job (see tests/fixtures/music_eval/README.md). The modal profiles
+/// are outside it too: the auto path scores major and minor unless a caller
+/// names `KeyConfig::modes`.
 ///
 /// Runs for roughly 70 s, so it sits in the hidden `[golden]` tier rather than
-/// the default ctest run. Around 93% of that is the analysis itself — 96 tracks
-/// each costing one harmonic separation and two chroma passes — and about 7% is
-/// rendering the corpus, so the cost is the coverage rather than the harness.
+/// the default ctest run — 96 tracks each costing one harmonic separation and
+/// two chroma passes, which is coverage rather than harness overhead.
 ///
 /// Regenerate with `SONARE_UPDATE_KEY_GOLDEN=1`.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <map>
 #include <sstream>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #include "analysis/key_analyzer.h"
 #include "core/audio.h"
-#include "support/golden_hash.h"
 #include "util/constants.h"
 
 namespace {
 
+using Catch::Matchers::WithinAbs;
 using sonare::Audio;
 using sonare::Key;
 using sonare::KeyAnalyzer;
@@ -120,16 +127,23 @@ const char* mode_short(Mode mode) {
   return "other";
 }
 
-std::string hex64(std::uint64_t value) {
-  std::ostringstream stream;
-  stream << std::hex << value;
-  return stream.str();
-}
+/// Two hundred times the 3.6e-7 an optimization level moves these numbers by,
+/// and still tight enough to see a real one: moving the Krumhansl-Schmuckler
+/// major tonic weight by 0.9% reddens thirty of these assertions.
+constexpr float kTolerance = 1.0e-4f;
+
+/// One ranked key candidate as the golden records it.
+struct Candidate {
+  int root = 0;              ///< Pitch class index, compared exactly
+  int mode = 0;              ///< Mode enumerator, compared exactly
+  float correlation = 0.0f;  ///< Compared to kTolerance
+};
 
 struct Row {
-  std::string track;     ///< Corpus coordinates, also the golden key
-  std::string decision;  ///< Detected key and mode, e.g. "Cmaj"
-  std::string hash;      ///< Quantized confidence + candidate correlations
+  std::string track;        ///< Corpus coordinates, also the golden key
+  std::string decision;     ///< Detected key and mode, e.g. "Cmaj"
+  float confidence = 0.0f;  ///< The winning candidate's posterior share
+  std::vector<Candidate> candidates;
 };
 
 std::vector<Row> compute_rows() {
@@ -150,14 +164,10 @@ std::vector<Row> compute_rows() {
           const KeyAnalyzer analyzer(audio, config);
           const Key key = analyzer.key();
 
-          // Quantize through the shared golden helper so the numbers survive a
-          // different libm the way every other golden in the tree does.
-          std::vector<float> numbers;
-          numbers.push_back(key.confidence);
+          std::vector<Candidate> candidates;
           for (const auto& candidate : analyzer.candidates()) {
-            numbers.push_back(static_cast<float>(static_cast<int>(candidate.key.root)));
-            numbers.push_back(static_cast<float>(static_cast<int>(candidate.key.mode)));
-            numbers.push_back(candidate.correlation);
+            candidates.push_back({static_cast<int>(candidate.key.root),
+                                  static_cast<int>(candidate.key.mode), candidate.correlation});
           }
 
           std::ostringstream track;
@@ -165,7 +175,7 @@ std::vector<Row> compute_rows() {
                 << "/v" << variant << "/sr" << sr;
           rows.push_back({track.str(),
                           std::string(pitch_class_short(key.root)) + mode_short(key.mode),
-                          hex64(sonare::test::fnv1a_quantized(numbers))});
+                          key.confidence, std::move(candidates)});
         }
       }
     }
@@ -173,22 +183,32 @@ std::vector<Row> compute_rows() {
   return rows;
 }
 
-std::map<std::string, std::pair<std::string, std::string>> load_manifest(
-    const std::filesystem::path& path) {
+std::map<std::string, Row> load_manifest(const std::filesystem::path& path) {
   std::ifstream file(path);
   REQUIRE(file.is_open());
-  std::map<std::string, std::pair<std::string, std::string>> out;
+  std::map<std::string, Row> out;
   std::string line;
   while (std::getline(file, line)) {
     if (line.empty() || line[0] == '#') continue;
     std::stringstream stream(line);
-    std::string track;
-    std::string decision;
-    std::string hash;
-    std::getline(stream, track, '\t');
-    std::getline(stream, decision, '\t');
-    std::getline(stream, hash, '\t');
-    out[track] = {decision, hash};
+    Row row;
+    std::string field;
+    std::getline(stream, row.track, '\t');
+    std::getline(stream, row.decision, '\t');
+    std::getline(stream, field, '\t');
+    row.confidence = std::stof(field);
+    // The remaining fields are whole candidate triples; a truncated one is a
+    // corrupt manifest rather than a shorter candidate list.
+    while (std::getline(stream, field, '\t')) {
+      Candidate candidate;
+      candidate.root = std::stoi(field);
+      REQUIRE(std::getline(stream, field, '\t'));
+      candidate.mode = std::stoi(field);
+      REQUIRE(std::getline(stream, field, '\t'));
+      candidate.correlation = std::stof(field);
+      row.candidates.push_back(candidate);
+    }
+    out[row.track] = std::move(row);
   }
   return out;
 }
@@ -196,9 +216,16 @@ std::map<std::string, std::pair<std::string, std::string>> load_manifest(
 void write_manifest(const std::filesystem::path& path, const std::vector<Row>& rows) {
   std::filesystem::create_directories(path.parent_path());
   std::ofstream file(path);
-  file << "# track\tdetected_key\tfnv1a_quantized_hash\n";
+  file << "# track\tdetected_key\tconfidence\t(candidate root\tmode\tcorrelation)...\n";
+  // Six decimals: four more than the tolerance compares to, so the written form
+  // never decides a comparison, and short enough for a golden move to be read.
+  file << std::fixed << std::setprecision(6);
   for (const auto& row : rows) {
-    file << row.track << '\t' << row.decision << '\t' << row.hash << '\n';
+    file << row.track << '\t' << row.decision << '\t' << row.confidence;
+    for (const auto& candidate : row.candidates) {
+      file << '\t' << candidate.root << '\t' << candidate.mode << '\t' << candidate.correlation;
+    }
+    file << '\n';
   }
 }
 
@@ -222,7 +249,16 @@ TEST_CASE("automatic key sweep decisions stay stable", "[.][key][golden]") {
   // what separates a stale golden from a single genuine regression.
   for (const auto& row : rows) {
     CAPTURE(row.track);
-    CHECK(expected.at(row.track).first == row.decision);
-    CHECK(expected.at(row.track).second == row.hash);
+    const Row& want = expected.at(row.track);
+    CHECK(want.decision == row.decision);
+    CHECK_THAT(row.confidence, WithinAbs(want.confidence, kTolerance));
+    CHECK(want.candidates.size() == row.candidates.size());
+    for (size_t i = 0; i < std::min(want.candidates.size(), row.candidates.size()); ++i) {
+      CAPTURE(i);
+      CHECK(want.candidates[i].root == row.candidates[i].root);
+      CHECK(want.candidates[i].mode == row.candidates[i].mode);
+      CHECK_THAT(row.candidates[i].correlation,
+                 WithinAbs(want.candidates[i].correlation, kTolerance));
+    }
   }
 }
