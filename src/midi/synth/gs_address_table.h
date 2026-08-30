@@ -99,6 +99,14 @@ enum class GsLevel : uint8_t {
   X(kPartPitchFineTune)     \
   X(kPartDelaySend)         \
   X(kPartToneModify)        \
+  X(kPartModDest)           \
+  X(kPartModLfo1PitchDepth) \
+  X(kPartBendDest)          \
+  X(kPartBendPitchControl)  \
+  X(kPartCafDest)           \
+  X(kPartPafDest)           \
+  X(kPartCc1Dest)           \
+  X(kPartCc2Dest)           \
   X(kPartEqSwitch)          \
   X(kPartEfxAssign)         \
   X(kDrumLevel)             \
@@ -163,7 +171,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 68> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 99> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -300,6 +308,86 @@ inline constexpr std::array<GsAddressEntry, 68> kGsAddressTable = {{
     // which of the eight (gs_apply_tone_modify).
     {0x401030, 0x000F00, GsParam::kPartToneModify, GsLevel::kAudible, 8, 0x00, 0x7F, 0x40, nullptr},
 
+    // Controller destinations (40 2x xx): six sources, each with the same eleven
+    // destinations, at +00 pitch / +01 TVF cutoff / +02 amplitude / +03-06 LFO1
+    // rate, pitch, TVF, TVA / +07-0A the same four for LFO2. Rows are split where
+    // the accepted range or the power-on default changes, not per destination.
+    //
+    // kAccept throughout: this is a modulation matrix and the engine routes its
+    // controllers directly, so no byte here has a reader. Two of them name a
+    // quantity that already exists under another address and are the ones worth
+    // raising first (docs/gs.md's alias table).
+    // Modulation as a source.
+    {0x402000, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402001, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAccept, 1, 0x00, 0x7F, 0x0A,
+     "the modulation depth is kModWheelVibratoCents, a constant; this alias onto it "
+     "is not wired yet"},
+    {0x402005, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 2, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402007, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402008, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // Bend as a source.
+    {0x402010, 0x000F00, GsParam::kPartBendPitchControl, GsLevel::kAccept, 1, 0x40, 0x58, 0x42,
+     "the part's bend range is RPN 00 00's bend_range_cents; this alias onto it is "
+     "not wired yet"},
+    {0x402011, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402014, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402017, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402018, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // CAf as a source.
+    {0x402020, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402021, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402024, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402027, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402028, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // PAf as a source.
+    {0x402030, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402031, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402034, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402037, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402038, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // CC1 as a source.
+    {0x402040, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402041, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402044, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402047, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402048, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // CC2 as a source.
+    {0x402050, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402051, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402054, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402057, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402058, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
+     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+
     // Part EQ switch (40 4x 20): whether the master EQ at 40 02 xx reaches this
     // part. Powers on ON, so a file that never writes it still gets the EQ.
     {0x404020, 0x000F00, GsParam::kPartEqSwitch, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
@@ -328,7 +416,7 @@ inline constexpr std::array<GsAddressEntry, 68> kGsAddressTable = {{
 }};
 
 /// The undefined regions covered so far.
-inline constexpr std::array<GsAddressRange, 11> kGsUndefinedRanges = {{
+inline constexpr std::array<GsAddressRange, 18> kGsUndefinedRanges = {{
     {0x400110, 0x40012F, 0,
      "no row between PATCH NAME and REVERB MACRO; the SC-55/SC-88 PARTIAL RESERVE the SC-8850 "
      "dropped arrives here"},
@@ -351,6 +439,15 @@ inline constexpr std::array<GsAddressRange, 11> kGsUndefinedRanges = {{
      "no row between TONE MODIFY 8 and SCALE TUNING C; a run crosses it"},
     {0x40104C, 0x40107F, 0x000F00,
      "no row past SCALE TUNING B; a run from the scale-tuning block crosses it"},
+    // Controller-destination block. Each source owns +00-+0A and the manual
+    // defines nothing between the last of its eleven and the next source.
+    {0x40200B, 0x40200F, 0x000F00, "no row between the modulation and bend destinations"},
+    {0x40201B, 0x40201F, 0x000F00, "no row between the bend and CAf destinations"},
+    {0x40202B, 0x40202F, 0x000F00, "no row between the CAf and PAf destinations"},
+    {0x40203B, 0x40203F, 0x000F00, "no row between the PAf and CC1 destinations"},
+    {0x40204B, 0x40204F, 0x000F00, "no row between the CC1 and CC2 destinations"},
+    {0x40205B, 0x40205F, 0x000F00, "no row past the CC2 destinations"},
+    {0x402060, 0x40207F, 0x000F00, "no row past the controller-destination block"},
 }};
 
 // --- Frame layer ---
@@ -502,6 +599,10 @@ constexpr bool gs_ranges_are_consistent() noexcept {
     if (r.why == nullptr || r.why[0] == '\0') return false;
     if (r.lo_addr > r.hi_addr) return false;
     if ((r.lo_addr & r.mask) != 0 || (r.hi_addr & r.mask) != 0) return false;
+    // One mid byte per range. A range crossing one would step through low bytes
+    // above 7F, which are not GS addresses, and it is what lets the walk below
+    // decide a row on the block base alone. Split such a range instead.
+    if ((r.lo_addr & 0xFFFF00u) != (r.hi_addr & 0xFFFF00u)) return false;
     // Both checks below expand the mask into the blocks it reaches rather than
     // comparing masked bases: the variable nibble is the LOW nibble of the mid
     // byte, so clearing it in an unmasked address destroys which block that
@@ -519,9 +620,16 @@ constexpr bool gs_ranges_are_consistent() noexcept {
         }
       }
     }
-    for (uint32_t block = 0; block < blocks; ++block) {
-      for (uint32_t addr = r.lo_addr; addr <= r.hi_addr; ++addr) {
-        for (const GsAddressEntry& e : kGsAddressTable) {
+    // Row-outermost, with the high-16 test lifted out of the address walk: a
+    // row that cannot claim the block's base cannot claim anything in the
+    // range, so all but a handful skip the walk entirely. The nesting is not
+    // cosmetic — walking every (block, address, row) triple exhausts the
+    // constexpr step budget once the table passes about eighty rows.
+    for (const GsAddressEntry& e : kGsAddressTable) {
+      for (uint32_t block = 0; block < blocks; ++block) {
+        const uint32_t base = r.lo_addr | (block << 8);
+        if ((base & ~e.mask & 0xFFFF00u) != (e.addr & 0xFFFF00u)) continue;
+        for (uint32_t addr = r.lo_addr; addr <= r.hi_addr; ++addr) {
           if (gs_row_claims(e, addr | (block << 8))) return false;
         }
       }
