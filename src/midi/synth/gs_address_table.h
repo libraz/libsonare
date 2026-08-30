@@ -111,6 +111,7 @@ enum class GsLevel : uint8_t {
   X(kPartToneMap0Number)    \
   X(kPartEqSwitch)          \
   X(kPartEfxAssign)         \
+  X(kDrumPlayNote)          \
   X(kDrumLevel)             \
   X(kDrumPanpot)            \
   X(kDrumReverbSend)        \
@@ -173,7 +174,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 101> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 102> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -416,6 +417,10 @@ inline constexpr std::array<GsAddressEntry, 101> kGsAddressTable = {{
     // The manual gives these no power-on value: a drum set change re-initialises
     // them to what the kit specifies. So each def is the value at which the
     // parameter changes nothing, which is what an unwritten one has to mean.
+    // PLAY NOTE NUMBER's identity value is the address's own note, which one def
+    // byte cannot carry; 00 stands in and the flag is what an unwritten note
+    // reads, as for the five rows below.
+    {0x410100, 0x00F07F, GsParam::kDrumPlayNote, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x410200, 0x00F07F, GsParam::kDrumLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F, nullptr},
     // 00 is RANDOM at this address and hard left through NRPN 1C, the same split
     // 40 1x 1C and CC10 have; it stays in range and answers centre.

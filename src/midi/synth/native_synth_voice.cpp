@@ -108,63 +108,78 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   DahdsrConfig amp_cfg = p.amp_env;
   float kit_gain = 1.0f;
 
-  VoiceRandomSequence seq;
-  seq.reseed(voice_index, note, age);
+  // Everything below voices the note rather than tracking the key, so a GS PLAY
+  // NOTE NUMBER substitution reaches all of it; `note` stays the struck one,
+  // which is what a note-off matches.
+  const uint8_t voiced_note =
+      drum_mod.play_note >= 0 ? static_cast<uint8_t>(drum_mod.play_note) : note;
 
-  base_freq_hz = synth_note_to_hz(static_cast<float>(note & 0x7Fu) + p.pitch_offset_cents / 100.0f);
+  VoiceRandomSequence seq;
+  seq.reseed(voice_index, voiced_note, age);
+
+  base_freq_hz =
+      synth_note_to_hz(static_cast<float>(voiced_note & 0x7Fu) + p.pitch_offset_cents / 100.0f);
 
   const bool osc_less = p.mode != SynthEngineMode::kSubtractive;
   unison = osc_less ? 0 : std::clamp(p.unison, 1, kMaxUnisonOscs);
   osc_norm = unison > 0 ? 1.0f / std::sqrt(static_cast<float>(unison)) : 1.0f;
-  if (p.mode == SynthEngineMode::kFm) fm.start(p.fm, sample_rate, note, velocity);
+  if (p.mode == SynthEngineMode::kFm) fm.start(p.fm, sample_rate, voiced_note, velocity);
   if (p.mode == SynthEngineMode::kKarplusStrong) {
-    ks.start(p.ks, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    ks.start(p.ks, sample_rate, voiced_note, velocity, voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kModal) {
-    modal.start(p.modal, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    modal.start(p.modal, sample_rate, voiced_note, velocity,
+                voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kAdditive) {
-    additive.start(p.additive, sample_rate, note, velocity, voice_seed(voice_index, note, age),
-                   organ_percussion);
+    additive.start(p.additive, sample_rate, voiced_note, velocity,
+                   voice_seed(voice_index, voiced_note, age), organ_percussion);
   }
   if (p.mode == SynthEngineMode::kPercussion) {
     PercussionPatchParams kit_perc = p.percussion;
-    if (drum_kit != 0) kit_gain = apply_gs_drum_kit(kit_perc, amp_cfg, drum_kit, note);
-    percussion.start(kit_perc, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    if (drum_kit != 0) kit_gain = apply_gs_drum_kit(kit_perc, amp_cfg, drum_kit, voiced_note);
+    percussion.start(kit_perc, sample_rate, voiced_note, velocity,
+                     voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kPiano) {
-    piano.start(p.piano, sample_rate, note, velocity, voice_seed(voice_index, note, age),
-                una_corda);
+    piano.start(p.piano, sample_rate, voiced_note, velocity,
+                voice_seed(voice_index, voiced_note, age), una_corda);
   }
   if (p.mode == SynthEngineMode::kPipeOrgan) {
-    pipe_organ.start(p.pipe_organ, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    pipe_organ.start(p.pipe_organ, sample_rate, voiced_note, velocity,
+                     voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kBowedString) {
-    bowed_string.start(p.bowed_string, sample_rate, note, velocity,
-                       voice_seed(voice_index, note, age));
+    bowed_string.start(p.bowed_string, sample_rate, voiced_note, velocity,
+                       voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kReed) {
-    reed.start(p.reed, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    reed.start(p.reed, sample_rate, voiced_note, velocity,
+               voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kBrass) {
-    brass.start(p.brass, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    brass.start(p.brass, sample_rate, voiced_note, velocity,
+                voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kFlute) {
-    flute.start(p.flute, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    flute.start(p.flute, sample_rate, voiced_note, velocity,
+                voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kPluckedString) {
-    plucked_string.start(p.plucked_string, sample_rate, note, velocity,
-                         voice_seed(voice_index, note, age));
+    plucked_string.start(p.plucked_string, sample_rate, voiced_note, velocity,
+                         voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kVocal) {
-    vocal.start(p.vocal, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    vocal.start(p.vocal, sample_rate, voiced_note, velocity,
+                voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kFreeReed) {
-    free_reed.start(p.free_reed, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    free_reed.start(p.free_reed, sample_rate, voiced_note, velocity,
+                    voice_seed(voice_index, voiced_note, age));
   }
   if (p.mode == SynthEngineMode::kHarpsichord) {
-    harpsichord.start(p.harpsichord, sample_rate, note, velocity,
-                      voice_seed(voice_index, note, age));
+    harpsichord.start(p.harpsichord, sample_rate, voiced_note, velocity,
+                      voice_seed(voice_index, voiced_note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -181,14 +196,15 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     // sound phasey/static; noise gets a per-osc seed stream instead.
     const float phase = seq.unipolar_at(static_cast<uint64_t>(k) * 2 + 1);
     oscs[static_cast<size_t>(k)].start(sample_rate, p.waveform, phase,
-                                       voice_seed(voice_index, note, age) ^ (k + 1));
+                                       voice_seed(voice_index, voiced_note, age) ^ (k + 1));
   }
 
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p.mode));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +
-      p.key_track * 100.0f * (static_cast<float>(note & 0x7Fu) - 60.0f) + part_mod.cutoff_cents;
+      p.key_track * 100.0f * (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) +
+      part_mod.cutoff_cents;
   if (p.drive > 0.0f) {
     // Gain-compensated tanh drive (same law as the Sf2 part insert).
     drive_gain = 1.0f + 9.0f * p.drive;
@@ -223,7 +239,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   // Mod-matrix source constants.
   has_matrix = !p.mod_matrix.empty();
   velocity01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
-  key_track_octaves = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
+  key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / 12.0f;
   random_value = seq.bipolar_at(103);
 
   // Body/formant resonance + seeded stereo scatter (realism polish).

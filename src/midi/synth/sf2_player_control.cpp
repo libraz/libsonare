@@ -311,6 +311,10 @@ bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
     if (w.part >= kGsDrumMapCount) continue;
     GsDrumNoteParams& d = drum_params_[w.part][w.index & 0x7Fu];
     switch (w.param) {
+      case GsParam::kDrumPlayNote:
+        d.play_note = w.value;
+        d.flags |= GsDrumNoteParams::kPlayNote;
+        break;
       case GsParam::kDrumLevel:
         d.level = w.value;
         d.flags |= GsDrumNoteParams::kLevel;

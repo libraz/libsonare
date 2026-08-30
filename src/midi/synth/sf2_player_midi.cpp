@@ -117,9 +117,18 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // an age at or above this mark and is excluded from the choke.
   const uint64_t age_before_note_on = pool_.next_age();
 
+  // GS PLAY NOTE NUMBER (41 m1 rr): the note whose SOUND this strike plays.
+  // Zone selection and the resolved params follow it; the per-note slab, the
+  // choke and the voice's own note stay on the struck note.
+  uint8_t sound_note = note & 0x7Fu;
+  if (is_drum) {
+    const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
+    if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
+  }
+
   bool has_renderable_zone = false;
   for (const Sf2Zone& pzone : preset.zones) {
-    if (pzone.is_global() || !pzone.matches(note, velocity)) continue;
+    if (pzone.is_global() || !pzone.matches(sound_note, velocity)) continue;
     if (pzone.instrument < 0 || static_cast<size_t>(pzone.instrument) >= instruments.size()) {
       continue;
     }
@@ -127,7 +136,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
     const Sf2Zone* inst_global =
         !inst.zones.empty() && inst.zones[0].is_global() ? &inst.zones[0] : nullptr;
     for (const Sf2Zone& izone : inst.zones) {
-      if (izone.is_global() || !izone.matches(note, velocity)) continue;
+      if (izone.is_global() || !izone.matches(sound_note, velocity)) continue;
       if (izone.sample < 0 || static_cast<size_t>(izone.sample) >= soundfont_->samples().size()) {
         continue;
       }
@@ -145,7 +154,8 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       if (preset_global != nullptr) gens.add_relative(*preset_global);
       gens.add_relative(pzone);
 
-      Sf2VoiceParams params = resolve_voice_params(gens, sample, note, velocity, sample_rate_);
+      Sf2VoiceParams params =
+          resolve_voice_params(gens, sample, sound_note, velocity, sample_rate_);
       if (params.end <= params.start || params.end > soundfont_->sample_pool().size() ||
           !std::isfinite(params.pitch_increment) || params.pitch_increment <= 0.0) {
         continue;
@@ -186,8 +196,16 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   const uint16_t bank = effective_bank(channel);
   const GsToneMap tone_map = gs_effective_tone_map(ch.bank_msb, ch.bank_lsb);
   const bool is_drum = bank == kDrumBank;
+  // GS PLAY NOTE NUMBER (41 m1 rr), resolved before the patch: the kit piece is
+  // the whole of a drum voice here, so substituting it is most of the parameter
+  // and the rest rides on drum_mod below.
+  uint8_t sound_note = note & 0x7Fu;
+  if (is_drum) {
+    const GsDrumNoteParams& gd = drum_params_[ch.drum_map_slot()][note & 0x7Fu];
+    if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
+  }
   const NativeSynthPatch& patch =
-      is_drum ? gm_fallback_drum_patch(note) : gm_fallback_patch(bank, ch.program, tone_map);
+      is_drum ? gm_fallback_drum_patch(sound_note) : gm_fallback_patch(bank, ch.program, tone_map);
   // GM kit exclusive/mute groups (hi-hats etc.): choke the ringing group voice
   // on this channel before allocating the new strike.
   if (is_drum && patch.percussion.exclusive_class != 0) {
@@ -282,6 +300,9 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
     }
     if ((gd.flags & GsDrumNoteParams::kDelay) != 0) {
       drum_mod.delay_scale = static_cast<float>(gd.delay & 0x7Fu) / 127.0f;
+    }
+    if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) {
+      drum_mod.play_note = static_cast<int16_t>(gd.play_note & 0x7Fu);
     }
   }
   // Drawbar percussion spends the channel's charge; note_off recharges it once

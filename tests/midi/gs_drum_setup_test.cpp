@@ -165,6 +165,35 @@ StereoRender render(const Writes& writes) {
   return out;
 }
 
+/// One strike of @p note released by a note-off on @p off_note, on whichever
+/// bank @p soundfont selects: the fixture answers every note, or nothing does
+/// and the physical-model floor takes it.
+StereoRender render_one(uint8_t note, uint8_t off_note, bool soundfont, const Writes& writes) {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.synth_fallback = !soundfont;
+  cfg.realize_efx_inline = true;
+  Sf2Player player(cfg);
+  if (soundfont) player.set_soundfont(make_fixture());
+  player.prepare(kOutRate, 256);
+  cc(player, kDrumChannel, 93, 64);
+  cc(player, kDrumChannel, 94, 64);
+  if (writes) writes(player);
+
+  StereoRender out;
+  out.left.assign(static_cast<size_t>(kHeld + kTail), 0.0f);
+  out.right.assign(static_cast<size_t>(kHeld + kTail), 0.0f);
+  float* chans[2] = {out.left.data(), out.right.data()};
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, kDrumChannel, note, uint8_t{110})));
+  player.process(chans, 2, kHeld);
+  chans[0] += kHeld;
+  chans[1] += kHeld;
+  player.on_event(0,
+                  event(sonare::midi::make_midi1_note_off(0, kDrumChannel, off_note, uint8_t{0})));
+  player.process(chans, 2, kTail);
+  return out;
+}
+
 bool identical(const StereoRender& a, const StereoRender& b) {
   return a.left == b.left && a.right == b.right;
 }
@@ -233,6 +262,32 @@ TEST_CASE("a GS drum parameter is one storage location reached from two sides",
     CHECK(identical(nrpn_then_sysex, nrpn_second));
     CHECK(identical(sysex_then_nrpn, nrpn_second));
   }
+}
+
+TEST_CASE("41 m1 rr sounds another note and still hangs on the struck key", "[midi][synth][gs]") {
+  const Writes play_b = [](Sf2Player& player) {
+    sysex(player, dt1(drum_addr(0, 0x1, kNoteA), {kNoteB}));
+  };
+
+  // The only drum-setup parameter with no NRPN alias, and the only one whose
+  // reset value is the address's own note rather than a constant, so it is
+  // checked by identity: A with PLAY NOTE B has to be B, not merely not-A.
+  for (const bool soundfont : {true, false}) {
+    INFO((soundfont ? "soundfont bank" : "model bank"));
+    const StereoRender struck_a = render_one(kNoteA, kNoteA, soundfont, nullptr);
+    const StereoRender struck_b = render_one(kNoteB, kNoteB, soundfont, nullptr);
+    // Two notes that already sound alike would make the identity below true
+    // without the write reaching anything.
+    CHECK_FALSE(identical(struck_a, struck_b));
+    CHECK(identical(render_one(kNoteA, kNoteA, soundfont, play_b), struck_b));
+  }
+
+  // The struck key still holds the voice, so a note-off addressed to the note
+  // that SOUNDS releases nothing. Only on the SoundFont bank: the model floor's
+  // kit pieces are one-shots, which no note-off releases either way.
+  const StereoRender released = render_one(kNoteA, kNoteA, true, play_b);
+  const StereoRender hanging = render_one(kNoteA, kNoteB, true, play_b);
+  CHECK_FALSE(identical(released, hanging));
 }
 
 TEST_CASE("a GS drum setup write lands in the map the address names", "[midi][synth][gs]") {

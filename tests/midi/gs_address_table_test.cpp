@@ -298,6 +298,8 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   // Drum setup (41 mn rr): one row per parameter covers both maps and all 128
   // notes, so the map nibble comes back as the part and the note as the index.
   // The nibble is zero-based here, unlike 40 1x 15's value.
+  check_row(0x410126, 0x24, GsParam::kDrumPlayNote, 0x26, 0);
+  check_row(0x41117F, 0x00, GsParam::kDrumPlayNote, 0x7F, 1);
   check_row(0x410226, 0x00, GsParam::kDrumLevel, 0x26, 0);
   check_row(0x411226, 0x7F, GsParam::kDrumLevel, 0x26, 1);
   check_row(0x410400, 0x7F, GsParam::kDrumPanpot, 0x00, 0);

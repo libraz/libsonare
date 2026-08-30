@@ -150,12 +150,15 @@ inline constexpr uint8_t kGsToneModifyCount = 8;
 void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexcept;
 
 /// Per-note drum overrides (GS NRPN msb 18/1A/1C/1D/1E/1F with the drum note as
-/// the lsb, and the drum setup addresses 41 m2/m4/m5/m6/m9 rr they alias).
+/// the lsb, and the drum setup addresses 41 m1/m2/m4/m5/m6/m9 rr — every one but
+/// PLAY NOTE NUMBER an alias of an NRPN).
 ///
 /// Every field holds the value at which the parameter changes nothing. The
 /// manual gives these no power-on value because a drum set change re-initialises
 /// them to what the kit itself specifies, so an unwritten parameter has to mean
-/// "the kit's" — which is also why each field is read only behind its flag.
+/// "the kit's" — which is also why each field is read only behind its flag. PLAY
+/// NOTE NUMBER has no such value at all, its identity being the struck note, so
+/// the flag is the whole of what an unwritten one means.
 struct GsDrumNoteParams {
   enum Flag : uint8_t {
     kPitch = 1u << 0,
@@ -164,6 +167,7 @@ struct GsDrumNoteParams {
     kReverb = 1u << 3,
     kChorus = 1u << 4,
     kDelay = 1u << 5,
+    kPlayNote = 1u << 6,
   };
   uint8_t flags = 0;
   int8_t pitch_coarse = 0;  // semitones (data - 64)
@@ -172,6 +176,7 @@ struct GsDrumNoteParams {
   uint8_t reverb = 127;     // reverb-send multiplicand (data)
   uint8_t chorus = 127;     // chorus-send multiplicand (data)
   uint8_t delay = 127;      // delay-send multiplicand (data)
+  uint8_t play_note = 0;    // the note whose sound is played (data)
 
   bool any() const noexcept { return flags != 0; }
 };
