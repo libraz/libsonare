@@ -451,6 +451,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_key_range_test.cpp
     midi/gs_rx_channel_test.cpp
     midi/gs_scale_tuning_test.cpp
+    midi/gs_mod_cutoff_test.cpp
     midi/gs_key_shift_test.cpp
     midi/gs_part_params_test.cpp
     midi/gs_part_edit_banks_test.cpp

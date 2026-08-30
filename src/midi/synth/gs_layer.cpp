@@ -65,6 +65,10 @@ float gs_vib_depth_cents(int8_t offset) noexcept {
   return 3.0f * static_cast<float>(clamp_offset(offset));
 }
 
+float gs_mod_cutoff_cents(uint8_t value) noexcept {
+  return gs_cutoff_offset_cents(static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64));
+}
+
 float gs_master_tune_cents(const GsMasterParams& master) noexcept {
   uint32_t word = 0;
   for (const uint8_t nibble : master.tune) word = (word << 4) | (nibble & 0x0Fu);

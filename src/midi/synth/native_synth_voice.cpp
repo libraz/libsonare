@@ -384,8 +384,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
 
   // --- filter: cutoff = patch Fc * 2^((env + velocity + keytrack)/1200) ---
   if (!filter_inaudible() || offsets.cutoff_cents != 0.0f) {
-    const float fc_cents =
-        fenv * patch->env_to_cutoff_cents + static_cutoff_cents + offsets.cutoff_cents;
+    const float fc_cents = fenv * patch->env_to_cutoff_cents + static_cutoff_cents +
+                           offsets.cutoff_cents + mod.mod_cutoff_cents;
     const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / 1200.0f));
     float q = patch->resonance_q;
     if (gs_resonance_gain != 1.0f) q = std::max(0.5f, q * gs_resonance_gain);

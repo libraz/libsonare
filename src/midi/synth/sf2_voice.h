@@ -111,6 +111,10 @@ struct Sf2ChannelMod {
   float gain = 1.0f;
   /// CC1 mod wheel x the part's MODULATION LFO1 PITCH DEPTH, in cents.
   float extra_vibrato_cents = 0.0f;
+  /// CC1 mod wheel x the part's MODULATION TVF CUTOFF CONTROL (40 2x 01), in
+  /// cents, added to the voice's cutoff. Read per sample rather than baked at
+  /// the note-on: the wheel is what a player moves while a note is sounding.
+  float mod_cutoff_cents = 0.0f;
   /// CC1 itself in [0,1]. Carried rather than recovered from the line above,
   /// which stopped being a fixed multiple of it once the depth became a part
   /// parameter a file can write.

@@ -201,6 +201,10 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       if (scale_cents != 0.0f) {
         params.pitch_increment *= std::exp2(static_cast<double>(scale_cents) / 1200.0);
       }
+      // MOD TVF CUTOFF CONTROL engages the filter the way a TONE MODIFY cutoff
+      // does, and on the part rather than on the wheel: the wheel rises after
+      // the note-on as often as before it, and a bypassed filter cannot open.
+      if (ch.mod_cutoff_cents != 0.0f) params.filter_bypass = false;
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
@@ -366,6 +370,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // on the way past rather than built with them; the struck key indexes it, as
   // it does on the SoundFont bank.
   part_mod.pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note);
+  // Same reason the SoundFont bank engages its filter here: the offset itself
+  // arrives per sample from the wheel, so what the note-on has to settle is
+  // only whether there is a filter for it to reach.
+  if (ch.mod_cutoff_cents != 0.0f) part_mod.filter_edited = true;
   voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod,
                organ_percussion, part_mod);
   // This host passes no glide_from_hz, so start() leaves the voice's glide at

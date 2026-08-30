@@ -105,6 +105,7 @@ enum class GsLevel : uint8_t {
   X(kPartDelaySend)         \
   X(kPartToneModify)        \
   X(kPartModDest)           \
+  X(kPartModTvfCutoff)      \
   X(kPartModLfo1PitchDepth) \
   X(kPartBendDest)          \
   X(kPartBendPitchControl)  \
@@ -197,7 +198,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 126> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 127> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -401,16 +402,22 @@ inline constexpr std::array<GsAddressEntry, 126> kGsAddressTable = {{
     // Controller destinations (40 2x xx): six sources, each with the same eleven
     // destinations, at +00 pitch / +01 TVF cutoff / +02 amplitude / +03-06 LFO1
     // rate, pitch, TVF, TVA / +07-0A the same four for LFO2. Rows are split where
-    // the accepted range or the power-on default changes, not per destination.
+    // the range, the power-on default or the level changes, not per destination.
     //
-    // kAccept throughout: this is a modulation matrix and the engine routes its
-    // controllers directly, so no byte here has a reader. Two of them name a
-    // quantity that already exists under another address and are the ones worth
-    // raising first (docs/gs.md's alias table).
+    // kAccept except where a destination names a quantity that already exists
+    // under another address: the engine routes its controllers directly rather
+    // than through a matrix, so a byte is readable exactly when the thing it
+    // asks for is already built. The wheel's cutoff and LFO1 pitch depth are
+    // the two that are (docs/gs.md's alias table); the rest have no reader.
     // Modulation as a source.
     {0x402000, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
-    {0x402001, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+    // The wheel's own cutoff edit: the same 150-cents-a-step offset TONE MODIFY
+    // writes at 40 1x 32, reached through the controller instead of statically,
+    // so the two are one quantity and gs_cutoff_offset_cents converts both.
+    {0x402001, 0x000F00, GsParam::kPartModTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402002, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 2, 0x00, 0x7F, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x0A,
      nullptr},

@@ -363,6 +363,13 @@ float gs_vib_rate_scale(int8_t offset) noexcept;
 /// Vibrato depth: ~3 cents of added pitch depth per step.
 float gs_vib_depth_cents(int8_t offset) noexcept;
 
+/// MODULATION TVF CUTOFF CONTROL (40 2x 01) as the cutoff offset a fully-raised
+/// mod wheel adds, in cents. The byte is centred on 40 and buys the same step
+/// gs_cutoff_offset_cents already gives the TONE MODIFY cutoff, so the wheel
+/// reaches one quantity rather than a second one that happens to resemble it.
+/// A wheel below full scales the result down; 40 is the whole range's no-op.
+float gs_mod_cutoff_cents(uint8_t value) noexcept;
+
 /// Applies the melodic part offsets onto resolved voice parameters.
 void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept;
 

@@ -298,6 +298,9 @@ class Sf2Player final : public MidiInstrument {
     float bend_range_cents = 200.0f;
     /// MODULATION LFO1 PITCH DEPTH (40 2x 04), the depth CC1 reaches at full.
     float mod_depth_cents = gs_mod_depth_cents(kGsModDepthDefault);
+    /// MODULATION TVF CUTOFF CONTROL (40 2x 01), the cutoff offset in cents CC1
+    /// reaches at full. The power-on 40 is no offset, so this starts at zero.
+    float mod_cutoff_cents = 0.0f;
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.

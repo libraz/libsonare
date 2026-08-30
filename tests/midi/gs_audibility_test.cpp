@@ -232,8 +232,9 @@ Setup setup_for(const GsAddressEntry& row) {
     // centred — which is where the stimulus leaves it.
     case GsParam::kPartBendPitchControl:
       return Setup::kBendApplied;
-    // Likewise a modulation depth, which scales CC1 and says nothing at zero.
+    // Likewise anything the wheel scales, which says nothing at CC1 zero.
     case GsParam::kPartModLfo1PitchDepth:
+    case GsParam::kPartModTvfCutoff:
       return Setup::kModWheelUp;
     // A group is a relation, so one note in it chokes nothing.
     case GsParam::kDrumAssignGroup:
@@ -279,6 +280,11 @@ Probe probe_for(const GsAddressEntry& row) {
       // 7F 7F is a type no adapter realises, so no chain is built and the part
       // is never bussed. 01 10 is Overdrive, which realises.
       return {{0x01, 0x10}, "the generic value selects a type nothing realises"};
+    case GsParam::kPartModTvfCutoff:
+      // hi opens the filter, and the stimulus zone's is already open: +9450
+      // cents onto a cutoff above the band leaves every partial where it was.
+      // lo is the same edit downwards, which the same zone can show.
+      return {{0x00}, "hi raises a cutoff that is already above the signal"};
     case GsParam::kPartAssignMode:
       // 01 LIMITED-MULTI and 02 FULL-MULTI are one behaviour here and only 00
       // SINGLE branches (docs/gs.md), so hi is inert by design.
