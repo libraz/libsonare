@@ -300,6 +300,14 @@ struct NativeSynthVoice : VoiceState {
   float drum_reverb_scale = 1.0f;
   float drum_chorus_scale = 1.0f;
   float drum_delay_scale = 1.0f;
+  /// GS melodic part edits that the render reads rather than start() folding
+  /// away: the patch fields they modify are automation targets, so latching a
+  /// finished value here would freeze a sweep on a held note.
+  float gs_resonance_gain = 1.0f;
+  float gs_vib_depth_cents = 0.0f;
+  /// Set by a cutoff or resonance edit; engages the filter stage the way the
+  /// SoundFont bank's filter_bypass = false does.
+  bool gs_filter_edited = false;
 
   /// Starts the voice for @p p. note/channel/age must already be set (the
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
@@ -311,9 +319,12 @@ struct NativeSynthVoice : VoiceState {
   /// @p drum_mod carries GS per-note drum NRPN edits (pitch coarse / level /
   /// pan / the three send multiplicands); default is a no-op. @p organ_percussion fires the drawbar
   /// organ's single-shot on this note (additive mode only; the channel decides which note gets it).
+  /// @p part_mod carries the GS melodic part edits (TONE MODIFY / the part NRPNs); default is a
+  /// no-op.
   void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
              float glide_from_hz = 0.0f, bool una_corda = false, uint8_t drum_kit = 0,
-             DrumVoiceMod drum_mod = {}, bool organ_percussion = false) noexcept;
+             DrumVoiceMod drum_mod = {}, bool organ_percussion = false,
+             GsPartMod part_mod = {}) noexcept;
   /// True when the patch's filter stage cannot colour this voice: a wide-open
   /// static SVF lowpass, no resonance, no envelope depth and no negative
   /// static offset. Read from the LIVE patch on every sample rather than
@@ -321,7 +332,7 @@ struct NativeSynthVoice : VoiceState {
   /// that apply to already-sounding voices, so a sweep on a held note has to
   /// engage the stage on the block it starts, not on the next note-on.
   bool filter_inaudible() const noexcept {
-    return patch->filter_model == SynthFilterModel::kSvf &&
+    return !gs_filter_edited && patch->filter_model == SynthFilterModel::kSvf &&
            patch->filter_output == SynthFilterOutput::kLowpass && patch->cutoff_hz >= 18000.0f &&
            patch->env_to_cutoff_cents == 0.0f && static_cutoff_cents >= 0.0f &&
            patch->resonance_q <= 0.71f;

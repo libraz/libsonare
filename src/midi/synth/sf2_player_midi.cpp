@@ -289,8 +289,11 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   const bool organ_percussion = patch.mode == SynthEngineMode::kAdditive &&
                                 patch.additive.percussion_harmonic >= 2 && ch.percussion_armed;
   if (organ_percussion) channels_[channel & 0x0Fu].percussion_armed = false;
+  // GS melodic part edits (40 1x 30 TONE MODIFY and the part NRPNs), through
+  // the same conversion the SoundFont bank's apply_gs_part_params uses: a
+  // parameter must not do something different because this bank answered.
   voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod,
-               organ_percussion);
+               organ_percussion, gs_part_mod(ch.gs));
   // This host passes no glide_from_hz, so start() leaves the voice's glide at
   // rest; the CC5/65/84 portamento is what drives it here.
   voice->glide_cents = porta.cents;

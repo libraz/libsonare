@@ -81,8 +81,8 @@ float sampler_velocity_gain(uint8_t velocity, float exponent) noexcept {
 
 void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity,
                              uint32_t voice_index, float glide_from_hz, bool una_corda,
-                             uint8_t drum_kit, DrumVoiceMod drum_mod,
-                             bool organ_percussion) noexcept {
+                             uint8_t drum_kit, DrumVoiceMod drum_mod, bool organ_percussion,
+                             GsPartMod part_mod) noexcept {
   patch = &p;
   key_down = true;
   releasing = false;
@@ -95,6 +95,12 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   drum_reverb_scale = drum_mod.reverb_scale;
   drum_chorus_scale = drum_mod.chorus_scale;
   drum_delay_scale = drum_mod.delay_scale;
+  // GS melodic part edits: the two the render reads, plus the flag that engages
+  // the filter stage. The other six fold into the envelope, the cutoff offset
+  // and the vibrato LFO below.
+  gs_resonance_gain = part_mod.resonance_gain;
+  gs_vib_depth_cents = part_mod.vib_depth_cents;
+  gs_filter_edited = part_mod.filter_edited;
 
   // A GS kit variation may retune the resolved drum patch's percussion + amp
   // envelope at note-on and scale its level (Standard patch stays shared; no
@@ -182,7 +188,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +
-      p.key_track * 100.0f * (static_cast<float>(note & 0x7Fu) - 60.0f);
+      p.key_track * 100.0f * (static_cast<float>(note & 0x7Fu) - 60.0f) + part_mod.cutoff_cents;
   if (p.drive > 0.0f) {
     // Gain-compensated tanh drive (same law as the Sf2 part insert).
     drive_gain = 1.0f + 9.0f * p.drive;
@@ -192,6 +198,11 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     drive_makeup = 1.0f;
   }
 
+  // After any kit variation, so a GS part edit scales the envelope the kit
+  // actually gave this note rather than the patch's own.
+  amp_cfg.attack_ms *= part_mod.attack_scale;
+  amp_cfg.decay_ms *= part_mod.decay_scale;
+  amp_cfg.release_ms *= part_mod.release_scale;
   amp_env.configure(sample_rate, amp_cfg);
   amp_env.note_on();
   filter_env.configure(sample_rate, p.filter_env);
@@ -199,7 +210,10 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   filter.prepare(sample_rate);
   filter.set_model(p.filter_model);
 
-  vibrato_lfo.start(sample_rate, 0.0f, p.lfo_rate_hz);
+  // The model bank's LFO has no onset delay of its own, so a GS vibrato-delay
+  // edit is the only thing that can give it one.
+  vibrato_lfo.start(sample_rate, gs_vib_delay_seconds(0.0f, part_mod.vib_delay_scale),
+                    p.lfo_rate_hz * part_mod.vib_rate_scale);
   lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz);
   // Per-voice drift: seeded depth (sign included) and a seeded rate offset so
   // stacked voices beat against each other instead of wobbling in unison.
@@ -281,7 +295,12 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   }
 
   // --- pitch: bend + vibrato (LFO1 + mod wheel) + drift + matrix + glide ---
-  const float vib = lfo1_value * (patch->lfo_to_pitch_cents + mod.extra_vibrato_cents);
+  // The GS depth edit is signed and the patch depth is an amount, so the sum is
+  // floored — but only when there is an edit, so an untouched voice keeps
+  // whatever the patch asked for.
+  float vib_depth = patch->lfo_to_pitch_cents;
+  if (gs_vib_depth_cents != 0.0f) vib_depth = std::max(0.0f, vib_depth + gs_vib_depth_cents);
+  const float vib = lfo1_value * (vib_depth + mod.extra_vibrato_cents);
   const float mode_pitch_offset =
       patch->mode == SynthEngineMode::kSubtractive ? 0.0f : patch->pitch_offset_cents;
   const float pitch_cents =
@@ -347,7 +366,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     const float fc_cents =
         fenv * patch->env_to_cutoff_cents + static_cutoff_cents + offsets.cutoff_cents;
     const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / 1200.0f));
-    filter.set(fc, patch->resonance_q);
+    float q = patch->resonance_q;
+    if (gs_resonance_gain != 1.0f) q = std::max(0.5f, q * gs_resonance_gain);
+    filter.set(fc, q);
     sample = filter.process(sample, patch->filter_output);
   }
 

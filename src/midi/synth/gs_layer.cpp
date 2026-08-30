@@ -151,13 +151,6 @@ GsPartMod gs_part_mod(const GsPartParams& gs) noexcept {
   return mod;
 }
 
-float gs_vib_delay_seconds(float base_s, float scale) noexcept {
-  const float delay_s = base_s * scale;
-  // A zero base delay still gains an audible onset when pushed up.
-  if (delay_s < 1.0e-3f && scale > 1.0f) return 0.05f * (scale - 1.0f);
-  return delay_s;
-}
-
 void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept {
   if (!gs.any()) return;
   const GsPartMod mod = gs_part_mod(gs);

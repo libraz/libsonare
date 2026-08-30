@@ -377,11 +377,8 @@ struct BankGap {
   const char* why;
 };
 
-constexpr std::array<BankGap, 1> kBankGaps = {{
-    {GsParam::kPartToneModify, Bank::kModel,
-     "apply_gs_part_params writes Sf2VoiceParams and the note-on that calls it is the SoundFont "
-     "one, so the eight part edits and the NRPNs they alias never reach a model voice"},
-}};
+/// Empty, and worth keeping so: every row this gate probes reaches both banks.
+constexpr std::array<BankGap, 0> kBankGaps = {};
 
 const BankGap* bank_gap_for(const GsAddressEntry& row, Bank bank) {
   for (const BankGap& gap : kBankGaps) {
