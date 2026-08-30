@@ -297,6 +297,8 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
 
   // User drum sets (21 dn rr): the same shape as the drum setup block, so the
   // set nibble comes back as the part and the note as the index.
+  check_row(0x210000, 0x53, GsParam::kUserDrumSetName, 0x00, 0);
+  check_row(0x21100B, 0x20, GsParam::kUserDrumSetName, 0x0B, 1);
   check_row(0x210126, 0x3C, GsParam::kUserDrumPlayNote, 0x26, 0);
   check_row(0x211126, 0x3C, GsParam::kUserDrumPlayNote, 0x26, 1);
   check_row(0x210226, 0x64, GsParam::kUserDrumLevel, 0x26, 0);

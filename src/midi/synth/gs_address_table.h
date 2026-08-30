@@ -111,6 +111,7 @@ enum class GsLevel : uint8_t {
   X(kPartToneMap0Number)    \
   X(kPartEqSwitch)          \
   X(kPartEfxAssign)         \
+  X(kUserDrumSetName)       \
   X(kUserDrumPlayNote)      \
   X(kUserDrumLevel)         \
   X(kUserDrumAssignGroup)   \
@@ -191,7 +192,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 120> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 121> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -206,6 +207,8 @@ inline constexpr std::array<GsAddressEntry, 120> kGsAddressTable = {{
     // rr the note. Nibbles 1-9 repeat the drum setup block at 41 mn rr; A, B and
     // C are this block's own and say where each note's sound comes from — the
     // tone map, the rhythm program, and the note within that kit.
+    {0x210000, 0x00F000, GsParam::kUserDrumSetName, GsLevel::kAccept, 12, 0x20, 0x7F, 0x20,
+     "a display string, and a renderer has nothing to display it on"},
     // Nibbles 1-9, parameter for parameter the drum setup block's, and carrying
     // its levels and its defaults for the same reasons: each holds the value
     // that changes nothing, and PLAY NOTE NUMBER has no such value so its def is
