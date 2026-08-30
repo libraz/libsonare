@@ -301,7 +301,7 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   // --- modulation sources ---
   const float mod_env_level = mod_env.next();
   const float mod_lfo_value = mod_lfo.next();
-  const float vib_lfo_value = vib_lfo.next();
+  const float vib_lfo_value = vib_lfo.next(mod.vib_rate_scale);
 
   // --- portamento: one-pole decay of the source-note offset ---
   if (glide_coeff > 0.0f) {

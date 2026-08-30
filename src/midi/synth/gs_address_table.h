@@ -106,6 +106,7 @@ enum class GsLevel : uint8_t {
   X(kPartToneModify)        \
   X(kPartModDest)           \
   X(kPartModTvfCutoff)      \
+  X(kPartModLfo1Rate)       \
   X(kPartModLfo1PitchDepth) \
   X(kPartBendDest)          \
   X(kPartBendPitchControl)  \
@@ -198,7 +199,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 127> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 128> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -417,8 +418,12 @@ inline constexpr std::array<GsAddressEntry, 127> kGsAddressTable = {{
     // so the two are one quantity and gs_cutoff_offset_cents converts both.
     {0x402001, 0x000F00, GsParam::kPartModTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
-    {0x402002, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 2, 0x00, 0x7F, 0x40,
+    {0x402002, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // The wheel's own vibrato rate, on the same 25-cents-a-step LFO frequency
+    // TONE MODIFY writes at 40 1x 30 — one rate reached two ways, not two.
+    {0x402003, 0x000F00, GsParam::kPartModLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
     {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x0A,
      nullptr},
     {0x402005, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 2, 0x00, 0x7F, 0x00,

@@ -301,6 +301,10 @@ class Sf2Player final : public MidiInstrument {
     /// MODULATION TVF CUTOFF CONTROL (40 2x 01), the cutoff offset in cents CC1
     /// reaches at full. The power-on 40 is no offset, so this starts at zero.
     float mod_cutoff_cents = 0.0f;
+    /// MODULATION LFO1 RATE CONTROL (40 2x 03) as its written byte. Held raw
+    /// where the line above is held converted, because the wheel enters this
+    /// one's exponent rather than scaling a full-scale amount.
+    uint8_t mod_lfo_rate = 0x40;
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.

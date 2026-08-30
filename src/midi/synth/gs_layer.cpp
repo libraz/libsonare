@@ -14,6 +14,15 @@ namespace {
 
 int8_t clamp_offset(int8_t v) noexcept { return static_cast<int8_t>(std::clamp<int>(v, -64, 63)); }
 
+/// Vibrato rate, in cents of LFO frequency per step. Named because the static
+/// edit and the wheel-scaled one both spend it and must not part company.
+constexpr float kGsVibRateCentsPerStep = 25.0f;
+
+/// The signed offset a part byte centred on 40 carries.
+int8_t centred_offset(uint8_t value) noexcept {
+  return clamp_offset(static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64));
+}
+
 /// The EFX block is 40 03 00-1F, so a run reaching past its 0x20th byte carries
 /// only addresses outside the block.
 constexpr size_t kGsEfxBlockSize = 0x20;
@@ -58,7 +67,7 @@ float gs_time_scale(int8_t offset) noexcept {
 }
 
 float gs_vib_rate_scale(int8_t offset) noexcept {
-  return std::exp2(25.0f * static_cast<float>(clamp_offset(offset)) / 1200.0f);
+  return std::exp2(kGsVibRateCentsPerStep * static_cast<float>(clamp_offset(offset)) / 1200.0f);
 }
 
 float gs_vib_depth_cents(int8_t offset) noexcept {
@@ -66,7 +75,14 @@ float gs_vib_depth_cents(int8_t offset) noexcept {
 }
 
 float gs_mod_cutoff_cents(uint8_t value) noexcept {
-  return gs_cutoff_offset_cents(static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64));
+  return gs_cutoff_offset_cents(centred_offset(value));
+}
+
+float gs_mod_lfo_rate_scale(uint8_t value, float wheel01) noexcept {
+  // The wheel scales the exponent rather than the multiplier, so a wheel at
+  // rest returns exactly 1 for every byte instead of something near it.
+  const float cents = kGsVibRateCentsPerStep * static_cast<float>(centred_offset(value)) * wheel01;
+  return cents != 0.0f ? std::exp2(cents / 1200.0f) : 1.0f;
 }
 
 float gs_master_tune_cents(const GsMasterParams& master) noexcept {

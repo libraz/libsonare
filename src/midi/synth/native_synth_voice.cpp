@@ -276,7 +276,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     return 0.0f;
   }
   const float fenv = filter_env.next();
-  const float lfo1_value = vibrato_lfo.next();
+  const float lfo1_value = vibrato_lfo.next(mod.vib_rate_scale);
   const float drift = drift_lfo.next() * drift_depth_cents;
 
   // --- mod matrix ---

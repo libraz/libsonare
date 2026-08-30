@@ -115,6 +115,11 @@ struct Sf2ChannelMod {
   /// cents, added to the voice's cutoff. Read per sample rather than baked at
   /// the note-on: the wheel is what a player moves while a note is sounding.
   float mod_cutoff_cents = 0.0f;
+  /// CC1 mod wheel x the part's MODULATION LFO1 RATE CONTROL (40 2x 03), as the
+  /// frequency multiplier the vibrato LFO advances by. 1.0 is no change, and it
+  /// is a multiplier rather than an added rate so the wheel scales the exponent
+  /// and an unraised one is exactly inert.
+  float vib_rate_scale = 1.0f;
   /// CC1 itself in [0,1]. Carried rather than recovered from the line above,
   /// which stopped being a fixed multiple of it once the depth became a part
   /// parameter a file can write.
@@ -145,14 +150,17 @@ class Sf2Lfo {
   }
 
   /// Advance one sample; returns the bipolar triangle value in [-1, 1].
-  float next() noexcept {
+  /// @p rate_scale multiplies the frequency for this sample only, which is how
+  /// a controller retunes the LFO under a held note: the phase carries across
+  /// unchanged, so a scale that moves stays continuous and 1.0 is exact.
+  float next(float rate_scale = 1.0f) noexcept {
     if (delay_samples_ > 0) {
       --delay_samples_;
       return 0.0f;
     }
     // Triangle from phase [0,1): 0 -> +1 -> 0 -> -1 -> 0.
     const float p = phase_;
-    phase_ += inc_;
+    phase_ += inc_ * rate_scale;
     if (phase_ >= 1.0f) phase_ -= 1.0f;
     if (p < 0.25f) return 4.0f * p;
     if (p < 0.75f) return 2.0f - 4.0f * p;

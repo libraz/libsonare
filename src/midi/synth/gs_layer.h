@@ -370,6 +370,14 @@ float gs_vib_depth_cents(int8_t offset) noexcept;
 /// A wheel below full scales the result down; 40 is the whole range's no-op.
 float gs_mod_cutoff_cents(uint8_t value) noexcept;
 
+/// MODULATION LFO1 RATE CONTROL (40 2x 03) at wheel position @p wheel01, as the
+/// frequency multiplier the vibrato LFO takes. The byte buys the same 25 cents
+/// of LFO frequency a step that the TONE MODIFY vibrato rate does, so the wheel
+/// reaches that rate rather than a second one. Takes the wheel rather than
+/// returning a full-scale value because the quantity is exponential: the wheel
+/// scales the exponent, which is what makes an unraised one exactly 1.
+float gs_mod_lfo_rate_scale(uint8_t value, float wheel01) noexcept;
+
 /// Applies the melodic part offsets onto resolved voice parameters.
 void apply_gs_part_params(Sf2VoiceParams& params, const GsPartParams& gs) noexcept;
 
