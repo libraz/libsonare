@@ -219,6 +219,59 @@ def test_a_capture_declaring_sends_carries_them_and_its_slot_in_the_score(monkey
     assert bytes([0x92, 60, 100]) in score
 
 
+def test_a_transposed_instrument_is_asked_for_the_key_that_sounds_the_grid_note(
+        monkeypatch, tmp_path):
+    """The grid is sounding pitch; only the key sent to the plugin moves.
+
+    A mapped sampler may sit anywhere on the keyboard, so a grid written where
+    the instrument answers would put every note label, every harmonic share and
+    every register term four octaves away from the pitch that was recorded.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    source = AuSource(plugin="x:y:z", key_offset=48)
+    argv = capture._note_argv(source, tmp_path / "o.wav", 28, 100, 2000)
+    assert argv[argv.index("--note") + 1] == "76"
+    scored = capture._note_argv(source, tmp_path / "s.wav", 28, 100, 2000, sends=(0, 0, 0))
+    score = Path(scored[scored.index("--midi") + 1]).read_bytes()
+    assert bytes([0x90, 76, 100]) in score
+
+
+def test_a_state_path_reaches_the_plugin_expanded(monkeypatch):
+    """`~` is expanded for the digest, so it has to be expanded for the load too.
+
+    Disagreeing is silent in the worst way: the identity hashes a real file and
+    the plugin is handed a path that does not exist, so every render is the
+    plugin's empty default at a plausible length.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    argv = AuSource(plugin="x:y:z", state="~/state.aupreset").argv(Path("/tmp/o.wav"))
+    assert argv[argv.index("--state") + 1] == str(Path.home() / "state.aupreset")
+
+
+def test_warmup_is_on_unless_the_capture_turns_it_off(tmp_path):
+    """The discarded strike has to be optional, because it can land ON the note.
+
+    Default on, so every capture measured before the field existed keeps the
+    render path it was measured through.
+    """
+    path = tmp_path / "x.json"
+    base = {"id": "x", "plugin": "x:y:z", "dry": False, "timbres": [{"id": "t"}]}
+    path.write_text(json.dumps(base))
+    assert capture.source_for(capture.load_config(path), {"id": "t"}).warmup is True
+    path.write_text(json.dumps({**base, "warmup": False}))
+    assert capture.source_for(capture.load_config(path), {"id": "t"}).warmup is False
+
+
+def test_the_key_offset_reaches_the_cache_key_and_only_when_it_is_set():
+    """A re-mapped source is a different recording; an unmapped one is not.
+
+    The second half is what keeps every capture made before the field existed
+    from re-rendering, which for a real-time grid is hours.
+    """
+    assert _identity(key_offset=-48) != _identity()
+    assert "key_offset" not in json.loads(_identity())
+
+
 def test_sends_must_name_all_three_controllers():
     with pytest.raises(ValueError):
         capture.config_sends({"id": "x", "sends": [0, 0]})
@@ -624,3 +677,18 @@ def test_harmonic_share_declines_to_answer_a_segment_it_cannot_resolve():
     """Too short to resolve the tolerance is unmeasured, not zero."""
     assert harmonic_share(_harmonic(midi_to_hz(60), seconds=0.01), SR, midi_to_hz(60)) is None
     assert harmonic_share(_harmonic(midi_to_hz(60)), SR, 0.0) is None
+
+
+def test_the_render_summary_survives_a_plugin_printing_on_stdout():
+    """A plugin shares the host's stdout, and one here writes an error to it.
+
+    Whole-stream parsing turns that into a silent misdiagnosis rather than a
+    failure: every probe reports peak 0.0000, so the settle sweep reads the
+    library as never loading at any settle time it tries.
+    """
+    noise = "[error] PresetSlotManager::selectSlot: slot not found for 2611\n"
+    assert au_oracle.summary_json(noise + '{"peak": 0.19, "dropout_ms": 0}')["peak"] == 0.19
+    # A plugin's own JSON is skipped rather than read as the render summary.
+    assert au_oracle.summary_json('{"level": "error"}\n{"peak": 0.5}')["peak"] == 0.5
+    with pytest.raises(json.JSONDecodeError):
+        au_oracle.summary_json("nothing here")

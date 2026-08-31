@@ -186,6 +186,19 @@ class AuSource:
     sample_rate: int = 48000
     min_peak: float = 0.005
     extra: tuple[str, ...] = field(default=())
+    #: Semitones added to a note on its way to the plugin, so a grid can be
+    #: written in the pitch that sounds.
+    #:
+    #: A sampler's key range and its sounding range are different things, and a
+    #: mapped instrument may sit anywhere on the keyboard: one electric bass
+    #: here answers on keys 71-109 and sounds four octaves below the key it is
+    #: sent. Every grid, every metric and every note label stays the sounding
+    #: pitch — the model's own — and this is the one place the two part company.
+    key_offset: int = 0
+
+    def key(self, note: int) -> int:
+        """The key that makes this source sound `note`."""
+        return note + self.key_offset
 
     def identity(self) -> dict:
         """The dict that goes into the cache key and the capture manifest.
@@ -222,6 +235,10 @@ class AuSource:
         if self.state:
             state = Path(self.state).expanduser()
             identity["state_sha256"] = _sha256_file(state) if state.is_file() else ""
+        # Same rule as the channel: recorded only when it moves the render, so a
+        # capture made before the field existed keeps its digest.
+        if self.key_offset:
+            identity["key_offset"] = self.key_offset
         return identity
 
     def argv(self, out_wav: Path, *, midi: Path | None = None) -> list[str]:
@@ -230,7 +247,10 @@ class AuSource:
         if self.preset:
             argv += ["--preset", str(resolve_preset(self.preset))]
         if self.state:
-            argv += ["--state", self.state]
+            # Expanded here as well as in `identity`, which digests the file: the
+            # two disagreeing means a `~` path hashes one file and loads none,
+            # and a plugin handed a missing state renders its empty default.
+            argv += ["--state", str(Path(self.state).expanduser())]
         for spec in self.params:
             argv += ["--param", spec]
         if self.program is not None:
@@ -263,6 +283,31 @@ class AuSource:
         argv += list(self.extra)
         argv += ["--json", "-o", str(out_wav)]
         return argv
+
+
+def summary_json(stdout: str) -> dict:
+    """aubounce's render summary, ignoring whatever the plugin printed around it.
+
+    A plugin shares the host's stdout and some of them use it: one sampler here
+    writes a slot-manager error above every render's JSON, which is harmless in
+    itself and fatal to a whole-stream `json.loads`. What that produced was not
+    an error but a diagnosis — every probe reported peak 0.0000, so the
+    calibration read the library as silent at every settle time it tried.
+
+    The summary is identified by carrying `peak`, so a plugin printing JSON of
+    its own is skipped rather than parsed as the render.
+    """
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(stdout):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(stdout, i)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and "peak" in obj:
+            return obj
+    raise json.JSONDecodeError("no aubounce summary in stdout", stdout or "", 0)
 
 
 def _sha256_file(path: Path) -> str:
@@ -337,7 +382,7 @@ def _bounce_once(
             f"aubounce failed (rc={proc.returncode}) for {source.plugin!r}:\n{proc.stderr.strip()}"
         )
     try:
-        summary = json.loads(proc.stdout)
+        summary = summary_json(proc.stdout)
     except json.JSONDecodeError as exc:  # pragma: no cover - aubounce contract
         raise AuRenderError(f"aubounce did not emit JSON:\n{proc.stdout}\n{proc.stderr}") from exc
 

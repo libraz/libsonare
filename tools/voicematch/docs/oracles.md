@@ -107,6 +107,10 @@ rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/vstpr
 
 **Confirm the slot map after any of this, by rendering.** Two timbres that come back byte-identical mean the channel is not selecting anything, and that failure has no other symptom: every render is the right length, at a normal level, with an instrument audible in it.
 
+**A `state` path is expanded before it reaches the host.** It was not always, and the way that failed is the shape everything on this page has: `AuSource.identity` expands the path to digest the file while `argv` passed the `~` through, so the cache key named a real preset and the plugin was handed one that does not exist — and a plugin handed a missing state loads its empty default and renders it at a plausible length.
+
+**A plugin shares the host's stdout, and some of them write to it.** One sampler here prints a slot-manager error above every render, which is harmless in itself and fatal to a whole-stream JSON parse. What that produced was not an error message but a wrong diagnosis: every probe came back peak 0.0000, so the settle sweep reported the library as never loading at any settle time it tried, and the recipe that fell out of it would have been "this plugin cannot be captured". `au_oracle.summary_json` scans stdout for the first JSON object carrying `peak` instead, so a plugin printing prose — or JSON of its own — is stepped over.
+
 ### Five ways a plugin produces a plausible file rather than an error
 
 None of them announces itself. Three are detected:
@@ -121,7 +125,7 @@ Two cannot be, because nothing in the file distinguishes them from a good render
 
 | what happens | what you get | how it is avoided |
 |---|---|---|
-| the plugin's first note is not its steady one | a probe whose softest hit — the one a drum fit is validated on — is louder and thinner than the same velocity struck again | aubounce's `--warmup` strikes one note and discards it before recording. On by default; `--au-no-warmup` opts out |
+| the plugin's first note is not its steady one | a probe whose softest hit — the one a drum fit is validated on — is louder and thinner than the same velocity struck again | aubounce's `--warmup` strikes one note and discards it before recording. On by default; `--au-no-warmup` opts out, and a capture whose instrument outrings the preroll has to ([capture.md](capture.md#fields)) |
 | the probe's program change is obeyed | the wrong instrument, at the right length, with a clean preroll and a healthy peak | the program change is stripped. `--au-gm` keeps it, for a plugin that really is a GM synth |
 
 Measured on the piano sampler, and the numbers are why the defaults are what they are: rendered at full speed a 2 s C4 loses 1544 ms out of its middle; at `--au-settle-ms 1000` it renders a peak of 0.0011 where the real one is 0.158. Two seconds of settling is enough and the default is twice that. `capture.py calibrate` measures all of this for a given plugin rather than assuming it.

@@ -686,16 +686,29 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     gate_s = manifest["gate_ms"] / 1000.0
     percussion = is_percussion(cfg)
 
-    # A reference profile is the calibration target, so the model's own grid is
-    # not part of it even when `render-grid` has put it in the same corpus: it
-    # would double the committed file with a snapshot of the thing being
-    # calibrated, which is stale the next time the voice is touched.
-    modelled = {t["id"] for t in manifest.get("timbres", []) if t.get("model")}
+    # What this profile is allowed to measure: the timbres the capture DECLARES,
+    # and nothing else the corpus happens to hold.
+    #
+    # Two things end up in a manifest that are not the reference. `render-grid`
+    # adds the model's own grid on purpose, so that every tool reading a corpus
+    # reads the model with no special case. And a re-capture keeps whatever the
+    # previous definition rendered, because `corpus --resume` preserves timbres
+    # it does not recognise rather than discarding an expensive render — so an
+    # instrument re-captured from a different product still has the old one on
+    # disk under the old timbre id.
+    #
+    # Measuring either is silent: `committed_capture` already intersects with
+    # the tracked definition, so the profile would declare one timbre and hold
+    # the statistics of two. The second case is the dangerous one, since the
+    # retired reference is usually retired for being wrong — a bass replaced
+    # because its rig was baked in would have gone on contributing to the DI
+    # profile that replaced it.
+    declared = {t["id"] for t in cfg.get("timbres", [])}
 
     def sweep(max_band_hz: float | None) -> list[dict]:
         rows: list[dict] = []
         for i, rec in enumerate(manifest["renders"], 1):
-            if rec["timbre"] in modelled:
+            if rec["timbre"] not in declared:
                 continue
             path = corpus_dir / rec["path"]
             if not path.exists():

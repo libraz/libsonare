@@ -63,6 +63,7 @@ from au_oracle import (  # noqa: E402
     AuSource,
     dry_params,
     resolve_preset,
+    summary_json,
 )
 from metrics import analyze_hit, harmonic_share, midi_to_hz, to_mono  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
@@ -168,6 +169,16 @@ def load_config(path: Path) -> dict:
     # the whole grid's render time for the sake of ten notes.
     cfg.setdefault("tail_by_note", {})
     cfg.setdefault("preroll_ms", 100)
+    # Strike the note once and throw it away before recording, because a large
+    # sampler plays its first note differently from every later one.
+    #
+    # On by default, and turned off for an instrument that rings longer than the
+    # preroll: the discarded strike is still sounding when the recorded one
+    # starts, so it lands under the whole measurement rather than beside it. On
+    # one electric bass that ran to -41 dB against a -26.8 dB onset — and to 7 dB
+    # under the softest row — where the first-note error it was guarding against
+    # was 1.9 dB and indistinguishable from the instrument's own round robin.
+    cfg.setdefault("warmup", True)
     cfg.setdefault("dry", True)
     # Whether the reference this capture produces carries a rig between the
     # instrument and the microphone. `dry` cannot answer it (see RIG_VALUES), and
@@ -325,9 +336,13 @@ def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
         # A rack selects its timbres by channel rather than by preset: one file
         # is loaded and each channel plays a different slot of it.
         channel=slot_channel(timbre),
+        # Where the instrument sits on the keyboard, which is not where it
+        # sounds; the grid is written in sounding pitch either way.
+        key_offset=int(timbre.get("key_offset", 0)),
         params=config_params(cfg),
         settle_ms=int(cfg["settle_ms"]),
         realtime=bool(cfg["realtime"]),
+        warmup=bool(cfg["warmup"]),
         preroll_ms=int(cfg["preroll_ms"]),
         tail=str(cfg["tail"]),
         sample_rate=int(cfg["sample_rate"]),
@@ -373,14 +388,15 @@ def _note_argv(source: AuSource, out: Path, note: int, velocity: int, gate_ms: i
         midi = out.with_suffix(".mid")
         midi.parent.mkdir(parents=True, exist_ok=True)
         midi.write_bytes(write_smf(
-            [Note(note, velocity, 0.0, gate_ms / 1000.0)],
+            [Note(source.key(note), velocity, 0.0, gate_ms / 1000.0)],
             program=-1, channel=source.channel - 1, sends=sends,
         ))
         return source.argv(out, midi=midi)
     argv = source.argv(out)
     # `argv` builds a render with no notes in it; a single note is what a
     # calibration probe needs and what the corpus grid is made of.
-    return argv[:3] + ["--note", str(note), "--velocity", str(velocity), "--gate-ms", str(gate_ms)] + argv[3:]
+    return argv[:3] + ["--note", str(source.key(note)), "--velocity", str(velocity),
+                       "--gate-ms", str(gate_ms)] + argv[3:]
 
 
 def _probe(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
@@ -393,7 +409,7 @@ def _probe(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
     if proc.returncode != 0:
         return {"error": proc.stderr.strip()[:400], "wall_s": wall}
     try:
-        summary = json.loads(proc.stdout)
+        summary = summary_json(proc.stdout)
     except json.JSONDecodeError:
         return {"error": f"no JSON: {proc.stdout[:200]}", "wall_s": wall}
     summary["wall_s"] = round(wall, 2)
@@ -601,6 +617,7 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         "preroll_ms": cfg["preroll_ms"],
         "settle_ms": cfg["settle_ms"],
         "realtime": cfg["realtime"],
+        "warmup": cfg["warmup"],
         "params": list(config_params(cfg)),
         "sends": list(config_sends(cfg)) if config_sends(cfg) else None,
         "timbres": list(cfg["timbres"]) + foreign,
@@ -807,7 +824,7 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
             last = proc.stderr.strip()[:400]
             continue
         try:
-            summary = json.loads(proc.stdout)
+            summary = summary_json(proc.stdout)
         except json.JSONDecodeError:
             last = f"no JSON: {proc.stdout[:160]}"
             continue

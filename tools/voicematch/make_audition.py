@@ -89,6 +89,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -395,8 +396,12 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         # one-based in the capture definition and zero-based in the file.
         ref_channel = int(timbre.get("slot_channel",
                                      timbre.get("channel", channel + 1))) - 1
-        timbre_smf = smf if ref_channel == channel else write_smf(
-            take.notes, program=voice.program, bank=voice.bank, end_pad=take.tail_s,
+        # A take is written in sounding pitch, so an instrument mapped away from
+        # it needs its own score even when the channel already matches.
+        ref_notes = ([replace(n, note=source.key(n.note)) for n in take.notes]
+                     if source.key_offset else take.notes)
+        timbre_smf = smf if (ref_channel == channel and not source.key_offset) else write_smf(
+            ref_notes, program=voice.program, bank=voice.bank, end_pad=take.tail_s,
             cc_events=take.cc_events, channel=ref_channel,
         )
         try:

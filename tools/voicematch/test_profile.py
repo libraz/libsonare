@@ -1282,3 +1282,49 @@ def test_model_sends_gs_reaches_a_dry_captured_voice(monkeypatch):
         args = SimpleNamespace(model_sends=mode, lib="", archive_references="")
         make_audition.render_take(Take(), Voice(), [], Path("."), args, [], None)
         assert seen == [want], f"{mode}: {seen}"
+
+
+def test_measure_reads_only_the_timbres_the_capture_declares(tmp_path):
+    """A corpus outlives the definition that filled it, and holds what it held.
+
+    `corpus --resume` keeps a timbre it does not recognise rather than throwing
+    away an expensive render, so an instrument re-captured from a different
+    product still has the old one on disk. Measuring both is silent in the worst
+    direction: `committed_capture` intersects with the tracked definition, so
+    the profile would declare one timbre and carry the statistics of two — and
+    the retired reference is usually retired for being wrong.
+    """
+    import numpy as np
+
+    from wavio import write_wav
+
+    root = tmp_path / "corpus"
+    sr, note = 48000, 60
+    t = np.arange(int(1.2 * sr)) / sr
+    for tid, f0 in (("di", 261.63), ("retired", 261.63)):
+        (root / tid).mkdir(parents=True, exist_ok=True)
+        env = np.where(t < 0.1, 0.0, np.exp(-2.0 * (t - 0.1)))
+        y = (0.5 * np.sin(2 * np.pi * f0 * t) * env).astype(np.float32)
+        write_wav(root / tid / "n060_v100.wav", np.stack([y, y], axis=1), sr)
+    (root / "manifest.json").write_text(json.dumps({
+        "id": "x", "plugin": "aumu:xxxx:Yyyy", "params": [], "sample_rate": sr,
+        "gate_ms": 1000, "tail": "0s", "preroll_ms": 100, "notes": [note],
+        "velocities": [100],
+        "timbres": [{"id": "di"}, {"id": "retired"}],
+        "renders": [
+            {"id": "di/060/100", "timbre": "di", "note": note, "velocity": 100,
+             "path": "di/n060_v100.wav"},
+            {"id": "retired/060/100", "timbre": "retired", "note": note, "velocity": 100,
+             "path": "retired/n060_v100.wav"},
+        ],
+    }))
+    config = tmp_path / "x.json"
+    config.write_text(json.dumps(
+        {"id": "x", "label": "One declared timbre", "timbres": [{"id": "di"}]}))
+    cfg = {"id": "x", "program": 0, "timbres": [{"id": "di"}], "_path": str(config)}
+
+    out = tmp_path / "x_profile.json"
+    assert profile_module.measure(cfg, root, out) == 0
+    written = json.loads(out.read_text())
+    assert {r["timbre"] for r in written["rows"]} == {"di"}
+    assert [t["id"] for t in written["capture"]["timbres"]] == ["di"]
