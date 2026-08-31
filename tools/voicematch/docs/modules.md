@@ -9,6 +9,7 @@
 - `au_oracle.py` — an AudioUnit instrument as the oracle, hosted by aubounce, with the guards a disk-streaming sampler needs and an on-disk render cache
 - `metrics.py` — per-note analysis and deltas
 - `room.py` — ambience: measure a reference's space, put the model in it, translate it back into libsonare's sends
+- `rig.py` — whether a reference was recorded through an amplifier or a rotary: a cabinet's skirt, a rotor's anti-phase modulation, and the vacuous nulls of both. Shows a rig present and never absent, so it decides `baked` and leaves `none` to an A/B
 - `smf.py` — minimal type-0 SMF writer (single source of truth for both sides)
 - `wavio.py` — stdlib WAV I/O: 16-bit PCM out, any common format in
 - `gm_names.py` — GM program labels and the percussion key map
@@ -70,4 +71,5 @@ One file per module, and none of them renders anything.
 - `test_phrases.py` builds every set for all 128 programs, because a generic set fills its notes in from a register table and the way that fails is a note number MIDI has no room for — which renders as silence on one side and a transposition on the other, and reads as a voicing difference. It also holds the drum channel to the kit set alone.
 - `test_bank.py` covers the index: that the whole bank is addressable with no two voices sharing a directory name, that program 0's two captures land on the piano and the kit respectively, and that a captured voice keeps its capture's phrase set — which is what keeps the reference archive reachable.
 - `test_calibration.py` holds the shipped `calibrations.json` to voices the bank actually has, since a mistyped key renders the baseline alone and produces a page indistinguishable from a voice nobody has recorded a candidate for. It also covers the name rules, the file-then-flag order, and the refusal when one name is declared in both.
+- `test_rig.py` covers the direction of each rig signature, and above all that a question which cannot be put reports as unanswerable rather than as a "no" — a vacuous negative is what would put `none` into a capture that never earned it.
 - `test_shape.py`, `test_capture.py`, `test_dataset.py`, `test_room.py`, `test_smf.py`, `test_wavio.py` cover their own modules.

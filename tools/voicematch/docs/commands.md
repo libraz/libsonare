@@ -172,9 +172,12 @@ It reports and never edits the capture definition. Which slot becomes a second t
 | `dynamics` | tabulate the pp→ff swing rather than one velocity at a time | — |
 | `takes` | measure the phrase set — what happens *between* notes, which a single-note grid cannot excite | `--only`, `--archive` |
 | `status` | the readiness row, and the command each gap needs | `--all`, `--archive` |
+| `rig` | measure whether the reference was recorded through an amplifier or a rotary, and say what the answer can be | `--against`, `--timbre` |
 | `room-match` | what libsonare's own CC91 send and GS tank would have to be to sit in the reference's room | `--take`, `--archive`, `--verbose` |
 
 All: `--config`, `--corpus`, `--profile`, `--program`. `compare` / `agree` / `dynamics` also take `--timbre` and `--notes`.
+
+**`rig --against` names sibling captures, and siblings from the same rack are the argument.** They came through one recording chain in one session, so what they cannot explain is the rig. It also reads a timbre of the subject's own corpus, which is how the model's grid is measured with the instrument that classified the reference: `--timbre model --against <same id>` puts the two rows side by side. The first thing that measured said is that the bank's `modernLead` cabinet opens a third-octave high and falls 8 dB/oct too slowly — knee 5040 Hz at −32.8 against the reference's 4000 at −40.5, leaving 13 to 19 dB too much above 5 kHz. That is the separation earning its keep: the same excess read as a +253 % brightness error on the voice, and it belongs to the cabinet.
 
 **`takes` on a wet capture places the model in the reference's room first.** The model always renders dry — `write_smf` writes CC91 0 — so against a reference recorded in its building every tail figure would be a dry signal read against a wet one, and all of them would land outside the references' spread for that reason and not because the voice is wrong. Measured on the church organ before the correction: the tail fell at 78 dB/s against the references' 15 to 17, and its four band levels missed by 11 to 25 dB; after it, the decay is 23 dB/s and the tail tonality is inside their spread. A capture's own `dry` flag decides whether the correction runs at all — nothing in the audio can tell a building from an instrument's own long release, and guessing wrong convolves an invented room onto every figure.
 

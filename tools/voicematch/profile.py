@@ -2800,6 +2800,70 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int]) -> i
 
 
 # --------------------------------------------------------------------------
+# rig
+
+
+def rig_evidence(cfg: dict, corpus_dir: Path, *, against: list[str], timbre: str) -> int:
+    """Put the `rig` question to the reference itself, and say what the answer can be.
+
+    The comparison captures are the argument: a cabinet is one filter after
+    several instruments, so what makes a dark spectrum into evidence is that
+    siblings share its shape while everything not behind it does not. Siblings
+    from the same rack are worth more than any absolute threshold, since they
+    came through the same recording chain in the same session.
+    """
+    from corpus import load_corpus
+    from rig import curve_distance, measure_rotary, measure_skirt
+
+    subject = load_corpus(corpus_dir, timbre or cfg["timbres"][0]["id"])
+    # Keyed by timbre as well as capture, so naming the subject's own capture as a
+    # sibling compares the model's grid against the reference it was rendered
+    # beside rather than overwriting the row it was going to be compared with.
+    subject_key = f"{cfg['id']}:{subject.timbre}"
+    skirts = {subject_key: measure_skirt(subject)}
+    for name in against:
+        other_cfg = load_config(CAPTURE_DIR / f"{name}.json")
+        other = load_corpus(out_root(other_cfg, ""))
+        skirts[f"{name}:{other.timbre}"] = measure_skirt(other)
+
+    first = skirts[subject_key]
+    centres = [f for f in first.centres if 2000.0 <= f <= 16000.0]
+    print(f"\nthird-octave level re 1-2 kHz, dB — {subject_key} against "
+          f"{len(against)} sibling(s)")
+    print(f"{'':24}" + "".join(f"{f:8.0f}" for f in centres))
+    for name, skirt in skirts.items():
+        row = [v for f, v in zip(skirt.centres, skirt.curve) if 2000.0 <= f <= 16000.0]
+        print(f"{name[:24]:24}" + "".join(f"{v:8.1f}" for v in row))
+
+    print(f"\n{'':24}{'skirt':>12}{'knee':>10}{'note spread':>14}{'vs subject':>12}")
+    for name, skirt in skirts.items():
+        distance = "" if name == subject_key else f"{curve_distance(first, skirt):12.2f}"
+        print(f"{name[:24]:24}{skirt.slope_db_per_octave:9.1f}/oct{skirt.knee_hz:9.0f}Hz"
+              f"{skirt.slope_spread:13.1f} {distance}")
+
+    rotary = measure_rotary(subject)
+    if rotary.stereo:
+        print(f"\nmodulation {rotary.rate_hz:.2f} Hz at {rotary.depth_db:.2f} dB, "
+              f"inter-channel correlation {rotary.interchannel_correlation:+.3f} "
+              f"(channels {rotary.channel_separation_db:.1f} dB apart)")
+        print("  A rotor turns away from one mic as it faces the other, so it drives the\n"
+              "  correlation negative. In-phase modulation is the instrument beating "
+              "against itself.")
+    else:
+        print(f"\nrendered dual mono ({rotary.channel_separation_db:.1f} dB apart): the "
+              f"rotary test has\n  nothing to read here, which is not the same answer as "
+              f"a rotor being absent.")
+
+    print(f"\n  `rig` is currently {subject.rig!r}.")
+    print("  This measurement can show a rig present and cannot show one absent: a dull\n"
+          "  instrument recorded flat and a bright one recorded through a cabinet both come\n"
+          "  back dull. `none` needs an A/B the product can supply — its amplifier stage\n"
+          "  switched off, and what that removed measured. Without one the answer stays\n"
+          "  unclassified however clean the spectrum looks.")
+    return 0
+
+
+# --------------------------------------------------------------------------
 
 
 def main() -> int:
@@ -2816,6 +2880,8 @@ def main() -> int:
                                       "between notes live and where a note grid is blind"),
                             ("status", "what an instrument has, what it is missing, and what "
                                        "the next round needs — the entry point of a loop"),
+                            ("rig", "measure whether this reference was recorded through an "
+                                    "amplifier or a rotary, and say what the answer can be"),
                             ("room-match", "what libsonare's own CC91 send and GS tank would "
                                            "have to be to sit in the reference's room")):
         p = sub.add_parser(name, help=help_text)
@@ -2825,6 +2891,13 @@ def main() -> int:
         p.add_argument("--program", type=int, default=None,
                        help="GM program the model answers with (default: the one the "
                             "capture definition names, or the one the profile recorded)")
+    rig_group = sub.choices["rig"]
+    rig_group.add_argument(
+        "--against", default="",
+        help="comma-separated capture ids to compare the high-frequency shape against. "
+             "Siblings from the same rack are what turn a dark spectrum into evidence of "
+             "one filter, since they came through the same chain in the same session")
+    rig_group.add_argument("--timbre", default="", help="which captured timbre to measure")
     for name in ("compare", "agree", "dynamics"):
         p = sub.choices[name]
         p.add_argument("--timbre", default="", help="which captured timbre to compare against")
@@ -2883,6 +2956,9 @@ def main() -> int:
                       archive=Path(args.status_archive).expanduser().resolve()
                       if args.status_archive else DEFAULT_REFERENCE_ARCHIVE,
                       reference_dir=REFERENCE_DIR, every=bool(args.every))
+    if args.cmd == "rig":
+        return rig_evidence(cfg, corpus_dir, timbre=args.timbre,
+                            against=[n.strip() for n in args.against.split(",") if n.strip()])
     if args.cmd == "room-match":
         from make_audition import DEFAULT_REFERENCE_ARCHIVE
         archive = (Path(args.archive).expanduser().resolve() if args.archive
