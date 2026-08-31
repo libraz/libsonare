@@ -109,6 +109,7 @@ enum class GsLevel : uint8_t {
   X(kPartModLfo1Rate)       \
   X(kPartModLfo1PitchDepth) \
   X(kPartModLfo1TvaDepth)   \
+  X(kPartModAmplitude)      \
   X(kPartBendDest)          \
   X(kPartBendPitchControl)  \
   X(kPartCafDest)           \
@@ -419,8 +420,10 @@ inline constexpr std::array<GsAddressEntry, 129> kGsAddressTable = {{
     // so the two are one quantity and gs_cutoff_offset_cents converts both.
     {0x402001, 0x000F00, GsParam::kPartModTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
-    {0x402002, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // The wheel's own level: a percentage of the part's gain, which is the same
+    // storage CC7 and CC11 spend and so needs nothing new to reach.
+    {0x402002, 0x000F00, GsParam::kPartModAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
     // The wheel's own vibrato rate, on the same 25-cents-a-step LFO frequency
     // TONE MODIFY writes at 40 1x 30 — one rate reached two ways, not two.
     {0x402003, 0x000F00, GsParam::kPartModLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,

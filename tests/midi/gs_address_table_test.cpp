@@ -241,7 +241,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   // block-to-part mapping is exercised alongside the index.
   check_row(0x402100, 0x40, GsParam::kPartModDest, 0, 0);
   check_row(0x402201, 0x40, GsParam::kPartModTvfCutoff, 0, 1);
-  check_row(0x402302, 0x40, GsParam::kPartModDest, 0, 2);
+  check_row(0x402302, 0x40, GsParam::kPartModAmplitude, 0, 2);
   check_row(0x402403, 0x40, GsParam::kPartModLfo1Rate, 0, 3);
   check_row(0x402404, 0x0A, GsParam::kPartModLfo1PitchDepth, 0, 3);
   check_row(0x402505, 0x00, GsParam::kPartModDest, 0, 4);

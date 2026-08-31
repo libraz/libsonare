@@ -237,6 +237,7 @@ Setup setup_for(const GsAddressEntry& row) {
     case GsParam::kPartModTvfCutoff:
     case GsParam::kPartModLfo1Rate:
     case GsParam::kPartModLfo1TvaDepth:
+    case GsParam::kPartModAmplitude:
       return Setup::kModWheelUp;
     // A group is a relation, so one note in it chokes nothing.
     case GsParam::kDrumAssignGroup:

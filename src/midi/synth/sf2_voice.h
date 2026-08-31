@@ -107,7 +107,9 @@ constexpr float gs_mod_depth_cents(uint8_t value) noexcept {
 struct Sf2ChannelMod {
   /// Pitch wheel offset in cents (bend scaled by the RPN0 bend range).
   float pitch_cents = 0.0f;
-  /// CC7 volume x CC11 expression as linear gain ((cc/127)^2 each).
+  /// CC7 volume x CC11 expression as linear gain ((cc/127)^2 each), times the
+  /// part's MODULATION AMPLITUDE CONTROL (40 2x 02) at the wheel's position —
+  /// that address is a percentage of this level, so it belongs in it.
   float gain = 1.0f;
   /// CC1 mod wheel x the part's MODULATION LFO1 PITCH DEPTH, in cents.
   float extra_vibrato_cents = 0.0f;

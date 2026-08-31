@@ -378,6 +378,13 @@ float gs_mod_cutoff_cents(uint8_t value) noexcept;
 /// scales the exponent, which is what makes an unraised one exactly 1.
 float gs_mod_lfo_rate_scale(uint8_t value, float wheel01) noexcept;
 
+/// MODULATION AMPLITUDE CONTROL (40 2x 02) as the fraction of its own level a
+/// fully-raised mod wheel adds to the part, over the manual's -100..+100 %. The
+/// byte is centred on 40 and the result multiplies the part's linear gain as
+/// 1 + fraction x wheel, so 00 at a raised wheel is silence and an unraised
+/// wheel is exactly inert whatever the byte says.
+float gs_mod_amp_fraction(uint8_t value) noexcept;
+
 /// MODULATION LFO1 TVA DEPTH (40 2x 06) as the fraction of a part's amplitude a
 /// fully-raised mod wheel swings away, 0 for no tremolo and 1 for a swing to
 /// silence. The wheel scales it linearly, so an unraised one is exactly 0. The

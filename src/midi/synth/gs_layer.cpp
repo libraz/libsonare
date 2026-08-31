@@ -78,6 +78,12 @@ float gs_mod_cutoff_cents(uint8_t value) noexcept {
   return gs_cutoff_offset_cents(centred_offset(value));
 }
 
+float gs_mod_amp_fraction(uint8_t value) noexcept {
+  // 100 % over the 64 steps below the centre, which puts 7F at +98.4 % — the
+  // same asymmetry every centred GS byte has, and the one clamp_offset gives.
+  return static_cast<float>(centred_offset(value)) / 64.0f;
+}
+
 float gs_mod_tva_depth(uint8_t value) noexcept {
   return static_cast<float>(value & 0x7Fu) / 127.0f;
 }

@@ -281,6 +281,9 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartModLfo1TvaDepth:
         st.mod_tva_depth = gs_mod_tva_depth(w.value);
         break;
+      case GsParam::kPartModAmplitude:
+        st.mod_amp_fraction = gs_mod_amp_fraction(w.value);
+        break;
       case GsParam::kPartBendPitchControl:
         // The same range RPN 00 00 writes, in whole semitones above 40; the
         // cents its LSB carries have no address of their own here.
@@ -697,8 +700,11 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   const ChannelState& st = channels_[ch];
   Sf2ChannelMod& mod = channel_mods_[ch];
   mod.pitch_cents = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
-  mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
+  // MODULATION AMPLITUDE CONTROL folds in here rather than into a field of its
+  // own: it is a percentage of the part's level, and this is that level.
+  mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression) *
+             (1.0f + st.mod_amp_fraction * mod.mod_wheel01);
   mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
   mod.mod_cutoff_cents = st.mod_cutoff_cents * mod.mod_wheel01;
   mod.vib_rate_scale = gs_mod_lfo_rate_scale(st.mod_lfo_rate, mod.mod_wheel01);

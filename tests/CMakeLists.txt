@@ -454,6 +454,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_mod_cutoff_test.cpp
     midi/gs_mod_lfo_rate_test.cpp
     midi/gs_mod_tremolo_test.cpp
+    midi/gs_mod_amplitude_test.cpp
     midi/gs_key_shift_test.cpp
     midi/gs_part_params_test.cpp
     midi/gs_part_edit_banks_test.cpp
