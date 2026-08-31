@@ -94,6 +94,63 @@ struct GsPartParams {
 /// @p gs as voice-applicable quantities (GsPartMod, channel_param_state.h).
 GsPartMod gs_part_mod(const GsPartParams& gs) noexcept;
 
+/// The six controller sources of the controller-destination block (40 2x xx),
+/// in address order: the low byte is the source in its high nibble and the
+/// destination in its low one.
+enum class GsCtrlSource : uint8_t {
+  kModulation = 0,
+  kBend,
+  kChannelAftertouch,
+  kPolyAftertouch,
+  kCc1,
+  kCc2,
+};
+inline constexpr size_t kGsCtrlSourceCount = 6;
+
+/// The source half of a controller-destination address.
+constexpr uint8_t gs_ctrl_source_index(uint32_t addr) noexcept {
+  return static_cast<uint8_t>((addr >> 4) & 0x0Fu);
+}
+
+/// One source's half of the block: per destination, what that source at FULL is
+/// worth. What it is worth now is this scaled by the source's own position, and
+/// a destination takes the sum over sources (docs/gs.md) — which is why the
+/// values are held per source rather than pre-summed, and why the set is an
+/// array rather than a field per source-destination pair.
+struct GsDestinationSet {
+  float pitch_cents = 0.0f;      ///< +00 PITCH CONTROL
+  float cutoff_cents = 0.0f;     ///< +01 TVF CUTOFF CONTROL
+  float amp_fraction = 0.0f;     ///< +02 AMPLITUDE CONTROL
+  float vib_depth_cents = 0.0f;  ///< +04 LFO1 PITCH DEPTH
+  float tvf_lfo_cents = 0.0f;    ///< +05 LFO1 TVF DEPTH
+  float tva_depth = 0.0f;        ///< +06 LFO1 TVA DEPTH
+  /// +03 LFO1 RATE CONTROL, held as its written byte where the rest are held
+  /// converted: the sources meet in this one's exponent rather than in a
+  /// full-scale amount, so the conversion happens after they are summed.
+  uint8_t lfo_rate = 0x40;
+};
+
+/// Whether any source names a TVF destination, which is what a note-on has to
+/// settle: the offset and the swing both arrive per sample from a controller,
+/// so what the note-on decides is only whether there is a filter to reach.
+constexpr bool gs_part_has_filter_destination(
+    const std::array<GsDestinationSet, kGsCtrlSourceCount>& dest) noexcept {
+  for (const GsDestinationSet& d : dest) {
+    if (d.cutoff_cents != 0.0f || d.tvf_lfo_cents != 0.0f) return true;
+  }
+  return false;
+}
+
+/// The reset state of a part's whole block. Every source is inert but the
+/// modulation wheel, whose LFO1 PITCH DEPTH powers on at 0A where every other
+/// source's powers on at 00.
+constexpr std::array<GsDestinationSet, kGsCtrlSourceCount> gs_default_destinations() noexcept {
+  std::array<GsDestinationSet, kGsCtrlSourceCount> d{};
+  d[static_cast<size_t>(GsCtrlSource::kModulation)].vib_depth_cents =
+      gs_mod_depth_cents(kGsModDepthDefault);
+  return d;
+}
+
 /// GS SCALE TUNING (40 1x 40-4B): one byte per pitch class from C, 40 = in tune
 /// and one cent a step. A temperament, so it is indexed by the key that was
 /// struck rather than by any note a GS parameter substituted for it.

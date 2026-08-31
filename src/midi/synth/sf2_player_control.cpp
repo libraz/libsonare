@@ -269,47 +269,28 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartToneModify:
         gs_apply_tone_modify(st.gs, w.index, w.value);
         break;
-      case GsParam::kPartModLfo1PitchDepth:
-        st.mod_depth_cents = gs_mod_depth_cents(w.value);
+      // The block is a matrix: the row names the destination and the address
+      // names the source, so one case serves every source that reaches it.
+      case GsParam::kPartCtrlPitch:
+        st.ctrl_dest[gs_ctrl_source_index(w.addr)].pitch_cents = gs_mod_pitch_cents(w.value);
         break;
-      case GsParam::kPartModPitch:
-        st.mod_pitch_cents = gs_mod_pitch_cents(w.value);
+      case GsParam::kPartCtrlTvfCutoff:
+        st.ctrl_dest[gs_ctrl_source_index(w.addr)].cutoff_cents = gs_mod_cutoff_cents(w.value);
         break;
-      case GsParam::kPartCafPitch:
-        st.caf_pitch_cents = gs_mod_pitch_cents(w.value);
+      case GsParam::kPartCtrlAmplitude:
+        st.ctrl_dest[gs_ctrl_source_index(w.addr)].amp_fraction = gs_mod_amp_fraction(w.value);
         break;
-      case GsParam::kPartModTvfCutoff:
-        st.mod_cutoff_cents = gs_mod_cutoff_cents(w.value);
+      case GsParam::kPartCtrlLfo1Rate:
+        st.ctrl_dest[gs_ctrl_source_index(w.addr)].lfo_rate = w.value;
         break;
-      case GsParam::kPartModLfo1Rate:
-        st.mod_lfo_rate = w.value;
+      case GsParam::kPartCtrlLfo1PitchDepth:
+        st.ctrl_dest[gs_ctrl_source_index(w.addr)].vib_depth_cents = gs_mod_depth_cents(w.value);
         break;
-      case GsParam::kPartModLfo1TvaDepth:
-        st.mod_tva_depth = gs_mod_tva_depth(w.value);
+      case GsParam::kPartCtrlLfo1TvfDepth:
+        st.ctrl_dest[gs_ctrl_source_index(w.addr)].tvf_lfo_cents = gs_lfo_tvf_depth_cents(w.value);
         break;
-      case GsParam::kPartModAmplitude:
-        st.mod_amp_fraction = gs_mod_amp_fraction(w.value);
-        break;
-      case GsParam::kPartCafTvfCutoff:
-        st.caf_cutoff_cents = gs_mod_cutoff_cents(w.value);
-        break;
-      case GsParam::kPartCafAmplitude:
-        st.caf_amp_fraction = gs_mod_amp_fraction(w.value);
-        break;
-      case GsParam::kPartCafLfo1Rate:
-        st.caf_lfo_rate = w.value;
-        break;
-      case GsParam::kPartCafLfo1PitchDepth:
-        st.caf_depth_cents = gs_mod_depth_cents(w.value);
-        break;
-      case GsParam::kPartCafLfo1TvaDepth:
-        st.caf_tva_depth = gs_mod_tva_depth(w.value);
-        break;
-      case GsParam::kPartModLfo1TvfDepth:
-        st.mod_tvf_lfo_cents = gs_lfo_tvf_depth_cents(w.value);
-        break;
-      case GsParam::kPartCafLfo1TvfDepth:
-        st.caf_tvf_lfo_cents = gs_lfo_tvf_depth_cents(w.value);
+      case GsParam::kPartCtrlLfo1TvaDepth:
+        st.ctrl_dest[gs_ctrl_source_index(w.addr)].tva_depth = gs_mod_tva_depth(w.value);
         break;
       case GsParam::kPartBendPitchControl:
         // The same range RPN 00 00 writes, in whole semitones above 40; the
@@ -729,35 +710,55 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   const float bend_cents =
       (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
-  // The two controller sources with destinations (40 2x 0x and 40 2x 2x). Each
-  // destination takes the sum of what its sources are worth at their present
-  // positions, so a source at rest contributes exactly nothing to any of them.
-  const float caf01 = static_cast<float>(st.channel_pressure) / 127.0f;
-  // PITCH CONTROL lands on the field the bend already writes, and adds to it
-  // rather than replacing it: two directions onto one pitch, as MASTER TUNE and
-  // RPN 00 01 are.
-  mod.pitch_cents = bend_cents + st.mod_pitch_cents * mod.mod_wheel01 + st.caf_pitch_cents * caf01;
+  // Where each controller source presently sits, in the block's own order. Only
+  // the two libsonare receives are ever non-zero; the rest stay at rest, so the
+  // sum below is over six terms and reads as two.
+  std::array<float, kGsCtrlSourceCount> source01{};
+  source01[static_cast<size_t>(GsCtrlSource::kModulation)] = mod.mod_wheel01;
+  source01[static_cast<size_t>(GsCtrlSource::kChannelAftertouch)] =
+      static_cast<float>(st.channel_pressure) / 127.0f;
+
+  // Each destination is the sum of what its sources are worth where they sit.
+  // Pitch starts at the bend rather than at zero because the two add on one
+  // field, as MASTER TUNE and RPN 00 01 do.
+  float pitch_cents = bend_cents;
+  float cutoff_cents = 0.0f;
+  float amp_fraction = 0.0f;
+  float vib_cents = 0.0f;
+  float tvf_lfo_cents = 0.0f;
+  float tva_depth = 0.0f;
+  // The rate is summed in cents and taken through one exponent below, so an
+  // untouched set of sources is exactly 1 rather than a product of numbers
+  // near it.
+  float lfo_rate_cents = 0.0f;
+  for (size_t s = 0; s < kGsCtrlSourceCount; ++s) {
+    const GsDestinationSet& d = st.ctrl_dest[s];
+    const float at = source01[s];
+    pitch_cents += d.pitch_cents * at;
+    cutoff_cents += d.cutoff_cents * at;
+    amp_fraction += d.amp_fraction * at;
+    vib_cents += d.vib_depth_cents * at;
+    tvf_lfo_cents += d.tvf_lfo_cents * at;
+    tva_depth += d.tva_depth * at;
+    lfo_rate_cents += gs_mod_lfo_rate_cents(d.lfo_rate) * at;
+  }
+
+  mod.pitch_cents = pitch_cents;
   // AMPLITUDE CONTROL folds into the part's gain rather than into a field of its
   // own: it is a percentage of the part's level, and this is that level. Floored
   // at zero, where two sources each asking for -100 % would otherwise arrive at
   // a negative gain, which is a phase inversion rather than a quieter part.
   mod.gain =
-      sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression) *
-      std::max(0.0f, 1.0f + st.mod_amp_fraction * mod.mod_wheel01 + st.caf_amp_fraction * caf01);
-  mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01 + st.caf_depth_cents * caf01;
-  mod.mod_cutoff_cents = st.mod_cutoff_cents * mod.mod_wheel01 + st.caf_cutoff_cents * caf01;
-  // Summed in cents and taken through one exponent, so an untouched pair is
-  // exactly 1 rather than the product of two numbers near it.
-  const float lfo_rate_cents = gs_mod_lfo_rate_cents(st.mod_lfo_rate) * mod.mod_wheel01 +
-                               gs_mod_lfo_rate_cents(st.caf_lfo_rate) * caf01;
+      sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression) * std::max(0.0f, 1.0f + amp_fraction);
+  mod.extra_vibrato_cents = vib_cents;
+  mod.mod_cutoff_cents = cutoff_cents;
   mod.vib_rate_scale = lfo_rate_cents != 0.0f ? std::exp2(lfo_rate_cents / 1200.0f) : 1.0f;
   // Clamped at 1 for the reason the gain is floored at 0: past full depth the
   // trough would take the amplitude through zero and out the other side.
-  mod.tremolo_depth01 =
-      std::min(1.0f, st.mod_tva_depth * mod.mod_wheel01 + st.caf_tva_depth * caf01);
+  mod.tremolo_depth01 = std::min(1.0f, tva_depth);
   // Not clamped, unlike the two above it: a filter swing has no end of its own
   // to pass, and the cutoff it lands on is bounded where every other cutoff is.
-  mod.lfo_cutoff_cents = st.mod_tvf_lfo_cents * mod.mod_wheel01 + st.caf_tvf_lfo_cents * caf01;
+  mod.lfo_cutoff_cents = tvf_lfo_cents;
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;

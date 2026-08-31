@@ -241,24 +241,26 @@ Setup setup_for(const GsAddressEntry& row) {
     // centred — which is where the stimulus leaves it.
     case GsParam::kPartBendPitchControl:
       return Setup::kBendApplied;
-    // Likewise anything the wheel scales, which says nothing at CC1 zero.
-    case GsParam::kPartModLfo1PitchDepth:
-    case GsParam::kPartModTvfCutoff:
-    case GsParam::kPartModLfo1Rate:
-    case GsParam::kPartModLfo1TvaDepth:
-    case GsParam::kPartModAmplitude:
-    case GsParam::kPartModLfo1TvfDepth:
-    case GsParam::kPartModPitch:
-      return Setup::kModWheelUp;
-    // The same destinations, reached from channel aftertouch instead.
-    case GsParam::kPartCafPitch:
-    case GsParam::kPartCafTvfCutoff:
-    case GsParam::kPartCafAmplitude:
-    case GsParam::kPartCafLfo1Rate:
-    case GsParam::kPartCafLfo1PitchDepth:
-    case GsParam::kPartCafLfo1TvfDepth:
-    case GsParam::kPartCafLfo1TvaDepth:
-      return Setup::kAftertouchUp;
+    // A controller destination is a depth: it says what its source at full is
+    // worth, so it says nothing until that source is off its rest position.
+    // Which source is the address's, not the row's — the block is a matrix and
+    // one row name serves every source that reaches the destination.
+    case GsParam::kPartCtrlPitch:
+    case GsParam::kPartCtrlTvfCutoff:
+    case GsParam::kPartCtrlAmplitude:
+    case GsParam::kPartCtrlLfo1Rate:
+    case GsParam::kPartCtrlLfo1PitchDepth:
+    case GsParam::kPartCtrlLfo1TvfDepth:
+    case GsParam::kPartCtrlLfo1TvaDepth:
+      switch (static_cast<sonare::midi::synth::GsCtrlSource>(
+          sonare::midi::synth::gs_ctrl_source_index(row.addr))) {
+        case sonare::midi::synth::GsCtrlSource::kModulation:
+          return Setup::kModWheelUp;
+        case sonare::midi::synth::GsCtrlSource::kChannelAftertouch:
+          return Setup::kAftertouchUp;
+        default:
+          return Setup::kNone;
+      }
     // A group is a relation, so one note in it chokes nothing.
     case GsParam::kDrumAssignGroup:
       return Setup::kDrumGroupPeer;
@@ -303,8 +305,7 @@ Probe probe_for(const GsAddressEntry& row) {
       // 7F 7F is a type no adapter realises, so no chain is built and the part
       // is never bussed. 01 10 is Overdrive, which realises.
       return {{0x01, 0x10}, "the generic value selects a type nothing realises"};
-    case GsParam::kPartModTvfCutoff:
-    case GsParam::kPartCafTvfCutoff:
+    case GsParam::kPartCtrlTvfCutoff:
       // hi opens the filter, and the stimulus zone's is already open: +9450
       // cents onto a cutoff above the band leaves every partial where it was.
       // lo is the same edit downwards, which the same zone can show.

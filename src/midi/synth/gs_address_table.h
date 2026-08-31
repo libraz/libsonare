@@ -36,122 +36,115 @@ enum class GsLevel : uint8_t {
 
 /// Every parameter the table names, written once so the enum and the names
 /// reported by gs_param_name() cannot disagree.
-#define SONARE_GS_PARAMS(X) \
-  X(kUnknown)               \
-  X(kUndefined)             \
-  X(kSystemModeSet)         \
-  X(kChannelMsgRxPort)      \
-  X(kMasterTune)            \
-  X(kMasterVolume)          \
-  X(kMasterKeyShift)        \
-  X(kMasterPan)             \
-  X(kModeSet)               \
-  X(kPatchName)             \
-  X(kReverbMacro)           \
-  X(kReverbCharacter)       \
-  X(kReverbPreLpf)          \
-  X(kReverbLevel)           \
-  X(kReverbTime)            \
-  X(kReverbDelayFeedback)   \
-  X(kReverbPredelay)        \
-  X(kChorusMacro)           \
-  X(kChorusPreLpf)          \
-  X(kChorusLevel)           \
-  X(kChorusFeedback)        \
-  X(kChorusDelay)           \
-  X(kChorusRate)            \
-  X(kChorusDepth)           \
-  X(kChorusSendToReverb)    \
-  X(kChorusSendToDelay)     \
-  X(kDelayMacro)            \
-  X(kDelayPreLpf)           \
-  X(kDelayTimeCenter)       \
-  X(kDelayTimeRatioLeft)    \
-  X(kDelayTimeRatioRight)   \
-  X(kDelayLevelCenter)      \
-  X(kDelayLevelLeft)        \
-  X(kDelayLevelRight)       \
-  X(kDelayLevel)            \
-  X(kDelayFeedback)         \
-  X(kDelaySendToReverb)     \
-  X(kEqLowFreq)             \
-  X(kEqLowGain)             \
-  X(kEqHighFreq)            \
-  X(kEqHighGain)            \
-  X(kEfxType)               \
-  X(kEfxParameter)          \
-  X(kEfxSendToReverb)       \
-  X(kEfxSendToChorus)       \
-  X(kEfxSendToDelay)        \
-  X(kEfxControlSource1)     \
-  X(kEfxControlDepth1)      \
-  X(kEfxControlSource2)     \
-  X(kEfxControlDepth2)      \
-  X(kEfxSendEqSwitch)       \
-  X(kPartToneNumber)        \
-  X(kPartRxChannel)         \
-  X(kPartMonoPoly)          \
-  X(kPartAssignMode)        \
-  X(kUseForRhythmPart)      \
-  X(kPartKeyShift)          \
-  X(kPartLevel)             \
-  X(kPartKeyRangeLow)       \
-  X(kPartKeyRangeHigh)      \
-  X(kPartScaleTuning)       \
-  X(kPartPanpot)            \
-  X(kPartChorusSend)        \
-  X(kPartReverbSend)        \
-  X(kPartPitchFineTune)     \
-  X(kPartDelaySend)         \
-  X(kPartToneModify)        \
-  X(kPartModDest)           \
-  X(kPartModPitch)          \
-  X(kPartModTvfCutoff)      \
-  X(kPartModLfo1Rate)       \
-  X(kPartModLfo1PitchDepth) \
-  X(kPartModLfo1TvfDepth)   \
-  X(kPartModLfo1TvaDepth)   \
-  X(kPartModAmplitude)      \
-  X(kPartBendDest)          \
-  X(kPartBendPitchControl)  \
-  X(kPartCafDest)           \
-  X(kPartCafPitch)          \
-  X(kPartCafTvfCutoff)      \
-  X(kPartCafAmplitude)      \
-  X(kPartCafLfo1Rate)       \
-  X(kPartCafLfo1PitchDepth) \
-  X(kPartCafLfo1TvfDepth)   \
-  X(kPartCafLfo1TvaDepth)   \
-  X(kPartPafDest)           \
-  X(kPartCc1Dest)           \
-  X(kPartCc2Dest)           \
-  X(kPartToneMapNumber)     \
-  X(kPartToneMap0Number)    \
-  X(kPartEqSwitch)          \
-  X(kPartEfxAssign)         \
-  X(kUserDrumSetName)       \
-  X(kUserDrumPlayNote)      \
-  X(kUserDrumLevel)         \
-  X(kUserDrumAssignGroup)   \
-  X(kUserDrumPanpot)        \
-  X(kUserDrumReverbSend)    \
-  X(kUserDrumChorusSend)    \
-  X(kUserDrumRxNoteOff)     \
-  X(kUserDrumRxNoteOn)      \
-  X(kUserDrumDelaySend)     \
-  X(kUserDrumSourceMap)     \
-  X(kUserDrumSourceProgram) \
-  X(kUserDrumSourceNote)    \
-  X(kDrumMapName)           \
-  X(kDrumPlayNote)          \
-  X(kDrumLevel)             \
-  X(kDrumAssignGroup)       \
-  X(kDrumPanpot)            \
-  X(kDrumReverbSend)        \
-  X(kDrumChorusSend)        \
-  X(kDrumRxNoteOff)         \
-  X(kDrumRxNoteOn)          \
-  X(kDrumDelaySend)         \
+#define SONARE_GS_PARAMS(X)  \
+  X(kUnknown)                \
+  X(kUndefined)              \
+  X(kSystemModeSet)          \
+  X(kChannelMsgRxPort)       \
+  X(kMasterTune)             \
+  X(kMasterVolume)           \
+  X(kMasterKeyShift)         \
+  X(kMasterPan)              \
+  X(kModeSet)                \
+  X(kPatchName)              \
+  X(kReverbMacro)            \
+  X(kReverbCharacter)        \
+  X(kReverbPreLpf)           \
+  X(kReverbLevel)            \
+  X(kReverbTime)             \
+  X(kReverbDelayFeedback)    \
+  X(kReverbPredelay)         \
+  X(kChorusMacro)            \
+  X(kChorusPreLpf)           \
+  X(kChorusLevel)            \
+  X(kChorusFeedback)         \
+  X(kChorusDelay)            \
+  X(kChorusRate)             \
+  X(kChorusDepth)            \
+  X(kChorusSendToReverb)     \
+  X(kChorusSendToDelay)      \
+  X(kDelayMacro)             \
+  X(kDelayPreLpf)            \
+  X(kDelayTimeCenter)        \
+  X(kDelayTimeRatioLeft)     \
+  X(kDelayTimeRatioRight)    \
+  X(kDelayLevelCenter)       \
+  X(kDelayLevelLeft)         \
+  X(kDelayLevelRight)        \
+  X(kDelayLevel)             \
+  X(kDelayFeedback)          \
+  X(kDelaySendToReverb)      \
+  X(kEqLowFreq)              \
+  X(kEqLowGain)              \
+  X(kEqHighFreq)             \
+  X(kEqHighGain)             \
+  X(kEfxType)                \
+  X(kEfxParameter)           \
+  X(kEfxSendToReverb)        \
+  X(kEfxSendToChorus)        \
+  X(kEfxSendToDelay)         \
+  X(kEfxControlSource1)      \
+  X(kEfxControlDepth1)       \
+  X(kEfxControlSource2)      \
+  X(kEfxControlDepth2)       \
+  X(kEfxSendEqSwitch)        \
+  X(kPartToneNumber)         \
+  X(kPartRxChannel)          \
+  X(kPartMonoPoly)           \
+  X(kPartAssignMode)         \
+  X(kUseForRhythmPart)       \
+  X(kPartKeyShift)           \
+  X(kPartLevel)              \
+  X(kPartKeyRangeLow)        \
+  X(kPartKeyRangeHigh)       \
+  X(kPartScaleTuning)        \
+  X(kPartPanpot)             \
+  X(kPartChorusSend)         \
+  X(kPartReverbSend)         \
+  X(kPartPitchFineTune)      \
+  X(kPartDelaySend)          \
+  X(kPartToneModify)         \
+  X(kPartModDest)            \
+  X(kPartCtrlPitch)          \
+  X(kPartCtrlTvfCutoff)      \
+  X(kPartCtrlAmplitude)      \
+  X(kPartCtrlLfo1Rate)       \
+  X(kPartCtrlLfo1PitchDepth) \
+  X(kPartCtrlLfo1TvfDepth)   \
+  X(kPartCtrlLfo1TvaDepth)   \
+  X(kPartBendDest)           \
+  X(kPartBendPitchControl)   \
+  X(kPartCafDest)            \
+  X(kPartPafDest)            \
+  X(kPartCc1Dest)            \
+  X(kPartCc2Dest)            \
+  X(kPartToneMapNumber)      \
+  X(kPartToneMap0Number)     \
+  X(kPartEqSwitch)           \
+  X(kPartEfxAssign)          \
+  X(kUserDrumSetName)        \
+  X(kUserDrumPlayNote)       \
+  X(kUserDrumLevel)          \
+  X(kUserDrumAssignGroup)    \
+  X(kUserDrumPanpot)         \
+  X(kUserDrumReverbSend)     \
+  X(kUserDrumChorusSend)     \
+  X(kUserDrumRxNoteOff)      \
+  X(kUserDrumRxNoteOn)       \
+  X(kUserDrumDelaySend)      \
+  X(kUserDrumSourceMap)      \
+  X(kUserDrumSourceProgram)  \
+  X(kUserDrumSourceNote)     \
+  X(kDrumMapName)            \
+  X(kDrumPlayNote)           \
+  X(kDrumLevel)              \
+  X(kDrumAssignGroup)        \
+  X(kDrumPanpot)             \
+  X(kDrumReverbSend)         \
+  X(kDrumChorusSend)         \
+  X(kDrumRxNoteOff)          \
+  X(kDrumRxNoteOn)           \
+  X(kDrumDelaySend)          \
   X(kOppositeGroupBlock)
 
 /// The parameter a decoded byte addresses. kUnknown means no table row claimed
@@ -424,29 +417,29 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
     // Modulation as a source.
     // Whole semitones above 40, the range the row already carries: the same
     // cents the bend spends, so the two add on one field.
-    {0x402000, 0x000F00, GsParam::kPartModPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
+    {0x402000, 0x000F00, GsParam::kPartCtrlPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
     // The wheel's own cutoff edit: the same 150-cents-a-step offset TONE MODIFY
     // writes at 40 1x 32, reached through the controller instead of statically,
     // so the two are one quantity and gs_cutoff_offset_cents converts both.
-    {0x402001, 0x000F00, GsParam::kPartModTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+    {0x402001, 0x000F00, GsParam::kPartCtrlTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
     // The wheel's own level: a percentage of the part's gain, which is the same
     // storage CC7 and CC11 spend and so needs nothing new to reach.
-    {0x402002, 0x000F00, GsParam::kPartModAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+    {0x402002, 0x000F00, GsParam::kPartCtrlAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
     // The wheel's own vibrato rate, on the same 25-cents-a-step LFO frequency
     // TONE MODIFY writes at 40 1x 30 — one rate reached two ways, not two.
-    {0x402003, 0x000F00, GsParam::kPartModLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+    {0x402003, 0x000F00, GsParam::kPartCtrlLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
-    {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x0A,
+    {0x402004, 0x000F00, GsParam::kPartCtrlLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x0A,
      nullptr},
     // The wheel's filter wobble, on the same LFO as the three above it. A depth
     // rather than an offset: it swings the cutoff, it does not move it.
-    {0x402005, 0x000F00, GsParam::kPartModLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+    {0x402005, 0x000F00, GsParam::kPartCtrlLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
     // The wheel's tremolo, on the LFO 40 2x 03 retunes and 40 2x 04 detunes with:
     // one oscillator with four destinations, so the rate is heard here too.
-    {0x402006, 0x000F00, GsParam::kPartModLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+    {0x402006, 0x000F00, GsParam::kPartCtrlLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
     {0x402007, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
      "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
@@ -466,20 +459,20 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
     // CAf as a source. The five destinations the modulation wheel reaches are
     // the five channel pressure reaches, on the same conversions and summing
     // into the same channel snapshot; the split here mirrors the block above.
-    {0x402020, 0x000F00, GsParam::kPartCafPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
-    {0x402021, 0x000F00, GsParam::kPartCafTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+    {0x402020, 0x000F00, GsParam::kPartCtrlPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
+    {0x402021, 0x000F00, GsParam::kPartCtrlTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
-    {0x402022, 0x000F00, GsParam::kPartCafAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+    {0x402022, 0x000F00, GsParam::kPartCtrlAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
-    {0x402023, 0x000F00, GsParam::kPartCafLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+    {0x402023, 0x000F00, GsParam::kPartCtrlLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
     // The one power-on default that differs from the wheel's: aftertouch carries
     // no vibrato until a file asks for it, where the wheel carries 0A of it.
-    {0x402024, 0x000F00, GsParam::kPartCafLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+    {0x402024, 0x000F00, GsParam::kPartCtrlLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
-    {0x402025, 0x000F00, GsParam::kPartCafLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+    {0x402025, 0x000F00, GsParam::kPartCtrlLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
-    {0x402026, 0x000F00, GsParam::kPartCafLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+    {0x402026, 0x000F00, GsParam::kPartCtrlLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
     {0x402027, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
      "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},

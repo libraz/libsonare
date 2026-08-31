@@ -296,40 +296,14 @@ class Sf2Player final : public MidiInstrument {
     // data entry CCs (6/38) route to whichever was selected last.
     ChannelParamState params;
     float bend_range_cents = 200.0f;
-    /// MODULATION LFO1 PITCH DEPTH (40 2x 04), the depth CC1 reaches at full.
-    float mod_depth_cents = gs_mod_depth_cents(kGsModDepthDefault);
-    /// MODULATION TVF CUTOFF CONTROL (40 2x 01), the cutoff offset in cents CC1
-    /// reaches at full. The power-on 40 is no offset, so this starts at zero.
-    /// MODULATION PITCH CONTROL (40 2x 00), the pitch offset in cents CC1
-    /// reaches at full. The power-on 40 is no offset, so this starts at zero.
-    float mod_pitch_cents = 0.0f;
-    float mod_cutoff_cents = 0.0f;
-    /// MODULATION LFO1 RATE CONTROL (40 2x 03) as its written byte. Held raw
-    /// where the line above is held converted, because the wheel enters this
-    /// one's exponent rather than scaling a full-scale amount.
-    uint8_t mod_lfo_rate = 0x40;
-    /// MODULATION LFO1 TVA DEPTH (40 2x 06), the tremolo depth CC1 reaches at
-    /// full. The power-on 00 is no tremolo, so this starts at zero.
-    float mod_tva_depth = 0.0f;
-    /// MODULATION AMPLITUDE CONTROL (40 2x 02), the fraction of the part's own
-    /// level CC1 adds at full. The power-on 40 is no change, so this is zero.
-    float mod_amp_fraction = 0.0f;
-    /// MODULATION LFO1 TVF DEPTH (40 2x 05), the filter swing CC1 reaches at
-    /// full, in cents. The power-on 00 is no swing, so this starts at zero.
-    float mod_tvf_lfo_cents = 0.0f;
-    /// Channel aftertouch, the second controller source with destinations
-    /// (40 2x 2x). The five below are its half of the block, held exactly as
-    /// their modulation siblings above are and converted by the same functions;
-    /// what differs is only the position they are scaled by, and that LFO1 PITCH
-    /// DEPTH powers on at 00 here where the wheel's powers on at 0A.
+    /// The controller-destination block (40 2x xx), one entry per source. What
+    /// each source is worth is its own value here scaled by where the source
+    /// presently sits; refresh_channel_mod sums them into the voice snapshot.
+    std::array<GsDestinationSet, kGsCtrlSourceCount> ctrl_dest = gs_default_destinations();
+    /// Channel aftertouch, the second source the block's positions come from.
+    /// The modulation wheel's is mod_wheel above; the other four sources have
+    /// no controller yet and stay at rest.
     uint8_t channel_pressure = 0;
-    float caf_pitch_cents = 0.0f;
-    float caf_cutoff_cents = 0.0f;
-    float caf_depth_cents = 0.0f;
-    uint8_t caf_lfo_rate = 0x40;
-    float caf_tva_depth = 0.0f;
-    float caf_amp_fraction = 0.0f;
-    float caf_tvf_lfo_cents = 0.0f;
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.

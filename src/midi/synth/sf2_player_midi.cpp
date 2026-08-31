@@ -205,10 +205,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       // MODIFY cutoff does, and on the part rather than on the controller: a
       // controller rises after the note-on as often as before it, and a
       // bypassed filter cannot open. Either source is enough on its own.
-      if (ch.mod_cutoff_cents != 0.0f || ch.caf_cutoff_cents != 0.0f ||
-          ch.mod_tvf_lfo_cents != 0.0f || ch.caf_tvf_lfo_cents != 0.0f) {
-        params.filter_bypass = false;
-      }
+      if (gs_part_has_filter_destination(ch.ctrl_dest)) params.filter_bypass = false;
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
@@ -377,10 +374,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // Same reason the SoundFont bank engages its filter here: the offset itself
   // arrives per sample from the controller, so what the note-on has to settle
   // is only whether there is a filter for it to reach.
-  if (ch.mod_cutoff_cents != 0.0f || ch.caf_cutoff_cents != 0.0f || ch.mod_tvf_lfo_cents != 0.0f ||
-      ch.caf_tvf_lfo_cents != 0.0f) {
-    part_mod.filter_edited = true;
-  }
+  if (gs_part_has_filter_destination(ch.ctrl_dest)) part_mod.filter_edited = true;
   voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod,
                organ_percussion, part_mod);
   // This host passes no glide_from_hz, so start() leaves the voice's glide at
