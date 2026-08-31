@@ -1,10 +1,12 @@
 {
   "id": "bass_fingered",
-  "label": "Fingered electric bass, sampled, close and dry",
+  "label": "Fingered electric bass, sampled, direct out with no amplifier",
   "program": 33,
   "takes": "sustained",
   "audition_title": "libsonare bass fingered vs the sampled reference",
-  "_notes": "Every fourth semitone across the compass this program is probed on, 28 to 52, and no further. Both ends were rendered before the grid was written and both speak: the peaks run 0.212, 0.222, 0.220 at the low, middle and high probe notes, and the share of energy on the played key's own series is 0.970 or better at all three. A note outside the compass is left out rather than transposed, because there the reference is stretching a sample and a model fitted against it would be fitted against the sampler.",
+  "_rig": "Measured, not assumed. The instrument's own amplifier stage is switched off in the state this capture loads, and what that removed is the whole of a rig: at the top of the compass the crest factor went from 9.57 to 19.63 dB, 1-3 kHz from -6.2 to -13.9 and 6-12 kHz from -57.2 to -44.7. A cabinet is a filter rather than a space, so none of that is visible to a dryness test and the answer has to be recorded rather than inferred. What is left is the pickup's own output, which is the boundary the model's voice ends at.",
+  "rig": "none",
+  "_notes": "Every fourth semitone across the compass this program is probed on, 28 to 52, and no further. A note outside the compass is left out rather than transposed, because there the reference is stretching a sample and a model fitted against it would be fitted against the sampler.",
   "notes": [
     28,
     32,
@@ -14,7 +16,7 @@
     48,
     52
   ],
-  "_velocities": "Five. On a plucked string velocity is the pluck itself rather than a volume control, so it moves the partial stack as much as the level: on this slot velocity 32 sits -17.8 dB under velocity 100 at the middle probe note. The softest row is kept because it is the most distinct timbre the instrument has, not because the level is interesting.",
+  "_velocities": "Five. On a plucked string velocity is the pluck itself rather than a volume control, so it moves the partial stack as much as the level. The softest row is kept because it is the most distinct timbre the instrument has, and here it costs nothing to keep: the reference's floor between notes is digital zero, so even the quietest row sits alone in the file.",
   "velocities": [
     32,
     56,
@@ -22,29 +24,33 @@
     104,
     127
   ],
-  "_dry": "Nothing to switch off, measured rather than assumed. Not one of the plugin's advertised parameters matches `reverb` with this rack loaded, and the render agrees: the note goes to the numerical floor within a fifth of a second of the key lifting, with no tail behind it. `dry` therefore has no section to act on and is left off rather than claiming an effect was disabled, which makes this a dry anchor.",
+  "_key_offset": "The instrument is mapped four octaves above where it sounds: its playable zone begins at key 71, which sounds a five-string bass's low B at 30.9 Hz, and tracks chromatically from there. So the grid's notes reach the plugin as keys 76 to 100, inside that zone at both ends. Confirmed by a harmonic comb against every octave offset at three keys - key 76 scores 0.847 at -48 against 0.323 at -36 and 0.001 at -12 - rather than by reading the strongest low partial, which at key 84 is the third harmonic and reports the note a fifth too high. A grid written in the key the instrument answers to would put every note label, every harmonic share and every register term four octaves from the pitch that was recorded.",
+  "_dry": "Nothing to switch off, measured rather than assumed. The plugin publishes 2049 parameters and every one of them is an unnamed slot, so there is no advertised effect section for `dry` to reach and no `--param` that could switch one off. What answers the question instead is `rig`, above, which is the one this family can be wrong about.",
   "dry": false,
   "params": [],
-  "_stimulus": "A plucked string is stopped by the player rather than by running out, so the gate is long and the tail is short - the opposite of a voice whose interest is what follows the release. The free fall happens while the key is still down, -16 dBFS a quarter of a second in and -42 at six seconds, which is what the long gate is for: a decay measured over a gate shorter than the fall is a slope fitted to its own first moments. The key lifting then damps it to the numerical floor within a fifth of a second, so half a second of tail records the whole of the stop.",
+  "_stimulus": "A plucked string is stopped by the player rather than by running out, so the gate is long: the free fall happens while the key is still down, at 3.0 dB/s from -26.6 dBFS a sixth of a second in to -44.4 at six seconds, which is a slope worth fitting. The tail is three seconds rather than the half-second a damped instrument needs, because this one is not damped by its own release - see `dimensions_na`.",
   "gate_ms": 6000,
-  "tail": "500ms",
-  "_calibration": "From `capture.py calibrate` on this rack: the reference renders identically in real time and faster than it, the same note twice is bit-identical - so there is no round robin to put a floor under the loss - and the settle minimum is a quarter of a second. `realtime` is kept on anyway, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "tail": "3s",
+  "_warmup": "Off, which is unusual and measured. The discarded strike a warmup renders is meant to land beside the recorded note; this instrument rings past fourteen seconds, so it lands underneath it - the preroll reads -41.2 dB against a -26.8 dB onset with the warmup on and digital zero with it off, and on the softest row the contamination is seven decibels under the note it would be measured from. What the warmup was guarding against is 1.9 dB of onset level, and that much is indistinguishable from the instrument's own three-way round robin, which one render per process pins to the same choice either way.",
+  "warmup": false,
+  "_calibration": "From `capture.py calibrate` on this state: real time is optional and the measured settle minimum is a quarter of a second, which the settle here is sixteen times over - the minimum was measured with the library's samples already in the page cache, and a note the grid reaches first would not be. `realtime` is kept on regardless, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement. The instrument is not deterministic: it chooses between three samples per note, so a repeated render is usually bit-identical and occasionally is not - one render in eleven here, and the one that differed was the same note two decibels louder with more third harmonic, 1.36 dB away by level-independent band shape. That difference is a floor under every level and timbre term, and it is the instrument's own rather than the harness's.",
   "realtime": true,
-  "settle_ms": 2000,
+  "settle_ms": 4000,
   "preroll_ms": 100,
   "sample_rate": 48000,
-  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. The rack holds one slot per GM program, so there is no second of this instrument in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference buys is a measured target for `autofit` and `--diagnose` where the voice could previously only be fitted by ear.",
+  "_timbres": "One. The ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage; what it buys is a target its predecessor could not be - a reference measured at the instrument's own boundary, which is where the voice ends. `source_for` takes every timbre of a capture from one plugin, but the plugin here is a sampler hosting third-party content, so a second library under the same host would be a legal second timbre. There is only one electric bass installed under it.",
   "timbres": [
     {
-      "id": "gm034",
-      "label": "GM bass fingered, rack slot 2",
-      "slot_channel": 2
+      "id": "di",
+      "label": "Sampled electric bass, direct out",
+      "key_offset": 48
     }
   ],
-  "_dimensions": "The slot is a finger-plucked electric bass source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",
-  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so anything not gated here has to be argued here.",
+  "_dimensions": "`decay` and its two stages are what a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension, so anything not gated here has to be argued here.",
   "dimensions_na": {
-    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
+    "stereo": "the reference renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
+    "damper": "there is nothing to measure. The release is slower than the note it releases - 1.7 dB/s after note-off against 3.0 dB/s while the key is held - so the fall this dimension reads is the string continuing rather than a damper arriving, and a model fitted to it would be fitted to acquire a release that lengthens its notes. The instrument's own release control is what sets it, and a capture that moved it would be measuring a setting rather than the instrument"
   },
   "dimensions": [
     "stretch",
@@ -53,13 +59,11 @@
     "doubling",
     "body",
     "attack",
-    "damper",
     "balance",
     "centroid_pct",
     "tnr",
     "vel_range",
     "register"
   ],
-  "_identity": "Which product this is captured from lives in the untracked sibling `bass_fingered.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/bass_fingered.json` and need nothing.",
-  "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 2, and it was rendered at its own three probe notes before anything else was written, reading 0.970 or better of its energy on the series of the key pressed. The same renders are what say the slot rings at all: four slots of these racks hold a sample that is at the numerical floor half a second into a six-second key, and a grid written for one of those would take every measurement on silence."
+  "_identity": "Which product this is captured from lives in the untracked sibling `bass_fingered.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/bass_fingered.json` and need nothing."
 }
