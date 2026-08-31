@@ -101,6 +101,24 @@ RIG_NONE = "none"
 RIG_BAKED = "baked"
 RIG_VALUES = (RIG_UNCLASSIFIED, RIG_NONE, RIG_BAKED)
 
+
+def model_rig(rig: str) -> bool:
+    """Whether the model side should render with the bank's rig, given a capture's answer.
+
+    The two sides of a comparison have to stop at the same place. A reference
+    captured at the instrument's own boundary (`none`) is compared against the
+    model's direct signal, so the bank's amplifier comes off; one recorded
+    through an amplifier (`baked`) is compared against the model plus its rig,
+    which is the acceptance measurement and the only one that says the
+    separation closed end to end.
+
+    An unanswered capture gets the rig, because that is the product sound and a
+    comparison is what an unclassified reference is still allowed to do. What it
+    is not allowed to do is drive a fit, which `check_rig` is for.
+    """
+    return rig != RIG_NONE
+
+
 #: The GM programs whose reference may have an amplifier, a cabinet or a rotary
 #: speaker inside it. An unanswered capture is a fit hazard here and nowhere else;
 #: a wind or a piano is not waiting on anyone. A building is deliberately absent —

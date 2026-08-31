@@ -954,6 +954,34 @@ def test_the_compare_table_has_a_dimension_that_moves_when_a_gain_does():
 # the model is rendered over the window its reference was captured in
 
 
+def test_the_model_grid_stops_where_the_capture_says_its_reference_did(tmp_path, monkeypatch):
+    """A capture measured at the instrument's boundary renders the model there too.
+
+    The bank binds an amplifier after an electric guitar's voice, so a model
+    render carries one by default. Compared against a direct reference that is
+    the amplifier measured as if it were the string — and nothing downstream can
+    see it, because both sides are audio and both look plausible.
+    """
+    seen: list[bool] = []
+
+    def fake_render(smf, seconds, sr, *, rig=True):
+        seen.append(rig)
+        return np.zeros((int(seconds * sr), 1), dtype=np.float32)
+
+    monkeypatch.setattr(profile_module, "render_model", fake_render)
+    monkeypatch.setattr(profile_module, "write_wav", lambda *a, **k: None)
+
+    cfg = {"id": "g", "notes": [52], "velocities": [100], "sample_rate": 48000,
+           "gate_ms": 50, "preroll_ms": 100, "tail": "1s", "program": 30,
+           "timbres": [{"id": "t"}]}
+    profile_module.render_grid({**cfg, "rig": "none"}, tmp_path / "di", timbre="t", program=30)
+    profile_module.render_grid({**cfg, "rig": "baked"}, tmp_path / "amp", timbre="t", program=30)
+    # And a capture that never answered gets the product sound, since comparing
+    # is what an unclassified reference is still allowed to do.
+    profile_module.render_grid(cfg, tmp_path / "u", timbre="t", program=30)
+    assert seen == [False, True, True]
+
+
 def test_the_model_grid_is_rendered_over_each_note_s_own_tail(tmp_path, monkeypatch):
     """A kit records eight seconds for a ride and two for a kick; so must the model.
 
@@ -966,7 +994,7 @@ def test_the_model_grid_is_rendered_over_each_note_s_own_tail(tmp_path, monkeypa
     """
     asked: dict[int, float] = {}
 
-    def fake_render(smf, seconds, sr):
+    def fake_render(smf, seconds, sr, *, rig=True):
         asked[fake_render.note] = seconds
         return np.zeros((int(seconds * sr), 1), dtype=np.float32)
 

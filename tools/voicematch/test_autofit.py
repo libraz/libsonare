@@ -1522,6 +1522,24 @@ def test_a_corpus_carries_what_its_capture_answered_about_a_rig(tmp_path):
     assert load_corpus(_write_corpus(tmp_path / "typo", rig="DI")).rig == RIG_UNCLASSIFIED
 
 
+def test_the_model_stops_on_the_same_side_of_the_boundary_the_reference_did():
+    """The rig record drives the model render, not only the fit refusal.
+
+    A direct reference is compared against the model's direct signal; one
+    recorded through an amplifier against the model plus its rig. Getting this
+    backwards measures the amplifier as if it were the string, and the model
+    side is exactly where nothing would complain.
+    """
+    from capture import model_rig
+
+    assert model_rig(RIG_NONE) is False
+    assert model_rig(RIG_BAKED) is True
+    # Unanswered gets the rig, which is the product sound. Comparing is what an
+    # unclassified reference is still allowed to do; fitting is what it is not,
+    # and that refusal is `check_rig`'s rather than this function's.
+    assert model_rig(RIG_UNCLASSIFIED) is True
+
+
 def test_a_fit_against_a_rigged_reference_is_refused(tmp_path):
     """A rig has no inverse, so unlike a room it cannot be measured out of the
     reference; the fit would reproduce an amplifier with the instrument's own

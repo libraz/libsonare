@@ -233,6 +233,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo import REPO_ROOT  # noqa: E402
 from build_lib import build_shared, configure_build, dylib_path  # noqa: E402
 from catalogue import Catalogue, drum_patch_key, dump_catalogue  # noqa: E402
+from capture import model_rig  # noqa: E402
 from corpus import (  # noqa: E402
     PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
     Corpus, check_rig, corpus_oracle, corpus_pattern, describe, load_corpus,
@@ -1204,7 +1205,11 @@ def render_metrics_main(argv: list[str]) -> int:
         pattern.notes, program=a.program, bank=a.bank, channel=pattern.channel,
         end_pad=pattern.tail
     )
-    audio = np.asarray(render_model(smf_bytes, total, SR), dtype=np.float32)
+    # The model stops where the reference did. With no capture to ask, that is
+    # the instrument's own boundary: a fit moves the voice, and the amplifier the
+    # bank binds after it is not the voice's to answer for.
+    rig = model_rig(corpus.rig) if corpus is not None else False
+    audio = np.asarray(render_model(smf_bytes, total, SR, rig=rig), dtype=np.float32)
     if a.room_ir:
         # Applied here rather than in the parent so the per-note metrics and the
         # multi-scale term both see the same roomed signal.

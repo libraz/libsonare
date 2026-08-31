@@ -46,8 +46,22 @@ def check_gm_fallback(manifest) -> None:
             )
 
 
-def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000) -> np.ndarray:
-    """Render SMF bytes to a (frames, 2) float32 array via the GM fallback bank."""
+def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000, *,
+                 rig: bool = True) -> np.ndarray:
+    """Render SMF bytes to a (frames, 2) float32 array via the GM fallback bank.
+
+    `rig` selects which side of the instrument's boundary the render stops at.
+    The default is the product sound — the bank binds an amplifier after an
+    electric guitar's voice, and a listener hears it — which is what an audition
+    should play and what a consumer gets from the same file.
+
+    A measurement passes `rig=False` when the reference it will be compared with
+    was captured at the instrument's own boundary. Comparing a rigged model
+    against a direct reference measures the amplifier as if it were the string,
+    and a fit run that way reproduces the amplifier with the instrument's own
+    parameters. The capture's `rig` field is the one place that answer lives, so
+    the caller reads it from there rather than deciding per call site.
+    """
     ensure_lib_path()
     import libsonare  # deferred so SONARE_LIB_PATH is set before the dylib loads
 
@@ -55,6 +69,7 @@ def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000) -> np.
     try:
         project.import_smf(smf_bytes)
         audio = project.bounce_with_sf2_instrument(
+            libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig),
             total_frames=int(round(total_seconds * sr)),
             sample_rate=sr,
         )

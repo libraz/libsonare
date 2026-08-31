@@ -73,8 +73,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from capture import (  # noqa: E402
-    DEFAULT_CONFIG, PERCUSSION_CHANNEL, load_config, note_groups, note_map, out_root,
-    tail_seconds,
+    DEFAULT_CONFIG, PERCUSSION_CHANNEL, RIG_UNCLASSIFIED, load_config, model_rig, note_groups,
+    note_map, out_root, tail_seconds,
 )
 from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
@@ -843,6 +843,10 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> in
 
     out_dir = corpus_dir / timbre
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Which side of the instrument's boundary the model stops at, from the
+    # capture's own answer: a direct reference is compared against the direct
+    # signal, one recorded through an amplifier against the model plus its rig.
+    rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
     rows = []
     total = len(notes) * len(velocities)
     for i, (note, vel) in enumerate(
@@ -851,7 +855,7 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> in
         tail_s = tail_seconds(cfg, note)
         smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
                         channel=channel, end_pad=tail_s)
-        audio = render_model(smf, preroll_s + gate_s + tail_s, sr)
+        audio = render_model(smf, preroll_s + gate_s + tail_s, sr, rig=rig)
         rel = Path(timbre) / f"n{note:03d}_v{vel:03d}.wav"
         write_wav(corpus_dir / rel, np.asarray(audio), sr)
         peak = float(np.abs(audio).max())
@@ -1137,6 +1141,10 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
           f"| {'h8-16 model':>11} {'h8-16 ref':>9}")
     print("-" * 82)
 
+    # Which side of the instrument's boundary the model stops at, from the
+    # capture's own answer: a direct reference is compared against the direct
+    # signal, one recorded through an amplifier against the model plus its rig.
+    rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
     swing: dict[str, list[float]] = {}
     for note in notes:
         got = {}
@@ -1146,7 +1154,8 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
                 break
             smf = write_smf([Note(note, v, preroll_s, gate_s)], program=program,
                             end_pad=tail_s)
-            audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"])
+            audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"],
+                                 rig=rig)
             m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
             if not m:
                 break
@@ -1404,6 +1413,10 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     # carry — see `loss.kit_report`. The reference row is stored under the note
     # it was CAPTURED on, since the families are declared in the capture's own
     # numbering, while the model row is whatever the map made it play.
+    # Which side of the instrument's boundary the model stops at, from the
+    # capture's own answer: a direct reference is compared against the direct
+    # signal, one recorded through an amplifier against the model plus its rig.
+    rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
     kit_rows: list[tuple[dict, dict]] = []
     for note, vel in pairs:
         played = mapping.get(note, note)
@@ -1413,7 +1426,7 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         tail_s = tail_seconds(cfg, note)
         smf = write_smf([Note(played, vel, preroll_s, gate_s)], program=program,
                         channel=PERCUSSION_CHANNEL - 1, end_pad=tail_s)
-        audio = render_model(smf, preroll_s + gate_s + tail_s, sr)
+        audio = render_model(smf, preroll_s + gate_s + tail_s, sr, rig=rig)
         m = measure_hit(audio, sr, played, vel, preroll_s=preroll_s, gate_s=gate_s,
                         max_band_hz=band_edge)
         r = ref[(note, vel)]
@@ -2003,6 +2016,9 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
     # tell one from an instrument's own long release, and guessing the wrong way
     # invents a building and convolves it onto every figure below.
     wet = not cfg.get("dry", True)
+    # And whether it carries a rig, which is a different question a dryness test
+    # cannot answer: a cabinet is a filter rather than a space.
+    rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
     # One IR per reference for the whole run: the room is a property of the
     # session that recorded it, and the first take able to measure one hands it
     # to every take that cannot.
@@ -2029,7 +2045,7 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
             clipped = usable_tail([to_mono(np.asarray(a, dtype=np.float64))
                                    for a in refs.values()], sr, nominal)
             windows["tail"] = clipped
-        dry_model = render_model(smf, take.duration(), sr)
+        dry_model = render_model(smf, take.duration(), sr, rig=rig)
         # The model renders dry — `write_smf` writes CC91 0 — so on a capture
         # whose reference carries its building, every tail figure below would be
         # a dry signal read against a wet one, and each of them would be outside
@@ -2160,12 +2176,16 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     # the register profile. Not the strike peak `vel_range` reads -- that is the
     # hammer -- and not the gate-wide RMS, which counts a long note as a loud
     # one and would report this voice's oversustained treble as a level.
+    # Which side of the instrument's boundary the model stops at, from the
+    # capture's own answer: a direct reference is compared against the direct
+    # signal, one recorded through an amplifier against the model plus its rig.
+    rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
     levels: dict[str, dict[int, dict[int, float]]] = {}
     for note, vel in pairs:
         tail_s = tail_seconds(cfg, note)
         smf = write_smf([Note(note, vel, preroll_s, gate_s)],
                         program=program, end_pad=tail_s)
-        audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"])
+        audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"], rig=rig)
         m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
         r = ref[(note, vel)]
         if not m:
