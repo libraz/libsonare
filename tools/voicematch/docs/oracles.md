@@ -94,11 +94,16 @@ The binary is found via `AUBOUNCE`, then `PATH`, then a sibling `../aubounce` ch
 
 A sampler that hosts third-party libraries typically keeps everything in one blob of its own. Where that is the case the route is a **saved class-info dictionary** — an `.aupreset` is exactly that — passed through the capture definition's `state` field rather than `preset`. `AuSource` digests it for the cache key on the same terms as a preset, since one edited in place is a different sound at the same path.
 
-Getting that file needs a host, and the host that can save the plugin state is not always the one that can load the instrument:
+Getting that file needs a host, and the host that can save the plugin state is not always the one that can load the instrument. A DAW that can save a **`.vstpreset`** is enough, because its `Comp` chunk is the component state the plugin itself produced and that is byte-compatible with what the audio-unit build keeps under its own key — both are one `getState()` output under different wrappers. `vstpreset.py` does the substitution:
 
-- A VST-only DAW can save the plugin's **`.vstpreset`**, whose `Comp` chunk is the component state the plugin itself produced.
-- That chunk is usually byte-compatible with what the audio-unit build keeps in its own state key, because both are the plugin's `getState()` output under different wrappers. **Converting is then a matter of substituting one value in a plist** — take an `.aupreset` saved from an empty instance for its skeleton, replace the state blob, keep the other keys as the plugin wrote them.
-- **Verify the conversion took rather than assuming it.** Load the converted file and read the state size back: a plugin that ingested it re-serialises to a size that differs from both the default and the input, while one that ignored it comes back at exactly the default. An empty-rack round trip settles the format question without the content question confusing it.
+```sh
+rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/vstpreset.py \
+    <rack>.vstpreset --plugin <type:subtype:manufacturer> --out <rack>.aupreset --settle-ms 30000
+```
+
+- **The conversion is verified rather than assumed**, which is why this is a tool and not a paragraph. It loads the result and reads the state size back: a plugin that ingested the blob re-serialises to a size unlike both its default and the input, while one that ignored it comes back at exactly the default, and the run fails saying so. A sampler hosting a third-party guitar library measured 4 195 bytes with an empty rack and 4 013 818 with a 4 013 825-byte `Comp` chunk in it, having reported that same default after being handed the `.vstpreset` directly.
+- **`--key` names where the state goes**, defaulting to `vstdata`; `aubounce info <plugin> --values` says which key a given plugin publishes. Only that one key is written — an empty second key loads as an empty rack in a plugin that reads it, which is indistinguishable from a preset that took.
+- **`--strings` is not evidence either way.** A plugin's own default state carries instrument names too, so a `.vstpreset` that was ignored still reports plausible ones, and they change between instances for reasons of the plugin's own. The state size is the only reading that separates the two.
 
 **Confirm the slot map after any of this, by rendering.** Two timbres that come back byte-identical mean the channel is not selecting anything, and that failure has no other symptom: every render is the right length, at a normal level, with an instrument audible in it.
 
