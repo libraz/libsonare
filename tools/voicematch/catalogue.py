@@ -108,6 +108,10 @@ class Catalogue:
     #: Patch key to engine name. Empty when the library predates the `#mode`
     #: line, which reads as "not reported" rather than as "subtractive".
     modes: dict[str, str] = field(default_factory=dict)
+    #: GM program to the amp preset the bank binds after its voice. Only the
+    #: programs that bind one appear; an absent program is heard as its voice
+    #: alone, which is nearly all of them.
+    rigs: dict[int, str] = field(default_factory=dict)
 
     def patch_for(self, program: int, bank: int = 0) -> str | None:
         """The patch voicing a (program, bank), falling back to the capital tone."""
@@ -174,17 +178,20 @@ def dump_catalogue(
         programs: dict[tuple[int, int], str] = {}
         bounds: dict[str, tuple[float, float]] = {}
         modes: dict[str, str] = {}
+        rigs: dict[int, str] = {}
         for line in dump.read_text().splitlines():
             parts = line.split("\t")
             if parts[0] == "#program" and len(parts) == 4:
                 programs[(int(parts[1]), int(parts[2]))] = parts[3]
             elif parts[0] == "#mode" and len(parts) == 3:
                 modes[parts[1]] = parts[2]
+            elif parts[0] == "#rig" and len(parts) == 3:
+                rigs[int(parts[1])] = parts[2]
             elif parts[0] == "#bound" and len(parts) == 4:
                 bounds[parts[1]] = (float(parts[2]), float(parts[3]))
             elif len(parts) == 2:
                 defaults[parts[0]] = float(parts[1])
-    return Catalogue(defaults, programs, bounds, modes)
+    return Catalogue(defaults, programs, bounds, modes, rigs)
 
 
 # A drum note's patch is keyed by note number rather than by a name, because a

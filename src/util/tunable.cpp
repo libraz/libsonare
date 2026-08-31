@@ -97,12 +97,14 @@ const std::unordered_map<std::string, float>& overrides() {
 /// constants appear whether the render used that engine or not. Narrow by the
 /// declaring file's stem to get one engine's, as `autofit.py` does.
 ///
-/// Three header line kinds precede the knobs: `#program<TAB>NNN<TAB>key` maps a
+/// Four header line kinds precede the knobs: `#program<TAB>NNN<TAB>key` maps a
 /// GM program to its patch, `#mode<TAB>key<TAB>engine` names the engine voicing
-/// that patch, and `#bound<TAB>path<TAB>lo<TAB>hi` gives a field's admissible
-/// range. A bound is keyed by path alone, being a property of the field rather
-/// than the patch; a mode is keyed by patch, being a property of the patch
-/// rather than of any one program it answers.
+/// that patch, `#rig<TAB>NNN<TAB>preset` names the amplifier a program is heard
+/// through by default, and `#bound<TAB>path<TAB>lo<TAB>hi` gives a field's
+/// admissible range. A bound is keyed by path alone, being a property of the
+/// field rather than the patch; a mode is keyed by patch, being a property of
+/// the patch rather than of any one program it answers; a rig is keyed by
+/// program, being what the bank binds to the number a file selects.
 class Recorder {
  public:
   ~Recorder() {
@@ -122,6 +124,11 @@ class Recorder {
     // programs and the engine belongs to the patch.
     for (const auto& row : modes_) {
       out << "#mode\t" << row.first << '\t' << row.second << '\n';
+    }
+    // `#rig <program> <preset>`: keyed by program, since the binding is what the
+    // bank says a program is heard through and one preset serves several.
+    for (const auto& row : rigs_) {
+      out << "#rig\t" << row.first << '\t' << row.second << '\n';
     }
     std::vector<std::pair<std::string, std::pair<float, float>>> bounds(bounds_.begin(),
                                                                         bounds_.end());
@@ -143,6 +150,8 @@ class Recorder {
 
   void note_patch_mode(const char* key, const char* mode) { modes_[key] = mode; }
 
+  void note_rig(int program, const char* preset) { rigs_[program] = preset; }
+
   void note_bound(const std::string& path, float lo, float hi) {
     bounds_.emplace(path, std::make_pair(lo, hi));
   }
@@ -157,6 +166,7 @@ class Recorder {
   std::unordered_map<std::string, std::pair<float, float>> bounds_;
   std::map<std::pair<int, int>, std::string> programs_;
   std::map<std::string, std::string> modes_;
+  std::map<int, std::string> rigs_;
 };
 
 /// True when a dump was requested; checked once so the recording path costs
@@ -210,6 +220,12 @@ void note_patch_mode(const char* key, const char* mode) {
   }
 }
 
+void note_rig(int program, const char* preset) {
+  if (recording() && preset != nullptr && *preset != '\0') {
+    Recorder::instance().note_rig(program, preset);
+  }
+}
+
 void note_bound(const char* path, float lo, float hi) {
   if (recording() && path != nullptr) Recorder::instance().note_bound(std::string(path), lo, hi);
 }
@@ -231,6 +247,8 @@ float tunable_keyed(const char*, float default_value) { return default_value; }
 void note_program_key(int, int, const char*) {}
 
 void note_patch_mode(const char*, const char*) {}
+
+void note_rig(int, const char*) {}
 
 void note_bound(const char*, float, float) {}
 

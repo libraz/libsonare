@@ -67,6 +67,17 @@ void note_program_key(int program, int bank, const char* key);
 /// unless a dump was requested.
 void note_patch_mode(const char* key, const char* mode);
 
+/// Record that GM melodic program @p program is heard through the default rig
+/// named @p preset, for the `SONARE_TUNING_DUMP` catalogue. A program with no
+/// rig is not recorded, so what appears is exactly the bound set.
+///
+/// The rig is bank data on the same terms as a patch field (docs/voicing.md), so
+/// it has to be readable from the library rather than parsed out of a table.
+/// Its two numeric controls are ordinary tunables and appear as keys; only the
+/// preset name needs a line of its own, being the one part of a binding that is
+/// not a float. No-op unless a dump was requested.
+void note_rig(int program, const char* preset);
+
 /// Record the admissible range of the patch field addressed as @p path (the
 /// key without its patch prefix, e.g. `bowed_string.bow_force`), for the
 /// `SONARE_TUNING_DUMP` catalogue.

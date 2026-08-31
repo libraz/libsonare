@@ -23,7 +23,8 @@ exactly one:
   shared  a group of calibration constants: an engine's own (`piano_voice`,
           `brass_voice`), the GS effect scales (`gs_effects`), and the two
           fallback tables that weight every program (`gm_fallback_map`, whose
-          `kSends*` are the CC91 weighting, and `gm_fallback_families`)
+          `kSends*` are the CC91 weighting and whose `rig.NNN` name the
+          amplifier a program is heard through, and `gm_fallback_families`)
 
 An engine's constants are a unit rather than being folded into the voices that
 use them, and that is a limitation stated rather than hidden: the dump does not
@@ -84,7 +85,7 @@ def unit_kind(prefix: str, patches: set[str]) -> str:
     return "shared"
 
 
-def fingerprint(values: dict[str, float]) -> str:
+def fingerprint(values: dict[str, float | str]) -> str:
     """A unit's identity: its keys and values, order-independent.
 
     `repr` rather than a format string, because it round-trips a float exactly
@@ -95,7 +96,7 @@ def fingerprint(values: dict[str, float]) -> str:
     return hashlib.sha256(body.encode()).hexdigest()
 
 
-def read_units(library: Path) -> tuple[dict[str, dict[str, float]], set[str]]:
+def read_units(library: Path) -> tuple[dict[str, dict[str, float | str]], set[str]]:
     """Every knob the library reports, grouped into units, plus its patch names."""
     from catalogue import dump_catalogue
 
@@ -107,12 +108,18 @@ def read_units(library: Path) -> tuple[dict[str, dict[str, float]], set[str]]:
             f"The registry is read from the library's own knob dump, which only a "
             f"-DBUILD_TUNING=ON build writes."
         ) from exc
-    units: dict[str, dict[str, float]] = {}
+    units: dict[str, dict[str, float | str]] = {}
     for key, value in catalogue.defaults.items():
         prefix, _, rest = key.partition(".")
         if not rest:
             continue
         units.setdefault(prefix, {})[rest] = value
+    # The amplifier a program is heard through is bank data on the same terms as
+    # a patch field, and it is the one part of a binding that is not a float. It
+    # is folded into the table's own unit rather than left out of every
+    # fingerprint, or swapping a program's rig would move no version at all.
+    for program, preset in catalogue.rigs.items():
+        units.setdefault("gm_fallback_map", {})[f"rig.{program:03d}"] = preset
     return units, set(catalogue.programs.values())
 
 
@@ -136,7 +143,7 @@ DOC = (
 )
 
 
-def rebuild(registry: dict, units: dict[str, dict[str, float]], patches: set[str],
+def rebuild(registry: dict, units: dict[str, dict[str, float | str]], patches: set[str],
             note: str, when: str) -> tuple[dict, list[str], list[str]]:
     """The registry as it should be, plus the units that changed and vanished."""
     held = registry["units"]
