@@ -4542,6 +4542,7 @@
           "canonical": 13,
           "gated": 0,
           "excused": [
+            "damper",
             "stereo"
           ],
           "gaps": [
@@ -4551,7 +4552,6 @@
             "doubling",
             "body",
             "attack",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
