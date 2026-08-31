@@ -4,6 +4,8 @@
   "program": 18,
   "takes": "sustained",
   "audition_title": "libsonare rock organ vs the sampled reference",
+  "_rig": "No rotor, which is the one this slot was most likely to have: the two channels sit 12.8 dB apart and their 1.6 Hz, 2.6 dB modulation is in phase (correlation +0.51), where a rotating horn would drive it negative. The cabinet test cannot be run for the same reason as the other two organs - a tonewheel generator produces nothing above its top drawbar, so a speaker after it has no band to shape, and that leaves an overdrive stage unmeasurable here as well. So there is no evidence of a rig here, which is not evidence of none: a single-sided measurement can show a rig present and cannot show one absent, and this rack publishes no amplifier stage to switch off, so no A/B is available from it. The answer stays unclassified rather than becoming a `none` nothing earned. `profile.py rig --against drawbar_organ,percussive_organ` is the measurement.",
+  "rig": "unclassified",
   "_notes": "Every sixth semitone across the compass this program is probed on, 36 to 84, which is the step the other organ captures here use: a keyboard voice's compass is the point of it, and a wide one asks for reach rather than resolution. Both ends were rendered before the grid was written and both speak, the peaks running 0.130, 0.130, 0.337 at the low, middle and high probe notes.",
   "notes": [
     36,

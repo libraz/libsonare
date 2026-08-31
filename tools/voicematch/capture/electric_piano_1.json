@@ -4,6 +4,8 @@
   "program": 4,
   "takes": "sustained",
   "audition_title": "libsonare electric piano 1 vs the sampled reference",
+  "_rig": "No shared filter in this rack. This slot is the darkest of it - 27.6 dB per octave from a knee at 2 kHz - but the sibling it resembles above 2 kHz is the marimba (11.9 dB RMS), a wooden bar with no amplifier anywhere near it, while the two electric siblings sit 26.7 and 29.0 away. A cabinet after several instruments makes them agree with each other; nothing here does. So there is no evidence of a rig here, which is not evidence of none: a single-sided measurement can show a rig present and cannot show one absent, and this rack publishes no amplifier stage to switch off, so no A/B is available from it. The answer stays unclassified rather than becoming a `none` nothing earned. `profile.py rig --against electric_piano_2,clavi,vibraphone,marimba` is the measurement.",
+  "rig": "unclassified",
   "_notes": "Every sixth semitone from 36 to 84, the compass a keyboard voice is probed on here, because the compass is the point of a keyboard and a physical model diverges most at the ends of it. Both ends were rendered before the grid was written and both speak, the peaks running 0.158, 0.158, 0.154 at 36, 60 and 84.",
   "notes": [
     36,

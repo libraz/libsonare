@@ -4,6 +4,8 @@
   "program": 5,
   "takes": "sustained",
   "audition_title": "libsonare electric piano 2 vs the sampled reference",
+  "_rig": "No shared filter in this rack: above 2 kHz this slot sits 5.2 dB RMS from the clavinet and 6.3 from the dulcimer, in among the unamplified siblings rather than apart from them, and falls at 15.2 dB per octave. Its 6 dB of 1.6 Hz amplitude modulation is in phase across two channels 20 dB apart, so it is a tremolo inside the instrument rather than a rotor, which turns away from one mic as it faces the other. So there is no evidence of a rig here, which is not evidence of none: a single-sided measurement can show a rig present and cannot show one absent, and this rack publishes no amplifier stage to switch off, so no A/B is available from it. The answer stays unclassified rather than becoming a `none` nothing earned. `profile.py rig --against clavi,vibraphone,dulcimer` is the measurement.",
+  "rig": "unclassified",
   "_notes": "Every sixth semitone from 36 to 84, the compass a keyboard voice is probed on here, because the compass is the point of a keyboard and a physical model diverges most at the ends of it. Both ends were rendered before the grid was written and both speak, the peaks running 0.187, 0.187, 0.162 at 36, 60 and 84.",
   "notes": [
     36,
