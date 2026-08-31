@@ -124,6 +124,15 @@ enum class Setup : uint8_t {
   /// oscillator nothing was riding, which is inaudible by construction rather
   /// than unimplemented. The wheel's power-on 0A gives it something to carry.
   kAftertouchUp,
+  /// The melodic part's two assignable sources moved, by sending the two
+  /// controllers they power on pointing at. CC1 is raised beside them for the
+  /// reason it is raised for aftertouch: LFO1 is shared and needs something
+  /// riding it before a RATE destination can be heard.
+  kAssignableUp,
+  /// An assignable source pointed at a destination and driven by a controller
+  /// that is NOT one of the power-on two, which is what a CONTROLLER NUMBER
+  /// write has to change: with the defaults in place the source never moves.
+  kAssignableRouted,
   /// The rhythm part's SECOND note put in a group, where an assign group only
   /// says something once two notes are in one.
   kDrumGroupPeer,
@@ -155,6 +164,10 @@ const char* setup_name(Setup setup) {
       return "mod-wheel-up";
     case Setup::kAftertouchUp:
       return "aftertouch-up";
+    case Setup::kAssignableUp:
+      return "assignable-up";
+    case Setup::kAssignableRouted:
+      return "assignable-routed";
     case Setup::kDrumGroupPeer:
       return "drum-group-peer";
     case Setup::kUserDrumSet:
@@ -197,9 +210,16 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
       // The same peer the drum setup's group row needs, written into the set
       // rather than into the map so the set's own storage is what is probed.
       return {dt1(0x210300u | kProbeDrumPeerNote, {0x7F})};
+    case Setup::kAssignableRouted:
+      // Both assignable sources pointed at AMPLITUDE CONTROL at -100 %, so a
+      // source that moves takes the part to silence and one that does not
+      // leaves it alone. The controller that moves is sent below.
+      return {dt1(0x402042u | (kMelodicBlock << 8), {0x00}),
+              dt1(0x402052u | (kMelodicBlock << 8), {0x00})};
     case Setup::kBendApplied:
     case Setup::kModWheelUp:
     case Setup::kAftertouchUp:
+    case Setup::kAssignableUp:
     case Setup::kUserDrumSet:
       return {};
   }
@@ -241,6 +261,10 @@ Setup setup_for(const GsAddressEntry& row) {
     // centred — which is where the stimulus leaves it.
     case GsParam::kPartBendPitchControl:
       return Setup::kBendApplied;
+    // A controller number says nothing until a source is pointed somewhere and
+    // the controller it names is moved.
+    case GsParam::kPartCtrlSourceNumber:
+      return Setup::kAssignableRouted;
     // A controller destination is a depth: it says what its source at full is
     // worth, so it says nothing until that source is off its rest position.
     // Which source is the address's, not the row's — the block is a matrix and
@@ -258,6 +282,9 @@ Setup setup_for(const GsAddressEntry& row) {
           return Setup::kModWheelUp;
         case sonare::midi::synth::GsCtrlSource::kChannelAftertouch:
           return Setup::kAftertouchUp;
+        case sonare::midi::synth::GsCtrlSource::kCc1:
+        case sonare::midi::synth::GsCtrlSource::kCc2:
+          return Setup::kAssignableUp;
         default:
           return Setup::kNone;
       }
@@ -305,6 +332,11 @@ Probe probe_for(const GsAddressEntry& row) {
       // 7F 7F is a type no adapter realises, so no chain is built and the part
       // is never bussed. 01 10 is Overdrive, which realises.
       return {{0x01, 0x10}, "the generic value selects a type nothing realises"};
+    case GsParam::kPartCtrlSourceNumber:
+      // hi points both sources at CC127, which nothing sends. The setup moves
+      // expression, so 11 is the number that makes the write mean something —
+      // and the one a corpus file writes, where 7F appears in no file at all.
+      return {{11, 11}, "hi names a controller no stimulus sends"};
     case GsParam::kPartCtrlTvfCutoff:
       // hi opens the filter, and the stimulus zone's is already open: +9450
       // cents onto a cutoff above the band leaves every partial where it was.
@@ -471,6 +503,16 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
   } else if (setup == Setup::kAftertouchUp) {
     p.on_event(0, event(sonare::midi::make_midi1_channel_pressure(0, ch, 127)));
     cc(p, ch, 1, 127);
+  } else if (setup == Setup::kAssignableUp) {
+    cc(p, ch, 16, 127);
+    cc(p, ch, 17, 127);
+    cc(p, ch, 1, 127);
+  } else if (setup == Setup::kAssignableRouted) {
+    // Expression, which is not either power-on assignment, so it drives the two
+    // destinations above only once a CONTROLLER NUMBER write points a source at
+    // it. Already at 127 by default, and sent anyway: the part reads a source's
+    // position from the controller MOVING, not from what it happens to be.
+    cc(p, ch, 11, 127);
   } else if (setup == Setup::kUserDrumSet || setup == Setup::kUserDrumSetGroupPeer) {
     // Set 1, on the rhythm part the stimulus strikes. With nothing written to
     // the set this sounds the Standard kit, which is what the part was already

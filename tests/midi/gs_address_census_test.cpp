@@ -49,14 +49,14 @@ std::string hex(uint32_t addr) {
 /// raises them by surfacing addresses nobody had seen, which is the census
 /// working rather than coverage regressing — re-record them in the same change,
 /// and compare the RATIO across a refresh, never the count.
-constexpr size_t kUnrowedAddressCeiling = 155;
+constexpr size_t kUnrowedAddressCeiling = 137;
 
 /// Corpus file-touches (an address counted once per file that wrote it) no row
 /// claims. Weighted, because one address reached by 1300 files is not the same
 /// size of gap as one reached by 2 — and the two numbers move independently, so
 /// a change that rows a rare address while breaking a common one is caught by
 /// the second ceiling even though the first went down.
-constexpr uint64_t kUnrowedFileTouchCeiling = 499;
+constexpr uint64_t kUnrowedFileTouchCeiling = 464;
 
 /// Files reaching the single most widely written address no row claims — how
 /// deep the worst remaining gap is, where the two ceilings above measure how

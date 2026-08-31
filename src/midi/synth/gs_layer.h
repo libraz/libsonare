@@ -130,6 +130,17 @@ struct GsDestinationSet {
   uint8_t lfo_rate = 0x40;
 };
 
+/// The GS power-on position of every MIDI controller a part tracks. Only the
+/// three that do not power on at zero are named; everything else starts where
+/// a controller nobody has moved sits.
+constexpr std::array<uint8_t, 128> gs_default_cc_positions() noexcept {
+  std::array<uint8_t, 128> p{};
+  p[7] = 100;   // CC7 volume
+  p[10] = 64;   // CC10 pan, centred
+  p[11] = 127;  // CC11 expression
+  return p;
+}
+
 /// Whether any source names a TVF destination, which is what a note-on has to
 /// settle: the offset and the swing both arrive per sample from a controller,
 /// so what the note-on decides is only whether there is a filter to reach.

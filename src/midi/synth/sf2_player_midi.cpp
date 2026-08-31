@@ -685,6 +685,18 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
 void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
+  // Every controller's position is recorded before the switch decides what this
+  // one means, because an assignable source of the 40 2x block names a
+  // controller by number and has to read where it sits whatever else it does.
+  // The power-on numbers are 16 and 17, the General Purpose controllers, which
+  // nothing below handles; a file is free to point a source at one that it does.
+  st.cc_position[controller & 0x7Fu] = value;
+  for (const uint8_t number : st.assignable_cc) {
+    if (controller == (number & 0x7Fu)) {
+      refresh_channel_mod(ch);
+      break;
+    }
+  }
   switch (controller) {
     case 0:  // Bank select MSB (GS variation bank)
       st.bank_msb = value;

@@ -1,7 +1,8 @@
 /// @file gs_aftertouch_dest_test.cpp
 /// @brief GS controller destinations from channel aftertouch (40 2x 2x): that
-///        the pressure arrives, and that it reaches the same seven places the
-///        modulation wheel reaches by the same route.
+///        the pressure arrives, that it reaches the same seven places the
+///        modulation wheel reaches by the same route, and that the assignable
+///        CC1 source lands there too.
 ///
 /// The block gives every source the same eleven destinations, so the claim
 /// worth testing is not what each byte does — the modulation block's own tests
@@ -50,6 +51,10 @@ constexpr uint8_t kToneModifyVibDepth = 0x31;
 /// aftertouch source's. The seven libsonare routes are +00 to +06.
 constexpr uint8_t kModBase = 0x00;
 constexpr uint8_t kCafBase = 0x20;
+/// The CC1 half, whose source is whichever controller 40 1x 1F names. Left at
+/// its power-on CC16, so the third source is reached without writing one.
+constexpr uint8_t kCc1Base = 0x40;
+constexpr uint8_t kAssignableCc = 16;
 constexpr uint8_t kPitch = 0x00;
 constexpr uint8_t kTvfCutoff = 0x01;
 constexpr uint8_t kAmplitude = 0x02;
@@ -61,7 +66,7 @@ constexpr uint8_t kModWheel = 1;
 constexpr uint8_t kVolume = 7;
 
 enum class Bank : uint8_t { kSoundFont, kModel };
-enum class Source : uint8_t { kWheel, kAftertouch };
+enum class Source : uint8_t { kWheel, kAftertouch, kAssignable };
 
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
@@ -172,11 +177,21 @@ void neutralise(Sf2Player& p) {
 Render from_source(Bank bank, Source source, uint8_t dest, uint8_t value) {
   return render(bank, [source, dest, value](Sf2Player& p) {
     neutralise(p);
-    write_dest(p, source == Source::kWheel ? kModBase : kCafBase, dest, value);
-    if (source == Source::kWheel) {
-      wheel(p, 127);
-    } else {
-      pressure(p, 127);
+    const uint8_t base = source == Source::kWheel        ? kModBase
+                         : source == Source::kAftertouch ? kCafBase
+                                                         : kCc1Base;
+    write_dest(p, base, dest, value);
+    switch (source) {
+      case Source::kWheel:
+        wheel(p, 127);
+        break;
+      case Source::kAftertouch:
+        pressure(p, 127);
+        break;
+      case Source::kAssignable:
+        p.on_event(0,
+                   event(sonare::midi::make_midi1_control_change(0, kChannel, kAssignableCc, 127)));
+        break;
     }
   });
 }
@@ -273,10 +288,12 @@ TEST_CASE("a destination does not care which source reaches it", "[midi][synth][
       INFO("destination: " << d.name);
       const Render by_wheel = from_source(bank, Source::kWheel, d.offset, d.probe);
       const Render by_pressure = from_source(bank, Source::kAftertouch, d.offset, d.probe);
-      // Non-vacuous: both have to have done something, or "identical" is only
-      // saying that neither source was wired.
+      const Render by_assignable = from_source(bank, Source::kAssignable, d.offset, d.probe);
+      // Non-vacuous: they have to have done something, or "identical" is only
+      // saying that no source was wired.
       CHECK_FALSE(by_wheel == neutral);
       CHECK(by_wheel == by_pressure);
+      CHECK(by_wheel == by_assignable);
     }
   }
 }

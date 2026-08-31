@@ -269,6 +269,9 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartToneModify:
         gs_apply_tone_modify(st.gs, w.index, w.value);
         break;
+      case GsParam::kPartCtrlSourceNumber:
+        st.assignable_cc[w.index & 1u] = w.value;
+        break;
       // The block is a matrix: the row names the destination and the address
       // names the source, so one case serves every source that reaches it.
       case GsParam::kPartCtrlPitch:
@@ -710,13 +713,20 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   const float bend_cents =
       (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
-  // Where each controller source presently sits, in the block's own order. Only
-  // the two libsonare receives are ever non-zero; the rest stay at rest, so the
-  // sum below is over six terms and reads as two.
+  // Where each controller source presently sits, in the block's own order. The
+  // bend and polyphonic aftertouch have no position here and stay at rest, so
+  // the sum below is over six terms and four of them can move.
   std::array<float, kGsCtrlSourceCount> source01{};
   source01[static_cast<size_t>(GsCtrlSource::kModulation)] = mod.mod_wheel01;
   source01[static_cast<size_t>(GsCtrlSource::kChannelAftertouch)] =
       static_cast<float>(st.channel_pressure) / 127.0f;
+  // Read through the number rather than stored beside it, so pointing a source
+  // at a controller that is already somewhere reads where it is: a file writes
+  // the assignment and the controller in whichever order it likes.
+  source01[static_cast<size_t>(GsCtrlSource::kCc1)] =
+      static_cast<float>(st.cc_position[st.assignable_cc[0] & 0x7Fu]) / 127.0f;
+  source01[static_cast<size_t>(GsCtrlSource::kCc2)] =
+      static_cast<float>(st.cc_position[st.assignable_cc[1] & 0x7Fu]) / 127.0f;
 
   // Each destination is the sum of what its sources are worth where they sit.
   // Pitch starts at the bend rather than at zero because the two add on one

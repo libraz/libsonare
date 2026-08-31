@@ -283,14 +283,23 @@ class Sf2Player final : public MidiInstrument {
     /// played under it. The GM fallback bank reaches its organs through here,
     /// so the bit has to exist on this host as well as on NativeSynth's.
     bool percussion_armed = true;
+    /// Where every controller presently sits, by number. Separate from the
+    /// fields below because those are what a controller MEANS and this is only
+    /// where it is: an assignable source names a controller by number and has
+    /// to read its position whatever else that number does, including a number
+    /// nothing else on this part interprets. Written in exactly one place, at
+    /// the top of control_change, so the two cannot drift; the three that power
+    /// on off zero are seeded here and the fields below take their defaults
+    /// from this rather than restating them.
+    std::array<uint8_t, 128> cc_position = gs_default_cc_positions();
     // Default-modulator controller state.
-    uint8_t volume = 100;      // CC7
-    uint8_t expression = 127;  // CC11
-    uint8_t pan = 64;          // CC10
-    uint8_t mod_wheel = 0;     // CC1
-    uint8_t reverb_send = 0;   // CC91 (the GS layer's GS reset sets the GS power-on 40)
-    uint8_t chorus_send = 0;   // CC93
-    uint8_t delay_send = 0;    // CC94 (GS delay send; no SF2 generator)
+    uint8_t volume = gs_default_cc_positions()[7];       // CC7
+    uint8_t expression = gs_default_cc_positions()[11];  // CC11
+    uint8_t pan = gs_default_cc_positions()[10];         // CC10
+    uint8_t mod_wheel = 0;                               // CC1
+    uint8_t reverb_send = 0;  // CC91 (the GS layer's GS reset sets the GS power-on 40)
+    uint8_t chorus_send = 0;  // CC93
+    uint8_t delay_send = 0;   // CC94 (GS delay send; no SF2 generator)
     uint16_t pitch_bend = 8192;
     // RPN/NRPN state: CC101/100 select an RPN, CC99/98 select a GS NRPN; the
     // data entry CCs (6/38) route to whichever was selected last.
@@ -304,6 +313,9 @@ class Sf2Player final : public MidiInstrument {
     /// The modulation wheel's is mod_wheel above; the other four sources have
     /// no controller yet and stay at rest.
     uint8_t channel_pressure = 0;
+    /// CC1 / CC2 CONTROLLER NUMBER (40 1x 1F/20): which MIDI controller drives
+    /// each assignable source of the controller-destination block.
+    std::array<uint8_t, 2> assignable_cc{{0x10, 0x11}};
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.

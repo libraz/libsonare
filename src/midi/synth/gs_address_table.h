@@ -105,6 +105,7 @@ enum class GsLevel : uint8_t {
   X(kPartDelaySend)          \
   X(kPartToneModify)         \
   X(kPartModDest)            \
+  X(kPartCtrlSourceNumber)   \
   X(kPartCtrlPitch)          \
   X(kPartCtrlTvfCutoff)      \
   X(kPartCtrlAmplitude)      \
@@ -203,7 +204,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 142> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -388,6 +389,12 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
      nullptr},
     {0x40101E, 0x000F00, GsParam::kPartKeyRangeHigh, GsLevel::kAudible, 1, 0x00, 0x7F, 0x7F,
      nullptr},
+    // CC1 / CC2 CONTROLLER NUMBER: which MIDI controller drives each of the two
+    // assignable sources of the 40 2x block. Two bytes whose power-on values
+    // differ (CC16 and CC17), so the row carries the first and GsWrite::index
+    // tells them apart, as MASTER TUNE's does.
+    {0x40101F, 0x000F00, GsParam::kPartCtrlSourceNumber, GsLevel::kAudible, 2, 0x00, 0x7F, 0x10,
+     nullptr},
     {0x401021, 0x000F00, GsParam::kPartChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     // The reverb send's 28 is the GS power-on 40 the reset already installs.
     {0x401022, 0x000F00, GsParam::kPartReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28, nullptr},
@@ -495,37 +502,41 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
      "recognised; polyphonic aftertouch is not received, and a per-note pressure needs per-voice "
      "state"},
     // CC1 as a source.
-    {0x402040, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
-    {0x402041, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
-    {0x402044, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
+    {0x402040, 0x000F00, GsParam::kPartCtrlPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
+    {0x402041, 0x000F00, GsParam::kPartCtrlTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402042, 0x000F00, GsParam::kPartCtrlAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402043, 0x000F00, GsParam::kPartCtrlLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402044, 0x000F00, GsParam::kPartCtrlLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x402045, 0x000F00, GsParam::kPartCtrlLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x402046, 0x000F00, GsParam::kPartCtrlLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
     {0x402047, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
     {0x402048, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
     // CC2 as a source.
-    {0x402050, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
-    {0x402051, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
-    {0x402054, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
+    {0x402050, 0x000F00, GsParam::kPartCtrlPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
+    {0x402051, 0x000F00, GsParam::kPartCtrlTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402052, 0x000F00, GsParam::kPartCtrlAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402053, 0x000F00, GsParam::kPartCtrlLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402054, 0x000F00, GsParam::kPartCtrlLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x402055, 0x000F00, GsParam::kPartCtrlLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x402056, 0x000F00, GsParam::kPartCtrlLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
     {0x402057, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
     {0x402058, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
-     "it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
 
     // Tone map (40 4x 00-01): which generation of the sound set a part plays
     // from. The maps themselves exist and are audible through Bank Select LSB;
