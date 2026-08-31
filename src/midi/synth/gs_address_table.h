@@ -108,6 +108,7 @@ enum class GsLevel : uint8_t {
   X(kPartModTvfCutoff)      \
   X(kPartModLfo1Rate)       \
   X(kPartModLfo1PitchDepth) \
+  X(kPartModLfo1TvfDepth)   \
   X(kPartModLfo1TvaDepth)   \
   X(kPartModAmplitude)      \
   X(kPartBendDest)          \
@@ -117,6 +118,7 @@ enum class GsLevel : uint8_t {
   X(kPartCafAmplitude)      \
   X(kPartCafLfo1Rate)       \
   X(kPartCafLfo1PitchDepth) \
+  X(kPartCafLfo1TvfDepth)   \
   X(kPartCafLfo1TvaDepth)   \
   X(kPartPafDest)           \
   X(kPartCc1Dest)           \
@@ -435,8 +437,10 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
      nullptr},
     {0x402004, 0x000F00, GsParam::kPartModLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x0A,
      nullptr},
-    {0x402005, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // The wheel's filter wobble, on the same LFO as the three above it. A depth
+    // rather than an offset: it swings the cutoff, it does not move it.
+    {0x402005, 0x000F00, GsParam::kPartModLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
     // The wheel's tremolo, on the LFO 40 2x 03 retunes and 40 2x 04 detunes with:
     // one oscillator with four destinations, so the rate is heard here too.
     {0x402006, 0x000F00, GsParam::kPartModLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
@@ -471,8 +475,8 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
     // no vibrato until a file asks for it, where the wheel carries 0A of it.
     {0x402024, 0x000F00, GsParam::kPartCafLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
-    {0x402025, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402025, 0x000F00, GsParam::kPartCafLfo1TvfDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
     {0x402026, 0x000F00, GsParam::kPartCafLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
     {0x402027, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,

@@ -1,6 +1,6 @@
 /// @file gs_aftertouch_dest_test.cpp
 /// @brief GS controller destinations from channel aftertouch (40 2x 2x): that
-///        the pressure arrives, and that it reaches the same five places the
+///        the pressure arrives, and that it reaches the same six places the
 ///        modulation wheel reaches by the same route.
 ///
 /// The block gives every source the same eleven destinations, so the claim
@@ -47,13 +47,14 @@ constexpr uint8_t kDestBlock = 0x21;
 constexpr uint8_t kPartBlock = 0x11;
 constexpr uint8_t kToneModifyVibDepth = 0x31;
 /// The destination offsets, from the modulation source's base and the
-/// aftertouch source's. The five libsonare routes are +01, +02, +03, +04, +06.
+/// aftertouch source's. The six libsonare routes are +01 to +06.
 constexpr uint8_t kModBase = 0x00;
 constexpr uint8_t kCafBase = 0x20;
 constexpr uint8_t kTvfCutoff = 0x01;
 constexpr uint8_t kAmplitude = 0x02;
 constexpr uint8_t kLfo1Rate = 0x03;
 constexpr uint8_t kLfo1PitchDepth = 0x04;
+constexpr uint8_t kLfo1TvfDepth = 0x05;
 constexpr uint8_t kLfo1TvaDepth = 0x06;
 constexpr uint8_t kModWheel = 1;
 constexpr uint8_t kVolume = 7;
@@ -181,19 +182,25 @@ Render from_source(Bank bank, Source source, uint8_t dest, uint8_t value) {
 
 struct Dest {
   uint8_t offset;
+  /// The end of the range that shows on this fixture: 00 for the cutoff, whose
+  /// other end raises an already-open filter, and the far end for the five
+  /// whose range starts or centres at rest.
   uint8_t probe;
+  /// The value `probe` is compared against with the source at rest. 00 for
+  /// every destination that engages nothing at the note-on; the LFO TVF depth
+  /// is the exception, because its 00 is the one value that leaves the part's
+  /// filter disengaged and the engagement is audible without being the depth.
+  uint8_t rest_peer;
   const char* name;
 };
 
-/// The probe value for each is the end of the range that shows on this fixture:
-/// 00 for the cutoff, whose other end raises an already-open filter, and the
-/// far end for the four whose range starts or centres at rest.
 constexpr Dest kDests[] = {
-    {kTvfCutoff, 0x00, "40 2x 01/21 TVF cutoff"},
-    {kAmplitude, 0x7F, "40 2x 02/22 amplitude"},
-    {kLfo1Rate, 0x7F, "40 2x 03/23 LFO1 rate"},
-    {kLfo1PitchDepth, 0x7F, "40 2x 04/24 LFO1 pitch depth"},
-    {kLfo1TvaDepth, 0x7F, "40 2x 06/26 LFO1 TVA depth"},
+    {kTvfCutoff, 0x00, 0x7F, "40 2x 01/21 TVF cutoff"},
+    {kAmplitude, 0x7F, 0x00, "40 2x 02/22 amplitude"},
+    {kLfo1Rate, 0x7F, 0x00, "40 2x 03/23 LFO1 rate"},
+    {kLfo1PitchDepth, 0x7F, 0x00, "40 2x 04/24 LFO1 pitch depth"},
+    {kLfo1TvfDepth, 0x7F, 0x40, "40 2x 05/25 LFO1 TVF depth"},
+    {kLfo1TvaDepth, 0x7F, 0x00, "40 2x 06/26 LFO1 TVA depth"},
 };
 
 }  // namespace
@@ -242,10 +249,10 @@ TEST_CASE("an unpressed part reads nothing in the aftertouch block", "[midi][syn
           if (press != 0) pressure(p, press);
         });
       };
-      CHECK(at(0x00, 0) == at(0x7F, 0));
+      CHECK(at(d.rest_peer, 0) == at(d.probe, 0));
       // Non-vacuous: the same pair has to part company once the part is
       // pressed, or the range has no ends to have compared.
-      CHECK_FALSE(at(0x00, 127) == at(0x7F, 127));
+      CHECK_FALSE(at(d.rest_peer, 127) == at(d.probe, 127));
     }
   }
 }

@@ -247,12 +247,14 @@ Setup setup_for(const GsAddressEntry& row) {
     case GsParam::kPartModLfo1Rate:
     case GsParam::kPartModLfo1TvaDepth:
     case GsParam::kPartModAmplitude:
+    case GsParam::kPartModLfo1TvfDepth:
       return Setup::kModWheelUp;
     // The same five destinations, reached from channel aftertouch instead.
     case GsParam::kPartCafTvfCutoff:
     case GsParam::kPartCafAmplitude:
     case GsParam::kPartCafLfo1Rate:
     case GsParam::kPartCafLfo1PitchDepth:
+    case GsParam::kPartCafLfo1TvfDepth:
     case GsParam::kPartCafLfo1TvaDepth:
       return Setup::kAftertouchUp;
     // A group is a relation, so one note in it chokes nothing.

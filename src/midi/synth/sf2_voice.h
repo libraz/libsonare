@@ -97,9 +97,19 @@ inline constexpr float kGsModDepthMaxCents = 600.0f;
 /// The GS power-on MODULATION LFO1 PITCH DEPTH.
 inline constexpr uint8_t kGsModDepthDefault = 0x0A;
 
+/// LFO1 TVF DEPTH (40 2x 05 / 25) at full: the cents of cutoff the LFO swings
+/// either side of where the part's filter already sits. Every source powers on
+/// at zero, so nothing spends it until a file asks.
+inline constexpr float kGsLfoTvfDepthMaxCents = 2400.0f;
+
 /// The vibrato depth a MODULATION LFO1 PITCH DEPTH byte asks for, in cents.
 constexpr float gs_mod_depth_cents(uint8_t value) noexcept {
   return kGsModDepthMaxCents * static_cast<float>(value) / 127.0f;
+}
+
+/// The filter swing an LFO1 TVF DEPTH byte asks for, in cents.
+constexpr float gs_lfo_tvf_depth_cents(uint8_t value) noexcept {
+  return kGsLfoTvfDepthMaxCents * static_cast<float>(value) / 127.0f;
 }
 
 /// Per-channel modulation snapshot the player passes into voice rendering
@@ -128,6 +138,11 @@ struct Sf2ChannelMod {
   /// a depth of 1 reaches silence, and no depth makes a part louder than the
   /// volume it was given.
   float tremolo_depth01 = 0.0f;
+  /// The controllers' LFO1 TVF DEPTH (40 2x 05 / 25), in cents, as the swing the
+  /// shared LFO puts on the voice's cutoff. Bipolar around wherever the cutoff
+  /// already is, so 0 is exactly no wobble and the LFO's own phase decides which
+  /// way the filter is moving at any sample.
+  float lfo_cutoff_cents = 0.0f;
   /// CC1 itself in [0,1]. Carried rather than recovered from the line above,
   /// which stopped being a fixed multiple of it once the depth became a part
   /// parameter a file can write.

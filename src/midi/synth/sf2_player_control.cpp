@@ -299,6 +299,12 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartCafLfo1TvaDepth:
         st.caf_tva_depth = gs_mod_tva_depth(w.value);
         break;
+      case GsParam::kPartModLfo1TvfDepth:
+        st.mod_tvf_lfo_cents = gs_lfo_tvf_depth_cents(w.value);
+        break;
+      case GsParam::kPartCafLfo1TvfDepth:
+        st.caf_tvf_lfo_cents = gs_lfo_tvf_depth_cents(w.value);
+        break;
       case GsParam::kPartBendPitchControl:
         // The same range RPN 00 00 writes, in whole semitones above 40; the
         // cents its LSB carries have no address of their own here.
@@ -738,6 +744,9 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   // trough would take the amplitude through zero and out the other side.
   mod.tremolo_depth01 =
       std::min(1.0f, st.mod_tva_depth * mod.mod_wheel01 + st.caf_tva_depth * caf01);
+  // Not clamped, unlike the two above it: a filter swing has no end of its own
+  // to pass, and the cutoff it lands on is bounded where every other cutoff is.
+  mod.lfo_cutoff_cents = st.mod_tvf_lfo_cents * mod.mod_wheel01 + st.caf_tvf_lfo_cents * caf01;
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;

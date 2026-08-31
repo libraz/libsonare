@@ -326,7 +326,8 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   // --- filter: Fc = zone Fc + modEnv + modLFO (cents) ---
   if (!params.filter_bypass) {
     const float fc_cents = params.filter_fc_cents + mod_env_level * params.mod_env_to_filter_fc +
-                           mod_lfo_value * params.mod_lfo_to_filter_fc + mod.mod_cutoff_cents;
+                           mod_lfo_value * params.mod_lfo_to_filter_fc + mod.mod_cutoff_cents +
+                           vib_lfo_value * mod.lfo_cutoff_cents;
     filter.set(abs_cents_to_hz(fc_cents), params.filter_q);
     sample = filter.process(sample).lp;
   }

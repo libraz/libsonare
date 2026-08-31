@@ -456,6 +456,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_mod_tremolo_test.cpp
     midi/gs_mod_amplitude_test.cpp
     midi/gs_aftertouch_dest_test.cpp
+    midi/gs_mod_tvf_lfo_test.cpp
     midi/gs_key_shift_test.cpp
     midi/gs_part_params_test.cpp
     midi/gs_part_edit_banks_test.cpp
