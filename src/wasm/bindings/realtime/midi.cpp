@@ -225,6 +225,7 @@ void RealtimeEngineWasm::setSf2Instrument(uint32_t destination_id, val config) {
     if (polyphony > 0) cfg.polyphony = polyphony;
     cfg.prefer_model_for_modeled_families =
         boolProperty(config, "preferModelForModeledFamilies", false);
+    cfg.bank_rig_binding = !boolProperty(config, "clearBankRig", false);
   }
   // Inject the mastering insert factory so live GS insertion effects (EFX)
   // realise their processing chain on the control thread (mirrors the C-ABI

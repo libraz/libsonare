@@ -1282,8 +1282,8 @@ sonare::midi::BuiltinSynthConfig synth_config_from_c(const SonareBuiltinSynthCon
 
 // Maps the public versioned SF2 patch to the player config ("0 => default";
 // struct_version 0/1 preserve the original layout; version 2 enables the
-// model-first field. Anything newer is rejected by the
-// caller). The player clamps polyphony itself.
+// model-first field and version 3 the rig clear. Anything newer is rejected by
+// the caller). The player clamps polyphony itself.
 sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
     const SonareSf2InstrumentConfig& c) noexcept {
   sonare::midi::synth::Sf2PlayerConfig cfg;
@@ -1292,6 +1292,7 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
   if (c.struct_version >= 2) {
     cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
   }
+  if (c.struct_version >= 3 && c.clear_bank_rig != 0) cfg.bank_rig_binding = false;
 #if defined(SONARE_WITH_MASTERING)
   // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
   // mastering factory itself, so the host injects it. An EFX SysEx on the
@@ -1530,7 +1531,7 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   // the data-free floor (every program still sounds; the manifest reports the
   // synth backend honestly).
   for (size_t i = 0; i < instrument_count; ++i) {
-    if (instruments[i].config.struct_version > 2) return SONARE_ERROR_INVALID_PARAMETER;
+    if (instruments[i].config.struct_version > 3) return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
   std::vector<HostedInstrument> hosted;

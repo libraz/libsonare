@@ -67,6 +67,33 @@ describe('Project SoundFont (SF2) binding', () => {
     project.destroy();
   });
 
+  it('clears the amplifier the bank binds after an electric guitar', () => {
+    // Program 30 is one of six the bank binds a rig to, program 0 is not, so
+    // the flag has to move the first render and leave the second untouched.
+    const render = (program: number, clearBankRig: boolean) => {
+      const project = Project.create();
+      project.setSampleRate(48000);
+      const { clipId, trackId } = project.addMidiClip(0, 2);
+      project.setTrackMidiDestination(trackId, 0);
+      project.setMidiEvents(clipId, [
+        Project.midiProgram(0, 0, 0, program),
+        Project.midiNoteOn(0.05, 0, 0, 52, 110),
+        Project.midiNoteOff(1, 0, 0, 52, 0),
+      ]);
+      const out = project.bounceWithSf2Instrument(
+        { destinationId: 0, gain: 1, clearBankRig },
+        { totalFrames: 48000, numChannels: 2, sampleRate: 48000 },
+      );
+      project.destroy();
+      return out;
+    };
+    const rigged = render(30, false);
+    const direct = render(30, true);
+    expect(peak(direct)).toBeGreaterThan(0.01);
+    expect(direct).not.toEqual(rigged);
+    expect(render(0, true)).toEqual(render(0, false));
+  });
+
   it('bounces MIDI through the SoundFont player to non-silent audio', () => {
     const project = buildMidiOnlyProject();
     // Without a loaded SoundFont the bounce still sounds: the built-in

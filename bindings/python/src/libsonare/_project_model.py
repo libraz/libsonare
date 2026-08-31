@@ -510,18 +510,26 @@ class Sf2InstrumentConfig:
     Every field uses "0 (or non-positive) => sensible default" (gain 0.5,
     polyphony 48). ``prefer_model_for_modeled_families`` defaults to false,
     retaining the established SoundFont-first behavior.
+
+    ``clear_bank_rig`` removes the stage the bank binds after a voice — the
+    amplifier and cabinet an electric guitar is never heard without. It defaults
+    to false, so a MIDI file that selects a distorted guitar and asks for
+    nothing else still comes out amplified. Set it to render the instrument
+    alone, which is what a calibration fit measures against a direct reference.
     """
 
     gain: float = 0.0
     polyphony: int = 0
     prefer_model_for_modeled_families: bool = False
+    clear_bank_rig: bool = False
 
     def _to_c(self) -> SonareSf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
-            struct_version=2,
+            struct_version=3,
             gain=float(self.gain),
             polyphony=int(self.polyphony),
             prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
+            clear_bank_rig=int(self.clear_bank_rig),
         )
 
 

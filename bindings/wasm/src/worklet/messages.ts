@@ -514,6 +514,7 @@ export interface SonareEngineSyncSf2InstrumentMessage {
     gain?: number;
     polyphony?: number;
     preferModelForModeledFamilies?: boolean;
+    clearBankRig?: boolean;
   };
 }
 

@@ -483,7 +483,7 @@ class SonareSf2InstrumentConfig(ctypes.Structure):
     """Maps to SonareSf2InstrumentConfig in sonare_c_project.h.
 
     Versioned struct: struct_version 0/1 preserve version 1; version 2 adds
-    ``prefer_model_for_modeled_families``.
+    ``prefer_model_for_modeled_families`` and version 3 ``clear_bank_rig``.
     """
 
     # See SonareBuiltinSynthConfig._c_aliases_: the engine-side typedef this
@@ -495,6 +495,7 @@ class SonareSf2InstrumentConfig(ctypes.Structure):
         ("gain", ctypes.c_float),
         ("polyphony", ctypes.c_int),
         ("prefer_model_for_modeled_families", ctypes.c_int),
+        ("clear_bank_rig", ctypes.c_int),
     ]
 
 

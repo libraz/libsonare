@@ -287,6 +287,7 @@ export function setSf2Instrument(
     gain?: number;
     polyphony?: number;
     preferModelForModeledFamilies?: boolean;
+    clearBankRig?: boolean;
   },
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);

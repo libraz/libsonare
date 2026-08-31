@@ -253,6 +253,12 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
     binding.config.prefer_model_for_modeled_families =
         desc["preferModelForModeledFamilies"].as<bool>() ? 1 : 0;
   }
+  // Version 3 reads version 2's field as well, so raising it here covers both
+  // whichever of the two the caller passed.
+  if (hasProperty(desc, "clearBankRig")) {
+    binding.config.struct_version = 3;
+    binding.config.clear_bank_rig = desc["clearBankRig"].as<bool>() ? 1 : 0;
+  }
   return binding;
 }
 

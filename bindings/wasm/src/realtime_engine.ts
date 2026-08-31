@@ -347,6 +347,7 @@ export class RealtimeEngine {
       gain?: number;
       polyphony?: number;
       preferModelForModeledFamilies?: boolean;
+      clearBankRig?: boolean;
     } = {},
     destinationId = config.destinationId ?? 0,
   ): void {

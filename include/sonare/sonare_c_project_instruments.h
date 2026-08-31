@@ -292,13 +292,18 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
 /// @brief Versioned SF2 player patch for @ref
 ///        sonare_project_bounce_with_sf2_instruments. Zero-initialize then
 ///        override: every field uses "0 => default" (struct_version 0 is
-///        treated as version 1; version 2 adds model-first selection).
+///        treated as version 1; version 2 adds model-first selection; version 3
+///        adds clearing the bank's default rig).
 typedef struct {
-  int struct_version;                    /* 0 or 1 => version 1; 2 => current version */
+  int struct_version;                    /* 0 or 1 => version 1; 3 => current version */
   float gain;                            /* master output gain (linear); 0 => 0.5 */
   int polyphony;                         /* max simultaneous voices; 0 => 48, clamped to [1, 64] */
   int prefer_model_for_modeled_families; /* v2: non-zero selects dedicated melodic models;
                                             drums remain SF2-first */
+  int clear_bank_rig;                    /* v3: non-zero renders the instrument alone, without the
+                                            amplifier the bank binds after an electric guitar's
+                                            voice; 0 keeps it, so a file that asks for nothing
+                                            still sounds complete */
 } SonareSf2InstrumentConfig;
 
 /// @brief Binds an SF2 player patch to a MIDI destination id (the value set by

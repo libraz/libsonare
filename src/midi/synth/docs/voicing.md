@@ -70,6 +70,8 @@ An amplifier is not expressible as a weight — there is no file-controlled "amp
 
 The six GM electric guitars bind today. Everything else the split would cover is left unbound rather than guessed at: an electric piano and a drawbar organ each want a component that is not an amplifier, and a module's electric bass is close enough to a direct signal that binding one would be a preference rather than a repair.
 
+**Clearing it is part of the contract, not a debug switch.** `clear_bank_rig` on the SF2 instrument config — `clearBankRig` on the JS surfaces — renders the instrument alone, and it exists on the live path as well as the bounce. Without it "the DI is still available" would be a claim no caller could act on, and a calibration harness comparing a rigged model against a direct reference would be measuring the amplifier as if it were the string, with both sides audio and both plausible. That is what the capture's `rig` field now decides on the model side too, and not only on whether a fit may run.
+
 ## The RT contract for a binding that changes mid-song
 
 A program change on a part changes which rig that part should carry, and building a rig allocates.

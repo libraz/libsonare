@@ -119,6 +119,7 @@ exports[`WASM binding sources stay on the shared common.h field readers > has no
   "project/project_arrange.cpp desc["trackId"].as<uint32_t>() #1",
   "project/project_arrange.cpp desc["trackId"].as<uint32_t>() #2",
   "project/project_bounce.cpp desc["attackMs"].as<float>() #1",
+  "project/project_bounce.cpp desc["clearBankRig"].as<bool>() #1",
   "project/project_bounce.cpp desc["decayMs"].as<float>() #1",
   "project/project_bounce.cpp desc["destinationId"].as<uint32_t>() #1",
   "project/project_bounce.cpp desc["destinationId"].as<uint32_t>() #2",

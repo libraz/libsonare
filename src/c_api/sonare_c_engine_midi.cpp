@@ -248,7 +248,7 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  if (config->struct_version > 2) return SONARE_ERROR_INVALID_PARAMETER;
+  if (config->struct_version > 3) return SONARE_ERROR_INVALID_PARAMETER;
   // A missing SoundFont is allowed: the player's NativeSynth GM fallback is
   // the data-free floor, so live MIDI stays audible with zero data.
   SONARE_C_TRY
@@ -258,10 +258,11 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   if (config->struct_version >= 2) {
     cfg.prefer_model_for_modeled_families = config->prefer_model_for_modeled_families != 0;
   }
-  // Make the live player EFX-capable: a GS insertion-effect SysEx pushed via
-  // sonare_engine_push_midi_sysex is realised on the control thread and swapped
-  // in wait-free (realize_efx_inline stays false, the live default). An unknown
-  // name or an FX-less build yields a null insert that is bypassed.
+  if (config->struct_version >= 3 && config->clear_bank_rig != 0) cfg.bank_rig_binding = false;
+    // Make the live player EFX-capable: a GS insertion-effect SysEx pushed via
+    // sonare_engine_push_midi_sysex is realised on the control thread and swapped
+    // in wait-free (realize_efx_inline stays false, the live default). An unknown
+    // name or an FX-less build yields a null insert that is bypassed.
 #if defined(SONARE_WITH_MASTERING)
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));

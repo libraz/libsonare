@@ -295,6 +295,13 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
         binding.config.struct_version = 2;
         binding.config.prefer_model_for_modeled_families = prefer_model.ToBoolean().Value() ? 1 : 0;
       }
+      // Version 3 reads version 2's field as well, so raising it here covers
+      // both whichever of the two the caller passed.
+      const Napi::Value clear_rig = obj.Get("clearBankRig");
+      if (!clear_rig.IsUndefined() && !clear_rig.IsNull()) {
+        binding.config.struct_version = 3;
+        binding.config.clear_bank_rig = clear_rig.ToBoolean().Value() ? 1 : 0;
+      }
       bindings.push_back(binding);
     }
   }

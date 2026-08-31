@@ -2017,9 +2017,15 @@
         "name": "prefer_model_for_modeled_families",
         "offset": 12,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "clear_bank_rig",
+        "offset": 16,
+        "size": 4
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareEngineTelemetry": {
     "align": 8,
@@ -6006,10 +6012,10 @@
         "kind": "aggregate",
         "name": "config",
         "offset": 4,
-        "size": 16
+        "size": 20
       }
     ],
-    "size": 20
+    "size": 24
   },
   "SonareSf2InstrumentConfig": {
     "align": 4,
@@ -6037,9 +6043,15 @@
         "name": "prefer_model_for_modeled_families",
         "offset": 12,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "clear_bank_rig",
+        "offset": 16,
+        "size": 4
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareSf2ProgramStatus": {
     "align": 4,

@@ -811,6 +811,13 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
       config.struct_version = 2;
       config.prefer_model_for_modeled_families = prefer_model.ToBoolean().Value() ? 1 : 0;
     }
+    // Version 3 reads version 2's field as well, so raising it here covers both
+    // whichever of the two the caller passed.
+    const Napi::Value clear_rig = obj.Get("clearBankRig");
+    if (!clear_rig.IsUndefined() && !clear_rig.IsNull()) {
+      config.struct_version = 3;
+      config.clear_bank_rig = clear_rig.ToBoolean().Value() ? 1 : 0;
+    }
     if (env.IsExceptionPending()) return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_sf2_instrument(engine_, destination_id, &config));

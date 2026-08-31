@@ -745,13 +745,18 @@ SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uin
 /// @brief Versioned SF2 player patch for @ref sonare_engine_set_sf2_instrument.
 /// @details Same zero-init contract as the project-bounce SF2 instruments:
 ///          every field uses "0 => default" (struct_version 0 => version 1).
-///          Version 2 adds @c prefer_model_for_modeled_families.
+///          Version 2 adds @c prefer_model_for_modeled_families; version 3 adds
+///          @c clear_bank_rig.
 typedef struct {
-  int struct_version;                    /* 0 or 1 => version 1; 2 => current version */
+  int struct_version;                    /* 0 or 1 => version 1; 3 => current version */
   float gain;                            /* master output gain (linear); 0 => 0.5 */
   int polyphony;                         /* max simultaneous voices; 0 => 48, clamped to [1, 64] */
   int prefer_model_for_modeled_families; /* v2: non-zero selects the dedicated model for
                                             covered melodic GM programs; drums stay SF2-first */
+  int clear_bank_rig;                    /* v3: non-zero renders the instrument alone, without the
+                                            amplifier the bank binds after an electric guitar's
+                                            voice; 0 keeps it, so a file that asks for nothing
+                                            still sounds complete */
 } SonareEngineSf2InstrumentConfig;
 
 /// @brief Binds/replaces a GS-compatible SoundFont player on a realtime MIDI

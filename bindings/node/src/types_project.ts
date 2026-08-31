@@ -423,6 +423,14 @@ export interface Sf2InstrumentConfig {
   polyphony?: number;
   /** Prefer dedicated physical models for covered melodic GM programs. Defaults to false; drums stay SF2-first. */
   preferModelForModeledFamilies?: boolean;
+  /**
+   * Render the instrument alone, without the stage the bank binds after its
+   * voice — the amplifier and cabinet an electric guitar is never heard
+   * without. Defaults to false, so a MIDI file that selects a distorted guitar
+   * and asks for nothing else still comes out amplified. Set it to get the
+   * direct signal, which is what a voice is calibrated against.
+   */
+  clearBankRig?: boolean;
 }
 
 export const SYNTH_ENGINE_MODES = [

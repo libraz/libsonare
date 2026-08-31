@@ -141,6 +141,50 @@ def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
         project.close()
 
 
+def test_clear_bank_rig_gives_back_the_instrument_alone() -> None:
+    """The bank binds an amplifier after an electric guitar; a host may clear it.
+
+    Program 30 is one of the six that bind one, program 0 is not, so the flag
+    has to change the first render and leave the second bit-identical. Checked
+    through the Python facade because that is the surface with a raw ctypes
+    mirror of the C struct — a field added to one and not the other is a silent
+    misread, not a compile error.
+    """
+    project = Project()
+    project.set_sample_rate(48000.0)
+    track, clip = project.add_midi_clip(0.0, 2.0)
+    project.set_track_midi_destination(track, 0)
+
+    def render(program: int, clear: bool) -> np.ndarray:
+        project.set_midi_events(
+            clip,
+            [
+                Project.midi_program(0.0, 0, 0, program),
+                Project.midi_note_on(0.05, 0, 0, 52, 110),
+                Project.midi_note_off(1.0, 0, 0, 52, 0),
+            ],
+        )
+        return project.bounce_with_sf2_instrument(
+            Sf2InstrumentConfig(gain=1.0, clear_bank_rig=clear),
+            total_frames=48000,
+            block_size=128,
+            num_channels=2,
+            sample_rate=48000,
+        )
+
+    try:
+        # No SoundFont is loaded, so every program plays the model floor, which
+        # is the only place the bank's rig binds.
+        rigged = render(30, clear=False)
+        direct = render(30, clear=True)
+        assert float(np.max(np.abs(direct))) > 0.01
+        assert not np.array_equal(rigged, direct)
+        # A program that binds nothing cannot be moved by the flag.
+        assert np.array_equal(render(0, clear=False), render(0, clear=True))
+    finally:
+        project.close()
+
+
 def test_engine_sf2_instrument_renders_live_midi() -> None:
     engine = RealtimeEngine(48000.0, 128)
     try:

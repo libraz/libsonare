@@ -487,8 +487,15 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
               engine, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
           SONARE_ERROR_INVALID_FORMAT);
 
-  config.struct_version = 3;
+  config.struct_version = 4;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  // Version 3 clears the bank's default rig. Accepted here rather than only in
+  // the bounce, since a host driving live MIDI wants the direct signal on the
+  // same terms an offline one does.
+  config.struct_version = 3;
+  config.clear_bank_rig = 1;
+  REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+  config.clear_bank_rig = 0;
   config.struct_version = 2;
   config.prefer_model_for_modeled_families = 1;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);

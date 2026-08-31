@@ -766,6 +766,7 @@ export class SonareEngine {
       gain?: number;
       polyphony?: number;
       preferModelForModeledFamilies?: boolean;
+      clearBankRig?: boolean;
     } = {},
   ): void {
     strips.setSf2Instrument(this.stripContext, trackId, config);
