@@ -115,6 +115,42 @@ struct GmFallbackSends {
 /// GM family.
 GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept;
 
+/// The rig a program is heard through by default (docs/voicing.md): the stage
+/// after the instrument, which the bank supplies and the host may replace or
+/// clear. An electric guitar's voice is the string and the pickup; the amplifier
+/// and its cabinet are this.
+///
+/// `preset` is an amp-preset identifier (mastering::saturation::amp_preset_names)
+/// or empty, which is what most programs return — an instrument whose whole
+/// sound is its own voice has no rig, and that is the default rather than a gap.
+/// The two numbers ride on top of the named preset: `drive` is how hard the amp
+/// is pushed and `level_db` the trim that keeps a rigged program at the same
+/// level as its unrigged siblings.
+struct GmFallbackRig {
+  /// Distinguishes one binding from another without comparing strings, so a part
+  /// that changes program WITHIN a rig keeps the amplifier it is already
+  /// running instead of rebuilding an identical one. 0 is no rig.
+  uint8_t id = 0;
+  const char* preset = "";
+  float drive = 0.5f;
+  float level_db = 0.0f;
+};
+
+/// Default rig for a melodic (bank, program). Never fails; bank 128 and every
+/// program with no binding return `id` 0 and an empty `preset`.
+///
+/// This is a lookup on bank data, not a routing decision: whether the rig is
+/// actually built depends on the part carrying no insert of its own and on the
+/// voice being the model's rather than a SoundFont's, which is Sf2Player's to
+/// judge. A sampled electric guitar already has an amplifier inside it.
+GmFallbackRig gm_fallback_rig(uint16_t bank, uint8_t program) noexcept;
+
+/// The binding an id names, for a caller that carried the id rather than the
+/// program — a part publishes which rig it wants as one small value across the
+/// thread boundary, and the builder resolves it back here. Ids come from
+/// gm_fallback_rig; an unknown one is no rig.
+GmFallbackRig gm_rig_binding(uint8_t id) noexcept;
+
 /// Longest amp-envelope release across all fallback patches (ms) — players
 /// fold this into their tail accounting when the fallback is enabled.
 float gm_fallback_max_release_ms() noexcept;

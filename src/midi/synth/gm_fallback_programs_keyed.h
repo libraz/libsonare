@@ -333,16 +333,14 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.muted_guitar.ks.brightness = 0.55f;
   o.muted_guitar.ks.release_damp_s = 0.04f;
 
-  // Overdriven / distortion: electric string into the gain-compensated tanh
-  // drive (the voice-level stage; the track-level `saturation.ampSim` insert
-  // supplies the full amp/cab character).
+  // Overdriven / distortion: the same instrument. What makes these two programs
+  // different from the clean guitar is the amplifier, which the bank binds after
+  // the voice (docs/voicing.md) rather than baking a saturation into it — a
+  // voice drive is the sound of clipping, and it is a cabinet that makes
+  // distortion sound like a guitar. The darker filter and lower gain each patch
+  // used to carry existed only to tame that drive and go with it.
   o.overdriven = o.electric_guitar;
-  o.overdriven.drive = 0.45f;
-  o.overdriven.cutoff_hz = 4000.0f;
   o.distortion = o.electric_guitar;
-  o.distortion.drive = 0.8f;
-  o.distortion.cutoff_hz = 3500.0f;
-  o.distortion.gain = 1.0f;
 
   // Electric / acoustic bass (GM 32-35): the KS string voiced for the low
   // register — long, strongly stretched decays (bass strings ring far longer

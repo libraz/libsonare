@@ -701,12 +701,15 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
     case 0:  // Bank select MSB (GS variation bank)
       st.bank_msb = value;
       // The fallback ambience floor is keyed on (effective bank, program), so
-      // a bank change moves it just like a program change does.
+      // a bank change moves it just like a program change does — and so is the
+      // rig the bank binds.
       refresh_channel_mod(ch);
+      refresh_part_rig(ch);
       break;
     case 32:  // Bank select LSB
       st.bank_lsb = value;
       refresh_channel_mod(ch);
+      refresh_part_rig(ch);
       break;
     case 1:
       st.mod_wheel = value;
@@ -870,9 +873,10 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
       } else {
         channels_[ch].program = u.note_number();
       }
-      // The fallback ambience floor is program-keyed; keep the mod snapshot
-      // in step with the new program.
+      // The fallback ambience floor is program-keyed, and so is the rig the bank
+      // binds; keep both in step with the new program.
       refresh_channel_mod(ch);
+      refresh_part_rig(ch);
     } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
       if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
         // MIDI 1.0: 14-bit value, LSB in data1 (bits 8..14), MSB in data2.

@@ -126,6 +126,16 @@ struct Sf2PlayerConfig {
   std::function<std::unique_ptr<rt::ProcessorBase>(std::string_view name,
                                                    std::string_view json_params)>
       insert_factory;
+  /// Bind the bank's per-program default rig on a part that carries no insert of
+  /// its own (docs/voicing.md). The voice is the instrument — an electric
+  /// guitar's string and its pickup — and the amplifier it is never heard
+  /// without is this stage, so a file that selects program 30 and sends no
+  /// insertion effect still comes out amplified while the direct signal stays
+  /// available. Bound only where the note plays the model floor: a SoundFont's
+  /// electric guitar is a recording of an amplified one, and a second amplifier
+  /// on top of it would be the bake this separation removes. Needs
+  /// `insert_factory` — a host that wires none gets the instrument alone.
+  bool bank_rig_binding = true;
   /// Offline / single-threaded hosts only: when set, process() realises any
   /// pending GS EFX change (a factory build, i.e. an allocation) inline at the
   /// top of the block, so an EFX SysEx that arrives mid-render takes effect
@@ -454,6 +464,14 @@ class Sf2Player final : public MidiInstrument {
                                     uint8_t note) const noexcept;
   /// Preset index for (bank, program) with GS-style fallbacks, or -1.
   int resolve_preset(uint16_t bank, uint8_t program) const noexcept;
+  /// AUDIO thread: recompute which default rig @p channel's current program binds
+  /// and publish it for the builder. Called from the program / bank / rhythm-part
+  /// writes only — never per note and never per controller, since it resolves a
+  /// preset. Also called for every part from the control thread at prepare(),
+  /// set_soundfont() and reset, where the audio thread is quiescent.
+  void refresh_part_rig(uint8_t channel) noexcept;
+  /// The rig id published for @p part, 0 when the part binds none.
+  uint8_t part_rig(int part) const noexcept;
   /// Recompute tail_samples_ from the SoundFont release scan, the synth
   /// fallback bank and the effect units (requires prepared_).
   void recompute_tail() noexcept;
@@ -622,6 +640,15 @@ class Sf2Player final : public MidiInstrument {
   /// the publisher, so the audio thread's held snapshot is never disturbed.
   std::unique_ptr<rt::RtPublisher<Sf2RealizedEfx>> efx_pub_ =
       std::make_unique<rt::RtPublisher<Sf2RealizedEfx>>();
+
+  /// Which default rig each part currently binds, four bits per part: written by
+  /// the AUDIO thread when a program or bank moves, read by the CONTROL thread
+  /// when it builds a snapshot. This is the one piece of audio-side state the
+  /// builder reads, which is why it is an atomic and why all sixteen parts share
+  /// one word — the builder sees them as they stood at a single instant instead
+  /// of assembling a mixture of two programs. Held by unique_ptr so Sf2Player
+  /// stays movable, the same reason EfxParamQueue is.
+  std::unique_ptr<std::atomic<uint64_t>> part_rigs_ = std::make_unique<std::atomic<uint64_t>>(0);
 
   /// CONTROL thread: build a fresh realised-EFX snapshot from the current EFX
   /// mirror (efx_ / efx_part_enabled_) and the config static inserts, via the

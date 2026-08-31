@@ -60,13 +60,25 @@ The same shape appears in GS itself: a drum note's send is a multiplicand of wha
 
 An amplifier is not expressible as a weight — there is no file-controlled "amp amount" for it to scale — so it takes the other form: a stage with a binding the host can clear. Both are bindings; they differ in what the file already had a handle on.
 
+## What binds, and what does not
+
+`gm_fallback_rig(bank, program)` is the table, and `Sf2Player::build_realized_efx()` is where a binding becomes a processor. Three conditions gate it, and each is the answer to a way the rule could be broken:
+
+- **Only where the note plays the model floor.** A SoundFont's electric guitar is a recording of an amplified one, so a bank rig on top of it would be two amplifiers, which is the bake this page removes. The part re-resolves the question at every program, bank and rhythm-part change.
+- **Only where the part carries nothing of its own.** A configured insert or a live GS EFX chain is the host or the file speaking, and either outranks a default.
+- **Only where the host wired an insert factory**, since the rig is built through it. A host that wires none gets the instrument alone, and that is stated in the config rather than left to be discovered.
+
+The six GM electric guitars bind today. Everything else the split would cover is left unbound rather than guessed at: an electric piano and a drawbar organ each want a component that is not an amplifier, and a module's electric bass is close enough to a direct signal that binding one would be a preference rather than a repair.
+
 ## The RT contract for a binding that changes mid-song
 
-A program change on a part changes which rig that part should carry, and building a rig allocates. This is a new mechanism rather than a variation on an existing one: `part_inserts` is configuration today and never moves once the player is prepared.
+A program change on a part changes which rig that part should carry, and building a rig allocates.
 
-- **The audio thread never builds.** A program change marks the part dirty; the control thread rebuilds and publishes, and the render side swaps a snapshot wait-free. This is the path the insertion effect already uses, and the rig joins it rather than growing a second one.
+- **The audio thread never builds.** It publishes which rig each part wants — one word, four bits per part, so the builder reads all sixteen as they stood at one instant — and the control thread builds and publishes the chains for the render side to swap wait-free. This is the path the insertion effect already uses, and the rig joins it rather than growing a second one.
+- **Offline renders resolve inline.** The bounce path realises a pending change at the top of a block rather than waiting for a control-thread pump, so a program change mid-render takes effect in the same block it arrived in — and the render stays deterministic, which is what the bit-identical contract needs.
+- **A live program change keeps the rig the part already had**, until the control thread comes past — `prepare`, `set_soundfont`, a reset, or a SysEx the host pushed. That is the same reach a *sequenced* insertion-effect SysEx has, for the same reason: a live program change arrives entirely on the audio thread and the control-thread hook on `MidiInstrument` is SysEx-only. A binding that rebound itself live would need a signal from the audio thread to the control thread, which no queue in the engine runs in that direction.
 - **A rig swapped under a sounding note loses that note's tail through the old rig.** The same is true of an EFX change on the hardware, and making it seamless would mean running both rigs during the crossover for an effect nobody asked for. Accepted, and stated so it is not rediscovered as a bug.
-- **Offline renders resolve inline.** The bounce path already realises a pending change at the top of a block rather than waiting for a control-thread pump, so a program change mid-render takes effect in the same block it arrived in — and the render stays deterministic, which is what the bit-identical contract needs.
+- **A program change within one rig rebuilds nothing.** A binding carries an id as well as a name, so moving a part from program 27 to 28 keeps the amplifier it is running instead of replacing it with an identical one and discarding its state.
 
 ## A reference is on one side of the boundary or the other, and which one decides what it may be used for
 
@@ -99,6 +111,8 @@ This is the same discipline the room already uses: an external reference has its
 **A rig binding is bank data.** Changing which amplifier a program defaults to changes what a consumer hears from the same file, exactly as changing a patch field does — and neither the semver release version nor the ABI versions can move for it.
 
 So a binding is reported by the library in the tuning dump and carries a unit in `tools/bank-versions.json`, on the same terms as a patch or an engine's constants. A rig swapped without a version moving is a voice that changed with nothing saying why.
+
+The drive and the trim are ordinary tunables and appear as keys. The **preset name** is the one part of a binding that is not a float, so it gets a `#rig` line of its own in the dump and is folded into the table's unit as `rig.NNN` — without that, changing which amplifier program 30 runs would move no fingerprint at all.
 
 ## Rules
 

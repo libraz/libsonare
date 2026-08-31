@@ -67,6 +67,20 @@ SONARE_TUNABLE(kSendsPercussiveCho, 1.0f);
 SONARE_TUNABLE(kSendsSfxRev, 1.4f);
 SONARE_TUNABLE(kSendsSfxCho, 1.0f);
 
+/// The default rigs (see `gm_fallback_rig`), tunable for the same reason a send
+/// weight is: an electric guitar's reference is always heard through one.
+/// Both numbers run high because a preset is voiced for a full-scale input and
+/// the bank's guitar arrives 12 dB under it, where a bare amp answers 28.6 dB
+/// down: the drives give 1.6% and 14.2% THD there (the lead rig scoops the
+/// harmonics a sine could show and compresses 4.3 dB on the note instead), and
+/// each trim peaks its program against the same voice's direct signal.
+SONARE_TUNABLE(kRigCleanDrive, 0.35f);
+SONARE_TUNABLE(kRigCleanLevelDb, 44.1f);
+SONARE_TUNABLE(kRigCrunchDrive, 0.55f);
+SONARE_TUNABLE(kRigCrunchLevelDb, 24.9f);
+SONARE_TUNABLE(kRigLeadDrive, 0.85f);
+SONARE_TUNABLE(kRigLeadLevelDb, 19.2f);
+
 /// A GS variation tone the model floor voices with a patch of its own: the
 /// capital tone it hangs under, the bank number that selects it, and the patch.
 ///
@@ -544,6 +558,10 @@ struct ProgramKeyRecorder {
         }
         ::sonare::tuning::note_program_key(p, bank, key);
       }
+      // The rig belongs to the program rather than to the patch it resolves to:
+      // three programs share the electric guitar's patch and are heard through
+      // two different amplifiers, which is the whole point of the separation.
+      ::sonare::tuning::note_rig(p, gm_fallback_rig(0, static_cast<uint8_t>(p)).preset);
     }
   }
 };
@@ -610,6 +628,44 @@ GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept {
       return {kSendsPercussiveRev, kSendsPercussiveCho};  // percussive
     default:
       return {kSendsSfxRev, kSendsSfxCho};  // SFX
+  }
+}
+
+GmFallbackRig gm_rig_binding(uint8_t id) noexcept {
+  switch (id) {
+    case 1:
+      return {1, "cleanCombo", kRigCleanDrive, kRigCleanLevelDb};
+    case 2:
+      return {2, "classicCrunch", kRigCrunchDrive, kRigCrunchLevelDb};
+    case 3:
+      return {3, "modernLead", kRigLeadDrive, kRigLeadLevelDb};
+    default:
+      return {};
+  }
+}
+
+GmFallbackRig gm_fallback_rig(uint16_t bank, uint8_t program) noexcept {
+  if (bank == kDrumBank) return {};
+  // The six GM electric guitars, and only those. What binds a rig is that the
+  // instrument is never heard without one: a module's samples of these six have
+  // an amplifier and a cabinet recorded into them, and the model's voice stops
+  // at the pickup. Everything else that could take a rig is left unbound for
+  // now — an electric piano and a drawbar organ each want a component that is
+  // not an amplifier (a suitcase preamp, a rotary speaker), and a module's
+  // electric bass is close enough to a direct signal that binding one would be
+  // a preference rather than a repair.
+  switch (program & 0x7Fu) {
+    case 26:  // Jazz Guitar: hollow body into a clean American combo
+    case 27:  // Clean Guitar
+    case 28:  // Muted Guitar
+    case 31:  // Guitar Harmonics: chimes, so the amp stays under breakup
+      return gm_rig_binding(1);
+    case 29:  // Overdriven Guitar: an amp just into its power stage
+      return gm_rig_binding(2);
+    case 30:  // Distortion Guitar: a cascaded preamp, scooped
+      return gm_rig_binding(3);
+    default:
+      return {};
   }
 }
 

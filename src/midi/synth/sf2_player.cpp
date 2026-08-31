@@ -67,7 +67,14 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
       }
     }
   }
-  if (prepared_) recompute_tail();
+  // Which parts play the model floor just changed, and the bank rig follows it:
+  // a SoundFont that covers program 30 takes that part off its amplifier, and
+  // one that is unloaded puts it back on.
+  for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
+  if (prepared_) {
+    recompute_tail();
+    realize_gs_efx();
+  }
 }
 
 void Sf2Player::recompute_tail() noexcept {
@@ -178,9 +185,11 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   apply_gs_system_state(sys_fx_, master_eq_, eq_part_bypassed_);
   recompute_tail();
   prepared_ = true;
-  // Publish the initial realised-EFX snapshot (the config static inserts; no GS
-  // EFX assigned yet), so the audio thread routes bussed parts from the first
-  // block. build_realized_efx() builds the kProcessor inserts via the factory.
+  // Publish the initial realised-EFX snapshot (the config static inserts, the
+  // bank rigs the parts' current programs bind; no GS EFX assigned yet), so the
+  // audio thread routes bussed parts from the first block. build_realized_efx()
+  // builds the kProcessor inserts via the factory.
+  for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
   efx_pub_->publish(build_realized_efx());
   gs_efx_dirty_ = false;
 }
@@ -238,6 +247,7 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
     // is stored in; one default cannot say sixteen different things.
     channels_[ch].rx_channel = ch;
     refresh_channel_mod(ch);
+    refresh_part_rig(ch);
   }
   refresh_rx_channels();
   for (int part = 0; part < 16; ++part) {

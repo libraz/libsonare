@@ -29,8 +29,9 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
       // edit slab the part reads (docs/gs.md).
       channels_[msg.channel & 0x0Fu].drum_map = msg.value;
       // The part's effective bank just moved between melodic and rhythm, and
-      // the fallback ambience floor is keyed on it.
+      // both the fallback ambience floor and the bank's rig are keyed on it.
       refresh_channel_mod(msg.channel & 0x0Fu);
+      refresh_part_rig(msg.channel & 0x0Fu);
       return true;
     case GsSysExKind::kEfxPartSwitch:
       // Route/unroute the part through the EFX. Offline (inline) updates the
@@ -200,6 +201,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
   // One bit per part written, so a run over several parts refreshes each once
   // instead of once per byte.
   uint16_t dirty = 0;
+  uint16_t rig_dirty = 0;
   bool rx_dirty = false;
   for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
     const GsWrite& w = writes[i];
@@ -225,6 +227,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         } else {
           st.program = w.value;
         }
+        rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
         break;
       case GsParam::kPartRxChannel:
         st.rx_channel = w.value;
@@ -307,6 +310,9 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
   }
   for (uint8_t ch = 0; ch < 16; ++ch) {
     if ((dirty & (1u << ch)) != 0) refresh_channel_mod(ch);
+    // Its own mask rather than `dirty`: this resolves a preset, and every other
+    // part parameter in the block leaves the rig binding exactly where it was.
+    if ((rig_dirty & (1u << ch)) != 0) refresh_part_rig(ch);
   }
   if (rx_dirty) refresh_rx_channels();
   return dirty != 0;
@@ -559,8 +565,26 @@ std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
         }
       }
     }
-    // Buss the part only when it carries a static insert (kDrive) or a live EFX
-    // chain, so unaffected parts keep adding straight to the dry mix.
+    // Nothing of the part's own and nothing from the file: the bank's default
+    // rig for the program it is playing (docs/voicing.md). The presets bind the
+    // analytic cabinet rather than a generated impulse, so the stage reports no
+    // latency and the part stays aligned with every other one.
+    if (chain.empty() && config_.insert_factory) {
+      const GmFallbackRig rig = gm_rig_binding(part_rig(part));
+      if (rig.id != 0) {
+        std::string params = std::string("{\"preset\":\"") + rig.preset +
+                             "\",\"drive\":" + std::to_string(rig.drive) +
+                             ",\"levelDb\":" + std::to_string(rig.level_db) + "}";
+        auto proc = config_.insert_factory("saturation.ampSim", params);
+        if (proc != nullptr) {
+          proc->prepare(sample_rate_, kChunkFrames);
+          chain.push_back(std::move(proc));
+        }
+      }
+    }
+    // Buss the part only when it carries a static insert (kDrive), a live EFX
+    // chain or a bank rig, so unaffected parts keep adding straight to the dry
+    // mix.
     out->part_bussed[static_cast<size_t>(part)] = static_insert || !chain.empty();
     out->any_bussed = out->any_bussed || out->part_bussed[static_cast<size_t>(part)];
   }
@@ -704,6 +728,37 @@ void Sf2Player::refresh_rx_channels() noexcept {
     const uint8_t ch = channels_[part].rx_channel;
     if (ch < 16) rx_parts_[ch] |= static_cast<uint16_t>(1u << part);
   }
+}
+
+uint8_t Sf2Player::part_rig(int part) const noexcept {
+  const uint64_t bits = part_rigs_->load(std::memory_order_acquire);
+  return static_cast<uint8_t>((bits >> (4 * (part & 0x0F))) & 0x0Fu);
+}
+
+void Sf2Player::refresh_part_rig(uint8_t channel) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  uint8_t id = 0;
+  if (config_.bank_rig_binding && config_.synth_fallback) {
+    const uint16_t bank = effective_bank(ch);
+    const uint8_t program = channels_[ch].program;
+    // Only where the note plays the model floor. A SoundFont's electric guitar
+    // was recorded through an amplifier, so a second one on top of it is the
+    // bake docs/voicing.md exists to remove.
+    const bool model_floor = soundfont_ == nullptr || resolve_preset(bank, program) < 0 ||
+                             (config_.prefer_model_for_modeled_families &&
+                              gm_program_has_dedicated_model(bank, program));
+    if (model_floor) id = gm_fallback_rig(bank, program).id;
+  }
+  const int shift = 4 * ch;
+  uint64_t bits = part_rigs_->load(std::memory_order_relaxed);
+  if (static_cast<uint8_t>((bits >> shift) & 0x0Fu) == id) return;
+  bits = (bits & ~(uint64_t{0x0F} << shift)) | (static_cast<uint64_t>(id) << shift);
+  part_rigs_->store(bits, std::memory_order_release);
+  // Same thread split as every other realise trigger: offline rebuilds inline at
+  // the next block, live waits for the control thread to come past. A live
+  // program change therefore keeps the rig it had, which is the reach a
+  // sequenced insertion-effect SysEx already has.
+  if (config_.realize_efx_inline) gs_efx_dirty_ = true;
 }
 
 void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
