@@ -273,7 +273,22 @@ def tail_seconds(cfg: dict, note: int) -> float:
     against two seconds of reference and eight seconds of decay against nothing,
     which reads as a model whose every band dies too fast.
     """
-    text = tail_for(cfg, note).strip().lower()
+    return parse_seconds(tail_for(cfg, note))
+
+
+def parse_seconds(value) -> float:
+    """A duration written as `500ms`, `2s` or a bare number, in seconds.
+
+    `ms` is tested before `s`, since it ends in one: reading `500ms` as `500m`
+    is a `ValueError` rather than a wrong number, so it was invisible until
+    something asked a capture written that way for its tail — which is 64 of
+    them, against the five whose tails are whole seconds.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().lower()
+    if text.endswith("ms"):
+        return float(text[:-2]) / 1000.0
     return float(text[:-1]) if text.endswith("s") else float(text)
 
 

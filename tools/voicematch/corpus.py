@@ -38,6 +38,7 @@ from capture import (
     RIG_NONE,
     RIG_UNCLASSIFIED,
     RIG_VALUES,
+    parse_seconds,
     rig_capable,
 )
 from patterns import Pattern
@@ -216,9 +217,10 @@ def _config_paths(config: str):
 
     A manifest records the path repo-relative, so a bare `Path.exists()` answers
     differently depending on where the harness was invoked from. `_dryness` is
-    not resolved this way and its miss is safe — an unread config reads wet, and
-    a dry reference measured wet still comes back dry — while a miss here
-    restores the ambiguity the lookup exists to resolve.
+    the one caller not resolved this way, and its miss is safe — an unread config
+    reads wet, and a dry reference measured wet still comes back dry. A miss in
+    `_note_channel` restores the ambiguity the lookup exists to resolve, and one
+    in `_rig` is indistinguishable from a capture nobody has answered for.
     """
     if not config:
         return
@@ -271,16 +273,20 @@ def _rig(manifest: dict) -> str:
 
     if "rig" in manifest:
         value = manifest.get("rig")
-    else:
-        config = manifest.get("config", "")
-        path = Path(config) if config else None
-        if path is None or not path.exists():
-            return RIG_UNCLASSIFIED
+        return str(value) if value in RIG_VALUES else RIG_UNCLASSIFIED
+    # Through `_config_paths`, because every corpus rendered before the field
+    # existed can only be answered from its config, and a manifest records that
+    # path repo-relative. Resolving it against the working directory instead
+    # makes the answer reachable from the repo root and nowhere else, and the
+    # miss looks exactly like a capture nobody has answered for.
+    for candidate in _config_paths(manifest.get("config", "")):
         try:
-            value = json.loads(path.read_text()).get("rig")
+            value = json.loads(candidate.read_text()).get("rig")
         except (OSError, ValueError):
-            return RIG_UNCLASSIFIED
-    return str(value) if value in RIG_VALUES else RIG_UNCLASSIFIED
+            continue
+        if value in RIG_VALUES:
+            return str(value)
+    return RIG_UNCLASSIFIED
 
 
 def check_rig(corpus: Corpus, program: int, *, allow: bool = False) -> None:
@@ -361,11 +367,8 @@ def _groups(manifest: dict) -> dict[str, tuple[int, ...]]:
 
 
 def _tail_seconds(tail) -> float:
-    """Read the manifest's tail field, which is written as '2s' or as a number."""
-    if isinstance(tail, (int, float)):
-        return float(tail)
-    text = str(tail).strip().lower()
-    return float(text[:-1]) if text.endswith("s") else float(text)
+    """Read the manifest's tail field, which is written as '500ms', '2s' or a number."""
+    return parse_seconds(tail)
 
 
 def corpus_pattern(

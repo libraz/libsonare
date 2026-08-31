@@ -590,6 +590,20 @@ def test_a_capture_with_no_per_note_table_answers_its_flat_tail():
     assert capture.tail_seconds({"tail": "2s", "tail_by_note": {}}, 60) == pytest.approx(2.0)
 
 
+def test_a_tail_in_milliseconds_is_read_as_milliseconds():
+    """`500ms` ends in `s`, and reading it as `500m` raised rather than misread.
+
+    Which hid it: the five captures whose tails are whole seconds are the five
+    that had ever been compared, and the sixty-four written in milliseconds threw
+    the moment anything asked one for its tail.
+    """
+    assert capture.tail_seconds({"tail": "500ms"}, 60) == pytest.approx(0.5)
+    assert capture.parse_seconds("250ms") == pytest.approx(0.25)
+    assert capture.parse_seconds("3s") == pytest.approx(3.0)
+    assert capture.parse_seconds(1.5) == pytest.approx(1.5)
+    assert capture.parse_seconds("2") == pytest.approx(2.0)
+
+
 # --------------------------------------------------------------------------
 # identifying what is loaded in a rack slot
 
