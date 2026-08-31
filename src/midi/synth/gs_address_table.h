@@ -105,6 +105,7 @@ enum class GsLevel : uint8_t {
   X(kPartDelaySend)         \
   X(kPartToneModify)        \
   X(kPartModDest)           \
+  X(kPartModPitch)          \
   X(kPartModTvfCutoff)      \
   X(kPartModLfo1Rate)       \
   X(kPartModLfo1PitchDepth) \
@@ -114,6 +115,7 @@ enum class GsLevel : uint8_t {
   X(kPartBendDest)          \
   X(kPartBendPitchControl)  \
   X(kPartCafDest)           \
+  X(kPartCafPitch)          \
   X(kPartCafTvfCutoff)      \
   X(kPartCafAmplitude)      \
   X(kPartCafLfo1Rate)       \
@@ -420,8 +422,9 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
     // asks for is already built. The wheel's cutoff and LFO1 pitch depth are
     // the two that are (docs/gs.md's alias table); the rest have no reader.
     // Modulation as a source.
-    {0x402000, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    // Whole semitones above 40, the range the row already carries: the same
+    // cents the bend spends, so the two add on one field.
+    {0x402000, 0x000F00, GsParam::kPartModPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
     // The wheel's own cutoff edit: the same 150-cents-a-step offset TONE MODIFY
     // writes at 40 1x 32, reached through the controller instead of statically,
     // so the two are one quantity and gs_cutoff_offset_cents converts both.
@@ -446,25 +449,24 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
     {0x402006, 0x000F00, GsParam::kPartModLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
     {0x402007, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
     {0x402008, 0x000F00, GsParam::kPartModDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
     // Bend as a source.
     {0x402010, 0x000F00, GsParam::kPartBendPitchControl, GsLevel::kAudible, 1, 0x40, 0x58, 0x42,
      nullptr},
     {0x402011, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the bend is routed to pitch alone, so its other destinations name nothing"},
     {0x402014, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the bend is routed to pitch alone, so its other destinations name nothing"},
     {0x402017, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the bend is routed to pitch alone, so its other destinations name nothing"},
     {0x402018, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the bend is routed to pitch alone, so its other destinations name nothing"},
     // CAf as a source. The five destinations the modulation wheel reaches are
     // the five channel pressure reaches, on the same conversions and summing
     // into the same channel snapshot; the split here mirrors the block above.
-    {0x402020, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402020, 0x000F00, GsParam::kPartCafPitch, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
     {0x402021, 0x000F00, GsParam::kPartCafTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
      nullptr},
     {0x402022, 0x000F00, GsParam::kPartCafAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
@@ -480,42 +482,57 @@ inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
     {0x402026, 0x000F00, GsParam::kPartCafLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
     {0x402027, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
     {0x402028, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
     // PAf as a source.
     {0x402030, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; polyphonic aftertouch is not received, and a per-note pressure needs per-voice "
+     "state"},
     {0x402031, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; polyphonic aftertouch is not received, and a per-note pressure needs per-voice "
+     "state"},
     {0x402034, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; polyphonic aftertouch is not received, and a per-note pressure needs per-voice "
+     "state"},
     {0x402037, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; polyphonic aftertouch is not received, and a per-note pressure needs per-voice "
+     "state"},
     {0x402038, 0x000F00, GsParam::kPartPafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; polyphonic aftertouch is not received, and a per-note pressure needs per-voice "
+     "state"},
     // CC1 as a source.
     {0x402040, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402041, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402044, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402047, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402048, 0x000F00, GsParam::kPartCc1Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     // CC2 as a source.
     {0x402050, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402051, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402054, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402057, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
     {0x402058, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+     "recognised; the assignable controller number (40 1x 1F/20) is not decoded, so nothing drives "
+     "it"},
 
     // Tone map (40 4x 00-01): which generation of the sound set a part plays
     // from. The maps themselves exist and are audible through Bank Select LSB;

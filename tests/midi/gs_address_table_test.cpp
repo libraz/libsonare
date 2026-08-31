@@ -239,7 +239,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   // Controller destinations (40 2x xx). One decode per row, plus the last
   // byte of every row that carries more than one, spread over blocks so the
   // block-to-part mapping is exercised alongside the index.
-  check_row(0x402100, 0x40, GsParam::kPartModDest, 0, 0);
+  check_row(0x402100, 0x40, GsParam::kPartModPitch, 0, 0);
   check_row(0x402201, 0x40, GsParam::kPartModTvfCutoff, 0, 1);
   check_row(0x402302, 0x40, GsParam::kPartModAmplitude, 0, 2);
   check_row(0x402403, 0x40, GsParam::kPartModLfo1Rate, 0, 3);
@@ -257,7 +257,7 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x402F17, 0x40, GsParam::kPartBendDest, 0, 15);
   check_row(0x402018, 0x00, GsParam::kPartBendDest, 0, 9);
   check_row(0x40211A, 0x00, GsParam::kPartBendDest, 2, 0);
-  check_row(0x402220, 0x40, GsParam::kPartCafDest, 0, 1);
+  check_row(0x402220, 0x40, GsParam::kPartCafPitch, 0, 1);
   check_row(0x402321, 0x40, GsParam::kPartCafTvfCutoff, 0, 2);
   check_row(0x402423, 0x40, GsParam::kPartCafLfo1Rate, 0, 3);
   check_row(0x402524, 0x00, GsParam::kPartCafLfo1PitchDepth, 0, 4);

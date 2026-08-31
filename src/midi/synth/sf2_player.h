@@ -300,6 +300,9 @@ class Sf2Player final : public MidiInstrument {
     float mod_depth_cents = gs_mod_depth_cents(kGsModDepthDefault);
     /// MODULATION TVF CUTOFF CONTROL (40 2x 01), the cutoff offset in cents CC1
     /// reaches at full. The power-on 40 is no offset, so this starts at zero.
+    /// MODULATION PITCH CONTROL (40 2x 00), the pitch offset in cents CC1
+    /// reaches at full. The power-on 40 is no offset, so this starts at zero.
+    float mod_pitch_cents = 0.0f;
     float mod_cutoff_cents = 0.0f;
     /// MODULATION LFO1 RATE CONTROL (40 2x 03) as its written byte. Held raw
     /// where the line above is held converted, because the wheel enters this
@@ -320,6 +323,7 @@ class Sf2Player final : public MidiInstrument {
     /// what differs is only the position they are scaled by, and that LFO1 PITCH
     /// DEPTH powers on at 00 here where the wheel's powers on at 0A.
     uint8_t channel_pressure = 0;
+    float caf_pitch_cents = 0.0f;
     float caf_cutoff_cents = 0.0f;
     float caf_depth_cents = 0.0f;
     uint8_t caf_lfo_rate = 0x40;

@@ -10,6 +10,8 @@
 
 namespace sonare::midi::synth {
 
+using ::sonare::constants::kCentsPerSemitone;
+
 namespace {
 
 int8_t clamp_offset(int8_t v) noexcept { return static_cast<int8_t>(std::clamp<int>(v, -64, 63)); }
@@ -74,6 +76,10 @@ float gs_vib_depth_cents(int8_t offset) noexcept {
   return 3.0f * static_cast<float>(clamp_offset(offset));
 }
 
+float gs_mod_pitch_cents(uint8_t value) noexcept {
+  return kCentsPerSemitone * static_cast<float>(centred_offset(value));
+}
+
 float gs_mod_cutoff_cents(uint8_t value) noexcept {
   return gs_cutoff_offset_cents(centred_offset(value));
 }
@@ -104,7 +110,6 @@ float gs_master_volume_gain(uint8_t value) noexcept {
 }
 
 float gs_key_shift_cents(uint8_t value) noexcept {
-  using ::sonare::constants::kCentsPerSemitone;
   // Clamped to the row's own 28-58: the apply layer already drops anything
   // outside it, and the corpus does reach 6F at 40 00 05.
   return static_cast<float>(std::clamp(static_cast<int>(value & 0x7Fu), 0x28, 0x58) - 0x40) *

@@ -248,8 +248,10 @@ Setup setup_for(const GsAddressEntry& row) {
     case GsParam::kPartModLfo1TvaDepth:
     case GsParam::kPartModAmplitude:
     case GsParam::kPartModLfo1TvfDepth:
+    case GsParam::kPartModPitch:
       return Setup::kModWheelUp;
-    // The same five destinations, reached from channel aftertouch instead.
+    // The same destinations, reached from channel aftertouch instead.
+    case GsParam::kPartCafPitch:
     case GsParam::kPartCafTvfCutoff:
     case GsParam::kPartCafAmplitude:
     case GsParam::kPartCafLfo1Rate:

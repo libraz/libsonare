@@ -370,6 +370,12 @@ float gs_vib_depth_cents(int8_t offset) noexcept;
 // conversion, and the sources sum on the way in (docs/gs.md). What each takes is
 // one source's byte; what a source is worth is that scaled by its own position.
 
+/// PITCH CONTROL (40 2x 00 / 20) as the pitch offset a controller at full adds,
+/// in cents. Whole semitones above 40 over the row's own 28-58 range, so the
+/// full swing is a two-octave bend either way; it lands on the same field the
+/// pitch wheel does, and like MASTER TUNE and RPN 00 01 the two add.
+float gs_mod_pitch_cents(uint8_t value) noexcept;
+
 /// TVF CUTOFF CONTROL (40 2x 01 / 21) as the cutoff offset a controller at full
 /// adds, in cents. The byte is centred on 40 and buys the same step
 /// gs_cutoff_offset_cents already gives the TONE MODIFY cutoff, so a controller

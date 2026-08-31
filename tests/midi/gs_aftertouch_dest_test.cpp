@@ -1,6 +1,6 @@
 /// @file gs_aftertouch_dest_test.cpp
 /// @brief GS controller destinations from channel aftertouch (40 2x 2x): that
-///        the pressure arrives, and that it reaches the same six places the
+///        the pressure arrives, and that it reaches the same seven places the
 ///        modulation wheel reaches by the same route.
 ///
 /// The block gives every source the same eleven destinations, so the claim
@@ -47,9 +47,10 @@ constexpr uint8_t kDestBlock = 0x21;
 constexpr uint8_t kPartBlock = 0x11;
 constexpr uint8_t kToneModifyVibDepth = 0x31;
 /// The destination offsets, from the modulation source's base and the
-/// aftertouch source's. The six libsonare routes are +01 to +06.
+/// aftertouch source's. The seven libsonare routes are +00 to +06.
 constexpr uint8_t kModBase = 0x00;
 constexpr uint8_t kCafBase = 0x20;
+constexpr uint8_t kPitch = 0x00;
 constexpr uint8_t kTvfCutoff = 0x01;
 constexpr uint8_t kAmplitude = 0x02;
 constexpr uint8_t kLfo1Rate = 0x03;
@@ -195,6 +196,7 @@ struct Dest {
 };
 
 constexpr Dest kDests[] = {
+    {kPitch, 0x58, 0x28, "40 2x 00/20 pitch"},
     {kTvfCutoff, 0x00, 0x7F, "40 2x 01/21 TVF cutoff"},
     {kAmplitude, 0x7F, 0x00, "40 2x 02/22 amplitude"},
     {kLfo1Rate, 0x7F, 0x00, "40 2x 03/23 LFO1 rate"},

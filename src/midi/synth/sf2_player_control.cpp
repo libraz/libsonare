@@ -272,6 +272,12 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartModLfo1PitchDepth:
         st.mod_depth_cents = gs_mod_depth_cents(w.value);
         break;
+      case GsParam::kPartModPitch:
+        st.mod_pitch_cents = gs_mod_pitch_cents(w.value);
+        break;
+      case GsParam::kPartCafPitch:
+        st.caf_pitch_cents = gs_mod_pitch_cents(w.value);
+        break;
       case GsParam::kPartModTvfCutoff:
         st.mod_cutoff_cents = gs_mod_cutoff_cents(w.value);
         break;
@@ -720,12 +726,17 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   const ChannelState& st = channels_[ch];
   Sf2ChannelMod& mod = channel_mods_[ch];
-  mod.pitch_cents = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
+  const float bend_cents =
+      (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
   // The two controller sources with destinations (40 2x 0x and 40 2x 2x). Each
   // destination takes the sum of what its sources are worth at their present
   // positions, so a source at rest contributes exactly nothing to any of them.
   const float caf01 = static_cast<float>(st.channel_pressure) / 127.0f;
+  // PITCH CONTROL lands on the field the bend already writes, and adds to it
+  // rather than replacing it: two directions onto one pitch, as MASTER TUNE and
+  // RPN 00 01 are.
+  mod.pitch_cents = bend_cents + st.mod_pitch_cents * mod.mod_wheel01 + st.caf_pitch_cents * caf01;
   // AMPLITUDE CONTROL folds into the part's gain rather than into a field of its
   // own: it is a percentage of the part's level, and this is that level. Floored
   // at zero, where two sources each asking for -100 % would otherwise arrive at
