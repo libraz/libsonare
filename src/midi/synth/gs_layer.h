@@ -363,33 +363,42 @@ float gs_vib_rate_scale(int8_t offset) noexcept;
 /// Vibrato depth: ~3 cents of added pitch depth per step.
 float gs_vib_depth_cents(int8_t offset) noexcept;
 
-/// MODULATION TVF CUTOFF CONTROL (40 2x 01) as the cutoff offset a fully-raised
-/// mod wheel adds, in cents. The byte is centred on 40 and buys the same step
-/// gs_cutoff_offset_cents already gives the TONE MODIFY cutoff, so the wheel
-/// reaches one quantity rather than a second one that happens to resemble it.
-/// A wheel below full scales the result down; 40 is the whole range's no-op.
+// --- controller destinations (40 2x xx) ---
+//
+// The `mod_` in these names is the destination block rather than the modulation
+// wheel: every source that reaches a destination reaches it through the same
+// conversion, and the sources sum on the way in (docs/gs.md). What each takes is
+// one source's byte; what a source is worth is that scaled by its own position.
+
+/// TVF CUTOFF CONTROL (40 2x 01 / 21) as the cutoff offset a controller at full
+/// adds, in cents. The byte is centred on 40 and buys the same step
+/// gs_cutoff_offset_cents already gives the TONE MODIFY cutoff, so a controller
+/// reaches one quantity rather than a second that happens to resemble it. A
+/// controller below full scales the result down; 40 is the range's no-op.
 float gs_mod_cutoff_cents(uint8_t value) noexcept;
 
-/// MODULATION LFO1 RATE CONTROL (40 2x 03) at wheel position @p wheel01, as the
-/// frequency multiplier the vibrato LFO takes. The byte buys the same 25 cents
-/// of LFO frequency a step that the TONE MODIFY vibrato rate does, so the wheel
-/// reaches that rate rather than a second one. Takes the wheel rather than
-/// returning a full-scale value because the quantity is exponential: the wheel
-/// scales the exponent, which is what makes an unraised one exactly 1.
-float gs_mod_lfo_rate_scale(uint8_t value, float wheel01) noexcept;
+/// LFO1 RATE CONTROL (40 2x 03 / 23) as the cents of LFO frequency a controller
+/// at full is worth. The byte buys the same 25 cents a step that the TONE MODIFY
+/// vibrato rate does, so a controller reaches that rate rather than a second
+/// one. Returned in cents rather than as a multiplier because the quantity is
+/// exponential and two sources reach it: each source's contribution is scaled by
+/// its own position and the sum goes into one exponent, which is what makes a
+/// controller at rest worth exactly 1 instead of something near it.
+float gs_mod_lfo_rate_cents(uint8_t value) noexcept;
 
-/// MODULATION AMPLITUDE CONTROL (40 2x 02) as the fraction of its own level a
-/// fully-raised mod wheel adds to the part, over the manual's -100..+100 %. The
-/// byte is centred on 40 and the result multiplies the part's linear gain as
-/// 1 + fraction x wheel, so 00 at a raised wheel is silence and an unraised
-/// wheel is exactly inert whatever the byte says.
+/// AMPLITUDE CONTROL (40 2x 02 / 22) as the fraction of its own level a
+/// controller at full adds to the part, over the manual's -100..+100 %. The byte
+/// is centred on 40 and the sum of every source's contribution multiplies the
+/// part's linear gain as 1 + sum, floored at zero: two sources each asking for
+/// -100 % cannot take a gain below silence and back up inverted.
 float gs_mod_amp_fraction(uint8_t value) noexcept;
 
-/// MODULATION LFO1 TVA DEPTH (40 2x 06) as the fraction of a part's amplitude a
-/// fully-raised mod wheel swings away, 0 for no tremolo and 1 for a swing to
-/// silence. The wheel scales it linearly, so an unraised one is exactly 0. The
-/// LFO is the same one 40 2x 03 retunes and 40 2x 04 gives its pitch depth:
-/// LFO1 is one oscillator with four destinations, not four of them.
+/// LFO1 TVA DEPTH (40 2x 06 / 26) as the fraction of a part's amplitude a
+/// controller at full swings away, 0 for no tremolo and 1 for a swing to
+/// silence. A controller scales it linearly and the sources sum, clamped at 1
+/// for the reason the amplitude is floored at 0. The LFO is the same one
+/// 40 2x 03 retunes and 40 2x 04 gives its pitch depth: LFO1 is one oscillator
+/// with four destinations, not four of them.
 float gs_mod_tva_depth(uint8_t value) noexcept;
 
 /// Applies the melodic part offsets onto resolved voice parameters.

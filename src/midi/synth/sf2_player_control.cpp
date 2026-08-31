@@ -284,6 +284,21 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartModAmplitude:
         st.mod_amp_fraction = gs_mod_amp_fraction(w.value);
         break;
+      case GsParam::kPartCafTvfCutoff:
+        st.caf_cutoff_cents = gs_mod_cutoff_cents(w.value);
+        break;
+      case GsParam::kPartCafAmplitude:
+        st.caf_amp_fraction = gs_mod_amp_fraction(w.value);
+        break;
+      case GsParam::kPartCafLfo1Rate:
+        st.caf_lfo_rate = w.value;
+        break;
+      case GsParam::kPartCafLfo1PitchDepth:
+        st.caf_depth_cents = gs_mod_depth_cents(w.value);
+        break;
+      case GsParam::kPartCafLfo1TvaDepth:
+        st.caf_tva_depth = gs_mod_tva_depth(w.value);
+        break;
       case GsParam::kPartBendPitchControl:
         // The same range RPN 00 00 writes, in whole semitones above 40; the
         // cents its LSB carries have no address of their own here.
@@ -701,14 +716,28 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   Sf2ChannelMod& mod = channel_mods_[ch];
   mod.pitch_cents = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
-  // MODULATION AMPLITUDE CONTROL folds in here rather than into a field of its
-  // own: it is a percentage of the part's level, and this is that level.
-  mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression) *
-             (1.0f + st.mod_amp_fraction * mod.mod_wheel01);
-  mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
-  mod.mod_cutoff_cents = st.mod_cutoff_cents * mod.mod_wheel01;
-  mod.vib_rate_scale = gs_mod_lfo_rate_scale(st.mod_lfo_rate, mod.mod_wheel01);
-  mod.tremolo_depth01 = st.mod_tva_depth * mod.mod_wheel01;
+  // The two controller sources with destinations (40 2x 0x and 40 2x 2x). Each
+  // destination takes the sum of what its sources are worth at their present
+  // positions, so a source at rest contributes exactly nothing to any of them.
+  const float caf01 = static_cast<float>(st.channel_pressure) / 127.0f;
+  // AMPLITUDE CONTROL folds into the part's gain rather than into a field of its
+  // own: it is a percentage of the part's level, and this is that level. Floored
+  // at zero, where two sources each asking for -100 % would otherwise arrive at
+  // a negative gain, which is a phase inversion rather than a quieter part.
+  mod.gain =
+      sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression) *
+      std::max(0.0f, 1.0f + st.mod_amp_fraction * mod.mod_wheel01 + st.caf_amp_fraction * caf01);
+  mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01 + st.caf_depth_cents * caf01;
+  mod.mod_cutoff_cents = st.mod_cutoff_cents * mod.mod_wheel01 + st.caf_cutoff_cents * caf01;
+  // Summed in cents and taken through one exponent, so an untouched pair is
+  // exactly 1 rather than the product of two numbers near it.
+  const float lfo_rate_cents = gs_mod_lfo_rate_cents(st.mod_lfo_rate) * mod.mod_wheel01 +
+                               gs_mod_lfo_rate_cents(st.caf_lfo_rate) * caf01;
+  mod.vib_rate_scale = lfo_rate_cents != 0.0f ? std::exp2(lfo_rate_cents / 1200.0f) : 1.0f;
+  // Clamped at 1 for the reason the gain is floored at 0: past full depth the
+  // trough would take the amplitude through zero and out the other side.
+  mod.tremolo_depth01 =
+      std::min(1.0f, st.mod_tva_depth * mod.mod_wheel01 + st.caf_tva_depth * caf01);
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;

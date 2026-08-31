@@ -311,6 +311,17 @@ class Sf2Player final : public MidiInstrument {
     /// MODULATION AMPLITUDE CONTROL (40 2x 02), the fraction of the part's own
     /// level CC1 adds at full. The power-on 40 is no change, so this is zero.
     float mod_amp_fraction = 0.0f;
+    /// Channel aftertouch, the second controller source with destinations
+    /// (40 2x 2x). The five below are its half of the block, held exactly as
+    /// their modulation siblings above are and converted by the same functions;
+    /// what differs is only the position they are scaled by, and that LFO1 PITCH
+    /// DEPTH powers on at 00 here where the wheel's powers on at 0A.
+    uint8_t channel_pressure = 0;
+    float caf_cutoff_cents = 0.0f;
+    float caf_depth_cents = 0.0f;
+    uint8_t caf_lfo_rate = 0x40;
+    float caf_tva_depth = 0.0f;
+    float caf_amp_fraction = 0.0f;
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.

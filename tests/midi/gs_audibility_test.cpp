@@ -118,6 +118,12 @@ enum class Setup : uint8_t {
   kVolumeCut,     ///< MASTER VOLUME pulled down, for the reset-command rows.
   kBendApplied,   ///< The melodic part bent fully up, where a bend range scales.
   kModWheelUp,    ///< The melodic part's CC1 raised, where a mod depth scales.
+  /// The melodic part's channel pressure raised, with CC1 raised beside it.
+  /// The wheel is there because LFO1 is shared: aftertouch powers on with no
+  /// pitch depth of its own, so its LFO RATE destination would be retuning an
+  /// oscillator nothing was riding, which is inaudible by construction rather
+  /// than unimplemented. The wheel's power-on 0A gives it something to carry.
+  kAftertouchUp,
   /// The rhythm part's SECOND note put in a group, where an assign group only
   /// says something once two notes are in one.
   kDrumGroupPeer,
@@ -147,6 +153,8 @@ const char* setup_name(Setup setup) {
       return "bend-applied";
     case Setup::kModWheelUp:
       return "mod-wheel-up";
+    case Setup::kAftertouchUp:
+      return "aftertouch-up";
     case Setup::kDrumGroupPeer:
       return "drum-group-peer";
     case Setup::kUserDrumSet:
@@ -191,6 +199,7 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
       return {dt1(0x210300u | kProbeDrumPeerNote, {0x7F})};
     case Setup::kBendApplied:
     case Setup::kModWheelUp:
+    case Setup::kAftertouchUp:
     case Setup::kUserDrumSet:
       return {};
   }
@@ -239,6 +248,13 @@ Setup setup_for(const GsAddressEntry& row) {
     case GsParam::kPartModLfo1TvaDepth:
     case GsParam::kPartModAmplitude:
       return Setup::kModWheelUp;
+    // The same five destinations, reached from channel aftertouch instead.
+    case GsParam::kPartCafTvfCutoff:
+    case GsParam::kPartCafAmplitude:
+    case GsParam::kPartCafLfo1Rate:
+    case GsParam::kPartCafLfo1PitchDepth:
+    case GsParam::kPartCafLfo1TvaDepth:
+      return Setup::kAftertouchUp;
     // A group is a relation, so one note in it chokes nothing.
     case GsParam::kDrumAssignGroup:
       return Setup::kDrumGroupPeer;
@@ -284,6 +300,7 @@ Probe probe_for(const GsAddressEntry& row) {
       // is never bussed. 01 10 is Overdrive, which realises.
       return {{0x01, 0x10}, "the generic value selects a type nothing realises"};
     case GsParam::kPartModTvfCutoff:
+    case GsParam::kPartCafTvfCutoff:
       // hi opens the filter, and the stimulus zone's is already open: +9450
       // cents onto a cutoff above the band leaves every partial where it was.
       // lo is the same edit downwards, which the same zone can show.
@@ -445,6 +462,9 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
   if (setup == Setup::kBendApplied) {
     p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, ch, 16383)));
   } else if (setup == Setup::kModWheelUp) {
+    cc(p, ch, 1, 127);
+  } else if (setup == Setup::kAftertouchUp) {
+    p.on_event(0, event(sonare::midi::make_midi1_channel_pressure(0, ch, 127)));
     cc(p, ch, 1, 127);
   } else if (setup == Setup::kUserDrumSet || setup == Setup::kUserDrumSetGroupPeer) {
     // Set 1, on the rhythm part the stimulus strikes. With nothing written to

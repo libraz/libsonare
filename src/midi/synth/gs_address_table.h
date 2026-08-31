@@ -113,6 +113,11 @@ enum class GsLevel : uint8_t {
   X(kPartBendDest)          \
   X(kPartBendPitchControl)  \
   X(kPartCafDest)           \
+  X(kPartCafTvfCutoff)      \
+  X(kPartCafAmplitude)      \
+  X(kPartCafLfo1Rate)       \
+  X(kPartCafLfo1PitchDepth) \
+  X(kPartCafLfo1TvaDepth)   \
   X(kPartPafDest)           \
   X(kPartCc1Dest)           \
   X(kPartCc2Dest)           \
@@ -201,7 +206,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 129> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 133> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -451,13 +456,25 @@ inline constexpr std::array<GsAddressEntry, 129> kGsAddressTable = {{
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     {0x402018, 0x000F00, GsParam::kPartBendDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
-    // CAf as a source.
+    // CAf as a source. The five destinations the modulation wheel reaches are
+    // the five channel pressure reaches, on the same conversions and summing
+    // into the same channel snapshot; the split here mirrors the block above.
     {0x402020, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x28, 0x58, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
-    {0x402021, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x40,
+    {0x402021, 0x000F00, GsParam::kPartCafTvfCutoff, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402022, 0x000F00, GsParam::kPartCafAmplitude, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x402023, 0x000F00, GsParam::kPartCafLfo1Rate, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    // The one power-on default that differs from the wheel's: aftertouch carries
+    // no vibrato until a file asks for it, where the wheel carries 0A of it.
+    {0x402024, 0x000F00, GsParam::kPartCafLfo1PitchDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x402025, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x00,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
-    {0x402024, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
-     "recognised; the engine has no controller-destination matrix, so nothing reads it"},
+    {0x402026, 0x000F00, GsParam::kPartCafLfo1TvaDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
     {0x402027, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 1, 0x00, 0x7F, 0x40,
      "recognised; the engine has no controller-destination matrix, so nothing reads it"},
     {0x402028, 0x000F00, GsParam::kPartCafDest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,

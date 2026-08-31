@@ -258,10 +258,12 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x402018, 0x00, GsParam::kPartBendDest, 0, 9);
   check_row(0x40211A, 0x00, GsParam::kPartBendDest, 2, 0);
   check_row(0x402220, 0x40, GsParam::kPartCafDest, 0, 1);
-  check_row(0x402321, 0x40, GsParam::kPartCafDest, 0, 2);
-  check_row(0x402423, 0x40, GsParam::kPartCafDest, 2, 3);
-  check_row(0x402524, 0x00, GsParam::kPartCafDest, 0, 4);
-  check_row(0x402626, 0x00, GsParam::kPartCafDest, 2, 5);
+  check_row(0x402321, 0x40, GsParam::kPartCafTvfCutoff, 0, 2);
+  check_row(0x402423, 0x40, GsParam::kPartCafLfo1Rate, 0, 3);
+  check_row(0x402524, 0x00, GsParam::kPartCafLfo1PitchDepth, 0, 4);
+  check_row(0x402626, 0x00, GsParam::kPartCafLfo1TvaDepth, 0, 5);
+  check_row(0x402722, 0x40, GsParam::kPartCafAmplitude, 0, 6);
+  check_row(0x402825, 0x00, GsParam::kPartCafDest, 0, 7);
   check_row(0x402727, 0x40, GsParam::kPartCafDest, 0, 6);
   check_row(0x402828, 0x00, GsParam::kPartCafDest, 0, 7);
   check_row(0x40292A, 0x00, GsParam::kPartCafDest, 2, 8);

@@ -88,11 +88,8 @@ float gs_mod_tva_depth(uint8_t value) noexcept {
   return static_cast<float>(value & 0x7Fu) / 127.0f;
 }
 
-float gs_mod_lfo_rate_scale(uint8_t value, float wheel01) noexcept {
-  // The wheel scales the exponent rather than the multiplier, so a wheel at
-  // rest returns exactly 1 for every byte instead of something near it.
-  const float cents = kGsVibRateCentsPerStep * static_cast<float>(centred_offset(value)) * wheel01;
-  return cents != 0.0f ? std::exp2(cents / 1200.0f) : 1.0f;
+float gs_mod_lfo_rate_cents(uint8_t value) noexcept {
+  return kGsVibRateCentsPerStep * static_cast<float>(centred_offset(value));
 }
 
 float gs_master_tune_cents(const GsMasterParams& master) noexcept {

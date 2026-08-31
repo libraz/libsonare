@@ -201,10 +201,13 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       if (scale_cents != 0.0f) {
         params.pitch_increment *= std::exp2(static_cast<double>(scale_cents) / 1200.0);
       }
-      // MOD TVF CUTOFF CONTROL engages the filter the way a TONE MODIFY cutoff
-      // does, and on the part rather than on the wheel: the wheel rises after
-      // the note-on as often as before it, and a bypassed filter cannot open.
-      if (ch.mod_cutoff_cents != 0.0f) params.filter_bypass = false;
+      // A TVF CUTOFF CONTROL destination engages the filter the way a TONE
+      // MODIFY cutoff does, and on the part rather than on the controller: a
+      // controller rises after the note-on as often as before it, and a
+      // bypassed filter cannot open. Either source is enough on its own.
+      if (ch.mod_cutoff_cents != 0.0f || ch.caf_cutoff_cents != 0.0f) {
+        params.filter_bypass = false;
+      }
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
@@ -371,9 +374,11 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // it does on the SoundFont bank.
   part_mod.pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note);
   // Same reason the SoundFont bank engages its filter here: the offset itself
-  // arrives per sample from the wheel, so what the note-on has to settle is
-  // only whether there is a filter for it to reach.
-  if (ch.mod_cutoff_cents != 0.0f) part_mod.filter_edited = true;
+  // arrives per sample from the controller, so what the note-on has to settle
+  // is only whether there is a filter for it to reach.
+  if (ch.mod_cutoff_cents != 0.0f || ch.caf_cutoff_cents != 0.0f) {
+    part_mod.filter_edited = true;
+  }
   voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod,
                organ_percussion, part_mod);
   // This host passes no glide_from_hz, so start() leaves the voice's glide at
@@ -869,6 +874,13 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
         // MIDI 2.0: 32-bit value in word[1]; keep the top 14 bits.
         channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
       }
+      refresh_channel_mod(ch);
+    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kChannelPressure)) {
+      // MIDI 1.0 carries the pressure in the first data byte (there is only
+      // one); MIDI 2.0 gives a 32-bit value, narrowed the way a CC is.
+      channels_[ch].channel_pressure = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                                           ? u.note_number()
+                                           : scale_cc_32_to_7(u.words[1]);
       refresh_channel_mod(ch);
     } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
       const uint8_t controller = u.note_number();
