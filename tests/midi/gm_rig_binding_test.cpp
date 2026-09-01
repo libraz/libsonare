@@ -205,9 +205,12 @@ TEST_CASE("each bound rig drives its amplifier where the bank's own level puts i
   REQUIRE(clean > 0.3);
   REQUIRE(clean < 3.0);
   REQUIRE(crunch > 10.0);
-  // Program 30's rig scoops its mids, so the harmonics a sine can show land in
-  // the scoop and a THD reading understates it. What it does instead is
-  // compress, which the note-level test above measures.
+  // Programs 29 and 30 are one amplifier at two gains, which is what separates
+  // them on a module — so the distortion guitar has to distort MORE than the
+  // overdriven one rather than merely differently. A brighter preset for 30 put
+  // its 5 kHz band 12.6 dB over its reference against this rig's 3.6.
+  const double lead = thd_at_bank_level(gm_fallback_rig(0, 30));
+  REQUIRE(lead > crunch);
 }
 
 TEST_CASE("the bank rig is removable, and absent everywhere it was not bound", "[midi][sf2][rig]") {

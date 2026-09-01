@@ -106,6 +106,8 @@ This is the same shape as the room rule and the opposite conclusion, for a reaso
 - Where the reference library offers the instrument dry and the rig switchable, capture **both**: the same notes rendered with the rig bypassed and engaged. The difference is the rig's transfer function in isolation, which is what an amplifier model should be fitted to and which no single amplified reference can give.
 - Where it does not, the rig is a design choice rather than a fitted one, and is recorded as such.
 
+**Recorded, for the six that bind today.** No product here renders an electric guitar both ways, so which amplifier each program is heard through is chosen rather than fitted. Programs 29 and 30 are one amplifier at two gains, which is also what separates them on a module: a brighter preset for 30 put its 5 kHz band 12.6 dB over its reference where 29's sat 3.6 out, and no drive value moved that band — the difference was the preset's tone stack, since all three bindings share one cabinet. What a measurement can still do is bound the choice rather than make it. **Both sides of that comparison are instrument-plus-rig, so an excess belongs to the chain and not to either stage**, and separating them needs a direct capture of the same instrument, which is exactly what a rig-switchable product is for.
+
 This is the same discipline the room already uses: an external reference has its room baked in and cannot be dried, so the room is measured and the model convolved to match before any timbre metric is taken.
 
 ## Versioning

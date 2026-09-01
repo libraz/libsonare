@@ -68,18 +68,18 @@ SONARE_TUNABLE(kSendsSfxRev, 1.4f);
 SONARE_TUNABLE(kSendsSfxCho, 1.0f);
 
 /// The default rigs (see `gm_fallback_rig`), tunable for the same reason a send
-/// weight is: an electric guitar's reference is always heard through one.
-/// Both numbers run high because a preset is voiced for a full-scale input and
-/// the bank's guitar arrives 12 dB under it, where a bare amp answers 28.6 dB
-/// down: the drives give 1.6% and 14.2% THD there (the lead rig scoops the
-/// harmonics a sine could show and compresses 4.3 dB on the note instead), and
-/// each trim peaks its program against the same voice's direct signal.
+/// weight is: an electric guitar's reference is always heard through one. The
+/// numbers run high because a preset is voiced for a full-scale input and the
+/// bank's guitar arrives 12 dB under one; each trim peaks its program against
+/// the same voice's direct signal. Programs 29 and 30 share an amplifier at
+/// different gain: a brighter preset put 30's 5 kHz band 12.6 dB over its
+/// reference against the crunch rig's 3.6, and no drive moved it.
 SONARE_TUNABLE(kRigCleanDrive, 0.35f);
 SONARE_TUNABLE(kRigCleanLevelDb, 44.1f);
 SONARE_TUNABLE(kRigCrunchDrive, 0.55f);
 SONARE_TUNABLE(kRigCrunchLevelDb, 24.9f);
-SONARE_TUNABLE(kRigLeadDrive, 0.85f);
-SONARE_TUNABLE(kRigLeadLevelDb, 19.2f);
+SONARE_TUNABLE(kRigLeadDrive, 0.95f);
+SONARE_TUNABLE(kRigLeadLevelDb, 21.2f);
 
 /// A GS variation tone the model floor voices with a patch of its own: the
 /// capital tone it hangs under, the bank number that selects it, and the patch.
@@ -638,7 +638,7 @@ GmFallbackRig gm_rig_binding(uint8_t id) noexcept {
     case 2:
       return {2, "classicCrunch", kRigCrunchDrive, kRigCrunchLevelDb};
     case 3:
-      return {3, "modernLead", kRigLeadDrive, kRigLeadLevelDb};
+      return {3, "classicCrunch", kRigLeadDrive, kRigLeadLevelDb};
     default:
       return {};
   }
