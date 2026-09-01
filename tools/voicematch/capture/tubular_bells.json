@@ -45,7 +45,8 @@
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a modal voice is every melodic dimension except `stretch`, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
-    "tnr": "a struck tube's partials are not a harmonic series, so the measurement counts them as noise by construction: only 0.363 of this slot's energy falls on the played key's series, which is the instrument rather than a defect"
+    "tnr": "a struck tube's partials are not a harmonic series, so the measurement counts them as noise by construction: only 0.363 of this slot's energy falls on the played key's series, which is the instrument rather than a defect",
+    "balance": "the same fact as `tnr` above, read on the ladder instead of on the noise: the model's modes sit at 0.50, 1.00, 2.76 and 5.40 times the played note at note 65, so h2-h6 reads its own silence and the delta is unscorable. Not an argument that the two agree - the reference's own modes are at 3.01, 4.98 and 8.13 times the played note, a set `modes` can compare and this dimension cannot"
   },
   "dimensions": [
     "decay",
@@ -54,7 +55,6 @@
     "body",
     "attack",
     "damper",
-    "balance",
     "centroid_pct",
     "vel_range",
     "register"

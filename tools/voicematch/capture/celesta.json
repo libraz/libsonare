@@ -44,7 +44,8 @@
   "_dimensions": "The slot is a struck metal bar with a resonator. `decay` and its two stages are what a struck voice lives on, since everything after the strike is a fall, and they are read off a gate long enough to contain one. `stretch` is not among the dimensions a modal voice is judged on at all - a bar has no series equal temperament predicts - so it is the class that drops it rather than this file.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a modal voice is every melodic dimension except `stretch`, so anything not gated here has to be argued here.",
   "dimensions_na": {
-    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
+    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
+    "balance": "the model's modes are a free-free bar's - 1.00, 2.75, 5.40 and 8.93 times the played note at note 72 - so the harmonic ladder h2-h6 reads its own silence, and the reference answers only because its noise bed fills h2 at 63.4 dB under h1. `modes` is the ruler a bar has, which is why the class weights carry no `harm` term for it"
   },
   "dimensions": [
     "decay",
@@ -53,7 +54,6 @@
     "body",
     "attack",
     "damper",
-    "balance",
     "centroid_pct",
     "tnr",
     "vel_range",

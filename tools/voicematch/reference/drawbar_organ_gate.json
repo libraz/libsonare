@@ -3,9 +3,9 @@
   "timbre": "drawbar-dark",
   "margin": 1.25,
   "reference_measured_utc": "2026-08-27T15:34:48+00:00",
-  "recorded_utc": "2026-08-28T09:43:02+00:00",
+  "recorded_utc": "2026-09-01T10:12:18+00:00",
   "reference_spread": {
-    "balance": 19.335,
+    "balance": 15.4747,
     "body": 22.41,
     "centroid_pct": 177.1716,
     "damper": 437.5,
@@ -33,8 +33,8 @@
       "abs_median": 0.258
     },
     "balance": {
-      "median": 38.15,
-      "abs_median": 39.667
+      "median": 25.454,
+      "abs_median": 25.454
     },
     "centroid_pct": {
       "median": 177.172,

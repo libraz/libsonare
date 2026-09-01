@@ -1756,6 +1756,7 @@
           "canonical": 12,
           "gated": 0,
           "excused": [
+            "balance",
             "stereo"
           ],
           "gaps": [
@@ -1765,7 +1766,6 @@
             "body",
             "attack",
             "damper",
-            "balance",
             "centroid_pct",
             "tnr",
             "vel_range",
@@ -1807,6 +1807,7 @@
           "canonical": 12,
           "gated": 0,
           "excused": [
+            "balance",
             "stereo"
           ],
           "gaps": [
@@ -1816,7 +1817,6 @@
             "body",
             "attack",
             "damper",
-            "balance",
             "centroid_pct",
             "tnr",
             "vel_range",
@@ -2262,6 +2262,7 @@
           "canonical": 12,
           "gated": 0,
           "excused": [
+            "balance",
             "stereo",
             "tnr"
           ],
@@ -2272,7 +2273,6 @@
             "body",
             "attack",
             "damper",
-            "balance",
             "centroid_pct",
             "vel_range",
             "register"
@@ -2575,7 +2575,7 @@
           "total": 9,
           "outside": {
             "vel_range": 1.81,
-            "balance": 1.58,
+            "balance": 1.32,
             "stereo": 1.2,
             "stretch": 1.02
           }
@@ -8524,6 +8524,7 @@
           "canonical": 12,
           "gated": 0,
           "excused": [
+            "balance",
             "damper",
             "stereo"
           ],
@@ -8533,7 +8534,6 @@
             "doubling",
             "body",
             "attack",
-            "balance",
             "centroid_pct",
             "tnr",
             "vel_range",
@@ -8575,6 +8575,7 @@
           "canonical": 12,
           "gated": 0,
           "excused": [
+            "balance",
             "damper",
             "stereo"
           ],
@@ -8584,7 +8585,6 @@
             "doubling",
             "body",
             "attack",
-            "balance",
             "centroid_pct",
             "tnr",
             "vel_range",

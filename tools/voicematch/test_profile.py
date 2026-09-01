@@ -109,6 +109,31 @@ def test_an_empty_spectrum_is_not_a_measurement():
 
 
 # --------------------------------------------------------------------------
+# the partial stack, and the bins that hold no partial
+
+
+def test_a_real_partial_stack_is_the_mean_of_its_partials():
+    assert profile_module.partial_balance_db(
+        [0.0, -6.0, -12.0, -18.0, -24.0, -30.0]) == pytest.approx(-18.0)
+
+
+def test_a_ladder_with_nothing_above_the_fundamental_is_unscorable():
+    """A bar or a bell puts its modes off the ladder, so h2-h6 hold the floor.
+
+    Averaged in, four noise-floor bins read as a partial stack 85 dB too weak,
+    which is a finite number for a voice that has no stack on this ruler at all.
+    """
+    assert profile_module.partial_balance_db(
+        [0.0, -95.0, -99.0, -101.0, -97.0, -103.0]) is None
+
+
+def test_a_floor_bin_does_not_drag_the_mean_of_a_real_partial():
+    """One partial and four empty bins is one partial, not a fifth of it."""
+    assert profile_module.partial_balance_db(
+        [0.0, -6.0, -99.0, -101.0, -97.0, -103.0]) == pytest.approx(-6.0)
+
+
+# --------------------------------------------------------------------------
 # the velocity axis
 
 

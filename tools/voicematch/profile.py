@@ -80,7 +80,8 @@ from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
     INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
     THIRD_OCTAVE_CENTERS, _db, _peak_near, _rms_envelope, _spectrum, analyze_hit,
-    band_edges_by_timbre, fit_partial_series, midi_to_hz, partial_hz, shared_band_edge, to_mono,
+    band_edges_by_timbre, fit_partial_series, ladder_present, midi_to_hz, partial_hz,
+    shared_band_edge, to_mono,
 )
 from phrases import TAKE_SETS, build_takes  # noqa: E402
 from _repo import REPO_ROOT  # noqa: E402
@@ -1052,11 +1053,19 @@ def partial_balance_db(partials_db: list[float] | None) -> float | None:
     over-long hammer contact or an over-soft plectrum does to the treble.
     Inharmonicity does not either — it needs six partials before it reports
     anything, so a note this broken reads as "unmeasurable" rather than as wrong.
+
+    A bin the ladder found nothing in carries the render's own noise floor, not a
+    sentinel, so it has to be excluded by the same `ladder_present` rule the fit
+    uses rather than by a magnitude test. Averaging the floor bins in is how a
+    bar or a bell scores a partial stack it does not have: a glockenspiel's h2-h6
+    sit 55 to 91 dB under h1 and read as -80 dB of stack, which is the mean of
+    four noise floors. Nothing above the fundamental surviving means unscorable.
     """
     if not partials_db or len(partials_db) < 6:
         return None
     ref = partials_db[0]
-    upper = [d for d in partials_db[1:6] if d > -200.0]
+    present = ladder_present(partials_db[:6])
+    upper = [d for d, ok in zip(partials_db[1:6], present[1:6]) if ok]
     if not upper:
         return None
     return float(np.mean(upper) - ref)

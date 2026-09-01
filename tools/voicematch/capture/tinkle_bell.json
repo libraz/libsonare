@@ -45,7 +45,8 @@
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
-    "damper": "the gate is set to this slot's own fall, so the key lifts on a note already 60 dB down - there is nothing left for a damper to stop, and what the measurement would read is the length of the sample rather than how the instrument is silenced"
+    "damper": "the gate is set to this slot's own fall, so the key lifts on a note already 60 dB down - there is nothing left for a damper to stop, and what the measurement would read is the length of the sample rather than how the instrument is silenced",
+    "balance": "the model is a struck bell and its modes say so - 1.00, 1.70 and 2.40 times the played note at note 84, none of them a harmonic - so the ladder h2-h6 reads its own silence and the delta is unscorable. `modes` is the ruler a bell has, which is why the class weights carry no `harm` term for it"
   },
   "dimensions": [
     "decay",
@@ -53,7 +54,6 @@
     "doubling",
     "body",
     "attack",
-    "balance",
     "centroid_pct",
     "tnr",
     "vel_range",
