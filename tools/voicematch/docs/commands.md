@@ -195,6 +195,14 @@ Three things about that number are worth knowing before it is written anywhere.
 
 What each subcommand measures, which dimensions a `compare` gates on, and what `make voice-gate` runs are in [capture.md](capture.md#profilepy).
 
+## `check_specs.py` — every spec still names knobs that exist
+
+```sh
+make spec-check
+```
+
+Resolves every `specs/*.json` knob against the same catalogue `autofit` validates on, and names the ones that resolve to nothing. It needs a `-DBUILD_TUNING=ON` library, which is why it is a make target rather than part of the test suite. It cannot say a knob is *useless* — that is `--diagnose`'s inert list, which needs renders and a reference. This is the cheaper half: the knob is not there at all.
+
 ## `shape` — compare the spectrogram instead of the summary
 
 **A package, not a script** — it needs `tools/voicematch` on `PYTHONPATH`:

@@ -31,7 +31,7 @@ One number per voice, in fifths. Each step is a predicate over facts already on 
 
 **Agreement is measured against the references' own spread**, not against zero. A voice inside that spread is as close to the instrument as two presets of the instrument are to each other, which is the strongest claim this harness can make. Where a capture has one reference timbre there is no spread and no dimension can be adjudicated at all — reported as unjudgeable, which is a different answer from "none of them agree".
 
-**The last step's two claims are the two nothing on disk implies**, so they are recorded by hand in `signoff.json` — see [unadopted settings and signed claims](#unadopted-settings-and-signed-claims) below.
+**The last step's two claims are the two nothing on disk implies**, so they are recorded by hand in `signoff.json` — see [the two claims 1.0 needs](#the-two-claims-10-needs) below.
 
 ## Coverage is all-or-nothing
 
@@ -56,8 +56,6 @@ A dimension with no reason is not excusable. That is the whole of the discipline
 The page groups the sixteen engines into three methods — physical model, FM, and subtractive/additive — because what the eye is asked for is which of the three, and sixteen hues would answer nothing. The engine's own name is on the row.
 
 **A kit is not its program's melodic patch.** On channel 10 the program selects the kit and the note selects the instrument, so the engine belongs to the drum notes; asking the program map gives whatever melodic voice shares the number, and program 0 answers `piano`.
-
-<a id="unadopted-settings-and-signed-claims"></a>
 
 ## Unadopted settings
 

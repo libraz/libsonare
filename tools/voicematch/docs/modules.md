@@ -20,6 +20,8 @@
 - `bank.py` — the library's own voice list as the audition index: every GM program, every variation bank, every kit, each resolved to a phrase set and to whichever capture covers it if any does. See [audition.md](audition.md)
 - `phrases.py` — the phrase sets an audition page plays: three written for one instrument each, five generic ones filled in from the program's own compass, one per `ToneClass`
 - `calibration.py` / `calibrations.json` — named calibration settings recorded per voice, so a batch across the bank carries per-voice candidates and a listening question outlives the shell history that asked it. Tracked, since an override string is knob names and numbers
+- `status.py` / `tools/voice-status.json` — where every voice in the bank stands, as one number and the reasons for it. See [status.md](status.md)
+- `signoff.py` / `signoff.json` — the structural residual and the musical sign-off, the two claims the last step needs and the only two nothing on disk implies. Each carries the bank generation and patch version it was taken against, so it expires with them
 - `make_audition.py` — the listening set for [`tools/audition`](../../audition/README.md)
 - `render_corpus.py` / `compare_metrics.py` — a whole-bank phrase render and a diff of two of them; a broad before/after sweep rather than a per-note comparison
 - `assets/`, `out/` — gitignored (soundfont download, render artifacts)
@@ -41,6 +43,7 @@
 - `writeback.py` — putting a fitted value back: literal splicing, the program table, the drum table
 - `report.py` — the end-of-run report and the diff it applies
 - `specs/` — knob spec JSONs; `example.json` shows all three knob forms, the rest are hand-tuned per-instrument sets. `--spec auto` needs none of them.
+- `check_specs.py` — `make spec-check`: every spec's knobs resolved against the catalogue a fit validates on, so a spec that outlives its mechanism fails before a run rather than during one
 - `shape/` — the second objective: two log-frequency spectrograms compared cell by cell. Its own CLI and its own README.
 
 ## Two objectives over one corpus
@@ -71,5 +74,7 @@ One file per module, and none of them renders anything.
 - `test_phrases.py` builds every set for all 128 programs, because a generic set fills its notes in from a register table and the way that fails is a note number MIDI has no room for — which renders as silence on one side and a transposition on the other, and reads as a voicing difference. It also holds the drum channel to the kit set alone.
 - `test_bank.py` covers the index: that the whole bank is addressable with no two voices sharing a directory name, that program 0's two captures land on the piano and the kit respectively, and that a captured voice keeps its capture's phrase set — which is what keeps the reference archive reachable.
 - `test_calibration.py` holds the shipped `calibrations.json` to voices the bank actually has, since a mistyped key renders the baseline alone and produces a page indistinguishable from a voice nobody has recorded a candidate for. It also covers the name rules, the file-then-flag order, and the refusal when one name is declared in both.
+- `test_signoff.py` covers the two ways a claim expires and the refusals that keep an accepted term honest — an acceptance with no reason, and one naming a term the diagnosis never reported. It also holds the shipped `signoff.json` to real voices and to generations the registry has.
+- `test_check_specs.py` covers both spec shapes and, above all, that the guard names a knob nothing has — a checker that passes everything is the failure mode here.
 - `test_rig.py` covers the direction of each rig signature, and above all that a question which cannot be put reports as unanswerable rather than as a "no" — a vacuous negative is what would put `none` into a capture that never earned it.
 - `test_shape.py`, `test_capture.py`, `test_dataset.py`, `test_room.py`, `test_smf.py`, `test_wavio.py` cover their own modules.
