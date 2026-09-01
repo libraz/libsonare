@@ -40,7 +40,7 @@
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-01",
           "unreachable": [],
           "accepted": [],
@@ -48,7 +48,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6 — then listen to a take and sign it off in signoff.json"
+      "next": "judge the recorded candidate(s) — tank-3.6 — then a shared calibration unit has moved since the diagnosis and nothing can attribute it: re-run autofit --diagnose"
     },
     {
       "slug": "p000b001-acoustic-grand-piano",
@@ -1364,7 +1364,7 @@
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-01",
           "unreachable": [],
           "accepted": [],
@@ -1372,7 +1372,7 @@
         },
         "music": null
       },
-      "next": "listen to a take and sign it off in signoff.json"
+      "next": "a shared calibration unit has moved since the diagnosis and nothing can attribute it: re-run autofit --diagnose"
     },
     {
       "slug": "p006b001-harpsichord",
@@ -3216,7 +3216,7 @@
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-01",
           "unreachable": [],
           "accepted": [],
@@ -3224,7 +3224,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then listen to a take and sign it off in signoff.json"
+      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then a shared calibration unit has moved since the diagnosis and nothing can attribute it: re-run autofit --diagnose"
     },
     {
       "slug": "p019b001-church-organ",

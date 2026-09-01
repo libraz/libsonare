@@ -38,6 +38,13 @@ float ks_steel_inharmonicity_b(uint8_t note) noexcept {
 /// after the slap/pop limiter clips the string against the fret.
 SONARE_TUNABLE(kPolDetuneCents, 11.0f);
 SONARE_TUNABLE(kReflect, 0.06f);  // near-hard clip at the fret gap
+/// What fraction of the played plane's decay targets the horizontal one keeps.
+/// Applied to both its t60 and its ring at the quote frequency, so the plane
+/// that dies first also loses its highs first whatever the string is doing.
+SONARE_TUNABLE(kPolT60Fraction, 0.55f);
+/// How much darker the horizontal plane's pole is where there is no quote
+/// frequency to solve against and the tone knob still sets it.
+SONARE_TUNABLE(kPolToneDarken, 0.12f);
 
 /// KS noise draws live far above the voice-level draw indices (detune/phase/
 /// drift use 0..~103 on the same per-voice seed).
@@ -48,6 +55,20 @@ constexpr uint64_t kKeyoffNoiseIndexBase = 1ull << 20;
 /// Key-off damper thump: burst length and lowpass corner (a soft felt "thunk").
 SONARE_TUNABLE(kKsKeyoffMs, 18.0f);
 SONARE_TUNABLE(kKsKeyoffCutoffHz, 2200.0f);
+
+/// How long the partial at kKsHfQuoteHz rings, in seconds; 0 keeps the pole the
+/// tone knob implies. A pole taken from a tone knob is charged once per
+/// traversal, so its tilt scales with the note's own pitch and a bass string
+/// keeps partials a wound string has lost: over the fifteen voices on this
+/// engine, quoting the decay instead takes the mean brightness error from 1.22
+/// octaves to 0.38, the partial stack from 15.8 dB to 11.8 and the noise from
+/// 18.4 dB to 11.0. Stated as a t60 rather than as a multiple of the
+/// fundamental's, which would inherit decay_stretch and ask the bass string
+/// whose fundamental was stretched to 14 s to hold 4 kHz for 5 of them.
+SONARE_TUNABLE(kKsHfT60S, 0.07f);
+/// Where that decay is quoted. A fixed frequency for the reason string_loop.h
+/// gives: a target quoted at the octave is unreachable in the bass.
+SONARE_TUNABLE(kKsHfQuoteHz, 4000.0f);
 
 }  // namespace
 
@@ -65,20 +86,42 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   const float node = std::floor(std::clamp(params.harmonic_node, 0.0f, 8.0f));
   const float loop_period = node >= 2.0f ? base_period / node : base_period;
 
-  // Loop lowpass: brightness -> feedback coefficient a (y += (1-a)(x-y)).
-  const float a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
-
   // Decay: t60 stretched per octave below A4 (low strings ring longer).
   const float stretch = std::clamp(params.decay_stretch, 0.0f, 1.0f);
   const float octaves_below_a4 = (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
   const float t60 = std::max(0.05f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
   const float damped_t60 = std::max(0.01f, params.release_damp_s);
 
-  // The played string: the vertical plane the pluck grips. configure() tunes it
-  // by compensating the EXACT phase delay of the loop filter at the fundamental
-  // (not just its DC group delay) plus the one-sample feedback path, so the
-  // sounding pitch matches the note to a few cents.
-  string_.configure(slab_, capacity_, loop_period, sr, a, t60, damped_t60);
+  // Loop lowpass: brightness -> feedback coefficient a (y += (1-a)(x-y)).
+  const float tone_a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
+  const float quote_w = kTwoPi * kKsHfQuoteHz / static_cast<float>(sr);
+  // Set one loop up from its two decay targets: its fundamental's t60 and the
+  // ring left at the quote frequency. A quote at or below the fundamental has no
+  // tilt to describe, and there the tone-derived pole stands.
+  auto voice_loop = [&](StringLoop& loop, float* span, float period, float t60_s, float hf_t60_s,
+                        float tone_a_offset = 0.0f) noexcept {
+    float a = std::min(0.97f, tone_a + tone_a_offset);
+    float g = string_loop_gain_for(period, sr, t60_s);
+    float release_g = string_loop_gain_for(period, sr, damped_t60);
+    const float w0 = kTwoPi / period;
+    if (kKsHfT60S > 0.0f && quote_w > w0 * 1.5f) {
+      const StringLoopFilter solved =
+          solve_string_loop_filter(w0, quote_w, g, string_loop_gain_for(period, sr, hf_t60_s));
+      // The damper is broadband, so its gain takes the compensation the
+      // fundamental's did; otherwise the pole is counted into it twice.
+      release_g = std::min(0.9999f, release_g * (g > 0.0f ? solved.g / g : 1.0f));
+      a = solved.a;
+      g = solved.g;
+    }
+    loop.configure_filter(span, capacity_, period, a, g, release_g);
+    return a;
+  };
+
+  // The played string: the vertical plane the pluck grips. configure_filter()
+  // tunes it by compensating the EXACT phase delay of the loop filter at the
+  // fundamental (not just its DC group delay) plus the one-sample feedback path,
+  // so the sounding pitch matches the note to a few cents.
+  const float a = voice_loop(string_, slab_, loop_period, t60, kKsHfT60S);
 
   // Stiff-string dispersion (steel strings). 0 disables the allpass cascade so
   // the loop stays a harmonic string, bit-identical. Otherwise scale the steel
@@ -179,10 +222,11 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   const float polarization = std::clamp(params.polarization, 0.0f, 1.0f);
   if (polarization > 0.0f && slab_ != nullptr) {
     const float pol_period = loop_period / std::exp2(kPolDetuneCents / 1200.0f);
-    // A darker loop filter: the horizontal plane loses its highs faster, and a
-    // faster decay (a fraction of the primary t60) gives the two-stage decay.
-    const float a2 = std::min(0.97f, a + 0.12f);
-    pol_.configure(slab_ + capacity_, capacity_, pol_period, sr, a2, 0.55f * t60, damped_t60);
+    // The horizontal plane takes the same fraction off both its targets: it
+    // decays faster than the primary and loses its highs faster still, which is
+    // what gives the two-stage decay.
+    voice_loop(pol_, slab_ + capacity_, pol_period, kPolT60Fraction * t60,
+               kPolT60Fraction * kKsHfT60S, kPolToneDarken);
     // The damper grips both planes at once, so the horizontal one is released at
     // the played string's damped gain rather than at one solved for its own
     // (slightly shorter) period.
@@ -199,8 +243,14 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     const float bc = std::clamp(params.body_coupling, 0.0f, 1.0f);
     if (bc > 0.0f) {
       constexpr float kLambdaMax = 0.999f;
-      const float mean = 0.5f * (string_.gain + pol_.gain);
-      const float half_diff = 0.5f * (string_.gain - pol_.gain);
+      // What a traversal actually keeps, which is the decay target rather than
+      // the gain sitting in front of the solved pole: the solver scales that
+      // gain up by exactly the pole's own loss at the fundamental, so reading it
+      // here reports a loop hotter than it is and the bridge silently shuts.
+      const float g1 = string_loop_gain_for(loop_period, sr, t60);
+      const float g2 = string_loop_gain_for(pol_period, sr, kPolT60Fraction * t60);
+      const float mean = 0.5f * (g1 + g2);
+      const float half_diff = 0.5f * (g1 - g2);
       const float room = kLambdaMax - mean;
       float eps_max = 0.0f;
       if (room > 0.0f) {
@@ -224,9 +274,9 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   // output, reinforcing the octave like a real coupled 4' choir.
   const float octave_mix = std::clamp(params.octave_mix, 0.0f, 1.0f);
   if (octave_mix > 0.0f && slab_ != nullptr) {
-    // Same loop brightness as the primary; configure() recomputes the phase-delay
-    // compensation at the octave-up fundamental so the 4' pitch is accurate.
-    oct_.configure(slab_ + 2 * capacity_, capacity_, 0.5f * loop_period, sr, a, t60, damped_t60);
+    // The same decay targets as the primary, solved at the octave-up period so
+    // both the 4' pitch and its loss are right for the shorter string.
+    voice_loop(oct_, slab_ + 2 * capacity_, 0.5f * loop_period, t60, kKsHfT60S);
     oct_exc_ = 0.7f;  // the 4' jack grips its string a touch less than the 8'
     oct_couple_ = octave_mix;
   } else {
