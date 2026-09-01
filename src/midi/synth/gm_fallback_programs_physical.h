@@ -212,9 +212,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
     p.brass.release_ms = release_ms;
     p.brass.breath_pressure = breath;
     p.brass.vel_to_breath = 0.5f;
-    // Brass physics gates: the linear waveguide is deliberately dark — the
-    // cuivré shock shaper is what manufactures the bright blare of real
-    // brass; the 2-DOF lip livens the attack buzz.
+    // Brass physics gates: the cuivré shock shaper adds the blare of a loud
+    // brass, and the 2-DOF lip livens the attack buzz. What makes the tone
+    // bright at all is the bell radiation each voice sets below — driven to
+    // full, the shaper supplies a twelfth of the partial stack a reference
+    // brass has, because the bore pressure it reshapes barely has one.
     p.brass.dynamic_lip = 0.25f;
     p.drift_cents = 1.5f;
     p.stereo_spread = 0.08f;
@@ -225,33 +227,48 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
     p.gain = gain;
     return p;
   };
+  // Bell radiation, and the voice lowpass that goes with it: the highpass lifts
+  // the whole band above the flare cutoff, so the top of the range needs closing
+  // in by roughly the same amount to keep the model's tone-to-noise where it was.
+  // The four values are fitted against their references; the cutoffs order as a
+  // bell's flare does, the horn widest and the trumpet narrowest.
   o.trumpet = brass(false, 0.55f, 0.30f, 0.75f, 0.28f, 12.0f, 80.0f, 0.88f, 0.50f, 0.90f);
-  o.trumpet.cutoff_hz = 6500.0f;
+  o.trumpet.cutoff_hz = 2400.0f;
+  o.trumpet.brass.bell_radiation_hz = 1900.0f;
   o.trumpet.brass.brassiness = 0.55f;
   o.trumpet.brass.cuivre_dynamics = 0.7f;
   o.trumpet.lfo_rate_hz = 5.5f;
   o.trumpet.lfo_to_pitch_cents = 4.0f;
   o.trombone = brass(false, 0.48f, 0.45f, 0.85f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.92f);
-  o.trombone.cutoff_hz = 3800.0f;
+  o.trombone.cutoff_hz = 1600.0f;
+  o.trombone.brass.bell_radiation_hz = 1400.0f;
   o.trombone.brass.brassiness = 0.85f;
   o.trombone.brass.cuivre_dynamics = 0.7f;
   o.trombone.lfo_rate_hz = 5.0f;
   o.trombone.lfo_to_pitch_cents = 3.0f;
   o.tuba = brass(true, 0.42f, 0.70f, 0.38f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.92f);
-  o.tuba.cutoff_hz = 3200.0f;
+  // The tuba and the muted trumpet have no reference; their flare cutoffs follow
+  // the bore, below the trombone's and level with the trumpet's respectively.
+  o.tuba.cutoff_hz = 1200.0f;
+  o.tuba.brass.bell_radiation_hz = 500.0f;
   o.tuba.brass.brassiness = 0.25f;
   o.tuba.brass.cuivre_dynamics = 0.5f;
   o.tuba.lfo_to_pitch_cents = 1.5f;
   // The muted trumpet plays through the real mute model instead of the old
   // dimmed-brightness fake.
-  o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.82f);
+  // The mute already attenuates, so this voice needs less of the radiation
+  // make-up than the rest of the family — 2.7 dB of it comes back out here.
+  o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.60f);
+  o.muted_trumpet.cutoff_hz = 2400.0f;
+  o.muted_trumpet.brass.bell_radiation_hz = 1900.0f;
   o.muted_trumpet.brass.brassiness = 0.4f;
   o.muted_trumpet.brass.cuivre_dynamics = 0.5f;
   o.muted_trumpet.brass.mute = 0.65f;
   o.muted_trumpet.lfo_rate_hz = 5.5f;
   o.muted_trumpet.lfo_to_pitch_cents = 4.0f;
   o.french_horn = brass(true, 0.50f, 0.55f, 0.48f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.88f);
-  o.french_horn.cutoff_hz = 3600.0f;
+  o.french_horn.cutoff_hz = 1600.0f;
+  o.french_horn.brass.bell_radiation_hz = 700.0f;
   o.french_horn.brass.brassiness = 0.3f;
   o.french_horn.brass.cuivre_dynamics = 0.6f;
   o.french_horn.lfo_to_pitch_cents = 1.5f;
@@ -262,7 +279,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // softer-edged while the summed blare stays.
   o.brass_section = brass(false, 0.50f, 0.42f, 0.72f, 0.32f, 45.0f, 130.0f, 0.85f, 0.35f, 0.85f);
   o.brass_section.amp_env.attack_ms = 40.0f;
-  o.brass_section.cutoff_hz = 5000.0f;
+  o.brass_section.cutoff_hz = 2400.0f;
+  o.brass_section.brass.bell_radiation_hz = 1900.0f;
   o.brass_section.brass.brassiness = 0.7f;
   o.brass_section.brass.cuivre_dynamics = 0.7f;
   o.brass_section.brass.chiff = 0.25f;

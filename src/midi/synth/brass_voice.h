@@ -15,11 +15,15 @@
 /// since the lip valve excites every harmonic regardless.
 ///
 /// The delay buffer is not owned here — the host attaches one bore span per
-/// voice slot before start(), and bell voicing is the shared BodyResonator, so
-/// the core emits raw bore pressure. Unconditionally stable: the lip reflection
-/// coefficient is bounded to [-1,1] and the bell loss gain is < 1. The linear
-/// waveguide is deliberately dark; the brassy "cuivré" edge would be
-/// amplitude-dependent steepening, which is not modelled.
+/// voice slot before start(). Unconditionally stable: the lip reflection
+/// coefficient is bounded to [-1,1] and the bell loss gain is < 1.
+///
+/// The bell is two filters, not one: it reflects the long wavelengths back down
+/// the bore (the loop lowpass @c brightness sets) and radiates the short ones
+/// (the complementary highpass @c bell_radiation_hz sets), and only the second
+/// is what a listener hears. Emitting the bore pressure instead makes the
+/// centroid track the note, where a reference brass holds a formant the note
+/// moves under. Formant colour on top of that is the shared BodyResonator.
 ///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism:
 /// breath turbulence and onset chiff come from the counter-based
@@ -103,6 +107,20 @@ struct BrassPatchParams {
   float chiff_ms = 10.0f;
 
   // --- off-by-default advanced physics (Phase 4; C-ABI non-exposed, gated) ---
+  /// Bell radiation cutoff (Hz): the flare's cutoff frequency, a property of the
+  /// bell's geometry and so the same for every note. A bell reflects the long
+  /// wavelengths back down the bore and radiates the short ones, which makes the
+  /// radiated field the complement of the loop reflection — a one-pole highpass
+  /// at this frequency, normalised so the fundamental keeps the level it had.
+  /// Without it the core emits the bore pressure, whose fundamental stands 10 dB
+  /// over the partials a reference brass puts its formant on, and no knob in the
+  /// engine reaches that: a real brass has a fixed formant the note moves under,
+  /// while the bore pressure's centroid simply tracks f0. Roughly the flare
+  /// cutoff of the instrument (a horn's is the lowest, a trumpet's the highest).
+  /// 0 = off -> the core emits the bore pressure and the render is
+  /// bit-identical.
+  float bell_radiation_hz = 0.0f;
+
   /// Cuivré / brassiness in [0,1]: the bright, blaring "brassy" edge of a loud
   /// brass. Physically it is the cumulative NONLINEAR wave steepening as a
   /// high-amplitude wave travels the bore — the compression phase outruns the
@@ -217,6 +235,11 @@ class BrassVoiceCore {
   float lp_alpha_ = 1.0f;
   float lp_state_ = 0.0f;
   float loss_gain_ = 0.95f;
+  // Bell radiation: the complement of the reflection, a one-pole highpass on the
+  // way out. Its own state, so the loop is untouched.
+  float rad_alpha_ = 0.0f;
+  float rad_state_ = 0.0f;
+  float rad_scale_ = 1.0f;
   // Retained from start() so live brightness updates apply the same conical
   // darkening bias as the note-on seed (a conical bore reflects darker).
   bool conical_ = false;

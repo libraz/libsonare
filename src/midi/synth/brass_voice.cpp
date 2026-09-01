@@ -72,6 +72,18 @@ SONARE_TUNABLE(kLossCeil, 0.999f);
 SONARE_TUNABLE(kBellPoleSpan, 0.7f);
 SONARE_TUNABLE(kConicalDarken, 0.12f);  // extra pole for conical (horn / tuba)
 
+// How much of the bell highpass's loss at the fundamental is given back, as an
+// exponent: 1 restores it exactly, 0 leaves the radiated level as the filter made
+// it. Only the note-to-note balance rides on it — every timbre metric is blind to
+// a per-note gain — and the references pick 0.35, which holds the register
+// profile at the 0.6 dB the bore pressure had while 1.0 spreads it to 2.3.
+SONARE_TUNABLE(kBellRadiationNorm, 0.35f);
+// Make-up for what radiating costs in loudness. The bore pressure is a fat
+// near-sine with a 5 dB crest; the radiated wave is the spiky one a reference
+// brass has, 12 to 17 dB, so holding the peak where it was leaves the family
+// 8 dB under the rest of the bank. Flat, so it is loudness only.
+SONARE_TUNABLE(kBellRadiationMakeup, 2.45f);
+
 // Live-control smoothing time (ms).
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
@@ -259,6 +271,20 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   const float peak_est = std::clamp(kPeakBase + kPeakTilt * std::log2(f0 / kPeakRefHz), 1.5f, 9.0f);
   output_scale_ = kOutputTargetPeak / peak_est;
 
+  // Bell radiation highpass, normalised at the fundamental so the tilt is the
+  // only thing it changes and the peak calibration above still holds.
+  rad_state_ = 0.0f;
+  rad_alpha_ = 0.0f;
+  rad_scale_ = 1.0f;
+  if (params.bell_radiation_hz > 0.0f) {
+    rad_alpha_ = 1.0f - std::exp(-kTwoPi * std::min(params.bell_radiation_hz, 0.45f * srf) / srf);
+    const float pole = 1.0f - rad_alpha_;
+    const float w0 = kTwoPi * f0 / srf;
+    const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
+    const float den = std::sqrt(1.0f - 2.0f * pole * std::cos(w0) + pole * pole);
+    rad_scale_ = kBellRadiationMakeup * std::pow(den / std::max(num, 1.0e-6f), kBellRadiationNorm);
+  }
+
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst so the
   // lip resonator has an f0 component to lock onto rather than swelling up from
   // silence (a bandpass resonator ignores the breath DC).
@@ -425,6 +451,14 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
     outp += b_eff * kCuivreMixMax * (shaped - outp);
   }
 
+  // Bell radiation (gated): the part the bell did not reflect. After the shock
+  // shaper, which steepens inside the bore, and before the mute, which sits on
+  // the bell's mouth.
+  if (rad_alpha_ > 0.0f) {
+    rad_state_ += rad_alpha_ * (outp - rad_state_);
+    outp = rad_scale_ * (outp - rad_state_);
+  }
+
   // Mute (gated): a resonant upper formant plus a scoop of the direct low-mid,
   // the nasal honk of a straight/cup mute on the bell.
   if (mute_ > 0.0f) {
@@ -490,6 +524,7 @@ void BrassVoiceCore::release() noexcept { releasing_ = true; }
 void BrassVoiceCore::kill() noexcept {
   breath_level_ = 0.0f;
   lp_state_ = 0.0f;
+  rad_state_ = 0.0f;
   bore_out_ = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;

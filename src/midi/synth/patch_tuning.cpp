@@ -268,6 +268,7 @@ void apply_brass(NativeSynthPatch& p, const Fields& f) {
   F(brass.breath_noise);
   F(brass.chiff);
   F(brass.chiff_ms);
+  F(brass.bell_radiation_hz);
   F(brass.brassiness);
   F(brass.cuivre_dynamics);
   F(brass.mute);

@@ -998,6 +998,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.brass.chiff = std::clamp(patch_clamp_detail::sanitize(p.brass.chiff, 0.35f), 0.0f, 1.0f);
   p.brass.chiff_ms =
       std::clamp(patch_clamp_detail::sanitize(p.brass.chiff_ms, 10.0f), 1.0f, 500.0f);
+  p.brass.bell_radiation_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.brass.bell_radiation_hz, 0.0f), 0.0f, 8000.0f);
   p.brass.brassiness =
       std::clamp(patch_clamp_detail::sanitize(p.brass.brassiness, 0.0f), 0.0f, 1.0f);
   p.brass.cuivre_dynamics =

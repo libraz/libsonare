@@ -366,11 +366,45 @@ TEST_CASE("advanced brass gates are off by default (bit-identical)", "[midi][syn
   // before they existed (the off-path is skipped entirely).
   NativeSynthPatch base = brass_base_patch();
   NativeSynthPatch same = brass_base_patch();
+  same.brass.bell_radiation_hz = 0.0f;
   same.brass.brassiness = 0.0f;
   same.brass.mute = 0.0f;
   same.brass.half_valve = 0.0f;
   same.brass.dynamic_lip = 0.0f;
   REQUIRE(render_patch(base, 53, 100, 24000) == render_patch(same, 53, 100, 24000));
+}
+
+TEST_CASE("bell radiation lifts the partials over the fundamental", "[midi][synth][brass]") {
+  // What a bell radiates is what it did not reflect, so the emitted field is the
+  // complement of the loop lowpass. The bore pressure the core emits without it
+  // is a near-sine whose fundamental stands over every partial; a reference brass
+  // puts its formant on those partials instead.
+  const double f0 = 174.6141;  // F3
+  NativeSynthPatch bore = brass_base_patch();
+  NativeSynthPatch radiated = brass_base_patch();
+  radiated.brass.bell_radiation_hz = 900.0f;
+  const std::vector<double> off = power_spectrum(render_patch(bore, 53, 100, 40000), 24000);
+  const std::vector<float> on_buf = render_patch(radiated, 53, 100, 40000);
+  const std::vector<double> on = power_spectrum(on_buf, 24000);
+  REQUIRE(harmonic_power(on, f0, 4) / harmonic_power(on, f0, 1) >
+          4.0 * harmonic_power(off, f0, 4) / harmonic_power(off, f0, 1));
+  REQUIRE(peak(on_buf) < 4.0f);
+}
+
+TEST_CASE("bell radiation holds a formant the note moves under", "[midi][synth][brass]") {
+  // The bore pressure's centroid is a multiple of the note, so an octave up moves
+  // it an octave. The flare cutoff does not move with the note, so the radiated
+  // centroid moves less — which is the register behaviour the references show and
+  // the reason no brightness knob could reach the deficit.
+  NativeSynthPatch bore = brass_base_patch();
+  NativeSynthPatch radiated = brass_base_patch();
+  radiated.brass.bell_radiation_hz = 900.0f;
+  const double bore_octave = spectral_centroid(render_patch(bore, 65, 100, 40000), 24000) /
+                             spectral_centroid(render_patch(bore, 53, 100, 40000), 24000);
+  const double radiated_octave = spectral_centroid(render_patch(radiated, 65, 100, 40000), 24000) /
+                                 spectral_centroid(render_patch(radiated, 53, 100, 40000), 24000);
+  REQUIRE(bore_octave > 1.7);
+  REQUIRE(radiated_octave < bore_octave);
 }
 
 TEST_CASE("cuivre brightens the brass tone", "[midi][synth][brass]") {
