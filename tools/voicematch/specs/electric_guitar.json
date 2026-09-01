@@ -1,0 +1,33 @@
+[
+  {
+    "_": "The brightness family of the electric guitar's Karplus-Strong string, against a reference captured at the pickup. Bounds are the library's own, reported through the tuning dump, except `cutoff_hz`: the clamp accepts 10 Hz upward and anything under a few hundred silences the instrument rather than darkening it, so the search starts where a guitar's own filter plausibly could.",
+    "tunable": "electric_guitar.ks.brightness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "electric_guitar.ks.exc_brightness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "electric_guitar.cutoff_hz",
+    "min": 800.0,
+    "max": 22000.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "electric_guitar.ks.vel_to_brightness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "electric_guitar.ks.pick_position",
+    "min": 0.0,
+    "max": 0.5,
+    "scale": "linear"
+  }
+]

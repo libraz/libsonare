@@ -4224,7 +4224,9 @@
       "capture": "electric_guitar_di",
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "di-fitted"
+      ],
       "axes": {
         "engine": "karplus_strong",
         "patch": "electric_guitar",

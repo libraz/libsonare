@@ -1,14 +1,9 @@
 {
   "_doc": "Named calibration settings per voice, for the audition page. A key is a voice slug — the same string `make_audition.py` names its output directory, the set picker shows and a render's address carries — so `tools/voicematch/bank.py` is what says which keys are legal, and `test_calibration.py` fails on one that matches no voice. Each entry lists settings in the order they should appear on the page, after the unmodified build and before anything `--variant` adds on the command line. Read only when a run passes `--calibrations`: every setting is one more render of every take, and the override layer needs a -DBUILD_TUNING=ON library, so a page opened to hear one voice should not pay for it.",
-
   "_overrides": "The value of SONARE_TUNING_OVERRIDES, passed to the library untouched — the library is the only thing that can say whether a key exists. Keys are scoped: an engine constant is `<file stem>.<name>` (`brass_voice.kLipCouple`), a patch field is `<patch>.<path>` (`trumpet.brass.brassiness`), and a drum note's patch is `d038.percussion.wire_buzz`. A bare constant name resolves when it is unique across the tree and not otherwise — four voices declare `kBreathBase`. `autofit.py --out result.json` writes a paste-ready string, which is where most of these come from.",
-
   "_note": "What the setting is for, in one line, shown on the page under the version button. It is the only place a candidate says why it is a candidate: the override string says what moved and never says what it was trying to fix, and a page is read weeks after it was built.",
-
   "_name": "The source key: letters, digits, `.`, `_`, `-`. It is the button label, the file stem and the last segment of the address, so what is on the button, what is in the URL and what is in a listening note are one string. `model` is taken by the unmodified build.",
-
   "_open": "A setting listed here is a candidate that has NOT been written back to the source. That is what the file is for: an override string kept only in a render directory under the scratch root is lost with the directory, and one harpsichord round's candidates were lost exactly that way. Recording is not adoption — a setting stays here until it is either written back (and deleted from here in the same change) or judged and deleted.",
-
   "_example": {
     "variants": [
       {
@@ -18,7 +13,6 @@
       }
     ]
   },
-
   "p000-acoustic-grand-piano": {
     "variants": [
       {
@@ -38,7 +32,6 @@
       }
     ]
   },
-
   "p019-church-organ": {
     "variants": [
       {
@@ -58,7 +51,6 @@
       }
     ]
   },
-
   "p017-percussive-organ": {
     "variants": [
       {
@@ -89,6 +81,15 @@
         "name": "drive-hard",
         "overrides": "rock_organ.drive=0.5,rock_organ.gain=0.2288",
         "note": "2.9 dB of crest off, level-matched; the far end of what a rock organ's amplifier plausibly does"
+      }
+    ]
+  },
+  "p027-electric-guitar-clean": {
+    "variants": [
+      {
+        "name": "di-fitted",
+        "overrides": "electric_guitar.ks.brightness=0.944272,electric_guitar.ks.exc_brightness=0.326238,electric_guitar.cutoff_hz=1297.44,electric_guitar.ks.vel_to_brightness=0.944272,electric_guitar.ks.pick_position=0.190983",
+        "note": "what a fit against the direct reference returns, and why it is not adopted: it takes the voice from 26.63 to 3.42 dB RMS of that reference above 2 kHz and takes program 29's whole chain from 4.93 to 23.29 dB of the amplified one. No rig recovers it - a cabinet only darkens, and the chain would need 27 dB more at 8 kHz - so the two references are not reachable together"
       }
     ]
   }
