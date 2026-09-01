@@ -108,26 +108,15 @@ SONARE_TUNABLE(kSympPartialDamp, 0.5f);
 SONARE_TUNABLE(kSympCoupling, 0.06f);
 
 /// Halvings of a mode's coupling per octave below kSympTaperAnchorHz, and that
-/// anchor. Zero leaves every mode coupled equally, which is where this bank
-/// started and is not what a bridge does.
+/// anchor. Zero couples every fundamental equally, which is not what a bridge
+/// does: a string answers the bridge through its own impedance, so a wound bass
+/// string barely moves while a treble string answers readily. That is the same
+/// fact as a pedalled bass note lighting up the upper half of the keyboard.
 ///
-/// A string is driven sympathetically through the bridge, and how far it moves
-/// for a given bridge motion is set by its own impedance. A wound bass string
-/// is heavy and stiff and barely answers; a treble string is light and answers
-/// readily. That is the same fact the paragraph below states from the listening
-/// side -- a pedalled bass note is heard lighting up the upper half of the
-/// keyboard, not the lower -- and the bank was built with the partials that
-/// paragraph asks for while still coupling every FUNDAMENTAL at one level, of
-/// which seven of sixteen sit below 160 Hz.
-///
-/// Measured on a pedal take, which is the only probe that can see any of this:
-/// eight staccato notes under a held pedal, and the window after the last of
-/// them with the pedal still down. Three concert grands put 1.7 to 2.9 % of
-/// that window's energy below 160 Hz; this bank put 16 %, and silencing it
-/// alone accounted for 5.7 dB of the excess. Raising the coupling to fill in
-/// the wash therefore made the balance worse rather than better: every dB of
-/// wash it added arrived mostly in the octave that was already the problem.
-SONARE_TUNABLE(kSympBassTaperOct, 0.0f);
+/// Set on the pedal take, the only probe that excites this: the tail below
+/// 160 Hz sat 3.7 dB over the three grands' own span, and 1.0 lands within
+/// 0.1 dB of its midpoint.
+SONARE_TUNABLE(kSympBassTaperOct, 1.0f);
 SONARE_TUNABLE(kSympTaperAnchorHz, 261.6256f);
 
 /// Soundboard radiating band: the modes are log-spread between these corners.

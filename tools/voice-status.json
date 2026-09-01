@@ -14,8 +14,6 @@
       "stage": 0.8,
       "stage_name": "agreeing",
       "open_candidates": [
-        "more-rebased",
-        "more-as-heard",
         "tank-3.6"
       ],
       "axes": {
@@ -44,7 +42,7 @@
         "structure": null,
         "music": null
       },
-      "next": "judge the recorded candidate(s) — more-rebased, more-as-heard, tank-3.6 — then record a structural residual with autofit --diagnose"
+      "next": "judge the recorded candidate(s) — tank-3.6 — then record a structural residual with autofit --diagnose"
     },
     {
       "slug": "p000b001-acoustic-grand-piano",

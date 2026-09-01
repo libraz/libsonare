@@ -16,16 +16,6 @@
   "p000-acoustic-grand-piano": {
     "variants": [
       {
-        "name": "more-rebased",
-        "overrides": "piano_resonance.kAirReleaseMs=700.0,piano_resonance.kAirGain=0.0067,piano_voice.kKnockVelExp=0.5,piano_resonance.kSympBassTaperOct=2.0,piano_resonance.kSympRingT60S=6.0,piano_resonance.kCaseLevel=11.4",
-        "note": "six mechanisms against the three dimensions still outside the reference spread: aftersound, stereo, vel_range"
-      },
-      {
-        "name": "more-as-heard",
-        "overrides": "fam0.piano.decay_stretch=0.0,fam0.piano.decay_slow_s=20.0,piano_resonance.kAirReleaseMs=700.0,piano_resonance.kAirGain=0.0067,piano_voice.kKnockVelExp=0.5,piano_resonance.kSympBassTaperOct=2.0,piano_resonance.kSympRingT60S=6.0,piano_resonance.kCaseLevel=11.4",
-        "note": "the same six as first heard, on the decay of the time — its decay_slow_s 20.0 now undoes the committed 26.0, so more-rebased is the live question"
-      },
-      {
         "name": "tank-3.6",
         "overrides": "gs_effects.kReverbDecayScale=1.104",
         "note": "the organ's longer GS tank, on a voice that did not ask for it — the tank is host-wide, so this is what the organ's fix costs every other program"
