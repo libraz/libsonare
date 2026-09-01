@@ -813,7 +813,8 @@ def velocity_response(rows: list[dict]) -> dict:
     return out
 
 
-def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> int:
+def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int,
+                rig: bool | None = None) -> int:
     """Render the model over the capture's own grid, as one more timbre of it.
 
     The oracle corpus is one WAV per (note, velocity), and the model has to be
@@ -846,7 +847,11 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> in
     # Which side of the instrument's boundary the model stops at, from the
     # capture's own answer: a direct reference is compared against the direct
     # signal, one recorded through an amplifier against the model plus its rig.
-    rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
+    # Overriding it renders the same grid at the other boundary, which is how the
+    # rig's own transfer function is obtained — the difference of the two, and the
+    # only thing that separates the amplifier from the voice behind it.
+    if rig is None:
+        rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
     rows = []
     total = len(notes) * len(velocities)
     for i, (note, vel) in enumerate(
@@ -2902,9 +2907,16 @@ def main() -> int:
         p = sub.choices[name]
         p.add_argument("--timbre", default="", help="which captured timbre to compare against")
         p.add_argument("--notes", default="", help="restrict to these MIDI notes, comma-separated")
-    sub.choices["render-grid"].add_argument(
+    grid_group = sub.choices["render-grid"]
+    grid_group.add_argument(
         "--timbre", default="model",
         help="name the model's grid takes in the corpus (default: model)")
+    grid_group.add_argument(
+        "--no-rig", action="store_true", dest="no_rig",
+        help="render at the instrument's own boundary whatever the capture answers, "
+             "clearing the amplifier the bank binds after an electric guitar's voice. "
+             "Against the same grid rendered normally, the difference is the rig's own "
+             "transfer function — the only measurement that separates it from the voice")
     status_group = sub.choices["status"]
     status_group.add_argument("--all", action="store_true", dest="every",
                               help="every shipped capture rather than one")
@@ -2949,7 +2961,8 @@ def main() -> int:
         return measure(cfg, corpus_dir, profile_path)
     if args.cmd == "render-grid":
         return render_grid(cfg, corpus_dir, timbre=args.timbre,
-                           program=int(cfg.get("program", 0)))
+                           program=int(cfg.get("program", 0)),
+                           rig=False if args.no_rig else None)
     if args.cmd == "status":
         from make_audition import DEFAULT_REFERENCE_ARCHIVE
         return status(cfg,
