@@ -4221,20 +4221,23 @@
       "tone_class": "plucked-string",
       "patch": "electric_guitar",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "electric_guitar_di",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "electric_guitar",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 50,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4242,8 +4245,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -4260,7 +4261,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p028-electric-guitar-muted",

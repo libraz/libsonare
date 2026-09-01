@@ -1,0 +1,72 @@
+{
+  "id": "electric_guitar_di",
+  "label": "Electric guitar, sampled, direct out with no amplifier",
+  "program": 27,
+  "takes": "sustained",
+  "audition_title": "libsonare electric guitar vs the sampled direct reference",
+  "_program": "27 rather than one of the amplified programs, for two reasons. It is the patch: 26 and 27 are `o.electric_guitar` itself and 28, 29 and 30 are copies of it made as the table is built, so a voice fitted here reaches all five, while the amplified programs would fit a copy and leave its source untouched. And `capture_for` returns the first capture matching a program in filename order, so a second capture registered for 30 would sit behind `distortion_guitar` and be invisible to `voice-status` with nothing saying so. Pairing this against the amplified reference of the same program is still the measurement worth making - it is what brackets the whole chain - but that is a comparison to run, not a program to register under.",
+  "_rig": "There is no amplifier stage in the signal path - the library's panel has none to switch, and the host publishes 2049 parameters of which every one is an unnamed slot at the same default, so unlike the bass this answer cannot rest on an A/B and rests on the shape instead. `profile.py rig --against overdriven_guitar,distortion_guitar,guitar_harmonics,bass_fingered,steel_guitar` is the measurement: this source falls at 23.7 dB per octave from a knee at 1587 Hz, while the three confirmed cabinets in that list agree at 38.5, 40.5 and 39.3 from a knee of exactly 4000 apiece. Neither term separates it alone - the confirmed direct bass reads 33.5 from 5040, which is inside the cabinets' range on slope and above them on knee - and what does is that the three cabinets agree that tightly on both while this one misses both by an octave and a third of the slope. Recorded as `none` on that basis, and it is the weaker of the two kinds of argument: the tool prints so itself, and a product that rendered this instrument both ways would settle it properly.",
+  "rig": "none",
+  "_notes": "Every fourth semitone from 40 to 76, which is the compass this instrument answers on rather than the one the program has. Keys 35 and below and 88 and above render digital silence, so the instrument is a six-string mapped at sounding pitch and the low E is its bottom. The grid stops at 76 rather than at the top of the zone because key 84 comes back 10 dB louder than key 76 and a third the length, and a level step that large inside one instrument is either a different recording or a different articulation - neither belongs in a grid until something says which.",
+  "notes": [
+    40,
+    44,
+    48,
+    52,
+    56,
+    60,
+    64,
+    68,
+    72,
+    76
+  ],
+  "_velocities": "Five, and the top one is 104 rather than the 127 every other plucked capture here uses. Velocity 125 and above is a different articulation on this instrument, not a louder version of the same one: at 127 the note is 21 dB brighter at 2-4 kHz, 30 dB brighter at 4-8 kHz, seven decibels louder and less than half as long, which is the natural-harmonic layer the panel switches in at that threshold. A grid holding it would measure two instruments and report the difference as dynamics. The ceiling below it is 104 rather than 120 because the instrument's own gain curve saturates first: 104 and 120 render identically to the byte, so the fifth row would have been the fourth again. Two sample layers sit under that with the boundary between 50 and 55 - the lower one is 9 dB darker at 2-4 kHz and 20 at 4-8 - so 32 and 48 sit in one and 56 upward in the other, and the axis has both rather than one row of the quiet one.",
+  "velocities": [
+    32,
+    48,
+    56,
+    80,
+    104
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed. The host publishes 2049 parameters and every one is an unnamed slot at the same default, so there is no advertised effect section for `dry` to reach and no `--param` that could switch one off. What answers the question instead is `rig`, above.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "A plucked string is stopped by the player rather than by running out, so the gate is long enough to contain the fall: 3.87 dB/s from -27.7 dBFS a fifth of a second in to -50.2 at six seconds. The tail is two seconds because the release is not what ends the note - after note-off the fall slows to 1.69 dB/s and the render reaches its own floor about a second later, so two seconds records the whole of it and a longer one would record only the floor.",
+  "gate_ms": 6000,
+  "tail": "2s",
+  "_warmup": "Off. The discarded strike a warmup renders is meant to land beside the recorded note; this instrument is still four decibels above its floor a second after release, so with a preroll of a tenth of a second it would land underneath instead. The preroll of a render without one is digital silence at -240 dBFS, so there is nothing for the warmup to be guarding against.",
+  "warmup": false,
+  "_calibration": "From `capture.py calibrate` on this state: real time is optional, the same note twice is bit-identical and the measured settle minimum is a quarter of a second, which the settle here is sixteen times over - the minimum was measured with the library's samples already in the page cache, and a note the grid reaches first would not be. `realtime` is kept on regardless, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement. The instrument is deterministic in the stronger sense too: three renders differing only in a controller came back identical to the byte, so there is no round robin to put a floor under the loss. Pitch bend does change the render, which is what says the controllers arrive at all - without that, the controller result would have read as a dead input rather than as one this instrument ignores.",
+  "realtime": true,
+  "settle_ms": 4000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_floor": "The reference has a floor of its own and the top of the band sits on it. Measured against the same render nine seconds later, where the note is gone, the attack leads by 37.1 dB at 2-4 kHz, 21.7 at 4-8 and 4.0 at 8-16. So the two highest bands carry almost no instrument and any excess measured against them is a lower bound rather than a reading - a floor can only make a reference look brighter than it is. Everything this capture is for lives below 8 kHz, where the margin is real.",
+  "_timbres": "One. The ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage; what it buys is the thing the three amplified guitar references cannot be - a target at the instrument's own boundary, where the model's voice ends. `source_for` takes every timbre of a capture from one plugin, but the plugin here is a sampler hosting third-party content, so a second guitar library under the same host would be a legal second timbre.",
+  "timbres": [
+    {
+      "id": "di",
+      "label": "Sampled electric guitar, direct out"
+    }
+  ],
+  "_dimensions": "`decay` and its two stages are what a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension, so anything not gated here has to be argued here.",
+  "dimensions_na": {
+    "stereo": "the reference renders dual mono: the two channels are bit-identical and their difference is digital silence, so the width is zero by construction rather than by voicing",
+    "damper": "the release is slower than the note it releases - 1.69 dB/s after note-off against 3.87 dB/s while the key is held - so what this dimension would read is the string continuing rather than a damper arriving, and a model fitted to it would be fitted to acquire a release that lengthens its notes"
+  },
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `electric_guitar_di.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/electric_guitar_di.json` and need nothing."
+}
