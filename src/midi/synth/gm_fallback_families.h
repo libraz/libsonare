@@ -189,7 +189,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[3].gain = 1.5f;
 
   // 32-39 bass: single dark saw through the transistor ladder, punchy
-  // filter envelope and a touch of drive.
+  // filter envelope and a touch of drive. All eight programs now name their own
+  // patch, so nothing in the octet reaches this one; the two synth basses still
+  // start from it.
   t[4].waveform = VaWaveform::kSaw;
   t[4].filter_model = SynthFilterModel::kMoogLadder;
   t[4].drive = 0.15f;
@@ -224,7 +226,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[6].stereo_spread = 0.6f;
 
   // 56-63 brass: 3-op FM stack with a feedback operator (the DX brass
-  // recipe), index swelling in through the modulator envelope.
+  // recipe), index swelling in through the modulator envelope. All eight
+  // programs now name their own patch, so nothing in the octet reaches this
+  // one; the two synth brasses still start from it.
   t[7].mode = SynthEngineMode::kFm;
   t[7].amp_env = fallback_env(40.0f, 200.0f, 0.85f, 200.0f);
   t[7].fm.algorithm = FmAlgorithm::kStack3;
@@ -237,7 +241,11 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[7].fm.ops[1].vel_to_level = 0.5f;
   t[7].fm.ops[2].ratio = 1.0f;
   t[7].fm.ops[2].level = 2.0f;
-  t[7].fm.ops[2].feedback = 2.4f;  // feedback op: saw-like brass spectrum
+  // Feedback op: saw-like brass spectrum, and 2.4 is well past where that stops
+  // being what it does. Swept alone against the GM 62 reference the value costs
+  // 15 dB of tone-to-noise by 1.0 and only 1.3 dB more by 2.4, while the
+  // centroid goes from 26% over the reference to 760% over it.
+  t[7].fm.ops[2].feedback = 2.4f;
   t[7].fm.ops[2].env = fallback_env(80.0f, 400.0f, 0.6f, 200.0f);
   // Section, not soloist: players never sit at exactly one pitch or one seat.
   t[7].drift_cents = 3.0f;

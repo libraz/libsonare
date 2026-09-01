@@ -47,12 +47,12 @@
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
     "decay": "the slot does not decay under a held key: -11 dBFS a quarter of a second in and -11 at six seconds, so the slope a free fall would have is not in this reference",
     "aftersound": "there is no free fall to have a late stage, the level being flat under a held key",
-    "doubling": "there is no free fall to have a prompt stage, the level being flat under a held key"
+    "doubling": "there is no free fall to have a prompt stage, the level being flat under a held key",
+    "attack": "the level is flat under a held key on this slot, so the envelope has no peak to find and the onset measurement reads wherever the argmax lands: the reference's own attack_ms scatters over 5, 105, 350, 1685, 2825 and 3630 ms across the grid, with no order in note or velocity. The same flatness on the model side reads 2.5 s. Nothing about an onset is in this number on either side"
   },
   "dimensions": [
     "stretch",
     "body",
-    "attack",
     "damper",
     "balance",
     "centroid_pct",

@@ -289,6 +289,10 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().bass_slap;
     case 37:  // Slap Bass 2
       return program_overrides().bass_pop;
+    case 38:  // Synth Bass 1
+      return program_overrides().synth_bass_1;
+    case 39:  // Synth Bass 2
+      return program_overrides().synth_bass_2;
     case 44:  // Tremolo Strings
       return program_overrides().tremolo_strings;
     case 45:  // Pizzicato Strings
@@ -334,6 +338,10 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().french_horn;
     case 61:  // Brass Section (the same lip reed, in section)
       return program_overrides().brass_section;
+    case 62:  // Synth Brass 1
+      return program_overrides().synth_brass_1;
+    case 63:  // Synth Brass 2
+      return program_overrides().synth_brass_2;
     // Reed woodwind family (physical single-reed waveguide).
     case 64:  // Soprano Sax
       return program_overrides().soprano_sax;

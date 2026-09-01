@@ -4789,15 +4789,15 @@
       "name": "Synth Bass 1",
       "group": "32-39 Bass",
       "tone_class": "plucked-string",
-      "patch": "fam4",
+      "patch": "synth_bass_1",
       "engine": "subtractive",
       "capture": "synth_bass_1",
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam4",
+        "patch": "synth_bass_1",
         "timbres": 1,
         "profile_rows": 35,
         "gate_state": null,
@@ -4831,7 +4831,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p039-synth-bass-2",
@@ -4841,15 +4841,15 @@
       "name": "Synth Bass 2",
       "group": "32-39 Bass",
       "tone_class": "plucked-string",
-      "patch": "fam4",
+      "patch": "synth_bass_2",
       "engine": "subtractive",
       "capture": "synth_bass_2",
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam4",
+        "patch": "synth_bass_2",
         "timbres": 1,
         "profile_rows": 35,
         "gate_state": null,
@@ -4858,6 +4858,7 @@
           "gated": 0,
           "excused": [
             "aftersound",
+            "attack",
             "decay",
             "doubling",
             "stereo"
@@ -4865,7 +4866,6 @@
           "gaps": [
             "stretch",
             "body",
-            "attack",
             "damper",
             "balance",
             "centroid_pct",
@@ -4883,7 +4883,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p040-violin",
@@ -6059,7 +6059,7 @@
       "name": "Synth Brass 1",
       "group": "56-63 Brass",
       "tone_class": "sustained",
-      "patch": "fam7",
+      "patch": "synth_brass_1",
       "engine": "fm",
       "capture": "synth_brass_1",
       "stage": 0.2,
@@ -6067,7 +6067,7 @@
       "open_candidates": [],
       "axes": {
         "engine": "fm",
-        "patch": "fam7",
+        "patch": "synth_brass_1",
         "timbres": 1,
         "profile_rows": 35,
         "gate_state": null,
@@ -6107,7 +6107,7 @@
       "name": "Synth Brass 2",
       "group": "56-63 Brass",
       "tone_class": "sustained",
-      "patch": "fam7",
+      "patch": "synth_brass_2",
       "engine": "fm",
       "capture": "synth_brass_2",
       "stage": 0.2,
@@ -6115,7 +6115,7 @@
       "open_candidates": [],
       "axes": {
         "engine": "fm",
-        "patch": "fam7",
+        "patch": "synth_brass_2",
         "timbres": 1,
         "profile_rows": 35,
         "gate_state": null,

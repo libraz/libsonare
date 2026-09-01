@@ -1,6 +1,7 @@
 #pragma once
 
 #include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/gm_fallback_families.h"
 
 namespace sonare::midi::synth::detail {
 
@@ -351,6 +352,127 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_sci_fi.lfo2_rate_hz = 1.1f;
   o.fx_sci_fi.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 800.0f};
   o.fx_sci_fi.gain = 0.6f;
+}
+
+/// GM 38-39 and 62-63, the four synth programs that sit outside 80-103. They
+/// were the last programs sharing a family patch with a sibling — 38 and 39
+/// rendered byte-identically, and so did 62 and 63 — and unlike the leads and
+/// pads above they each have a captured reference, so the pair is separated by
+/// what the two references disagree about rather than by their names.
+///
+/// Both basses are mono and sustained in the reference (stereo width 0.00,
+/// under 0.1 dB/s under a held key), so neither takes a spread or a decay. Both
+/// carry a resonant low-pass parked near the second harmonic and NOT tracking
+/// the keyboard: the octave partial sits level with the fundamental at the
+/// bottom of the range and 18-20 dB under it two octaves up, which a tracked
+/// cutoff cannot produce. What separates them is what survives above that knee
+/// — bass 1 drops everything over the octave onto one flat step, bass 2 keeps a
+/// falling series four partials deep — and how the attack answers velocity.
+///
+/// The brasses stay on the family's FM stack, where the modulator index is what
+/// a velocity-driven brightness sweep needs. What separates them is the
+/// feedback operator, and that is measured: scored on third-octave shape
+/// against their own references, brass 1 is best with it off (7.3 dB RMS, 17.3
+/// at the family's value) and brass 2 wants it near the top of its range (6.2).
+/// One value cannot serve both, which is the case for the split.
+///
+/// One residual on the brasses is structural rather than a value: both
+/// references carry a roughly 1 Hz amplitude modulation 5 to 7 dB deep, and it
+/// is what their scattered onset numbers are measuring — the envelope peak
+/// lands on whichever crest is highest, 0.7 to 2.5 s in, which is why the
+/// comparison reads the model as arriving 1.2 s early on a patch whose attack
+/// is 40 ms. The engine has the mechanism (an LFO2 route to amp gain, as FX 7
+/// uses) and no knob in the fit could reach it. It is left unbuilt because both
+/// timbres come from one product and a 5 dB tremolo on every synth brass note
+/// is a large thing to adopt on one opinion.
+///
+/// Two dimensions are out of reach here and are left as gaps rather than argued
+/// away. All four references span about 12 dB from the softest velocity to the
+/// hardest and the engine's own curve spans about 24, and no patch field scales
+/// it. And `stereo_spread` is a per-voice pan scatter, so one held note comes
+/// out panned rather than wide — its channels correlate at +1.0000 whatever the
+/// setting — and the width the references measure is unreachable at the one
+/// note the comparison takes. The setting is not inert, it is just invisible
+/// there: four voices correlate at 0.90 against 0.96 for half the spread, and
+/// the same scatter puts a single note 7.8 dB off centre against 4.9. Both
+/// numbers move together, so the pair's split is the references' width ratio
+/// rather than either of their values.
+SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverrides& o) noexcept {
+  const std::array<NativeSynthPatch, 16> fam = build_family_patches();
+
+  // The shared synth bass: one saw into a resonant low-pass that stays where it
+  // is put. No unison, no drift and no drive — the references measure 40 to 54
+  // dB tone-to-noise, which is cleaner than a detuned stack can be.
+  NativeSynthPatch sbass = fam[4];
+  sbass.waveform = VaWaveform::kSaw;
+  sbass.unison = 1;
+  sbass.detune_cents = 0.0f;
+  sbass.drift_cents = 0.0f;
+  sbass.drive = 0.0f;
+  sbass.filter_model = SynthFilterModel::kSvf;
+  sbass.resonance_q = 2.0f;
+  sbass.key_track = 0.0f;
+  sbass.filter_env = DahdsrConfig{};
+  sbass.env_to_cutoff_cents = 0.0f;
+  sbass.vel_to_cutoff_cents = 0.0f;
+  sbass.stereo_spread = 0.0f;
+
+  // Synth Bass 1 (GM 38): the fundamental and its octave, and a flat step for
+  // everything above — h3 to h6 all sit within 6 dB of each other at every note
+  // and every velocity, so there is no series above the knee to shape.
+  o.synth_bass_1 = sbass;
+  o.synth_bass_1.cutoff_hz = 180.925f;
+  o.synth_bass_1.resonance_q = 1.23538f;
+  // The reference falls 0.06 dB/s under a held key, which is nearly flat and is
+  // not nothing: at a dead-flat sustain the envelope has no peak to find and the
+  // comparison's onset term reads wherever the argmax lands, 2.2 s in.
+  o.synth_bass_1.amp_env = fallback_env(6.68737f, 6000.0f, 0.96f, 39.706f);
+  // Levelled to its sibling, not to anything outside the pair: the two came out
+  // 6.6 dB apart in held RMS at E2 and are the only same-envelope comparison
+  // either of them has, so each moves half of it off the family's 0.5.
+  o.synth_bass_1.gain = 0.342f;
+
+  // Synth Bass 2 (GM 39): a deeper series (h3 to h6 fall 21 dB across an
+  // octave) and an attack that lengthens with velocity, which the filter
+  // envelope carries since the amp attack cannot answer velocity.
+  o.synth_bass_2 = sbass;
+  o.synth_bass_2.filter_model = SynthFilterModel::kMoogLadder;
+  o.synth_bass_2.cutoff_hz = 221.42f;
+  o.synth_bass_2.resonance_q = 4.8522f;
+  o.synth_bass_2.vel_to_cutoff_cents = 566.563f;
+  o.synth_bass_2.env_to_cutoff_cents = 167.184f;
+  o.synth_bass_2.amp_env = fallback_env(16.7184f, 0.0f, 1.0f, 36.9329f);
+  o.synth_bass_2.filter_env = fallback_env(120.0f, 400.0f, 1.0f, 150.0f);
+  o.synth_bass_2.gain = 0.731f;
+
+  // Synth Brass 1 (GM 62): the family stack with the feedback operator off, and
+  // the fit put it there on its own, against the range floor. It is the wider
+  // of the pair (reference width 0.70 to 1.00 against 0.23 to 0.51) and the
+  // shorter (damper release 50 to 75 ms), and its brightness answers velocity
+  // hardest — the centroid doubles from the softest note to the hardest.
+  o.synth_brass_1 = fam[7];
+  o.synth_brass_1.fm.ops[2].feedback = 0.0f;
+  o.synth_brass_1.fm.ops[1].level = 3.50155f;
+  o.synth_brass_1.fm.ops[1].vel_to_level = 0.944272f;
+  o.synth_brass_1.fm.ops[2].vel_to_level = 0.583592f;
+  o.synth_brass_1.fm.ops[1].env.decay_ms = 175.915f;
+  o.synth_brass_1.cutoff_hz = 16316.9f;
+  o.synth_brass_1.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 60.0f);
+  o.synth_brass_1.stereo_spread = 0.6f;
+
+  // Synth Brass 2 (GM 63): darker in the harmonics (h3 sits 8 to 12 dB under
+  // brass 1's), narrower (width 0.23 to 0.51) and slower to let go (120 to 170
+  // ms), with the feedback operator carrying its high shelf.
+  o.synth_brass_2 = fam[7];
+  o.synth_brass_2.fm.ops[2].feedback = 1.88854f;
+  o.synth_brass_2.fm.ops[1].level = 1.16718f;
+  o.synth_brass_2.fm.ops[2].level = 1.16718f;
+  o.synth_brass_2.fm.ops[1].vel_to_level = 0.944272f;
+  o.synth_brass_2.fm.ops[2].vel_to_level = 0.0557281f;
+  o.synth_brass_2.fm.ops[1].env.decay_ms = 1547.3f;
+  o.synth_brass_2.cutoff_hz = 1078.64f;
+  o.synth_brass_2.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 150.0f);
+  o.synth_brass_2.stereo_spread = 0.3f;
 }
 
 }  // namespace sonare::midi::synth::detail

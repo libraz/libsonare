@@ -71,6 +71,10 @@ struct ProgramOverrides {
   NativeSynthPatch tinkle_bell;         // program 112 (high metal chime, percussion)
   NativeSynthPatch agogo;               // program 113 (two-tone metal bell)
   NativeSynthPatch steel_drums;         // program 114 (tuned steel pan)
+  NativeSynthPatch synth_bass_1;        // program 38 (Synth Bass 1)
+  NativeSynthPatch synth_bass_2;        // program 39 (Synth Bass 2)
+  NativeSynthPatch synth_brass_1;       // program 62 (Synth Brass 1)
+  NativeSynthPatch synth_brass_2;       // program 63 (Synth Brass 2)
   NativeSynthPatch lead_square;         // program 80 (Lead 1, square)
   NativeSynthPatch lead_saw;            // program 81 (Lead 2, sawtooth)
   NativeSynthPatch lead_calliope;       // program 82 (Lead 3, calliope)
@@ -244,6 +248,10 @@ struct ProgramOverrides {
   X(tinkle_bell)                      \
   X(agogo)                            \
   X(steel_drums)                      \
+  X(synth_bass_1)                     \
+  X(synth_bass_2)                     \
+  X(synth_brass_1)                    \
+  X(synth_brass_2)                    \
   X(lead_square)                      \
   X(lead_saw)                         \
   X(lead_calliope)                    \

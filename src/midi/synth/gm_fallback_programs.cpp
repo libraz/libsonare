@@ -17,6 +17,7 @@ SONARE_TUNED_CONSTEXPR ProgramOverrides build_program_overrides() noexcept {
   configure_percussion_programs(o);
   configure_physical_programs(o);
   configure_synth_programs(o);
+  configure_synth_bass_and_brass_programs(o);
   configure_sfx_programs(o);
   configure_variation_programs(o);
 
