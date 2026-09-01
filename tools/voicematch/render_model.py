@@ -3,14 +3,16 @@
 Renders via `Project.import_smf` + `bounce_with_sf2_instrument` with NO
 SoundFont loaded, which forces every program through the built-in synthesizer
 GM fallback (`gm_fallback_map` -> NativeSynth physical voices) — exactly the
-code path being tuned. The dylib is resolved through SONARE_LIB_PATH, so the
-harness always tests the working tree's freshly built library.
+code path being tuned. The dylib is resolved through SONARE_LIB_PATH, and
+nothing rebuilds it — a render measures whatever that file happens to hold, so
+`ensure_lib_path` says so when the library is older than the sources.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -20,13 +22,58 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 from _repo import REPO_ROOT  # noqa: E402
 
 DEFAULT_DYLIB = REPO_ROOT / "build-python-shared" / "lib" / "libsonare.dylib"
+REFRESH_HINT = "cmake --build build-python-shared --target sonare_shared -j"
+
+_SOURCE_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".h", ".hpp"})
+_staleness_checked = False
+
+
+def _newest_source_mtime() -> float:
+    """Most recent edit under the C++ tree the dylib is compiled from."""
+    newest = 0.0
+    for root in ("src", "include"):
+        for path in (REPO_ROOT / root).rglob("*"):
+            if path.suffix in _SOURCE_SUFFIXES:
+                newest = max(newest, path.stat().st_mtime)
+    return newest
+
+
+def warn_if_stale(lib: str) -> None:
+    """Say on stderr when @p lib predates the sources, once per process.
+
+    A render carries no mark of which library produced it, and the default is a
+    build directory nothing keeps current, so an edited voice can be measured
+    through the previous generation with every number looking ordinary. It is a
+    warning rather than an error because measuring an older library on purpose
+    is a legitimate control.
+    """
+    global _staleness_checked
+    if _staleness_checked or not lib:
+        return
+    _staleness_checked = True
+    try:
+        built = Path(lib).stat().st_mtime
+    except OSError:
+        return
+    newest = _newest_source_mtime()
+    if newest <= built:
+        return
+    stamp = "%Y-%m-%d %H:%M:%S"
+    print(
+        f"warning: {lib} was built {time.strftime(stamp, time.localtime(built))} and a "
+        f"source file changed {time.strftime(stamp, time.localtime(newest))}; this render "
+        f"measures the older library. Refresh with: {REFRESH_HINT}",
+        file=sys.stderr,
+    )
 
 
 def ensure_lib_path() -> str:
     """Point the Python binding at the working-tree dylib unless overridden."""
     if "SONARE_LIB_PATH" not in os.environ and DEFAULT_DYLIB.exists():
         os.environ["SONARE_LIB_PATH"] = str(DEFAULT_DYLIB)
-    return os.environ.get("SONARE_LIB_PATH", "")
+    lib = os.environ.get("SONARE_LIB_PATH", "")
+    warn_if_stale(lib)
+    return lib
 
 
 def check_gm_fallback(manifest) -> None:
