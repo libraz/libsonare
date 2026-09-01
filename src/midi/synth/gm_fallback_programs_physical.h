@@ -124,13 +124,22 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
     p.gain = gain;
     return p;
   };
+  // The beating reed goes only to the voices whose references it improves on
+  // every dimension at once: the low saxes and the bassoon, all of which the
+  // linearised table left more than an octave dark. The double reeds and the
+  // clarinet reach their brightness through it too, and pay for it in
+  // tone-to-noise and in the band under the note, so they keep the table. Each
+  // fitted gain holds the sustained level the table had, so only timbre moves.
   o.soprano_sax = reed(true, 0.55f, 0.55f, 0.64f, 0.32f, 16.0f, 80.0f, 0.78f, 0.30f, 0.55f);
   o.soprano_sax.cutoff_hz = 5200.0f;
   o.soprano_sax.lfo_rate_hz = 5.4f;
   o.soprano_sax.lfo_to_pitch_cents = 6.0f;
   o.soprano_sax.reed.growl = 0.15f;
   o.soprano_sax.reed.chiff = 0.55f;
-  o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 0.55f);
+  o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 1.53f);
+  // No capture: the setting is read off its two fitted neighbours.
+  o.alto_sax.reed.closing_pressure = 2.4f;
+  o.alto_sax.reed.flow_gain = 0.6f;
   o.alto_sax.cutoff_hz = 4500.0f;
   o.alto_sax.lfo_rate_hz = 5.2f;
   o.alto_sax.lfo_to_pitch_cents = 6.0f;
@@ -138,14 +147,18 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.alto_sax.reed.chiff = 0.6f;
   o.alto_sax.reed.reed_opening = 0.62f;
   o.alto_sax.reed.breath_noise = 0.3f;
-  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 0.58f);
+  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 1.602f);
+  o.tenor_sax.reed.closing_pressure = 2.4f;
+  o.tenor_sax.reed.flow_gain = 0.7f;
   o.tenor_sax.cutoff_hz = 4000.0f;
   o.tenor_sax.lfo_rate_hz = 5.0f;
   o.tenor_sax.lfo_to_pitch_cents = 5.0f;
   o.tenor_sax.reed.growl = 0.18f;
   o.tenor_sax.reed.chiff = 0.6f;
   o.tenor_sax.reed.breath_noise = 0.3f;
-  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.58f);
+  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 1.602f);
+  o.baritone_sax.reed.closing_pressure = 2.4f;
+  o.baritone_sax.reed.flow_gain = 0.7f;
   o.baritone_sax.cutoff_hz = 3800.0f;
   o.baritone_sax.lfo_rate_hz = 4.8f;
   o.baritone_sax.lfo_to_pitch_cents = 4.0f;
@@ -159,7 +172,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.cutoff_hz = 4600.0f;
   o.english_horn.lfo_rate_hz = 5.2f;
   o.english_horn.lfo_to_pitch_cents = 5.0f;
-  o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.62f);
+  o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 2.808f);
+  o.bassoon.reed.closing_pressure = 2.4f;
+  o.bassoon.reed.flow_gain = 0.7f;
   o.bassoon.cutoff_hz = 3800.0f;
   o.bassoon.lfo_rate_hz = 4.8f;
   o.bassoon.lfo_to_pitch_cents = 4.0f;

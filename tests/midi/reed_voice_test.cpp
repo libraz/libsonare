@@ -577,6 +577,92 @@ TEST_CASE("tonehole scattering stays bounded across the keyboard", "[midi][synth
   }
 }
 
+TEST_CASE("advanced reed gates are off by default (bit-identical)", "[midi][synth][reed]") {
+  // Every gate at its default value must leave the linearised table's render
+  // untouched, sample for sample.
+  NativeSynthPatch base = reed_base_patch();
+  NativeSynthPatch same = base;
+  same.reed.dynamic_reed = false;
+  same.reed.register_vent = 0.0f;
+  same.reed.growl = 0.0f;
+  same.reed.cone_growth = 0.0f;
+  same.reed.tonehole = 0.0f;
+  same.reed.closing_pressure = 0.0f;
+  same.reed.flow_gain = 1.4f;  // ignored while the closing pressure is zero
+  const std::vector<float> a = render_patch(base, 58, 110, 12000);
+  const std::vector<float> b = render_patch(same, 58, 110, 12000);
+  REQUIRE(a == b);
+}
+
+TEST_CASE("the beating reed fills the harmonic ladder", "[midi][synth][reed]") {
+  // The linearised table's only nonlinearity is a weak quadratic term, so it
+  // drives the bore with a near-sine. Closing the channel toward beating and
+  // taking the flow through the square root of the pressure drop is what puts a
+  // series over the fundamental.
+  const double f0 = 146.8324;  // D3
+  NativeSynthPatch table = reed_base_patch();
+  table.reed.conical = true;
+  NativeSynthPatch beating = table;
+  beating.reed.closing_pressure = 2.0f;
+  beating.reed.flow_gain = 1.2f;
+  const std::vector<double> flat = power_spectrum(render_patch(table, 50, 110, 24000), 8000);
+  const std::vector<double> rich = power_spectrum(render_patch(beating, 50, 110, 24000), 8000);
+  double flat_stack = 0.0;
+  double rich_stack = 0.0;
+  for (int k = 2; k <= 6; ++k) {
+    flat_stack += harmonic_power(flat, f0, k) / harmonic_power(flat, f0, 1);
+    rich_stack += harmonic_power(rich, f0, k) / harmonic_power(rich, f0, 1);
+  }
+  REQUIRE(rich_stack > 1.8 * flat_stack);
+}
+
+TEST_CASE("the beating reed leaves no steady flow under the note", "[midi][synth][reed]") {
+  // The channel's flow carries a large standing component that holds the
+  // mouthpiece open and radiates nothing; injected into the bore it reads as a
+  // rumble below the fundamental. Subtracting it keeps the band under the note
+  // where the linearised table left it.
+  for (uint8_t note : {34, 50, 70}) {
+    const double f0 = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+    NativeSynthPatch patch = reed_base_patch();
+    patch.reed.conical = true;
+    patch.reed.closing_pressure = 2.0f;
+    patch.reed.flow_gain = 1.2f;
+    const std::vector<double> ps = power_spectrum(render_patch(patch, note, 110, 24000), 8000);
+    double under = 0.0;
+    const int top = static_cast<int>(0.8 * f0 / kRate * kFft);
+    for (int b = 1; b <= top && b < static_cast<int>(ps.size()); ++b) {
+      under += ps[static_cast<size_t>(b)];
+    }
+    REQUIRE(under < 0.25 * harmonic_power(ps, f0, 1));
+  }
+}
+
+TEST_CASE("the beating reed stays bounded across the keyboard", "[midi][synth][reed]") {
+  for (bool conical : {false, true}) {
+    for (uint8_t note : {28, 46, 64, 82}) {
+      for (float pressure : {1.0f, 2.0f, 4.0f}) {
+        NativeSynthPatch patch = reed_base_patch();
+        patch.reed.conical = conical;
+        patch.reed.closing_pressure = pressure;
+        // The whole clamped flow-gain range, top included: the make-up scales
+        // whatever column the drive produces, so the bound has to be read off
+        // the drive the clamp allows and not off the one the bank uses. It is
+        // looser than the table path's because the column is not a smooth
+        // function of the drive: the ceiling over this grid climbs from 1.2 at
+        // a tenth of the clamp to 9.3 at the clamp, and neighbouring cells
+        // differ tenfold. That is why the bank fits a gain per voice rather
+        // than trusting one output trim.
+        for (float fg : {0.3f, 0.7f, 1.0f, 1.5f}) {
+          patch.reed.flow_gain = fg;
+          const std::vector<float> tone = render_patch(patch, note, 127, 24000);
+          REQUIRE(peak(tone) < 12.0f);
+          REQUIRE(std::isfinite(tone.back()));
+        }
+      }
+    }
+  }
+}
+
 TEST_CASE("advanced reed gates compose stably", "[midi][synth][reed]") {
   // All five gates on together, across both topologies and the keyboard, must
   // stay bounded and finite.
@@ -590,6 +676,8 @@ TEST_CASE("advanced reed gates compose stably", "[midi][synth][reed]") {
       patch.reed.growl = 0.5f;
       patch.reed.cone_growth = 0.8f;
       patch.reed.tonehole = 0.7f;
+      patch.reed.closing_pressure = 2.0f;
+      patch.reed.flow_gain = 1.6f;
       const std::vector<float> tone = render_patch(patch, note, 110, 24000);
       REQUIRE(peak(tone) < 4.0f);
       REQUIRE(std::isfinite(tone.back()));

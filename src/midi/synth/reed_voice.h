@@ -3,9 +3,18 @@
 /// @file reed_voice.h
 /// @brief Reed-woodwind core for the NativeSynth voice — clarinet, saxophone,
 ///        oboe, bassoon. A breath-excited Smith single-reed waveguide: a
-///        memoryless reed table gates the mouth pressure into a travelling-wave
+///        memoryless reed valve gates the mouth pressure into a travelling-wave
 ///        bore, and that one nonlinearity plus the bore resonance is the whole
 ///        instrument (McIntyre, Schumacher & Woodhouse 1983).
+///
+/// The valve comes in two forms and the choice is the loudest decision here.
+/// The default is STK's linearisation, a straight line through the operating
+/// point clamped at both ends; it is stable everywhere but its only curvature is
+/// a weak quadratic term, so at the pressures the bank plays it drives the bore
+/// with something close to a sine. `closing_pressure` swaps in the channel's own
+/// physics — a linearly closing opening and a Bernoulli flow — which is what
+/// puts a series over the fundamental, at the cost of a column far weaker and a
+/// subharmonic waiting past the flow gains the bank uses.
 ///
 /// Cylinder vs cone is loop topology, not EQ, and is the decision the
 /// declarations do not show: the clarinet's cylinder is a negative-feedback comb
@@ -16,7 +25,8 @@
 /// The delay buffer is not owned here — the host attaches one bore span per
 /// voice slot before start(), and bell/formant voicing is the shared
 /// BodyResonator, so the core emits raw bore pressure. Unconditionally stable:
-/// the reed table is bounded to [-1,1] and the bell loss gain is < 1.
+/// both valves are bounded (the table to [-1,1], the flow by an opening that
+/// closes to zero) and the bell loss gain is < 1.
 ///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism:
 /// breath turbulence and onset chiff come from the counter-based
@@ -107,6 +117,30 @@ struct ReedPatchParams {
   /// reed resonance (a darker, rounder cane reed); high = a stiff, high reed
   /// resonance (a brighter, edgier reed formant).
   float reed_resonance = 0.5f;
+
+  /// Beating-reed closing pressure: the mouth-minus-bore drop at which the reed
+  /// channel shuts. The shipped valve is the linearised reed table (STK's
+  /// `offset + slope*dp`, hard-clamped), whose only nonlinearity is a weak
+  /// quadratic term, so the bore is driven by a near-sine and the radiated
+  /// spectrum has no formant for a body to resonate. This replaces it with the
+  /// channel's own physics: the opening closes linearly toward beating and the
+  /// flow follows the square root of the pressure drop, which saturates on a
+  /// curve rather than on a clamp — a full harmonic series, and a drive that
+  /// stays a continuous function of its own controls. In the region that voices
+  /// the bank the clamped table is not one: a 0.05 step in its slope swings a
+  /// single note's brightness by 2.8 octaves. 0 = off -> the linearised table is
+  /// used and the render is bit-identical.
+  float closing_pressure = 0.0f;
+  /// How much of the reed's flow the bore receives (only when
+  /// closing_pressure > 0). Sets the oscillation amplitude and, with it, how far
+  /// the opening swings — so it reads as drive rather than as level, and the
+  /// patch's own gain is what holds the loudness. Clamped to 1.5: past roughly
+  /// 1 the loop enters the subharmonic every fit ran into, and the column's
+  /// level stops tracking the drive.
+  float flow_gain = 0.7f;
+  /// @note With the beating reed on, the valve is this pair alone:
+  /// reed_stiffness, reed_opening and dynamic_reed all address the table it
+  /// replaces and stop reaching the sound.
 
   /// Register vent in [0,1]: opening the register key vents the bore near the
   /// mouthpiece, damping the fundamental so the tube speaks its upper register
@@ -225,6 +259,10 @@ class ReedVoiceCore {
   // offset = the reed rest opening, slope < 0 = the reed stiffness.
   float reed_offset_ = 0.7f;
   float reed_slope_ = -0.3f;
+
+  // Beating reed (gated): 0 closing pressure keeps the table above.
+  float closing_pressure_ = 0.0f;
+  float flow_gain_ = 0.0f;
 
   // Breath contour: a one-pole ramp of the mouth pressure toward the target
   // level (1 while blowing, 0 once tongued off). breath_target_ is the steady

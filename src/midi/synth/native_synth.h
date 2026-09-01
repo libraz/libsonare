@@ -978,6 +978,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.reed.cone_growth =
       std::clamp(patch_clamp_detail::sanitize(p.reed.cone_growth, 0.0f), 0.0f, 1.0f);
   p.reed.tonehole = std::clamp(patch_clamp_detail::sanitize(p.reed.tonehole, 0.0f), 0.0f, 1.0f);
+  p.reed.closing_pressure =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.closing_pressure, 0.0f), 0.0f, 8.0f);
+  p.reed.flow_gain = std::clamp(patch_clamp_detail::sanitize(p.reed.flow_gain, 0.7f), 0.0f, 1.5f);
   p.brass.breath_pressure =
       std::clamp(patch_clamp_detail::sanitize(p.brass.breath_pressure, 0.7f), 0.0f, 1.0f);
   p.brass.vel_to_breath =

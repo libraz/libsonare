@@ -88,6 +88,11 @@ SONARE_TUNABLE(kHpCompScale, 0.5f);
 // bounded to [-1,1]), so only a gentle scale brings a forte note into the other
 // engines' range.
 SONARE_TUNABLE(kOutputScale, 0.9f);
+// Make-up for the beating reed's much weaker column, which at the flow gains
+// that stay clear of the subharmonic settles some 30 dB under the table's. Ten
+// leaves the core inside the bound the table path holds and puts the rest into
+// the patch gains. Flat, so it is loudness only and no metric moves with it.
+SONARE_TUNABLE(kBeatingReedMakeup, 10.0f);
 
 // --- 4a dynamic (mass-spring) reed (only when params.dynamic_reed) ---
 // Reed natural frequency (Hz) = base + span*reed_resonance: a cane reed's own
@@ -197,6 +202,10 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   reed_offset_ = kReedOffsetMin + kReedOffsetSpan * (1.0f - opening);
   reed_slope_ = -(kReedSlopeBase + kReedSlopeSpan * stiffness);
 
+  // Beating reed (gated): the channel's own physics in place of the table above.
+  closing_pressure_ = std::max(params.closing_pressure, 0.0f);
+  flow_gain_ = std::max(params.flow_gain, 0.0f);
+
   // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)).
   const float a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * kBellPoleSpan;
   lp_alpha_ = 1.0f - a;
@@ -242,6 +251,11 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
   output_scale_ = kOutputScale;
+  // A beating reed drives the loop only a little over unity at the flow gains
+  // that stay clear of the subharmonic, so its column settles far below the
+  // linearised table's. Made up at the output, where it cannot move the
+  // oscillation the way an injection-side scale would.
+  if (closing_pressure_ > 0.0f) output_scale_ *= kBeatingReedMakeup;
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst (the
   // Karplus-Strong trick) so the reed locks onto a resonating column quickly
@@ -387,7 +401,22 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   if (reed_dyn_) reed += reed_couple_ * reed_resonator(dp);
   if (reed > 1.0f) reed = 1.0f;
   if (reed < -1.0f) reed = -1.0f;
-  const float inj = breath + dp * reed;
+  float inj = breath + dp * reed;
+  // Beating reed (gated): the channel's Bernoulli flow replaces the linearised
+  // table above. The opening closes toward zero as the mouth outruns the bore and
+  // the flow follows the square root of that drop, so the drive saturates on a
+  // curve instead of on a clamp.
+  if (closing_pressure_ > 0.0f) {
+    const float drop = breath - refl;
+    const float open = std::clamp(1.0f - drop / closing_pressure_, 0.0f, 1.0f);
+    const float flow = open * std::copysign(std::sqrt(std::fabs(drop)), drop);
+    // The same flow with the bore at rest is the steady part, which holds the
+    // mouthpiece open and radiates nothing. Subtracted in closed form rather
+    // than tracked, so the note speaks without a settling rumble under it.
+    const float rest = std::clamp(1.0f - breath / closing_pressure_, 0.0f, 1.0f);
+    const float steady = rest * std::sqrt(std::max(breath, 0.0f));
+    inj = refl + flow_gain_ * (flow - steady);
+  }
 
   // Advance the bore delay line: write the reed injection, read the delayed
   // pressure returning from the bell.
