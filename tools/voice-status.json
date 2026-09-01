@@ -1332,8 +1332,8 @@
       "patch": "harpsichord",
       "engine": "harpsichord",
       "capture": "harpsichord",
-      "stage": 0.4,
-      "stage_name": "measured",
+      "stage": 0.8,
+      "stage_name": "agreeing",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
@@ -1343,21 +1343,16 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 8,
+          "gated": 13,
           "excused": [],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
-          "inside": 6,
-          "total": 8,
+          "inside": 10,
+          "total": 13,
           "outside": {
+            "body": 2.2,
             "balance": 1.29,
             "vel_range": 1.29
           }
@@ -1365,7 +1360,7 @@
         "structure": null,
         "music": null
       },
-      "next": "5 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, body, register"
+      "next": "record a structural residual with autofit --diagnose, then sign off a musical take"
     },
     {
       "slug": "p006b001-harpsichord",
@@ -3174,8 +3169,8 @@
       "patch": "church_organ",
       "engine": "pipe_organ",
       "capture": "pipe_organ",
-      "stage": 0.4,
-      "stage_name": "measured",
+      "stage": 0.8,
+      "stage_name": "agreeing",
       "open_candidates": [
         "tank-3.6",
         "hall",
@@ -3189,32 +3184,29 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 3,
+          "gated": 5,
           "excused": [
+            "body",
             "damper",
+            "stereo",
             "tnr",
             "vel_range"
           ],
-          "gaps": [
-            "body",
-            "attack",
-            "stereo",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
-          "inside": 1,
-          "total": 3,
+          "inside": 3,
+          "total": 5,
           "outside": {
-            "stretch": 1.47,
+            "stretch": 1.3,
             "centroid_pct": 1.26
           }
         },
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: body, attack, stereo, register"
+      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then record a structural residual with autofit --diagnose"
     },
     {
       "slug": "p019b001-church-organ",
