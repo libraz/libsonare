@@ -1088,6 +1088,14 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.release_ms, 80.0f), 1.0f, 5000.0f);
   p.free_reed.breath_noise =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.breath_noise, 0.08f), 0.0f, 1.0f);
+  p.free_reed.slot_duty =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_duty, 0.0f), 0.0f, 0.9f);
+  p.free_reed.slot_return =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_return, 0.4f), 0.0f, 1.5f);
+  p.free_reed.slot_gap =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_gap, 0.14f), 0.02f, 0.5f);
+  p.free_reed.radiation =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.radiation, 1.0f), 0.0f, 1.0f);
   p.harpsichord.pluck_8a =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_8a, 0.14f), 0.0f, 0.5f);
   p.harpsichord.pluck_8b =

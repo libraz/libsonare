@@ -58,7 +58,8 @@ struct ProgramOverrides {
   NativeSynthPatch percussive_organ;    // program 17 (the same tonewheel plus percussion)
   NativeSynthPatch rock_organ;          // program 18 (fuller registration, driven)
   NativeSynthPatch church_organ;        // program 19 (Church Organ, flue pipe)
-  NativeSynthPatch reed_organ;          // programs 20-21 (Reed Organ / Accordion, free reed)
+  NativeSynthPatch reed_organ;          // program 20 (Reed Organ, harmonium free reed)
+  NativeSynthPatch accordion;           // program 21 (Accordion, free reed)
   NativeSynthPatch harmonica;           // program 22 (free reed, bright hand vibrato)
   NativeSynthPatch bandoneon;           // program 23 (musette-detuned free reed)
   NativeSynthPatch orchestra_hit;       // program 55 (bright detuned-saw stab)
@@ -236,6 +237,7 @@ struct ProgramOverrides {
   X(rock_organ)                       \
   X(church_organ)                     \
   X(reed_organ)                       \
+  X(accordion)                        \
   X(harmonica)                        \
   X(bandoneon)                        \
   X(orchestra_hit)                    \

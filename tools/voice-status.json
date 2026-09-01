@@ -3474,7 +3474,7 @@
       "name": "Accordion",
       "group": "16-23 Organ",
       "tone_class": "sustained",
-      "patch": "reed_organ",
+      "patch": "accordion",
       "engine": "free_reed",
       "capture": "accordion",
       "stage": 0.2,
@@ -3482,7 +3482,7 @@
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
-        "patch": "reed_organ",
+        "patch": "accordion",
         "timbres": 1,
         "profile_rows": 35,
         "gate_state": null,

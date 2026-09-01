@@ -47,10 +47,28 @@ SONARE_TUNABLE(kBreathNoiseDepth, 0.12f);
 SONARE_TUNABLE(kOutputMin, 0.3f);
 SONARE_TUNABLE(kOutputSpan, 0.5f);
 
+// Slot flow (gated). The return pass is the narrower of the two on every
+// reference fitted; held here rather than per patch because no reference moved
+// it. The make-up brings the radiated pair back to the saw shaper's level.
+SONARE_TUNABLE(kSlotReturnWidth, 0.75f);
+SONARE_TUNABLE(kSlotMakeup, 0.55f);
+
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
   return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
+}
+
+/// One flow hump: a quartic bump of fractional @p width centred at @p centre,
+/// zero in value and slope at both edges so the source rolls off at 18 dB per
+/// octave and folds little back under Nyquist.
+float flow_hump(float phase, float centre, float width) noexcept {
+  float d = phase - centre;
+  d -= std::floor(d + 0.5f);
+  const float u = 2.0f * d / width;
+  if (u <= -1.0f || u >= 1.0f) return 0.0f;
+  const float v = 1.0f - u * u;
+  return v * v;
 }
 
 }  // namespace
@@ -105,11 +123,32 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
                                 0.45f * static_cast<float>(sr));
   body_alpha_ = 1.0f - std::exp(-kTwoPi * corner / static_cast<float>(sr));
 
+  // Slot flow (gated): the pair of humps the tongue passes on its way through
+  // the slot, radiated as a small monopole.
+  slot_duty_ = std::max(params.slot_duty, 0.0f);
+  slot_return_ = std::max(params.slot_return, 0.0f);
+  slot_return_width_ = slot_duty_ * kSlotReturnWidth;
+  slot_gap_ = params.slot_gap;
+  radiation_ = std::clamp(params.radiation, 0.0f, 1.0f);
+  prev_flow_ = 0.0f;
+  // The humps' own mean is the steady flow that holds the slot open and
+  // radiates nothing. Subtracted in closed form: a quartic bump integrates to
+  // 8/15 of its width, so the pair's mean is exact and needs no tracker.
+  slot_mean_ = (8.0f / 15.0f) * (slot_duty_ + slot_return_ * slot_return_width_);
+  // A first difference is the monopole's +6 dB/octave, and it is 2*sin(pi*f0/sr)
+  // at the fundamental — small, and note-dependent. Normalising it away leaves
+  // the tilt without the level or the register slope that come with it.
+  const float w = static_cast<float>(kTwoPi * base_freq_hz_ / (2.0 * sr));
+  radiation_norm_ = 1.0f / std::max(2.0f * std::sin(w), 1e-6f);
+
   // Contour + textures.
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth;
   output_scale_ = kOutputMin + kOutputSpan * level;
+  // The radiated pair swings wider than the saturated saw it replaces, so the
+  // patch gains stay comparable across the two shapers.
+  if (slot_duty_ > 0.0f) output_scale_ *= kSlotMakeup;
 }
 
 float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
@@ -119,22 +158,41 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
   const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
   level_ += coeff * (level_target_ - level_);
 
-  // Tongue A: phase-accumulator saw shaped by the asymmetric saturator. The
-  // in-slot and out-of-slot half-cycles get different gains, giving the free
-  // reed's slightly skewed, even-and-odd harmonic-rich buzz.
+  // Tongue A, and the musette partner (gated): two phase accumulators, averaged.
   phase_a_ += inc_a_ * ratio;
   phase_a_ -= std::floor(phase_a_);
-  const float saw_a = 2.0f * phase_a_ - 1.0f;
-  const float gain_a = saw_a >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
-  float tongue = std::tanh(drive_ * gain_a * saw_a);
-
-  // Tongue B (musette pair, gated): the detuned partner, averaged in.
   if (dual_) {
     phase_b_ += inc_b_ * ratio;
     phase_b_ -= std::floor(phase_b_);
-    const float saw_b = 2.0f * phase_b_ - 1.0f;
-    const float gain_b = saw_b >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
-    tongue = 0.5f * (tongue + std::tanh(drive_ * gain_b * saw_b));
+  }
+
+  float tongue;
+  if (slot_duty_ > 0.0f) {
+    // Slot flow (gated): the tongue swings through the slot and lets air past
+    // twice per cycle, so the source is a pair of humps rather than a shaped
+    // saw. Radiating it is what lifts the second partial over the first.
+    float flow = flow_hump(phase_a_, 0.0f, slot_duty_) +
+                 slot_return_ * flow_hump(phase_a_, slot_gap_, slot_return_width_);
+    if (dual_) {
+      const float flow_b = flow_hump(phase_b_, 0.0f, slot_duty_) +
+                           slot_return_ * flow_hump(phase_b_, slot_gap_, slot_return_width_);
+      flow = 0.5f * (flow + flow_b);
+    }
+    flow -= slot_mean_;
+    const float radiated = (flow - prev_flow_) * radiation_norm_;
+    prev_flow_ = flow;
+    tongue = flow + radiation_ * (radiated - flow);
+  } else {
+    // The soft-clipped asymmetric saw: the in-slot and out-of-slot half-cycles
+    // get different gains, giving a skewed even-and-odd harmonic buzz.
+    const float saw_a = 2.0f * phase_a_ - 1.0f;
+    const float gain_a = saw_a >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
+    tongue = std::tanh(drive_ * gain_a * saw_a);
+    if (dual_) {
+      const float saw_b = 2.0f * phase_b_ - 1.0f;
+      const float gain_b = saw_b >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
+      tongue = 0.5f * (tongue + std::tanh(drive_ * gain_b * saw_b));
+    }
   }
 
   // Leakage air hiss around the reed, before the body filter so it shares the
@@ -161,6 +219,7 @@ void FreeReedVoiceCore::kill() noexcept {
   body_state_ = 0.0f;
   phase_a_ = 0.0f;
   phase_b_ = 0.0f;
+  prev_flow_ = 0.0f;
   releasing_ = true;
 }
 

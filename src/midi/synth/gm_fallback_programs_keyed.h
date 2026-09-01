@@ -680,10 +680,14 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.church_organ.stereo_spread = 0.55f;
   o.church_organ.gain = 0.45f;
 
-  // Reed Organ (GM 20) + Accordion (GM 21): a true free reed — the metal
-  // tongue swings through its slot under steady bellows pressure. Harmonium
-  // colour: a mellow plate, soft tongues, and a slow bellows take-up with just
-  // a hint of wet-tuned beating.
+  // Reed Organ (GM 20): a true free reed — the metal tongue swings through its
+  // slot under steady bellows pressure. Harmonium colour: a mellow plate, soft
+  // tongues, and a slow bellows take-up with just a hint of wet-tuned beating.
+  //
+  // The four free reeds all take the slot flow rather than the saw shaper,
+  // which is what carries their references' second partial over the first and
+  // the null near the seventh; the saw could reach neither. The harmonium's
+  // slot is the widest of them, and its null the lowest.
   o.reed_organ.mode = SynthEngineMode::kFreeReed;
   o.reed_organ.amp_env = fallback_env(30.0f, 0.0f, 1.0f, 120.0f);
   o.reed_organ.cutoff_hz = 20000.0f;
@@ -693,19 +697,33 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.reed_organ.free_reed.breath_pressure = 0.7f;
   o.reed_organ.free_reed.attack_ms = 30.0f;
   o.reed_organ.free_reed.release_ms = 120.0f;
+  o.reed_organ.free_reed.slot_duty = 0.56f;
+  o.reed_organ.free_reed.slot_return = 0.8f;
+  o.reed_organ.free_reed.slot_gap = 0.41f;
   o.reed_organ.stereo_spread = 0.18f;
   o.reed_organ.gain = 0.42f;
 
+  // Accordion (GM 21): the same free reed on a narrower slot. It voiced off the
+  // harmonium's patch until the two were measured apart — the accordion's null
+  // sits an octave higher, which is a slot half the width, and no single duty
+  // put both inside their references.
+  o.accordion = o.reed_organ;
+  o.accordion.free_reed.slot_duty = 0.29f;
+  o.accordion.free_reed.slot_return = 0.45f;
+  o.accordion.free_reed.slot_gap = 0.14f;
+
   // Harmonica (GM 22): a small, bright free reed right at the mouth — stiff
   // little tongues speak fast with a buzzy edge, and the player's cupping
-  // hands add a gentle vibrato.
-  o.harmonica = o.reed_organ;
+  // hands add a gentle vibrato. Cupped hands are also why it radiates as less
+  // than a free monopole where the bellows instruments measure as one.
+  o.harmonica = o.accordion;
   o.harmonica.amp_env = fallback_env(12.0f, 0.0f, 1.0f, 90.0f);
   o.harmonica.free_reed.brightness = 0.78f;
   o.harmonica.free_reed.reed_stiffness = 0.65f;
   o.harmonica.free_reed.detune = 0.15f;
   o.harmonica.free_reed.attack_ms = 12.0f;
   o.harmonica.free_reed.release_ms = 90.0f;
+  o.harmonica.free_reed.radiation = 0.6f;
   o.harmonica.lfo_rate_hz = 5.6f;
   o.harmonica.lfo_to_pitch_cents = 8.0f;
   o.harmonica.stereo_spread = 0.12f;
@@ -714,7 +732,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Bandoneon (GM 23): the tango free reed. The defining trait is the musette
   // voicing — two near-unison tongues a few cents apart beat against each
   // other, producing the characteristic wet shimmer.
-  o.bandoneon = o.reed_organ;
+  o.bandoneon = o.accordion;
   o.bandoneon.amp_env = fallback_env(24.0f, 0.0f, 1.0f, 120.0f);
   o.bandoneon.free_reed.brightness = 0.55f;
   o.bandoneon.free_reed.reed_stiffness = 0.45f;

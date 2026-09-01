@@ -327,6 +327,10 @@ constexpr FreeReedPatchParams blank_free_reed() noexcept {
   z.attack_ms = 0.0f;
   z.release_ms = 0.0f;
   z.breath_noise = 0.0f;
+  z.slot_duty = 0.0f;
+  z.slot_return = 0.0f;
+  z.slot_gap = 0.0f;
+  z.radiation = 0.0f;
   return z;
 }
 

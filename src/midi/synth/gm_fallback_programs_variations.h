@@ -206,7 +206,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // Accordion It: the Italian musette. Three reed banks tuned progressively
   // wider apart beat against each other — the wet, shimmering register that is
   // the whole difference from the dry French tuning of the capital.
-  o.accordion_italian = o.reed_organ;
+  o.accordion_italian = o.accordion;
   o.accordion_italian.free_reed.detune = 0.46f;
   o.accordion_italian.free_reed.brightness = 0.58f;
   o.accordion_italian.stereo_spread = 0.3f;

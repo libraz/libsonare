@@ -428,6 +428,7 @@ if(BUILD_ARRANGEMENT)
     midi/pipe_organ_voice_test.cpp
     midi/bowed_string_voice_test.cpp
     midi/reed_voice_test.cpp
+    midi/free_reed_voice_test.cpp
     midi/brass_voice_test.cpp
     midi/flute_voice_test.cpp
     midi/new_engines_voice_test.cpp

@@ -367,6 +367,10 @@ void apply_free_reed(NativeSynthPatch& p, const Fields& f) {
   F(free_reed.attack_ms);
   F(free_reed.release_ms);
   F(free_reed.breath_noise);
+  F(free_reed.slot_duty);
+  F(free_reed.slot_return);
+  F(free_reed.slot_gap);
+  F(free_reed.radiation);
 }
 
 void apply_vocal(NativeSynthPatch& p, const Fields& f) {

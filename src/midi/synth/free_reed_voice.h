@@ -11,13 +11,19 @@
 ///        waveform.
 ///
 /// The model is a driven tongue oscillator (not a bore waveguide): a phase
-/// accumulator at the note fundamental generates the tongue's motion, an
-/// asymmetric soft nonlinearity (the tongue passing in/out of the slot is not
-/// symmetric) shapes it into the buzzy harmonic spectrum, and a fixed body
-/// lowpass (the reed-plate / cavity radiation) colours it. Two slightly detuned
-/// tongues per note give the shimmering "musette" beating of an accordion.
-/// Because the source is a feed-forward oscillator (no acoustic feedback loop),
-/// the model is unconditionally stable and owns no host delay slab.
+/// accumulator at the note fundamental generates the tongue's motion, a shaper
+/// turns it into the buzzy harmonic spectrum, and a fixed body lowpass (the
+/// reed-plate / cavity radiation) colours it. Two slightly detuned tongues per
+/// note give the shimmering "musette" beating of an accordion. Because the
+/// source is a feed-forward oscillator (no acoustic feedback loop), the model is
+/// unconditionally stable and owns no host delay slab.
+///
+/// The shaper comes in two forms. The default is a soft-clipped asymmetric saw,
+/// whose ladder falls monotonically from the fundamental and cannot be made to
+/// do anything else. `slot_duty` swaps in the slot's own geometry — the tongue
+/// swings through and lets air past twice per cycle, so the source is a pair of
+/// flow humps — and radiates it, which is what puts the measured free reed's
+/// second partial above its first and its null at the seventh.
 ///
 /// RT contract: start()/render() are allocation-free. Determinism: the breath
 /// noise is the counter-based (voice_index, note, age) stream, so identical
@@ -50,6 +56,27 @@ struct FreeReedPatchParams {
   float release_ms = 80.0f;
   /// Breath/air noise in [0,1]: the leakage air hiss around the reed.
   float breath_noise = 0.08f;
+  /// Slot opening duty: the fraction of the period the tongue's first pass
+  /// holds the slot open. The shipped shaper is a soft-clipped asymmetric saw,
+  /// whose ladder falls monotonically and sits 10 to 16 dB under the measured
+  /// references' by the sixth partial; no setting of the knobs above changes
+  /// that, because a saw through a saturator has no other shape. This replaces
+  /// it with the flow the slot actually passes, and the duty is what places the
+  /// null the references all carry near the seventh partial. 0 = off -> the saw
+  /// is used and the render is bit-identical.
+  float slot_duty = 0.0f;
+  /// The tongue's return pass through the slot, relative to the first (only
+  /// when slot_duty > 0). 0 = one opening per cycle.
+  float slot_return = 0.4f;
+  /// Where the return pass falls inside the period (only when slot_duty > 0).
+  /// Sets how much even-harmonic content the pair of humps carries.
+  float slot_gap = 0.14f;
+  /// How much of a free monopole the reed plate is (only when slot_duty > 0):
+  /// 0 radiates the flow itself, 1 its time derivative, the +6 dB/octave tilt a
+  /// small source radiates with. Normalised at the fundamental, so it is timbre
+  /// only and moves no level. The harmonium and the bandoneon measure at 1, the
+  /// harmonica — played inside the cupped hands — at 0.
+  float radiation = 1.0f;
 };
 
 /// Per-voice free-reed state, embedded in NativeSynthVoice. The voice's
@@ -84,6 +111,16 @@ class FreeReedVoiceCore {
   // Tongue nonlinearity shaping (asymmetry from reed_stiffness).
   float asymmetry_ = 0.0f;
   float drive_ = 1.0f;
+
+  // Slot flow (gated): 0 duty keeps the asymmetric saw above.
+  float slot_duty_ = 0.0f;
+  float slot_return_ = 0.0f;
+  float slot_return_width_ = 0.0f;
+  float slot_gap_ = 0.0f;
+  float slot_mean_ = 0.0f;
+  float radiation_ = 0.0f;
+  float radiation_norm_ = 0.0f;
+  float prev_flow_ = 0.0f;
 
   // Body lowpass (reed-plate / cavity radiation): a one-pole roll-off.
   float body_alpha_ = 1.0f;

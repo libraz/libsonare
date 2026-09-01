@@ -256,8 +256,9 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
     case 19:  // Church Organ (flue pipe)
       return program_overrides().church_organ;
     case 20:  // Reed Organ (harmonium free reed)
-    case 21:  // Accordion (shares the reed-organ free-reed voicing)
       return program_overrides().reed_organ;
+    case 21:  // Accordion (a narrower slot than the harmonium's)
+      return program_overrides().accordion;
     case 22:  // Harmonica (small bright free reed)
       return program_overrides().harmonica;
     case 23:  // Bandoneon (musette-detuned free reed)
