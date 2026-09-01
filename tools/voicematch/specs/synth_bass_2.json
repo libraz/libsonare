@@ -1,0 +1,45 @@
+[
+  {
+    "_": "GM 39 against a sampled reference. Same untracked filter as GM 38, plus the two terms its sibling does not need: the reference's attack lengthens with velocity and its brightness opens with it, and neither can come from the amp envelope, which has no velocity input. Bounds are narrowed from the library's own for the same reason as GM 38's. Level is not in this spec on purpose. Every shape term the loss takes is normalised, so `gain` is free to move several dB for a fraction of a percent of loss and the run's own level warning is the only thing that notices; and a synthetic voice's level is a bank-balance question — judged against its siblings on the same note, not against one product's peak — so it is set with the block rather than fitted per program.",
+    "tunable": "synth_bass_2.cutoff_hz",
+    "min": 40.0,
+    "max": 1500.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "synth_bass_2.resonance_q",
+    "min": 0.5,
+    "max": 8.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "synth_bass_2.vel_to_cutoff_cents",
+    "min": 0.0,
+    "max": 2400.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_bass_2.env_to_cutoff_cents",
+    "min": 0.0,
+    "max": 3000.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_bass_2.filter_env.decay_ms",
+    "min": 20.0,
+    "max": 2000.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "synth_bass_2.amp_env.attack_ms",
+    "min": 0.0,
+    "max": 300.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_bass_2.amp_env.release_ms",
+    "min": 20.0,
+    "max": 600.0,
+    "scale": "log"
+  }
+]

@@ -1,0 +1,27 @@
+[
+  {
+    "_": "GM 38 against a sampled reference. The filter is the voice here: it does not track the keyboard, so cutoff and Q together set where the octave partial stops following the fundamental, which is the one thing that moves across the range. Bounds are narrowed from the library's own — the clamp accepts 10 Hz upward, and anything under about 40 silences a bass rather than darkening it. Level is not in this spec on purpose. Every shape term the loss takes is normalised, so `gain` is free to move several dB for a fraction of a percent of loss and the run's own level warning is the only thing that notices; and a synthetic voice's level is a bank-balance question — judged against its siblings on the same note, not against one product's peak — so it is set with the block rather than fitted per program.",
+    "tunable": "synth_bass_1.cutoff_hz",
+    "min": 40.0,
+    "max": 1500.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "synth_bass_1.resonance_q",
+    "min": 0.5,
+    "max": 8.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "synth_bass_1.amp_env.attack_ms",
+    "min": 0.0,
+    "max": 120.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_bass_1.amp_env.release_ms",
+    "min": 20.0,
+    "max": 600.0,
+    "scale": "log"
+  }
+]

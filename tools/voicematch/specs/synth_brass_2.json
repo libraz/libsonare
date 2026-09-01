@@ -1,0 +1,45 @@
+[
+  {
+    "_": "GM 63 against a sampled reference. Same knobs as GM 62 — one FM stack, so the search has to be the same one — but the reference is the darker and less velocity-dependent of the pair, so the fit is expected to land on lower modulator levels and a shallower sweep rather than on a different mechanism. Level is not in this spec on purpose. Every shape term the loss takes is normalised, so `gain` is free to move several dB for a fraction of a percent of loss and the run's own level warning is the only thing that notices; and a synthetic voice's level is a bank-balance question — judged against its siblings on the same note, not against one product's peak — so it is set with the block rather than fitted per program.",
+    "tunable": "synth_brass_2.fm.ops1.level",
+    "min": 0.0,
+    "max": 8.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_2.fm.ops2.level",
+    "min": 0.0,
+    "max": 8.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_2.fm.ops2.feedback",
+    "min": 0.0,
+    "max": 2.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_2.fm.ops1.vel_to_level",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_2.fm.ops2.vel_to_level",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_2.fm.ops1.env.decay_ms",
+    "min": 20.0,
+    "max": 2000.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "synth_brass_2.cutoff_hz",
+    "min": 800.0,
+    "max": 22000.0,
+    "scale": "log"
+  }
+]

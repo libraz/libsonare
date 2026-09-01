@@ -1,0 +1,45 @@
+[
+  {
+    "_": "GM 62 against a sampled reference. The FM stack's two modulator levels and their velocity scaling are the whole timbre: the reference's centroid doubles from the softest velocity to the hardest, which is a modulator index sweep and nothing else in this engine. The feedback operator is left in the search rather than pinned at the 0.0 the shape score preferred, so the fit can say whether the two terms trade. Level is not in this spec on purpose. Every shape term the loss takes is normalised, so `gain` is free to move several dB for a fraction of a percent of loss and the run's own level warning is the only thing that notices; and a synthetic voice's level is a bank-balance question — judged against its siblings on the same note, not against one product's peak — so it is set with the block rather than fitted per program.",
+    "tunable": "synth_brass_1.fm.ops1.level",
+    "min": 0.0,
+    "max": 8.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_1.fm.ops2.level",
+    "min": 0.0,
+    "max": 8.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_1.fm.ops2.feedback",
+    "min": 0.0,
+    "max": 2.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_1.fm.ops1.vel_to_level",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_1.fm.ops2.vel_to_level",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "synth_brass_1.fm.ops1.env.decay_ms",
+    "min": 20.0,
+    "max": 2000.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "synth_brass_1.cutoff_hz",
+    "min": 800.0,
+    "max": 22000.0,
+    "scale": "log"
+  }
+]
