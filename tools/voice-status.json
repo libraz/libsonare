@@ -4438,17 +4438,18 @@
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "balance",
+            "body"
+          ],
           "gaps": [
             "stretch",
             "decay",
             "aftersound",
             "doubling",
-            "body",
             "attack",
             "stereo",
             "damper",
-            "balance",
             "centroid_pct",
             "tnr",
             "vel_range",

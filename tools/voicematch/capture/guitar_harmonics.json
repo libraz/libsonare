@@ -43,19 +43,21 @@
       "slot_channel": 16
     }
   ],
-  "_dimensions": "The slot is a touched-node string source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. `stereo` is gated rather than excused because this slot does render an image: its two channels are not identical.",
+  "_octave": "Which octave this program answers a key in is a per-product convention, and the three that can be asked here give three answers. On the played key's own harmonic ladder the reference is loudest at h1 and keeps h3 within 1.5 dB of it, so it sounds at the key; the model is loudest at h2 with h1 50 dB under it, so it sounds an octave above, which is the twelfth-fret flageolet its patch models; the SoundFont oracle is loudest at h4 with h1 51 dB under it, two octaves above. A pitch estimator reads all three as in tune to a few cents, since an octave error is not one, which is why `compare`'s tuning row says -3 cents and nothing else says anything. Two products two octaves apart do not define a target, so this is left as it is rather than moved toward the one reference that exists - the same rule that stops one library's opinion becoming a fit. What the octave does not explain is the timbre: forcing `ks.harmonic_node` to 0 leaves the third-octave curve within 3 dB of where it was, so the deficit above 2 kHz is the loop rather than the register.",
+  "_dimensions": "The slot is a plucked electric string source; it is the model rather than the reference that touches a node, and the two do not sound the same key (see `_octave`). `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. `stereo` is gated rather than excused because this slot does render an image: its two channels are not identical.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so anything not gated here has to be argued here.",
-  "dimensions_na": {},
+  "dimensions_na": {
+    "body": "anchored on the played key's fundamental, which the three products place in three different octaves (see `_octave`); the octave alone moves it 26 dB on this voice",
+    "balance": "the partial levels are read against the same fundamental, and the octave alone moves the h2-h6 stack 32 dB and flips the sign of its error"
+  },
   "dimensions": [
     "stretch",
     "decay",
     "aftersound",
     "doubling",
-    "body",
     "attack",
     "stereo",
     "damper",
-    "balance",
     "centroid_pct",
     "tnr",
     "vel_range",
