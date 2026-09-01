@@ -31,7 +31,7 @@ One number per voice, in fifths. Each step is a predicate over facts already on 
 
 **Agreement is measured against the references' own spread**, not against zero. A voice inside that spread is as close to the instrument as two presets of the instrument are to each other, which is the strongest claim this harness can make. Where a capture has one reference timbre there is no spread and no dimension can be adjudicated at all — reported as unjudgeable, which is a different answer from "none of them agree".
 
-**Nothing reaches 1.0.** Neither a structural residual (`autofit --diagnose`) nor a musical sign-off is recorded anywhere yet, so both read as unknown and the step is unreachable rather than quietly satisfied.
+**The last step's two claims are the two nothing on disk implies**, so they are recorded by hand in `signoff.json` — see [unadopted settings and signed claims](#unadopted-settings-and-signed-claims) below.
 
 ## Coverage is all-or-nothing
 
@@ -57,8 +57,33 @@ The page groups the sixteen engines into three methods — physical model, FM, a
 
 **A kit is not its program's melodic patch.** On channel 10 the program selects the kit and the note selects the instrument, so the engine belongs to the drum notes; asking the program map gives whatever melodic voice shares the number, and program 0 answers `piano`.
 
+<a id="unadopted-settings-and-signed-claims"></a>
+
 ## Unadopted settings
 
 `calibrations.json` holds a candidate that has been heard and not written back. It is the only place such a thing can live: an override string kept in a render directory under the scratch root goes with the directory, and one harpsichord round's seven candidates were lost exactly that way.
 
 Recording is not adoption. A setting stays there until it is either written back — deleted from the file in the same change — or judged and deleted. The bank view counts them per voice; `make voice-status` prints the total.
+
+## The two claims 1.0 needs
+
+Every step below `settled` is a predicate over a file some tool already wrote. The last one is not, because it is the two questions a comparison cannot ask, and `signoff.json` is where their answers go — keyed by voice slug, like `calibrations.json`.
+
+```json
+"p000-acoustic-grand-piano": {
+  "structure": {
+    "provenance": { "date": "2026-09-01", "bank_generation": 19, "patch_version": 1 },
+    "spec": "specs/piano_corpus.json",
+    "probe": "the corpus pattern over 15 notes and 4 velocities",
+    "unreachable": [],
+    "accepted": {},
+    "note": "…"
+  }
+}
+```
+
+- **`structure`** is one `autofit --diagnose` run reduced to the part that outlives it. `unreachable` is the terms it reported no knob moves at all, which is the only verdict that is a structural claim; `spent`, `partial` and `reachable` are values, weights or budget and belong to the next fit. `spec` and `probe` are recorded because a knob whose axis the probe holds fixed reads inert and is not.
+- **An unreachable term is accepted with a reason, or it is open.** Same discipline as a capture's `dimensions_na` and the parity allowlist, for the same reason. A term accepted with an empty reason is refused, and so is one the diagnosis never reported. An open term blocks `settled` and is what the voice's next action names — which is the point of recording a diagnosis that found something: it turns "nobody has looked" into a named measurement with no mechanism behind it.
+- **`music`** is somebody's word that a take is the instrument. No metric produces it and none ever will; the rest of the harness exists to make it a smaller question.
+
+**Both claims expire, and the two ways they expire are not the same.** Each record carries the `bank_generation` it was taken at and, for a voice that has one, the version of its own patch unit — both from `tools/bank-versions.json`. The patch version moving makes it `stale`: the voice itself changed. Only the generation moving makes it `unverified`: some unit's values moved, and shared calibration constants are their own unit precisely because nothing can attribute them to the patches that use them. Both block `settled`, and they are named apart so the next action can say which happened. A kit has no single patch unit — its voices are its drum notes — so only the generation dates a claim about it.

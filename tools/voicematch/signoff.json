@@ -1,0 +1,49 @@
+{
+  "_doc": "The last two claims about a voice, recorded by hand because nothing on disk implies them. `structure` is what `autofit --diagnose` found; `music` is somebody's word that a take is the instrument. Keyed by voice slug, the same string the audition page shows, `calibrations.json` uses and a render's address carries. `tools/voicematch/signoff.py` is what reads it and `tools/voicematch/status.py` is what the reading feeds; the ladder's rules are `docs/status.md`.",
+  "_structure": "One `autofit --diagnose` run, reduced to the part that outlives it. `spec` and `probe` say what was diagnosed and over which axes, because a knob whose axis the probe holds fixed reads inert and is not. `unreachable` is the terms it reported no knob moves at all — the structural claim, and the only verdict that is one. `spent`, `partial` and `reachable` are values, weights or budget and belong to the next fit rather than here.",
+  "_accepted": "An unreachable term is accepted here with the reason it is acceptable, or it is open. That is the same discipline as a capture's `dimensions_na` and the parity allowlist, for the same reason: an exclusion argued only in prose is invisible to anything mechanical and reads as an oversight however good the argument. A term accepted with an empty reason is refused, and so is one that the diagnosis did not report.",
+  "_music": "A take somebody listened to and signed. No metric produces this and none ever will — the rest of the harness exists to make it a smaller question, not to answer it. `take` names the phrase from the capture's take set.",
+  "_provenance": "Which bank the claim was taken against, from `tools/bank-versions.json`: its `bank_generation`, and the version of this voice's own patch unit where it has one. The patch version moving makes a record `stale`, the generation alone moving makes it `unverified` — shared calibration constants are their own unit precisely because they cannot be attributed to the patches that use them. Both block `settled`; they are named apart so the next action can say which happened. A kit has no single patch unit, so only the generation applies to it.",
+  "p000-acoustic-grand-piano": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-01",
+        "bank_generation": 19,
+        "patch_version": 1
+      },
+      "spec": "specs/piano_corpus.json",
+      "probe": "the corpus pattern over 15 notes and 4 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Every measurement is reachable by something, no knob is inert and no probe was unscorable. Eight of the sixteen terms are spent — a knob moves them and none reduces them, which is a converged fit rather than a missing mechanism — and the three largest residuals by their own units (modes, mod, dyn) carry no weight in this spec, so no fit has ever been pointed at them. That is headroom, not physics."
+    }
+  },
+  "p006-harpsichord": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-01",
+        "bank_generation": 19,
+        "patch_version": 1
+      },
+      "spec": "specs/harpsichord.json",
+      "probe": "the corpus pattern over 11 notes and 4 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable, and `cents` and `stiff` are inside the smallest difference they resolve. Four knobs are inert over their whole range: `kJackMs` and `kJackCutoffHz` shape a noise whose level ships at 0 and is itself in this spec, so they are live in combination and the 2n+1 probe cannot see it; `velocity_droop_db` and `kDamperDelayMs` are not explained."
+    }
+  },
+  "p019-church-organ": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-01",
+        "bank_generation": 19,
+        "patch_version": 2
+      },
+      "spec": "specs/church_organ_corpus.json",
+      "probe": "the corpus pattern over 11 notes and one velocity",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable. `dyn` reads matched by construction rather than by fit — the capture has one velocity — and eight terms carry no weight in this spec, so their residual has never been searched. One knob is inert over its whole range: `church_organ.pipe_organ.brightness`."
+    }
+  }
+}

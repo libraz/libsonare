@@ -39,10 +39,16 @@
             "stereo": 1.45
           }
         },
-        "structure": null,
+        "structure": {
+          "state": "current",
+          "date": "2026-09-01",
+          "unreachable": [],
+          "accepted": [],
+          "open": []
+        },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6 — then record a structural residual with autofit --diagnose"
+      "next": "judge the recorded candidate(s) — tank-3.6 — then listen to a take and sign it off in signoff.json"
     },
     {
       "slug": "p000b001-acoustic-grand-piano",
@@ -1357,10 +1363,16 @@
             "vel_range": 1.29
           }
         },
-        "structure": null,
+        "structure": {
+          "state": "current",
+          "date": "2026-09-01",
+          "unreachable": [],
+          "accepted": [],
+          "open": []
+        },
         "music": null
       },
-      "next": "record a structural residual with autofit --diagnose, then sign off a musical take"
+      "next": "listen to a take and sign it off in signoff.json"
     },
     {
       "slug": "p006b001-harpsichord",
@@ -2571,7 +2583,7 @@
         "structure": null,
         "music": null
       },
-      "next": "record a structural residual with autofit --diagnose, then sign off a musical take"
+      "next": "record a structural residual with autofit --diagnose"
     },
     {
       "slug": "p016b001-drawbar-organ",
@@ -3203,10 +3215,16 @@
             "centroid_pct": 1.26
           }
         },
-        "structure": null,
+        "structure": {
+          "state": "current",
+          "date": "2026-09-01",
+          "unreachable": [],
+          "accepted": [],
+          "open": []
+        },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then record a structural residual with autofit --diagnose"
+      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then listen to a take and sign it off in signoff.json"
     },
     {
       "slug": "p019b001-church-organ",
@@ -9264,7 +9282,7 @@
         "structure": null,
         "music": null
       },
-      "next": "record a structural residual with autofit --diagnose, then sign off a musical take"
+      "next": "record a structural residual with autofit --diagnose"
     }
   ]
 }

@@ -42,9 +42,11 @@ as two presets of the instrument are to one another, which is the strongest
 claim this harness can make and the reason it is the last step before the two
 that need a human.
 
-Nothing reaches 1.0 yet: neither the structural residual (`autofit --diagnose`)
-nor a musical sign-off is recorded anywhere, so both read as unknown and the
-step is unreachable rather than quietly satisfied.
+The two claims 1.0 needs are the two nothing on disk implies — a diagnosis of
+what calibration cannot reach, and somebody's word that a take is the
+instrument — so they are recorded by hand in `signoff.json`, keyed by the same
+slug everything else here is. Both expire with the bank they were taken
+against, and `signoff` tells the two ways they expire apart.
 """
 
 from __future__ import annotations
@@ -58,6 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bank  # noqa: E402
 import catalogue as catalogue_mod  # noqa: E402
+import signoff  # noqa: E402
 from _repo import REPO_ROOT  # noqa: E402
 from toneclass import canonical_dimensions  # noqa: E402
 
@@ -65,6 +68,7 @@ HERE = Path(__file__).resolve().parent
 REFERENCE_DIR = HERE / "reference"
 CALIBRATIONS = HERE / "calibrations.json"
 OUT_PATH = REPO_ROOT / "tools" / "voice-status.json"
+BANK_VERSIONS = REPO_ROOT / "tools" / "bank-versions.json"
 
 #: The step names, low to high. The index is the stage in fifths.
 STAGES = ("untouched", "voiced", "measured", "covered", "agreeing", "settled")
@@ -213,9 +217,9 @@ def stage_for(axes: dict) -> int:
     agree = axes["agreement"]
     if not (agree["total"] and agree["inside"] * 2 > agree["total"]):
         return 3
-    # `settled` needs a recorded structural residual and a musical sign-off, and
-    # neither exists yet. Unknown is not satisfied.
-    if axes["structure"] is None or axes["music"] is None:
+    # `settled` needs both claims recorded, both still current against the bank,
+    # and every unreachable term accepted. Unknown is not satisfied.
+    if not signoff.settled(axes["structure"], axes["music"]):
         return 4
     return 5
 
@@ -243,10 +247,35 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
         worst = ", ".join(f"{d} {r}x" for d, r in list(out.items())[:3])
         return f"outside the reference spread: {worst}"
     if stage == 4:
+        rest = _last_step(axes)
         if candidates:
-            return (f"judge the recorded candidate(s) — {', '.join(candidates)} — "
-                    f"then record a structural residual with autofit --diagnose")
-        return "record a structural residual with autofit --diagnose, then sign off a musical take"
+            return f"judge the recorded candidate(s) — {', '.join(candidates)} — then {rest}"
+        return rest
+    return "settled"
+
+
+def _last_step(axes: dict) -> str:
+    """Which half of the last step is missing, and why.
+
+    The two claims fail in four ways between them and they need different work,
+    so naming the half is the whole value of the sentence: re-running a
+    diagnosis and listening to a take are not interchangeable.
+    """
+    structure, music = axes["structure"], axes["music"]
+    if structure is None:
+        return "record a structural residual with autofit --diagnose"
+    if structure["state"] == signoff.STALE:
+        return "the patch has moved since the diagnosis: re-run autofit --diagnose"
+    if structure["state"] == signoff.UNVERIFIED:
+        return ("a shared calibration unit has moved since the diagnosis and nothing can "
+                "attribute it: re-run autofit --diagnose")
+    if structure["open"]:
+        return (f"{len(structure['open'])} term(s) no knob reaches and nobody has accepted: "
+                f"{', '.join(structure['open'])}")
+    if music is None:
+        return "listen to a take and sign it off in signoff.json"
+    if music["state"] != signoff.CURRENT:
+        return f"the sign-off is {music['state']} against this bank: listen again"
     return "settled"
 
 
@@ -256,6 +285,8 @@ def build(catalogue) -> list[dict]:
     kits = sorted({c.program for c in pool if c.drums}) or [0]
     voices = bank.voices(catalogue=catalogue, kits=kits)
     cands = open_candidates()
+    claims = signoff.load()
+    generation, unit_versions = signoff.bank_versions(BANK_VERSIONS)
     rows = []
     for v in voices:
         cap = v.capture
@@ -264,6 +295,10 @@ def build(catalogue) -> list[dict]:
             "gate_state": None, "gate_timbre": "", "_gate": {},
         }
         gate = facts.pop("_gate")
+        claim = claims.get(v.slug, signoff.Record())
+        # A kit's voices are its drum notes, so it has no single patch unit and
+        # only the bank generation can date a claim about it.
+        patch_version = unit_versions.get(v.patch or "", 0)
         axes = {
             "engine": engine_for(v, catalogue),
             "patch": v.patch or None,
@@ -272,9 +307,8 @@ def build(catalogue) -> list[dict]:
             "gate_state": facts["gate_state"],
             "coverage": coverage(v, cap.raw if cap else {}, gate),
             "agreement": gate_agreement(gate),
-            # Not recorded anywhere yet; unknown rather than absent.
-            "structure": None,
-            "music": None,
+            "structure": signoff.axis(claim.structure, generation, patch_version),
+            "music": signoff.axis(claim.music, generation, patch_version),
         }
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])
