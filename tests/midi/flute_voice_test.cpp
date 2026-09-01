@@ -272,7 +272,6 @@ TEST_CASE("flute advanced-physics gates change the tone and stay bounded", "[mid
   // Each gate on must alter the sounding tone (proving it is wired) and keep the
   // loop bounded / finite; all gates on together must also stay bounded.
   const std::vector<float> base = render_patch(flute_base_patch(), 72, 100, 24000);
-  const float base_rms = rms(base, 12000, 24000);
   struct Gate {
     const char* name;
     float FlutePatchParams::*field;
@@ -289,7 +288,14 @@ TEST_CASE("flute advanced-physics gates change the tone and stay bounded", "[mid
     const std::vector<float> tone = render_patch(patch, 72, 100, 24000);
     REQUIRE(peak(tone) < 4.0f);
     REQUIRE(std::isfinite(tone.back()));
-    REQUIRE(std::fabs(rms(tone, 12000, 24000) - base_rms) > 1e-6f);
+    // Against the difference of the two renders, not the difference of their
+    // levels: a gate that reshapes the tone without moving its energy is still
+    // wired, and one whose level reading happens to land on the base's is not
+    // evidence that it is not. The four measure 0.9 % to 112 % of the base's own
+    // level here, so the bound sits an order under the weakest of them.
+    std::vector<float> delta(tone.size());
+    for (size_t i = 0; i < tone.size(); ++i) delta[i] = tone[i] - base[i];
+    REQUIRE(rms(delta, 12000, 24000) > 1.0e-5f);
   }
   // All gates on simultaneously across the keyboard: still bounded.
   for (uint8_t note : {48, 72, 96}) {

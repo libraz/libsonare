@@ -50,8 +50,10 @@ SONARE_TUNABLE(kLossSpan, 0.18f);
 
 // Pitch correction: the jet+bore lock lands a touch sharp of the naive full-
 // period loop, so the loop delay is lengthened to bring the sounding note onto
-// pitch (probe-calibrated across the keyboard; centres the residual to ~+-15c).
-SONARE_TUNABLE(kPitchCorrect, 1.0104f);
+// pitch. The earlier 1.0104 was set against a probe rather than a reference and
+// left all eight flute captures flat by 7 to 12 cents; this centres them inside
+// +-3, which is the spread between the voices and as close as one number gets.
+SONARE_TUNABLE(kPitchCorrect, 1.0045f);
 
 // Live-control smoothing time (ms).
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
