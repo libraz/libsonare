@@ -7,7 +7,7 @@
        gs-census gs-census-header gs-census-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
-       voice-readiness voice-status-refresh voice-status-check \
+       voice-readiness voice-status-refresh voice-status-check spec-check \
        excerpts excerpts-check test-voicematch
 
 BUILD_DIR := build
@@ -469,6 +469,13 @@ voice-status-refresh: build-bank-shared
 voice-status-check: build-bank-shared
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py \
 		--check --lib $(BANK_SHARED_LIB)
+
+# A fit spec outlives the mechanism it was written for. Nothing asks whether its
+# knobs still exist until a run resolves the corpus and then dies on the first
+# dead name, so this asks first, against the same catalogue the fit validates on.
+spec-check: build-bank-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/check_specs.py \
+		--lib $(BANK_SHARED_LIB)
 
 # Re-cut the committed Bach excerpts a musical take plays. Needs the sibling
 # corpus ($SONARE_BACH_ROOT); rendering one needs nothing, which is why the note

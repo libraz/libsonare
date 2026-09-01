@@ -1,23 +1,11 @@
 {
-  "_": "The harpsichord's own mechanism, without the sampler-generic envelope, filter and gain knobs `--spec auto` adds. Two reasons to have it: the reach check pushes every knob in a spec to the far end of its range at once, and an auto spec's `amp_env.attack_ms` (1 ms, bounded to 20 s) and `cutoff_hz` (20 kHz, bounded down to 10 Hz) silence the render there, which aborts a `--diagnose` run before it probes anything. And a generic envelope is not what this voice is wrong about: what it answers with is a plectrum, three string choirs and the segment behind the bridge.",
+  "_": "The harpsichord's own mechanism, without the sampler-generic envelope, filter and gain knobs `--spec auto` adds. Two reasons to have it: the reach check pushes every knob in a spec to the far end of its range at once, and an auto spec's `amp_env.attack_ms` (1 ms, bounded to 20 s) and `cutoff_hz` (20 kHz, bounded down to 10 Hz) silence the render there, which aborts a `--diagnose` run before it probes anything. And a generic envelope is not what this voice is wrong about: what it answers with is a plectrum, the string choir this registration draws and the segment behind the bridge.",
   "_ranges": "Every patch field's range is its `clamp_synth_patch` bound, so a knob pinned to one is a statement about the model rather than about the range. The engine constants have no clamp, so theirs are guides: an eighth to eight times the compiled-in default, narrowed where the quantity is a fraction.",
-  "_excluded": "`harpsichord_voice.kOutputTrim` is fittable and deliberately absent. It is an output level, not a property of the instrument, and every term here is normalised by the note's own level — so it buys a better-looking spectrum by moving the whole voice, which the level-drift fence then has to pay for.",
+  "_excluded": "`harpsichord_voice.kOutputTrim` is fittable and deliberately absent. It is an output level, not a property of the instrument, and every term here is normalised by the note's own level — so it buys a better-looking spectrum by moving the whole voice, which the level-drift fence then has to pay for.\n\n`pluck_8b`, `pluck_4`, `unison_detune_cents` and `octave_detune_cents` are fittable and deliberately absent, because this spec fits program 6 in bank 0 and that registration draws the front 8' choir alone. `eight_b` and `four` are booleans, which the override layer cannot reach, so no fit here can switch on the choirs those four control and all four move nothing at all. They belong to a fit of bank 2 or bank 1, whose patches do draw them.\n\n`kJackMs` and `kJackCutoffHz` also read inert, and are kept: they shape a noise whose level is `jack_noise`, which ships at 0 and is in this spec. A knob that is inert alone and live in combination is the one thing the 2n+1 probe cannot see.",
   "knobs": [
     {
       "_": "Where each choir's jack plucks, as a fraction of the speaking length. With `plectrum_edge` and `damping_ref_hz` this is one lever on the partial stack above the fundamental, not three.",
       "tunable": "harpsichord.harpsichord.pluck_8a",
-      "min": 0.0,
-      "max": 0.5,
-      "scale": "linear"
-    },
-    {
-      "tunable": "harpsichord.harpsichord.pluck_8b",
-      "min": 0.0,
-      "max": 0.5,
-      "scale": "linear"
-    },
-    {
-      "tunable": "harpsichord.harpsichord.pluck_4",
       "min": 0.0,
       "max": 0.5,
       "scale": "linear"
@@ -51,18 +39,6 @@
       "min": 100.0,
       "max": 20000.0,
       "scale": "log"
-    },
-    {
-      "tunable": "harpsichord.harpsichord.unison_detune_cents",
-      "min": -50.0,
-      "max": 50.0,
-      "scale": "linear"
-    },
-    {
-      "tunable": "harpsichord.harpsichord.octave_detune_cents",
-      "min": -50.0,
-      "max": 50.0,
-      "scale": "linear"
     },
     {
       "_": "The undamped string behind the bridge, which is where this instrument's inharmonic content comes from.",
@@ -122,22 +98,10 @@
       "scale": "linear"
     },
     {
-      "_": "The plectrum's release pulse: how abruptly it lets go, and the contact patch a soft and a hard plectrum release through.",
+      "_": "The plectrum's release pulse: how abruptly it lets go. The contact patch is not a constant of its own -- the excitation is one period of the bridge force an ideally plucked string produces, whose duty cycle is the plucking point, so `pluck_8a` and its siblings above carry that shape.",
       "tunable": "harpsichord_voice.kPlectrumRise",
       "min": 0.5,
       "max": 8.0,
-      "scale": "log"
-    },
-    {
-      "tunable": "harpsichord_voice.kContactWide",
-      "min": 0.1,
-      "max": 2.0,
-      "scale": "log"
-    },
-    {
-      "tunable": "harpsichord_voice.kContactNarrow",
-      "min": 0.005,
-      "max": 0.4,
       "scale": "log"
     },
     {
