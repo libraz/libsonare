@@ -37,25 +37,39 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ag.percussion.noise_cutoff_hz = 3600.0f;
   ag.gain = 0.55f;
 
-  // Steel Drums (GM 114): a tuned steel pan — near-harmonic modes with a small
-  // strike pitch drop for the "pan" attack, rung a little longer and pushed
-  // forward as a melodic lead.
+  // Steel Drums (GM 114): a tuned pan, and the one program here that is not a
+  // membrane. A pan note is tuned so its octave and twelfth are true and the
+  // octave comes out LOUDER than the note — a reference reads it 1.1 to 2.2 dB
+  // over the fundamental at every note, with the fourth partial level with the
+  // fundamental too. The membrane core cannot say that: its mode weight is
+  // 1/(k+1) in the mode index, fixed, so the second mode starts 8 dB down and
+  // no strike position reaches past it. So this one runs on the modal core,
+  // whose modes carry their own gain and decay. Measured at three notes a
+  // tritone apart, which agreed to about a decibel.
   NativeSynthPatch& sd = o.steel_drums;
-  sd.mode = SynthEngineMode::kPercussion;
-  sd.amp_env = fallback_env(0.5f, 900.0f, 0.0f, 350.0f);
+  sd.mode = SynthEngineMode::kModal;
+  sd.amp_env = fallback_env(0.5f, 0.0f, 1.0f, 400.0f);
   sd.cutoff_hz = 20000.0f;
-  sd.percussion.num_modes = 4;
-  sd.percussion.mode_ratios = {1.0f, 2.0f, 3.0f, 4.0f, 0.0f, 0.0f};
-  sd.percussion.base_freq_hz = 0.0f;
-  sd.percussion.mode_decay_s = 0.9f;
-  sd.percussion.tone_gain = 0.7f;
-  sd.percussion.pitch_drop = 0.05f;
-  sd.percussion.pitch_drop_ms = 30.0f;
-  sd.percussion.noise_gain = 0.15f;
-  sd.percussion.noise_decay_ms = 10.0f;
-  sd.percussion.noise_cutoff_hz = 4000.0f;
-  sd.percussion.noise_output = SynthFilterOutput::kBandpass;
-  sd.gain = 0.7f;
+  sd.modal.num_modes = 8;
+  sd.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  sd.modal.modes[1] = {2.0f, 1.21f, 1.25f};   // the tuned octave, the loudest
+  sd.modal.modes[2] = {3.01f, 0.19f, 1.06f};  // the tuned twelfth
+  sd.modal.modes[3] = {3.08f, 0.14f, 0.89f};  // and its partner, 4 dB under it
+  sd.modal.modes[4] = {4.01f, 1.24f, 1.04f};
+  sd.modal.modes[5] = {5.03f, 0.05f, 1.28f};
+  sd.modal.modes[6] = {6.02f, 0.36f, 0.88f};
+  sd.modal.modes[7] = {8.02f, 0.27f, 0.74f};
+  sd.modal.decay_s = 0.45f;
+  sd.modal.decay_stretch = 0.73f;
+  // The mallet carries the reference's own velocity tilt: its upper partials
+  // rise 1 to 12 dB from the softest row to the loudest, steeper the higher the
+  // mode, which is the curve's shape.
+  sd.modal.strike_brightness = 1.0f;
+  sd.modal.vel_to_brightness = 0.22f;
+  sd.modal.release_damp_s = 0.45f;  // nothing damps a pan; it rings its own fall
+  // The modal core radiates about 8 dB hotter than the membrane one did for the
+  // same gain, so this is set from the reference's own peak rather than kept.
+  sd.gain = 0.52f;
 
   // Woodblock (GM 115): a single high-Q wood resonance with a short stick click.
   NativeSynthPatch& wb = o.woodblock;

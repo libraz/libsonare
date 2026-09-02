@@ -546,12 +546,13 @@ TEST_CASE("tubular bells ring on after note-off", "[midi][synth][modal]") {
 
 TEST_CASE("the promoted pitched-percussion programs track the key and honour note-off",
           "[midi][synth][percussion]") {
-  // Tinkle Bell (112) .. Reverse Cymbal (119) all voice the percussion core as
-  // melodic programs — key-tracked (except the unpitched reverse cymbal), never
-  // one-shot.
+  // Tinkle Bell (112) .. Reverse Cymbal (119) voice a struck core as melodic
+  // programs — key-tracked (except the unpitched reverse cymbal), never
+  // one-shot. All of them are membranes but the steel pan, which is checked
+  // below on the core it needs instead.
   for (uint8_t program = 112; program <= 119; ++program) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, program);
-    REQUIRE(patch.mode == SynthEngineMode::kPercussion);
+    if (program != 114) REQUIRE(patch.mode == SynthEngineMode::kPercussion);
     REQUIRE_FALSE(patch.one_shot);
     const std::vector<float> tone = render_patch(patch, 69, 110, 24000);
     float peak = 0.0f;
@@ -570,4 +571,29 @@ TEST_CASE("the promoted pitched-percussion programs track the key and honour not
   REQUIRE(high_f0 > 0.0);
   REQUIRE(std::fabs(low_f0 / 220.0 - 1.0) < 0.05);
   REQUIRE(std::fabs(high_f0 / 440.0 - 1.0) < 0.05);
+}
+
+TEST_CASE("the steel pan's tuned octave is louder than the note under it", "[midi][synth][modal]") {
+  // A pan note is hammered until its octave and its twelfth are true, and the
+  // octave then radiates harder than the fundamental — a reference reads it 1
+  // to 2 dB over at every note of the compass. That is what the pan does NOT
+  // share with the membranes around it in the GM map, and it is why this one
+  // program is voiced on the modal core: the membrane core weights its modes
+  // 1/(k+1) in the mode index, fixed, so its second mode starts 8 dB under the
+  // first and no strike position reaches past that.
+  const double f0 = 440.0;
+  const NativeSynthPatch& pan = gm_fallback_patch(0, 114);
+  REQUIRE(pan.mode == SynthEngineMode::kModal);
+  const std::vector<float> tone = render_patch(pan, 69, 127, 24000);
+  float peak = 0.0f;
+  for (float s : tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  const std::vector<double> power = power_spectrum(tone, 1024);
+  REQUIRE(band_power(power, 2.0 * f0) > band_power(power, f0));
+  // The twelfth is present and well under both, which is the other half of the
+  // tuning: a plain harmonic stack would not put it 15 dB down.
+  const double twelfth = band_power(power, 3.0 * f0);
+  REQUIRE(twelfth > 0.0);
+  REQUIRE(twelfth < 0.1 * band_power(power, f0));
+  REQUIRE(render_patch(pan, 69, 127, 8192) == render_patch(pan, 69, 127, 8192));
 }
