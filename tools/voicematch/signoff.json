@@ -32,6 +32,24 @@
       "note": "Nothing unreachable, and `cents` and `stiff` are inside the smallest difference they resolve. The same four knobs are inert over their whole range as before the knob space grew, and each is inert in combination with a field the probe holds fixed. `kJackMs`, `kJackCutoffHz` and `kDamperDelayMs` all shape the jack burst, whose level `jack_noise` ships at 0 — it is itself in this spec, so they are live in combination and the 2n+1 probe cannot see it. `velocity_droop_db` shapes the response only past `peak_velocity`, which ships at 127 with nothing past it: two renders at 127 with the droop at 0 and at 9 dB are byte-identical, and at a peak of 64 they differ. `peak_velocity` is reachable now but is not in this spec, so the droop stays inert until somebody decides to fit the pair."
     }
   },
+  "p016-drawbar-organ": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-03",
+        "bank_generation": 31,
+        "patch_version": 4
+      },
+      "spec": "auto — 28 knobs, the drawbar_organ patch plus its engine",
+      "probe": "the corpus pattern over 11 notes and 2 velocities, dark registration",
+      "unreachable": [
+        "cents"
+      ],
+      "accepted": {
+        "cents": "The additive core places every partial at `f0 * kDrawbarRatios[k]`, a compile-time table with no per-partial tuning field, so the voice's intonation is the played pitch by construction and nothing in the patch or the engine can tilt it. The probe agrees: the largest effect any of the 28 knobs had on this term was 0.001 cents. The residual is 1.09 cents, 1.1 times the smallest difference the term resolves, so what cannot be reached is also barely distinguishable. Moving it would mean giving the ratio table a per-partial offset, which is a new mechanism rather than a calibration."
+      },
+      "note": "One unreachable term, `cents`, and it is a property of the engine rather than a gap in the fit. Nine of the sixteen terms carry no weight in this spec, so their residual has never been searched, and `hf` at 426 units is the largest of those by a wide margin. Eleven knobs move no measurement at all, and each was chased to its switch and the switch overridden to check: the two percussion knobs are gated by `percussion_harmonic`, which ships 0 here and 3 on the percussive organ, and both come alive at 3; `body_mix` is gated by `body`, which ships `kNone`, and comes alive at `kString`; the four filter-envelope knobs stay dead even with `cutoff_hz` closed to 800 Hz, because the envelope reaches the cutoff only through the mod matrix and this patch routes nothing from it; and `unison` is dead in its own right, `detune_cents` staying byte-identical at four voices, because the additive core has no unison — it sums one partial per drawbar at a fixed ratio and there is nothing to detune. One probe end was unscorable: `amp_env.sustain` at its low bound renders silence, so that knob carries half the evidence the others do."
+    }
+  },
   "p019-church-organ": {
     "structure": {
       "provenance": {
