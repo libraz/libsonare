@@ -55,6 +55,11 @@ inline int ks_slab_capacity(double sample_rate) noexcept {
 struct KsPatchParams {
   /// Loop-lowpass openness in [0,1]: how slowly the upper harmonics decay
   /// relative to the fundamental (1 = bright/metallic, 0 = dull/nylon).
+  /// Reaches only the notes whose loop has no HF decay target to solve against —
+  /// above about e''' for the played string, an octave lower for the 4' companion
+  /// and a touched node. Below that the loss filter comes from the two decay
+  /// targets and this is not consulted, so a guitar renders the same samples at
+  /// 0.1 and at 0.95; @ref mute_harmonic is what darkens a string that sounds.
   float brightness = 0.6f;
   /// String t60 at A4 in seconds (fundamental decay to -60 dB).
   float decay_s = 3.0f;
@@ -71,6 +76,17 @@ struct KsPatchParams {
   float vel_to_brightness = 0.6f;
   /// Damped t60 in seconds applied at note-off (finger/palm mute).
   float release_damp_s = 0.08f;
+  /// Hand mute: which harmonic the loop's damping is quoted at, as a multiple of
+  /// the note's own fundamental. 0 = off, and the quote stays at the engine's
+  /// fixed frequency and absolute ring (render bit-identical).
+  ///
+  /// A palm damps a mode by how far it moves under it, so the break it puts in
+  /// the series sits at the same harmonic whatever the note: the captured
+  /// reference keeps three partials and loses the fourth at every pitch from E2
+  /// to E4. A fixed frequency cannot say that — four octaves of the compass are
+  /// below it, and one pole tilts by almost nothing there. The depth scales with
+  /// the note too. About 2 is a dead thump and 6 a light palm; 0 is open.
+  float mute_harmonic = 0.0f;
   /// Fret-slap intensity in [0,1] (off-by-default; 0 = no fret contact, render
   /// bit-identical to the plain string). A hard-driven bass string slaps
   /// against the frets/fingerboard: displacement past the fret gap is limited

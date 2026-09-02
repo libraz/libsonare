@@ -1,0 +1,63 @@
+[
+  {
+    "_": "The palm mute. The reference keeps three partials and loses the fourth at every pitch it was measured at, so the break is at a harmonic rather than at a frequency and `mute_harmonic` is what places it; the rest of this spec is what the string presents to it. Bounds are the library's own except `cutoff_hz`, whose clamp accepts 10 Hz upward while anything under a few hundred silences the instrument rather than darkening it.",
+    "tunable": "muted_guitar.ks.mute_harmonic",
+    "min": 1.6,
+    "max": 8.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.ks.exc_brightness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.ks.vel_to_brightness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.ks.pickup_pos",
+    "min": 0.0,
+    "max": 0.5,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.ks.pick_position",
+    "min": 0.0,
+    "max": 0.5,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.ks.nail",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.ks.pluck_style",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.ks.decay_s",
+    "min": 0.12,
+    "max": 1.2,
+    "scale": "log"
+  },
+  {
+    "tunable": "muted_guitar.ks.decay_stretch",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "muted_guitar.cutoff_hz",
+    "min": 500.0,
+    "max": 22000.0,
+    "scale": "log"
+  }
+]

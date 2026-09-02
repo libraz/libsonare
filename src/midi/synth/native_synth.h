@@ -735,6 +735,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.ks.vel_to_brightness, 0.6f), 0.0f, 1.0f);
   p.ks.release_damp_s =
       std::clamp(patch_clamp_detail::sanitize(p.ks.release_damp_s, 0.08f), 0.01f, 10.0f);
+  p.ks.mute_harmonic =
+      std::clamp(patch_clamp_detail::sanitize(p.ks.mute_harmonic, 0.0f), 0.0f, 16.0f);
   p.ks.slap = std::clamp(patch_clamp_detail::sanitize(p.ks.slap, 0.0f), 0.0f, 1.0f);
   p.ks.polarization = std::clamp(patch_clamp_detail::sanitize(p.ks.polarization, 0.0f), 0.0f, 1.0f);
   // Bounded here rather than only at use, so the touched node reports its real

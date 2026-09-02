@@ -14,6 +14,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
 /// Tension modulation: the attack pitch rise at full velocity / full knob
@@ -70,6 +71,11 @@ SONARE_TUNABLE(kKsHfT60S, 0.07f);
 /// gives: a target quoted at the octave is unreachable in the bass.
 SONARE_TUNABLE(kKsHfQuoteHz, 4000.0f);
 
+/// How many times faster the partial at ks.mute_harmonic decays than the
+/// fundamental, when a hand is on the strings. The captured palm mute puts its
+/// break at the fourth partial and drops it from 18 dB/s to 68.
+SONARE_TUNABLE(kKsMuteDecayRatio, 3.8f);
+
 }  // namespace
 
 void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t note,
@@ -94,7 +100,8 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
 
   // Loop lowpass: brightness -> feedback coefficient a (y += (1-a)(x-y)).
   const float tone_a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
-  const float quote_w = kTwoPi * kKsHfQuoteHz / static_cast<float>(sr);
+  const float fixed_quote_w = kTwoPi * kKsHfQuoteHz / static_cast<float>(sr);
+  const float mute = std::clamp(params.mute_harmonic, 0.0f, 16.0f);
   // Set one loop up from its two decay targets: its fundamental's t60 and the
   // ring left at the quote frequency. A quote at or below the fundamental has no
   // tilt to describe, and there the tone-derived pole stands.
@@ -104,9 +111,15 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     float g = string_loop_gain_for(period, sr, t60_s);
     float release_g = string_loop_gain_for(period, sr, damped_t60);
     const float w0 = kTwoPi / period;
+    // A hand mute is measured against the note and the open string against the
+    // room: a palm damps a mode by how far it moves under it, so both where the
+    // break falls and how deep it is scale with the string, while a wire's own
+    // losses and the air's are a property of the frequency.
+    const float quote_w = mute > 0.0f ? std::min(mute * w0, 0.9f * kPi) : fixed_quote_w;
+    const float quote_t60 = mute > 0.0f ? t60_s / kKsMuteDecayRatio : hf_t60_s;
     if (kKsHfT60S > 0.0f && quote_w > w0 * 1.5f) {
       const StringLoopFilter solved =
-          solve_string_loop_filter(w0, quote_w, g, string_loop_gain_for(period, sr, hf_t60_s));
+          solve_string_loop_filter(w0, quote_w, g, string_loop_gain_for(period, sr, quote_t60));
       // The damper is broadband, so its gain takes the compensation the
       // fundamental's did; otherwise the pole is counted into it twice.
       release_g = std::min(0.9999f, release_g * (g > 0.0f ? solved.g / g : 1.0f));

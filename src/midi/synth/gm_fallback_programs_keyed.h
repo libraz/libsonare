@@ -327,11 +327,24 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.electric_guitar.ks.nail = 0.7f;         // pick
   o.electric_guitar.gain = 1.3f;
 
-  // Palm mute: same electric string, choked decay.
+  // Palm mute: the same electric string with a hand on it. The mute is the whole
+  // of the difference and it is not a shorter decay — a choked decay alone left
+  // this the bank's worst centroid at 1.9 octaves over the reference, because
+  // the partials that make it bright were still there. `mute_harmonic` is the
+  // break the palm puts in the series; the rest is fitted against the reference.
   o.muted_guitar = o.electric_guitar;
-  o.muted_guitar.ks.decay_s = 0.35f;
+  o.muted_guitar.ks.mute_harmonic = 2.5f;
+  o.muted_guitar.ks.decay_s = 0.355891f;
+  o.muted_guitar.ks.decay_stretch = 0.798374f;
   o.muted_guitar.ks.brightness = 0.55f;
   o.muted_guitar.ks.release_damp_s = 0.04f;
+  o.muted_guitar.cutoff_hz = 617.386f;
+  o.muted_guitar.ks.exc_brightness = 0.236068f;
+  o.muted_guitar.ks.vel_to_brightness = 0.708204f;
+  o.muted_guitar.ks.nail = 0.618034f;
+  o.muted_guitar.ks.pluck_style = 0.437694f;
+  o.muted_guitar.ks.pick_position = 0.381966f;
+  o.muted_guitar.ks.pickup_pos = 0.336881f;
 
   // Overdriven / distortion: the same instrument. What makes these two programs
   // different from the clean guitar is the amplifier, which the bank binds after

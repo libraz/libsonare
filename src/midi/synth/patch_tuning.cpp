@@ -307,6 +307,7 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.exc_brightness);
   F(ks.vel_to_brightness);
   F(ks.release_damp_s);
+  F(ks.mute_harmonic);
   F(ks.slap);
   F(ks.polarization);
   F(ks.body_coupling);

@@ -74,6 +74,7 @@ constexpr KsPatchParams blank_ks() noexcept {
   z.exc_brightness = 0.0f;
   z.vel_to_brightness = 0.0f;
   z.release_damp_s = 0.0f;
+  z.mute_harmonic = 0.0f;
   z.slap = 0.0f;
   z.polarization = 0.0f;
   z.body_coupling = 0.0f;
