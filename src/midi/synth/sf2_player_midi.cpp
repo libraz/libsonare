@@ -773,6 +773,22 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       st.delay_send = value;
       refresh_channel_mod(ch);
       break;
+    // TONE MODIFY 1-8 by controller. The manual annotates each of the eight as
+    // one parameter reachable three ways, so these land in the storage the
+    // 40 1x 30-37 block and the 01 08/09/0A/20/21/63/64/66 NRPNs already write.
+    case 71:
+    case 72:
+    case 73:
+    case 74:
+    case 75:
+    case 76:
+    case 77:
+    case 78: {
+      // The eight controllers are contiguous but not in address order.
+      static constexpr uint8_t kToneModifyIndex[8] = {3, 6, 4, 2, 5, 0, 1, 7};
+      gs_apply_tone_modify(st.gs, kToneModifyIndex[controller - 71u], value);
+      break;
+    }
     case 98:  // NRPN LSB
       st.params.select_nrpn_lsb(value);
       break;

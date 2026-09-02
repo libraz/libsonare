@@ -9,6 +9,10 @@
 /// storage cannot do, because only one of the two paths would reach the voice.
 /// Each pair also renders untouched, so a pair that moves nothing fails instead
 /// of agreeing vacuously.
+///
+/// Every route the table gives a row has to be one of the renders. The eight
+/// TONE MODIFY rows are reachable three ways and were checked two, and the
+/// third was the one that had never been wired.
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -175,6 +179,10 @@ struct Alias {
   std::vector<uint8_t> data;  ///< what the SysEx side writes
   std::function<void(Sf2Player&)> by_controller;
   bool needs_fx;
+  /// The table's CC column where the row reaches the parameter a third way,
+  /// carrying `data[0]`; 0 on the rows whose column is a dash and on the rows
+  /// whose controller IS `by_controller`.
+  uint8_t cc = 0;
 };
 
 std::vector<Alias> aliases() {
@@ -210,42 +218,50 @@ std::vector<Alias> aliases() {
        0x30,
        {110},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x08, 110); },
-       false},
+       false,
+       76},
       {"TONE MODIFY2 vibrato depth = NRPN 01 09",
        0x31,
        {127},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x09, 127); },
-       false},
+       false,
+       77},
       {"TONE MODIFY3 TVF cutoff = NRPN 01 20",
        0x32,
        {104},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x20, 104); },
-       false},
+       false,
+       74},
       {"TONE MODIFY4 TVF resonance = NRPN 01 21",
        0x33,
        {127},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x21, 127); },
-       false},
+       false,
+       71},
       {"TONE MODIFY5 EG attack = NRPN 01 63",
        0x34,
        {127},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x63, 127); },
-       false},
+       false,
+       73},
       {"TONE MODIFY6 EG decay = NRPN 01 64",
        0x35,
        {127},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x64, 127); },
-       false},
+       false,
+       75},
       {"TONE MODIFY7 EG release = NRPN 01 66",
        0x36,
        {127},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x66, 127); },
-       false},
+       false,
+       72},
       {"TONE MODIFY8 vibrato delay = NRPN 01 0A",
        0x37,
        {127},
        [](Sf2Player& p) { send_nrpn(p, 0x01, 0x0A, 127); },
-       false},
+       false,
+       78},
   };
 }
 
@@ -271,6 +287,16 @@ TEST_CASE("every part-parameter alias writes the storage its controller owns",
     // reason.
     CHECK_FALSE(identical(untouched, by_cc));
     CHECK(identical(by_cc, by_sysex));
+
+    // The TONE MODIFY rows name a controller as well, and a table column with
+    // no case behind it is how one route stays unwired while the others agree:
+    // these eight answered SysEx and NRPN and dropped every CC71-78 sent at
+    // them.
+    if (a.cc != 0) {
+      const Render by_cc_number =
+          render_with([&a](Sf2Player& p) { send_cc(p, a.cc, a.data[0]); }, a.needs_fx);
+      CHECK(identical(by_cc, by_cc_number));
+    }
   }
 }
 
