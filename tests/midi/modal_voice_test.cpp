@@ -548,11 +548,11 @@ TEST_CASE("the promoted pitched-percussion programs track the key and honour not
           "[midi][synth][percussion]") {
   // Tinkle Bell (112) .. Reverse Cymbal (119) voice a struck core as melodic
   // programs — key-tracked (except the unpitched reverse cymbal), never
-  // one-shot. All of them are membranes but the steel pan, which is checked
-  // below on the core it needs instead.
+  // one-shot. All of them are membranes but the agogo and the steel pan, which
+  // are checked below on the core the two of them need instead.
   for (uint8_t program = 112; program <= 119; ++program) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, program);
-    if (program != 114) REQUIRE(patch.mode == SynthEngineMode::kPercussion);
+    if (program != 113 && program != 114) REQUIRE(patch.mode == SynthEngineMode::kPercussion);
     REQUIRE_FALSE(patch.one_shot);
     const std::vector<float> tone = render_patch(patch, 69, 110, 24000);
     float peak = 0.0f;
@@ -596,4 +596,22 @@ TEST_CASE("the steel pan's tuned octave is louder than the note under it", "[mid
   REQUIRE(twelfth > 0.0);
   REQUIRE(twelfth < 0.1 * band_power(power, f0));
   REQUIRE(render_patch(pan, 69, 127, 8192) == render_patch(pan, 69, 127, 8192));
+}
+
+TEST_CASE("the agogo sounds an octave over the key it is played on", "[midi][synth][modal]") {
+  // Two independent GM sources put this program's loudest line at twice the
+  // played key with nothing at the key itself, so the octave is a convention
+  // the program carries rather than one library's mapping. Nothing in the
+  // pitch metrics sees it — they measure inharmonicity and cents, both of
+  // which agree with themselves an octave out — so it is asserted here.
+  const double f0 = 440.0;
+  const NativeSynthPatch& agogo = gm_fallback_patch(0, 113);
+  REQUIRE(agogo.mode == SynthEngineMode::kModal);
+  const std::vector<float> tone = render_patch(agogo, 69, 127, 24000);
+  float peak = 0.0f;
+  for (float s : tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  const std::vector<double> power = power_spectrum(tone, 1024);
+  REQUIRE(band_power(power, 2.0 * f0) > 100.0 * band_power(power, f0));
+  REQUIRE(render_patch(agogo, 69, 127, 8192) == render_patch(agogo, 69, 127, 8192));
 }

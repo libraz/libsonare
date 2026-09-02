@@ -12,30 +12,73 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   // frequency, which is 0 here). A zero-sustain decay envelope gives the strike
   // shape without swallowing note-off, exactly like the timpani override.
 
-  // Tinkle Bell (GM 112): a high glassy chime — sparse inharmonic metal modes.
+  // Tinkle Bell (GM 112): a high glassy chime, and a long one. Its lines are
+  // the played key and the key's fourth partial, both on the harmonic grid;
+  // the 1.70 and 2.40 this patch used to voice are in neither of the two GM
+  // sources measured. The fall is 60 dB in 1.48 s at every note AND every
+  // velocity, which is a sampler's envelope rather than an instrument's, so
+  // nothing here is key-tracked either.
   NativeSynthPatch& tk = o.tinkle_bell;
   tk.mode = SynthEngineMode::kPercussion;
-  tk.amp_env = fallback_env(0.5f, 500.0f, 0.0f, 300.0f);
+  // Nothing damps a small bell, so the release is the fall's own length: below
+  // that a short note is cut while the instrument still has a second to run.
+  tk.amp_env = fallback_env(0.5f, 900.0f, 0.0f, 1500.0f);
+  // Held at the strike while the modes fall alone, which is the knee: the
+  // reference's first 20 dB take 715 ms and its last 20 take 295.
+  tk.amp_env.hold_ms = 900.0f;
   tk.cutoff_hz = 20000.0f;
-  tk.percussion.num_modes = 3;
-  tk.percussion.mode_ratios = {1.0f, 1.7f, 2.4f, 0.0f, 0.0f, 0.0f};
+  tk.percussion.num_modes = 2;
+  tk.percussion.mode_ratios = {1.0f, 4.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   tk.percussion.base_freq_hz = 0.0f;
-  tk.percussion.mode_decay_s = 0.4f;
+  tk.percussion.mode_decay_s = 2.1f;
   tk.percussion.tone_gain = 0.6f;
-  tk.percussion.noise_gain = 0.12f;
-  tk.percussion.noise_decay_ms = 8.0f;
-  tk.percussion.noise_cutoff_hz = 6000.0f;
+  // The bell's inharmonic metal. The reference carries it as fixed-frequency
+  // lines that move with the sample zone rather than the key, so a mode cannot
+  // hold them; a band can. 68 dB under the note and 88 over the lead-in floor.
+  tk.percussion.noise_gain = 0.003f;
+  tk.percussion.noise_decay_ms = 900.0f;
+  tk.percussion.noise_cutoff_hz = 2500.0f;
   tk.percussion.noise_output = SynthFilterOutput::kBandpass;
-  tk.gain = 0.6f;
+  tk.gain = 1.18f;
 
-  // Agogo (GM 113): a two-tone metal bell.
+  // Agogo (GM 113): a two-tone metal bell, and the second program here that is
+  // not a membrane. Both GM sources measured put its loudest line at twice the
+  // played key with nothing at the key itself, and its ladder falls far steeper
+  // than the membrane core's fixed 1/(k+1) — the second-loudest partial sits
+  // 1.8 dB under the first and the next 17 under that. So it runs on the modal
+  // core, whose modes carry their own gain and decay. Read at five notes over a
+  // major sixth, which agreed to about a decibel; the reference is one sample
+  // transposed, so those five say one thing.
   NativeSynthPatch& ag = o.agogo;
-  ag = tk;
-  ag.percussion.num_modes = 2;
-  ag.percussion.mode_ratios = {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f};
-  ag.percussion.mode_decay_s = 0.28f;
-  ag.percussion.noise_cutoff_hz = 3600.0f;
-  ag.gain = 0.55f;
+  ag.mode = SynthEngineMode::kModal;
+  ag.amp_env = fallback_env(0.5f, 0.0f, 1.0f, 600.0f);
+  // A lowpass fixed in Hz rather than tracked, because that is what the
+  // reference has: its partials lose about 12 dB per octave of ABSOLUTE
+  // frequency, so the same bell struck an octave up comes out 3.5 dB quieter
+  // with its bright partial 13 dB down. One corner reproduces both.
+  ag.cutoff_hz = 1800.0f;
+  ag.modal.num_modes = 8;
+  // Two modes on the sounded note, because its fall is two-stage and one
+  // resonator is one exponential: a fast part carries the first 0.2 s at about
+  // -120 dB/s and a slow one the rest at -49.
+  ag.modal.modes[0] = {2.0f, 0.56f, 1.0f};  // the sounded note, an octave up
+  ag.modal.modes[1] = {2.0f, 1.2f, 0.2f};
+  ag.modal.modes[2] = {2.5f, 0.139f, 0.519f};
+  ag.modal.modes[3] = {4.65f, 0.101f, 0.53f};
+  ag.modal.modes[4] = {5.18f, 0.044f, 0.413f};
+  ag.modal.modes[5] = {7.25f, 0.118f, 0.503f};
+  ag.modal.modes[6] = {8.11f, 0.816f, 0.395f};  // the bell's own bright partial
+  ag.modal.modes[7] = {14.04f, 0.159f, 0.423f};
+  ag.modal.decay_s = 1.22f;
+  // Flat: the reference's fall to -60 dB moves 40 ms over the whole compass,
+  // and upward, so there is no bar-size stretch to track.
+  ag.modal.decay_stretch = 0.0f;
+  // The stick carries the reference's velocity tilt: from the softest row to
+  // the hardest its partials rise 3 dB at the third mode and 38 at the eighth.
+  ag.modal.strike_brightness = 1.0f;
+  ag.modal.vel_to_brightness = 0.42f;
+  ag.modal.release_damp_s = 1.22f;  // a struck bell is not damped by the key
+  ag.gain = 0.62f;
 
   // Steel Drums (GM 114): a tuned pan, and the one program here that is not a
   // membrane. A pan note is tuned so its octave and twelfth are true and the
