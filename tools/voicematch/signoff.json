@@ -7,43 +7,43 @@
   "p000-acoustic-grand-piano": {
     "structure": {
       "provenance": {
-        "date": "2026-09-01",
-        "bank_generation": 19,
-        "patch_version": 1
+        "date": "2026-09-03",
+        "bank_generation": 31,
+        "patch_version": 2
       },
       "spec": "specs/piano_corpus.json",
       "probe": "the corpus pattern over 15 notes and 4 velocities",
       "unreachable": [],
       "accepted": {},
-      "note": "Every measurement is reachable by something, no knob is inert and no probe was unscorable. Eight of the sixteen terms are spent — a knob moves them and none reduces them, which is a converged fit rather than a missing mechanism — and the three largest residuals by their own units (modes, mod, dyn) carry no weight in this spec, so no fit has ever been pointed at them. That is headroom, not physics."
+      "note": "Every measurement is reachable by something, no knob is inert and no probe was unscorable. Six of the sixteen terms are spent — a knob moves them and none reduces them, which is a converged fit rather than a missing mechanism — five are partial, and `tnr` is the one term still mostly on the table, where `fam0.piano.decay_fast_s` buys 60 % of the gap on its own. Three terms (modes, mod, dyn) carry no weight in this spec, so no fit has ever been pointed at their residual. That is headroom, not physics."
     }
   },
   "p006-harpsichord": {
     "structure": {
       "provenance": {
-        "date": "2026-09-01",
-        "bank_generation": 19,
-        "patch_version": 1
+        "date": "2026-09-03",
+        "bank_generation": 31,
+        "patch_version": 2
       },
       "spec": "specs/harpsichord.json",
       "probe": "the corpus pattern over 11 notes and 4 velocities",
       "unreachable": [],
       "accepted": {},
-      "note": "Nothing unreachable, and `cents` and `stiff` are inside the smallest difference they resolve. Four knobs are inert over their whole range and each is inert in combination with a field the probe holds fixed. `kJackMs`, `kJackCutoffHz` and `kDamperDelayMs` all shape the jack burst, whose level `jack_noise` ships at 0 — it is itself in this spec, so they are live in combination and the 2n+1 probe cannot see it. `velocity_droop_db` shapes the response only past `peak_velocity`, which ships at 127 with nothing past it: two renders at 127 with the droop at 0 and at 9 dB are byte-identical, and at a peak of 64 they differ. `peak_velocity` is in the override layer now, so a fit can reach it."
+      "note": "Nothing unreachable, and `cents` and `stiff` are inside the smallest difference they resolve. The same four knobs are inert over their whole range as before the knob space grew, and each is inert in combination with a field the probe holds fixed. `kJackMs`, `kJackCutoffHz` and `kDamperDelayMs` all shape the jack burst, whose level `jack_noise` ships at 0 — it is itself in this spec, so they are live in combination and the 2n+1 probe cannot see it. `velocity_droop_db` shapes the response only past `peak_velocity`, which ships at 127 with nothing past it: two renders at 127 with the droop at 0 and at 9 dB are byte-identical, and at a peak of 64 they differ. `peak_velocity` is reachable now but is not in this spec, so the droop stays inert until somebody decides to fit the pair."
     }
   },
   "p019-church-organ": {
     "structure": {
       "provenance": {
-        "date": "2026-09-01",
-        "bank_generation": 19,
-        "patch_version": 2
+        "date": "2026-09-03",
+        "bank_generation": 31,
+        "patch_version": 3
       },
       "spec": "specs/church_organ_corpus.json",
       "probe": "the corpus pattern over 11 notes and one velocity",
       "unreachable": [],
       "accepted": {},
-      "note": "Nothing unreachable. `dyn` reads matched by construction rather than by fit — the capture has one velocity — and eight terms carry no weight in this spec, so their residual has never been searched. One knob is inert over its whole range: `church_organ.pipe_organ.brightness`, and it is inert because the flat voicing fields are read only when `rank_count` is 0 while this registration draws six ranks. `reed` and `radiation` beside it are dead the same way and are not in the spec. Two renders differing only in `brightness` are byte-identical at the shipped registration and differ at `rank_count=0`; `rank_count` is in the override layer now, so a fit can reach all three."
+      "note": "Nothing unreachable and no knob inert, the second of those being new: `church_organ.pipe_organ.brightness` was the one, and it has come out of the spec because it is not whole-chorus voicing at all — the flat voicing fields are read only when `rank_count` is 0 while this registration draws six ranks, and `reed` and `radiation` beside it are dead the same way. `dyn` reads matched by construction rather than by fit, since the capture has one velocity, and eight terms carry no weight here, so their residual has never been searched. One thing the run cannot see: `ranks0.brightness` is scored live because the probe reaches C5 and C6, but the 16' it voices is pinned by a filter floor at and below C#4, so no knob here reaches the register that rank is played in."
     }
   }
 }

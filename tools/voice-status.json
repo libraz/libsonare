@@ -40,15 +40,15 @@
           }
         },
         "structure": {
-          "state": "stale",
-          "date": "2026-09-01",
+          "state": "current",
+          "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
           "open": []
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6 — then the patch has moved since the diagnosis: re-run autofit --diagnose"
+      "next": "judge the recorded candidate(s) — tank-3.6 — then listen to a take and sign it off in signoff.json"
     },
     {
       "slug": "p000b001-acoustic-grand-piano",
@@ -1364,15 +1364,15 @@
           }
         },
         "structure": {
-          "state": "stale",
-          "date": "2026-09-01",
+          "state": "current",
+          "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
           "open": []
         },
         "music": null
       },
-      "next": "the patch has moved since the diagnosis: re-run autofit --diagnose"
+      "next": "listen to a take and sign it off in signoff.json"
     },
     {
       "slug": "p006b001-harpsichord",
@@ -3220,15 +3220,15 @@
           }
         },
         "structure": {
-          "state": "stale",
-          "date": "2026-09-01",
+          "state": "current",
+          "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
           "open": []
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then the patch has moved since the diagnosis: re-run autofit --diagnose"
+      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then listen to a take and sign it off in signoff.json"
     },
     {
       "slug": "p019b001-church-organ",
