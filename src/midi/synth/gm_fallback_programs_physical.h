@@ -48,9 +48,27 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
   o.cello.lfo_rate_hz = 4.8f;
   o.cello.lfo_to_pitch_cents = 7.0f;
-  o.contrabass = bowed(0.15f, 0.62f, 0.36f, 0.44f, 90.0f, 160.0f, 0.46f, 0.32f);
+  // Contrabass (GM 43): the one member of the family with a reference, and fitted
+  // to it. The bridge reflection filter is fixed in Hz, so at these pitches its
+  // whole range sits above every partial and the darkening has to come from the
+  // patch filter below. The corpus is all but muted because kViolin is a violin.
+  // Gain restated because the darker string and the muted corpus together cost
+  // 6.7 dB: it puts the model back on the reference's own peak and held level.
+  o.contrabass = bowed(0.177f, 0.58f, 0.15f, 0.18f, 185.0f, 160.0f, 0.06f, 0.69f);
   o.contrabass.lfo_rate_hz = 4.4f;
   o.contrabass.lfo_to_pitch_cents = 5.0f;
+  o.contrabass.cutoff_hz = 2800.0f;
+  o.contrabass.resonance_q = 0.57f;
+  o.contrabass.bowed_string.release_ms = 330.0f;
+  o.contrabass.bowed_string.bow_speed = 0.62f;
+  o.contrabass.bowed_string.vel_to_speed = 0.58f;
+  o.contrabass.bowed_string.stribeck = 0.33f;
+  o.contrabass.bowed_string.sympathetic = 0.06f;
+  // The reference's held level settles 3.8 to 6.4 dB under its own attack peak and
+  // then holds flat, so the sustain is that settle rather than a decay.
+  o.contrabass.amp_env.attack_ms = 127.0f;
+  o.contrabass.amp_env.decay_ms = 380.0f;
+  o.contrabass.amp_env.sustain = 0.44f;
 
   // Fiddle (GM 110): the same violin, bowed the other way. A short hard stroke
   // near the bridge with the rosin audible and next to no vibrato — the
