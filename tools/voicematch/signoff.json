@@ -63,5 +63,18 @@
       "accepted": {},
       "note": "Nothing unreachable and no knob inert, the second of those being new: `church_organ.pipe_organ.brightness` was the one, and it has come out of the spec because it is not whole-chorus voicing at all — the flat voicing fields are read only when `rank_count` is 0 while this registration draws six ranks, and `reed` and `radiation` beside it are dead the same way. `dyn` reads matched by construction rather than by fit, since the capture has one velocity, and eight terms carry no weight here, so their residual has never been searched. One thing the run cannot see: `ranks0.brightness` is scored live because the probe reaches C5 and C6, but the 16' it voices is pinned by a filter floor at and below C#4, so no knob here reaches the register that rank is played in."
     }
+  },
+  "kit000-standard-kit": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-03",
+        "bank_generation": 31
+      },
+      "spec": "auto — 65 to 69 knobs per note, the dNNN patch plus its engine",
+      "probe": "the drum probe on notes 36, 38, 42, 47 and 49 at six velocities, kit-a — five of the kit's forty-seven, one per excitation family",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable at any of the five, and no term worse than spent: `band` and `modes` are partial everywhere, and `bdecay`, `env`, `lf` and `crest` are reachable on most notes, meaning most of the gap is still on the table. The residual is large with it — `band` runs 153 to 258 units and `bdecay` reaches 190 on the kick and the mid tom — so this reads as a voice nobody has fitted rather than one missing a mechanism. `kit` reads matched with zero movers at every note, and that is the probe rather than the kit: a single-note strike has no cross-instrument relation in it, so the term measuring the tom series and the hi-hat trio has nothing to measure. Between 28 and 35 of the roughly 66 knobs offered per note move nothing; the percussion core carries a shell, a plate and a particle layer and each drum note uses one or two of them, which was confirmed on three — `shell_weight2` comes alive at `shell_num_modes` 4, `plate_t60_s` at `plate_gain` 0.5, and `phisem_body_gain` needs `phisem_beans` and `phisem_body_hz` together, being dead with either alone. The rest were not chased. This claim covers five notes rather than the kit; a family the five miss is undiagnosed rather than clean."
+    }
   }
 }

@@ -9301,10 +9301,16 @@
             "level": 1.32
           }
         },
-        "structure": null,
+        "structure": {
+          "state": "current",
+          "date": "2026-09-03",
+          "unreachable": [],
+          "accepted": [],
+          "open": []
+        },
         "music": null
       },
-      "next": "record a structural residual with autofit --diagnose"
+      "next": "listen to a take and sign it off in signoff.json"
     }
   ]
 }
