@@ -19,6 +19,16 @@ namespace {
 /// each asks for on its own is 0.80 and 1.46, and this is the midpoint.
 SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 
+/// Exponent of the same curve on the lip-reed generator.
+///
+/// The spec's 2.0 swung the four brass references 10.6 to 14.8 dB wider from
+/// velocity 32 to 127; with the curve off entirely the engine's own breath
+/// response is 4.1 to 7.7 dB, which is under every one of them, so this is an
+/// exponent rather than the opt-out the piano and the harpsichord take. The
+/// exponent each reference asks for is 0.76, 0.77, 1.06 and 1.12 — the low
+/// brass want less than the high — and this is their mean.
+SONARE_TUNABLE(kBrassVelocityExponent, 0.93f);
+
 /// Exponent of the same curve on the tonewheel generator.
 ///
 /// A key closes contacts on wheels that are already turning, so the instrument
@@ -59,6 +69,7 @@ SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 /// shift underneath its own calibration if this changed for it too.
 float sampler_velocity_exponent(SynthEngineMode mode) noexcept {
   if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord) return 0.0f;
+  if (mode == SynthEngineMode::kBrass) return kBrassVelocityExponent;
   if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
   if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
   return 2.0f;
