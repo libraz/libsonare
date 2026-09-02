@@ -82,5 +82,14 @@
         "note": "what a fit against the direct reference returns, and why it is not adopted: it takes the voice from 26.63 to 3.42 dB RMS of that reference above 2 kHz and takes program 29's whole chain from 4.93 to 23.29 dB of the amplified one. No rig recovers it - a cabinet only darkens, and the chain would need 27 dB more at 8 kHz - so the two references are not reachable together"
       }
     ]
+  },
+  "p078-whistle": {
+    "variants": [
+      {
+        "name": "keyed-filter",
+        "overrides": "tin_whistle.cutoff_hz=300,tin_whistle.key_track=1.0",
+        "note": "the patch's own filter closed to 1.15x f0 and tracking the key, which no flute patch does today: h2-h6 goes from -19 to -38 dB and stays flat across the range for 1 dB of level. The reference sits at -70, so this is 20 of a 45 dB gap; every knob on the engine put together gives 7, and the four that give more than 3 collapse the level to a third because they are loop gain rather than timbre"
+      }
+    ]
   }
 }
