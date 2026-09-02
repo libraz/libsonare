@@ -4343,7 +4343,10 @@
       "capture": "overdriven_guitar",
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "di-fitted",
+        "di-fitted-drive-0.75"
+      ],
       "axes": {
         "engine": "karplus_strong",
         "patch": "overdriven",

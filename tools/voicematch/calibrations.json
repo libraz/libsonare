@@ -1,6 +1,7 @@
 {
   "_doc": "Named calibration settings per voice, for the audition page. A key is a voice slug — the same string `make_audition.py` names its output directory, the set picker shows and a render's address carries — so `tools/voicematch/bank.py` is what says which keys are legal, and `test_calibration.py` fails on one that matches no voice. Each entry lists settings in the order they should appear on the page, after the unmodified build and before anything `--variant` adds on the command line. Read only when a run passes `--calibrations`: every setting is one more render of every take, and the override layer needs a -DBUILD_TUNING=ON library, so a page opened to hear one voice should not pay for it.",
   "_overrides": "The value of SONARE_TUNING_OVERRIDES, passed to the library untouched — the library is the only thing that can say whether a key exists. Keys are scoped: an engine constant is `<file stem>.<name>` (`brass_voice.kLipCouple`), a patch field is `<patch>.<path>` (`trumpet.brass.brassiness`), and a drum note's patch is `d038.percussion.wire_buzz`. A bare constant name resolves when it is unique across the tree and not otherwise — four voices declare `kBreathBase`. `autofit.py --out result.json` writes a paste-ready string, which is where most of these come from.",
+  "_copies": "A patch prefix reaches THAT patch and no other, which is not where a source edit stops. `overdriven` and `distortion` are built by copying `electric_guitar` as the fallback tables are built, and the copy is taken from the compiled-in values before each patch is tuned under its own name — so editing the source propagates to all three and `electric_guitar.ks.brightness=…` moves programs 26 and 27 alone. The failure is silent and it renders: the program the setting was aimed at comes back byte-identical to the unmodified build, which reads as a knob with no effect rather than as a key that arrived somewhere else. A candidate meant for a copy needs its own entry under that copy's own voice.",
   "_note": "What the setting is for, in one line, shown on the page under the version button. It is the only place a candidate says why it is a candidate: the override string says what moved and never says what it was trying to fix, and a page is read weeks after it was built.",
   "_name": "The source key: letters, digits, `.`, `_`, `-`. It is the button label, the file stem and the last segment of the address, so what is on the button, what is in the URL and what is in a listening note are one string. `model` is taken by the unmodified build.",
   "_open": "A setting listed here is a candidate that has NOT been written back to the source. That is what the file is for: an override string kept only in a render directory under the scratch root is lost with the directory, and one harpsichord round's candidates were lost exactly that way. Recording is not adoption — a setting stays here until it is either written back (and deleted from here in the same change) or judged and deleted.",
@@ -79,7 +80,21 @@
       {
         "name": "di-fitted",
         "overrides": "electric_guitar.ks.brightness=0.944272,electric_guitar.ks.exc_brightness=0.326238,electric_guitar.cutoff_hz=1297.44,electric_guitar.ks.vel_to_brightness=0.944272,electric_guitar.ks.pick_position=0.190983",
-        "note": "what a fit against the direct reference returns, and why it is not adopted: it takes the voice from 26.63 to 3.42 dB RMS of that reference above 2 kHz and takes program 29's whole chain from 4.93 to 23.29 dB of the amplified one. No rig recovers it - a cabinet only darkens, and the chain would need 27 dB more at 8 kHz - so the two references are not reachable together"
+        "note": "what a fit against the direct reference returns. It closes most of the gap it was aimed at - the voice sits 12 dB over that reference at 2 kHz rising to 40 at 6.35 - and it is a candidate rather than a fit because one product at the pickup can bound a voice and cannot target it: nothing here says whether this reference's darkness is the instrument or the library. These keys reach programs 26 and 27 only; the same fit on the amplified end is filed under p029, which is where it can be heard against a reference that carries a rig"
+      }
+    ]
+  },
+  "p029-overdriven-guitar": {
+    "variants": [
+      {
+        "name": "di-fitted",
+        "overrides": "overdriven.ks.brightness=0.944272,overdriven.ks.exc_brightness=0.326238,overdriven.cutoff_hz=1297.44,overdriven.ks.vel_to_brightness=0.944272,overdriven.ks.pick_position=0.190983",
+        "note": "the direct fit carried onto the copy that voices this program, which is the measurement that says what it costs the amplified end. Against this program's own reference it improves rather than breaks it, at the shipped rig gain and over all 35 notes: brightness 43.60 to 25.27 per cent of the reference centroid, the partial stack 7.28 to 4.45 dB, body under the note 46.69 to 35.27, the double decay 10.43 to 5.56 dB/s, and the five rows whose decays were too far apart to compare all come back. Tone-to-noise is the one that does not follow, 7.80 to 8.25 dB out"
+      },
+      {
+        "name": "di-fitted-drive-0.75",
+        "overrides": "overdriven.ks.brightness=0.944272,overdriven.ks.exc_brightness=0.326238,overdriven.cutoff_hz=1297.44,overdriven.ks.vel_to_brightness=0.944272,overdriven.ks.pick_position=0.190983,gm_fallback_map.kRigCrunchDrive=0.75",
+        "note": "the same fit with the crunch rig driven harder, which is what a darker string in front of the same amplifier asks for. It centres brightness on the reference - the signed median goes to +3.21 per cent - and the per-note figure is the best in the sweep at 22.29. It is not free: the partial stack goes back out from 4.45 to 4.93 dB and tone-to-noise from 8.25 to 8.78, so the drive is buying a centre and selling scatter. Judge it against di-fitted by ear"
       }
     ]
   },
