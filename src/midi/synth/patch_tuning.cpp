@@ -156,11 +156,14 @@ void apply_env(DahdsrConfig& e, const Fields& f, const std::string& path) {
 /// The patch sections every engine shares: oscillator detune / drift, gain,
 /// both envelopes, the filter, the LFOs, glide, body and stereo.
 void apply_common(NativeSynthPatch& p, const Fields& f) {
-  // The oscillator count and the body voicing: the two shared fields that
-  // switch a mechanism rather than trim one, and the two whose absence made a
-  // sweep of `detune_cents` or `body_mix` read as a structural answer.
+  // The shared fields that switch a mechanism rather than trim one, and whose
+  // absence made a sweep of `detune_cents`, `body_mix`, `cutoff_hz` or a
+  // release read as a structural answer.
   I(unison);
   I_TYPED(body, static_cast<int>(BodyType::kNone), static_cast<int>(BodyType::kVocal));
+  I_TYPED(one_shot, 0, 1);
+  I_TYPED(filter_output, static_cast<int>(SynthFilterOutput::kLowpass),
+          static_cast<int>(SynthFilterOutput::kHighpass));
   F(detune_cents);
   F(drift_cents);
   F(drift_rate_hz);
@@ -183,6 +186,8 @@ void apply_common(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_piano(NativeSynthPatch& p, const Fields& f) {
+  // The choir size decides what `piano.detune_cents` has to detune.
+  I(piano.strings);
   F(piano.detune_cents);
   F(piano.decay_fast_s);
   F(piano.decay_slow_s);
@@ -198,6 +203,11 @@ void apply_piano(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
+  // The registration comes first because it decides which of the fields under
+  // it are read at all: >0 sounds `ranks[0..rank_count)` and leaves the four
+  // flat voicing fields unread, 0 sounds one implicit 8' built from them.
+  I(pipe_organ.rank_count);
+  I_TYPED(pipe_organ.stopped, 0, 1);
   F(pipe_organ.brightness);
   F(pipe_organ.tone_decay_s);
   F(pipe_organ.breath);
@@ -215,6 +225,7 @@ void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
     PipeOrganRank& r = p.pipe_organ.ranks[static_cast<size_t>(i)];
     const std::string base = "pipe_organ.ranks" + std::to_string(i) + '.';
     r.footage_mult = f((base + "footage_mult").c_str(), r.footage_mult);
+    r.stopped = f.as_int((base + "stopped").c_str(), r.stopped ? 1 : 0, 0, 1) != 0;
     r.brightness = f((base + "brightness").c_str(), r.brightness);
     r.level = f((base + "level").c_str(), r.level);
     r.reed = f((base + "reed").c_str(), r.reed);
@@ -223,6 +234,9 @@ void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
+  // The friction model: off is the memoryless table, and `rosin` and `stribeck`
+  // shape the bristle memory only when it is on.
+  I_TYPED(bowed_string.elasto_plastic, 0, 1);
   F(bowed_string.bow_position);
   F(bowed_string.bow_force);
   F(bowed_string.bow_speed);
@@ -238,6 +252,10 @@ void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_reed(NativeSynthPatch& p, const Fields& f) {
+  // The bore shape decides which harmonics exist at all, and the dynamic reed
+  // is what `closing_pressure` biases; off, it is the memoryless table.
+  I_TYPED(reed.conical, 0, 1);
+  I_TYPED(reed.dynamic_reed, 0, 1);
   F(reed.breath_pressure);
   F(reed.vel_to_breath);
   F(reed.reed_stiffness);
@@ -259,6 +277,8 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_brass(NativeSynthPatch& p, const Fields& f) {
+  // The body shape biases the bell reflection every brightness knob works into.
+  I_TYPED(brass.conical, 0, 1);
   F(brass.breath_pressure);
   F(brass.vel_to_breath);
   F(brass.lip_tension);
@@ -333,6 +353,15 @@ void apply_plucked_string(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_harpsichord(NativeSynthPatch& p, const Fields& f) {
+  // The registration and the key's reach come first because each decides
+  // whether the fields under it are read: a choir that is not drawn ignores its
+  // own pluck point and detune, and `velocity_droop_db` shapes the response
+  // only past `peak_velocity`, which at 127 there is no room beyond.
+  I_TYPED(harpsichord.eight_a, 0, 1);
+  I_TYPED(harpsichord.eight_b, 0, 1);
+  I_TYPED(harpsichord.four, 0, 1);
+  I_TYPED(harpsichord.peak_velocity, 0, 127);
+  I_TYPED(harpsichord.undamped_from_note, 0, 128);
   F(harpsichord.pluck_8a);
   F(harpsichord.pluck_8b);
   F(harpsichord.pluck_4);
@@ -375,6 +404,8 @@ void apply_free_reed(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_vocal(NativeSynthPatch& p, const Fields& f) {
+  // Which formant table the whole voice is read out of.
+  I(vocal.vowel);
   F(vocal.brightness);
   F(vocal.breath_noise);
   F(vocal.vibrato_rate_hz);
@@ -415,10 +446,12 @@ void apply_additive(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_percussion(NativeSynthPatch& p, const Fields& f) {
-  // The counts come first because they decide whether the fields under them do
-  // anything: sweeping the shell's frequencies with `shell_num_modes` at 0
-  // reads as "the shell cannot reach this measurement" and means "the shell is
-  // switched off".
+  // The counts and the kit switch come first because they decide whether the
+  // fields under them do anything: sweeping the shell's frequencies with
+  // `shell_num_modes` at 0 reads as "the shell cannot reach this measurement"
+  // and means "the shell is switched off", and `gm_kit` ignores the rest of the
+  // section outright — note-on resolves the struck note through the GM map.
+  I_TYPED(percussion.gm_kit, 0, 1);
   I(percussion.num_modes);
   I(percussion.shell_num_modes);
   // Neither is narrowed by `clamp_synth_patch`, so each states the range its

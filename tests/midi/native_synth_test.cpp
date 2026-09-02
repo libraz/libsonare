@@ -953,6 +953,52 @@ TEST_CASE("the tuning field table reaches every percussion field", "[midi][synth
   REQUIRE(unique.size() == paths.size());
 }
 
+TEST_CASE("the tuning field table reaches the switch beside every field it gates",
+          "[midi][synth][tuning]") {
+  // A switch left out of the table makes every field it gates read inert, and
+  // a 2n+1 probe cannot see the pair because it holds the switch fixed. The
+  // church organ's `pipe_organ.brightness` is dead at every value because the
+  // flat voicing fields are read only at rank_count 0, and the harpsichord's
+  // `velocity_droop_db` because the droop shapes the response past
+  // `peak_velocity`, which ships at the top of the range with nothing past it.
+  using sonare::midi::synth::NativeSynthPatch;
+  using sonare::midi::synth::patch_tuning_field_paths;
+
+  struct Gate {
+    SynthEngineMode mode;
+    const char* gate;
+    const char* gated;
+  };
+  static const Gate kGates[] = {
+      {SynthEngineMode::kPipeOrgan, "pipe_organ.rank_count", "pipe_organ.brightness"},
+      {SynthEngineMode::kPipeOrgan, "pipe_organ.ranks0.stopped", "pipe_organ.ranks0.brightness"},
+      {SynthEngineMode::kHarpsichord, "harpsichord.peak_velocity", "harpsichord.velocity_droop_db"},
+      {SynthEngineMode::kHarpsichord, "harpsichord.four", "harpsichord.pluck_4"},
+      {SynthEngineMode::kPiano, "piano.strings", "piano.detune_cents"},
+      {SynthEngineMode::kBowedString, "bowed_string.elasto_plastic", "bowed_string.stribeck"},
+      {SynthEngineMode::kReed, "reed.dynamic_reed", "reed.closing_pressure"},
+      {SynthEngineMode::kReed, "reed.conical", "reed.cone_growth"},
+      {SynthEngineMode::kBrass, "brass.conical", "brass.brightness"},
+      {SynthEngineMode::kVocal, "vocal.vowel", "vocal.brightness"},
+      {SynthEngineMode::kPercussion, "percussion.gm_kit", "percussion.num_modes"},
+      // The two every engine carries: the filter's output tap and whether a
+      // note-off is heard at all.
+      {SynthEngineMode::kSubtractive, "filter_output", "cutoff_hz"},
+      {SynthEngineMode::kSubtractive, "one_shot", "amp_env.release_ms"},
+  };
+  for (const Gate& g : kGates) {
+    NativeSynthPatch p;
+    p.mode = g.mode;
+    const std::vector<std::string> paths = patch_tuning_field_paths(p);
+    const auto reaches = [&paths](const char* path) {
+      return std::find(paths.begin(), paths.end(), path) != paths.end();
+    };
+    INFO(g.gate << " gating " << g.gated);
+    REQUIRE(reaches(g.gate));
+    REQUIRE(reaches(g.gated));
+  }
+}
+
 #endif  // SONARE_TUNING
 
 TEST_CASE("gm_fallback_max_release_ms bounds every fallback patch table", "[midi][synth]") {
