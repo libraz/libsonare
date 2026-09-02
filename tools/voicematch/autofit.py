@@ -775,6 +775,14 @@ class Evaluator:
         not one knob at a time. A single knob can be genuinely inert, which is a
         finding about that knob; the entire spec moving nothing is a finding
         about the plumbing, and telling the two apart is the point.
+
+        That first render is silent whenever any one knob's far end silences the
+        voice, and several always do on a short probe: `amp_env.delay_ms` reaches
+        5 s and the attacks 20 s, both longer than a plucked instrument's whole
+        gate. Silence is not evidence about the plumbing either way, so the check
+        falls back to pushing knobs one at a time and needs only one of them to
+        move a measurement. The all-at-once render stays the fast path because it
+        usually answers in two renders instead of one per knob.
         """
         n_runtime = sum(1 for k in knobs if k.tunable is not None)
         if not n_runtime:
@@ -786,18 +794,33 @@ class Evaluator:
             return (k.hi if abs(k.hi - k.start_value) >= abs(k.start_value - k.lo)
                     else k.lo)
 
-        base = self._render_terms([k.start_value for k in knobs])
-        moved = self._render_terms([far(k) for k in knobs])
-        if base is None or moved is None:
+        start = [k.start_value for k in knobs]
+        base = self._render_terms(start)
+        if base is None:
             raise RuntimeError(
-                "the override reach check could not score a render — the model "
-                "produced nothing measurable at the start values or at the ends "
-                "of the spec's ranges"
+                "the override reach check could not score a render at the spec's "
+                "own start values — the probe measures nothing on this voice as it "
+                "ships, so there is no baseline for a fit to improve on. This is a "
+                "probe or capture problem rather than an override one."
             )
+        moved = self._render_terms([far(k) for k in knobs])
+        how = "to the far end of every range at once"
+        if moved is None:
+            how = "to the far end of one range at a time"
+            for i, k in enumerate(knobs):
+                if k.tunable is None:
+                    continue
+                one = list(start)
+                one[i] = far(k)
+                alone = self._render_terms(one)
+                if alone is not None and any(
+                        abs(base[t] - alone[t]) >= 1e-12 for t in LOSS_TERMS):
+                    return
+            moved = base
         if all(abs(base[t] - moved[t]) < 1e-12 for t in LOSS_TERMS):
             raise RuntimeError(
-                f"{n_runtime} runtime knobs were pushed to the far end of every "
-                f"range at once and not one measurement moved. The overrides are "
+                f"{n_runtime} runtime knobs were pushed {how} and not one "
+                f"measurement moved. The overrides are "
                 f"not reaching the library: either it was built without "
                 f"BUILD_TUNING, or the dylib being loaded is not the one that was "
                 f"just built (check SONARE_LIB_PATH against {self.build_dir}). "

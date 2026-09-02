@@ -2565,6 +2565,59 @@ def test_the_reach_check_passes_when_the_override_moves_the_render(monkeypatch):
     assert seen == [[0.25], [1.0]]
 
 
+def test_a_knob_that_silences_the_voice_does_not_read_as_broken_plumbing(monkeypatch):
+    """Several knobs' far ends are longer than a plucked instrument's whole gate.
+
+    `amp_env.delay_ms` reaches 5 s and the attacks 20 s, so pushing every knob at
+    once renders digital silence on any short probe and the check has nothing to
+    compare. Silence says nothing about whether the overrides arrive, so the
+    check falls back to one knob at a time and passes on the first that moves a
+    measurement.
+    """
+    ev = Evaluator.__new__(Evaluator)
+    ev.build_dir = Path("build")
+    seen = []
+
+    def render(values):
+        seen.append(list(values))
+        if values[1] == 1.0:  # the silencing knob, at its far end
+            return None
+        return {t: float(values[0]) for t in LOSS_TERMS}
+
+    monkeypatch.setattr(ev, "_render_terms", render, raising=False)
+    ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.25),
+                              _reach_knob("silencer", 0.0, 1.0, 0.25)])
+    # Start, the unscorable all-at-once render, then the first knob on its own.
+    assert seen == [[0.25, 0.25], [1.0, 1.0], [1.0, 0.25]]
+
+
+def test_a_probe_that_measures_nothing_as_shipped_says_so_rather_than_blaming_overrides(
+        monkeypatch):
+    """No baseline means no fit, and the reason is the probe rather than the
+    environment — a message about BUILD_TUNING would send the reader nowhere."""
+    ev = Evaluator.__new__(Evaluator)
+    ev.build_dir = Path("build")
+    monkeypatch.setattr(ev, "_render_terms", lambda values: None, raising=False)
+    with pytest.raises(RuntimeError, match="own start values"):
+        ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.25)])
+
+
+def test_the_one_at_a_time_fallback_still_catches_a_library_that_ignores_overrides(
+        monkeypatch):
+    """The fallback must not turn the plumbing failure into a pass: if no single
+    knob moves anything either, the run is still searching nothing."""
+    ev = Evaluator.__new__(Evaluator)
+    ev.build_dir = Path("build")
+
+    def render(values):
+        return None if values == [1.0, 1.0] else {t: 1.0 for t in LOSS_TERMS}
+
+    monkeypatch.setattr(ev, "_render_terms", render, raising=False)
+    with pytest.raises(RuntimeError, match="one range at a time"):
+        ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.25),
+                                  _reach_knob("b", 0.0, 1.0, 0.25)])
+
+
 def test_a_source_only_spec_has_no_override_plumbing_to_check(monkeypatch):
     """A rebuilding knob does not travel through the environment at all."""
     ev = Evaluator.__new__(Evaluator)
