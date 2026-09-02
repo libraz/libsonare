@@ -63,14 +63,21 @@ capture.py calibrate --config capture/<id>.json
 
 ### How a timbre is addressed, which is decided before anything is rendered
 
-A capture's timbres are the instruments being measured, and a plugin offers them in one of two shapes. Which one it is decides what `--probe-slots` is for and what the overlay has to carry.
+A capture's timbres are the instruments being measured, and a plugin offers them in one of three shapes. Which one it is decides what `--probe-slots` is for and what the overlay has to carry.
 
 - **A preset per timbre.** The plugin loads one instrument per preset file, so each timbre names its own `preset` and they all play on channel 1. Nothing has to be arranged in advance.
 - **One rack, one channel per slot.** The plugin cannot be told from outside which instrument to load — its preset is the whole rack rather than a slot — so the instrument set is arranged inside the plugin first: one instrument per slot, each slot on its own MIDI channel, saved once as a single preset. Every timbre then names that same file and differs only by `slot_channel`.
+- **One instrument, selected from the keyboard.** Neither a preset nor a channel reaches the variants: they are one instrument's own articulations, switched by a key outside its playing range. The timbre names that key as `keyswitch` and the capture says how long before the note it is struck as `keyswitch_lead_ms`. Nothing outside the plugin can enumerate these — the switch map is the library's documentation and the render is the only confirmation — so identify each one by rendering it before writing the timbre list.
 
 **In the second shape `slot_channel` is the only thing selecting a slot.** `source_for` threads it through to the host's `--channel` and nothing else reaches the rack, so a timbre list that leaves it at its default captures slot 1 once per timbre. The failure has no symptom worth noticing — every render is the right length, at a normal level, with an instrument audible in it — and the only sign is that two timbres come back byte-identical, so `shasum` two of them after the first note of a new rack rather than listening for a difference.
 
 **`slot_channel` is an address; `channel` is a meaning. Never write one in the other's field.** `channel` says what a timbre's note numbers stand for, which is what `profile.is_percussion` reads to choose the metric set for the whole capture, and MIDI gives it two answers: 10 for a note that selects an instrument, 1 for a note that selects a pitch. `load_config` refuses anything else, because a third value is an address that has reached the wrong field — which is how five melodic instruments that happened to sit in slot 10 came to be measured as drum maps, each note reporting a band tilt and a crest and none reporting a fundamental. A rack that keeps a kit somewhere other than slot 10 needs both fields and they disagree: `channel: 10`, `slot_channel: 15`.
+
+**A key switch comes OUT of the preroll, not on top of it.** The switch has to precede the note, and every consumer downstream expects the note at exactly `preroll_ms` — the onset guard below, the corpus assembly that drops the head, every metric that reads a window from it. So `au_preroll_ms` is `preroll_ms` less the lead, and the host is asked only for the remainder: the note lands where it always did whether a timbre is switched or not, which is what lets a switched timbre share one corpus with an unswitched one. The capture's `preroll_ms` therefore has to be raised to cover the lead, and raising it means re-rendering every timbre onto the one timeline. That is cheap to justify and worth proving: re-take a few cells of the existing grid at the new preroll first and check they agree sample for sample with the old ones once each has its head removed. Agreement says the corpus is regenerable; disagreement says the plugin is not deterministic and the whole grid is about to move for a reason that has nothing to do with the switch.
+
+**A switch is supposed to select rather than sound, and a library that voices one is invisible to every check but this.** It lands where the late-onset guard expects silence rather than where it expects a note, so that guard cannot fire, and it is loud enough and on the right series to pass the peak and tone-share tests — leaving the same transient under every measurement of that timbre and of no other, which reads as the variant. `_render_note` refuses a switched render whose onset arrives more than `ONSET_SLACK_MS` *early*, and refuses rather than retries, since an audible key is deterministic. Choosing switch keys outside the instrument's playing range is what makes this pass; confirm the range rather than assuming the library's map.
+
+**What a switch does with a request the instrument cannot answer is a measurement, not a guess.** A fretted instrument's forced-string switch is the case here: no single string spans a three-octave grid, so most of a grid is out of range for most of the switches. Measured across the whole grid, the sampled guitar captured here neither fails nor renders silence — it clamps to the nearest string that can reach the note, and an unswitched note is always played on the highest that can. That is what makes a two-timbre capture possible from one product: forcing the lowest switch gives the lowest fingering of every note and forcing nothing gives the highest, so the pair brackets the choice completely instead of sampling it, and where only one string reaches a note the two come back byte-identical — a spread of zero where the instrument has one fingering. **Establish the clamp rule by rendering the grid against every switch and comparing digests**, not by reasoning from the string's open pitch: the two answers agree here and there is nothing in the file that would have said so.
 
 **Which slot holds what is measured, not read.** A rack does not publish its channel map, `--probe-slots` reports only which channels are placed, and a slot's name is not a description of it. Render a diagnostic note per placed channel and identify each from what comes back — speech time, tone-to-noise, where the energy sits, the partial stack — then record that reasoning in a `_`-prefixed key beside the slot list. Both multi-slot captures here were identified that way, and one of them turned out to hold five electric-organ slots among its pipe ranks.
 
@@ -90,7 +97,7 @@ Tracked `capture/<id>.json`:
 | `bank` | the GS variation bank, where the reference is one (the pipe organ) | — |
 | `takes` | the audition phrase set ([audition.md](audition.md#phrase-sets)); a capture's own always wins over the generic one | `""` |
 | `dimensions` | which `compare` columns the gate holds; empty means all of them | `[]` |
-| `timbres[]` | `id`, `label`, and `slot_channel` — the slot, from `--probe-slots`. `channel` is the other quantity and is written only where a note number selects an instrument. `key_offset` is below | — / `channel: 1` |
+| `timbres[]` | `id`, `label`, and `slot_channel` — the slot, from `--probe-slots`. `channel` is the other quantity and is written only where a note number selects an instrument. `key_offset` is below; `keyswitch` is identity and belongs in the overlay | — / `channel: 1` |
 | `notes` / `velocities` | the grid. Velocity is an axis in its own right on anything plucked | — |
 | `note_map` | oracle-side note correspondence, where the kit is not laid out as GM ([probes.md](probes.md#a-sampled-kit-need-not-lay-its-instruments-out-the-way-gm-does)) | — |
 | `groups` | which of the notes are one instrument — the tom series, the hi-hat trio — as `name: [notes]`, for the kit-relation term ([loss.md](loss.md#percussion-terms)) | `{}` |
@@ -99,6 +106,7 @@ Tracked `capture/<id>.json`:
 | `gate_ms` / `tail` | how long the key is held and how long is recorded after it lifts | `8000` / `"2s"` |
 | `tail_by_note` | a longer tail for the notes that need one — the cymbals | `{}` |
 | `preroll_ms` / `sample_rate` | render lead-in, and the rate everything is measured at | `100` / `48000` |
+| `keyswitch_lead_ms` | how long before each note a switched timbre's key is struck. Comes out of `preroll_ms`, so it has to be smaller than it — see above | `0` |
 | `dry` | switch off every effect section the plugin advertises | `true` |
 | `rig` | whether an amplifier, a cabinet or a rotary speaker stands between the instrument and the microphone in this reference — `none` or `baked`, and absent means unclassified | `"unclassified"` |
 | `params` | anything else, as `Name=value` | `[]` |
@@ -109,7 +117,7 @@ Untracked `capture/<id>.local.json`, folded over the above:
 |---|---|
 | `plugin` | the triple from `aubounce list` |
 | `label` | the product name, if the tracked label is generic |
-| `timbres[]` | `id` (matching the tracked one) plus `preset` and a product-specific `label` |
+| `timbres[]` | `id` (matching the tracked one) plus `preset` and a product-specific `label`, and `keyswitch` where the variants are switched from the keyboard — which key selects which articulation is the library's own map and names it as surely as a preset path does |
 
 **A rack's slot names are not a description of what the slot does.** On the harpsichord rack the slot called `Digi` decays over 36 seconds and the one called `Ambient` decays in 3. That is why that capture sets `dry: false` and measures each timbre's room instead: the switch cannot be trusted where the effects are per-slot sends rather than a section the plugin advertises. Measure before believing a name, and record which slots came out dry — a slot's own room is what a later `compare` corrects the model with.
 

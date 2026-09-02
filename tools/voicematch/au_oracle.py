@@ -54,12 +54,12 @@ import subprocess
 import sys
 import tempfile
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
 
-from smf import strip_program_changes
+from smf import Note, strip_program_changes
 from wavio import read_wav
 
 HERE = Path(__file__).resolve().parent
@@ -195,6 +195,46 @@ class AuSource:
     #: sent. Every grid, every metric and every note label stays the sounding
     #: pitch — the model's own — and this is the one place the two part company.
     key_offset: int = 0
+    #: A silent key struck before the note, to select which of the instrument's
+    #: variants answers it. Zero is none.
+    #:
+    #: The third route to a timbre, for a library whose variants are neither
+    #: presets nor rack slots. One sampled electric guitar here holds a string
+    #: per instrument on one MIDI channel and picks between them from the
+    #: keyboard: the same written note played on a lower string is a different
+    #: sound, which is a real ambiguity in what a note number means on a
+    #: fretted instrument and one the model has no axis for.
+    keyswitch: int = 0
+    #: How long before the note the key switch is struck, in milliseconds.
+    #:
+    #: Taken out of the preroll rather than added to it — see `au_preroll_ms` —
+    #: so the note still lands at exactly `preroll_ms` and every consumer that
+    #: strips a preroll or checks an onset against one is unaffected.
+    keyswitch_lead_ms: int = 0
+
+    def __post_init__(self) -> None:
+        if bool(self.keyswitch) != bool(self.keyswitch_lead_ms):
+            raise ValueError(
+                "a key switch needs a lead and a lead needs a key switch: a switch "
+                "struck on the note's own tick has no defined order against it"
+            )
+        if self.keyswitch_lead_ms >= self.preroll_ms:
+            raise ValueError(
+                f"key switch lead {self.keyswitch_lead_ms} ms does not fit inside a "
+                f"{self.preroll_ms} ms preroll: raise the capture's preroll"
+            )
+
+    @property
+    def au_preroll_ms(self) -> int:
+        """The silence aubounce writes, which is the preroll less the switch's lead.
+
+        The preroll is the distance from the first sample to the note, and the
+        key switch sits inside it. Folding the lead in here rather than adding
+        it on is what keeps the note at `preroll_ms` for everything downstream:
+        the onset guard, the corpus assembly that drops the head, and every
+        metric that reads a window from it.
+        """
+        return self.preroll_ms - self.keyswitch_lead_ms
 
     def key(self, note: int) -> int:
         """The key that makes this source sound `note`."""
@@ -239,6 +279,9 @@ class AuSource:
         # capture made before the field existed keeps its digest.
         if self.key_offset:
             identity["key_offset"] = self.key_offset
+        if self.keyswitch:
+            identity["keyswitch"] = self.keyswitch
+            identity["keyswitch_lead_ms"] = self.keyswitch_lead_ms
         return identity
 
     def argv(self, out_wav: Path, *, midi: Path | None = None) -> list[str]:
@@ -271,7 +314,7 @@ class AuSource:
             argv += ["--channel", str(self.channel)]
         argv += [
             "--sample-rate", str(self.sample_rate),
-            "--preroll-ms", str(self.preroll_ms),
+            "--preroll-ms", str(self.au_preroll_ms),
             "--settle-ms", str(self.settle_ms),
         ]
         if self.tail:
@@ -283,6 +326,46 @@ class AuSource:
         argv += list(self.extra)
         argv += ["--json", "-o", str(out_wav)]
         return argv
+
+
+#: Velocity and gate for a key switch. It selects rather than sounds, so what
+#: matters is only that it is a note-on — velocity 0 is a note-off — and that it
+#: is released well before the note it selects for, in case a library reads the
+#: release rather than the press.
+KEYSWITCH_VELOCITY = 100
+KEYSWITCH_GATE_MS = 50
+
+
+def with_keyswitches(source: AuSource, notes: list) -> list:
+    """`notes`, delayed by the lead, with a selecting key struck before each onset.
+
+    A key switch arms the next note-on and is consumed by it, so a phrase needs
+    one per onset rather than one at the top; notes sharing an onset — a chord —
+    share a switch. The phrase is moved back by the lead so the first switch has
+    somewhere to go, which costs nothing because `au_preroll_ms` takes the same
+    lead out of the host's preroll: the two cancel and the audio lands where an
+    unswitched render's would.
+
+    Where two onsets are closer together than the lead, the switch goes halfway
+    between them instead. That is safe rather than approximate — the key is
+    silent and may overlap a sounding note; what it must not do is arrive before
+    the note that consumed the previous one.
+
+    Returns `notes` unchanged for a source with no switch, so a caller needs no
+    branch of its own.
+    """
+    if not source.keyswitch:
+        return list(notes)
+    lead = source.keyswitch_lead_ms / 1000.0
+    moved = [replace(n, start=n.start + lead) for n in notes]
+    switches = []
+    previous = None
+    for onset in sorted({n.start for n in moved}):
+        at = onset - lead if previous is None else max(onset - lead, (previous + onset) / 2.0)
+        switches.append(Note(source.keyswitch, KEYSWITCH_VELOCITY, max(0.0, at),
+                             KEYSWITCH_GATE_MS / 1000.0))
+        previous = onset
+    return switches + moved
 
 
 def summary_json(stdout: str) -> dict:

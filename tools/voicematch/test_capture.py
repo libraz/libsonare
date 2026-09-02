@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import au_oracle  # noqa: E402
 import capture  # noqa: E402
-from au_oracle import AuSource, _strip_preroll  # noqa: E402
+from au_oracle import AuSource, _strip_preroll, with_keyswitches  # noqa: E402
 from metrics import harmonic_share, midi_to_hz  # noqa: E402
 from profile import double_decay, find_partials, measure_note  # noqa: E402
 from wavio import write_wav  # noqa: E402
@@ -236,6 +236,116 @@ def test_a_transposed_instrument_is_asked_for_the_key_that_sounds_the_grid_note(
     assert bytes([0x90, 76, 100]) in score
 
 
+def test_a_key_switch_precedes_its_note_and_comes_out_of_the_preroll(monkeypatch, tmp_path):
+    """The note stays at `preroll_ms` whether a timbre is switched or not.
+
+    That is the whole of the design: the lead is taken out of the preroll rather
+    than added to it, so the onset guard, the corpus assembly that drops the
+    head and every metric that reads a window from the preroll are unaffected —
+    and a switched timbre shares one timeline with an unswitched one.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    source = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=92, keyswitch_lead_ms=300)
+    argv = capture._note_argv(source, tmp_path / "o.wav", 60, 100, 2000)
+    assert argv[argv.index("--preroll-ms") + 1] == "200"
+    score = Path(argv[argv.index("--midi") + 1]).read_bytes()
+    assert bytes([0x90, 92, au_oracle.KEYSWITCH_VELOCITY]) in score
+    assert bytes([0x90, 60, 100]) in score
+    # The switch is at tick 0 and the note 300 ms later; the note-off of the
+    # switch lands between them rather than after the note.
+    assert score.index(bytes([0x90, 92, au_oracle.KEYSWITCH_VELOCITY])) < \
+        score.index(bytes([0x90, 60, 100]))
+
+
+def test_a_phrase_gets_one_switch_per_onset_and_a_chord_gets_one():
+    """A switch is consumed by the note it arms rather than latching for the phrase.
+
+    One at the top of a take would select for the first note and leave every
+    later one on the instrument's own choice — a render at the right length and
+    level that is mostly the unswitched timbre.
+    """
+    from smf import Note
+    source = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=89, keyswitch_lead_ms=300)
+    take = [Note(60, 100, 0.0, 0.4), Note(64, 100, 0.0, 0.4),   # a chord: one onset
+            Note(67, 100, 1.0, 0.4)]                            # room for a full lead
+    out = with_keyswitches(source, take)
+    switches = [n for n in out if n.note == 89]
+    assert len(switches) == 2
+    # Each a full lead ahead of the note it arms, which has itself moved back.
+    assert [n.start for n in switches] == [0.0, 1.0]
+    # Every phrase note moved back by the lead, and nothing else about it changed.
+    assert sorted((n.note, n.start, n.dur) for n in out if n.note != 89) == [
+        (60, 0.3, 0.4), (64, 0.3, 0.4), (67, 1.3, 0.4)]
+
+
+def test_two_onsets_closer_than_the_lead_put_the_switch_between_them():
+    """It may overlap a sounding note; it must not precede the note that consumed
+    the previous one."""
+    from smf import Note
+    source = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=89, keyswitch_lead_ms=300)
+    out = with_keyswitches(source, [Note(60, 100, 0.0, 0.5), Note(62, 100, 0.1, 0.5)])
+    switches = sorted(n.start for n in out if n.note == 89)
+    played = sorted(n.start for n in out if n.note != 89)
+    assert played == [0.3, 0.4]
+    assert switches[0] < played[0]
+    assert played[0] < switches[1] < played[1]
+
+
+def test_a_source_with_no_switch_leaves_a_phrase_exactly_alone():
+    """The null: every capture measured before the field existed keeps its score."""
+    from smf import Note
+    take = [Note(60, 100, 0.0, 0.4), Note(67, 100, 1.0, 0.4)]
+    assert with_keyswitches(AuSource(plugin="x:y:z"), take) == take
+
+
+def test_a_key_switch_alone_writes_no_controllers(monkeypatch, tmp_path):
+    """Selecting a variant must not also dry a capture that was never dried.
+
+    The switch forces the score path, which `write_smf` zeroes CC91/93/94 on by
+    default, where the note arguments this capture's other rows were taken
+    through write no controller at all. Left alone, one timbre of a corpus would
+    carry a dry command its siblings do not and the difference would be read as
+    the variant.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    source = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=92, keyswitch_lead_ms=300)
+    argv = capture._note_argv(source, tmp_path / "o.wav", 60, 100, 2000)
+    score = Path(argv[argv.index("--midi") + 1]).read_bytes()
+    for cc in (91, 93, 94):
+        assert bytes([0xB0, cc]) not in score
+    # And a capture that DOES declare sends still gets them.
+    argv = capture._note_argv(source, tmp_path / "s.wav", 60, 100, 2000, sends=(40, 0, 0))
+    score = Path(argv[argv.index("--midi") + 1]).read_bytes()
+    assert bytes([0xB0, 91, 40]) in score
+
+
+@pytest.mark.parametrize("kw,lead", [(92, 0), (0, 300)])
+def test_a_switch_without_a_lead_or_a_lead_without_a_switch_is_refused(kw, lead):
+    """Struck on the note's own tick, the two have no defined order."""
+    with pytest.raises(ValueError):
+        AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=kw, keyswitch_lead_ms=lead)
+
+
+def test_a_lead_longer_than_the_preroll_is_refused():
+    """It would be a negative preroll, which aubounce would take as an argument."""
+    with pytest.raises(ValueError, match="preroll"):
+        AuSource(plugin="x:y:z", preroll_ms=200, keyswitch=92, keyswitch_lead_ms=200)
+
+
+def test_a_switched_timbre_moves_the_digest_and_an_unswitched_one_does_not(monkeypatch):
+    """A different string is a different recording; a capture without one is not.
+
+    Same rule as the channel and the key offset: recorded only when it moves the
+    render, so no reference measured before the field existed re-renders.
+    """
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    plain = AuSource(plugin="x:y:z", preroll_ms=500).identity()
+    assert "keyswitch" not in plain
+    a = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=92, keyswitch_lead_ms=300)
+    b = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=89, keyswitch_lead_ms=300)
+    assert a.identity() != b.identity()
+
+
 def test_a_state_path_reaches_the_plugin_expanded(monkeypatch):
     """`~` is expanded for the digest, so it has to be expanded for the load too.
 
@@ -369,6 +479,53 @@ def test_a_render_on_time_is_taken_first_try(tmp_path, monkeypatch):
                                    floor_peak=0.0, preroll_ms=100.0, sample_rate=SR)
     assert len(calls) == 1
     assert summary["attempts"] == 1
+
+
+def test_a_key_switch_that_sounds_is_refused_rather_than_recorded(tmp_path, monkeypatch):
+    """A switch is supposed to select, and a library that voices one is a click.
+
+    It lands where the late-onset guard expects silence rather than where it
+    expects a note, so that guard cannot see it, and it is loud enough and on
+    the right series to pass every level test. What it would do is put the same
+    transient under every measurement of the timbre — and only of that timbre,
+    so it reads as the variant rather than as a defect.
+
+    Refused rather than retried: an audible key is deterministic, so five more
+    renders produce five more of it.
+    """
+    out = tmp_path / "n060_v100.wav"
+
+    def fake_run(argv, **kwargs):
+        # The switch at the host's preroll, 300 ms before the note.
+        _render_file(out, 200.0)
+        return SimpleNamespace(returncode=0,
+                               stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    src = AuSource(plugin="aumu:test:test", preroll_ms=500,
+                   keyswitch=92, keyswitch_lead_ms=300)
+    with pytest.raises(capture.AuRenderError, match="sounding rather than selecting"):
+        capture._render_note(src, out, 60, 100, 50, floor_peak=0.0,
+                             preroll_ms=500.0, sample_rate=SR)
+
+
+def test_a_silent_key_switch_leaves_the_note_where_the_preroll_says(tmp_path, monkeypatch):
+    """The null for the guard above: a switch that selects is invisible."""
+    out = tmp_path / "n060_v100.wav"
+
+    def fake_run(argv, **kwargs):
+        _render_file(out, 500.0)
+        return SimpleNamespace(returncode=0,
+                               stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    src = AuSource(plugin="aumu:test:test", preroll_ms=500,
+                   keyswitch=92, keyswitch_lead_ms=300)
+    summary = capture._render_note(src, out, 60, 100, 50, floor_peak=0.0,
+                                   preroll_ms=500.0, sample_rate=SR)
+    assert summary["onset_ms"] == pytest.approx(500.0, abs=1.0)
 
 
 def _body_file(path: Path, body: np.ndarray, *, onset_ms: float = 100.0, sr: int = SR) -> Path:

@@ -99,7 +99,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _repo import REPO_ROOT  # noqa: E402
-from au_oracle import AuRenderError, render_oracle_au  # noqa: E402
+from au_oracle import AuRenderError, render_oracle_au, with_keyswitches  # noqa: E402
 import calibration  # noqa: E402
 from bank import Voice, load_capture, parse_selection, voices, write_index  # noqa: E402
 from calibration import Variant  # noqa: E402
@@ -400,10 +400,26 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         # it needs its own score even when the channel already matches.
         ref_notes = ([replace(n, note=source.key(n.note)) for n in take.notes]
                      if source.key_offset else take.notes)
-        timbre_smf = smf if (ref_channel == channel and not source.key_offset) else write_smf(
-            ref_notes, program=voice.program, bank=voice.bank, end_pad=take.tail_s,
-            cc_events=take.cc_events, channel=ref_channel,
-        )
+        # A timbre selected from the keyboard needs its own score for the same
+        # reason a rack slot does, and for the same failure: the switch would
+        # simply be absent and every switched timbre would render as the
+        # unswitched instrument, at the right length and level, byte-identical to
+        # its sibling. One switch per onset, since a switch is consumed by the
+        # note it arms rather than latching for the phrase.
+        ref_notes = with_keyswitches(source, ref_notes)
+        # The phrase moves back by the lead, so anything else on its timeline
+        # moves with it. On a take under the sustain pedal, leaving CC64 where it
+        # was would lift the dampers a third of a second early and read as the
+        # variant.
+        lead_s = source.keyswitch_lead_ms / 1000.0
+        ref_cc = tuple((at + lead_s, cc, v) for at, cc, v in take.cc_events)
+        timbre_smf = (smf if (ref_channel == channel and not source.key_offset
+                              and not source.keyswitch)
+                      else write_smf(
+                          ref_notes, program=voice.program, bank=voice.bank,
+                          end_pad=take.tail_s, cc_events=ref_cc,
+                          channel=ref_channel,
+                      ))
         try:
             fresh[timbre["id"]] = render_oracle_au(timbre_smf, total, SR, source=source)
             renders[timbre["id"]] = fresh[timbre["id"]]

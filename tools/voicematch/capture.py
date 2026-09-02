@@ -64,6 +64,7 @@ from au_oracle import (  # noqa: E402
     dry_params,
     resolve_preset,
     summary_json,
+    with_keyswitches,
 )
 from metrics import analyze_hit, harmonic_share, midi_to_hz, to_mono  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
@@ -187,6 +188,17 @@ def load_config(path: Path) -> dict:
     # the whole grid's render time for the sake of ten notes.
     cfg.setdefault("tail_by_note", {})
     cfg.setdefault("preroll_ms", 100)
+    # How long before each note a timbre's key switch is struck. Taken out of the
+    # preroll rather than added to it, so the note lands at `preroll_ms` whether a
+    # timbre is switched or not and every timbre of the corpus shares one
+    # timeline — which is what lets a switched timbre sit beside an unswitched one.
+    cfg.setdefault("keyswitch_lead_ms", 0)
+    if cfg["keyswitch_lead_ms"] >= cfg["preroll_ms"]:
+        raise ValueError(
+            f"{cfg.get('id', path.name)}: a key switch lead of "
+            f"{cfg['keyswitch_lead_ms']} ms does not fit inside a {cfg['preroll_ms']} ms "
+            f"preroll. The lead comes out of the preroll, so raise the preroll"
+        )
     # Strike the note once and throw it away before recording, because a large
     # sampler plays its first note differently from every later one.
     #
@@ -225,6 +237,13 @@ def load_config(path: Path) -> dict:
                 f"note number MEANS. Write it as `slot_channel`; `channel` answers "
                 f"{PERCUSSION_CHANNEL} (a note selects an instrument) or 1 (a note "
                 f"selects a pitch)"
+            )
+        if timbre.get("keyswitch") and not cfg["keyswitch_lead_ms"]:
+            raise ValueError(
+                f"{cfg.get('id', path.name)}: timbre {timbre.get('id', '?')!r} is "
+                f"selected by a key switch and the capture declares no "
+                f"`keyswitch_lead_ms`, so the switch would be struck on the note's "
+                f"own tick with no defined order against it"
             )
     cfg["_path"] = str(path)
     return cfg
@@ -372,6 +391,12 @@ def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
         # Where the instrument sits on the keyboard, which is not where it
         # sounds; the grid is written in sounding pitch either way.
         key_offset=int(timbre.get("key_offset", 0)),
+        # The third route to a timbre, for a library that selects its variants
+        # from the keyboard rather than by preset or by channel. Per timbre
+        # because it IS the timbre; the lead is per capture, because every
+        # timbre of one corpus has to share a timeline.
+        keyswitch=int(timbre.get("keyswitch", 0)),
+        keyswitch_lead_ms=int(cfg["keyswitch_lead_ms"]) if timbre.get("keyswitch") else 0,
         params=config_params(cfg),
         settle_ms=int(cfg["settle_ms"]),
         realtime=bool(cfg["realtime"]),
@@ -415,14 +440,21 @@ def config_sends(cfg: dict) -> tuple[int, int, int] | None:
 
 def _note_argv(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
                *, sends: tuple[int, int, int] | None = None) -> list[str]:
-    if sends is not None:
+    if sends is not None or source.keyswitch:
         # A file supplies its own channel, and aubounce refuses `--channel`
         # beside `--midi` rather than dropping it, so the slot goes in here.
         midi = out.with_suffix(".mid")
         midi.parent.mkdir(parents=True, exist_ok=True)
+        notes = with_keyswitches(
+            source, [Note(source.key(note), velocity, 0.0, gate_ms / 1000.0)])
         midi.write_bytes(write_smf(
-            [Note(source.key(note), velocity, 0.0, gate_ms / 1000.0)],
-            program=-1, channel=source.channel - 1, sends=sends,
+            notes, program=-1, channel=source.channel - 1,
+            # A capture that declares no sends took its reference through the
+            # note arguments, which write no controllers at all. `write_smf`
+            # zeroes all three by default, so a key switch alone would silently
+            # add a dry command to a render that never had one and stop being
+            # comparable with the rows captured beside it.
+            sends=sends if sends is not None else (None, None, None),
         ))
         return source.argv(out, midi=midi)
     argv = source.argv(out)
@@ -648,6 +680,10 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         "gate_ms": cfg["gate_ms"],
         "tail": cfg["tail"],
         "preroll_ms": cfg["preroll_ms"],
+        # Nothing downstream reads it — the note lands at `preroll_ms` either way
+        # — but a corpus that says how it was made is what a later run compares
+        # itself against.
+        "keyswitch_lead_ms": cfg["keyswitch_lead_ms"],
         "settle_ms": cfg["settle_ms"],
         "realtime": cfg["realtime"],
         "warmup": cfg["warmup"],
@@ -887,6 +923,17 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
             last = (f"the render begins {onset:.0f} ms in against a {preroll_ms:.0f} ms "
                     f"preroll: this is not the note")
             continue
+        if src.keyswitch and onset is not None and onset < preroll_ms - ONSET_SLACK_MS:
+            # A key switch is supposed to select rather than sound, and a library
+            # that gives it a voice is a click under every measurement of that
+            # timbre — at a level the peak, the tone share and the late-onset
+            # guard above all pass, since it lands where the guard expects
+            # silence rather than where it expects a note.
+            raise AuRenderError(
+                f"the render begins {onset:.0f} ms in against a {preroll_ms:.0f} ms "
+                f"preroll: key {src.keyswitch} is sounding rather than selecting, so "
+                f"every note of this timbre carries it"
+            )
         if attempt:
             print(f"       (took {attempt + 1} attempts)", file=sys.stderr)
         summary["attempts"] = attempt + 1
