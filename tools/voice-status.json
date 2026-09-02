@@ -6855,7 +6855,9 @@
       "capture": "whistle",
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "keyed-filter"
+      ],
       "axes": {
         "engine": "flute",
         "patch": "tin_whistle",
