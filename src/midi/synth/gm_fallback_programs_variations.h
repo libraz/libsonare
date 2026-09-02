@@ -154,9 +154,16 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_bell.modal.modes[4] = {2.0f, 0.5f, 0.8f};    // nominal
   o.church_bell.modal.modes[5] = {2.5f, 0.3f, 0.45f};   // deciem
   o.church_bell.modal.modes[6] = {3.0f, 0.22f, 0.3f};   // undecime
+  // Seven modes, so the eighth slot is cleared rather than left holding
+  // whatever the chime above put there: unread today, and audible the moment
+  // this series grows.
+  o.church_bell.modal.modes[7] = {};
   o.church_bell.modal.decay_s = 20.0f;
   o.church_bell.modal.decay_stretch = 0.6f;
   o.church_bell.modal.strike_brightness = 0.85f;
+  // Stated rather than inherited: the chime this copies carries a mallet tilt
+  // fitted to its own reference, and a cast bell is not that instrument.
+  o.church_bell.modal.vel_to_brightness = 0.6f;
   // The ring-down is deliberately held to the tubular bell's: this table's
   // longest release is the tail every fallback bounce is padded by
   // (gm_fallback_max_release_ms), so a tower bell's true ring would make every

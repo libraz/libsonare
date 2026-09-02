@@ -203,22 +203,32 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   mb.amp_env.release_ms = 700.0f;
   mb.gain = 0.55f;
 
-  // Tubular Bells (GM 14): a long-ringing struck bell. The perceived "strike
-  // pitch" is a missing fundamental an octave below the hum, approximated by a
-  // sub-unity hum mode. A struck bell keeps ringing after the mallet leaves the
-  // key, so the note-off damp is loosened (a long release_damp_s) and the amp
-  // release is long — a glockenspiel's short damper would choke the bell.
+  // Tubular Bells (GM 14): a struck tube, whose partials are not a bar's. The
+  // played pitch is barely present in the sound — a reference chime puts it 26 dB
+  // under the loudest partial — and is heard as the missing fundamental of the
+  // 2.01 : 2.94 : 4.01 triple, which is the 2:3:4 a founder tunes a chime to. The
+  // ratios, weights and per-mode t60 below are that reference measured at three
+  // notes an octave apart, which agreed to about a decibel; the two partials it
+  // also carries at 2.50 and 15.91 are the quietest of the eleven and are the
+  // ones the bank has no slot for. A struck bell keeps ringing after the mallet
+  // leaves the key, so the note-off damp is loosened and the amp release is long.
   NativeSynthPatch& tb = o.tubular_bells;
   tb = bar;
-  tb.modal.num_modes = 5;
-  tb.modal.modes[0] = {0.5f, 0.4f, 1.2f};  // hum (missing-fundamental strike pitch)
-  tb.modal.modes[1] = {1.0f, 1.0f, 1.0f};
-  tb.modal.modes[2] = {2.76f, 0.7f, 0.9f};
-  tb.modal.modes[3] = {5.4f, 0.4f, 0.7f};
-  tb.modal.modes[4] = {8.9f, 0.25f, 0.5f};
-  tb.modal.decay_s = 9.0f;
-  tb.modal.decay_stretch = 0.5f;
-  tb.modal.strike_brightness = 0.7f;
+  tb.modal.num_modes = 8;
+  tb.modal.modes[0] = {0.63f, 0.108f, 1.01f};  // hum
+  tb.modal.modes[1] = {1.23f, 1.0f, 1.0f};
+  tb.modal.modes[2] = {2.01f, 0.279f, 1.05f};  // 2 of the strike triple
+  tb.modal.modes[3] = {2.94f, 0.841f, 0.90f};  // 3
+  tb.modal.modes[4] = {4.01f, 0.216f, 0.73f};  // 4
+  tb.modal.modes[5] = {4.88f, 0.472f, 0.78f};
+  tb.modal.modes[6] = {7.96f, 0.126f, 0.55f};
+  tb.modal.modes[7] = {11.67f, 0.226f, 0.35f};
+  tb.modal.decay_s = 9.3f;
+  tb.modal.decay_stretch = 0.29f;
+  // The mallet curve carries the reference's own velocity tilt, so at full
+  // velocity it is flat and the weights above are read as measured.
+  tb.modal.strike_brightness = 1.0f;
+  tb.modal.vel_to_brightness = 0.11f;
   tb.modal.release_damp_s = 8.0f;  // the bell rings on after note-off
   tb.amp_env.sustain = 1.0f;
   tb.amp_env.release_ms = 6000.0f;

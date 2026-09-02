@@ -476,8 +476,10 @@ TEST_CASE("the promoted chromatic-percussion programs voice their physical cores
   REQUIRE(gm_fallback_patch(0, 14).mode == SynthEngineMode::kModal);
   REQUIRE(gm_fallback_patch(0, 15).mode == SynthEngineMode::kKarplusStrong);
 
-  // Each lands its fundamental on the played key and rings audibly.
-  for (const uint8_t program : {uint8_t{8}, uint8_t{10}, uint8_t{14}, uint8_t{15}}) {
+  // Each lands its fundamental on the played key and rings audibly. The chime
+  // is not among them and is checked below: a tube has no partial at its own
+  // strike note.
+  for (const uint8_t program : {uint8_t{8}, uint8_t{10}, uint8_t{15}}) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, program);
     const std::vector<float> tone = render_patch(patch, 69, 110, 24000);
     float peak = 0.0f;
@@ -490,6 +492,38 @@ TEST_CASE("the promoted chromatic-percussion programs voice their physical cores
     // Deterministic bounce.
     REQUIRE(render_patch(patch, 69, 110, 8192) == render_patch(patch, 69, 110, 8192));
   }
+}
+
+TEST_CASE("the chime's strike note is the fundamental its partials imply, not one it sounds",
+          "[midi][synth][modal]") {
+  // A founder tunes a chime so three of its partials fall in 2:3:4, and the
+  // pitch heard is the fundamental that triple implies. Measured on a reference
+  // chime at three notes an octave apart, the played pitch itself carries no
+  // partial at all: the line at it lasts under a tenth of a second where every
+  // real mode rings for nine or more. So this voice is right exactly when the
+  // triple is there and the key's own frequency is not.
+  const double f0 = 440.0;
+  const NativeSynthPatch& bells = gm_fallback_patch(0, 14);
+  REQUIRE(bells.mode == SynthEngineMode::kModal);
+  const std::vector<float> tone = render_patch(bells, 69, 110, 24000);
+  float peak = 0.0f;
+  for (float s : tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  const std::vector<double> power = power_spectrum(tone, 1024);
+
+  for (const double ratio : {2.01, 2.94, 4.01}) {
+    const double found = refine_peak_hz(power, f0 * ratio);
+    REQUIRE(found > 0.0);
+    REQUIRE(std::fabs(found / (f0 * ratio) - 1.0) < 0.01);
+  }
+  // The triple carries the sound and the played pitch does not. Both halves
+  // matter: a bar series would pass the first check by putting a fundamental
+  // and its own partials nearby, and only the second says this is a tube.
+  const double strike = band_power(power, f0);
+  for (const double ratio : {2.01, 2.94}) {
+    REQUIRE(band_power(power, f0 * ratio) > 100.0 * strike);
+  }
+  REQUIRE(render_patch(bells, 69, 110, 8192) == render_patch(bells, 69, 110, 8192));
 }
 
 TEST_CASE("tubular bells ring on after note-off", "[midi][synth][modal]") {
