@@ -131,6 +131,22 @@ def test_an_empty_spread_is_unjudgeable_rather_than_disagreeing():
     assert got["unjudgeable"] == ["attack"]
 
 
+def test_a_spread_of_zero_is_unjudgeable_rather_than_infinitely_outside():
+    """Two references agreeing to finer than the metric resolves is not a width.
+
+    Measured on the tonewheel organ, whose registrations both arrive inside one
+    5 ms envelope hop: the ratio has no denominator, and taking it raised a
+    ZeroDivisionError that stopped the whole bank's status from regenerating.
+    """
+    got = status.gate_agreement({
+        "reference_spread": {"attack": 0.0, "stereo": 0.229},
+        "bounds": {"attack": {"median": 40.0}, "stereo": {"median": 0.1}},
+    })
+    assert got["unjudgeable"] == ["attack"]
+    assert got["total"] == 1
+    assert got["inside"] == 1
+
+
 def test_a_bound_inside_the_spread_agrees():
     got = status.gate_agreement({
         "reference_spread": {"attack": 25.0, "stereo": 0.229},

@@ -29,7 +29,7 @@ One number per voice, in fifths. Each step is a predicate over facts already on 
 
 **Untouched needs the patch as well as the engine.** Subtractive is the right engine for a synth lead and the default everywhere else, so `tremolo_strings` and `orchestra_hit` are deliberate while `fam10` through `fam15` are eight synth programs sharing one patch nobody has voiced apart.
 
-**Agreement is measured against the references' own spread**, not against zero. A voice inside that spread is as close to the instrument as two presets of the instrument are to each other, which is the strongest claim this harness can make. Where a capture has one reference timbre there is no spread and no dimension can be adjudicated at all — reported as unjudgeable, which is a different answer from "none of them agree".
+**Agreement is measured against the references' own spread**, not against zero. A voice inside that spread is as close to the instrument as two presets of the instrument are to each other, which is the strongest claim this harness can make. Where a capture has one reference timbre there is no spread and no dimension can be adjudicated at all — reported as unjudgeable, which is a different answer from "none of them agree". A single dimension whose spread is zero gets the same answer for the same reason: the references agree to finer than the metric resolves, so the ratio has no denominator. The tonewheel organ's arrival is one, both registrations speaking inside a single envelope hop.
 
 **The last step's two claims are the two nothing on disk implies**, so they are recorded by hand in `signoff.json` — see [the two claims 1.0 needs](#the-two-claims-10-needs) below.
 

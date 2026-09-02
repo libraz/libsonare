@@ -136,6 +136,11 @@ def gate_agreement(gate: dict) -> dict:
     spread is empty and no dimension can be adjudicated at all, which is a
     different answer from "none of them agree" and is reported as such.
 
+    A spread of zero is the same answer for one dimension: the references agree
+    to finer than the metric resolves, so there is no width to read a bound
+    against and the ratio has no denominator. A tonewheel organ's arrival is one
+    -- both registrations speak inside a single 5 ms envelope hop.
+
     The margin comes back off the bound first. A bound is the measurement times
     the gate's slack, and that slack is there so a regression guard survives
     measurement noise — it says nothing about how close the voice is. Left in,
@@ -148,20 +153,26 @@ def gate_agreement(gate: dict) -> dict:
     if not spread:
         return {"inside": 0, "total": 0, "unjudgeable": sorted(bounds)}
     margin = float(gate.get("margin") or 1.0) or 1.0
-    inside, outside = [], {}
+    inside, outside, unjudgeable = [], {}, []
     for dim, b in bounds.items():
         if dim not in spread:
+            continue
+        if spread[dim] <= 0.0:
+            unjudgeable.append(dim)
             continue
         measured = b["median"] / margin
         if measured <= spread[dim] * 1.0001:
             inside.append(dim)
         else:
             outside[dim] = round(measured / spread[dim], 2)
-    return {
+    out = {
         "inside": len(inside),
         "total": len(inside) + len(outside),
         "outside": dict(sorted(outside.items(), key=lambda kv: -kv[1])),
     }
+    if unjudgeable:
+        out["unjudgeable"] = sorted(unjudgeable)
+    return out
 
 
 def coverage(voice, cap_raw: dict, gate: dict) -> dict:
