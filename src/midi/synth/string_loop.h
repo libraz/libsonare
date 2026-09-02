@@ -46,6 +46,30 @@ struct StringLoopFilter {
   float g = 0.0f;
 };
 
+namespace string_loop_detail {
+
+/// A pole this close to the unit circle already rings for minutes; past it the
+/// loop is numerically a resonator rather than a string.
+inline constexpr float kMaxPole = 0.995f;
+
+/// The root of a^2 + beta*a + 1 == 0 inside the unit circle. The two roots are
+/// reciprocals, so one always is; a complex pair collapses to -beta/2.
+inline float stable_pole(float beta) noexcept {
+  const float disc = beta * beta - 4.0f;
+  if (disc <= 0.0f) return std::clamp(-0.5f * beta, -kMaxPole, kMaxPole);
+  const float root = std::sqrt(disc);
+  const float hi = 0.5f * (-beta + root);
+  const float lo = 0.5f * (-beta - root);
+  return std::clamp(std::abs(hi) < std::abs(lo) ? hi : lo, -kMaxPole, kMaxPole);
+}
+
+/// |H(w)| of the loss one-pole y += (1-a)(x-y), given cos(w).
+inline float onepole_magnitude(float a, float cos_w) noexcept {
+  return (1.0f - a) / std::sqrt(std::max(1.0e-12f, 1.0f - 2.0f * a * cos_w + a * a));
+}
+
+}  // namespace string_loop_detail
+
 /// Solves the loop's loss filter from what the string has to DO rather than
 /// from a tone knob: @p g_fundamental is the per-traversal gain the fundamental
 /// (@p omega0, radians per sample) must keep, and @p g_reference the smaller one
@@ -68,16 +92,29 @@ struct StringLoopFilter {
 /// costs that same f''' about 62 dB/s, which is what kills a treble string.
 ///
 /// A single pole can only tilt so far — the reachable ratio tops out at
-/// sin(omega_ref/2)/sin(omega0/2) per traversal — so an unreachable request
-/// clamps to the most damping one pole has rather than failing.
+/// sin(omega_ref/2)/sin(omega0/2) per traversal — and an unreachable request
+/// costs the tilt, never the note: the fundamental keeps the gain it asked for
+/// and the reference partial lands wherever one pole could reach.
+///
+/// That priority is the whole of the second clamp below. The pole attenuates the
+/// fundamental as well, so the gain in front of it is scaled up to compensate,
+/// and the compensation is bounded — which means the pole is too. Left
+/// unbounded it clamps instead, and the pole's own loss then lands on the note
+/// as a second decay nothing asked for: a harpsichord's 4' choir fell to 2 ms of
+/// a requested 8 s above f'', and every plucked string lost most of its ring
+/// over the same span. Neither is visible from here — both loops still tune,
+/// still sound and still stay inside the unit circle.
 inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, float g_fundamental,
                                                  float g_reference) noexcept {
-  /// A pole this close to the unit circle already rings for minutes; past it the
-  /// loop is numerically a resonator rather than a string.
-  constexpr float kMaxPole = 0.995f;
   /// The loop's peak response (at DC, for a lowpass pole) must stay under one or
   /// the delay line grows without bound.
   constexpr float kMaxLoopGain = 0.9999f;
+  /// How many times longer than the fundamental the frequencies under it may
+  /// ring. A string has no mode down there, but a lowpass in the loop peaks at
+  /// DC, so the gain that holds the fundamental's t60 always leaves something
+  /// beneath it ringing longer — 837 s under a 6.8 s note, at the point the
+  /// compensation clamped. The bank's own working cases sit at 1.7 times.
+  constexpr float kMaxSubFundamentalRing = 8.0f;
 
   StringLoopFilter out;
   const float g0 = std::clamp(g_fundamental, 0.0f, kMaxLoopGain);
@@ -91,29 +128,30 @@ inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, 
     return out;
   }
 
-  const float c2 = std::cos(omega_ref);
   const float r2 = ratio * ratio;
-  const float denom = 1.0f - r2;
   // |H(w0)|/|H(w_ref)| == ratio reduces to a^2 + beta*a + 1 == 0, whose two
   // roots are reciprocals — the stable one is the root inside the unit circle.
-  const float beta = -2.0f * (c2 - r2 * c1) / denom;
-  const float disc = beta * beta - 4.0f;
-  if (disc <= 0.0f) {
-    // Past what one pole can tilt; take the most damping it has.
-    out.a = std::clamp(-0.5f * beta, -kMaxPole, kMaxPole);
+  out.a = string_loop_detail::stable_pole(-2.0f * (std::cos(omega_ref) - r2 * c1) / (1.0f - r2));
+
+  // The darkest pole the compensation can still pay for, from the same quadratic
+  // — the response the fundamental needs is what bounds |H(w0)| from below.
+  const float g_max = std::min(kMaxLoopGain, std::pow(g0, 1.0f / kMaxSubFundamentalRing));
+  const float mag_floor = g_max > 0.0f ? g0 / g_max : 1.0f;
+  if (mag_floor < 0.999999f) {
+    const float m2 = mag_floor * mag_floor;
+    out.a =
+        std::min(out.a, string_loop_detail::stable_pole(-2.0f * (1.0f - m2 * c1) / (1.0f - m2)));
   } else {
-    const float root = std::sqrt(disc);
-    const float hi = 0.5f * (-beta + root);
-    const float lo = 0.5f * (-beta - root);
-    out.a = std::clamp(std::abs(hi) < std::abs(lo) ? hi : lo, -kMaxPole, kMaxPole);
+    // A decay already at the loop's ceiling leaves nothing to compensate with,
+    // so the only pole that keeps the fundamental's gain is no pole at all.
+    out.a = std::min(out.a, 0.0f);
   }
 
   // Scale the pole back up so the fundamental keeps exactly the gain it was
   // asked for; without this the pole's own attenuation at w0 is an unaccounted
   // second decay.
-  const float mag_at_w0 =
-      (1.0f - out.a) / std::sqrt(std::max(1.0e-12f, 1.0f - 2.0f * out.a * c1 + out.a * out.a));
-  out.g = std::min(kMaxLoopGain, g0 / std::max(1.0e-6f, mag_at_w0));
+  out.g = std::min(kMaxLoopGain,
+                   g0 / std::max(1.0e-6f, string_loop_detail::onepole_magnitude(out.a, c1)));
   return out;
 }
 

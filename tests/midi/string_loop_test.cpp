@@ -113,6 +113,49 @@ TEST_CASE("solved loss filter clamps rather than fails on an unreachable tilt",
   REQUIRE(std::isfinite(f.g));
 }
 
+TEST_CASE("an unreachable reference target costs the tilt, never the fundamental's decay",
+          "[midi][synth][string_loop]") {
+  // The case the two above do not reach: a reference frequency close to the
+  // fundamental, or a reference decay far shorter than it, asks for more tilt
+  // than one pole has. The answer has to be the darkest pole the compensating
+  // gain can still pay for — past that the gain clamps, and the pole's own loss
+  // at the fundamental becomes a second decay nothing asked for. It is silent:
+  // the filter is still stable, still tuned, and the note is simply gone.
+  for (int note : {29, 40, 52, 60, 72, 84, 96, 105}) {
+    const double f0 = note_hz(note);
+    const double period = kSr / f0;
+    const double omega0 = 2.0 * M_PI / period;
+    for (float t60 : {0.35f, 3.5f, 12.0f, 55.0f}) {
+      const float g0 = string_loop_gain_for(static_cast<float>(period), kSr, t60);
+      for (double quote_hz : {1.02 * f0, 1.5 * f0, 4000.0}) {
+        for (float hf_t60 : {0.005f, 0.07f, t60 * 0.45f}) {
+          const float g_ref = string_loop_gain_for(static_cast<float>(period), kSr, hf_t60);
+          const double omega_ref = 2.0 * M_PI * quote_hz / kSr;
+          if (omega_ref >= M_PI) continue;
+          const StringLoopFilter f = solve_string_loop_filter(
+              static_cast<float>(omega0), static_cast<float>(omega_ref), g0, g_ref);
+
+          INFO("note " << note << " t60 " << t60 << " quote " << quote_hz << " hf " << hf_t60
+                       << " -> a=" << f.a << " g=" << f.g);
+          REQUIRE(std::isfinite(f.a));
+          REQUIRE(f.g < 1.0f);
+          // The contract, and the whole of the defect: the per-traversal gain the
+          // fundamental keeps is the one its own t60 asked for, whatever became of
+          // the reference partial's target.
+          REQUIRE(response(f, omega0) == Catch::Approx(static_cast<double>(g0)).epsilon(1e-4));
+          // And nothing under the fundamental may ring away past it. A lowpass in
+          // the loop peaks at DC, so some excess is inherent; unbounded it reached
+          // 837 s beneath a 6.8 s note.
+          const double traversals = kSr / period;
+          const double ring_dc = -6.907755279 / (std::log(static_cast<double>(f.g)) * traversals);
+          const double ring_f0 = -6.907755279 / (std::log(response(f, omega0)) * traversals);
+          REQUIRE(ring_dc <= 10.0 * ring_f0);
+        }
+      }
+    }
+  }
+}
+
 TEST_CASE("string loop sounds the pitch it was configured for", "[midi][synth][string_loop]") {
   // The loop compensates its filter's phase delay at the fundamental, so the
   // sounding pitch is the requested one rather than a few percent flat.

@@ -70,6 +70,25 @@ float window_db(const std::vector<float>& x, double from_s, double to_s) {
          std::log10(static_cast<float>(std::sqrt(sum / static_cast<double>(b - a))) + 1e-30f);
 }
 
+/// Level in dB of the sinusoid at @p hz over a window given in seconds. A single
+/// Goertzel-style correlation rather than a spectrum: what is being asked is
+/// whether one named partial is still there, and a broadband RMS cannot say,
+/// since a second string in the same render answers for it.
+float tone_db(const std::vector<float>& x, double hz, double from_s, double to_s) {
+  const size_t a = static_cast<size_t>(from_s * kSr);
+  const size_t b = std::min(x.size(), static_cast<size_t>(to_s * kSr));
+  if (b <= a) return -600.0f;
+  const double w = 2.0 * M_PI * hz / kSr;
+  double re = 0.0;
+  double im = 0.0;
+  for (size_t i = a; i < b; ++i) {
+    re += x[i] * std::cos(w * static_cast<double>(i));
+    im += x[i] * std::sin(w * static_cast<double>(i));
+  }
+  const double n = static_cast<double>(b - a);
+  return static_cast<float>(20.0 * std::log10(2.0 * std::hypot(re, im) / n + 1e-30));
+}
+
 /// Sustained decay rate in dB per second, measured clear of the attack.
 float decay_db_s(const std::vector<float>& x) {
   const float early = window_db(x, 1.5, 2.0);
@@ -137,6 +156,37 @@ TEST_CASE("harpsichord treble still sounds after four seconds", "[midi][synth][h
   const float at_four = window_db(top, 4.0, 4.4);
   INFO("f''' falls " << (at_start - at_four) << " dB over four seconds");
   REQUIRE(at_four > at_start - 55.0f);
+}
+
+TEST_CASE("the 4' choir sounds the treble as well as the 8'", "[midi][synth][harpsichord]") {
+  HarpsichordPatchParams params;
+  params.decay_s = 11.6f;
+  params.decay_stretch = 0.40f;
+  params.eight_a = false;
+  params.four = true;
+  params.rear_segment_mm = 0.0f;  // the 4' alone, with no second string answering for it
+  Slab slab;
+
+  // The 4' string is an octave above the key, so from c'' up it is already at or
+  // past the frequency its HF damping is quoted at, and there the two decay
+  // targets contradict each other. The loss filter has to give up the tilt; when
+  // it gave up the fundamental instead this choir fell to a couple of
+  // milliseconds of the eight seconds it was drawn for, and the top of the
+  // register went silent while the 8' beside it rang on. Up to f''', the top of
+  // the compass a harpsichord with a 4' actually has.
+  for (uint8_t note : {72, 84, 89}) {
+    const double sounding = 2.0 * 440.0 * std::pow(2.0, (note - 69) / 12.0);
+    const std::vector<float> x = render_held(params, note, 88, 2.5, slab);
+    const float at_start = tone_db(x, sounding, 0.2, 0.4);
+    const float at_two = tone_db(x, sounding, 2.0, 2.4);
+    INFO("4' at note " << static_cast<int>(note) << " sounds " << sounding << " Hz at " << at_start
+                       << " dB, " << at_two << " dB two seconds on");
+    // The absolute level first, and not because it is the interesting one: a
+    // choir that never sounded at all falls by nothing, so a bound on the fall
+    // alone passes on silence. This one measured -154 dB.
+    REQUIRE(at_start > -30.0f);
+    REQUIRE(at_two > at_start - 40.0f);
+  }
 }
 
 TEST_CASE("harpsichord sustained decay tracks the captured reference across the compass",

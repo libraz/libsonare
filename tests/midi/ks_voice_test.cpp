@@ -215,6 +215,29 @@ TEST_CASE("decay stretching: low strings ring longer", "[midi][synth][ks]") {
   REQUIRE(decay_ratio(low_note) > 1.5f * decay_ratio(high_note));
 }
 
+TEST_CASE("a plucked string keeps its ring into the treble", "[midi][synth][ks]") {
+  // The loop's loss filter is solved against two decay targets, and above about
+  // f'' the second one is out of reach: the reference frequency is barely clear
+  // of the fundamental, so no single pole tilts that far. What must not happen
+  // then is the note paying for it — the top octave and a half of every plucked
+  // program once fell to a tenth of a second of a requested three, and nothing
+  // reported it, because the string still tuned, still sounded and still decayed.
+  NativeSynthPatch patch = ks_base_patch();
+  patch.ks.decay_s = 3.0f;
+  patch.ks.decay_stretch = 0.0f;  // one target for every note, so the notes compare
+  for (uint8_t note : {60, 72, 84, 96}) {
+    const std::vector<float> tone = render_patch(patch, note, 110, 48000);
+    const float early = rms(tone, 2400, 7200);   // 50-150 ms
+    const float late = rms(tone, 38400, 48000);  // 0.8-1.0 s
+    REQUIRE(early > 0.0f);
+    const float fall_db = 20.0f * std::log10(late / early);
+    INFO("note " << static_cast<int>(note) << " falls " << fall_db << " dB by 0.9 s");
+    // A 3 s t60 is 20 dB a second; the window and the pluck's own shape put the
+    // measured fall somewhat past that, and the bound sits clear of both.
+    REQUIRE(fall_db > -30.0f);
+  }
+}
+
 TEST_CASE("pick-position comb notches the matching harmonic", "[midi][synth][ks]") {
   // Picking at the middle of the string (0.5) puts a node at every even
   // harmonic; picking near the bridge (0.1) keeps them strong.
