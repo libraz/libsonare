@@ -31,6 +31,8 @@ One number per voice, in fifths. Each step is a predicate over facts already on 
 
 **Agreement is measured against the references' own spread**, not against zero. A voice inside that spread is as close to the instrument as two presets of the instrument are to each other, which is the strongest claim this harness can make. Where a capture has one reference timbre there is no spread and no dimension can be adjudicated at all — reported as unjudgeable, which is a different answer from "none of them agree". A single dimension whose spread is zero gets the same answer for the same reason: the references agree to finer than the metric resolves, so the ratio has no denominator. The tonewheel organ's arrival is one, both registrations speaking inside a single envelope hop.
 
+**A spread the model has no axis for is a tolerance and never a target.** The timbres of a capture usually differ by something the bank could in principle express — an instrument, a registration, a microphone position — so a voice outside the spread has somewhere to move. The sampled electric guitar's two are the ends of a *fingering* choice on one instrument, and the bank plays one string per note: the band is a real ambiguity in what a note number means on a fretted instrument, which makes sitting inside it a legitimate claim and makes moving toward either end something no fit can be asked to do. Where a capture's timbres differ that way, its `_timbres` note says so, and `agreeing` is the last step such a voice can reach on the strength of that capture alone.
+
 **The last step's two claims are the two nothing on disk implies**, so they are recorded by hand in `signoff.json` — see [the two claims 1.0 needs](#the-two-claims-10-needs) below.
 
 ## Coverage is all-or-nothing

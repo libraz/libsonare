@@ -4242,8 +4242,8 @@
       "axes": {
         "engine": "karplus_strong",
         "patch": "electric_guitar",
-        "timbres": 1,
-        "profile_rows": 50,
+        "timbres": 2,
+        "profile_rows": 100,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -4275,7 +4275,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p028-electric-guitar-muted",
