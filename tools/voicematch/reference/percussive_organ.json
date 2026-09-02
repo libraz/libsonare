@@ -1,7 +1,7 @@
 {
  "id": "percussive_organ",
  "label": "Drawbar organ with a percussion stop, sampled",
- "measured_utc": "2026-08-28T16:04:48+00:00",
+ "measured_utc": "2026-09-02T06:38:24+00:00",
  "capture": {
   "program": 17,
   "params": [],
@@ -13,7 +13,7 @@
    {
     "id": "gm018",
     "label": "GM percussive organ, rack slot 2",
-    "channel": 2
+    "slot_channel": 2
    }
   ],
   "notes": [
@@ -89,7 +89,7 @@
    "peak_dbfs": -18.32,
    "rms_dbfs": -27.19,
    "held_peak_dbfs": -24.22,
-   "attack_ms": 105.0,
+   "attack_ms": 10.0,
    "decay_span_s": 2.89,
    "decay_db_s": -0.07,
    "decay_early_db_s": -2.52,
@@ -168,8 +168,12 @@
    "peak_dbfs": -18.09,
    "rms_dbfs": -24.62,
    "held_peak_dbfs": -21.61,
-   "attack_ms": 2990.0,
-   "decay_span_s": 0.005,
+   "attack_ms": 50.0,
+   "decay_span_s": 2.945,
+   "decay_db_s": 0.11,
+   "decay_early_db_s": 4.87,
+   "decay_late_db_s": 0.16,
+   "decay_knee_s": 0.42,
    "partial_decay_db_s": [
     0.03,
     0.22,
@@ -244,12 +248,12 @@
    "peak_dbfs": -16.1,
    "rms_dbfs": -24.76,
    "held_peak_dbfs": -20.08,
-   "attack_ms": 375.0,
-   "decay_span_s": 2.62,
-   "decay_db_s": -2.35,
-   "decay_early_db_s": -2.06,
-   "decay_late_db_s": 1.1,
-   "decay_knee_s": 1.95,
+   "attack_ms": 15.0,
+   "decay_span_s": 2.975,
+   "decay_db_s": -2.15,
+   "decay_early_db_s": -1.09,
+   "decay_late_db_s": -1.9,
+   "decay_knee_s": 1.57,
    "partial_decay_db_s": [
     -4.39,
     -2.8,
@@ -324,12 +328,12 @@
    "peak_dbfs": -15.52,
    "rms_dbfs": -22.26,
    "held_peak_dbfs": -20.35,
-   "attack_ms": 1445.0,
-   "decay_span_s": 1.55,
-   "decay_db_s": -0.07,
-   "decay_early_db_s": 0.73,
-   "decay_late_db_s": 5.3,
-   "decay_knee_s": 0.975,
+   "attack_ms": 15.0,
+   "decay_span_s": 2.945,
+   "decay_db_s": 0.04,
+   "decay_early_db_s": 7.63,
+   "decay_late_db_s": 0.07,
+   "decay_knee_s": 0.395,
    "partial_decay_db_s": [
     -0.08,
     -0.08,
@@ -404,7 +408,7 @@
    "peak_dbfs": -17.74,
    "rms_dbfs": -26.72,
    "held_peak_dbfs": -22.22,
-   "attack_ms": 15.0,
+   "attack_ms": 10.0,
    "decay_span_s": 2.98,
    "decay_db_s": -0.04,
    "decay_early_db_s": -0.32,
@@ -484,12 +488,12 @@
    "peak_dbfs": -17.94,
    "rms_dbfs": -26.56,
    "held_peak_dbfs": -24.17,
-   "attack_ms": 1440.0,
-   "decay_span_s": 1.555,
-   "decay_db_s": -0.12,
-   "decay_early_db_s": 1.03,
-   "decay_late_db_s": 5.71,
-   "decay_knee_s": 0.945,
+   "attack_ms": 10.0,
+   "decay_span_s": 2.97,
+   "decay_db_s": -0.01,
+   "decay_early_db_s": 0.26,
+   "decay_late_db_s": 2.02,
+   "decay_knee_s": 2.225,
    "partial_decay_db_s": [
     -0.33,
     1.38,
@@ -564,7 +568,7 @@
    "peak_dbfs": -12.97,
    "rms_dbfs": -29.37,
    "held_peak_dbfs": -18.73,
-   "attack_ms": 15.0,
+   "attack_ms": 10.0,
    "decay_span_s": 2.98,
    "decay_db_s": -0.51,
    "decay_early_db_s": -37.37,
@@ -644,7 +648,7 @@
    "peak_dbfs": -17.52,
    "rms_dbfs": -32.65,
    "held_peak_dbfs": -23.22,
-   "attack_ms": 10.0,
+   "attack_ms": 5.0,
    "decay_span_s": 2.985,
    "decay_db_s": -0.86,
    "decay_early_db_s": -19.91,
@@ -724,7 +728,7 @@
    "peak_dbfs": -19.4,
    "rms_dbfs": -30.96,
    "held_peak_dbfs": -23.69,
-   "attack_ms": 200.0,
+   "attack_ms": 130.0,
    "decay_span_s": 2.795,
    "decay_db_s": -0.16,
    "decay_early_db_s": -52.82,
@@ -829,17 +833,20 @@
     "36": {
      "100": -0.07
     },
+    "42": {
+     "100": 0.11
+    },
     "48": {
-     "100": -2.35
+     "100": -2.15
     },
     "54": {
-     "100": -0.07
+     "100": 0.04
     },
     "60": {
      "100": -0.04
     },
     "66": {
-     "100": -0.12
+     "100": -0.01
     },
     "72": {
      "100": -0.51

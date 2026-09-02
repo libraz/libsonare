@@ -2,9 +2,10 @@
   "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps the magnitude of the signed median and 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "drawbar-dark",
   "margin": 1.25,
-  "reference_measured_utc": "2026-08-27T15:34:48+00:00",
-  "recorded_utc": "2026-09-01T10:12:18+00:00",
+  "reference_measured_utc": "2026-09-02T06:37:35+00:00",
+  "recorded_utc": "2026-09-02T06:50:13+00:00",
   "reference_spread": {
+    "attack": 0.0,
     "balance": 15.4747,
     "body": 22.41,
     "centroid_pct": 177.1716,
@@ -27,6 +28,10 @@
     "damper": {
       "median": 437.5,
       "abs_median": 437.5
+    },
+    "attack": {
+      "median": 40.0,
+      "abs_median": 40.0
     },
     "stereo": {
       "median": 0.258,

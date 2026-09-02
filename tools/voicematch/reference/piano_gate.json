@@ -2,12 +2,12 @@
   "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps the magnitude of the signed median and 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "grand-274",
   "margin": 1.25,
-  "reference_measured_utc": "2026-08-26T07:39:26+00:00",
-  "recorded_utc": "2026-08-26T08:11:28+00:00",
+  "reference_measured_utc": "2026-09-02T06:38:36+00:00",
+  "recorded_utc": "2026-09-02T06:50:38+00:00",
   "reference_spread": {
     "aftersound": 1.16,
-    "attack": 25.0,
-    "balance": 7.266,
+    "attack": 5.0,
+    "balance": 6.899,
     "body": 7.26,
     "centroid_pct": 25.9312,
     "decay": 0.775,
@@ -27,8 +27,8 @@
       "abs_median": 0.869
     },
     "attack": {
-      "median": 25.0,
-      "abs_median": 25.0
+      "median": 6.25,
+      "abs_median": 6.25
     },
     "aftersound": {
       "median": 1.406,
@@ -36,31 +36,31 @@
     },
     "doubling": {
       "median": 4.87,
-      "abs_median": 6.044
+      "abs_median": 5.419
     },
     "stereo": {
       "median": 0.414,
       "abs_median": 0.497
     },
     "balance": {
-      "median": 7.266,
-      "abs_median": 7.266
+      "median": 6.899,
+      "abs_median": 6.899
     },
     "centroid_pct": {
       "median": 25.931,
-      "abs_median": 34.068
+      "abs_median": 33.914
     },
     "body": {
       "median": 7.26,
       "abs_median": 7.26
     },
     "vel_range": {
-      "median": 1.025,
+      "median": 0.92,
       "abs_median": 1.787
     },
     "register": {
       "median": 1.285,
-      "abs_median": 2.263
+      "abs_median": 2.0
     }
   }
 }

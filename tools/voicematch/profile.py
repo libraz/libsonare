@@ -230,6 +230,56 @@ DECAY_RANGE_DB = 60.0
 #: in a fraction of it, which is a comparison of a late rate against an early one.
 DECAY_SPAN_AGREEMENT = 0.6
 
+#: How far under the envelope's maximum still counts as the note having arrived.
+#: A struck note's maximum IS its onset, but a held one has no maximum worth the
+#: name: measured on this corpus a clarinet's envelope crests 0.20 dB over its
+#: own mean, so its loudest 10 ms window falls wherever the vibrato happened to
+#: peak -- 1270 ms in, against 25 ms for the first arrival within this bound. The
+#: value is the one `metrics` already quotes an attack against on the percussion
+#: path, and it moves a decaying note's onset by under 15 ms.
+ONSET_SLACK_DB = 3.0
+
+#: How long after arriving a note may still be climbing to the peak its decay is
+#: fitted from. Measured on this corpus the longest any voice with a real peak
+#: takes is 185 ms -- a vibraphone bar blooming -- while the earliest a plateau
+#: puts its highest sample is 375 ms, so the two populations do not overlap.
+RISE_WINDOW_S = 0.25
+
+
+def onset_index(env_db: np.ndarray) -> int:
+    """First envelope point within @ref ONSET_SLACK_DB of the loudest one.
+
+    The attack time is read off this rather than off `argmax`, which is only an
+    onset on an instrument that decays. On a plateau `argmax` is the largest
+    sample of a flat line: a clarinet's envelope crests 0.13 dB over its own
+    median, so its loudest window lands wherever the vibrato happened to.
+    """
+    if env_db.size == 0:
+        return 0
+    return int(np.argmax(env_db >= float(np.max(env_db)) - ONSET_SLACK_DB))
+
+
+def decay_origin_index(env_db: np.ndarray, hop_s: float) -> int:
+    """Where the fall starts: the loudest point inside the note's own rise.
+
+    A decay is fitted from the peak, and on anything that decays `argmax` finds
+    it. What `argmax` cannot do is refuse -- a held note has no peak, so it
+    returns the wandering level's best moment and the rate is fitted from where
+    noise put it, over whatever fraction of the note followed. Bounding the
+    search to @ref RISE_WINDOW_S past the arrival keeps the real peak on every
+    voice that has one and stops a plateau's late crest from claiming to be one.
+
+    Not the arrival itself: that sits on the rising edge, and a fast envelope
+    fitted from there is fitted partly over its own attack. Measured on a synth
+    drum whose peak is 30 ms past its arrival, the early rate came back at
+    +60.8 dB/s -- a decay reported as a climb.
+    """
+    if env_db.size == 0:
+        return 0
+    start = onset_index(env_db)
+    span = max(1, int(round(RISE_WINDOW_S / max(hop_s, 1e-9))))
+    return start + int(np.argmax(env_db[start:min(env_db.size, start + span)]))
+
 
 #: Where the body reading is taken, in seconds from the onset. After the strike,
 #: so the hammer's own broadband noise is not counted as the instrument's body,
@@ -338,9 +388,9 @@ def register_deltas(model: dict[int, dict[int, float]],
     return out
 
 
-def usable_decay_end(env_db: np.ndarray, peak_i: int,
+def usable_decay_end(env_db: np.ndarray, start_i: int,
                      range_db: float = DECAY_RANGE_DB) -> int:
-    """Index one past the last envelope point still within @p range_db of the peak.
+    """Index one past the last envelope point still within @p range_db of @p start_i.
 
     The LAST point inside the range, not the first one outside it: a decaying
     unison beats by ten decibels and more, and dips below any line long before
@@ -351,8 +401,8 @@ def usable_decay_end(env_db: np.ndarray, peak_i: int,
     piano's `_late_top` records what that costs its top octave, what was tried,
     and why the reading is flagged rather than corrected.
     """
-    live = np.where(env_db[peak_i:] >= env_db[peak_i] - range_db)[0]
-    return peak_i + int(live[-1]) + 1 if live.size else peak_i + 1
+    live = np.where(env_db[start_i:] >= env_db[start_i] - range_db)[0]
+    return start_i + int(live[-1]) + 1 if live.size else start_i + 1
 
 
 def double_decay(env_db: np.ndarray, t: np.ndarray) -> dict:
@@ -521,13 +571,18 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     # windowed RMS only in proportion to its share of the window's energy, so a
     # click that puts 14 dB on `peak_dbfs` puts under 3 on this.
     row["held_peak_dbfs"] = round(float(env_db[peak_i]), 2)
-    row["attack_ms"] = round(float(t_env[peak_i] * 1000.0), 1)
+    # Three indices, because `argmax` answers only the first of the three
+    # questions on an envelope that does not decay: how loud the note got, when
+    # it arrived, and where its fall begins.
+    onset_i = onset_index(env_db)
+    origin_i = decay_origin_index(env_db, float(t_env[1] - t_env[0]) if t_env.size > 1 else 0.005)
+    row["attack_ms"] = round(float(t_env[onset_i] * 1000.0), 1)
 
-    tail = slice(peak_i, usable_decay_end(env_db, peak_i))
+    tail = slice(origin_i, usable_decay_end(env_db, origin_i))
     # How much of the held note the two rates were fitted over. Both are slopes,
     # so they only compare against a reference fitted over a comparable span --
     # a two-stage decay read to 4 s and one read to 8 is two different questions.
-    row["decay_span_s"] = round(float(t_env[tail][-1] - t_env[peak_i]), 3) \
+    row["decay_span_s"] = round(float(t_env[tail][-1] - t_env[origin_i]), 3) \
         if t_env[tail].size else 0.0
     if t_env[tail].size > 8:
         row["decay_db_s"] = round(float(np.polyfit(t_env[tail], env_db[tail], 1)[0]), 2)
@@ -2382,7 +2437,7 @@ DELTA_LABELS = {"stretch": "tuning vs the reference (cents)",
                 # before the soundboard reaches full level, so the number is
                 # the bloom after it. Naming the peak rather than the cause is
                 # the only wording true of both.
-                "attack": "time to the envelope peak (ms)",
+                "attack": "time to the note's arrival (ms)",
                 "crest": "peak over RMS of the hit (dB)",
                 "level": "how loud the hit is vs the reference (dBFS)"}
 

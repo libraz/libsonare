@@ -2563,10 +2563,8 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 9,
-          "excused": [
-            "attack"
-          ],
+          "gated": 10,
+          "excused": [],
           "gaps": [],
           "complete": true
         },
@@ -2578,7 +2576,10 @@
             "balance": 1.32,
             "stereo": 1.2,
             "stretch": 1.02
-          }
+          },
+          "unjudgeable": [
+            "attack"
+          ]
         },
         "structure": null,
         "music": null
@@ -3181,8 +3182,8 @@
       "patch": "church_organ",
       "engine": "pipe_organ",
       "capture": "pipe_organ",
-      "stage": 0.8,
-      "stage_name": "agreeing",
+      "stage": 0.6,
+      "stage_name": "covered",
       "open_candidates": [
         "tank-3.6",
         "hall",
@@ -3208,11 +3209,12 @@
           "complete": true
         },
         "agreement": {
-          "inside": 3,
+          "inside": 2,
           "total": 5,
           "outside": {
             "stretch": 1.3,
-            "centroid_pct": 1.26
+            "centroid_pct": 1.26,
+            "attack": 1.17
           }
         },
         "structure": {
@@ -3224,7 +3226,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then a shared calibration unit has moved since the diagnosis and nothing can attribute it: re-run autofit --diagnose"
+      "next": "outside the reference spread: stretch 1.3x, centroid_pct 1.26x, attack 1.17x"
     },
     {
       "slug": "p019b001-church-organ",
@@ -4866,7 +4868,6 @@
           "gated": 0,
           "excused": [
             "aftersound",
-            "attack",
             "decay",
             "doubling",
             "stereo"
@@ -4874,6 +4875,7 @@
           "gaps": [
             "stretch",
             "body",
+            "attack",
             "damper",
             "balance",
             "centroid_pct",

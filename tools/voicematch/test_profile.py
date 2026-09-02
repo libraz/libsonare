@@ -1132,6 +1132,64 @@ def test_a_faded_sample_does_not_have_the_slope_of_its_silence_read_as_an_afters
     assert abs(whole["decay_late_db_s"]) < 1.0
 
 
+def test_a_held_note_arrives_where_it_got_loud_not_where_it_wobbled():
+    """`argmax` is an onset only on an envelope that decays.
+
+    The plateau is the harmonica's shape and the numbers are its measured ones:
+    a 25 ms rise, then three seconds within a decibel of level. The loudest
+    window lands wherever the tremolo crested, so an attack read off it reports
+    seconds; the decay fitted from there has a fraction of the note left.
+    """
+    sr = 200  # the envelope's own 5 ms grid
+    t = np.linspace(0.0, 3.0, int(3.0 * sr))
+    rise = np.clip(t / 0.025, 0.0, 1.0)
+    # A tremolo alone crests first at its own first period; what puts the maximum
+    # late is the slow wander under it, which is what the level actually does.
+    env_db = (20.0 * np.log10(np.maximum(rise, 1e-6))
+              + 0.9 * np.sin(2.0 * np.pi * 5.0 * t)
+              + 0.6 * np.sin(2.0 * np.pi * 0.2 * t - 1.194))
+
+    late = int(np.argmax(env_db))
+    assert t[late] > 1.0, "the fixture has to crest late to be a test"
+
+    onset = profile_module.onset_index(env_db)
+    assert t[onset] == pytest.approx(0.025, abs=0.02)
+    # The decay origin travels with it: fitted from the crest there is almost
+    # nothing left of a three-second note to fit over.
+    origin = profile_module.decay_origin_index(env_db, float(t[1] - t[0]))
+    assert t[origin] < profile_module.RISE_WINDOW_S + 0.03
+    span = t[profile_module.usable_decay_end(env_db, origin) - 1] - t[origin]
+    assert span > 2.7
+    assert t[profile_module.usable_decay_end(env_db, late) - 1] - t[late] < 2.0
+
+
+def test_a_struck_notes_decay_is_still_fitted_from_its_peak():
+    """The origin may not slide onto the rising edge, or a fall reads as a climb.
+
+    The shape and the numbers are the synth drum's: it arrives at 10 ms, takes
+    the last 3 dB over the 30 ms after that, and then falls at 63 dB/s. Fitting
+    the early segment from the arrival crosses the top of the rise, and the rate
+    it reports for the fall is +54 dB/s -- a decay measured as a climb.
+    """
+    sr = 200
+    t = np.linspace(0.0, 3.0, int(3.0 * sr))
+    env_db = np.piecewise(
+        t, [t < 0.01, (t >= 0.01) & (t < 0.04), t >= 0.04],
+        [lambda u: -40.0 + 3700.0 * u, lambda u: -3.0 + 100.0 * (u - 0.01),
+         lambda u: -63.0 * (u - 0.04)])
+    peak = int(np.argmax(env_db))
+
+    onset = profile_module.onset_index(env_db)
+    assert t[onset] < t[peak], "the fixture needs the arrival on the rising edge"
+    origin = profile_module.decay_origin_index(env_db, float(t[1] - t[0]))
+    assert origin == pytest.approx(peak, abs=1)
+
+    knee = int(0.05 * sr)
+    assert np.polyfit(t[onset:onset + knee], env_db[onset:onset + knee], 1)[0] > 0.0, \
+        "fitting from the arrival is what reports a climb"
+    assert np.polyfit(t[origin:origin + knee], env_db[origin:origin + knee], 1)[0] < -60.0
+
+
 def test_a_beating_unison_dips_below_the_range_without_having_stopped():
     """The end is the LAST point inside the range, not the first one outside it."""
     t = np.linspace(0.0, 8.0, 400)

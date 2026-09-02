@@ -41,14 +41,13 @@
       "slot_channel": 8
     }
   ],
-  "_dimensions": "The slot is a synthetic bass source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one.",
+  "_dimensions": "The slot is a synthetic bass source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. Their exclusions below are about this slot; `attack` is gated because the measurement stopped reading the envelope's maximum, which on a level this flat was the largest sample of a flat line.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
     "decay": "the slot does not decay under a held key: -11 dBFS a quarter of a second in and -11 at six seconds, so the slope a free fall would have is not in this reference",
     "aftersound": "there is no free fall to have a late stage, the level being flat under a held key",
-    "doubling": "there is no free fall to have a prompt stage, the level being flat under a held key",
-    "attack": "the level is flat under a held key on this slot, so the envelope has no peak to find and the onset measurement reads wherever the argmax lands: the reference's own attack_ms scatters over 5, 105, 350, 1685, 2825 and 3630 ms across the grid, with no order in note or velocity. The same flatness on the model side reads 2.5 s. Nothing about an onset is in this number on either side"
+    "doubling": "there is no free fall to have a prompt stage, the level being flat under a held key"
   },
   "dimensions": [
     "stretch",
@@ -58,7 +57,8 @@
     "centroid_pct",
     "tnr",
     "vel_range",
-    "register"
+    "register",
+    "attack"
   ],
   "_identity": "Which product this is captured from lives in the untracked sibling `synth_bass_2.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/synth_bass_2.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 8, and it was rendered at its own three probe notes before anything else was written, reading 0.978 or better of its energy on the series of the key pressed. The same renders are what say the slot rings at all: four slots of these racks hold a sample that is at the numerical floor half a second into a six-second key, and a grid written for one of those would take every measurement on silence."
