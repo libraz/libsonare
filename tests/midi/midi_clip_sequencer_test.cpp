@@ -134,6 +134,70 @@ TEST_CASE("sort_render_events_stable orders same-frame events note-off before no
   REQUIRE(events == before);
 }
 
+TEST_CASE("a same-timestamp controller gesture keeps the order it was written in", "[midi]") {
+  // An RPN is CC101, CC100 then Data Entry, and a file writes all three at one
+  // tick. Ordering same-timestamp events by controller number delivers them as
+  // 6, 100, 101 -- the value ahead of the selector that gives it meaning -- and
+  // a receiver that discards unselected data entry then drops the whole edit,
+  // which is what happened to every RPN and NRPN reaching the synth.
+  const auto rpn_at = [](double ppq) {
+    return std::vector<MidiClipEvent>{
+        ev(ppq, sonare::midi::make_midi1_control_change(0, 0, 101, 0)),
+        ev(ppq, sonare::midi::make_midi1_control_change(0, 0, 100, 0)),
+        ev(ppq, sonare::midi::make_midi1_control_change(0, 0, 6, 12)),
+        ev(ppq, sonare::midi::make_midi1_control_change(0, 0, 38, 0)),
+    };
+  };
+  const std::vector<uint8_t> written{101, 100, 6, 38};
+
+  MidiClip clip;
+  for (const MidiClipEvent& e : rpn_at(1.0)) clip.add_event(e);
+  // A note-on at the same tick, added first, still has to end up last: the rank
+  // ordering is what the gesture rides on and it is not being given up here.
+  clip.add_event(ev(1.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  clip.sort_stable();
+
+  REQUIRE(clip.events().size() == 5);
+  for (size_t i = 0; i < written.size(); ++i) {
+    REQUIRE(clip.events()[i].ump.note_number() == written[i]);
+  }
+  REQUIRE(clip.events()[4].ump.is_note_on());
+
+  // Idempotent: a second sort must not start reordering what the first kept.
+  const auto before = clip.events();
+  clip.sort_stable();
+  REQUIRE(clip.events() == before);
+}
+
+TEST_CASE("sort_render_events_stable keeps a same-frame controller gesture in order", "[midi]") {
+  // The live and baked paths sort render-frame events with the same comparator,
+  // so the gesture has to survive there too.
+  auto re = [](int64_t frame, const Ump& ump) {
+    MidiEvent e;
+    e.render_frame = frame;
+    e.ump = ump;
+    return e;
+  };
+  const std::vector<uint8_t> written{99, 98, 6};
+  std::vector<MidiEvent> events{
+      re(480, sonare::midi::make_midi1_note_on(0, 0, 60, 100)),
+      re(480, sonare::midi::make_midi1_control_change(0, 0, 99, 0x01)),
+      re(480, sonare::midi::make_midi1_control_change(0, 0, 98, 0x20)),
+      re(480, sonare::midi::make_midi1_control_change(0, 0, 6, 104)),
+  };
+  sonare::midi::sort_render_events_stable(events);
+
+  REQUIRE(events.size() == 4);
+  for (size_t i = 0; i < written.size(); ++i) {
+    REQUIRE(events[i].ump.note_number() == written[i]);
+  }
+  REQUIRE(events[3].ump.is_note_on());
+
+  const auto before = events;
+  sonare::midi::sort_render_events_stable(events);
+  REQUIRE(events == before);
+}
+
 TEST_CASE("MidiClip validate_note_pairs reports matched and unmatched notes", "[midi]") {
   {
     MidiClip clip;

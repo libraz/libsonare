@@ -19,7 +19,7 @@ int same_time_rank(const Ump& ump) noexcept {
       const uint8_t controller = ump.note_number();
       if (controller == 0) return 1;
       if (controller == 32) return 2;
-      return 4;
+      return kGeneralRank;
     }
     if (status == UmpStatus::kProgramChange) return 3;
   } else if (message_type == UmpMessageType::kMidi2ChannelVoice) {
@@ -30,7 +30,7 @@ int same_time_rank(const Ump& ump) noexcept {
     if (static_cast<UmpStatus>(ump.status_nibble()) == UmpStatus::kProgramChange) return 3;
   }
   if (ump.is_note_on()) return 5;
-  return 4;
+  return kGeneralRank;
 }
 
 bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept {
@@ -38,6 +38,9 @@ bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept {
   const int ra = same_time_rank(a.ump);
   const int rb = same_time_rank(b.ump);
   if (ra != rb) return ra < rb;
+  // Two events sharing kGeneralRank are a gesture, not a set: leave them in
+  // stream order. See MidiClip::sort_stable for why.
+  if (ra == kGeneralRank) return false;
   // Deterministic tiebreak on note then channel then first word so identical
   // timestamps are fully ordered regardless of insertion order. Mirrors
   // MidiClip::sort_stable.
@@ -93,6 +96,10 @@ void MidiClip::sort_stable() {
                      const int ra = same_time_rank(a.ump);
                      const int rb = same_time_rank(b.ump);
                      if (ra != rb) return ra < rb;
+                     // Two events sharing kGeneralRank keep the order they
+                     // arrived in: a controller number is not a key to sort on,
+                     // it is a step in a gesture.
+                     if (ra == kGeneralRank) return false;
                      // Stable tiebreak on note then channel then first word so
                      // identical-timestamp ordering is fully deterministic
                      // regardless of insertion order.

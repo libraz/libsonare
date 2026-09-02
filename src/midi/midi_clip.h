@@ -56,7 +56,9 @@ class MidiClip {
 
   /// Stable sort by (ppq, then note-off before note-on at the SAME ppq, then a
   /// stable tiebreak on note/channel/word so identical timestamps are ordered
-  /// deterministically). Idempotent. No clock/random.
+  /// deterministically). Controllers and the other @ref kGeneralRank messages
+  /// keep the order they were added in instead, because that order is the
+  /// gesture. Idempotent. No clock/random.
   void sort_stable();
 
   /// Validates that every note-on has a matching note-off (per
@@ -80,10 +82,23 @@ class MidiClip {
 /// same-timestamp ties identically.
 int same_time_rank(const Ump& ump) noexcept;
 
+/// The rank every message that is not a note, a bank select or a program change
+/// falls into. Two events sharing it are ordered by the stream and never by
+/// their own bytes: see @ref render_event_before.
+constexpr int kGeneralRank = 4;
+
 /// Strict-weak ordering used by every render-event sort: ascending render_frame,
 /// then same_time_rank (note-off before note-on), then a deterministic
 /// note/channel/first-word tiebreak. Exposed so fixed-capacity buffers (e.g.
 /// MidiFxBuffer) can sort in place with the same contract.
+///
+/// The tiebreak is deliberately NOT applied inside @ref kGeneralRank. A
+/// multi-message controller gesture — RPN / NRPN, a 14-bit MSB/LSB pair — is
+/// normally written at one timestamp, and its meaning is the order: an RPN is
+/// CC101, CC100, then Data Entry. Sorting those by controller number delivers
+/// 6, 100, 101, so the value arrives before the selector that gives it meaning
+/// and the receiver discards the whole edit. Stream order is what a sort here
+/// has to preserve, which stability already gives.
 bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept;
 
 /// Stable-sorts absolute render-frame MidiEvents ascending by render_frame, then
