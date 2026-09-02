@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bank  # noqa: E402
 import calibration  # noqa: E402
+from _repo import REPO_ROOT  # noqa: E402
 
 
 def _write(tmp_path: Path, payload: dict) -> Path:
@@ -39,6 +40,28 @@ def test_every_recorded_voice_is_a_voice_the_bank_has():
     table = calibration.load()
     known = {v.slug for v in bank.voices(kits=sorted(bank.KIT_NAMES))}
     assert calibration.unknown_voices(table, known) == []
+
+
+def test_every_patch_key_names_the_patch_of_the_voice_it_is_filed_under():
+    """A patch prefix reaches that patch and no other, and says nothing when it misses.
+
+    Where one patch is built by copying another — `overdriven` and `distortion`
+    from `electric_guitar` — the copy is taken before either is tuned, so a key
+    aimed at the source renders the copy byte-identical to the unmodified build.
+    The page then shows a candidate that changes nothing, which reads as a knob
+    with no effect rather than as a setting filed under the wrong voice.
+    """
+    status = json.loads((REPO_ROOT / "tools" / "voice-status.json").read_text())
+    patches = {v["slug"]: v.get("patch") for v in status["voices"]}
+    known = {p for p in patches.values() if p}
+    wrong = []
+    for slug, variants in calibration.load().items():
+        for variant in variants:
+            for assignment in variant.overrides.split(","):
+                prefix = assignment.split("=", 1)[0].split(".", 1)[0]
+                if prefix in known and prefix != patches.get(slug):
+                    wrong.append(f"{slug}/{variant.name}: {prefix} voices another patch")
+    assert wrong == []
 
 
 def test_documentation_keys_are_not_voices():
