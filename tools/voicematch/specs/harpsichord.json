@@ -35,6 +35,7 @@
       "scale": "linear"
     },
     {
+      "_": "The range is nominal at the bottom of the compass and largely fictional at the top: the voice keeps this reference clear of the fundamental with `clamp(damping_ref_hz, 2*f0, 0.45*sr)`, so every value under twice the played pitch collapses onto the same render. Measured at four notes: 100 Hz, half the floor and 95 % of it are byte-identical, and 150 % of it differs. Over this corpus that is nothing at the bottom note and 63 % of the log range at the top, so a value the search lands below about 2.8 kHz is scored on the lower notes alone. Not a defect - a reference at or below the fundamental has no tilt to describe - but the search is narrower than the bounds say.",
       "tunable": "harpsichord.harpsichord.damping_ref_hz",
       "min": 100.0,
       "max": 20000.0,

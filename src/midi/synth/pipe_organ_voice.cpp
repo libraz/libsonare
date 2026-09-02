@@ -334,6 +334,9 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     float bright = std::clamp(ranks[r].brightness + 0.3f * reed, 0.0f, 1.0f);
     if (stopped) bright = std::min(bright, 0.35f);
     const float corner = (kReflectCornerBase + kReflectCornerSpan * bright) * f0;
+    // The 0.05 floor is a fixed 392 Hz at 48 kHz, so the tracking above stops at
+    // the bottom of the compass: a stopped 16' is pinned over its whole brightness
+    // range at and below C#4, which is the register that rank is played in.
     const float alpha = std::clamp(1.0f - std::exp(-kTwoPi * corner / srf), 0.05f, 1.0f);
     const float a = 1.0f - alpha;
     pipe.lp_alpha = alpha;
