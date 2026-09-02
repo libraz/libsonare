@@ -263,6 +263,8 @@ A knob the fit left where it started is not rewritten at all: the two spellings 
 
 `--out result.json` records the whole thing — every knob's start and best, the losses, the held-out score, and a paste-ready `SONARE_TUNING_OVERRIDES` string for auditioning the result without rebuilding.
 
+**A write-back reaches further than the program the fit was aimed at, and nothing narrows it.** `--spec auto --program N` offers that patch's fields *and* the engine's shared calibration constants, so a bowed fit rewrites `bowed_string_voice.cpp` alongside the patch and moves violin, viola, cello, fiddle and both string ensembles with it — programs that usually have no reference to notice. `--program-only` does not prevent this: it narrows the `--dump-knobs` listing and nothing else. Split the result by key shape before adopting any of it, and take an engine constant only when more than one voice on that engine has a reference to hold it to.
+
 ## Fitting a drum note
 
 `--spec auto --drum-note N` offers that note's own patch fields (`d038.percussion.wire_buzz`, `d038.amp_env.decay_ms`, …) with the same clamp-derived ranges as a program patch — a bound belongs to the field, so `percussion.wire_buzz 0..4` covers every drum note that has one. `--stages` splits them the same way, with the noise burst, the strike position and the pitch drop as excitation and the mode decay, the wire buzz and the shimmer as decay.
