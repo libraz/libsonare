@@ -2,8 +2,8 @@
   "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps the magnitude of the signed median and 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "drawbar-dark",
   "margin": 1.25,
-  "reference_measured_utc": "2026-09-02T06:37:35+00:00",
-  "recorded_utc": "2026-09-02T06:50:13+00:00",
+  "reference_measured_utc": "2026-09-02T13:41:19+00:00",
+  "recorded_utc": "2026-09-02T13:42:27+00:00",
   "reference_spread": {
     "attack": 0.0,
     "balance": 15.4747,

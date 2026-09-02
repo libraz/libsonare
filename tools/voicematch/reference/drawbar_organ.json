@@ -1,7 +1,7 @@
 {
  "id": "drawbar_organ",
  "label": "Drawbar organ, tonewheel generator, two registrations",
- "measured_utc": "2026-09-02T06:37:35+00:00",
+ "measured_utc": "2026-09-02T13:41:19+00:00",
  "capture": {
   "program": 16,
   "params": [],
@@ -4028,6 +4028,20 @@
      "monotonic": true
     }
    }
+  }
+ },
+ "rooms": {
+  "drawbar-bright": {
+   "rt60_s": 1.3766,
+   "hf_ratio": 0.548,
+   "tail_db": 26.3711,
+   "predelay_ms": 15.0,
+   "tail_window_s": 2.0,
+   "note_window_s": 3.0,
+   "notes_measured": 10,
+   "notes_probed": 11,
+   "rt60_min_s": 1.3344,
+   "rt60_max_s": 1.6918
   }
  }
 }

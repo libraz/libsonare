@@ -3186,8 +3186,8 @@
       "patch": "church_organ",
       "engine": "pipe_organ",
       "capture": "pipe_organ",
-      "stage": 0.6,
-      "stage_name": "covered",
+      "stage": 0.8,
+      "stage_name": "agreeing",
       "open_candidates": [
         "tank-3.6",
         "hall",
@@ -3213,12 +3213,10 @@
           "complete": true
         },
         "agreement": {
-          "inside": 2,
+          "inside": 4,
           "total": 5,
           "outside": {
-            "stretch": 1.3,
-            "centroid_pct": 1.26,
-            "attack": 1.17
+            "centroid_pct": 1.29
           }
         },
         "structure": {
@@ -3230,7 +3228,7 @@
         },
         "music": null
       },
-      "next": "outside the reference spread: stretch 1.3x, centroid_pct 1.26x, attack 1.17x"
+      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then a shared calibration unit has moved since the diagnosis and nothing can attribute it: re-run autofit --diagnose"
     },
     {
       "slug": "p019b001-church-organ",

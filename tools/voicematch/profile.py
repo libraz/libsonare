@@ -60,6 +60,7 @@ by breaking another.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import subprocess
@@ -117,6 +118,9 @@ SILENT_HIT_DBFS = -80.0
 # note rather than the instrument being slow to speak. Well above any real
 # attack on a kit and well under the shortest delay a retried note came back at.
 LATE_ONSET_MS = 20.0
+# What a recorded room carries back into a `Room`. The entry beside them says how
+# many notes agreed and over what range, which is provenance rather than the space.
+ROOM_FIELDS = tuple(f.name for f in dataclasses.fields(Room))
 
 
 # --------------------------------------------------------------------------
@@ -732,6 +736,73 @@ def measurement_stamp(profile: dict, out_path: Path) -> str:
     return now
 
 
+def measure_rooms(manifest: dict, corpus_dir: Path, declared: set[str],
+                  preroll_s: float, gate_s: float) -> dict:
+    """The space each timbre was recorded in, where its own grid can say.
+
+    Recorded here rather than measured at comparison time because `compare` reads
+    the committed profile and never the audio, so a room that lived only in the
+    corpus would be unavailable from a clean clone — and because the room is a
+    property of the reference, which is what this file holds.
+
+    **A room is common to every note and an instrument's own decay is not**, so
+    the estimate is taken per note and kept only where most of the compass agrees
+    there is one. Measured over the whole grid at once instead, a single note
+    carries the answer: the electric guitar's DI reports a 1.17 s space that way,
+    and note by note it is 3.56 s on one note of ten and nothing on the other
+    nine. `room.py`'s own guards do not catch that one — the length is credible
+    and the notes are held for seconds — so the agreement is the guard.
+
+    The rest of the guards are `measurable_room`'s: a small space, a dry render
+    and a probe whose windows are gates rather than notes all come back as no
+    room. A timbre with no entry is compared as rendered, which on all but a few
+    captures is the right answer and the one this records.
+    """
+    by_timbre: dict[str, dict[int, tuple[int, Path]]] = {}
+    for rec in manifest["renders"]:
+        if rec["timbre"] not in declared:
+            continue
+        path = corpus_dir / rec["path"]
+        if not path.exists():
+            continue
+        # The loudest take of each note: a T20 fit needs the tail 25 dB clear of
+        # the floor, which the softest blow of a decaying instrument is not.
+        slot = by_timbre.setdefault(rec["timbre"], {})
+        if rec["velocity"] >= slot.get(rec["note"], (-1, None))[0]:
+            slot[rec["note"]] = (rec["velocity"], path)
+    rooms: dict[str, dict] = {}
+    for tid, by_note in sorted(by_timbre.items()):
+        measured: list[Room] = []
+        for note in sorted(by_note):
+            audio, sr = read_wav(by_note[note][1])
+            mono = audio.mean(axis=1) if audio.ndim > 1 else audio
+            room = measurable_room(np.asarray(mono, dtype=np.float64), sr,
+                                   [(preroll_s, preroll_s + gate_s)])
+            if room is not None:
+                measured.append(room)
+        probed = len(by_note)
+        if len(measured) * 2 <= probed:
+            if measured:
+                print(f"  {tid}: {len(measured)} of {probed} notes measure a space and the "
+                      f"rest measure none, so what one note decays like is not a room — "
+                      f"compared as rendered", file=sys.stderr)
+            continue
+        rt60 = sorted(r.rt60_s for r in measured)
+        # Rounded like every other measurement in the file. A room quoted to the
+        # last bit would also re-stamp the profile — and date every gate against
+        # it — on an arithmetic drift far below what the estimate can resolve.
+        entry = {k: round(float(np.median([getattr(r, k) for r in measured])), 4)
+                 for k in ROOM_FIELDS}
+        entry.update({"notes_measured": len(measured), "notes_probed": probed,
+                      "rt60_min_s": round(rt60[0], 4), "rt60_max_s": round(rt60[-1], 4)})
+        rooms[tid] = entry
+        print(f"  {tid}: recorded in a space of RT60 {entry['rt60_s']:.2f}s "
+              f"({rt60[0]:.2f}-{rt60[-1]:.2f} over {len(measured)} of {probed} notes), tail "
+              f"level {entry['tail_db']:+.1f}dB, HF ratio {entry['hf_ratio']:.2f} — a "
+              f"comparison places the model in it before measuring", file=sys.stderr)
+    return rooms
+
+
 def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     manifest_path = corpus_dir / "manifest.json"
     if not manifest_path.exists():
@@ -806,6 +877,8 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
               file=sys.stderr)
         rows = sweep(band_edge)
 
+    rooms = measure_rooms(manifest, corpus_dir, declared, preroll_s, gate_s)
+
     tracked = json.loads(Path(cfg["_path"]).read_text())
     profile = {
         "id": cfg["id"],
@@ -821,6 +894,11 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         "rows": rows,
         "summary": summarize_percussion(rows) if percussion else summarize(rows),
     }
+    # Absent rather than empty on a reference with no room, so the profile of a
+    # dry capture is byte-identical to one measured before this was recorded and
+    # its stamp — and every gate dated against it — stays where it is.
+    if rooms:
+        profile["rooms"] = rooms
     before = out_path.read_text() if out_path.exists() else ""
     profile["measured_utc"] = measurement_stamp(profile, out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1470,6 +1548,11 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         print("capture note -> model note: "
               + ", ".join(f"{k}->{v}" for k, v in sorted(mapping.items())))
     print()
+    # Wired for symmetry rather than because a kit needs it: `Room.gated` refuses
+    # a probe whose windows are the gate, which every percussion grid's are, so
+    # no captured kit records a room and this is a no-op on all of them today.
+    place = ModelPlacer(profile, timbre, [(preroll_s, preroll_s + gate_s)])
+    place.announce()
     print(f"{'note':>5} {'vel':>4} | {'tilt Δdb':>9} {'shape db':>9} "
           f"{'decay Δdb/s':>12} {'centroid Δ%':>12} {'attack Δms':>11} "
           f"{'crest Δdb':>10} {'level Δdb':>10}")
@@ -1496,6 +1579,7 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         smf = write_smf([Note(played, vel, preroll_s, gate_s)], program=program,
                         channel=PERCUSSION_CHANNEL - 1, end_pad=tail_s)
         audio = render_model(smf, preroll_s + gate_s + tail_s, sr, rig=rig)
+        audio = place(audio, sr)
         m = measure_hit(audio, sr, played, vel, preroll_s=preroll_s, gate_s=gate_s,
                         max_band_hz=band_edge)
         r = ref[(note, vel)]
@@ -2196,6 +2280,42 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
     return 0
 
 
+class ModelPlacer:
+    """Puts every model render in the space the reference was recorded in.
+
+    A dry model scored against a reference carrying its building reads short in
+    decay, fast in release and thin under the note, and all three are the room.
+    The fitter has always corrected for this on the same corpus (`autofit
+    --room auto`); this is the comparator's half of it, off the room the profile
+    recorded, so the two halves judge one signal.
+
+    One impulse response for the whole grid, fitted on the first render: the
+    space belongs to the recording session rather than to a note, and a fit per
+    note would make each row's correction depend on that row's own decay.
+    """
+
+    def __init__(self, profile: dict, timbre: str, spans: list[tuple[float, float]]):
+        recorded = (profile.get("rooms") or {}).get(timbre)
+        self.room = (Room(**{k: v for k, v in recorded.items() if k in ROOM_FIELDS})
+                     if recorded else None)
+        self.spans = spans
+        self.ir: np.ndarray | None = None
+
+    def announce(self) -> None:
+        if self.room is None:
+            return
+        print(f"the reference carries a room — RT60 {self.room.rt60_s:.2f}s, tail level "
+              f"{self.room.tail_db:+.1f}dB, HF ratio {self.room.hf_ratio:.2f} — and the "
+              f"model is placed in a matching space before every measurement below\n")
+
+    def __call__(self, audio: np.ndarray, sr: int) -> np.ndarray:
+        if self.room is None:
+            return audio
+        placed, self.ir = place_model_in(np.asarray(audio, dtype=np.float64), sr,
+                                         self.spans, self.room, self.ir)
+        return placed.astype(np.float32)
+
+
 def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int],
             gate_path: str = "", write_gate: str = "", margin: float = 1.25) -> int:
     """Measure libsonare the same way and print the difference, dimension by dimension."""
@@ -2222,6 +2342,8 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     print(f"model vs {timbre}: {len(pairs)} notes, model on GM program {program}")
     print(f"reference A4 sits {a4_off:+.2f} c from 440 Hz; "
           f"that offset is removed from the stretch column\n")
+    place = ModelPlacer(profile, timbre, [(preroll_s, preroll_s + gate_s)])
+    place.announce()
     # Every dimension the summary gates has a column here, so a bound that moves
     # can be traced to the notes that moved it. The aftersound is the one that
     # most needs it: it is the slowest thing the voice does, so it is the least
@@ -2255,6 +2377,7 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         smf = write_smf([Note(note, vel, preroll_s, gate_s)],
                         program=program, end_pad=tail_s)
         audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"], rig=rig)
+        audio = place(audio, cap["sample_rate"])
         m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
         r = ref[(note, vel)]
         if not m:

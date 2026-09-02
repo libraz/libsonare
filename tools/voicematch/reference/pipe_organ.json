@@ -1,7 +1,7 @@
 {
  "id": "pipe_organ",
  "label": "Church organ, principal chorus, recorded in its building",
- "measured_utc": "2026-09-02T06:38:38+00:00",
+ "measured_utc": "2026-09-02T13:41:18+00:00",
  "capture": {
   "program": 19,
   "params": [],
@@ -2139,6 +2139,32 @@
     }
    },
    "velocity_response": {}
+  }
+ },
+ "rooms": {
+  "plenum-a": {
+   "rt60_s": 4.3051,
+   "hf_ratio": 0.5939,
+   "tail_db": 17.2932,
+   "predelay_ms": 15.0,
+   "tail_window_s": 3.0,
+   "note_window_s": 3.0,
+   "notes_measured": 10,
+   "notes_probed": 11,
+   "rt60_min_s": 3.3738,
+   "rt60_max_s": 4.5806
+  },
+  "plenum-b": {
+   "rt60_s": 4.138,
+   "hf_ratio": 0.4605,
+   "tail_db": 15.1654,
+   "predelay_ms": 15.0,
+   "tail_window_s": 3.0,
+   "note_window_s": 3.0,
+   "notes_measured": 8,
+   "notes_probed": 11,
+   "rt60_min_s": 3.8692,
+   "rt60_max_s": 4.3003
   }
  }
 }

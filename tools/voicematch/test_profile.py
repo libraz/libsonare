@@ -1439,3 +1439,99 @@ def test_measure_reads_only_the_timbres_the_capture_declares(tmp_path):
     written = json.loads(out.read_text())
     assert {r["timbre"] for r in written["rows"]} == {"di"}
     assert [t["id"] for t in written["capture"]["timbres"]] == ["di"]
+
+
+def _grid_corpus(tmp_path: Path, notes: list[int], wet: set[int], rt60: float = 1.6) -> Path:
+    """A one-note-per-render corpus, with `wet` notes recorded in a room."""
+    from room import Room, apply_room, synth_room_ir
+    from wavio import write_wav
+
+    sr, gate_s, preroll_s = 48000, 1.0, 0.1
+    ir = synth_room_ir(Room(rt60_s=rt60, hf_ratio=0.5, tail_db=0.0, predelay_ms=15.0), sr)
+    root = tmp_path / "corpus"
+    (root / "t").mkdir(parents=True, exist_ok=True)
+    renders = []
+    for note in notes:
+        f0 = 440.0 * 2.0 ** ((note - 69) / 12.0)
+        span = np.arange(int(4.0 * sr)) / sr
+        env = np.where((span < preroll_s) | (span > preroll_s + gate_s), 0.0,
+                       np.exp(-(span - preroll_s) / 0.4))
+        dry = sum(np.sin(2 * np.pi * f0 * k * span) / k for k in (1, 2, 3, 4))
+        y = (0.3 * dry * env).astype(np.float32)
+        audio = np.stack([y, y], axis=1)
+        if note in wet:
+            audio = apply_room(audio, ir).astype(np.float32)
+        name = f"n{note:03d}_v100.wav"
+        write_wav(root / "t" / name, audio, sr)
+        renders.append({"id": f"t/{note}/100", "timbre": "t", "note": note,
+                        "velocity": 100, "path": f"t/{name}"})
+    (root / "manifest.json").write_text(json.dumps({
+        "id": "x", "plugin": "aumu:xxxx:Yyyy", "params": [], "sample_rate": sr,
+        "gate_ms": int(gate_s * 1000), "tail": "2s", "preroll_ms": int(preroll_s * 1000),
+        "notes": notes, "velocities": [100], "timbres": [{"id": "t"}], "renders": renders,
+    }))
+    return root
+
+
+def _measured_rooms(tmp_path: Path, root: Path) -> dict:
+    config = tmp_path / "x.json"
+    config.write_text(json.dumps({"id": "x", "label": "One timbre", "timbres": [{"id": "t"}]}))
+    cfg = {"id": "x", "program": 0, "timbres": [{"id": "t"}], "_path": str(config)}
+    out = tmp_path / "x_profile.json"
+    assert profile_module.measure(cfg, root, out) == 0
+    return json.loads(out.read_text()).get("rooms") or {}
+
+
+def test_a_space_only_one_note_of_the_grid_measures_is_not_a_room(tmp_path):
+    """A room belongs to the building, so every note is in it or none is.
+
+    Measured over a whole grid at once the distinction disappears and one note
+    carries the answer: the electric guitar's DI reported a credible 1.17 s
+    space that way, and note by note it is 3.56 s on one note of ten and nothing
+    on the other nine. None of `room.py`'s own guards catch it — the length is
+    believable and the notes are held for seconds — so the agreement is the
+    guard, and without it the model would be convolved with a room invented from
+    one note's decay and its own decay deficit hidden underneath.
+    """
+    notes = [48, 52, 56, 60, 64, 68]
+    assert _measured_rooms(tmp_path / "one", _grid_corpus(tmp_path / "one", notes, {60})) == {}
+
+
+def test_a_space_the_whole_grid_measures_is_recorded_with_what_agreed(tmp_path):
+    every = _grid_corpus(tmp_path / "all", [48, 52, 56, 60, 64, 68], {48, 52, 56, 60, 64, 68})
+    rooms = _measured_rooms(tmp_path / "all", every)
+    assert set(rooms) == {"t"}
+    assert rooms["t"]["rt60_s"] > 0.35
+    assert rooms["t"]["notes_probed"] == 6
+    assert rooms["t"]["notes_measured"] * 2 > 6, "kept without a majority of the grid"
+    assert rooms["t"]["rt60_min_s"] <= rooms["t"]["rt60_s"] <= rooms["t"]["rt60_max_s"]
+
+
+def test_the_model_is_placed_in_the_room_the_profile_recorded():
+    """The comparator's half of the correction the fitter already applies.
+
+    A dry model scored against a reference carrying its building reads short in
+    decay and fast in release, and both are the room. What is asserted is the
+    property that makes the correction worth having: the placed model *measures*
+    the recorded space, rather than merely having been convolved with something.
+    """
+    from room import Room, estimate_room
+
+    sr, spans = SR, [(0.1, 1.1)]
+    t = np.arange(int(4.0 * sr)) / sr
+    env = np.where((t < 0.1) | (t > 1.1), 0.0, np.exp(-(t - 0.1) / 0.4))
+    dry = sum(np.sin(2 * np.pi * 220.0 * k * t) / k for k in (1, 2, 3, 4))
+    model = np.stack([(0.3 * dry * env).astype(np.float32)] * 2, axis=1)
+
+    room = Room(rt60_s=1.6, hf_ratio=0.5, tail_db=0.0, predelay_ms=15.0)
+    assert estimate_room(model, sr, spans).is_dry(), "the bare model already has a room"
+
+    recorded = {**room.to_dict(), "notes_measured": 6, "notes_probed": 6,
+                "rt60_min_s": 1.5, "rt60_max_s": 1.7}
+    placed = profile_module.ModelPlacer({"rooms": {"t": recorded}}, "t", spans)
+    got = estimate_room(placed(model, sr), sr, spans)
+    assert not got.is_dry()
+    assert 0.6 * room.rt60_s <= got.rt60_s <= 1.6 * room.rt60_s, got.rt60_s
+
+    unplaced = profile_module.ModelPlacer({}, "t", spans)
+    assert unplaced(model, sr) is model
