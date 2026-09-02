@@ -93,6 +93,19 @@ def test_a_stale_gate_does_not_count_as_a_gate():
     assert status.stage_for(_axes(gate_state="stale")) == 1
 
 
+def test_a_gate_that_was_never_written_is_named_as_one_to_write():
+    """Two states, one message, and one of them read as a Python repr.
+
+    A voice whose second timbre has just arrived reaches this for the first
+    time, and `re-record it` names an action there is nothing to re-record for.
+    """
+    never = status.next_action(_axes(timbres=2, gate_state=None), 1, [])
+    stale = status.next_action(_axes(timbres=2, gate_state="stale"), 1, [])
+    assert "None" not in never
+    assert "write the first gate" in never
+    assert "re-record" in stale
+
+
 def test_coverage_is_all_or_nothing():
     """One unexcused gap holds the voice below `covered`, whatever the rest are."""
     assert status.stage_for(_axes(coverage={"complete": False, "gaps": ["body"]})) == 2

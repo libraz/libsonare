@@ -247,8 +247,12 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
                     "can be judged against the references' own spread")
         if not axes["profile_rows"]:
             return "measure the captured corpus into a reference profile"
+        if axes["gate_state"] is None:
+            return ("write the first gate: `profile.py compare --write-gate` against "
+                    "the profile just measured")
         if axes["gate_state"] != "current":
-            return f"the gate is {axes['gate_state']}: re-record it against the current profile"
+            return (f"the gate is {axes['gate_state']}: re-record it against the "
+                    f"current profile")
     if stage == 2:
         gaps = axes["coverage"]["gaps"]
         return (f"{len(gaps)} canonical dimension(s) neither gated nor excused: "
