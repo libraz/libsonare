@@ -2049,7 +2049,9 @@
       "capture": "marimba",
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "ring-2.3x"
+      ],
       "axes": {
         "engine": "modal",
         "patch": "marimba",
@@ -2200,7 +2202,9 @@
       "capture": "xylophone",
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "ring-3.4x"
+      ],
       "axes": {
         "engine": "modal",
         "patch": "xylophone",

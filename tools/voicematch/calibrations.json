@@ -83,6 +83,24 @@
       }
     ]
   },
+  "p012-marimba": {
+    "variants": [
+      {
+        "name": "ring-2.3x",
+        "overrides": "marimba.modal.decay_s=1.02,marimba.modal.decay_stretch=0.78",
+        "note": "the ring the reference asks for, and the reason it is a candidate rather than a fit. It matches the reference note for note over the first 0.25 s across the whole grid, where the shipped value is 9 to 23 dB down too early - but the SAME two numbers come out of the xylophone, whose reference decays identically to this one to within a decibel at the same note. One library gave both slots one envelope, so it can say the model rings too short and cannot say by how much without erasing what separates a marimba from a xylophone"
+      }
+    ]
+  },
+  "p013-xylophone": {
+    "variants": [
+      {
+        "name": "ring-3.4x",
+        "overrides": "xylophone.modal.decay_s=1.02,xylophone.modal.decay_stretch=0.87",
+        "note": "the same measurement on the xylophone, matching the reference note for note over the first 0.25 s where the shipped value is 31 to 47 dB down too early. Adopting it and the marimba's together would give the two instruments the same ring, which is most of what tells them apart - hear them before either lands"
+      }
+    ]
+  },
   "p078-whistle": {
     "variants": [
       {
