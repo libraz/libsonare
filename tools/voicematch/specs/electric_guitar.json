@@ -1,12 +1,6 @@
 [
   {
-    "_": "The brightness family of the electric guitar's Karplus-Strong string, against a reference captured at the pickup. Bounds are the library's own, reported through the tuning dump, except `cutoff_hz`: the clamp accepts 10 Hz upward and anything under a few hundred silences the instrument rather than darkening it, so the search starts where a guitar's own filter plausibly could.",
-    "tunable": "electric_guitar.ks.brightness",
-    "min": 0.0,
-    "max": 1.0,
-    "scale": "linear"
-  },
-  {
+    "_": "The brightness family of the electric guitar's Karplus-Strong string, against a reference captured at the pickup. Bounds are the library's own, reported through the tuning dump, except `cutoff_hz`: the clamp accepts 10 Hz upward and anything under a few hundred silences the instrument rather than darkening it, so the search starts where a guitar's own filter plausibly could.\n\n`electric_guitar.ks.brightness` was the first knob here and is excluded, for the reason its own field comment gives: the loop pole is taken from it only where the loop has no HF decay target to solve against, which is above about MIDI 100, and below that the loss filter comes from the two decay targets and the value is never consulted. Measured on this patch: renders at 0.0 and at 1.0 are byte-identical at MIDI 40, 52, 64, 76, 88 and 100, and differ at 104. A guitar's whole compass is inside the dead half, so the knob is not merely weak here, it is unreachable. `exc_brightness` and `cutoff_hz` are what this family actually has, and `mute_harmonic` is what darkens a string that sounds.",
     "tunable": "electric_guitar.ks.exc_brightness",
     "min": 0.0,
     "max": 1.0,
