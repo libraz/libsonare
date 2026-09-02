@@ -8214,7 +8214,10 @@
       "capture": "shamisen",
       "stage": 0.2,
       "stage_name": "voiced",
-      "open_candidates": [],
+      "open_candidates": [
+        "even-register",
+        "flat-velocity"
+      ],
       "axes": {
         "engine": "plucked_string",
         "patch": "shamisen",

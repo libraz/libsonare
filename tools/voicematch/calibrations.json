@@ -101,6 +101,20 @@
       }
     ]
   },
+  "p106-shamisen": {
+    "variants": [
+      {
+        "name": "even-register",
+        "overrides": "shamisen.plucked_string.brightness=1.0,shamisen.key_track=1.0,shamisen.cutoff_hz=900",
+        "note": "the loop lowpass opened and the darkening moved to a patch filter that tracks the key. The reference's spectral tilt is the same at every note - -11.5 to -14.7 dB per octave of harmonic number over the whole compass - where the model runs -2.2 at the bottom to -18.1 at the top, because its only tone control is fixed in Hz. On the centroid the model goes from 4.12x the reference at the low probe note down to 0.67x at the high one, and this candidate brings that to 1.72x down to 0.99x. The cost is the reason it is a candidate: the model's only between-partial energy is the buzz's high-frequency spray, so darkening it deletes the noise as well as the tilt and tone-to-noise goes from 5 dB cleaner than the reference to 13"
+      },
+      {
+        "name": "flat-velocity",
+        "overrides": "shamisen.plucked_string.vel_to_brightness=0.0557281",
+        "note": "velocity almost stops opening the excitation, which is what a fit returns and is not what a bachi does. It improves five readings - the level range from 7.9 to 3.7 dB too wide, the double decay from 73 to 58 dB/s short, tone-to-noise from 5.4 to 1.7, the held decay from 3.4 to 1.2 and the partial stack by a decibel - and takes the brightness median the other way, from 149 to 199 per cent. Judge it by ear against the plectrum, since the measurement cannot say whether a harder stroke should brighten this instrument"
+      }
+    ]
+  },
   "p078-whistle": {
     "variants": [
       {
