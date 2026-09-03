@@ -201,7 +201,19 @@ What each subcommand measures, which dimensions a `compare` gates on, and what `
 make spec-check
 ```
 
-Resolves every `specs/*.json` knob against the same catalogue `autofit` validates on, and names the ones that resolve to nothing. It needs a `-DBUILD_TUNING=ON` library, which is why it is a make target rather than part of the test suite. It cannot say a knob is *useless* — that is `--diagnose`'s inert list, which needs renders and a reference. This is the cheaper half: the knob is not there at all.
+Resolves every `specs/*.json` knob against the same catalogue `autofit` validates on, and names the ones that resolve to nothing. It needs a `-DBUILD_TUNING=ON` library, which is why it is a make target rather than part of the test suite. It cannot say a knob is *useless* — that is `liveness.py` below. This is the cheaper half: the knob is not there at all.
+
+## `liveness.py` — every spec still names knobs that move something
+
+```sh
+make spec-liveness                    # the 17 specs, minutes
+make spec-liveness-census             # every patch's own fields, hour-scale
+make spec-liveness-census-check       # is the recorded census still the bank's?
+```
+
+Renders each knob at both ends of its stated range across seven notes at a soft and a loud velocity, and compares the raw float32 bytes. No reference and no corpus, so it covers every spec rather than the few with an oracle. `DEAD` (moves nothing anywhere, with no reason given) and `STALE` (a `dead` reason whose knob has come alive) fail; `partial`, `vel-only` and `excused` are reported and do not.
+
+`--census` points the same probe at the bank instead of the specs and writes `field-coverage.json`, stamped with the bank generation it was taken against; `--census-check` compares that stamp with `bank-versions.json` and needs no library. Full account of both, including why a corpus `--diagnose` cannot report what this does, in [fitting.md](fitting.md#the-liveness-gate).
 
 ## `shape` — compare the spectrogram instead of the summary
 

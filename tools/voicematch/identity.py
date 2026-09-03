@@ -71,34 +71,40 @@ VELOCITY = 100
 PERCUSSION_CHANNEL = 9
 
 _WORKER = r'''
-import hashlib, sys
+import hashlib, json, sys
 import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 from render_model import render_model
 from smf import Note, write_smf
-note, program, channel, seconds, gate, velocity = (int(sys.argv[1]), int(sys.argv[2]),
-                                                  int(sys.argv[3]), float(sys.argv[4]),
-                                                  float(sys.argv[5]), int(sys.argv[6]))
-smf = write_smf([Note(note, velocity, 0.1, gate)], program=program, channel=channel,
-                end_pad=1.0)
-a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
-peak = float(np.max(np.abs(a))) if a.size else 0.0
-sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest() + " " + repr(peak))
+program, channel, seconds, gate = (int(sys.argv[1]), int(sys.argv[2]),
+                                   float(sys.argv[3]), float(sys.argv[4]))
+for note, velocity in json.loads(sys.argv[5]):
+    smf = write_smf([Note(note, velocity, 0.1, gate)], program=program, channel=channel,
+                    end_pad=1.0)
+    a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
+    peak = float(np.max(np.abs(a))) if a.size else 0.0
+    sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest() + " " + repr(peak) + "\n")
 '''
 
 
-def render_probe(lib: str, note: int, program: int, channel: int,
-                 overrides: str = "", velocity: int = VELOCITY) -> tuple[str, float]:
-    """One render's sha256 and its peak amplitude, from one library.
+def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, int]],
+                 overrides: str = "") -> list[tuple[str, float]]:
+    """One sha256 and peak per (note, velocity), all from a single subprocess.
 
-    A hash and not a comparison of arrays: the two libraries cannot be loaded
-    into one process -- the override table is read once at load -- so each side
-    is a subprocess and what crosses back has to be small.
+    A hash and not a comparison of arrays: two libraries cannot be loaded into
+    one process -- the override table is read once at load -- so each side is a
+    subprocess and what crosses back has to be small.
+
+    A batch and not one call per render, because that same once-at-load rule is
+    what makes the subprocess necessary and it binds the *override*, not the
+    note: every note and velocity under one override can share the interpreter.
+    The spawn is what the wall clock is made of, so a grid of seven notes at two
+    velocities costs one startup instead of fourteen.
 
     The peak rides along because it costs nothing and answers the question a
     hash cannot: whether the render sounded at all. Two silent renders are
     byte-identical, so silence reads as "this knob changes nothing" -- which is
-    how a probe of a note outside a kit reports every field as inert.
+    how a probe of a note outside a kit would report every field as inert.
     """
     env = dict(os.environ)
     env["SONARE_LIB_PATH"] = lib
@@ -107,13 +113,25 @@ def render_probe(lib: str, note: int, program: int, channel: int,
     else:
         env.pop("SONARE_TUNING_OVERRIDES", None)
     p = subprocess.run(
-        [sys.executable, "-c", _WORKER, str(note), str(program), str(channel),
-         str(SECONDS), str(GATE_S), str(velocity)],
+        [sys.executable, "-c", _WORKER, str(program), str(channel),
+         str(SECONDS), str(GATE_S), json.dumps([list(x) for x in pairs])],
         capture_output=True, text=True, env=env, cwd=REPO_ROOT)
     if p.returncode:
         raise RuntimeError(f"{lib}: {p.stderr[-2000:]}")
-    digest, _, peak = p.stdout.strip().partition(" ")
-    return digest, float(peak)
+    out = []
+    for line in p.stdout.strip().splitlines():
+        digest, _, peak = line.partition(" ")
+        out.append((digest, float(peak)))
+    if len(out) != len(pairs):
+        raise RuntimeError(
+            f"{lib}: asked for {len(pairs)} render(s) and got {len(out)} back")
+    return out
+
+
+def render_probe(lib: str, note: int, program: int, channel: int,
+                 overrides: str = "", velocity: int = VELOCITY) -> tuple[str, float]:
+    """One render's sha256 and its peak amplitude (see `render_batch`)."""
+    return render_batch(lib, program, channel, [(note, velocity)], overrides)[0]
 
 
 def render_hash(lib: str, note: int, program: int, channel: int,

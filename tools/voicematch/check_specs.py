@@ -13,9 +13,9 @@ the answer. This asks. It resolves every spec's knobs against the same
 catalogue `autofit` validates against, and names each one that resolves to
 nothing.
 
-It cannot say a knob is *useless* — that is `--diagnose`'s inert list, which
-needs renders and a reference. This is the cheaper half: the knob is not there
-at all.
+It cannot say a knob is *useless*. That is `liveness.py`, which renders each
+knob's range ends and compares the bytes — no reference, but minutes rather
+than seconds. This is the cheaper half: the knob is not there at all.
 """
 
 from __future__ import annotations

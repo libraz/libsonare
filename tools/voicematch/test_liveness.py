@@ -136,6 +136,37 @@ def test_a_patch_with_no_fields_shares_nothing_rather_than_dividing_by_zero():
     assert liveness.PatchReport(patch="x", program=0, channel=0).share() == 0.0
 
 
+def test_a_census_records_the_generation_it_was_taken_against(tmp_path, monkeypatch):
+    monkeypatch.setattr(liveness, "bank_generation", lambda: 31)
+    out = tmp_path / "field-coverage.json"
+    liveness.write_census(out, [liveness.PatchReport(
+        patch="violin", program=40, channel=0, total=8,
+        inert=["violin.bowed_string.stribeck"])], (48, 60), (32, 100))
+    d = json.loads(out.read_text())
+    assert d["bank_generation"] == 31
+    assert d["patches"]["violin"]["inert"] == ["bowed_string.stribeck"]
+    assert d["patches"]["violin"]["fields"] == 8
+
+
+def test_a_census_matching_the_bank_passes(tmp_path, monkeypatch):
+    monkeypatch.setattr(liveness, "bank_generation", lambda: 31)
+    out = tmp_path / "c.json"
+    out.write_text(json.dumps({"bank_generation": 31}))
+    assert liveness.check_census(out) == 0
+
+
+def test_a_census_older_than_the_bank_fails(tmp_path, monkeypatch):
+    """A voice moved since it was measured, so what it says is about another bank."""
+    monkeypatch.setattr(liveness, "bank_generation", lambda: 32)
+    out = tmp_path / "c.json"
+    out.write_text(json.dumps({"bank_generation": 31}))
+    assert liveness.check_census(out) == 1
+
+
+def test_a_missing_census_fails_rather_than_reading_as_clean(tmp_path):
+    assert liveness.check_census(tmp_path / "absent.json") == 1
+
+
 def test_an_empty_spec_claims_no_silent_note():
     """With nothing probed every note is trivially silent, which is not a finding."""
     assert liveness.SpecReport(spec="s.json").silent_notes(NOTES) == []

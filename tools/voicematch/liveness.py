@@ -11,8 +11,12 @@ The check is the one the sweeps kept arriving at by hand: render the voice at
 each end of the knob's stated range and compare the raw float32 bytes. It needs
 no reference and no corpus, so it covers all 17 specs rather than the handful
 with an oracle, and it cannot be talked out of an answer -- bytes differ or they
-do not. What it costs is a render per range end per note per velocity, about
-150 ms each.
+do not. What it costs is a render per range end per note per velocity, and the
+cost of a render here is its interpreter spawn rather than its audio: the
+override table is read once at library load, so a render cannot share a process
+with a *different* override. It can share one with the rest of its own grid,
+which is what `render_batch` does -- one spawn per knob-end instead of one per
+cell, and the 17 specs go from eight minutes to three and a half.
 
 Two axes, because one is how the by-hand version kept being wrong. The note is
 the axis a single-note probe misses; the velocity is the one the fitting notes
@@ -51,6 +55,11 @@ A spec neither of those reaches is skipped and said to be skipped.
 A note at which NO knob in a spec moves anything is reported too. That is the
 positive control: a note the voice does not sound renders silence at both ends
 of every range, which reads exactly like a spec full of dead knobs.
+
+`--census` points the same probe at the bank instead of the specs -- per patch,
+which of its own fields cannot move the render it voices -- and writes a result
+stamped with the bank generation it was taken against. See `census` below for
+what it deliberately leaves out and why it never fails.
 """
 
 from __future__ import annotations
@@ -68,7 +77,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import catalogue as catalogue_mod  # noqa: E402
 from catalogue import drum_patch_key, resolve_knob_name, scan_tunables  # noqa: E402
 from check_specs import SPEC_DIR  # noqa: E402
-from identity import PERCUSSION_CHANNEL, render_hash, render_peak  # noqa: E402
+from identity import PERCUSSION_CHANNEL, render_batch  # noqa: E402
 
 #: Below this a render has not sounded. Well under the quietest real note the
 #: bank produces and well over the denormal dust a closed envelope leaves.
@@ -201,19 +210,29 @@ def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None
 def probe_knobs(knobs: list[Knob], lib: str, program: int, channel: int,
                 notes: tuple[int, ...], velocities: tuple[int, ...],
                 workers: int) -> tuple[dict[str, list[int]], dict[str, set[int]]]:
-    """Render each knob's range ends over the grid; where it moved, and at which velocity."""
-    def probe(job: tuple[Knob, int, int]) -> tuple[str, int, int, bool]:
-        knob, note, vel = job
-        a = render_hash(lib, note, program, channel, f"{knob.name}={knob.lo}", velocity=vel)
-        b = render_hash(lib, note, program, channel, f"{knob.name}={knob.hi}", velocity=vel)
-        return knob.name, note, vel, a != b
+    """Render each knob's range ends over the grid; where it moved, and at which velocity.
 
-    jobs = [(knob, note, vel) for knob in knobs for note in notes for vel in velocities]
+    One subprocess per knob-end rather than per cell: the override is fixed at
+    library load and the grid is not, so the whole grid rides on one spawn.
+    """
+    cells = [(note, vel) for note in notes for vel in velocities]
+
+    def probe(job: tuple[Knob, float]) -> tuple[str, list[str]]:
+        knob, value = job
+        got = render_batch(lib, program, channel, cells, f"{knob.name}={value}")
+        return knob.name, [digest for digest, _ in got]
+
+    jobs = [(knob, value) for knob in knobs for value in (knob.lo, knob.hi)]
+    ends: dict[str, list[list[str]]] = {knob.name: [] for knob in knobs}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for name, digests in pool.map(probe, jobs):
+            ends[name].append(digests)
+
     live: dict[str, set[int]] = {knob.name: set() for knob in knobs}
     moved_at: dict[str, set[int]] = {knob.name: set() for knob in knobs}
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        for name, note, vel, moved in pool.map(probe, jobs):
-            if moved:
+    for name, (lo_side, hi_side) in ends.items():
+        for (note, vel), a, b in zip(cells, lo_side, hi_side):
+            if a != b:
                 live[name].add(note)
                 moved_at[name].add(vel)
     return {name: sorted(hit) for name, hit in live.items()}, moved_at
@@ -305,8 +324,8 @@ def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, .
         # drum notes while a kit sounds about 47 of them, and a note it does not
         # sound renders silence -- under which every field is byte-identical and
         # the patch would otherwise be counted as wholly inert.
-        loudest = max(render_peak(lib, n, program, channel, velocity=max(velocities))
-                      for n in grid)
+        loudest = max(peak for _, peak in render_batch(
+            lib, program, channel, [(n, max(velocities)) for n in grid]))
         if loudest < SILENCE_PEAK:
             yield PatchReport(patch=patch, program=program, channel=channel,
                               total=len(knobs), silent=True)
@@ -315,6 +334,65 @@ def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, .
         yield PatchReport(
             patch=patch, program=program, channel=channel, total=len(knobs),
             inert=sorted(name for name, hit in live.items() if not hit))
+
+
+#: `tools/bank-versions.json`, whose generation a census is only valid against.
+BANK_VERSIONS = Path(__file__).resolve().parents[1] / "bank-versions.json"
+
+
+def bank_generation() -> int | None:
+    """The bank generation the registry currently records, if it is readable."""
+    try:
+        return int(json.loads(BANK_VERSIONS.read_text())["bank_generation"])
+    except (OSError, KeyError, ValueError):
+        return None
+
+
+def write_census(path: Path, reports: list[PatchReport], notes: tuple[int, ...],
+                 velocities: tuple[int, ...]) -> None:
+    """Write the census, stamped with the bank generation it was taken against.
+
+    The stamp is what makes a committed census honest without an hour-scale
+    check target: a voice fitted or a family rebalanced moves the generation,
+    and a census recorded against an older one is a claim about a bank nobody
+    is running any more. `--census-check` compares the two and says so.
+    """
+    path.write_text(json.dumps({
+        "_": ("Per patch, which of its own fields could not move the render it voices. "
+              "Generated by `make spec-liveness-census`; see tools/voicematch/docs/"
+              "fitting.md. A census screens rather than proves - a null here earns the "
+              "per-semitone ladder, and a patch is free not to use a field its engine "
+              "offers, so this is not a defect list."),
+        "bank_generation": bank_generation(),
+        "notes": list(notes),
+        "velocities": list(velocities),
+        "patches": {
+            r.patch: {
+                "program": r.program,
+                "channel": r.channel,
+                "fields": r.total,
+                "silent": r.silent,
+                "inert": [n.split(".", 1)[1] for n in r.inert],
+            }
+            for r in sorted(reports, key=lambda r: r.patch)
+        },
+    }, indent=2) + "\n")
+
+
+def check_census(path: Path) -> int:
+    """Fail when a recorded census predates the bank it claims to describe."""
+    if not path.exists():
+        print(f"{path}: no census recorded -- run `make spec-liveness-census`")
+        return 1
+    recorded = json.loads(path.read_text()).get("bank_generation")
+    current = bank_generation()
+    if recorded == current:
+        print(f"{path}: current (bank generation {current})")
+        return 0
+    print(f"{path}: taken against bank generation {recorded}, the bank is now {current}. "
+          "A voice moved since this was measured, so what it says about that voice's "
+          "fields is a claim about a bank nobody runs. Regenerate it or delete it.")
+    return 1
 
 
 def run_census(args, catalogue, velocities: tuple[int, ...]) -> int:
@@ -352,6 +430,9 @@ def run_census(args, catalogue, velocities: tuple[int, ...]) -> int:
           "render over this grid. That is a census, not a verdict: a patch is free not to "
           "use a field its engine offers, and what a null here earns is the per-semitone "
           "ladder.")
+    if args.out:
+        write_census(Path(args.out), reports, notes, velocities)
+        print(f"wrote {args.out}")
     return 0
 
 
@@ -364,11 +445,18 @@ def main() -> int:
                     help="every patch's own fields instead of the specs")
     ap.add_argument("--drums", action="store_true",
                     help="with --census, include the drum-note patches")
+    ap.add_argument("--out", default=None,
+                    help="with --census, also write the result as JSON")
+    ap.add_argument("--census-check", default=None, metavar="PATH",
+                    help="report whether a recorded census still matches the bank")
     ap.add_argument("--notes", default="")
     ap.add_argument("--velocities", default=",".join(str(v) for v in DEFAULT_VELOCITIES))
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--sr", type=int, default=48000)
     args = ap.parse_args()
+
+    if args.census_check:
+        return check_census(Path(args.census_check))
 
     velocities = tuple(int(v) for v in args.velocities.split(",") if v.strip())
     catalogue = catalogue_mod.dump_catalogue(0, "sustain", args.lib, sr=args.sr)

@@ -8,7 +8,7 @@
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
-       spec-liveness spec-liveness-census \
+       spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch
 
 BUILD_DIR := build
@@ -194,6 +194,8 @@ BANK_SHARED_LIB := $(CURDIR)/$(BANK_BUILD_DIR)/lib/libsonare.dylib
 else
 BANK_SHARED_LIB := $(CURDIR)/$(BANK_BUILD_DIR)/lib/libsonare.so
 endif
+
+FIELD_COVERAGE := $(CURDIR)/tools/voicematch/field-coverage.json
 
 build-bank-shared:
 	$(CMAKE) -S . -B $(BANK_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
@@ -488,13 +490,21 @@ spec-liveness: build-bank-shared
 
 # The same probe pointed at the whole bank instead of the 17 specs: per patch,
 # which of its own fields cannot move the render it voices. Needs no reference,
-# so it answers for the 117 voices that have no oracle too. An hour-scale run --
-# the cost is one interpreter spawn per render and the override table is read at
-# library load, so renders cannot be batched. Informational rather than a gate:
-# a patch is free not to use a field its engine offers, so it always exits 0.
+# so it answers for the 117 voices that have no oracle too. Tens of minutes: the
+# cost is interpreter spawns rather than renders, and a whole grid shares one.
+# Informational rather than a gate -- a patch is free not to use a field its
+# engine offers, so it always exits 0.
 spec-liveness-census: build-bank-shared
 	$(RYE) run --pyproject bindings/python/pyproject.toml python -u tools/voicematch/liveness.py \
-		--census --drums --lib $(BANK_SHARED_LIB)
+		--census --drums --lib $(BANK_SHARED_LIB) --out $(FIELD_COVERAGE)
+
+# The census is committed, so a plain clone can read it without the hour. What
+# keeps it honest is the bank generation it was stamped with: a voice fitted or
+# a family rebalanced moves that, and a census taken against an older one
+# describes a bank nobody runs. This compares the two and needs no library.
+spec-liveness-census-check:
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/liveness.py \
+		--census-check $(FIELD_COVERAGE)
 
 # Re-cut the committed Bach excerpts a musical take plays. Needs the sibling
 # corpus ($SONARE_BACH_ROOT); rendering one needs nothing, which is why the note
