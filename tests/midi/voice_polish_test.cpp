@@ -3,6 +3,8 @@
 ///        body knock, note-tracked wood tube), seeded per-voice stereo
 ///        spread, and the mix-bus glue (gain-neutral drive + DC blocker).
 
+#include <sonare/sonare_c_types_analysis.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -19,6 +21,7 @@ namespace {
 
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::BodyType;
+using sonare::midi::synth::clamp_synth_patch;
 using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
@@ -172,6 +175,24 @@ TEST_CASE("GM fallbacks carry the P14 body/spread voicing", "[midi][synth][body]
   REQUIRE(gm_fallback_patch(0, 89).stereo_spread > 0.0f);  // synth pad
   REQUIRE(gm_fallback_patch(0, 48).stereo_spread > 0.0f);  // string ensemble
   REQUIRE(gm_fallback_patch(0, 25).stereo_spread == 0.0f);
+}
+
+TEST_CASE("every body type a patch can name reaches the resonator", "[midi][synth][body]") {
+  // The clamp bounded `body` with a literal that outlived the enum, so a vocal
+  // body was reset to none on every surface with nothing red to show for it.
+  // The C enumeration is what the bindings and the clamp are kept in step with,
+  // so walking it covers a member added later without a list to update here.
+  for (int c = SONARE_SYNTH_BODY_NONE + 1; c < SONARE_SYNTH_BODY_TYPE_COUNT; ++c) {
+    const auto type = static_cast<BodyType>(c - 1);
+    NativeSynthPatch body = noise_patch();
+    body.body = type;
+    body.body_mix = 0.6f;
+    INFO("body type " << c);
+    REQUIRE(clamp_synth_patch(body).body == type);
+    // Surviving the clamp is not reaching the voice: the resonator has to
+    // colour the render, which a body reset to none does not.
+    REQUIRE(render_note(body, 69, 8192) != render_note(noise_patch(), 69, 8192));
+  }
 }
 
 TEST_CASE("stereo spread scatters voices across the image", "[midi][synth][spread]") {
