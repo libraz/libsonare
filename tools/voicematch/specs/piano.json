@@ -1,5 +1,8 @@
 [
-  { "tunable": "kHammerWidthHarmonics", "min": 2.5, "max": 9.0, "scale": "log" },
+  {
+    "_": "The hammer's footprint cap voices the bottom two thirds of the keyboard and nothing above it. It is the narrower of two lowpasses on the injected force - `min(felt stiffness cutoff, width_harm * f0)` - and since only the second tracks pitch, the first wins from note 77 up and the cap stops binding. Measured per semitone: live 21 to 76, and at velocity 32 and at 100 alike, so this is the note axis and not the dynamics one. Five of the corpus's fifteen notes are above it, where `kFeltCutoffContactCycles` is what sets the same quantity.",
+    "tunable": "kHammerWidthHarmonics", "min": 2.5, "max": 9.0, "scale": "log"
+  },
   { "tunable": "kWidthBassOct", "min": -3.0, "max": 1.2, "scale": "linear" },
   { "tunable": "kWidthTrebleOct", "min": -1.0, "max": 2.5, "scale": "linear" },
   { "tunable": "kStrikeNoiseInject", "min": 0.05, "max": 0.8, "scale": "linear" },

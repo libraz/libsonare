@@ -55,6 +55,7 @@
       "scale": "linear"
     },
     {
+      "_": "The string scale, and its only path out of the model is the segment behind the bridge - pitch does not come from here, so at `rear_coupling` 0 it renders byte-identically over the whole compass. That path has a ceiling: the rear ratio is clamped at `kRearMaxRatio`, the speaking length shrinks as the note rises, and above note 79 the ratio is pinned there and the scale stops changing anything. Measured per semitone: live 21 to 79 as shipped, and 21 to 97 with `kRearMaxRatio` at its 0.5 maximum. The corpus's top two notes, 84 and 89, are inside the pinned range, and both knobs that move the boundary are in this spec - so how much of the grid this one is scored on depends on where the fit puts the other two.",
       "tunable": "harpsichord.harpsichord.scale_c5_mm",
       "min": 80.0,
       "max": 800.0,

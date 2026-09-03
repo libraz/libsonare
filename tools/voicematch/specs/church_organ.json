@@ -6,6 +6,7 @@
     "scale": "linear"
   },
   {
+    "_": "The 8' loses this knob entirely at and below note 39 and the 4' at and below 27, because the reflection filter's coefficient is floored at a fixed 392 Hz while its corner tracks the sounding pitch. The floor walks up the compass with the rank's footage; the measured ladder for all six ranks is in `church_organ_corpus.json`'s `_rank_floors`.",
     "tunable": "church_organ.pipe_organ.ranks1.brightness",
     "min": 0.5,
     "max": 0.95,
