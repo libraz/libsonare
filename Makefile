@@ -148,18 +148,25 @@ format:
 	cd bindings/node && yarn lint:fix
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix .
 	$(MAKE) lint
 
 # `test:types` type-checks the Node binding's tests against src (biome does not
 # type-check, and the build tsconfig excludes tests). It reads sources only —
 # no built addon or dist/ needed — so it belongs with the other static gates.
+#
+# Ruff lints the repo rather than a path list. Python lives in ten trees here —
+# the binding, `tools/`, `benchmarks/`, `examples/python/` and four under
+# `tests/` — and a list of them is a hand-maintained index that a new tree drops
+# out of silently; `.` respects .gitignore, so an untracked scratch script is
+# still skipped. `ruff format` deliberately stays on the binding: it would
+# restyle 110 files elsewhere, whose line breaks are hand-set.
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
 	cd bindings/node && yarn test:types
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check bindings/python/src bindings/python/tests
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check .
 
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror

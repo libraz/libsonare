@@ -67,15 +67,20 @@ jobs:
           yarn install --immutable
           yarn lint
           yarn test:types
-      - name: Lint the Python binding
+      - name: Lint Python
         # Pinned to the resolved version in requirements-dev.lock: an unpinned
         # install lets a new ruff release fail an unrelated pull request.
         # Invoked as a module so the check does not depend on pip's script
         # directory being on PATH.
+        #
+        # The repo rather than a path list, matching `make lint`. Python lives
+        # in ten trees here and only the binding was gated, so a lint error
+        # anywhere else -- `tools/`, `benchmarks/`, `tests/` -- reached develop
+        # unseen. Ruff respects .gitignore and skips node_modules by default.
         working-directory: .
         run: |
           python3 -m pip install --disable-pip-version-check ruff==0.15.14
-          python3 -m ruff check bindings/python/src bindings/python/tests
+          python3 -m ruff check .
       - name: Type-check the Python binding
         # main-ci type-checks the stubs, but only on main, so type errors used
         # to accumulate on develop and surface all at once at release time.
