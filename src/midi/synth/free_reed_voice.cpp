@@ -26,6 +26,8 @@ SONARE_TUNABLE(kDetuneSpanCents, 12.0f);
 // biased per half-cycle: asymmetry from reed_stiffness skews the waveform (the
 // even-harmonic "free reed" bias), drive pushes the saturator toward its knee
 // for the buzzy odd-harmonic edge. Both spans keep tanh well inside float range.
+// All five reach only the shaped saw, which slot_duty > 0 replaces; every
+// shipped patch sets one, so a fit over these five moves nothing.
 SONARE_TUNABLE(kAsymBase, 0.15f);
 SONARE_TUNABLE(kAsymSpan, 0.45f);
 SONARE_TUNABLE(kDriveBase, 1.2f);

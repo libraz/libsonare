@@ -42,6 +42,8 @@ struct FreeReedPatchParams {
   float brightness = 0.6f;
   /// Reed stiffness in [0,1]: shapes the asymmetry / harmonic richness of the
   /// tongue nonlinearity (softer = rounder, stiffer = buzzier).
+  /// @note Only the shaped-saw source reads it, so @ref slot_duty above 0 takes
+  /// the sound away from it entirely. Every shipped free-reed patch sets one.
   float reed_stiffness = 0.5f;
   /// Steady bellows pressure in [0,1]: the dynamic level / drive.
   float breath_pressure = 0.7f;

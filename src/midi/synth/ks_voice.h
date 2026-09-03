@@ -56,10 +56,11 @@ struct KsPatchParams {
   /// Loop-lowpass openness in [0,1]: how slowly the upper harmonics decay
   /// relative to the fundamental (1 = bright/metallic, 0 = dull/nylon).
   /// Reaches only the notes whose loop has no HF decay target to solve against —
-  /// above about e''' for the played string, an octave lower for the 4' companion
-  /// and a touched node. Below that the loss filter comes from the two decay
-  /// targets and this is not consulted, so a guitar renders the same samples at
-  /// 0.1 and at 0.95; @ref mute_harmonic is what darkens a string that sounds.
+  /// MIDI 101 up for the played string, an octave lower for the 4' companion and
+  /// a touched node. Below that the loss filter comes from the two decay targets
+  /// and this is not consulted, so a guitar renders the same samples at 0.1 and
+  /// at 0.95; @ref mute_harmonic is what darkens a string that sounds, and a
+  /// patch that sets it never reaches this at all.
   float brightness = 0.6f;
   /// String t60 at A4 in seconds (fundamental decay to -60 dB).
   float decay_s = 3.0f;
