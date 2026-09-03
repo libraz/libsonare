@@ -356,13 +356,20 @@ gs-census-check:
 # Also gates request-object coverage: every one-shot facade export keeps a
 # *Request overload, and every *Request a public function accepts stays exported
 # from the package entry (both are invisible to the C-ABI parity checker).
+#
+# `check_lint_scope` gates the static gates themselves. CI does not call this
+# Makefile for lint, so the ruff target, the clang-format pathspec and every
+# pinned tool version each live in three files at once; widening one and not the
+# others leaves the gate that runs on a push as narrow as it was, and green.
 conformance:
 	python3 tools/conformance/check_public_contracts.py
 	python3 tools/api/check_request_object_coverage.py
 	python3 tools/conformance/check_cli_contract.py --schema
+	python3 tools/conformance/check_lint_scope.py
 	python3 -m unittest tests/conformance/test_cli_contract.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
 	python3 -m unittest tests/conformance/test_bank_versions.py
+	python3 tools/conformance/test_lint_scope.py
 	python3 tools/parity/test_handle_gating.py
 	python3 tools/parity/test_record_shape.py
 	python3 tools/parity/test_ts_reexport.py
