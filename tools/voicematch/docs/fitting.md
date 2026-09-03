@@ -252,6 +252,8 @@ Three scoping decisions, each of which changes what the number means:
 
 **It is informational and exits 0 whatever it finds.** That is the difference from the gate: a spec asserts that a knob is worth sweeping, so a dead one there is a false claim, while a patch field is a struct member and a patch is free not to use one its engine offers. Read the census for where a voice is thinner than it looks, not for a list of defects.
 
+**Read it per engine before reading it per patch, because a share is mostly a statement about the engine.** The percussion patch is a union of mechanisms — tone bank, noise layer, plate, shell, wire, contact — and a piece that uses three of them leaves the rest inert by construction, so the highest shares in the file belong to the simplest pieces rather than the thinnest ones. The same reading covers the shared members every patch carries whatever its engine: seven of them move no percussion render anywhere in the bank, which is one fact recorded 135 times rather than 135 findings. Group by `mode` from the knob catalogue and the file stops looking like a defect list, which it is not. What it is good for is the question a fit asks first — of the fields this voice has, which ones are worth a sweep — and that is exactly the question a drum spec will need answered, since no drum voice has a spec yet.
+
 What the gate cannot do is judge a `partial`. It does not know an instrument's compass, so it reports where a knob stops and leaves the reading to whoever knows whether the instrument plays there. That reading is where three of this bank's specs turned out to be fitting the top of a compass with knobs that stop below it.
 
 ## Proving the probe reached the code
