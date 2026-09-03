@@ -1,6 +1,8 @@
 {
   "_": "The partial ladder and the register level, together. Measured against the C7 capture the shipped voice runs its low mid 7 to 16 dB bright, its top two octaves 36 and 83 dB dark, and its level 8 dB quiet at D1 against 10 dB loud at F#6 — and those are one problem, not two: the contact duration is the only strong control the ladder has, and moving it moves the level by an amount nothing chooses. Fit them jointly or each half spends the other.",
 
+  "_crossover": "The top note of this spec's grid is rendered by a different synthesis path from the rest of it, and three of the knobs below cannot reach it. Above kModalCrossNoteHi, which is note 98, the waveguide is skipped entirely and the modal bank takes the note, so there is no loop lowpass left for a brightness control to set: `kTrebleBrightPerOct`, `kTrebleTaperOctCap` and `fam0.piano.brightness` render byte-identical at their range ends at C8 and differ at 72, 84, 90 and 96, and all three come alive at C8 the moment the crossover is pushed above the keyboard. `kContactPeriodsAtC4` is the fourth knob dead there, for the keytrack reason its own note gives. Two methods agree on the set: render bytes at the range ends, and `--diagnose`, which names the same four as moving no measurement. They stay in the spec because 72 through 96 is most of this grid; what they are not is a control on C8.\n\nThe bank's own three constants are the exact complement — byte-identical at and below 90, live from 96 — so they are in the list below. Without them C8's decay has no control in this spec at all, while its ladder keeps one, because the excitation is upstream of the crossover and both paths read it.",
+
   "_weights": "harm carries the ladder, which is the defect. level and crest hold the register balance so the ladder cannot be bought by getting louder — the single failure mode this fit has, since every ladder metric normalises each note by its own fundamental. slope and tail keep the decay from being spent, and cents/tnr are along at their defaults to notice if something breaks.",
   "weights": {
     "harm": 3.0,
@@ -39,6 +41,18 @@
     },
     { "tunable": "piano_voice.kTrebleBrightPerOct", "min": 0.0, "max": 0.4, "scale": "linear" },
     { "tunable": "piano_voice.kTrebleTaperOctCap", "min": 0.5, "max": 4.0, "scale": "linear" },
-    { "tunable": "fam0.piano.brightness", "min": 0.4, "max": 1.0, "scale": "linear" }
+    { "tunable": "fam0.piano.brightness", "min": 0.4, "max": 1.0, "scale": "linear" },
+    {
+      "_": "The modal bank's grading of a partial's decay, t60(f) = t60_slow * (f/f0)^-p. The range is the physically meaningful span rather than a hand-picked one: 0 gives every partial the fundamental's decay, 0.5 is air-loss-dominated, 1 is t60 proportional to 1/f. It is reported as measuring best at its default over this band, so a fit that leaves it there is a confirmation rather than a wasted knob.",
+      "tunable": "piano_voice.kModalDampPow", "min": 0.0, "max": 1.0, "scale": "linear"
+    },
+    {
+      "_": "The bank's output trim, and the one knob in this spec pointed straight at the register level the summary above calls dark. The two synthesis paths are derived to agree at the fundamental, which makes 1 the value that derivation implies; forced fully to one path and then the other the bank measures a flat 12.5 to 12.9 dB under the loop from C5 to C8, and this trim is the whole of that gap. The range reaches past 1 so the fit can say the derivation is what is off rather than only how far under it to sit.",
+      "tunable": "piano_voice.kModalLevel", "min": 0.1, "max": 1.2, "scale": "log"
+    },
+    {
+      "_": "How much of a struck partial the bank leaves for the aftersound. The bounds are narrow and are not free to widen: past about 0.075 C7's and C8's decay rows stop scoring against all three references and are dropped rather than compared, and under about 0.04 the aftersound overshoots. Anything outside that buys loss by removing rows from the comparison, which is the one way this fit can improve its number by measuring less.",
+      "tunable": "piano_voice.kModalResidue", "min": 0.04, "max": 0.075, "scale": "linear"
+    }
   ]
 }
