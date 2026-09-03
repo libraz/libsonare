@@ -2745,6 +2745,13 @@ def summarize_deltas(deltas: dict[str, list[float]]) -> dict[str, dict]:
     }
 
 
+#: Dimensions whose row is a NOTE rather than a grid cell — each one is built by
+#: aggregating that note's velocities, so a count below the grid's is their shape
+#: and not evidence a censor took away. Reporting them as thin would put a line
+#: on every gate and teach the reader to skip the one that means something.
+PER_NOTE_DIMENSIONS = ("vel_range", "register")
+
+
 def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
                measured_utc: str = "") -> int:
     """Fail the run when a dimension has moved outside its recorded bound.
@@ -2780,11 +2787,25 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
               f"re-record before reading a failure as the voice's.", file=sys.stderr)
     bounds = gate.get("bounds", {})
     failures = []
+    evidence: list[tuple[str, int, int | None]] = []
     for key, bound in bounds.items():
         row = summary.get(key)
         if row is None:
             failures.append(f"{DELTA_LABELS.get(key, key)}: not measured in this run")
             continue
+        # How many of the grid's rows survived censoring into this median. A
+        # censor drops a row it cannot compare and the remaining rows are
+        # averaged, so a dimension can be held to a bound while most of the
+        # keyboard contributed nothing -- and neither the bound nor the verdict
+        # says which rows those were. Recorded so the comparison is against the
+        # same population, in both directions: evidence returning is as much a
+        # different measurement as evidence leaving.
+        was, now = bound.get("rows"), int(row.get("n", 0))
+        evidence.append((key, now, was))
+        if was and now and (2 * now < was or 2 * was < now):
+            failures.append(
+                f"{DELTA_LABELS.get(key, key)}: median over {now} rows, bound recorded "
+                f"from {was} — not the same population")
         for stat in ("median", "abs_median"):
             limit = bound.get(stat)
             if limit is None:
@@ -2803,6 +2824,15 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
     if ungated:
         print(f"  {', '.join(DELTA_LABELS.get(k, k) for k in ungated)}: measured, no bound "
               f"recorded — nothing here holds it. Re-record with --write-gate.")
+    widest = max((now for _k, now, _was in evidence), default=0)
+    thin = [(k, now) for k, now, _was in evidence
+            if widest and 2 * now < widest and k not in PER_NOTE_DIMENSIONS]
+    if thin:
+        print(f"  held on part of the grid: "
+              f"{', '.join(f'{DELTA_LABELS.get(k, k)} {n}/{widest}' for k, n in thin)}")
+    if any(was is None for _k, _now, was in evidence):
+        print("  this gate records no row counts, so a bound cannot be compared against the "
+              "evidence it was set from. The next --write-gate records them.")
     if failures:
         for line in failures:
             print(f"  FAIL  {line}")
@@ -2845,12 +2875,18 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         bounds[key] = {
             "median": round(max(abs(row["median"]) * margin, floor), 3),
             "abs_median": round(max(row["abs_median"] * margin, floor), 3),
+            # The grid rows that survived censoring into this median. One voice
+            # records its decay bound from 18 of 50, and without this a later
+            # run compares against it as though the whole grid had spoken.
+            "rows": int(row.get("n", 0)),
         }
     gate_path.parent.mkdir(parents=True, exist_ok=True)
     gate_path.write_text(json.dumps({
         "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps "
              "the magnitude of the signed median and 'abs_median' caps the median absolute "
              "error, which is the one that can fail when errors of opposite sign cancel. "
+             "'rows' is how many of the grid's rows survived censoring into that median, so a "
+             "later run can tell whether it is comparing against the same population. "
              "Re-record only in the same change as the behaviour that justifies it.",
         "timbre": timbre,
         "margin": margin,

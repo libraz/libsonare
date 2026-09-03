@@ -845,6 +845,70 @@ def test_every_gate_dimension_has_a_floor_under_its_bound(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# How much of the grid a bound was set from
+# --------------------------------------------------------------------------- #
+def _gate(tmp_path, **rows):
+    """A gate whose bounds are wide enough that only the evidence can fail it."""
+    path = tmp_path / "gate.json"
+    path.write_text(json.dumps({"timbre": "ref", "bounds": {
+        k: {"median": 1e9, "abs_median": 1e9, **({"rows": n} if n else {})}
+        for k, n in rows.items()}}))
+    return path
+
+
+def _summary(**rows):
+    return {k: {"median": 0.0, "abs_median": 0.0, "n": n} for k, n in rows.items()}
+
+
+def test_a_bound_measured_on_the_same_evidence_holds(tmp_path):
+    assert profile_module.check_gate(
+        _summary(decay=50, tnr=50), _gate(tmp_path, decay=50, tnr=50), "ref") == 0
+
+
+def test_a_bound_whose_evidence_collapsed_fails(tmp_path):
+    """The censors drop a row they cannot compare and the rest are averaged, so a
+    dimension can hold a bound while most of the keyboard contributed nothing."""
+    rc = profile_module.check_gate(
+        _summary(decay=8, tnr=50), _gate(tmp_path, decay=50, tnr=50), "ref")
+    assert rc == 1
+
+
+def test_a_bound_whose_evidence_returned_also_fails(tmp_path):
+    """Evidence arriving is as much a different population as evidence leaving:
+    the median moves to notes the bound was never set from."""
+    rc = profile_module.check_gate(
+        _summary(decay=50, tnr=50), _gate(tmp_path, decay=8, tnr=50), "ref")
+    assert rc == 1
+
+
+def test_a_gate_with_no_row_counts_says_so_rather_than_passing_quietly(tmp_path, capsys):
+    """Every gate written before the counts existed is this one."""
+    assert profile_module.check_gate(
+        _summary(decay=8, tnr=50), _gate(tmp_path, decay=0, tnr=0), "ref") == 0
+    out = capsys.readouterr().out
+    assert "records no row counts" in out
+    # And the run's own thin dimension is still named, which is all an old gate
+    # can offer: 8 against a grid that spoke 50 times elsewhere.
+    assert "8/50" in out
+
+
+def test_a_per_note_dimension_is_not_reported_as_thin(tmp_path, capsys):
+    """Its row IS a note, so a count below the grid's is its shape. A line on
+    every gate is a line nobody reads by the time one of them means something."""
+    profile_module.check_gate(
+        _summary(vel_range=10, tnr=50), _gate(tmp_path, vel_range=10, tnr=50), "ref")
+    assert "held on part of the grid" not in capsys.readouterr().out
+
+
+def test_the_written_gate_records_what_each_bound_was_measured_from(tmp_path):
+    gate = tmp_path / "gate.json"
+    profile_module.write_gate_file(_summary(decay=18, tnr=50), gate, "ref", 1.25)
+    bounds = json.loads(gate.read_text())["bounds"]
+    assert bounds["decay"]["rows"] == 18
+    assert bounds["tnr"]["rows"] == 50
+
+
+# --------------------------------------------------------------------------- #
 # The captured layout, and the model's
 # --------------------------------------------------------------------------- #
 def test_a_capture_may_state_which_model_note_answers_each_of_its_own():
