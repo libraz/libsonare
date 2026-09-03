@@ -534,6 +534,11 @@ params = [
 # difference, e.g. a "0 = use library default" sentinel the facade exposes that
 # the core struct spells as its concrete value. Seed empty: every mapped numeric
 # / boolean default currently matches its core struct initializer.
+#
+# Held empty by the audit (allowlist.RATCHETED_SECTIONS), because the sentinel
+# case above is rarer than the case an entry here would hide: a facade that
+# computes a different value. The first genuine entry takes this section off
+# that tuple in the same change.
 # ---------------------------------------------------------------------------
 [core_default]
 params = []
@@ -541,7 +546,12 @@ params = []
 # ---------------------------------------------------------------------------
 # [enum] — "key.param" entries whose enum value-sets may differ across surfaces.
 # TS unions often carry extra alias spellings (e.g. 'stereo-pan' + 'stereoPan')
-# that the C enum lacks; add reviewed aliases here.
+# that the C enum lacks; a reviewed alias belongs here.
+#
+# Held empty by the audit (allowlist.RATCHETED_SECTIONS): an entry is far more
+# often a surface that accepts a value the others reject than it is an alias,
+# and the two are indistinguishable to the checker. Adding the first alias takes
+# this section off that tuple in the same change.
 # ---------------------------------------------------------------------------
 [enum]
 params = []

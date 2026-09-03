@@ -95,9 +95,27 @@ def _audit_allowlist(rep, selected: list[str], path: Path) -> int:
             file=sys.stderr,
         )
         return 2
+    ratcheted = rep.allowlist.ratcheted_entries() if rep.allowlist else []
+    if ratcheted:
+        print(
+            f"{len(ratcheted)} allowlist entr(ies) in a section held empty: {path}",
+            file=sys.stderr,
+        )
+        for scope, pattern in ratcheted:
+            print(f"  [{scope}] {pattern}", file=sys.stderr)
+        print(
+            "A differing core default or enum set is usually a surface that "
+            "computes something else rather than one that spells a name "
+            "differently -- fix the surface. If this really is the same value "
+            "under another spelling, take its section out of "
+            "allowlist.RATCHETED_SECTIONS in the same change, so the widening "
+            "is reviewed instead of inherited.",
+            file=sys.stderr,
+        )
+        return 1
     unused = rep.allowlist.unused_entries() if rep.allowlist else []
     if not unused:
-        print(f"allowlist has no stale entries: {path}")
+        print(f"allowlist has no stale entries and nothing in a held-empty section: {path}")
         return 0
     print(f"{len(unused)} allowlist entr(ies) suppressed nothing: {path}", file=sys.stderr)
     for scope, pattern in unused:

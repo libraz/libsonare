@@ -61,6 +61,15 @@ def _match(name: str, patterns: list[str], used: set[str] | None = None) -> bool
     return False
 
 
+#: Sections held at zero entries, and the knob for letting one take its first.
+#: Both describe what a facade computes or what it will accept, not how a name
+#: is spelled, so an entry is far more often a surface that stopped agreeing
+#: than the reviewed alias the section was written for. Both are empty today.
+#: Taking a section off this tuple is how it stops being -- do that in the same
+#: change as the entry, so the widening is reviewed rather than inherited.
+RATCHETED_SECTIONS = ("core_default", "enum")
+
+
 @dataclass
 class Allowlist:
     coverage: dict[str, list[str]] = field(default_factory=dict)
@@ -120,6 +129,12 @@ class Allowlist:
             if pattern not in pool:
                 unused.append((scope, pattern))
         return unused
+
+    def ratcheted_entries(self) -> list[tuple[str, str]]:
+        """Entries in a section currently held at zero, as (scope, pattern)."""
+        return [(f"{section}.params", pattern)
+                for section in RATCHETED_SECTIONS
+                for pattern in getattr(self, section)]
 
     def coverage_ok(self, key: str, surface: str) -> bool:
         return self._mark(f"coverage.{surface}", key, self.coverage.get(surface, []))

@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Regression tests for the stale-allowlist-entry audit.
+"""Regression tests for the allowlist audit: stale entries, and held-empty sections.
 
 An allowlist entry is a recorded decision about one divergence. Once that
 divergence is fixed the entry stops describing anything, but it does not stop
 asserting: the next symbol to take the name inherits a blessing nobody granted
 it. The audit exists to make that moment visible, so what these tests pin is
 that it neither misses a dead entry nor accuses a live one.
+
+The second half is the ratchet. ``[core_default]`` and ``[enum]`` are empty, and
+an entry in either is far more often a surface that computes or accepts
+something else than the reviewed alias the section was written for -- a
+distinction no checker can draw. So they are held at zero and widening one means
+editing ``RATCHETED_SECTIONS``, which puts the decision in the diff.
 
 Stdlib only; no build needed. Run directly:
 
@@ -78,6 +84,33 @@ def test_a_shared_surface_only_entry_counts_as_used_from_any_surface() -> None:
     allow.surface_only = {"any": ["require_module"]}
     assert allow.surface_only_ok("require_module", "wasm")
     assert allow.unused_entries() == [], allow.unused_entries()
+
+
+def test_a_core_default_entry_is_reported_while_the_section_is_held_empty() -> None:
+    """The ratchet: an entry fails until its section is taken off the tuple."""
+    allow = allowlist_mod.Allowlist()
+    allow.core_default = ["analyze.sample_rate"]
+    assert allow.ratcheted_entries() == [("core_default.params", "analyze.sample_rate")]
+
+
+def test_an_enum_entry_is_reported_too() -> None:
+    allow = allowlist_mod.Allowlist()
+    allow.enum = ["master_audio.preset"]
+    assert allow.ratcheted_entries() == [("enum.params", "master_audio.preset")]
+
+
+def test_a_representation_section_is_left_alone() -> None:
+    """`[default]` takes same-value representation differences and keeps three."""
+    allow = allowlist_mod.Allowlist()
+    allow.default = ["analyze.hop_length"]
+    allow.input_naming = ["analyze.samples"]
+    assert allow.ratcheted_entries() == []
+
+
+def test_the_repository_allowlist_holds_its_ratcheted_sections_empty() -> None:
+    """Both are empty today; widening one is a deliberate edit, not a drift."""
+    allow = allowlist_mod.load(_HERE / "allowlist.toml")
+    assert allow.ratcheted_entries() == [], allow.ratcheted_entries()
 
 
 def test_the_repository_allowlist_carries_no_stale_entry() -> None:

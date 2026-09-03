@@ -201,6 +201,14 @@ keys), `[default]` / `[core_default]` / `[enum]` (lists of `"key.param"`),
 intra-binding wiring inconsistency is intentional), `[record]` (see below).
 `[tuning]` overrides the central knobs (`input_roles`, `handle_prefixes`).
 
+`[core_default]` and `[enum]` are empty and the audit holds them there. Each was
+written for a same-value representation difference — a `0 = use library default`
+sentinel, a TS union carrying an extra alias spelling — but an entry is far more
+often a surface that computes a different value or accepts one the others
+reject, and nothing mechanical can tell those apart. Taking a section off
+`allowlist.RATCHETED_SECTIONS` is how it stops being held; do it in the same
+change as the entry, so the widening is reviewed rather than inherited.
+
 `[record]` has three entry kinds. **Prefer the narrowest that fits:**
 
 | entry | scope | missing C field still reports? |
