@@ -126,6 +126,16 @@ def test_an_excused_knob_is_not_also_reported_velocity_gated():
     assert r.velocity_gated((32, 100)) == []
 
 
+def test_a_patch_report_shares_its_inert_count():
+    r = liveness.PatchReport(patch="violin", program=40, channel=0,
+                             inert=["violin.a", "violin.b"], total=8)
+    assert r.share() == 0.25
+
+
+def test_a_patch_with_no_fields_shares_nothing_rather_than_dividing_by_zero():
+    assert liveness.PatchReport(patch="x", program=0, channel=0).share() == 0.0
+
+
 def test_an_empty_spec_claims_no_silent_note():
     """With nothing probed every note is trivially silent, which is not a finding."""
     assert liveness.SpecReport(spec="s.json").silent_notes(NOTES) == []

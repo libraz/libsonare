@@ -236,6 +236,18 @@ Three verdicts, of which `partial` is not a defect:
 
 **`--diagnose` over a corpus cannot report any of this, and that is not a shortcoming of either tool.** A corpus spans the compass, so a knob live at one end of it moves the measurement and reads live; the fourteen-knob treble spec diagnoses with every knob live and every term reachable, while three of those knobs cannot move C8 and three others cannot move anything below C7. The diagnose asks whether a knob reaches a *measurement*; this asks whether it reaches a *note*. Neither answer implies the other.
 
+### The census
+
+`make spec-liveness-census` points the same probe at the bank instead of at the specs: per patch, which of its *own* fields cannot move the render it voices. It answers for the 117 voices that have no oracle as readily as for the five that do, which is what a reference-free probe buys — `--diagnose` can say "eleven knobs move no measurement" only where somebody has captured an instrument first.
+
+Three scoping decisions, each of which changes what the number means:
+
+- **Patches, not programs.** One patch commonly voices several programs, so probing per program asks the same question up to 128 times. A drum note's patch is addressed by note instead, sounds on the percussion channel, and has exactly one note in its grid.
+- **The patch's own fields only, not the engine constants** the auto spec offers beside them. An engine constant is shared by every patch on that engine, so a null against one program is not a statement about the constant.
+- **Three notes rather than seven.** A census screens; what it names earns the per-semitone ladder above. Widening the grid here would buy resolution nothing reads, and it is not free: the override table is read once at library load, so every render is its own interpreter spawn, and that spawn rather than the render is what the wall clock is made of. The whole bank is an hour-scale run.
+
+**It is informational and exits 0 whatever it finds.** That is the difference from the gate: a spec asserts that a knob is worth sweeping, so a dead one there is a false claim, while a patch field is a struct member and a patch is free not to use one its engine offers. Read the census for where a voice is thinner than it looks, not for a list of defects.
+
 What the gate cannot do is judge a `partial`. It does not know an instrument's compass, so it reports where a knob stops and leaves the reading to whoever knows whether the instrument plays there. That reading is where three of this bank's specs turned out to be fitting the top of a compass with knobs that stop below it.
 
 ## Proving the probe reached the code

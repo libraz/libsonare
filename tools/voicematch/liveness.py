@@ -66,9 +66,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import catalogue as catalogue_mod  # noqa: E402
-from catalogue import resolve_knob_name, scan_tunables  # noqa: E402
+from catalogue import drum_patch_key, resolve_knob_name, scan_tunables  # noqa: E402
 from check_specs import SPEC_DIR  # noqa: E402
-from identity import render_hash  # noqa: E402
+from identity import PERCUSSION_CHANNEL, render_hash, render_peak  # noqa: E402
+
+#: Below this a render has not sounded. Well under the quietest real note the
+#: bank produces and well over the denormal dust a closed envelope leaves.
+SILENCE_PEAK = 1.0e-6
 
 #: Seven notes at even fourths from C2 to C8. Wide rather than instrument-shaped
 #: on purpose: the grid is what tells a register-graded knob from a dead one,
@@ -194,6 +198,27 @@ def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None
     return None, None, "no knob names a patch or an engine the catalogue reports"
 
 
+def probe_knobs(knobs: list[Knob], lib: str, program: int, channel: int,
+                notes: tuple[int, ...], velocities: tuple[int, ...],
+                workers: int) -> tuple[dict[str, list[int]], dict[str, set[int]]]:
+    """Render each knob's range ends over the grid; where it moved, and at which velocity."""
+    def probe(job: tuple[Knob, int, int]) -> tuple[str, int, int, bool]:
+        knob, note, vel = job
+        a = render_hash(lib, note, program, channel, f"{knob.name}={knob.lo}", velocity=vel)
+        b = render_hash(lib, note, program, channel, f"{knob.name}={knob.hi}", velocity=vel)
+        return knob.name, note, vel, a != b
+
+    jobs = [(knob, note, vel) for knob in knobs for note in notes for vel in velocities]
+    live: dict[str, set[int]] = {knob.name: set() for knob in knobs}
+    moved_at: dict[str, set[int]] = {knob.name: set() for knob in knobs}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for name, note, vel, moved in pool.map(probe, jobs):
+            if moved:
+                live[name].add(note)
+                moved_at[name].add(vel)
+    return {name: sorted(hit) for name, hit in live.items()}, moved_at
+
+
 def scan_spec(path: Path, catalogue, lib: str, notes: tuple[int, ...],
               velocities: tuple[int, ...], workers: int) -> SpecReport:
     """Render every knob's range ends at every note and record where they differ."""
@@ -211,23 +236,123 @@ def scan_spec(path: Path, catalogue, lib: str, notes: tuple[int, ...],
     if program is None:
         return report
 
-    def probe(job: tuple[Knob, int, int]) -> tuple[str, int, int, bool]:
-        knob, note, vel = job
-        a = render_hash(lib, note, program, 0, f"{knob.name}={knob.lo}", velocity=vel)
-        b = render_hash(lib, note, program, 0, f"{knob.name}={knob.hi}", velocity=vel)
-        return knob.name, note, vel, a != b
-
-    jobs = [(knob, note, vel) for knob in knobs for note in notes for vel in velocities]
-    live: dict[str, set[int]] = {knob.name: set() for knob in knobs}
-    report.velocities = {knob.name: set() for knob in knobs}
     report.excuses = {knob.name: knob.excuse for knob in knobs if knob.excuse}
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        for name, note, vel, moved in pool.map(probe, jobs):
-            if moved:
-                live[name].add(note)
-                report.velocities[name].add(vel)
-    report.live = {name: sorted(hit) for name, hit in live.items()}
+    report.live, report.velocities = probe_knobs(
+        knobs, lib, program, 0, notes, velocities, workers)
     return report
+
+
+#: Three notes in the middle of the compass. A census screens rather than
+#: proves: anything it names earns the per-semitone ladder the fitting notes
+#: describe, so a wider grid here would buy resolution nothing reads.
+CENSUS_NOTES = (48, 60, 72)
+
+
+@dataclass
+class PatchReport:
+    """One patch's own fields, and which of them reach its render."""
+
+    patch: str
+    program: int
+    channel: int
+    inert: list[str] = field(default_factory=list)
+    total: int = 0
+    #: Set when the patch rendered silence, in which case `inert` says nothing.
+    silent: bool = False
+
+    def share(self) -> float:
+        return len(self.inert) / self.total if self.total else 0.0
+
+
+def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, ...],
+           workers: int, drums: bool):
+    """Per patch, which of its own fields cannot move the render it voices.
+
+    The bank's patches rather than its programs, because one patch commonly
+    voices several and probing each program would ask the same question 128
+    times. Engine constants are left out: they are shared by every patch on
+    that engine, so a null against one program says nothing about the constant.
+
+    A drum note's patch is addressed by note rather than through the program
+    map, and sounds on the percussion channel at its own note -- so its grid is
+    that one note, which is all a drum note has.
+
+    Yields one report per patch as it finishes rather than returning the set,
+    because the bank takes minutes and a run that prints nothing until the end
+    is indistinguishable from a hung one.
+    """
+    from knobs import auto_spec  # noqa: PLC0415 -- import cost is a catalogue scan
+
+    seen: dict[str, int] = {}
+    for (program, bank), patch in sorted(catalogue.programs.items()):
+        if bank == 0:
+            seen.setdefault(patch, program)
+    jobs = [(patch, program, 0, notes, None) for patch, program in sorted(seen.items())]
+    if drums:
+        jobs += [(drum_patch_key(n), 0, PERCUSSION_CHANNEL, (n,), n) for n in range(128)]
+
+    for patch, program, channel, grid, drum_note in jobs:
+        try:
+            entries = auto_spec(program, catalogue, drum_note=drum_note)
+        except ValueError:
+            continue  # a drum note outside the kit, or a program with no patch
+        knobs = [Knob(e["tunable"], float(e["min"]), float(e["max"]))
+                 for e in entries if e["tunable"].startswith(patch + ".")
+                 and e["min"] != e["max"]]
+        if not knobs:
+            continue
+        # One unmodified render first. The catalogue reports a patch for all 128
+        # drum notes while a kit sounds about 47 of them, and a note it does not
+        # sound renders silence -- under which every field is byte-identical and
+        # the patch would otherwise be counted as wholly inert.
+        loudest = max(render_peak(lib, n, program, channel, velocity=max(velocities))
+                      for n in grid)
+        if loudest < SILENCE_PEAK:
+            yield PatchReport(patch=patch, program=program, channel=channel,
+                              total=len(knobs), silent=True)
+            continue
+        live, _ = probe_knobs(knobs, lib, program, channel, grid, velocities, workers)
+        yield PatchReport(
+            patch=patch, program=program, channel=channel, total=len(knobs),
+            inert=sorted(name for name, hit in live.items() if not hit))
+
+
+def run_census(args, catalogue, velocities: tuple[int, ...]) -> int:
+    notes = tuple(int(n) for n in args.notes.split(",")) if args.notes else CENSUS_NOTES
+    grid = ", ".join(str(n) for n in notes)
+    vels = ", ".join(str(v) for v in velocities)
+    print(f"notes {grid} at velocities {vels}, each patch's own fields only\n")
+    reports = []
+    for r in census(catalogue, args.lib, notes, velocities, args.workers, args.drums):
+        reports.append(r)
+        if r.silent:
+            print(f"  {r.patch:24s} silent -- not probed", flush=True)
+            continue
+        pct = round(100 * r.share())
+        print(f"  {r.patch:24s} {len(r.inert):3d} of {r.total:3d} inert ({pct:3d}%)",
+              flush=True)
+
+    sounded = [r for r in reports if not r.silent]
+    silent = [r for r in reports if r.silent]
+    print("\n== what each patch cannot reach ==")
+    for r in sorted(sounded, key=lambda r: (-r.share(), r.patch)):
+        if not r.inert:
+            continue
+        print(f"{r.patch}: {len(r.inert)} of {r.total}")
+        for name in r.inert:
+            print(f"  {name.split('.', 1)[1]}")
+    clean = [r for r in sounded if not r.inert]
+    print(f"\n{len(clean)} patch(es) reach every one of their own fields.")
+    if silent:
+        names = ", ".join(r.patch for r in silent)
+        print(f"{len(silent)} patch(es) rendered silence and were not probed: {names}")
+    total = sum(r.total for r in sounded)
+    dead = sum(len(r.inert) for r in sounded)
+    print(f"{dead} of {total} patch fields across {len(sounded)} sounding patches move no "
+          "render over this grid. That is a census, not a verdict: a patch is free not to "
+          "use a field its engine offers, and what a null here earns is the per-semitone "
+          "ladder.")
+    return 0
 
 
 def main() -> int:
@@ -235,16 +360,24 @@ def main() -> int:
     ap.add_argument("--lib", default="build-tuning/lib/libsonare.dylib",
                     help="a -DBUILD_TUNING=ON library")
     ap.add_argument("--spec", default=None, help="one spec file, else all of them")
-    ap.add_argument("--notes", default=",".join(str(n) for n in DEFAULT_NOTES))
+    ap.add_argument("--census", action="store_true",
+                    help="every patch's own fields instead of the specs")
+    ap.add_argument("--drums", action="store_true",
+                    help="with --census, include the drum-note patches")
+    ap.add_argument("--notes", default="")
     ap.add_argument("--velocities", default=",".join(str(v) for v in DEFAULT_VELOCITIES))
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--sr", type=int, default=48000)
     args = ap.parse_args()
 
-    notes = tuple(int(n) for n in args.notes.split(",") if n.strip())
     velocities = tuple(int(v) for v in args.velocities.split(",") if v.strip())
-    paths = [Path(args.spec)] if args.spec else sorted(SPEC_DIR.glob("*.json"))
     catalogue = catalogue_mod.dump_catalogue(0, "sustain", args.lib, sr=args.sr)
+    if args.census:
+        return run_census(args, catalogue, velocities)
+
+    notes = tuple(int(n) for n in (args.notes or ",".join(str(n) for n in DEFAULT_NOTES))
+                  .split(",") if n.strip())
+    paths = [Path(args.spec)] if args.spec else sorted(SPEC_DIR.glob("*.json"))
 
     reports = [scan_spec(p, catalogue, args.lib, notes, velocities, args.workers)
                for p in paths]

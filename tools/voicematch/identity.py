@@ -82,17 +82,23 @@ note, program, channel, seconds, gate, velocity = (int(sys.argv[1]), int(sys.arg
 smf = write_smf([Note(note, velocity, 0.1, gate)], program=program, channel=channel,
                 end_pad=1.0)
 a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
-sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest())
+peak = float(np.max(np.abs(a))) if a.size else 0.0
+sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest() + " " + repr(peak))
 '''
 
 
-def render_hash(lib: str, note: int, program: int, channel: int,
-                overrides: str = "", velocity: int = VELOCITY) -> str:
-    """sha256 of one render's raw float32 bytes, from one library.
+def render_probe(lib: str, note: int, program: int, channel: int,
+                 overrides: str = "", velocity: int = VELOCITY) -> tuple[str, float]:
+    """One render's sha256 and its peak amplitude, from one library.
 
     A hash and not a comparison of arrays: the two libraries cannot be loaded
     into one process -- the override table is read once at load -- so each side
     is a subprocess and what crosses back has to be small.
+
+    The peak rides along because it costs nothing and answers the question a
+    hash cannot: whether the render sounded at all. Two silent renders are
+    byte-identical, so silence reads as "this knob changes nothing" -- which is
+    how a probe of a note outside a kit reports every field as inert.
     """
     env = dict(os.environ)
     env["SONARE_LIB_PATH"] = lib
@@ -106,7 +112,20 @@ def render_hash(lib: str, note: int, program: int, channel: int,
         capture_output=True, text=True, env=env, cwd=REPO_ROOT)
     if p.returncode:
         raise RuntimeError(f"{lib}: {p.stderr[-2000:]}")
-    return p.stdout.strip()
+    digest, _, peak = p.stdout.strip().partition(" ")
+    return digest, float(peak)
+
+
+def render_hash(lib: str, note: int, program: int, channel: int,
+                overrides: str = "", velocity: int = VELOCITY) -> str:
+    """sha256 of one render's raw float32 bytes (see `render_probe`)."""
+    return render_probe(lib, note, program, channel, overrides, velocity)[0]
+
+
+def render_peak(lib: str, note: int, program: int, channel: int,
+                overrides: str = "", velocity: int = VELOCITY) -> float:
+    """Peak amplitude of one render, for telling silence from an inert knob."""
+    return render_probe(lib, note, program, channel, overrides, velocity)[1]
 
 
 def parse_reach(spec: str) -> tuple[int, int, int, str]:

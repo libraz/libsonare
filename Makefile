@@ -7,7 +7,8 @@
        gs-census gs-census-header gs-census-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
-       voice-readiness voice-status-refresh voice-status-check spec-check spec-liveness \
+       voice-readiness voice-status-refresh voice-status-check spec-check \
+       spec-liveness spec-liveness-census \
        excerpts excerpts-check test-voicematch
 
 BUILD_DIR := build
@@ -484,6 +485,16 @@ spec-check: build-bank-shared
 spec-liveness: build-bank-shared
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/liveness.py \
 		--lib $(BANK_SHARED_LIB)
+
+# The same probe pointed at the whole bank instead of the 17 specs: per patch,
+# which of its own fields cannot move the render it voices. Needs no reference,
+# so it answers for the 117 voices that have no oracle too. An hour-scale run --
+# the cost is one interpreter spawn per render and the override table is read at
+# library load, so renders cannot be batched. Informational rather than a gate:
+# a patch is free not to use a field its engine offers, so it always exits 0.
+spec-liveness-census: build-bank-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python -u tools/voicematch/liveness.py \
+		--census --drums --lib $(BANK_SHARED_LIB)
 
 # Re-cut the committed Bach excerpts a musical take plays. Needs the sibling
 # corpus ($SONARE_BACH_ROOT); rendering one needs nothing, which is why the note
