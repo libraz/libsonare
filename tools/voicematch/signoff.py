@@ -37,15 +37,20 @@ one — the version of its own patch unit. `tools/bank-versions.json` is the
 source for both.
 
 - The patch version moved: the voice itself changed, and the record is `stale`.
-- Only the generation moved: some unit's values moved, and the dump cannot say
-  whether that unit reaches this voice. Shared calibration constants are their
-  own unit precisely because they cannot be attributed to the patches that use
-  them, so the honest answer is `unverified` rather than either verdict.
+- A *shared* unit moved: one of the 17 engine and fallback-table units carries
+  values this voice may rest on, and nothing can say whether it does, so the
+  honest answer is `unverified` rather than either verdict.
+
+The second is deliberately not "the generation moved". The generation moves for
+any of the 314 units, so dating a record against it retires every voice in the
+bank whenever one patch is touched — and says a shared unit moved when none
+did. The registry's own `kind` already separates the two, and a record only
+rests on its own patch and the shared set.
 
 Both block `settled`; they are named apart so the next action can say which one
 happened. A kit has no single patch unit — its voices are its drum notes — so
-only the generation applies to it, and it can never read better than the bank's
-own generation says.
+the drum kinds stand in for the patch version it does not have, and it is dated
+against those together with the shared ones.
 """
 
 from __future__ import annotations
@@ -75,11 +80,20 @@ class Provenance:
     bank_generation: int = 0
     patch_version: int = 0
 
-    def state(self, generation: int, patch_version: int) -> str:
-        """`current`, `stale` or `unverified` against the registry as it stands."""
+    def state(self, shared_generation: int, patch_version: int) -> str:
+        """`current`, `stale` or `unverified` against the registry as it stands.
+
+        The second argument is the generation at which a *shared* calibration
+        unit last moved, not the registry's current one. A record is evidence
+        about its own patch and about the constants under it, and nothing else:
+        another voice's patch moving cannot reach this one, so comparing
+        against the bare generation retires a diagnosis every time any of the
+        297 patch and drum units is touched -- while saying, wrongly, that a
+        shared unit had moved.
+        """
         if patch_version and self.patch_version and patch_version > self.patch_version:
             return STALE
-        if generation and self.bank_generation and generation > self.bank_generation:
+        if shared_generation and self.bank_generation and shared_generation > self.bank_generation:
             return UNVERIFIED
         return CURRENT
 
@@ -198,12 +212,36 @@ def bank_versions(path: Path) -> tuple[int, dict[str, int]]:
     return int(raw.get("bank_generation", 0) or 0), units
 
 
-def axis(claim: Structure | Music | None, generation: int, patch_version: int) -> dict | None:
-    """One claim as `status.py` records it, or None where nothing is recorded."""
+def moved_generation(path: Path, kinds: set[str]) -> int:
+    """The generation at which a unit of one of these kinds last moved.
+
+    Read from the registry's own `kind`, which already separates the 17 engine
+    and fallback-table units from the 169 patch and 128 drum ones. That split
+    is what lets a record be held against the units it actually rests on: a
+    voice with a patch of its own is dated by the shared kinds, since its own
+    patch version covers the rest, and a kit -- whose voices are its drum
+    notes and which therefore has no single patch unit -- by those and the
+    drum kinds together.
+    """
+    if not path.is_file():
+        return 0
+    raw = json.loads(path.read_text())
+    return max((int(h.get("generation", 0) or 0)
+                for u in (raw.get("units") or {}).values() if u.get("kind") in kinds
+                for h in (u.get("history") or [])), default=0)
+
+
+def axis(claim: Structure | Music | None, dating: int, patch_version: int) -> dict | None:
+    """One claim as `status.py` records it, or None where nothing is recorded.
+
+    `dating` is the generation the claim is held against, which is
+    `shared_generation` for a voice with a patch of its own and the bare
+    generation for a kit. See `Provenance.state`.
+    """
     if claim is None:
         return None
     out: dict = {
-        "state": claim.provenance.state(generation, patch_version),
+        "state": claim.provenance.state(dating, patch_version),
         "date": claim.provenance.date,
     }
     if isinstance(claim, Structure):

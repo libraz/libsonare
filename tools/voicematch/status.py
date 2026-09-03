@@ -302,6 +302,8 @@ def build(catalogue) -> list[dict]:
     cands = open_candidates()
     claims = signoff.load()
     generation, unit_versions = signoff.bank_versions(BANK_VERSIONS)
+    shared_gen = signoff.moved_generation(BANK_VERSIONS, {"shared"})
+    kit_gen = signoff.moved_generation(BANK_VERSIONS, {"shared", "drum"})
     rows = []
     for v in voices:
         cap = v.capture
@@ -311,9 +313,10 @@ def build(catalogue) -> list[dict]:
         }
         gate = facts.pop("_gate")
         claim = claims.get(v.slug, signoff.Record())
-        # A kit's voices are its drum notes, so it has no single patch unit and
-        # only the bank generation can date a claim about it.
+        # A kit's voices are its drum notes, so it has no single patch unit:
+        # the drum kinds stand in for the patch version it does not have.
         patch_version = unit_versions.get(v.patch or "", 0)
+        dating = kit_gen if v.kit else shared_gen
         axes = {
             "engine": engine_for(v, catalogue),
             "patch": v.patch or None,
@@ -322,8 +325,8 @@ def build(catalogue) -> list[dict]:
             "gate_state": facts["gate_state"],
             "coverage": coverage(v, cap.raw if cap else {}, gate),
             "agreement": gate_agreement(gate),
-            "structure": signoff.axis(claim.structure, generation, patch_version),
-            "music": signoff.axis(claim.music, generation, patch_version),
+            "structure": signoff.axis(claim.structure, dating, patch_version),
+            "music": signoff.axis(claim.music, dating, patch_version),
         }
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])

@@ -94,10 +94,22 @@ def test_the_patch_moving_makes_it_stale():
     assert p.state(20, 3) == signoff.STALE
 
 
-def test_the_generation_alone_moving_makes_it_unverified():
+def test_a_shared_unit_moving_makes_it_unverified():
     """A shared unit moved and nothing can say whether it reaches this voice."""
     p = signoff.Provenance(bank_generation=19, patch_version=2)
     assert p.state(20, 2) == signoff.UNVERIFIED
+
+
+def test_another_voices_patch_moving_leaves_it_current():
+    """The generation runs ahead of the shared units, and only they date this.
+
+    A patch bump moves the registry's generation, so holding a record against
+    the bare number retires every voice in the bank whenever any one of the
+    297 patch and drum units is touched -- and says a shared unit moved when
+    none did.
+    """
+    p = signoff.Provenance(bank_generation=26, patch_version=2)
+    assert p.state(26, 2) == signoff.CURRENT
 
 
 def test_a_kit_has_no_patch_version_and_still_expires():
@@ -105,6 +117,28 @@ def test_a_kit_has_no_patch_version_and_still_expires():
     p = signoff.Provenance(bank_generation=19)
     assert p.state(19, 0) == signoff.CURRENT
     assert p.state(20, 0) == signoff.UNVERIFIED
+
+
+def test_moved_generation_reads_only_the_named_kinds(tmp_path):
+    reg = tmp_path / "bank-versions.json"
+    reg.write_text(json.dumps({
+        "bank_generation": 32,
+        "units": {
+            "piano_voice": {"kind": "shared", "version": 2,
+                            "history": [{"generation": 1}, {"generation": 26}]},
+            "lead_voice": {"kind": "patch", "version": 3,
+                           "history": [{"generation": 5}, {"generation": 32}]},
+            "d035": {"kind": "drum", "version": 2, "history": [{"generation": 30}]},
+        },
+    }))
+    assert signoff.moved_generation(reg, {"shared"}) == 26
+    # A kit has no patch unit of its own, so the drum kinds stand in for one.
+    assert signoff.moved_generation(reg, {"shared", "drum"}) == 30
+    assert signoff.moved_generation(reg, {"patch"}) == 32
+
+
+def test_moved_generation_is_zero_without_a_registry(tmp_path):
+    assert signoff.moved_generation(tmp_path / "absent.json", {"shared"}) == 0
 
 
 # --------------------------------------------------------------------------- #
