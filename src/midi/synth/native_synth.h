@@ -1157,7 +1157,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   // board radiating more than what drives it is not a board.
   p.harpsichord.board_diffuse_db = std::clamp(
       patch_clamp_detail::sanitize(p.harpsichord.board_diffuse_db, -120.0f), -120.0f, 0.0f);
-  if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 4) p.body = BodyType::kNone;
+  // Bound by the enum's last member, not a literal: the literal was 4 and
+  // outlived kVocal being added at 5, so every vocal body was reset to none.
+  if (static_cast<int>(p.body) < 0 ||
+      static_cast<int>(p.body) > static_cast<int>(BodyType::kVocal)) {
+    p.body = BodyType::kNone;
+  }
   p.body_mix = std::clamp(patch_clamp_detail::sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(patch_clamp_detail::sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
   return p;
