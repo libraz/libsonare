@@ -687,6 +687,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
                                         0.918024f, 0.0f,  0.6f};  // 2' super-octave
   o.church_organ.pipe_organ.ranks[5] = {5.0f,      false, 0.369863f,
                                         0.687749f, 0.0f,  0.6f};  // 1-3/5' tierce
+  // Inert: the implicit single-rank voicing, read only at rank_count 0, and all
+  // three organ patches draw ranks. It was fitted anyway, in the same change
+  // that drew them. Left in place because deleting it moves the bank
+  // fingerprint and would retire this voice's diagnosis for no change in sound.
   o.church_organ.pipe_organ.brightness = 0.417552f;
   // Treble regulation: thin the upperwork (4'/quint/2'/tierce) toward the treble
   // so the plenum does not turn shrill above C4, while the bass and mid compass
