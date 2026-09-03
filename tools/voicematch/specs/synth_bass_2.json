@@ -27,6 +27,7 @@
   {
     "_": "Inert as this patch ships, and its switch is one knob away rather than out of reach. `filter_env.sustain` is 1.0 here, and the envelope leaves its decay stage on the first sample when `level - sustain <= 0.05 * (1 - sustain)`, which at a sustain of 1 is `0 <= 0` whatever the decay rate — so the filter envelope is a constant and there is no decay to time. `env_to_cutoff_cents` is 167 and non-zero, so the envelope does reach the cutoff; the sustain alone is what flattens it. Measured: renders at 20 ms and 2000 ms are byte-identical at MIDI 28, 36, 48, 60 and 72, and differ at every one of them once the sustain is 0.3, and again at 0.99. Whether to fit the pair is a decision about whether this bass sweeps at all, which is a voicing question and not a calibration one.",
     "tunable": "synth_bass_2.filter_env.decay_ms",
+    "dead": "gated by `filter_env.sustain`, which ships at 1.0 so the envelope leaves its decay stage on the first sample; live at 0.3 and at 0.99. Not in this spec, so reviving it is a decision about whether this bass sweeps at all.",
     "min": 20.0,
     "max": 2000.0,
     "scale": "log"

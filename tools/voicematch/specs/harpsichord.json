@@ -94,6 +94,7 @@
     },
     {
       "tunable": "harpsichord.harpsichord.velocity_droop_db",
+      "dead": "gated by `peak_velocity`, which ships at 127 with nothing past it; live at a peak of 64. Not in this spec, so reviving it is a decision about what the key commands.",
       "min": 0.0,
       "max": 12.0,
       "scale": "linear"
@@ -119,18 +120,21 @@
     },
     {
       "tunable": "harpsichord_voice.kJackMs",
+      "dead": "shapes a noise whose level is `jack_noise`, which ships at 0 and is in this spec; live at 0.5. Inert alone and live in combination is what the 2n+1 probe cannot see.",
       "min": 2.0,
       "max": 200.0,
       "scale": "log"
     },
     {
       "tunable": "harpsichord_voice.kJackCutoffHz",
+      "dead": "gated by `jack_noise` the same way as `kJackMs`; live at 0.5.",
       "min": 200.0,
       "max": 12000.0,
       "scale": "log"
     },
     {
       "tunable": "harpsichord_voice.kDamperDelayMs",
+      "dead": "gated by `jack_noise` too, which the prose above had grouped without naming; measured dead at 36, 60 and 84 as shipped and live at all three at 0.5.",
       "min": 0.0,
       "max": 60.0,
       "scale": "linear"

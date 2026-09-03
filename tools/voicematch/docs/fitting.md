@@ -212,6 +212,29 @@ Three things it reports about itself, because each one turns a null result into 
 
 Probes whose render had nothing to measure are excluded and counted, since one end of any gain is silence and a silent render matches nothing.
 
+## The liveness gate
+
+Every finding above was reached by hand, one knob at a time, and each of them had been sitting in a shipped spec for as long as the spec had existed. `make spec-liveness` is that sweep made mechanical: for each spec it derives the program, renders each knob at both ends of its stated range across seven notes from C2 to C8, and compares the raw float32 bytes. It needs no reference and no corpus, which is what lets it cover all seventeen specs rather than the handful with an oracle, and it took only the method that was right — two agents ran the by-hand version and the one that computed instead of rendering was wrong at three of four.
+
+It reads the program off the spec rather than being told, so the two cannot drift: a knob prefixed with a patch name resolves through the catalogue's program map, and a knob prefixed with an engine file stem resolves through the engine map to the first patch on that engine. A spec neither route reaches is skipped and named.
+
+Three verdicts, of which `partial` is not a defect:
+
+| verdict | what it means | what to do |
+|---|---|---|
+| `DEAD` | byte-identical at every note, and no reason given | find the switch, record it as the knob's `dead` string, or drop the knob |
+| `STALE` | carries a `dead` reason and has since come alive | delete the reason |
+| `partial` | live at some notes, not others | read it — the note a knob stops at is rarely the one a spec assumes |
+| `excused` | dead, with a `dead` reason | nothing |
+
+**A `dead` reason is a sentence beside the knob, not a line in the tool**, so whoever is about to sweep the knob reads it. It is the same discipline as a capture's `dimensions_na` and the parity allowlist, and it expires the same way: an excuse whose knob has come alive fails, because a reason left behind keeps asserting a reviewed decision about a knob that no longer needs one. A blank reason does not excuse anything. Keeping an excused knob is a real choice rather than a free one — it stays in the fit's covariance and in its report, and dropping it is the other answer, which is what `electric_guitar.ks.brightness` got.
+
+**A note at which no knob in a spec moves anything is reported, and it is the positive control.** A note the voice does not sound renders silence at both ends of every range, which reads exactly like a spec full of dead knobs; `church_organ_keytrack.json` shows the shape, its single knob dividing by an octave count that is zero at C4.
+
+**`--diagnose` over a corpus cannot report any of this, and that is not a shortcoming of either tool.** A corpus spans the compass, so a knob live at one end of it moves the measurement and reads live; the fourteen-knob treble spec diagnoses with every knob live and every term reachable, while three of those knobs cannot move C8 and three others cannot move anything below C7. The diagnose asks whether a knob reaches a *measurement*; this asks whether it reaches a *note*. Neither answer implies the other.
+
+What the gate cannot do is judge a `partial`. It does not know an instrument's compass, so it reports where a knob stops and leaves the reading to whoever knows whether the instrument plays there. That reading is where three of this bank's specs turned out to be fitting the top of a compass with knobs that stop below it.
+
 ## Proving the probe reached the code
 
 Two guards, both unconditional, because a probe that never reached what it was aimed at produces a clean run with a plausible answer and nothing that reads as a failure.

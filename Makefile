@@ -7,7 +7,7 @@
        gs-census gs-census-header gs-census-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
-       voice-readiness voice-status-refresh voice-status-check spec-check \
+       voice-readiness voice-status-refresh voice-status-check spec-check spec-liveness \
        excerpts excerpts-check test-voicematch
 
 BUILD_DIR := build
@@ -475,6 +475,14 @@ voice-status-check: build-bank-shared
 # dead name, so this asks first, against the same catalogue the fit validates on.
 spec-check: build-bank-shared
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/check_specs.py \
+		--lib $(BANK_SHARED_LIB)
+
+# The other half of the same question: `spec-check` asks whether a knob exists,
+# this asks whether it moves anything. A render per range end per note, so it is
+# minutes rather than seconds and stays out of `ci-local`; the answer needs no
+# reference, which is why it covers every spec instead of the few with an oracle.
+spec-liveness: build-bank-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/liveness.py \
 		--lib $(BANK_SHARED_LIB)
 
 # Re-cut the committed Bach excerpts a musical take plays. Needs the sibling
