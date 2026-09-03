@@ -76,18 +76,18 @@ import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 from render_model import render_model
 from smf import Note, write_smf
-note, program, channel, seconds, gate = (int(sys.argv[1]), int(sys.argv[2]),
-                                         int(sys.argv[3]), float(sys.argv[4]),
-                                         float(sys.argv[5]))
-smf = write_smf([Note(note, %(vel)d, 0.1, gate)], program=program, channel=channel,
+note, program, channel, seconds, gate, velocity = (int(sys.argv[1]), int(sys.argv[2]),
+                                                  int(sys.argv[3]), float(sys.argv[4]),
+                                                  float(sys.argv[5]), int(sys.argv[6]))
+smf = write_smf([Note(note, velocity, 0.1, gate)], program=program, channel=channel,
                 end_pad=1.0)
 a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
 sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest())
-''' % {"vel": VELOCITY}
+'''
 
 
 def render_hash(lib: str, note: int, program: int, channel: int,
-                overrides: str = "") -> str:
+                overrides: str = "", velocity: int = VELOCITY) -> str:
     """sha256 of one render's raw float32 bytes, from one library.
 
     A hash and not a comparison of arrays: the two libraries cannot be loaded
@@ -102,7 +102,7 @@ def render_hash(lib: str, note: int, program: int, channel: int,
         env.pop("SONARE_TUNING_OVERRIDES", None)
     p = subprocess.run(
         [sys.executable, "-c", _WORKER, str(note), str(program), str(channel),
-         str(SECONDS), str(GATE_S)],
+         str(SECONDS), str(GATE_S), str(velocity)],
         capture_output=True, text=True, env=env, cwd=REPO_ROOT)
     if p.returncode:
         raise RuntimeError(f"{lib}: {p.stderr[-2000:]}")

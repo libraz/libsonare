@@ -214,7 +214,9 @@ Probes whose render had nothing to measure are excluded and counted, since one e
 
 ## The liveness gate
 
-Every finding above was reached by hand, one knob at a time, and each of them had been sitting in a shipped spec for as long as the spec had existed. `make spec-liveness` is that sweep made mechanical: for each spec it derives the program, renders each knob at both ends of its stated range across seven notes from C2 to C8, and compares the raw float32 bytes. It needs no reference and no corpus, which is what lets it cover all seventeen specs rather than the handful with an oracle, and it took only the method that was right — two agents ran the by-hand version and the one that computed instead of rendering was wrong at three of four.
+Every finding above was reached by hand, one knob at a time, and each of them had been sitting in a shipped spec for as long as the spec had existed. `make spec-liveness` is that sweep made mechanical: for each spec it derives the program, renders each knob at both ends of its stated range across seven notes from C2 to C8 at a soft and a loud velocity, and compares the raw float32 bytes. It needs no reference and no corpus, which is what lets it cover all seventeen specs rather than the handful with an oracle, and it took only the method that was right — two agents ran the by-hand version and the one that computed instead of rendering was wrong at three of four.
+
+**Both axes above are in the grid, because either one alone is how the by-hand version kept being wrong.** The note is the axis a single-note probe misses. The velocity is the one named first at the top of this section, and leaving it out would have built the same trap into the tool: a dynamics control holds a fixed-velocity probe still and reads exactly like a dead knob. A knob live at one of the two velocities is reported as that rather than folded into `partial`.
 
 It reads the program off the spec rather than being told, so the two cannot drift: a knob prefixed with a patch name resolves through the catalogue's program map, and a knob prefixed with an engine file stem resolves through the engine map to the first patch on that engine. A spec neither route reaches is skipped and named.
 
@@ -225,6 +227,7 @@ Three verdicts, of which `partial` is not a defect:
 | `DEAD` | byte-identical at every note, and no reason given | find the switch, record it as the knob's `dead` string, or drop the knob |
 | `STALE` | carries a `dead` reason and has since come alive | delete the reason |
 | `partial` | live at some notes, not others | read it — the note a knob stops at is rarely the one a spec assumes |
+| `vel-only` | moves at one of the two velocities | read it — it is a dynamics control, or a probe artefact |
 | `excused` | dead, with a `dead` reason | nothing |
 
 **A `dead` reason is a sentence beside the knob, not a line in the tool**, so whoever is about to sweep the knob reads it. It is the same discipline as a capture's `dimensions_na` and the parity allowlist, and it expires the same way: an excuse whose knob has come alive fails, because a reason left behind keeps asserting a reviewed decision about a knob that no longer needs one. A blank reason does not excuse anything. Keeping an excused knob is a real choice rather than a free one — it stays in the fit's covariance and in its report, and dropping it is the other answer, which is what `electric_guitar.ks.brightness` got.

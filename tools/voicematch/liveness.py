@@ -11,7 +11,14 @@ The check is the one the sweeps kept arriving at by hand: render the voice at
 each end of the knob's stated range and compare the raw float32 bytes. It needs
 no reference and no corpus, so it covers all 17 specs rather than the handful
 with an oracle, and it cannot be talked out of an answer -- bytes differ or they
-do not. What it costs is a render per range end per note, about 150 ms each.
+do not. What it costs is a render per range end per note per velocity, about
+150 ms each.
+
+Two axes, because one is how the by-hand version kept being wrong. The note is
+the axis a single-note probe misses; the velocity is the one the fitting notes
+name first, since a dynamics control holds a fixed-velocity probe still and
+reads exactly like a dead knob. A knob that moves at one of the two velocities
+and not the other is reported rather than being folded into `partial`.
 
 Three verdicts, and two of them are defects:
 
@@ -68,6 +75,13 @@ from identity import render_hash  # noqa: E402
 #: and narrowing it to a compass would hide exactly the case it exists for.
 DEFAULT_NOTES = (36, 48, 60, 72, 84, 96, 108)
 
+#: A soft and a loud strike. Two rather than one because velocity is the axis
+#: the fitting notes name first: a dynamics control holds a single-velocity
+#: probe still and reads exactly like a dead knob. Two also lets a knob that
+#: moves at one velocity and not the other be named as such, which is a fact
+#: about the knob rather than about the grid.
+DEFAULT_VELOCITIES = (32, 100)
+
 
 @dataclass
 class Knob:
@@ -91,6 +105,17 @@ class SpecReport:
     skipped: str = ""
     live: dict[str, list[int]] = field(default_factory=dict)
     excuses: dict[str, str] = field(default_factory=dict)
+    #: Per knob, the velocities at which it moved anything at all.
+    velocities: dict[str, set[int]] = field(default_factory=dict)
+
+    def velocity_gated(self, velocities: tuple[int, ...]) -> list[str]:
+        """Knobs live at one velocity of several -- a dynamics control, named."""
+        if len(velocities) < 2:
+            return []
+        return sorted(
+            name for name, hit in self.velocities.items()
+            if len(hit) == 1 and not self.excuses.get(name)
+        )
 
     def dead(self) -> list[str]:
         """Knobs that moved nothing at any note and carry no excuse."""
@@ -170,7 +195,7 @@ def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None
 
 
 def scan_spec(path: Path, catalogue, lib: str, notes: tuple[int, ...],
-              workers: int) -> SpecReport:
+              velocities: tuple[int, ...], workers: int) -> SpecReport:
     """Render every knob's range ends at every note and record where they differ."""
     # The older specs name a constant bare, and the override table's keys are
     # flat and scoped, so scope here rather than at every use.
@@ -186,21 +211,22 @@ def scan_spec(path: Path, catalogue, lib: str, notes: tuple[int, ...],
     if program is None:
         return report
 
-    def probe(job: tuple[Knob, int]) -> tuple[str, int, bool]:
-        knob, note = job
-        a = render_hash(lib, note, program, 0, f"{knob.name}={knob.lo}")
-        b = render_hash(lib, note, program, 0, f"{knob.name}={knob.hi}")
-        return knob.name, note, a != b
+    def probe(job: tuple[Knob, int, int]) -> tuple[str, int, int, bool]:
+        knob, note, vel = job
+        a = render_hash(lib, note, program, 0, f"{knob.name}={knob.lo}", velocity=vel)
+        b = render_hash(lib, note, program, 0, f"{knob.name}={knob.hi}", velocity=vel)
+        return knob.name, note, vel, a != b
 
-    jobs = [(knob, note) for knob in knobs for note in notes]
-    report.live = {knob.name: [] for knob in knobs}
+    jobs = [(knob, note, vel) for knob in knobs for note in notes for vel in velocities]
+    live: dict[str, set[int]] = {knob.name: set() for knob in knobs}
+    report.velocities = {knob.name: set() for knob in knobs}
     report.excuses = {knob.name: knob.excuse for knob in knobs if knob.excuse}
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        for name, note, moved in pool.map(probe, jobs):
+        for name, note, vel, moved in pool.map(probe, jobs):
             if moved:
-                report.live[name].append(note)
-    for hit in report.live.values():
-        hit.sort()
+                live[name].add(note)
+                report.velocities[name].add(vel)
+    report.live = {name: sorted(hit) for name, hit in live.items()}
     return report
 
 
@@ -210,17 +236,21 @@ def main() -> int:
                     help="a -DBUILD_TUNING=ON library")
     ap.add_argument("--spec", default=None, help="one spec file, else all of them")
     ap.add_argument("--notes", default=",".join(str(n) for n in DEFAULT_NOTES))
+    ap.add_argument("--velocities", default=",".join(str(v) for v in DEFAULT_VELOCITIES))
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--sr", type=int, default=48000)
     args = ap.parse_args()
 
     notes = tuple(int(n) for n in args.notes.split(",") if n.strip())
+    velocities = tuple(int(v) for v in args.velocities.split(",") if v.strip())
     paths = [Path(args.spec)] if args.spec else sorted(SPEC_DIR.glob("*.json"))
     catalogue = catalogue_mod.dump_catalogue(0, "sustain", args.lib, sr=args.sr)
 
-    reports = [scan_spec(p, catalogue, args.lib, notes, args.workers) for p in paths]
+    reports = [scan_spec(p, catalogue, args.lib, notes, velocities, args.workers)
+               for p in paths]
     grid = ", ".join(str(n) for n in notes)
-    print(f"{len(paths)} spec(s) over notes {grid}\n")
+    vels = ", ".join(str(v) for v in velocities)
+    print(f"{len(paths)} spec(s) over notes {grid} at velocities {vels}\n")
 
     failed = 0
     for r in reports:
@@ -229,8 +259,9 @@ def main() -> int:
             continue
         dead, stale, partial = r.dead(), r.stale(), r.partial(notes)
         excused, silent = r.excused(), r.silent_notes(notes)
+        gated = r.velocity_gated(velocities)
         head = f"specs/{r.spec}: program {r.program} ({r.patch}), {len(r.live)} knob(s)"
-        if not (dead or stale or partial or excused or silent):
+        if not (dead or stale or partial or excused or silent or gated):
             print(f"{head} -- all live at every note")
             continue
         print(head)
@@ -244,6 +275,9 @@ def main() -> int:
         for name in partial:
             hit = ", ".join(str(n) for n in r.live[name])
             print(f"  partial  {name} -- live at {hit}")
+        for name in gated:
+            at = ", ".join(str(v) for v in sorted(r.velocities[name]))
+            print(f"  vel-only {name} -- moves only at velocity {at}")
         if silent:
             where = ", ".join(str(n) for n in silent)
             print(f"  note {where}: nothing in this spec moved -- probably unvoiced here")

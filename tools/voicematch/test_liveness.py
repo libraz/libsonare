@@ -107,6 +107,25 @@ def test_the_reason_is_read_off_the_knob(tmp_path):
     assert liveness.spec_entries(path)[0].excuse == "gated by a.switch"
 
 
+def test_a_knob_moving_at_one_velocity_of_two_is_named():
+    """The axis the fitting notes name first: a dynamics control on a fixed probe."""
+    r = liveness.SpecReport(spec="s.json", live={"dyn": [60], "both": [60]},
+                            velocities={"dyn": {100}, "both": {32, 100}})
+    assert r.velocity_gated((32, 100)) == ["dyn"]
+
+
+def test_one_velocity_cannot_gate_anything():
+    """With a single velocity probed every knob trivially moves at one of them."""
+    r = liveness.SpecReport(spec="s.json", live={"dyn": [60]}, velocities={"dyn": {100}})
+    assert r.velocity_gated((100,)) == []
+
+
+def test_an_excused_knob_is_not_also_reported_velocity_gated():
+    r = liveness.SpecReport(spec="s.json", live={"dyn": []},
+                            velocities={"dyn": {100}}, excuses={"dyn": "gated"})
+    assert r.velocity_gated((32, 100)) == []
+
+
 def test_an_empty_spec_claims_no_silent_note():
     """With nothing probed every note is trivially silent, which is not a finding."""
     assert liveness.SpecReport(spec="s.json").silent_notes(NOTES) == []
