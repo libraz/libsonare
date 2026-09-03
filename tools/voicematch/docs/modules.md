@@ -43,7 +43,7 @@
 - `writeback.py` — putting a fitted value back: literal splicing, the program table, the drum table
 - `report.py` — the end-of-run report and the diff it applies
 - `specs/` — knob spec JSONs; `example.json` shows all three knob forms, the rest are hand-tuned per-instrument sets. `--spec auto` needs none of them.
-- `check_specs.py` — `make spec-check`: every spec's knobs resolved against the catalogue a fit validates on, so a spec that outlives its mechanism fails before a run rather than during one
+- `check_specs.py` — `make spec-check`: every spec's knobs resolved against the catalogue a fit validates on, so a spec that outlives its mechanism fails before a run rather than during one; and every clamped field still measuring a range rather than a point, so a clamp that resets a field cannot delete it from the knob list and the census at once
 - `shape/` — the second objective: two log-frequency spectrograms compared cell by cell. Its own CLI and its own README.
 
 ## Two objectives over one corpus

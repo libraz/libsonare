@@ -1,4 +1,5 @@
-"""The spec guard: that it reads both spec shapes and fails on a name nothing has."""
+"""The spec guard: that it reads both spec shapes, fails on a name nothing has,
+and fails on a clamp that leaves a field no range to sweep."""
 
 from __future__ import annotations
 
@@ -51,3 +52,18 @@ def test_a_knob_nothing_has_is_named(tmp_path):
     ]})
     dead = check_specs.missing([path], _catalogue("harpsichord.harpsichord.pluck_8a"))
     assert dead == {"spec.json": ["harpsichord_voice.kContactWide"]}
+
+
+def _bounds(**paths):
+    return SimpleNamespace(bounds=dict(paths))
+
+
+def test_a_field_the_clamp_leaves_a_range_passes():
+    assert check_specs.collapsed_bounds(_bounds(body=(0.0, 5.0), gain=(0.0, 4.0))) == []
+
+
+def test_a_field_clamped_to_one_point_is_named():
+    """The failure this exists for: the field leaves the knob list and the bank
+    census together, and absent reads as an engine that never offered it."""
+    assert check_specs.collapsed_bounds(
+        _bounds(body=(0.0, 0.0), gain=(0.0, 4.0))) == ["body"]

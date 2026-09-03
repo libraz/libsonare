@@ -16,6 +16,17 @@ nothing.
 It cannot say a knob is *useless*. That is `liveness.py`, which renders each
 knob's range ends and compares the bytes — no reference, but minutes rather
 than seconds. This is the cheaper half: the knob is not there at all.
+
+The same catalogue answers a second question at the same price, and it is the
+one nothing else can ask. A field is offered to a fit only where its measured
+`min` differs from its `max`, which is right — a single point is nothing to
+sweep. But the range is read back *through* `clamp_synth_patch`, so a clamp
+that resets a field rather than narrowing it reports the same value at both
+probe ends. The field then leaves the knob list and the bank census together,
+and absent reads exactly like an engine that never offered it. The `body` clamp
+was bounded by a literal that outlived its enum this way, and for a whole
+census the 39 patches that name a resonator carried no `body` field and read as
+fully covered.
 """
 
 from __future__ import annotations
@@ -62,6 +73,16 @@ def missing(paths: list[Path], catalogue) -> dict[str, list[str]]:
     return out
 
 
+def collapsed_bounds(catalogue) -> list[str]:
+    """Field paths whose measured clamp range is a single point.
+
+    The `#bound` table rather than the knob list `auto_spec` derives from it:
+    the derivation is where the field is lost, so a check downstream of it sees
+    an absence it cannot distinguish from an engine that offers no such field.
+    """
+    return sorted(path for path, (lo, hi) in catalogue.bounds.items() if lo == hi)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--lib", default=None, help="a -DBUILD_TUNING=ON library")
@@ -70,17 +91,33 @@ def main() -> int:
 
     paths = sorted(SPEC_DIR.glob("*.json"))
     catalogue = catalogue_mod.dump_catalogue(0, "sustain", args.lib, sr=args.sr)
+    failed = False
+
     dead = missing(paths, catalogue)
-    if not dead:
+    if dead:
+        failed = True
+        for name, knobs in sorted(dead.items()):
+            print(f"specs/{name}: {len(knobs)} knob(s) name nothing the library reports")
+            for knob in knobs:
+                print(f"  {knob}")
+        print("\nA spec keeps the name of a mechanism the engine no longer has. Delete the knob, "
+              "or point it at what replaced it.\n")
+    else:
         print(f"every knob in {len(paths)} spec(s) resolves against the library's catalogue")
-        return 0
-    for name, knobs in sorted(dead.items()):
-        print(f"specs/{name}: {len(knobs)} knob(s) name nothing the library reports")
-        for knob in knobs:
-            print(f"  {knob}")
-    print("\nA spec keeps the name of a mechanism the engine no longer has. Delete the knob, "
-          "or point it at what replaced it.")
-    return 1
+
+    collapsed = collapsed_bounds(catalogue)
+    if collapsed:
+        failed = True
+        print(f"\n{len(collapsed)} patch field(s) clamp to a single point, so no fit and no "
+              f"census reaches them and neither records that it did not:")
+        for name in collapsed:
+            print(f"  {name}")
+        print("\nA clamp that resets a field rather than narrowing it reads back the same value "
+              "at both probe ends. Fix the clamp, or say why the field is fixed.")
+    else:
+        print(f"none of {len(catalogue.bounds)} clamped field(s) collapses to a single point")
+
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

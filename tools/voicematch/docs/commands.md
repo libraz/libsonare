@@ -195,13 +195,15 @@ Three things about that number are worth knowing before it is written anywhere.
 
 What each subcommand measures, which dimensions a `compare` gates on, and what `make voice-gate` runs are in [capture.md](capture.md#profilepy).
 
-## `check_specs.py` — every spec still names knobs that exist
+## `check_specs.py` — every spec still names knobs that exist, and every clamp still leaves a range
 
 ```sh
 make spec-check
 ```
 
 Resolves every `specs/*.json` knob against the same catalogue `autofit` validates on, and names the ones that resolve to nothing. It needs a `-DBUILD_TUNING=ON` library, which is why it is a make target rather than part of the test suite. It cannot say a knob is *useless* — that is `liveness.py` below. This is the cheaper half: the knob is not there at all.
+
+The same catalogue answers a second question at the same price. A field is offered to a fit only where its clamp leaves a range, and the range is measured back *through* `clamp_synth_patch`, so a clamp that resets a field rather than narrowing it reports one point and the field leaves the knob list and the bank census together — absent, and indistinguishable from an engine that offers no such field. This fails on any `#bound` whose low equals its high. **It reads the bound table, not the knob list derived from it**: the derivation is where the field is lost, so the first version of this check walked the derived entries looking for `min == max` and stayed green against a library with the defect built in.
 
 ## `liveness.py` — every spec still names knobs that move something
 
