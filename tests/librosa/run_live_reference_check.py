@@ -15,10 +15,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
 import generate_librosa_reference as generator
 import librosa
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> int:

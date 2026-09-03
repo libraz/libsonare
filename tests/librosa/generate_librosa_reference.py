@@ -1525,7 +1525,7 @@ def generate_iirt_reference():
         # Identify row with max energy.
         peak_row = int(np.argmax(out.sum(axis=1)))
         synthetic_only = False
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except
         # librosa.iirt may require scipy; fall back to synthetic expectation.
         # Expected: A4 row = 69 - midi_start = 48
         shape = [n_filters, 1 + int((duration * sr + win_length) // hop_length)]
