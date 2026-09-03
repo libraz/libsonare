@@ -4244,8 +4244,8 @@
       "patch": "electric_guitar",
       "engine": "karplus_strong",
       "capture": "electric_guitar_di",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.8,
+      "stage_name": "agreeing",
       "open_candidates": [
         "di-fitted"
       ],
@@ -4254,38 +4254,32 @@
         "patch": "electric_guitar",
         "timbres": 2,
         "profile_rows": 100,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
-          "inside": 0,
-          "total": 0,
-          "unjudgeable": []
+          "inside": 6,
+          "total": 11,
+          "outside": {
+            "body": 4.96,
+            "tnr": 3.13,
+            "attack": 3.0,
+            "doubling": 1.53,
+            "vel_range": 1.33
+          }
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "judge the recorded candidate(s) — di-fitted — then record a structural residual with autofit --diagnose"
     },
     {
       "slug": "p028-electric-guitar-muted",
