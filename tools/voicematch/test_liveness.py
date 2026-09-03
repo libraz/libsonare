@@ -46,7 +46,32 @@ def test_the_capital_tone_answers_rather_than_a_variation():
     """A variation is a separate patch; the program map is keyed by both."""
     knobs = [liveness.Knob("church_organ.pipe_organ.level", 0.0, 1.0)]
     catalogue = _catalogue({(19, 8): "church_organ", (19, 0): "church_organ"})
-    assert liveness.derive_program(knobs, catalogue)[0] == 19
+    assert liveness.derive_program(knobs, catalogue)[:3] == (19, "church_organ", 0)
+
+
+def test_a_spec_scoped_to_a_variation_is_swept_at_the_variation():
+    """The capital tone sounds at bank 0, so an override scoped to the variation
+    moves nothing there and every knob in the spec would read dead."""
+    knobs = [liveness.Knob("church_organ_full.pipe_organ.level", 0.0, 1.0)]
+    catalogue = _catalogue({(19, 0): "church_organ", (19, 16): "church_organ_full"})
+    assert liveness.derive_program(knobs, catalogue)[:3] == (19, "church_organ_full", 16)
+
+
+def test_the_engine_stand_in_prefers_a_capital_tone():
+    """An engine constant is shared by every patch on the engine, so the choice
+    among them should land where a plain GM file reaches -- even when a variation
+    sorts ahead of it by name."""
+    knobs = [liveness.Knob("pipe_organ_voice.kFoo", 0.0, 1.0)]
+    catalogue = _catalogue(
+        {(19, 0): "church_organ", (19, 16): "aaa_organ_full"},
+        {"church_organ": "pipe_organ", "aaa_organ_full": "pipe_organ"})
+    assert liveness.derive_program(knobs, catalogue)[:3] == (19, "church_organ", 0)
+
+
+def test_an_engine_with_only_variations_still_answers():
+    knobs = [liveness.Knob("pipe_organ_voice.kFoo", 0.0, 1.0)]
+    catalogue = _catalogue({(19, 16): "church_organ_full"}, {"church_organ_full": "pipe_organ"})
+    assert liveness.derive_program(knobs, catalogue)[:3] == (19, "church_organ_full", 16)
 
 
 def test_an_engine_only_spec_falls_back_to_the_engine_map(tmp_path):
@@ -58,8 +83,8 @@ def test_an_engine_only_spec_falls_back_to_the_engine_map(tmp_path):
 
 def test_a_spec_reaching_neither_map_is_skipped_with_a_reason():
     knobs = [liveness.Knob("nowhere_voice.kFoo", 0.0, 1.0)]
-    program, patch, why = liveness.derive_program(knobs, _catalogue({(0, 0): "fam0"}))
-    assert (program, patch) == (None, None)
+    program, patch, bank, why = liveness.derive_program(knobs, _catalogue({(0, 0): "fam0"}))
+    assert (program, patch, bank) == (None, None, 0)
     assert why
 
 

@@ -115,6 +115,9 @@ class SpecReport:
     spec: str
     program: int | None = None
     patch: str | None = None
+    #: The GS variation the patch was probed at, since a spec scoped to one is
+    #: swept at the address that sounds it rather than at the capital tone.
+    bank: int = 0
     skipped: str = ""
     live: dict[str, list[int]] = field(default_factory=dict)
     excuses: dict[str, str] = field(default_factory=dict)
@@ -180,31 +183,54 @@ def spec_entries(path: Path) -> list[Knob]:
     return out
 
 
-def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None, str]:
-    """The (program, patch) a spec is about, or why it could not be derived.
+def patch_addresses(catalogue) -> dict[str, tuple[int, int]]:
+    """Each patch the bank has, once, at the address to render it at.
+
+    Bank 0 wins where a patch has one, since that is the address a plain GM file
+    uses. Thirty patches have no bank-0 address at all -- the GS variations,
+    where a registration differs from the program it varies -- and rendering one
+    at bank 0 does not give a wrong answer but no answer: the capital tone sounds
+    instead, so an override scoped to the variation moves nothing and the patch
+    reads as having no live field. The spec sweep and the census both need this
+    map, and they need the same one: a patch addressable by one and not the other
+    is how the census came to miss thirty of them.
+    """
+    seen: dict[str, tuple[int, int]] = {}
+    for (program, bank), patch in sorted(catalogue.programs.items(), key=lambda kv: kv[0][::-1]):
+        seen.setdefault(patch, (program, bank))
+    return seen
+
+
+def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None, int, str]:
+    """The (program, patch, bank) a spec is about, or why it could not be derived.
 
     Two routes, in order. A knob prefixed with a patch name resolves directly
-    through the program map. Otherwise a knob prefixed with an engine file stem
-    (`piano_voice.kFoo`) names the engine, and the first patch the catalogue
-    reports on that engine answers for it -- which is what a fit over such a
-    spec is implicitly doing anyway. Both read the scoped name, so `scan_spec`
-    scopes before it calls this.
+    through the address map, at that patch's own address -- a variation included,
+    since the capital tone would not answer for it. Otherwise a knob prefixed
+    with an engine file stem (`piano_voice.kFoo`) names the engine, and a patch
+    the catalogue reports on that engine stands in for it -- which is what a fit
+    over such a spec is implicitly doing anyway. The stand-in prefers a capital
+    tone, because an engine constant is shared by every patch on the engine and
+    the choice among them should land on the address a plain GM file reaches;
+    a variation answers only for an engine that has no bank-0 patch at all.
+    Both routes read the scoped name, so `scan_spec` scopes before calling this.
     """
-    patch_to_program: dict[str, int] = {}
-    for (program, bank), patch in sorted(catalogue.programs.items()):
-        if bank == 0:
-            patch_to_program.setdefault(patch, program)
+    addresses = patch_addresses(catalogue)
     for knob in knobs:
         head = knob.name.split(".")[0]
-        if head in patch_to_program:
-            return patch_to_program[head], head, ""
+        if head in addresses:
+            program, bank = addresses[head]
+            return program, head, bank, ""
     for knob in knobs:
         head = knob.name.split(".")[0]
         mode = head[: -len("_voice")] if head.endswith("_voice") else head
-        for patch, engine in sorted(catalogue.modes.items()):
-            if engine == mode and patch in patch_to_program:
-                return patch_to_program[patch], patch, ""
-    return None, None, "no knob names a patch or an engine the catalogue reports"
+        on_engine = sorted((patch for patch, engine in catalogue.modes.items()
+                            if engine == mode and patch in addresses),
+                           key=lambda p: (addresses[p][1] != 0, p))
+        if on_engine:
+            program, bank = addresses[on_engine[0]]
+            return program, on_engine[0], bank, ""
+    return None, None, 0, "no knob names a patch or an engine the catalogue reports"
 
 
 def probe_knobs(knobs: list[Knob], lib: str, program: int, channel: int,
@@ -251,14 +277,14 @@ def scan_spec(path: Path, catalogue, lib: str, notes: tuple[int, ...],
     if not knobs:
         report.skipped = "no knob carries a tunable name and a range"
         return report
-    program, patch, why = derive_program(knobs, catalogue)
-    report.program, report.patch, report.skipped = program, patch, why
+    program, patch, bank, why = derive_program(knobs, catalogue)
+    report.program, report.patch, report.bank, report.skipped = program, patch, bank, why
     if program is None:
         return report
 
     report.excuses = {knob.name: knob.excuse for knob in knobs if knob.excuse}
     report.live, report.velocities = probe_knobs(
-        knobs, lib, program, 0, notes, velocities, workers)
+        knobs, lib, program, 0, notes, velocities, workers, bank)
     return report
 
 
@@ -289,20 +315,13 @@ class PatchReport:
 
 def census_jobs(catalogue, notes: tuple[int, ...], drums: bool
                 ) -> list[tuple[str, int, int, int, tuple[int, ...], int | None]]:
-    """Every patch the bank has, once, with the address to probe it at.
+    """Every melodic patch at its own address, plus one job per drum note.
 
-    Bank 0 wins where a patch has one, since that is the address a plain GM file
-    uses. Thirty patches have no bank-0 address at all -- the GS variations,
-    where a registration differs from the program it varies -- and probing one
-    at bank 0 does not give a wrong answer but no answer: `auto_spec` resolves
-    the capital tone there, so the variation offers none of its own knobs and
-    the patch drops out of the run without a line.
+    The addresses are `patch_addresses`; what this adds is the grid and the
+    channel each job is probed on.
     """
-    seen: dict[str, tuple[int, int]] = {}
-    for (program, bank), patch in sorted(catalogue.programs.items(), key=lambda kv: kv[0][::-1]):
-        seen.setdefault(patch, (program, bank))
     jobs = [(patch, program, bank, 0, notes, None)
-            for patch, (program, bank) in sorted(seen.items())]
+            for patch, (program, bank) in sorted(patch_addresses(catalogue).items())]
     if drums:
         jobs += [(drum_patch_key(n), 0, 0, PERCUSSION_CHANNEL, (n,), n) for n in range(128)]
     return jobs
@@ -501,7 +520,8 @@ def main() -> int:
         dead, stale, partial = r.dead(), r.stale(), r.partial(notes)
         excused, silent = r.excused(), r.silent_notes(notes)
         gated = r.velocity_gated(velocities)
-        head = f"specs/{r.spec}: program {r.program} ({r.patch}), {len(r.live)} knob(s)"
+        at = f"program {r.program}" + (f" bank {r.bank}" if r.bank else "")
+        head = f"specs/{r.spec}: {at} ({r.patch}), {len(r.live)} knob(s)"
         if not (dead or stale or partial or excused or silent or gated):
             print(f"{head} -- all live at every note")
             continue
