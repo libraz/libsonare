@@ -243,6 +243,7 @@ Three verdicts, of which `partial` is not a defect:
 Three scoping decisions, each of which changes what the number means:
 
 - **Patches, not programs.** One patch commonly voices several programs, so probing per program asks the same question up to 128 times. A drum note's patch is addressed by note instead, sounds on the percussion channel, and has exactly one note in its grid.
+- **Every address a patch has, preferring bank 0.** Thirty of the bank's patches are reachable from no bank-0 program — `church_organ_full`, `harpsichord_octave`, `piano_wide`, `mandolin` and the rest of the GS variations — and a variation is exactly where a registration differs from the program it varies. Probing them at bank 0 does not merely give the wrong answer, it gives none: `auto_spec` resolves the capital tone's patch there, so a variation offers **zero** of its own knobs and the census skipped all thirty without a line. The bank rides through `auto_spec` *and* the render, since offering one patch's knobs against another's render fits a patch nothing played. A patch that also has a bank-0 address is probed there, which is the address a plain GM file uses.
 - **The patch's own fields only, not the engine constants** the auto spec offers beside them. An engine constant is shared by every patch on that engine, so a null against one program is not a statement about the constant.
 - **Three notes rather than seven.** A census screens; what it names earns the per-semitone ladder above. Widening the grid here would buy resolution nothing reads.
 
@@ -254,6 +255,7 @@ Three scoping decisions, each of which changes what the number means:
 - **An envelope stage behind a sustain at an end stop.** `sustain` at 1.0 means decay never runs (`synth_bass_2.filter_env.decay_ms`); at 0.0 the release has nothing to release from (`fx_brightness`, `sfx_gunshot`).
 - **An attack past the probe's half-second gate**, which reaches the filter envelope as well as the amplitude one — `sfx_seashore` has a 500 ms filter attack.
 - **A superseded mechanism**, where a newer model replaced the branch the field fed: the reed's Bernoulli valve over the clamped table, the free reed's slot flow over the shaped saw.
+- **A field beyond the count that narrows it.** A variation is built by copying a patch and narrowing it, so `church_organ_flutes` at `rank_count` 3 keeps the base's ranks 3 to 5 populated and unused. The boundary is the check rather than the finding: across the three organ patches the inert edge lands exactly on 6, 8 and 3, and `church_organ_full`'s two extra ranks carry their own levels and are live, so the fuller registration really is fuller.
 - **A field whose effect needs a second voice**, which the probe never plays: `percussion.exclusive_class` on 13 notes.
 - **A field the rest of the patch has filtered away.** `ks.dispersion` is live on 10 of the 11 patches that set it and inert on `muted_guitar` alone, whose 617 Hz cutoff and 0.36 s decay remove the partials dispersion would have displaced. Check an engine-wide null before calling a knob dead; this one is not.
 

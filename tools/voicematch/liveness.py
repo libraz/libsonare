@@ -209,7 +209,8 @@ def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None
 
 def probe_knobs(knobs: list[Knob], lib: str, program: int, channel: int,
                 notes: tuple[int, ...], velocities: tuple[int, ...],
-                workers: int) -> tuple[dict[str, list[int]], dict[str, set[int]]]:
+                workers: int, bank: int = 0
+                ) -> tuple[dict[str, list[int]], dict[str, set[int]]]:
     """Render each knob's range ends over the grid; where it moved, and at which velocity.
 
     One subprocess per knob-end rather than per cell: the override is fixed at
@@ -219,7 +220,7 @@ def probe_knobs(knobs: list[Knob], lib: str, program: int, channel: int,
 
     def probe(job: tuple[Knob, float]) -> tuple[str, list[str]]:
         knob, value = job
-        got = render_batch(lib, program, channel, cells, f"{knob.name}={value}")
+        got = render_batch(lib, program, channel, cells, f"{knob.name}={value}", bank)
         return knob.name, [digest for digest, _ in got]
 
     jobs = [(knob, value) for knob in knobs for value in (knob.lo, knob.hi)]
@@ -274,6 +275,9 @@ class PatchReport:
     patch: str
     program: int
     channel: int
+    #: The GS variation this patch was probed at. A patch reachable from no
+    #: bank-0 program has no other address.
+    bank: int = 0
     inert: list[str] = field(default_factory=list)
     total: int = 0
     #: Set when the patch rendered silence, in which case `inert` says nothing.
@@ -281,6 +285,27 @@ class PatchReport:
 
     def share(self) -> float:
         return len(self.inert) / self.total if self.total else 0.0
+
+
+def census_jobs(catalogue, notes: tuple[int, ...], drums: bool
+                ) -> list[tuple[str, int, int, int, tuple[int, ...], int | None]]:
+    """Every patch the bank has, once, with the address to probe it at.
+
+    Bank 0 wins where a patch has one, since that is the address a plain GM file
+    uses. Thirty patches have no bank-0 address at all -- the GS variations,
+    where a registration differs from the program it varies -- and probing one
+    at bank 0 does not give a wrong answer but no answer: `auto_spec` resolves
+    the capital tone there, so the variation offers none of its own knobs and
+    the patch drops out of the run without a line.
+    """
+    seen: dict[str, tuple[int, int]] = {}
+    for (program, bank), patch in sorted(catalogue.programs.items(), key=lambda kv: kv[0][::-1]):
+        seen.setdefault(patch, (program, bank))
+    jobs = [(patch, program, bank, 0, notes, None)
+            for patch, (program, bank) in sorted(seen.items())]
+    if drums:
+        jobs += [(drum_patch_key(n), 0, 0, PERCUSSION_CHANNEL, (n,), n) for n in range(128)]
+    return jobs
 
 
 def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, ...],
@@ -302,17 +327,9 @@ def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, .
     """
     from knobs import auto_spec  # noqa: PLC0415 -- import cost is a catalogue scan
 
-    seen: dict[str, int] = {}
-    for (program, bank), patch in sorted(catalogue.programs.items()):
-        if bank == 0:
-            seen.setdefault(patch, program)
-    jobs = [(patch, program, 0, notes, None) for patch, program in sorted(seen.items())]
-    if drums:
-        jobs += [(drum_patch_key(n), 0, PERCUSSION_CHANNEL, (n,), n) for n in range(128)]
-
-    for patch, program, channel, grid, drum_note in jobs:
+    for patch, program, bank, channel, grid, drum_note in census_jobs(catalogue, notes, drums):
         try:
-            entries = auto_spec(program, catalogue, drum_note=drum_note)
+            entries = auto_spec(program, catalogue, drum_note=drum_note, bank=bank)
         except ValueError:
             continue  # a drum note outside the kit, or a program with no patch
         knobs = [Knob(e["tunable"], float(e["min"]), float(e["max"]))
@@ -325,14 +342,14 @@ def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, .
         # sound renders silence -- under which every field is byte-identical and
         # the patch would otherwise be counted as wholly inert.
         loudest = max(peak for _, peak in render_batch(
-            lib, program, channel, [(n, max(velocities)) for n in grid]))
+            lib, program, channel, [(n, max(velocities)) for n in grid], "", bank))
         if loudest < SILENCE_PEAK:
-            yield PatchReport(patch=patch, program=program, channel=channel,
+            yield PatchReport(patch=patch, program=program, bank=bank, channel=channel,
                               total=len(knobs), silent=True)
             continue
-        live, _ = probe_knobs(knobs, lib, program, channel, grid, velocities, workers)
+        live, _ = probe_knobs(knobs, lib, program, channel, grid, velocities, workers, bank)
         yield PatchReport(
-            patch=patch, program=program, channel=channel, total=len(knobs),
+            patch=patch, program=program, bank=bank, channel=channel, total=len(knobs),
             inert=sorted(name for name, hit in live.items() if not hit))
 
 
@@ -369,6 +386,9 @@ def write_census(path: Path, reports: list[PatchReport], notes: tuple[int, ...],
         "patches": {
             r.patch: {
                 "program": r.program,
+                # Absent means bank 0, which is every patch a plain GM file
+                # reaches; a variation carries the address it was probed at.
+                **({"bank": r.bank} if r.bank else {}),
                 "channel": r.channel,
                 "fields": r.total,
                 "silent": r.silent,

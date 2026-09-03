@@ -28,6 +28,24 @@
         "unison"
       ]
     },
+    "accordion_italian": {
+      "program": 21,
+      "bank": 8,
+      "channel": 0,
+      "fields": 29,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "free_reed.reed_stiffness",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
     "agogo": {
       "program": 113,
       "channel": 0,
@@ -304,6 +322,42 @@
         "unison"
       ]
     },
+    "bright_piano_wide": {
+      "program": 1,
+      "bank": 1,
+      "channel": 0,
+      "fields": 30,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "carillon": {
+      "program": 14,
+      "bank": 2,
+      "channel": 0,
+      "fields": 39,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "modal.modes7.decay_scale",
+        "modal.modes7.ratio",
+        "unison"
+      ]
+    },
     "celesta": {
       "program": 8,
       "channel": 0,
@@ -357,6 +411,25 @@
         "unison"
       ]
     },
+    "church_bell": {
+      "program": 14,
+      "bank": 1,
+      "channel": 0,
+      "fields": 39,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "modal.modes7.decay_scale",
+        "modal.modes7.ratio",
+        "unison"
+      ]
+    },
     "church_organ": {
       "program": 19,
       "channel": 0,
@@ -384,6 +457,80 @@
         "pipe_organ.ranks7.radiation",
         "pipe_organ.ranks7.reed",
         "pipe_organ.ranks7.stopped",
+        "pipe_organ.reed",
+        "pipe_organ.stopped",
+        "pipe_organ.swell",
+        "unison"
+      ]
+    },
+    "church_organ_flutes": {
+      "program": 19,
+      "bank": 1,
+      "channel": 0,
+      "fields": 80,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "pipe_organ.brightness",
+        "pipe_organ.radiation",
+        "pipe_organ.ranks3.brightness",
+        "pipe_organ.ranks3.footage_mult",
+        "pipe_organ.ranks3.level",
+        "pipe_organ.ranks3.radiation",
+        "pipe_organ.ranks3.reed",
+        "pipe_organ.ranks3.stopped",
+        "pipe_organ.ranks4.brightness",
+        "pipe_organ.ranks4.footage_mult",
+        "pipe_organ.ranks4.level",
+        "pipe_organ.ranks4.radiation",
+        "pipe_organ.ranks4.reed",
+        "pipe_organ.ranks4.stopped",
+        "pipe_organ.ranks5.brightness",
+        "pipe_organ.ranks5.footage_mult",
+        "pipe_organ.ranks5.level",
+        "pipe_organ.ranks5.radiation",
+        "pipe_organ.ranks5.reed",
+        "pipe_organ.ranks5.stopped",
+        "pipe_organ.ranks6.brightness",
+        "pipe_organ.ranks6.footage_mult",
+        "pipe_organ.ranks6.level",
+        "pipe_organ.ranks6.radiation",
+        "pipe_organ.ranks6.reed",
+        "pipe_organ.ranks6.stopped",
+        "pipe_organ.ranks7.brightness",
+        "pipe_organ.ranks7.footage_mult",
+        "pipe_organ.ranks7.level",
+        "pipe_organ.ranks7.radiation",
+        "pipe_organ.ranks7.reed",
+        "pipe_organ.ranks7.stopped",
+        "pipe_organ.reed",
+        "pipe_organ.stopped",
+        "pipe_organ.swell",
+        "unison"
+      ]
+    },
+    "church_organ_full": {
+      "program": 19,
+      "bank": 2,
+      "channel": 0,
+      "fields": 80,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "pipe_organ.brightness",
+        "pipe_organ.radiation",
         "pipe_organ.reed",
         "pipe_organ.stopped",
         "pipe_organ.swell",
@@ -6475,8 +6622,113 @@
         "unison"
       ]
     },
+    "e_piano_detuned_1": {
+      "program": 4,
+      "bank": 1,
+      "channel": 0,
+      "fields": 56,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "fm.ops3.env.release_ms",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "e_piano_detuned_2": {
+      "program": 5,
+      "bank": 1,
+      "channel": 0,
+      "fields": 56,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "fm.ops3.env.release_ms",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "e_piano_sixties": {
+      "program": 4,
+      "bank": 3,
+      "channel": 0,
+      "fields": 54,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "fm.ops3.env.release_ms",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "e_piano_velocity_1": {
+      "program": 4,
+      "bank": 2,
+      "channel": 0,
+      "fields": 55,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "fm.ops3.env.release_ms",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "e_piano_velocity_2": {
+      "program": 5,
+      "bank": 2,
+      "channel": 0,
+      "fields": 55,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "fm.ops3.env.release_ms",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
     "electric_grand": {
       "program": 2,
+      "channel": 0,
+      "fields": 30,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "electric_grand_wide": {
+      "program": 2,
+      "bank": 1,
       "channel": 0,
       "fields": 30,
       "silent": false,
@@ -6780,8 +7032,83 @@
         "unison"
       ]
     },
+    "harpsichord_keyoff": {
+      "program": 6,
+      "bank": 3,
+      "channel": 0,
+      "fields": 45,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "harpsichord.octave_detune_cents",
+        "harpsichord.pluck_4",
+        "harpsichord.pluck_8b",
+        "harpsichord.undamped_from_note",
+        "harpsichord.unison_detune_cents",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "harpsichord_octave": {
+      "program": 6,
+      "bank": 1,
+      "channel": 0,
+      "fields": 45,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "harpsichord.pluck_8b",
+        "harpsichord.unison_detune_cents",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "harpsichord_wide": {
+      "program": 6,
+      "bank": 2,
+      "channel": 0,
+      "fields": 45,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "harpsichord.octave_detune_cents",
+        "harpsichord.pluck_4",
+        "harpsichord.undamped_from_note",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
     "honky_tonk": {
       "program": 3,
+      "channel": 0,
+      "fields": 30,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "honky_tonk_wide": {
+      "program": 3,
+      "bank": 1,
       "channel": 0,
       "fields": 30,
       "silent": false,
@@ -6929,8 +7256,51 @@
         "filter_output"
       ]
     },
+    "mandolin": {
+      "program": 25,
+      "bank": 2,
+      "channel": 0,
+      "fields": 35,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "ks.brightness",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
     "marimba": {
       "program": 12,
+      "channel": 0,
+      "fields": 40,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "modal.modes3.decay_scale",
+        "modal.modes3.ratio",
+        "modal.modes4.decay_scale",
+        "modal.modes4.ratio",
+        "modal.modes5.decay_scale",
+        "modal.modes5.ratio",
+        "modal.modes6.decay_scale",
+        "modal.modes6.ratio",
+        "modal.modes7.decay_scale",
+        "modal.modes7.ratio",
+        "unison"
+      ]
+    },
+    "marimba_wide": {
+      "program": 12,
+      "bank": 1,
       "channel": 0,
       "fields": 40,
       "silent": false,
@@ -7060,6 +7430,23 @@
         "unison"
       ]
     },
+    "nylon_guitar_keyoff": {
+      "program": 24,
+      "bank": 2,
+      "channel": 0,
+      "fields": 35,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "ks.brightness",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
     "oboe": {
       "program": 68,
       "channel": 0,
@@ -7100,6 +7487,95 @@
       "inert": [
         "body_mix",
         "lfo_rate_hz"
+      ]
+    },
+    "organ_4": {
+      "program": 16,
+      "bank": 3,
+      "channel": 0,
+      "fields": 31,
+      "silent": false,
+      "inert": [
+        "additive.percussion_decay_ms",
+        "additive.percussion_level",
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "organ_5": {
+      "program": 17,
+      "bank": 2,
+      "channel": 0,
+      "fields": 31,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "organ_detuned_1": {
+      "program": 16,
+      "bank": 1,
+      "channel": 0,
+      "fields": 29,
+      "silent": false,
+      "inert": [
+        "additive.percussion_decay_ms",
+        "additive.percussion_level",
+        "body_mix",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "organ_detuned_2": {
+      "program": 17,
+      "bank": 1,
+      "channel": 0,
+      "fields": 28,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "organ_sixties": {
+      "program": 16,
+      "bank": 2,
+      "channel": 0,
+      "fields": 25,
+      "silent": false,
+      "inert": [
+        "additive.percussion_decay_ms",
+        "additive.percussion_level",
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
       ]
     },
     "overdriven": {
@@ -7252,6 +7728,40 @@
       "program": 17,
       "channel": 0,
       "fields": 25,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "piano_dark": {
+      "program": 0,
+      "bank": 2,
+      "channel": 0,
+      "fields": 30,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "piano_wide": {
+      "program": 0,
+      "bank": 1,
+      "channel": 0,
+      "fields": 30,
       "silent": false,
       "inert": [
         "body_mix",
@@ -7999,8 +8509,69 @@
         "unison"
       ]
     },
+    "twelve_string_guitar": {
+      "program": 25,
+      "bank": 1,
+      "channel": 0,
+      "fields": 35,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "ks.brightness",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
+    "ukulele": {
+      "program": 24,
+      "bank": 1,
+      "channel": 0,
+      "fields": 35,
+      "silent": false,
+      "inert": [
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "ks.brightness",
+        "lfo_rate_hz",
+        "unison"
+      ]
+    },
     "vibraphone": {
       "program": 11,
+      "channel": 0,
+      "fields": 39,
+      "silent": false,
+      "inert": [
+        "body_mix",
+        "drift_rate_hz",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "lfo_rate_hz",
+        "modal.modes3.decay_scale",
+        "modal.modes3.ratio",
+        "modal.modes4.decay_scale",
+        "modal.modes4.ratio",
+        "modal.modes5.decay_scale",
+        "modal.modes5.ratio",
+        "modal.modes6.decay_scale",
+        "modal.modes6.ratio",
+        "modal.modes7.decay_scale",
+        "modal.modes7.ratio",
+        "unison"
+      ]
+    },
+    "vibraphone_wide": {
+      "program": 11,
+      "bank": 1,
       "channel": 0,
       "fields": 39,
       "silent": false,
@@ -8041,6 +8612,21 @@
     },
     "violin": {
       "program": 40,
+      "channel": 0,
+      "fields": 34,
+      "silent": false,
+      "inert": [
+        "amp_env.decay_ms",
+        "filter_env.attack_ms",
+        "filter_env.decay_ms",
+        "filter_env.release_ms",
+        "filter_env.sustain",
+        "unison"
+      ]
+    },
+    "violin_slow": {
+      "program": 40,
+      "bank": 1,
       "channel": 0,
       "fields": 34,
       "silent": false,

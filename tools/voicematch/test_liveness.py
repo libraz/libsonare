@@ -136,6 +136,36 @@ def test_a_patch_with_no_fields_shares_nothing_rather_than_dividing_by_zero():
     assert liveness.PatchReport(patch="x", program=0, channel=0).share() == 0.0
 
 
+def _programs(**addr):
+    """A program map keyed the way the catalogue reports it: (program, bank)."""
+    return SimpleNamespace(programs={v: k for k, v in addr.items()})
+
+
+def test_a_patch_with_a_bank_zero_address_is_probed_there():
+    """That is the address a plain GM file reaches it at."""
+    cat = _programs(church_organ=(19, 0))
+    cat.programs[(19, 2)] = "church_organ"
+    jobs = liveness.census_jobs(cat, (60,), drums=False)
+    assert [(j[0], j[1], j[2]) for j in jobs] == [("church_organ", 19, 0)]
+
+
+def test_a_patch_no_bank_zero_program_reaches_is_still_probed():
+    """The thirty GS variations. Probing one at bank 0 offers it none of its own
+    knobs, so it left the run without a line rather than with a wrong answer."""
+    cat = _programs(church_organ=(19, 0))
+    cat.programs[(19, 2)] = "church_organ_full"
+    jobs = {j[0]: (j[1], j[2]) for j in liveness.census_jobs(cat, (60,), drums=False)}
+    assert jobs == {"church_organ": (19, 0), "church_organ_full": (19, 2)}
+
+
+def test_a_drum_note_keeps_its_own_channel_and_a_grid_of_one():
+    jobs = liveness.census_jobs(_programs(piano=(0, 0)), (60,), drums=True)
+    drums = [j for j in jobs if j[5] is not None]
+    assert len(drums) == 128
+    assert drums[38][3] == liveness.PERCUSSION_CHANNEL
+    assert drums[38][4] == (38,)
+
+
 def test_a_census_records_the_generation_it_was_taken_against(tmp_path, monkeypatch):
     monkeypatch.setattr(liveness, "bank_generation", lambda: 31)
     out = tmp_path / "field-coverage.json"
@@ -146,6 +176,17 @@ def test_a_census_records_the_generation_it_was_taken_against(tmp_path, monkeypa
     assert d["bank_generation"] == 31
     assert d["patches"]["violin"]["inert"] == ["bowed_string.stribeck"]
     assert d["patches"]["violin"]["fields"] == 8
+    # Bank 0 is the common case and stays out of the file; a variation carries
+    # the address it was probed at, or nothing says which patch was measured.
+    assert "bank" not in d["patches"]["violin"]
+
+
+def test_a_variation_records_the_address_it_was_probed_at(tmp_path, monkeypatch):
+    monkeypatch.setattr(liveness, "bank_generation", lambda: 32)
+    out = tmp_path / "field-coverage.json"
+    liveness.write_census(out, [liveness.PatchReport(
+        patch="church_organ_full", program=19, bank=2, channel=0, total=8)], (60,), (100,))
+    assert json.loads(out.read_text())["patches"]["church_organ_full"]["bank"] == 2
 
 
 def test_a_census_matching_the_bank_passes(tmp_path, monkeypatch):

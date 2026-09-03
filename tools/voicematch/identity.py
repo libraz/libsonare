@@ -76,11 +76,12 @@ import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 from render_model import render_model
 from smf import Note, write_smf
-program, channel, seconds, gate = (int(sys.argv[1]), int(sys.argv[2]),
-                                   float(sys.argv[3]), float(sys.argv[4]))
+program, channel, seconds, gate, bank = (int(sys.argv[1]), int(sys.argv[2]),
+                                         float(sys.argv[3]), float(sys.argv[4]),
+                                         int(sys.argv[6]))
 for note, velocity in json.loads(sys.argv[5]):
-    smf = write_smf([Note(note, velocity, 0.1, gate)], program=program, channel=channel,
-                    end_pad=1.0)
+    smf = write_smf([Note(note, velocity, 0.1, gate)], program=program, bank=bank,
+                    channel=channel, end_pad=1.0)
     a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
     peak = float(np.max(np.abs(a))) if a.size else 0.0
     sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest() + " " + repr(peak) + "\n")
@@ -88,7 +89,7 @@ for note, velocity in json.loads(sys.argv[5]):
 
 
 def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, int]],
-                 overrides: str = "") -> list[tuple[str, float]]:
+                 overrides: str = "", bank: int = 0) -> list[tuple[str, float]]:
     """One sha256 and peak per (note, velocity), all from a single subprocess.
 
     A hash and not a comparison of arrays: two libraries cannot be loaded into
@@ -105,6 +106,11 @@ def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, in
     hash cannot: whether the render sounded at all. Two silent renders are
     byte-identical, so silence reads as "this knob changes nothing" -- which is
     how a probe of a note outside a kit would report every field as inert.
+
+    `bank` selects a GS variation. Thirty of the bank's patches are reachable
+    from no other address, and a variation is exactly where a registration
+    differs from the program it varies -- a fuller chorus, an octave stop, a
+    wider unison -- so a field's reach on the base patch is not an answer for it.
     """
     env = dict(os.environ)
     env["SONARE_LIB_PATH"] = lib
@@ -114,7 +120,7 @@ def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, in
         env.pop("SONARE_TUNING_OVERRIDES", None)
     p = subprocess.run(
         [sys.executable, "-c", _WORKER, str(program), str(channel),
-         str(SECONDS), str(GATE_S), json.dumps([list(x) for x in pairs])],
+         str(SECONDS), str(GATE_S), json.dumps([list(x) for x in pairs]), str(bank)],
         capture_output=True, text=True, env=env, cwd=REPO_ROOT)
     if p.returncode:
         raise RuntimeError(f"{lib}: {p.stderr[-2000:]}")

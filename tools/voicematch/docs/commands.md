@@ -215,7 +215,7 @@ make spec-liveness-census-check       # is the recorded census still the bank's?
 
 Renders each knob at both ends of its stated range across seven notes at a soft and a loud velocity, and compares the raw float32 bytes. No reference and no corpus, so it covers every spec rather than the few with an oracle. `DEAD` (moves nothing anywhere, with no reason given) and `STALE` (a `dead` reason whose knob has come alive) fail; `partial`, `vel-only` and `excused` are reported and do not.
 
-`--census` points the same probe at the bank instead of the specs and writes `field-coverage.json`, stamped with the bank generation it was taken against; `--census-check` compares that stamp with `bank-versions.json` and needs no library. Full account of both, including why a corpus `--diagnose` cannot report what this does, in [fitting.md](fitting.md#the-liveness-gate).
+`--census` points the same probe at the bank instead of the specs and writes `field-coverage.json`, stamped with the bank generation it was taken against; `--census-check` compares that stamp with `bank-versions.json` and needs no library. It walks every patch once at the address it is reachable from, preferring bank 0 — thirty of them are GS variations with no bank-0 program, and the bank has to reach `auto_spec` as well as the render or the variation is offered the capital tone's knobs and drops out of the run. Full account of both, including why a corpus `--diagnose` cannot report what this does, in [fitting.md](fitting.md#the-liveness-gate).
 
 ## `shape` — compare the spectrogram instead of the summary
 
