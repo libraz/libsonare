@@ -732,6 +732,32 @@ def test_an_existing_drum_correction_is_moved_not_duplicated():
     assert "t[46].amp_env.release_ms = 55.0f;" in text
 
 
+def test_a_count_is_written_as_an_integer_and_a_switch_is_not_written_at_all():
+    """The struct has `bool`, `int` and enum members among its floats, and a
+    float literal spliced into one of those does not compile: the kick's fit
+    emitted `t[35].one_shot = 0.884586f;` and five -Werror errors with it. Which
+    is which comes from the override layer's own `I` / `I_TYPED` declarations."""
+    def at(label: str, start: float) -> Knob:
+        return Knob(label=label, lo=0.0, hi=8.0, log=False, start_value=start,
+                    tunable=label)
+
+    knobs = [
+        at("d035.percussion.num_modes", 2.0),      # a count
+        at("d035.percussion.noise_output", 0.0),   # an enum: its type is its range
+        at("d035.one_shot", 1.0),                  # a bool, and the fit's 0.885 is 1
+        at("d035.percussion.shell_num_modes", 1.0),
+    ]
+    per_patch, per_drum, other = patch_field_assignments(knobs, [3.94, 0.717, 0.885, 1.18])
+    assert per_patch == {}
+    # The count rounds as `std::lround` did when it rendered; the two switches are
+    # reported for a human to place; the second rounds back to where it started.
+    assert per_drum == {35: [("percussion.num_modes", 4.0)]}
+    assert other == ["d035.percussion.noise_output", "d035.one_shot"]
+    text = next(iter(write_drum_fields(per_drum).values()))
+    assert "t[35].percussion.num_modes = 4;" in text
+    assert "num_modes = 4.0f" not in text
+
+
 def test_a_note_assigned_in_a_chain_still_finds_its_anchor():
     """`t[41] = t[43] = ... = d.tom;` is one statement; appending after it is correct."""
     edited = write_drum_fields({43: [("percussion.tone_gain", 0.7)]})

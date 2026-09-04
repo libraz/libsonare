@@ -18,6 +18,7 @@ and nothing else — see `write_edits`, which is what records them.
 from __future__ import annotations
 
 import functools
+import math
 import re
 import sys
 from pathlib import Path
@@ -165,6 +166,56 @@ def array_members() -> tuple[str, ...]:
     return tuple(sorted(set(found)))
 
 
+@functools.lru_cache(maxsize=1)
+def _typed_members() -> tuple[frozenset[str], frozenset[str]]:
+    """(integer fields, switch fields), read from the layer that declares them.
+
+    A patch field reaches the fitter as a float and comes back as one, but the
+    struct has `bool`, `int` and enum members among the floats and a float
+    literal spliced into one of those does not compile. Which is which is not
+    guessed here and not mirrored: the override layer already separates them,
+    `I(path)` for a count and `I_TYPED(path, lo, hi)` for a field whose own type
+    is its range, and those two macros are what this reads. Same discipline as
+    `array_members`, which drifted the one time it was a hand-written list.
+    """
+    text = (REPO_ROOT / TUNING_LAYER_FILE).read_text()
+    ints = frozenset(re.findall(r"^\s*I\(([\w.]+)\);", text, re.M))
+    switches = frozenset(re.findall(r"^\s*I_TYPED\(([\w.]+),", text, re.M))
+    if not ints or not switches:
+        raise ValueError(f"no I / I_TYPED field declarations found in {TUNING_LAYER_FILE}")
+    return ints, switches
+
+
+def integer_field(path: str) -> bool:
+    """Whether this field path is a count, written as an integer literal."""
+    return path in _typed_members()[0]
+
+
+def switch_field(path: str) -> bool:
+    """Whether this field path is a switch whose own type bounds it.
+
+    Reported rather than written, as a family patch is. The value a search
+    lands on is a bucket and not a number — `one_shot` at 0.885 renders exactly
+    as it did at 1.0 — and an enum member takes an enumerator, not a literal.
+    """
+    return path in _typed_members()[1]
+
+
+def _lround(value: float) -> float:
+    """`std::lround`: half away from zero, which is what `as_int` applied.
+
+    Not Python's `round`, which breaks a half towards even — the two disagree
+    at exactly the values a search lands on when a count's optimum is between
+    two integers, and then the literal written is not the one that rendered.
+    """
+    return math.floor(abs(value) + 0.5) * (-1.0 if value < 0 else 1.0)
+
+
+def _key_path(member: str) -> str:
+    """`key_to_member_path` backwards: `percussion.shell_t60_s[0]` -> `...s0`."""
+    return member.replace("[", "").replace("]", "")
+
+
 def key_to_member_path(path: str) -> str:
     """Turn a tuning key's field path into the C++ member expression it names."""
     arrays = array_members()
@@ -204,6 +255,18 @@ def patch_field_assignments(
         patch, _, path = knob.tunable.partition(".")
         if not path:
             continue
+        if switch_field(path):
+            other.append(knob.tunable)
+            continue
+        if integer_field(path):
+            # The field is an int, so the search's resolution below one is not a
+            # value. Rounded the way the override layer rounded it when the
+            # render being written back was measured, or the literal is not the
+            # value that scored. It also makes the no-op case visible:
+            # `num_modes` at 2 landing on 2.4 rendered nothing new.
+            value = _lround(value)
+            if value == _lround(knob.start_value):
+                continue
         drum = DRUM_PATCH_KEY.fullmatch(patch)
         if patch in named:
             per_patch.setdefault(patch, []).append((key_to_member_path(path), value))
@@ -231,7 +294,12 @@ def _splice_field_lines(
     for path, value in sorted(fields):
         member = f"{prefix}{path}"
         existing = re.compile(rf"^([ \t]*){re.escape(member)}\s*=\s*[^;]+;[ \t]*$", re.M)
-        line = f"{member} = {format_value(value)}f;"
+        # A count takes an integer literal. `2.0f` into an `int` member is a
+        # -Wliteral-conversion error under this tree's -Werror, so the type has
+        # to reach the literal — see `_typed_members`.
+        literal = (f"{int(_lround(value))}" if integer_field(_key_path(path))
+                   else f"{format_value(value)}f")
+        line = f"{member} = {literal};"
         if existing.search(text):
             text = existing.sub(lambda m, s=line: f"{m.group(1)}{s}", text, count=1)
         else:
