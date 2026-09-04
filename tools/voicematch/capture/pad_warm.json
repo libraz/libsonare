@@ -1,0 +1,60 @@
+{
+  "id": "pad_warm",
+  "label": "Pad 2 (warm), sampled, close and dry",
+  "program": 89,
+  "takes": "sustained",
+  "audition_title": "libsonare warm pad vs the sampled reference",
+  "_notes": "Every eighth semitone from 36 to 84, which is the register this program is probed on and four octaves of it. A synth voice has no compass in the sense a wind does -- nothing runs out of tube -- so the grid is chosen for what changes across it rather than for where the instrument stops, and what changes is the filter's key tracking: at velocity 100 the spectral centroid runs 167 Hz at note 36, 432 at 60 and 1266 at 84. Both ends were rendered before the grid was written and both are healthy -- onset at the preroll, level held for the whole gate, the key tracked to within the transform's own resolution. The step is eight rather than the four a reed gets because there is no register break here to straddle: a subtractive voice changes smoothly with pitch, and a point every major sixth resolves that.",
+  "notes": [
+    36,
+    44,
+    52,
+    60,
+    68,
+    76,
+    84
+  ],
+  "_velocities": "Four, and the axis is both level and timbre. Measured at note 60, the peak runs 13.6 dB from velocity 16 to 100 while the spectral centroid moves 392 Hz to 432 -- so velocity reaches the filter as well as the amplifier, and a model given a level-only velocity map is wrong about brightness at both ends whatever its gain does. Four points rather than the five a wind gets, because the whole rack spans 8.7 to 16.7 dB on this measurement against a reed's 49 and a piano's thirty: the axis is real and it is narrow, and a fifth point on it would resolve nothing the four do not.",
+  "velocities": [
+    32,
+    64,
+    96,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured twice rather than assumed. With the rack loaded the plugin advertises 1473 parameters and not one of them matches `reverb` or `delay`, and `capture.py calibrate` agrees independently at RT60 0.00 s. So `dry` has no section to act on and is left off rather than claiming an effect was disabled. What that buys downstream is a dry anchor -- every level, release and decay measured against it is the voice alone, and the 920 ms this slot takes to fall 40 dB after note-off is its own envelope rather than a room.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: over the two seconds this capture records after note-off, a release and a small hall are the same falling signal, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly, since one envelope generator gives every note the same one. Three readings say dry. `capture.py calibrate` measures RT60 0.00 s on this rack; the plugin advertises 1473 parameters and not one matches `reverb` or `delay`; and the rack is its own control -- the eight slots that stop at note-off record no space at all while six of the eight that release recorded one each, 0.64 s to 2.22 s, correlating 0.87 with their own release times. Six sources in one room cannot report six rooms. Left to measure, what those entries would do is convolve a hall of up to 2.2 s onto every model render before any figure is taken, which lands hardest on `damper` -- the dimension a pad is most worth judging on.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "The metrics take their sustain window between 0.6 s and 1.8 s after onset, so the gate has to outlast that with margin. The other end needs the tail measured rather than chosen: this slot releases over 920 ms to fall 40 dB, and two seconds is what carries every pad in the rack past that bound with the slowest of them, at 1510 ms, still inside it.",
+  "gate_ms": 3000,
+  "tail": "2s",
+  "_calibration": "From `capture.py calibrate` on this rack: the reference renders identically in real time and faster than it, the same note twice is bit-identical -- so there is no round robin to put a floor under the loss -- and the measured settle minimum is 750 ms. `realtime` is kept on anyway. The saving is real here in a way it is not for a single capture, since sixteen grids of this rack are about 450 renders and full speed would take some forty minutes off them, but a note streamed late is caught only by `verify` and what it would otherwise become is a committed measurement that is silently wrong. The independent reading worth keeping is the last line of the calibration, RT60 0.00 s, which is the dryness below measured a second way.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second warm pad in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm090",
+      "label": "GM warm pad, rack slot 10",
+      "slot_channel": 10
+    }
+  ],
+  "_dimensions": "All ten of the ten a sustained voice can be judged on. `damper` is load-bearing here for the opposite reason to a wind's: the release is most of what a pad is, and it is the one dimension a sustain-window metric cannot reach. `vel_range` is kept for the 13.6 dB measured above, which is narrow and is not zero.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `pad_warm.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/pad_warm.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel, and the numbering is confirmed at six points spread across it rather than assumed from the filename: slot 1 has odd harmonics only and no even partial above -112 dB, which is a square wave and is nothing else; slot 2 has the 1/n ladder of a sawtooth; slot 7 sounds a second pitch a fifth away at every note of the compass; slot 10 is the darkest and widest of the sixteen; slot 14 is the only one whose high band grows into the note; and slot 16 sweeps its centroid from 969 Hz to 6642 across the compass. Two further readings hold the map between those points: slots 1 through 8 all reach the numerical floor within 210 ms of note-off while slots 9 through 16 take 380 to 1510 ms to fall 40 dB, so the lead-versus-pad seam lands exactly where the filename says the eighth program ends, and every slot tracks the key it is sent at notes 36, 60 and 84 alike, so none of them is transposed or mapped away. This slot: the most heavily filtered slot in the rack -- the ladder is 65 dB down by h8 and the centroid is 167 Hz at note 36 -- and the two channels correlate -0.07, which is the widest image of the sixteen. Dark and wide is what the program name asks for, and no other slot here is either."
+}

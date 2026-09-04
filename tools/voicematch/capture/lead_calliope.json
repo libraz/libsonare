@@ -1,0 +1,63 @@
+{
+  "id": "lead_calliope",
+  "label": "Lead 3 (calliope), sampled, close and dry",
+  "program": 82,
+  "takes": "sustained",
+  "audition_title": "libsonare calliope lead vs the sampled reference",
+  "_notes": "Every eighth semitone from 36 to 84, which is the register this program is probed on and four octaves of it. A synth voice has no compass in the sense a wind does -- nothing runs out of tube -- so the grid is chosen for what changes across it rather than for where the instrument stops, and what changes is the filter's key tracking: at velocity 100 the spectral centroid runs 757 Hz at note 36, 1482 at 60 and 2080 at 84. Both ends were rendered before the grid was written and both are healthy -- onset at the preroll, level held for the whole gate, the key tracked to within the transform's own resolution. The step is eight rather than the four a reed gets because there is no register break here to straddle: a subtractive voice changes smoothly with pitch, and a point every major sixth resolves that.",
+  "notes": [
+    36,
+    44,
+    52,
+    60,
+    68,
+    76,
+    84
+  ],
+  "_velocities": "Four, and the axis is both level and timbre. Measured at note 60, the peak runs 10.5 dB from velocity 16 to 100 while the spectral centroid moves 837 Hz to 1482 -- so velocity reaches the filter as well as the amplifier, and a model given a level-only velocity map is wrong about brightness at both ends whatever its gain does. Four points rather than the five a wind gets, because the whole rack spans 8.7 to 16.7 dB on this measurement against a reed's 49 and a piano's thirty: the axis is real and it is narrow, and a fifth point on it would resolve nothing the four do not.",
+  "velocities": [
+    32,
+    64,
+    96,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured twice rather than assumed. With the rack loaded the plugin advertises 1473 parameters and not one of them matches `reverb` or `delay`, and `capture.py calibrate` agrees independently at RT60 0.00 s. So `dry` has no section to act on and is left off rather than claiming an effect was disabled. What that buys downstream is a dry anchor -- every level, release and decay measured against it is the voice alone, and the 110 ms this slot takes to fall 40 dB after note-off is its own envelope rather than a room.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: over the two seconds this capture records after note-off, a release and a small hall are the same falling signal, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly, since one envelope generator gives every note the same one. Three readings say dry. `capture.py calibrate` measures RT60 0.00 s on this rack; the plugin advertises 1473 parameters and not one matches `reverb` or `delay`; and the rack is its own control -- the eight slots that stop at note-off record no space at all while six of the eight that release recorded one each, 0.64 s to 2.22 s, correlating 0.87 with their own release times. Six sources in one room cannot report six rooms. Left to measure, what those entries would do is convolve a hall of up to 2.2 s onto every model render before any figure is taken, which lands hardest on `damper` -- the dimension a pad is most worth judging on.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "The metrics take their sustain window between 0.6 s and 1.8 s after onset, so the gate has to outlast that with margin. The other end needs almost nothing: this slot stops at note-off rather than releasing -- 110 ms to fall 40 dB -- so half a second of tail records the whole of it and anything longer is silence on disk.",
+  "gate_ms": 3000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack: the reference renders identically in real time and faster than it, the same note twice is bit-identical -- so there is no round robin to put a floor under the loss -- and the measured settle minimum is 750 ms. `realtime` is kept on anyway. The saving is real here in a way it is not for a single capture, since sixteen grids of this rack are about 450 renders and full speed would take some forty minutes off them, but a note streamed late is caught only by `verify` and what it would otherwise become is a committed measurement that is silently wrong. The independent reading worth keeping is the last line of the calibration, RT60 0.00 s, which is the dryness below measured a second way.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second calliope lead in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm083",
+      "label": "GM calliope lead, rack slot 3",
+      "slot_channel": 3
+    }
+  ],
+  "_dimensions": "Nine of the ten a sustained voice can be judged on. `damper` is load-bearing here for the opposite reason to a wind's: this voice does not release, it stops, and a model whose note-off is a decay gives itself away there before anywhere else. `vel_range` is kept for the 10.5 dB measured above, which is narrow and is not zero.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a sustained voice already drops `decay`, `aftersound` and `doubling` -- a voice fed continuously has no free fall for them to describe -- so those are not listed here.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
+  },
+  "_identity": "Which product this is captured from lives in the untracked sibling `lead_calliope.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/lead_calliope.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel, and the numbering is confirmed at six points spread across it rather than assumed from the filename: slot 1 has odd harmonics only and no even partial above -112 dB, which is a square wave and is nothing else; slot 2 has the 1/n ladder of a sawtooth; slot 7 sounds a second pitch a fifth away at every note of the compass; slot 10 is the darkest and widest of the sixteen; slot 14 is the only one whose high band grows into the note; and slot 16 sweeps its centroid from 969 Hz to 6642 across the compass. Two further readings hold the map between those points: slots 1 through 8 all reach the numerical floor within 210 ms of note-off while slots 9 through 16 take 380 to 1510 ms to fall 40 dB, so the lead-versus-pad seam lands exactly where the filename says the eighth program ends, and every slot tracks the key it is sent at notes 36, 60 and 84 alike, so none of them is transposed or mapped away. This slot: the ladder is not monotone: h4 sits at -24.6 dB and h5 at -16.3, so there is a resonance above the fourth partial rather than a filter falling through it, and the level swings 13 dB inside the held note. A pipe tone under a slow modulation is what the program name asks for; the slot number itself is read off the numbering confirmed elsewhere in the rack."
+}
