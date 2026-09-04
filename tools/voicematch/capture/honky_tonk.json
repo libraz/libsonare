@@ -1,0 +1,66 @@
+{
+  "id": "honky_tonk",
+  "label": "Honky-tonk Piano, sampled, close and dry",
+  "program": 3,
+  "takes": "sustained",
+  "audition_title": "libsonare honky-tonk piano vs the sampled reference",
+  "_notes": "Every sixth semitone from 36 to 84, which is the grid this rack's already-captured keyboards use and is adopted rather than redesigned: the point of measuring another slot of one family is that it can be read beside the ones already measured, and a grid of its own would cost exactly that. The compass is the point of a keyboard voice and a physical model diverges most at the ends of it, so both ends were rendered before this definition was written. Both are healthy, and the top behaves as a piano's top should: at note 84 the note is nearly 30 dB down half a second in, where at note 36 it is 5.",
+  "notes": [
+    36,
+    42,
+    48,
+    54,
+    60,
+    66,
+    72,
+    78,
+    84
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole family. On a struck string this is most of the identity rather than a level control: the hammer's speed sets what the string is made of as well as how loud it is.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. Here the reading is unambiguous in any case: the note falls past 110 dB within 300 ms of the key lifting, which no space does, and with the rack loaded the plugin advertises no parameter matching `reverb` or `delay`.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Eight seconds, and on a piano that is not margin over the analysis window but the measurement itself: note-off is the damper, so the free decay a model has to match happens while the key is still down. Half a second of tail is then enough for what the damper does, which on this slot is immediate.",
+  "gate_ms": 8000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, which its already-captured siblings were recorded against and which this capture does not re-argue: the settings below are theirs, so the slots of this family stay comparable cell for cell. `realtime` is kept on; a note streamed late is caught only by `verify`, and what it would otherwise become is a committed measurement that is silently wrong.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second honky-tonk piano in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm004",
+      "label": "GM honky-tonk piano, rack slot 4",
+      "slot_channel": 4
+    }
+  ],
+  "_dimensions": "13 of the 13 a struck string can be judged on. `decay`, `aftersound` and `doubling` are the load-bearing three here: what a piano is, past the first fifty milliseconds, is how it falls, where the fall changes rate, and whether the strings of a unison have drifted apart by then. A model with one string cannot have the third at all, which is why it is measured rather than assumed.",
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `honky_tonk.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/honky_tonk.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: five of its sixteen slots were captured in an earlier round, so the map can be confirmed rather than argued. Rendered at note 60 velocity 104 under this capture's own gate, slot 5 returns a peak of -15.40 dBFS and the committed profile for GM 005 reads -15.40 at that same cell; slot 8 returns -17.06 and the profile for GM 008 reads -17.06. Two exact agreements fix the numbering with nothing left to interpret, and every slot of the eight tracks the key it is sent at notes 36, 60 and 84. This slot: the only slot in the family with a split fundamental. Over the first two seconds of note 60 it has two peaks where every other slot has one: 263.0 Hz at full level and 260.0 Hz 8.3 dB under it, three hertz and about twenty cents apart. A deliberately mistuned unison is what a honky-tonk piano is, it is measurable on one note, and nothing else on this rack has one -- so this slot is identified by its own measurement and not only by the numbering."
+}

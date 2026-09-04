@@ -264,15 +264,15 @@
       "tone_class": "struck-string",
       "patch": "bright_piano",
       "engine": "piano",
-      "capture": null,
+      "capture": "bright_piano",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "bright_piano",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 45,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -303,7 +303,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p001b001-bright-acoustic-piano",
@@ -417,20 +417,22 @@
       "tone_class": "struck-string",
       "patch": "electric_grand",
       "engine": "piano",
-      "capture": null,
+      "capture": "electric_grand",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "electric_grand",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 44,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -438,7 +440,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -456,7 +457,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p002b001-electric-grand-piano",
@@ -570,15 +571,15 @@
       "tone_class": "struck-string",
       "patch": "honky_tonk",
       "engine": "piano",
-      "capture": null,
+      "capture": "honky_tonk",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "honky_tonk",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 45,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
@@ -609,7 +610,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p003b001-honky-tonk-piano",
