@@ -1,0 +1,64 @@
+{
+  "id": "jazz_guitar",
+  "label": "Electric Guitar (jazz), sampled, close and dry",
+  "program": 26,
+  "takes": "sustained",
+  "audition_title": "libsonare jazz guitar vs the sampled reference",
+  "_notes": "Every fourth semitone from 40 to 64, which is the grid all seven of this rack's other guitars were captured against and is adopted rather than redesigned: the point of measuring an eighth is that it can be read beside them. Both ends were rendered before this definition was written and both are healthy -- the pitch is exact at each (82.5 Hz at note 40 against an equal-tempered 82.4, 330.0 at note 64 against 329.6) and the level holds within 1.2 dB across the compass.",
+  "notes": [
+    40,
+    44,
+    48,
+    52,
+    56,
+    60,
+    64
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live here, at 21 to 23 dB between velocity 16 and 104, so it needed none of the exclusion a flat velocity response would have forced.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. `calibrate` measures RT60 0.00 s here and the plugin advertises no parameter matching `reverb` or `delay` with the rack loaded. This slot puts a third reading under it: 300 ms after the key lifts it is 101 dB down, and no space decays that fast.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Six seconds, the family's, and on a plucked string that is the measurement rather than margin around it: note-off is the player damping, so the free decay a model has to match happens while the key is still down. It is well inside the gate at both ends -- 23 dB down at the bottom of the compass and 43 at the top by the time the key lifts -- and the release that follows is fast and real, reaching 101 dB down within 300 ms, which is what makes `damper` measurable here.",
+  "gate_ms": 6000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, whose settings this capture adopts from the slots of it captured earlier so they stay comparable: a two-second settle, and real time kept on although the reference renders the same either way, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second jazz guitar in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm027",
+      "label": "GM jazz guitar, rack slot 11",
+      "slot_channel": 11
+    }
+  ],
+  "_dimensions": "All 13 a plucked string can be judged on, with none excused. `stereo` is kept and is worth a word: this slot has no width to speak of, its two channels differing only at -86 dB relative to the signal with their levels equal to a thousandth of a decibel, which is the render's own numerical noise rather than a recorded image. Kept rather than excused because a reference of zero width is still a target -- what it checks is that the model does not invent one -- and because every guitar captured beside it keeps it too.",
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `jazz_guitar.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/jazz_guitar.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements rather than argued from a spectrum: fifteen of its sixteen slots were captured in an earlier round, and this is the sixteenth. Rendered under the neighbouring capture's own gate at a cell its profile holds, slot 10 returns a peak of -15.65 dBFS against a committed -15.65. One exact agreement on the slot immediately below, on a rack with one free slot, fixes this one. This slot: read off the confirmed numbering, and an attempt to identify it by colour is recorded here because it failed. A jazz guitar is the dark end of a family, so the brightness of every guitar on the rack was measured over the note's body at the same cell: this slot reads 251 Hz and is third darkest of the eight, behind the muted guitar at 184 and the steel-string at 229, with the nylon at 331 and the DI at 429 above it. Dark, but not the darkest, and the three below and above it are within a factor of two -- so the ordering is consistent with the name and identifies nothing. The measurement that is worth keeping is that the ordering changes with the window: read over the sustain rather than the body, the same slot appears to be the darkest of the family by a wide margin, which is a statement about where a plucked note's energy has gone by then rather than about the instrument."
+}

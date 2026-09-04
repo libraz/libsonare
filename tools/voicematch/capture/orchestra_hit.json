@@ -1,0 +1,65 @@
+{
+  "id": "orchestra_hit",
+  "label": "Orchestra Hit, sampled, close and dry",
+  "program": 55,
+  "takes": "modal",
+  "audition_title": "libsonare orchestra hit vs the sampled reference",
+  "_notes": "Every sixth semitone from 48 to 72, two octaves, which is the range this is written across rather than a compass an instrument has. Both ends were rendered before this definition was written and both are healthy. What the range changes is the length: the hit takes 1177 ms to fall 40 dB at note 48, 688 at note 62 and 388 at note 72, so the same gesture is three times shorter at the top than at the bottom.",
+  "notes": [
+    48,
+    54,
+    60,
+    66,
+    72
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live here, at 21 to 23 dB between velocity 16 and 104, so it needed none of the exclusion a flat velocity response would have forced.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. `calibrate` measures RT60 0.00 s here and the plugin advertises no parameter matching `reverb` or `delay` with the rack loaded. This slot puts a third reading under it: its own hit reaches digital silence inside a two-second gate, with nothing sounding after it.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Two seconds, sized to the longest cell of the grid: the hit at the bottom of the range is the slowest to go and reaches silence just inside it, so the gate holds every free decay whole and the key lifts on silence at every cell.",
+  "gate_ms": 2000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, whose settings this capture adopts from the slots of it captured earlier so they stay comparable: a two-second settle, and real time kept on although the reference renders the same either way, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second orchestra hit in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm056",
+      "label": "GM orchestra hit, rack slot 8",
+      "slot_channel": 8
+    }
+  ],
+  "_dimensions": "10 of the 12 a modal voice can be judged on. `decay` carries this one: what the program is, past the first fifty milliseconds, is a fall, and the fall changes by a factor of three across the two octaves the grid covers.",
+  "dimensions": [
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_class": "It is only loosely pitched, and the figure is worth recording because it is unusual for a voice the class calls modal: 15 to 30 per cent of its energy falls within two per cent of the harmonics of the key played, against 99.8 per cent for the trumpet on the neighbouring slot. That is what a whole orchestra striking a chord together sounds like rather than a defect, and `tnr` is kept because measuring how little of it is tonal is the point.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing",
+    "damper": "note-off cannot be observed on this voice: the hit has reached silence before the key lifts at every cell of the grid, so there is nothing left for a damper to act on. The gate is sized to hold the longest fall whole rather than shortened to make a release visible, because the fall is the measurement and the release would only be the gate's own edge"
+  },
+  "_identity": "Which product this is captured from lives in the untracked sibling `orchestra_hit.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/orchestra_hit.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements rather than argued from a spectrum. Rendered under the neighbouring capture's own gate at a cell its profile holds, slot 9 returns a peak of -13.58 dBFS against a committed -13.58. That fixes slot n as GM program 47+n, and this slot as the one below the trumpet. This slot: measured against the slot beside it, which is the comparison the confirmed numbering makes available and the only one made here. It ends by itself -- 1177 ms at the bottom of the grid, 388 at the top -- where the trumpet on the next slot holds its level for as long as the key is down, 3 dB under its peak at three seconds. And it is only loosely pitched where that neighbour is exactly pitched: 0.15 to 0.30 of its energy falls in the harmonic series of the key played, against 0.998. A short stab that is not one instrument, next to a sustained one that is, is what GM 056 names. The rest of the rack was not rendered for this, so the claim is against that neighbour rather than against the rack."
+}
