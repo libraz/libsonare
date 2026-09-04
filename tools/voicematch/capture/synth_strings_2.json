@@ -1,0 +1,61 @@
+{
+  "id": "synth_strings_2",
+  "label": "Synth Strings 2, sampled, close and dry",
+  "program": 51,
+  "takes": "sustained",
+  "audition_title": "libsonare synth strings 2 vs the sampled reference",
+  "_notes": "Every fourth semitone from 48 to 72, the grid the section voices already captured on this rack share, so that `register` spans the same two octaves for all of them and is comparable across the group. The compass is wider than the grid rather than equal to it: this slot was rendered at 36 and at 91 as well, and both are healthy and distinct from the neighbouring slots, so the ends are a choice made for comparability and not a limit found in the instrument.",
+  "notes": [
+    48,
+    52,
+    56,
+    60,
+    64,
+    68,
+    72
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live here at 26.0 dB between velocity 16 and 104, and the spectral centroid moves with it rather than the level alone.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's 1526 advertised parameters matches `reverb`, `delay` or `room`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer rests on the rack rather than on this slot's tail, because a tail cannot settle it: a release and a small hall are the same falling signal over the half second a capture records, and this voice has a release long enough to be mistaken for one, sitting 20 dB down 300 ms after the key lifts where the section's sampled strings are 44 dB down. What answers it is that there is no reverb to be in the recording -- with the rack loaded not one of the 1526 parameters the plugin advertises matches `reverb`, `delay` or `room`, and `calibrate` measures RT60 0.00 s on it.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Five seconds, and this is the one setting where these two depart from the rest of the rack. Both voices amplitude modulate through the whole of a held note -- 11.3 dB peak to trough at 2.02 Hz, measured over an eight-second gate where it runs for 15 cycles -- so the gate is not only the length of the measurement but has to span enough of the modulation that a level read over it is the voice rather than a phase of it. The section's shared three seconds spans 2.4 cycles of the slower of the two, under the three a rate can be claimed from; five spans 4.1 and 10.1 respectively.",
+  "gate_ms": 5000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` run on this slot rather than adopted from a sibling, because determinism is a property a slot can have on its own: a two-second settle against a measured minimum of 250 ms, and two renders of one cell bit-identical, so there is no round robin to put a floor under the loss. Everything but the gate matches the slots of this rack captured earlier so they stay comparable. `realtime` is kept on although the reference renders the same either way, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second synth strings 2 in it to disagree with, and `source_for` takes every timbre of a capture from one plugin. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm052",
+      "label": "GM synth strings 2, rack slot 4",
+      "slot_channel": 4
+    }
+  ],
+  "_dimensions": "All 10 a sustained voice can be judged on, with none excused. `stereo` is kept and is real here rather than nominal: the two channels differ by +1.2 dB relative to the signal and are not identical sample for sample, which is an image rather than the render noise a dual-mono slot shows.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `synth_strings_2.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/synth_strings_2.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round. Rendered under its own capture's gate at a cell its profile holds, slot 1 returns a peak of -33.22 dBFS against a committed -33.22, which fixes slot n as GM program 47+n. Slots 2 to 5 were then compared against each other as audio rather than as peaks at notes 36, 48, 60, 72, 84 and 91, and no pair comes within 15 dB of being the same recording -- the closest is -1.7 dB relative to the signal, against the -35 dB that marks a shared sample on the three slots of another rack that do share one."
+}
