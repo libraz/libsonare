@@ -4916,25 +4916,26 @@
       "tone_class": "sustained",
       "patch": "violin",
       "engine": "bowed_string",
-      "capture": null,
+      "capture": "violin",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "violin",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4952,7 +4953,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p040b001-violin",
@@ -5060,25 +5061,26 @@
       "tone_class": "sustained",
       "patch": "viola",
       "engine": "bowed_string",
-      "capture": null,
+      "capture": "viola",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "viola",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5096,7 +5098,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p042-cello",
@@ -5108,25 +5110,26 @@
       "tone_class": "sustained",
       "patch": "cello",
       "engine": "bowed_string",
-      "capture": null,
+      "capture": "cello",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "cello",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5144,7 +5147,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p043-contrabass",

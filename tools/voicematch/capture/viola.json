@@ -1,0 +1,64 @@
+{
+  "id": "viola",
+  "label": "Viola, sampled, close and dry",
+  "program": 41,
+  "takes": "sustained",
+  "audition_title": "libsonare viola vs the sampled reference",
+  "_notes": "The widest of the three, and the only one whose grid matches what the instrument is written across. It is distinct from the cello from note 48 upward and distinct from the violin as far as 88; only at 91 does it stop being itself, which is above this grid.",
+  "notes": [
+    48,
+    54,
+    60,
+    66,
+    72,
+    78,
+    84
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live here at 21.6 dB between velocity 16 and 104.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's 1526 advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. `calibrate` measures RT60 0.00 s on this rack, with the rack loaded not one of the 1526 parameters the plugin advertises matches `reverb` or `delay`, and this slot is 190 dB down 300 ms after the key lifts, which no space does.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Three seconds, the family's. A bowed string sustains rather than decaying, so the gate is the length of the measurement rather than a window over an event, and the note is still sounding within a few decibels of its peak when the key lifts. The release that follows is immediate -- 190 dB down within 300 ms -- so half a second of tail is more than it needs.",
+  "gate_ms": 3000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, whose settings this capture adopts from the slots of it captured earlier so they stay comparable: a two-second settle against a measured minimum of 250 ms. Two renders of one cell agree to -89 dB relative to the signal with a correlation of 1.00000000 and identical peaks, so there is no round robin to put a floor under the loss; the bit-identity the recipe tests for is a stricter question than the one that matters here. `realtime` is kept on because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second viola in it to disagree with, and `source_for` takes every timbre of a capture from one plugin. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear.",
+  "timbres": [
+    {
+      "id": "gm042",
+      "label": "GM viola, rack slot 10",
+      "slot_channel": 10
+    }
+  ],
+  "_dimensions": "9 of the 10 a sustained voice can be judged on. `stereo` is the exclusion and it is measured: the two channels are bit-identical sample for sample, so there is no width to compare against. `register` is kept and is worth a word given the grid -- it is measured across the range this slot actually covers, which is narrower than the instrument, so it reports how the voice changes over 36 semitones rather than over its whole compass.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing"
+  },
+  "_identity": "Which product this is captured from lives in the untracked sibling `viola.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/viola.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: nine of its sixteen slots were captured in an earlier round. Rendered under those captures' own gates at cells their profiles hold, slot 6 returns a peak of -13.19 dBFS against a committed -13.19, slot 12 returns -16.52 against -16.52 and slot 15 returns -14.78 against -14.78, which fixes slot n as GM program 31+n. This rack's three solo strings share samples outside each instrument's own range, and the grid above is drawn from where this slot is itself rather than from the instrument's nominal compass. Measured by rendering all three slots at one cell and comparing the audio rather than the peak -- two slots whose difference sits below -15 dB relative to the signal are the same recording. At notes 36 to 44 all three return one recording; from 48 to 55 the violin returns the cello's; from 79 to 84 the cello returns the viola's; at 91 the viola returns the violin's. Only between 60 and 76 are all three distinct. Nothing about a render betrays this -- the onset, the level, the pitch and the gate all read correctly for the note asked for -- so it is checked rather than assumed, and it is why this grid is narrower than the instrument."
+}
