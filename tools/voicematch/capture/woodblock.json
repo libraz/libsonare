@@ -1,0 +1,67 @@
+{
+  "id": "woodblock",
+  "label": "Woodblock, sampled, close and dry",
+  "program": 115,
+  "takes": "modal",
+  "audition_title": "libsonare woodblock vs the sampled reference",
+  "_notes": "Every third semitone across the compass this program is probed on, 72 to 84. Both ends were rendered before this definition was written and both speak, the peaks reading 0.241, 0.242 and 0.241 at the low, middle and high probe notes — a level flat to 0.1 dB across the octave, which is the first sign of what `_register` measures.",
+  "notes": [
+    72,
+    75,
+    78,
+    81,
+    84
+  ],
+  "_velocities": "Five, the rack's own, so this slot reads beside the fifteen other captures of it. The axis is live but narrow: 12.4 dB between velocity 32 and 127 at the middle probe note, against 19.9 on the agogo beside it. Velocity moves the level and not the strike — the mode ratios below are identical at every velocity.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with this rack loaded not one of the plugin's advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it. Here the reason is sharper than usual: the whole note is 35 ms at the bottom of the compass and 17.6 at the top, so there is no tail to estimate a space from at all, and an estimate taken anyway would be reading the sample's own last two milliseconds. `calibrate` measures RT60 0.00 s, and with the rack loaded no advertised parameter matches `reverb`, `delay` or `room`.",
+  "room": "none",
+  "rig": "none",
+  "params": [],
+  "_stimulus": "Half a second, which is not a window over the fall the way the sibling slots' gates are — this note is over in 35 ms whatever the key is held for. The gate is simply long enough that nothing is truncated, and every decay figure is read from the note's own envelope rather than from the gate. That is also why `damper` is excused below rather than measured.",
+  "gate_ms": 500,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, whose settings this capture shares with the slots of it captured earlier so they stay comparable. The settle is kept generous at eight seconds: the rack next to this one renders silence or a note seconds late at two seconds of settle, so a settle that costs time is preferred to one that costs a measurement. `realtime` is kept on because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 8000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_measurement": "This is the shortest voice captured here, and the analysis path had to be taught to reach it: the partial fit opens its window 120 ms after note-on to skip the strike, which on a note that is over in 35 ms is a window onto silence, and all twenty-five renders read as nothing measurable. Where that fixed window finds no fundamental the fit is now placed against the note's own ring instead, from its envelope peak to 40 dB under it. Nothing that measured before measures differently — the fallback is reached only after the fixed window has already failed.",
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. The rack holds one slot per GM program, so there is no second woodblock in it to disagree with. What the reference buys is a measured target for `autofit` and `--diagnose` where the voice could previously only be fitted by ear.",
+  "timbres": [
+    {
+      "id": "gm116",
+      "label": "GM woodblock, rack slot 4",
+      "slot_channel": 4
+    }
+  ],
+  "_dimensions": "The slot is a struck bar. What it is judged on is the strike and the few milliseconds of ring after it, both read off the note's own envelope. `stretch` is not among the dimensions a modal voice is judged on at all — a bar has no series equal temperament predicts — so it is the class that drops it rather than this file.",
+  "dimensions": [
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, so anything not gated here has to be argued here.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels cancel to -200 dB relative to the signal at every probe note, so the width is zero by construction rather than by voicing",
+    "damper": "the note is 35 ms at the bottom of the compass and the key is held for 500, so it lifts on a sound that ended fourteen gate-lengths ago - there is nothing left for a damper to stop, and what the measurement would read is the noise floor reported as a very fast damper",
+    "balance": "this bar sounds an octave over the key it is played on and has nothing at the key itself - the played fundamental measures 55 to 75 dB under the loudest line at every probe note - so h1 is empty and every ladder taken against it is a ratio to silence. What the bar has instead sits at 1.77, 1.91, 2.03, 2.24, 2.37, 3.90 and 5.63 times the played key, none of them a harmonic of it. `modes` is the ruler a bar has, which is why the class weights carry no `harm` term for it"
+  },
+  "_register": "Kept and gated, though the reference satisfies it by construction: this rack answers the whole compass by transposing one recording. The strongest line tracks the key to within +1.4 to +3.0 cents across the octave, the seven mode ratios above are identical at every note to two decimal places, and the fall halves exactly with the octave — 35.2 ms at note 72 against 17.6 at note 84. A real bar does not do that, and the model will not; the dimension is measurable and the reference is the target, so it is gated rather than excused. What it must not be read as is evidence that a transposing model is right.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. This program answers on channel 4, and the slot is a decay rather than a cliff: the steepest step inside the fall is 7.1 to 13.2 dB, measured over 2 ms windows because a 10 ms window has only two to four of them inside this note and reads the ruler instead — at that resolution the same fall reports steps of up to 32 dB and looks like a sample ending. Four slots of these two racks genuinely are cliffs, reproducing bit-identically at a fifth of a second, and are not captured.",
+  "_identity": "Which product this is captured from lives in the untracked sibling `woodblock.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/woodblock.json` and need nothing."
+}

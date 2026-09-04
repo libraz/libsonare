@@ -8703,29 +8703,30 @@
       "tone_class": "modal",
       "patch": "woodblock",
       "engine": "percussion",
-      "capture": null,
+      "capture": "woodblock",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "woodblock",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 25,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "balance",
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
-            "balance",
             "centroid_pct",
             "tnr",
             "vel_range",
@@ -8741,7 +8742,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p116-taiko-drum",
