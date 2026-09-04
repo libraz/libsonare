@@ -48,6 +48,21 @@ MIN_SUSTAIN_SEC = 0.15
 # gate longer than that, where the fraction would otherwise walk off the end of
 # the note. See `analyze_note`.
 SUSTAIN_WINDOW_S = (0.6, 1.8)
+#: How far under the note's own peak an analysis window may sit before it is
+#: read as having landed past the end of the sound rather than on its tail.
+#:
+#: Measured across the captured corpora rather than chosen, on both windows it
+#: guards: the woodblock's are 215 dB down, which is digital silence, and the
+#: next quietest corpus is 55 dB down on the sustain window and 29 on the
+#: partial-fit one. Anywhere in that gap separates them. Falling back gives the
+#: analysis MORE signal, so the direction is safe where the threshold is not.
+#:
+#: An emptiness test rather than a length one, because length is not the failure:
+#: a woodblock's sustain window is a full 300 ms and starts 115 ms after the
+#: sound ended. And a positive test rather than a failed-measurement one,
+#: because the measurements do not fail on silence — `find_partials` returns an
+#: f0 from a -124 dBFS noise floor, which is then reported as the voice.
+SILENT_WINDOW_DB = -80.0
 N_HARMONICS = 12
 
 # ISO 1/3-octave centres, 50 Hz to 12.5 kHz: the resolution a percussion hit's
@@ -902,6 +917,17 @@ class NoteMetrics:
         return asdict(self)
 
 
+def _under_peak_db(window: np.ndarray, note: np.ndarray) -> float:
+    """The window's RMS against the note's peak, in dB. `-inf` for an empty one."""
+    if window.size == 0 or note.size == 0:
+        return float("-inf")
+    peak = float(np.abs(note).max())
+    if peak <= 0.0:
+        return 0.0
+    rms = float(np.sqrt(np.mean(window.astype(np.float64) ** 2)))
+    return 20.0 * np.log10(max(rms, 1e-30) / peak)
+
+
 def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
                  *, onset: float | None = None) -> NoteMetrics:
     """Compute all per-note metrics from the mono render.
@@ -937,6 +963,11 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
     sustain = mono[sus_a:sus_b]
     if len(sustain) < 256:
         sustain = mono[on : on + max(256, off - on)]
+    # The cap above is in seconds, so it cannot see a window that is long enough
+    # and lands after the sound: a woodblock is over in 25 ms and its window is
+    # 300 ms of silence starting at 150. See `SILENT_WINDOW_DB`.
+    if _under_peak_db(sustain, mono[on:off]) < SILENT_WINDOW_DB:
+        sustain = mono[on:off]
 
     freqs, mag = _spectrum(sustain, sr)
 

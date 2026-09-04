@@ -80,8 +80,9 @@ from capture import (  # noqa: E402
 from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
     INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
-    THIRD_OCTAVE_CENTERS, _db, _peak_near, _rms_envelope, _spectrum, analyze_hit,
-    band_edges_by_timbre, fit_partial_series, ladder_present, midi_to_hz, partial_hz,
+    SILENT_WINDOW_DB, THIRD_OCTAVE_CENTERS, _db, _peak_near, _rms_envelope,
+    _spectrum, _under_peak_db, analyze_hit, band_edges_by_timbre,
+    fit_partial_series, ladder_present, midi_to_hz, partial_hz,
     shared_band_edge, to_mono,
 )
 from phrases import TAKE_SETS, build_takes  # noqa: E402
@@ -576,16 +577,19 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     # depends on, while a window too late has lost the high partials entirely.
     a = int(0.12 * sr)
     b = min(len(held), a + int(1.5 * sr))
+    # 120 ms is after the end of a note that is over in 35, and everything read
+    # off this window — the partials, the centroid, the tone-to-noise — is then
+    # taken on the floor. So it is checked for signal BEFORE it is used rather
+    # than after it has failed, because it does not fail: `find_partials`
+    # returns an f0 from a -124 dBFS floor, which is then reported as the voice.
+    # Where it is empty the same fit is placed against the note's own ring, from
+    # its envelope peak to where the fall leaves the floor. See
+    # `SILENT_WINDOW_DB` for the separation this rests on.
+    if _under_peak_db(held[a:b], held) < SILENT_WINDOW_DB:
+        ring_a, ring_b = _short_ring_window(held, sr)
+        if ring_b > ring_a:
+            a, b = ring_a, ring_b
     row: dict = dict(find_partials(held[a:b], sr, note))
-    if not row:
-        # 120 ms is after the end of a note that is over in 35, and a voice that
-        # short then has no row at all rather than a bad one. So where the fixed
-        # window holds nothing, the same window is placed against this note's
-        # own ring: from its envelope peak to where the fall leaves the floor.
-        # Tried only after the fixed window has failed, so no note that measures
-        # today measures differently.
-        a, b = _short_ring_window(held, sr)
-        row = dict(find_partials(held[a:b], sr, note)) if b > a else {}
     if not row:
         # No fundamental means this is not a struck note, and every measurement
         # below would still produce a number for it — a decay slope of 0 dB/s

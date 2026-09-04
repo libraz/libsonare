@@ -142,6 +142,25 @@ def test_a_note_over_before_the_fixed_window_opens_is_still_measured():
     assert got["f0_hz"] > 0.0
 
 
+def test_an_empty_window_over_a_noise_floor_is_caught_too():
+    """The case a failed-measurement gate cannot see, and the one that shipped.
+
+    A render is not digitally silent after its note: the model's floor sits at
+    -124 dBFS, and `find_partials` returns an f0 from it. So the row is not
+    empty, a fallback waiting for emptiness never fires, and the centroid and
+    tone-to-noise are then measured on the floor — 2.8 Hz and -48 dB against a
+    reference's 1113 Hz and +5.
+    """
+    short = _short_ring(72, 35.0)
+    rng = np.random.default_rng(11)
+    noisy = (short + rng.standard_normal(short.size).astype(np.float32) * 1e-6)
+    got = measure_note(noisy, SR, 72, preroll_s=0.1, gate_s=0.5)
+    assert got, "a 35 ms ring over a noise floor measured as nothing"
+    # The bar's strongest line, not the floor: the ring is built at 2.03x the key.
+    assert got["centroid_hz"] > 0.5 * midi_to_hz(72)
+    assert got["tnr_db"] > 0.0
+
+
 def test_the_short_ring_fallback_is_reached_only_after_the_fixed_window_fails():
     """The invariance the change rests on: a note with content at 120 ms is
     measured from there exactly as before, so no committed profile moves."""
