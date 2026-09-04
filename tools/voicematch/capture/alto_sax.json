@@ -1,0 +1,65 @@
+{
+  "id": "alto_sax",
+  "label": "Alto Sax, sampled, close and dry",
+  "program": 65,
+  "takes": "sustained",
+  "audition_title": "libsonare alto sax vs the sampled reference",
+  "_notes": "Every fourth semitone from 52 to 76, sitting between the grids the soprano above it and the tenor below it were captured against so the family reads as one. The low end is where this slot ends rather than a choice: it sounds nothing at all at note 49 and is healthy from 51 upward, so the grid starts clear of that edge.",
+  "notes": [
+    52,
+    56,
+    60,
+    64,
+    68,
+    72,
+    76
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live here at 16.0 dB between velocity 16 and 104.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's 1526 advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. `calibrate` measures RT60 0.11 s, which the harness classes as dry and which is stated here rather than rounded away: it is a fifth of the 0.35 s floor and shorter than this instrument's own release, so it is not separable from the note and is not a space. With the rack loaded, not one of the 1526 parameters the plugin advertises matches `reverb`, `delay` or `room`, and every slot of it captured in an earlier round recorded no space.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Three seconds, the family's. This voice sustains rather than decaying, so the gate is the length of the measurement rather than a window over an event: it is still sounding 6.2 dB under its peak when the key lifts, which is what makes `damper` measurable here and what the previous reading of this slot said was impossible.",
+  "gate_ms": 3000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, whose settings this capture adopts from the slots of it captured earlier so they stay comparable: a two-second settle against a measured minimum of 250 ms, and two renders of one cell bit-identical, so there is no round robin to put a floor under the loss. `realtime` is kept on although the reference renders the same either way, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second alto sax in it to disagree with, and `source_for` takes every timbre of a capture from one plugin. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm066",
+      "label": "GM alto sax, rack slot 2",
+      "slot_channel": 2
+    }
+  ],
+  "_dimensions": "9 of the 10 a sustained voice can be judged on. `stereo` is the exclusion and it is measured: the two channels are bit-identical sample for sample, so there is no width to compare against. It is the same exclusion the captured slots of this family already carry.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing"
+  },
+  "_history": "This voice was previously recorded as unusable because its samples were said to stop while the key is still down. Re-measured, they do not: it holds 6.2 dB under its peak at the end of an eight-second gate, and the steepest single 10 ms step anywhere inside the held note is 1.3 dB, which is the instrument's own movement. A sample running out reads quite differently -- the two voices on the neighbouring racks that genuinely do it step 47 and 53 dB in one window and are at the noise floor immediately after.",
+  "_identity": "Which product this is captured from lives in the untracked sibling `alto_sax.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/alto_sax.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: fifteen of its sixteen slots were captured in an earlier round. Rendered under that capture's own gate at a cell its profile holds, slot 1 returns a peak of -10.38 dBFS against a committed -10.38, which fixes slot n as GM program 63+n and this slot as the one above the soprano. Every slot of this rack near this one was compared against its neighbours at both ends of this grid and at its middle, and all are distinct audio -- the sample sharing that three slots of another rack show outside their instruments' ranges does not happen here."
+}

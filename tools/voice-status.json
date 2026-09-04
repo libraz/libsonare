@@ -5408,15 +5408,15 @@
       "tone_class": "sustained",
       "patch": "string_ensemble_1",
       "engine": "bowed_string",
-      "capture": null,
+      "capture": "string_ensemble_1",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "string_ensemble_1",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -5444,7 +5444,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p049-string-ensemble-2",
@@ -5456,15 +5456,15 @@
       "tone_class": "sustained",
       "patch": "string_ensemble_2",
       "engine": "bowed_string",
-      "capture": null,
+      "capture": "string_ensemble_2",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "string_ensemble_2",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -5492,7 +5492,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p050-synth-strings-1",
@@ -5600,15 +5600,15 @@
       "tone_class": "sustained",
       "patch": "choir_aahs",
       "engine": "vocal",
-      "capture": null,
+      "capture": "choir_aahs",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
         "patch": "choir_aahs",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 27,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -5636,7 +5636,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p053-voice-oohs",
@@ -5648,15 +5648,15 @@
       "tone_class": "sustained",
       "patch": "voice_oohs",
       "engine": "vocal",
-      "capture": null,
+      "capture": "voice_oohs",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
         "patch": "voice_oohs",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -5684,7 +5684,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p054-synth-voice",
@@ -5696,15 +5696,15 @@
       "tone_class": "sustained",
       "patch": "synth_voice",
       "engine": "vocal",
-      "capture": null,
+      "capture": "synth_voice",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
         "patch": "synth_voice",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -5732,7 +5732,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p055-orchestra-hit",
@@ -5893,25 +5893,26 @@
       "tone_class": "sustained",
       "patch": "tuba",
       "engine": "brass",
-      "capture": null,
+      "capture": "tuba",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "tuba",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 30,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5929,7 +5930,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p059-muted-trumpet",
@@ -5941,25 +5942,26 @@
       "tone_class": "sustained",
       "patch": "muted_trumpet",
       "engine": "brass",
-      "capture": null,
+      "capture": "muted_trumpet",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "muted_trumpet",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -5977,7 +5979,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p060-french-horn",
@@ -6230,25 +6232,26 @@
       "tone_class": "sustained",
       "patch": "alto_sax",
       "engine": "reed",
-      "capture": null,
+      "capture": "alto_sax",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "alto_sax",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -6266,7 +6269,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p066-tenor-sax",

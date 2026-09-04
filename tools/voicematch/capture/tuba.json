@@ -1,0 +1,64 @@
+{
+  "id": "tuba",
+  "label": "Tuba, sampled, close and dry",
+  "program": 58,
+  "takes": "sustained",
+  "audition_title": "libsonare tuba vs the sampled reference",
+  "_notes": "Every sixth semitone from 28 to 58, which is the range this instrument is written across rather than a keyboard compass, and lower than anything else on its rack. Both ends were rendered before this definition was written and both are healthy, holding within 1.3 dB of each other.",
+  "notes": [
+    28,
+    34,
+    40,
+    46,
+    52,
+    58
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier. The axis is live at 14.4 dB between velocity 16 and 104, and it is not smooth: this voice changes sample between velocity 80 and 104, and the step is large enough that a model sweeping a filter cannot reach it. Across the boundary the spectral centroid roughly doubles at every note of the grid -- 181 to 506 Hz at note 28, 322 to 933 at note 40, 448 to 776 at note 52 -- where between the three velocities below it the centroid moves by a few per cent. `verify` reports the same boundary from the other side, as the loud layer being 0.4 to 1.1 dB quieter than the one under it over the body of the note at three of the six notes. That is recorded rather than re-rendered, because the peak ramp is monotone at every note and it is only the sustained energy that dips: the brighter sample puts less of itself below the fundamental.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's 1526 advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. `calibrate` measures RT60 0.00 s. With the rack loaded, not one of the 1526 parameters the plugin advertises matches `reverb`, `delay` or `room`, and every slot of it captured in an earlier round recorded no space.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Three seconds, the family's. This voice sustains rather than decaying, so the gate is the length of the measurement rather than a window over an event: it is still sounding 2.7 dB under its peak when the key lifts, which is what makes `damper` measurable here and what the previous reading of this slot said was impossible.",
+  "gate_ms": 3000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, whose settings this capture adopts from the slots of it captured earlier so they stay comparable: a two-second settle against a measured minimum of 250 ms, and two renders of one cell bit-identical, so there is no round robin to put a floor under the loss. `realtime` is kept on although the reference renders the same either way, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second tuba in it to disagree with, and `source_for` takes every timbre of a capture from one plugin. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm059",
+      "label": "GM tuba, rack slot 11",
+      "slot_channel": 11
+    }
+  ],
+  "_dimensions": "9 of the 10 a sustained voice can be judged on. `stereo` is the exclusion and it is measured: the two channels are bit-identical sample for sample, so there is no width to compare against. It is the same exclusion the captured slots of this family already carry.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing"
+  },
+  "_history": "This voice was previously recorded as unusable because its samples were said to stop while the key is still down. Re-measured, they do not: it holds 2.7 dB under its peak at the end of an eight-second gate, and the steepest single 10 ms step anywhere inside the held note is 0.7 dB, which is the instrument's own movement. A sample running out reads quite differently -- the two voices on the neighbouring racks that genuinely do it step 47 and 53 dB in one window and are at the noise floor immediately after.",
+  "_identity": "Which product this is captured from lives in the untracked sibling `tuba.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/tuba.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round. Rendered under that capture's own gate at a cell its profile holds, slot 9 returns a peak of -13.58 dBFS against a committed -13.58, which fixes slot n as GM program 47+n. Every slot of this rack near this one was compared against its neighbours at both ends of this grid and at its middle, and all are distinct audio -- the sample sharing that three slots of another rack show outside their instruments' ranges does not happen here."
+}
