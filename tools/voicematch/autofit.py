@@ -233,7 +233,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo import REPO_ROOT  # noqa: E402
 from build_lib import build_shared, configure_build, dylib_path  # noqa: E402
 from catalogue import Catalogue, drum_patch_key, dump_catalogue  # noqa: E402
-from capture import model_rig  # noqa: E402
+from capture import ROOM_NONE, model_rig  # noqa: E402
 from corpus import (  # noqa: E402
     PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
     Corpus, check_rig, corpus_oracle, corpus_pattern, describe, load_corpus,
@@ -549,7 +549,13 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     # and estimating a room from it would invent one and then convolve the model
     # with it.
     room = None
-    may_carry_room = (not corpus.dry) if corpus is not None else oracle_may_carry_room(args)
+    # `dry` and `room` are separate assertions and a corpus needs neither to be
+    # true to have no space in it: a plugin with no effect section answers
+    # `dry: false` for want of anything to switch off, and 57 of the captures
+    # here do. Without the second half of this, every one of them had a room
+    # estimated from its own note tails and convolved onto the model.
+    may_carry_room = ((not corpus.dry and corpus.room != ROOM_NONE)
+                      if corpus is not None else oracle_may_carry_room(args))
     if getattr(args, "room", "auto") != "none" and may_carry_room:
         measured = estimate_room(
             audio, SR, [(n.start, n.start + n.dur) for n in pattern.notes]

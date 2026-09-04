@@ -52,7 +52,14 @@ from loss import (  # noqa: E402
 )
 import json  # noqa: E402
 import profile as profile_module  # noqa: E402
-from capture import RIG_BAKED, RIG_NONE, RIG_UNCLASSIFIED  # noqa: E402
+from capture import (  # noqa: E402
+    RIG_BAKED,
+    RIG_NONE,
+    RIG_UNCLASSIFIED,
+    ROOM_NONE,
+    ROOM_PRESENT,
+    ROOM_UNCLASSIFIED,
+)
 from corpus import corpus_oracle, corpus_pattern, load_corpus  # noqa: E402
 from knobs import at_bound, load_spec, load_spec_weights  # noqa: E402
 from loss import (  # noqa: E402
@@ -1343,7 +1350,7 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
 # --------------------------------------------------------------------------- #
 def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
                   gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True,
-                  channel=1, groups=None, rig=None) -> Path:
+                  channel=1, groups=None, rig=None, room=None) -> Path:
     """A miniature capture: one short tone per slot, plus the manifest beside it.
 
     `seconds` is a number for a grid captured at one flat tail, or a note-keyed
@@ -1382,6 +1389,10 @@ def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
     # the field looks like.
     if rig is not None:
         header["rig"] = rig
+    # Same rule as the rig: absent is how every corpus captured before the field
+    # looks, and it has to stay distinguishable from an explicit `none`.
+    if room is not None:
+        header["room"] = room
     (root / "manifest.json").write_text(json.dumps(header))
     return root
 
@@ -1505,6 +1516,25 @@ def test_a_corpus_probe_reports_its_dryness_from_the_capture_config(tmp_path):
     """A wet capture has to be measured; a dry one must not have a room invented for it."""
     assert load_corpus(_write_corpus(tmp_path / "dry", dry=True)).dry is True
     assert load_corpus(_write_corpus(tmp_path / "wet", dry=False)).dry is False
+
+
+def test_a_corpus_carries_what_its_capture_answered_about_a_space(tmp_path):
+    """`dry` and `room` are separate answers and only the second is about a room.
+
+    A plugin advertising no effect section answers `dry: false` for want of
+    anything to switch off, which is the shape of most captures here — and read
+    on its own it puts a room on a reference that was measured to have none.
+    """
+    assert load_corpus(_write_corpus(tmp_path / "u")).room == ROOM_UNCLASSIFIED
+    assert load_corpus(_write_corpus(tmp_path / "n", room=ROOM_NONE)).room == ROOM_NONE
+    assert load_corpus(_write_corpus(tmp_path / "p", room=ROOM_PRESENT)).room == ROOM_PRESENT
+    # The pair that motivated the field, and the one the room gate has to read
+    # as no space: nothing to switch off, and nothing there to switch it in.
+    both = load_corpus(_write_corpus(tmp_path / "b", dry=False, room=ROOM_NONE))
+    assert both.dry is False and both.room == ROOM_NONE
+    # Same rule as the rig: an answer nothing understands is an unanswered one,
+    # since reading it as `none` would skip the correction on a wet reference.
+    assert load_corpus(_write_corpus(tmp_path / "typo", room="dry")).room == ROOM_UNCLASSIFIED
 
 
 def test_a_corpus_carries_what_its_capture_answered_about_a_rig(tmp_path):

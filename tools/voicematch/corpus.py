@@ -38,6 +38,8 @@ from capture import (
     RIG_NONE,
     RIG_UNCLASSIFIED,
     RIG_VALUES,
+    ROOM_UNCLASSIFIED,
+    ROOM_VALUES,
     parse_seconds,
     rig_capable,
 )
@@ -71,6 +73,13 @@ class Corpus:
     #: capture is the instrument; a wet one has a room baked in that the model
     #: has to be placed in before any decay metric means anything.
     dry: bool = False
+    #: What the capture config answered about a space in the recording, which is
+    #: a different assertion from `dry` and the one that settles the question.
+    #: `dry` says an effect section was switched off; a plugin with no such
+    #: section to switch answers False to it while still having been recorded in
+    #: no space at all. Only `none` may skip the correction — `unclassified` is
+    #: nobody having answered, and the room is then measured from the audio.
+    room: str = ROOM_UNCLASSIFIED
     #: What the capture config answered about a rig — an amplifier, a cabinet, a
     #: rotary speaker — standing between the instrument and the microphone.
     #: `unclassified` where nobody has answered, which is not `none`. A different
@@ -176,6 +185,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         velocities=tuple(sorted({v for _, v in renders})),
         label=label,
         dry=_dryness(manifest),
+        room=_room(manifest),
         rig=_rig(manifest),
         channel=_note_channel(manifest, entry),
         groups=_groups(manifest),
@@ -259,6 +269,36 @@ def _dryness(manifest: dict) -> bool:
         return bool(json.loads(path.read_text()).get("dry", False))
     except (OSError, ValueError):
         return False
+
+
+def _room(manifest: dict) -> str:
+    """What the capture answered about a space, from the manifest or its config.
+
+    Same two-step as `_rig`. Absent, unreadable and unrecognised all come back
+    `unclassified`, so a corpus nobody has answered for still has its room
+    measured from the audio — the safe direction, since a reference recorded in
+    a hall and read as dry is fitted with the hall inside the instrument.
+
+    Read alongside `dry` rather than instead of it, because the two answer
+    different questions and only this one is about a room: a plugin advertising
+    no effect section answers `dry: false` for want of anything to switch off,
+    and every capture of one was having a space estimated from its own note
+    tails. On a voice that sustains that estimate is the release — which is the
+    measurement `room` exists to replace.
+    """
+    import json
+
+    if "room" in manifest:
+        value = manifest.get("room")
+        return str(value) if value in ROOM_VALUES else ROOM_UNCLASSIFIED
+    for candidate in _config_paths(manifest.get("config", "")):
+        try:
+            value = json.loads(candidate.read_text()).get("room")
+        except (OSError, ValueError):
+            continue
+        if value in ROOM_VALUES:
+            return str(value)
+    return ROOM_UNCLASSIFIED
 
 
 def _rig(manifest: dict) -> str:
