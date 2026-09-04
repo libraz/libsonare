@@ -534,6 +534,33 @@ def tone_to_noise_db(freqs: np.ndarray, mag: np.ndarray, f0_hz: float,
     return float(10.0 * np.log10((tone + 1e-30) / (noise + 1e-30)))
 
 
+#: How far under its own peak a note's ring is still worth fitting partials in.
+#: The strike is what puts a bar's modes there, so unlike a sustained voice
+#: there is no later window to prefer — what there is has to be taken whole.
+SHORT_RING_FLOOR_DB = 40.0
+
+
+def _short_ring_window(held: np.ndarray, sr: int) -> tuple[int, int]:
+    """Where a note too short for the fixed window keeps its partials.
+
+    From the envelope peak, which is the strike, to where the ring has fallen
+    `SHORT_RING_FLOOR_DB` under it. Both ends are this note's own: a woodblock
+    is 35 ms at the bottom of its range and 17 at the top, so no fixed span
+    covers it either.
+    """
+    times, env = _rms_envelope(held, sr)
+    if env.size == 0:
+        return 0, 0
+    peak_i = int(np.argmax(env))
+    floor = float(env[peak_i]) * 10.0 ** (-SHORT_RING_FLOOR_DB / 20.0)
+    over = np.nonzero(env[peak_i:] > floor)[0]
+    end_i = peak_i + (int(over[-1]) if over.size else 0)
+    hop = float(times[1] - times[0]) if times.size > 1 else 0.005
+    a = int(float(times[peak_i]) * sr)
+    b = min(len(held), int((float(times[end_i]) + hop) * sr))
+    return (a, b) if b - a >= sr // 200 else (0, 0)
+
+
 def measure_note(audio: np.ndarray, sr: int, note: int, *,
                  preroll_s: float, gate_s: float) -> dict:
     """Every measurement this profile carries, for one captured note."""
@@ -550,6 +577,15 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     a = int(0.12 * sr)
     b = min(len(held), a + int(1.5 * sr))
     row: dict = dict(find_partials(held[a:b], sr, note))
+    if not row:
+        # 120 ms is after the end of a note that is over in 35, and a voice that
+        # short then has no row at all rather than a bad one. So where the fixed
+        # window holds nothing, the same window is placed against this note's
+        # own ring: from its envelope peak to where the fall leaves the floor.
+        # Tried only after the fixed window has failed, so no note that measures
+        # today measures differently.
+        a, b = _short_ring_window(held, sr)
+        row = dict(find_partials(held[a:b], sr, note)) if b > a else {}
     if not row:
         # No fundamental means this is not a struck note, and every measurement
         # below would still produce a number for it — a decay slope of 0 dB/s

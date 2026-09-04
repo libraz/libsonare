@@ -24,7 +24,12 @@ import au_oracle  # noqa: E402
 import capture  # noqa: E402
 from au_oracle import AuSource, _strip_preroll, with_keyswitches  # noqa: E402
 from metrics import harmonic_share, midi_to_hz  # noqa: E402
-from profile import double_decay, find_partials, measure_note  # noqa: E402
+from profile import (  # noqa: E402
+    _short_ring_window,
+    double_decay,
+    find_partials,
+    measure_note,
+)
 from wavio import write_wav  # noqa: E402
 
 SR = 48000
@@ -111,6 +116,45 @@ def test_damper_release_is_measured_from_note_off():
 def test_measure_note_returns_nothing_for_silence():
     silence = np.zeros(int(2.0 * SR), dtype=np.float32)
     assert measure_note(silence, SR, 60, preroll_s=0.1, gate_s=1.0) == {}
+
+
+def _short_ring(note: int, ring_ms: float, preroll: float = 0.1,
+                gate: float = 0.5) -> np.ndarray:
+    """A struck bar: partials over in `ring_ms`, silence for the rest of the gate."""
+    t = np.arange(int((preroll + gate + 0.5) * SR)) / SR
+    f0 = midi_to_hz(note)
+    out = np.zeros_like(t)
+    since = t - preroll
+    for k, ratio in enumerate((2.03, 1.91, 1.77, 2.24), start=1):
+        out += (1.0 / k) * np.sin(2 * np.pi * f0 * ratio * t)
+    out *= np.where(since >= 0.0, 10.0 ** (-60.0 / 20.0 * since / (ring_ms / 1000.0)), 0.0)
+    return (out / np.abs(out).max()).astype(np.float32)
+
+
+def test_a_note_over_before_the_fixed_window_opens_is_still_measured():
+    """The window that skips the strike opens 120 ms in; a woodblock ends at 35.
+
+    Without the fallback every render of the shortest voice in the bank read as
+    nothing measurable, and the profile was written empty rather than refused.
+    """
+    got = measure_note(_short_ring(72, 35.0), SR, 72, preroll_s=0.1, gate_s=0.5)
+    assert got, "a 35 ms ring measured as nothing"
+    assert got["f0_hz"] > 0.0
+
+
+def test_the_short_ring_fallback_is_reached_only_after_the_fixed_window_fails():
+    """The invariance the change rests on: a note with content at 120 ms is
+    measured from there exactly as before, so no committed profile moves."""
+    long_note = stiff_string(60, 3.0e-4, seconds=2.0)
+    padded = np.concatenate([np.zeros(int(0.1 * SR), dtype=np.float32), long_note])
+    before = measure_note(padded, SR, 60, preroll_s=0.1, gate_s=1.5)
+    assert before, "the control did not measure at all"
+    # The fallback window on this note is the strike, which is where the fixed
+    # window deliberately does NOT look — so if it had been taken, the fitted
+    # partial levels would differ from the ones the fixed window reports.
+    a, b = _short_ring_window(padded[int(0.1 * SR):], SR)
+    assert a < int(0.12 * SR) <= b, "the fallback window is not the strike here"
+    assert before["f0_hz"] == pytest.approx(midi_to_hz(60), rel=0.02)
 
 
 # --------------------------------------------------------------------------
