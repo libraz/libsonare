@@ -1,0 +1,61 @@
+{
+  "id": "fx_atmosphere",
+  "label": "FX 4 (atmosphere), sampled, close and dry",
+  "program": 99,
+  "takes": "sustained",
+  "audition_title": "libsonare atmosphere effect vs the sampled reference",
+  "_notes": "Every fourth semitone across the register this program is probed on, 48 to 72. Both ends were rendered before the grid was written and both are healthy -- onset at the preroll, the key tracked to within the transform's own resolution, and the level behaving at the ends as it does in the middle. Brightness across the grid at velocity 100: 460 Hz at note 48, 712 at 60 and 1251 at 72.",
+  "notes": [
+    48,
+    52,
+    56,
+    60,
+    64,
+    68,
+    72
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. Measured at the middle of the grid, the peak runs 17.9 dB from velocity 16 to 100 while the spectral centroid moves 645 Hz to 712 -- so velocity reaches the filter as well as the amplifier, and a model given a level-only velocity map is wrong about brightness at both ends whatever its gain does.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: over the tail this capture records, a release and a small hall are the same falling signal, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. Three readings say dry. `capture.py calibrate` measures RT60 0.00 s on this rack; the plugin advertises no parameter matching `reverb` or `delay`; and the slots that stop at note-off leave digital silence 300 ms later, which no space does. Left to measure, what the estimate would record is convolved onto every model render before any figure is taken.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "The metrics take their sustain window between 0.6 s and 1.8 s after onset, so the gate has to outlast that with margin. The tail is measured rather than chosen: this slot releases over 1210 ms to fall 40 dB, and two seconds carries every slot of the eight past that bound with the slowest of them, at 1370 ms, still inside it.",
+  "gate_ms": 3000,
+  "tail": "2s",
+  "_calibration": "From `capture.py calibrate` on this rack: the reference renders identically in real time and faster than it, the same note twice is bit-identical -- so there is no round robin to put a floor under the loss -- and the measured settle minimum is well under the 2 s used. `realtime` is kept on: a note streamed late is caught only by `verify`, and what it would otherwise become is a committed measurement that is silently wrong. The independent reading worth keeping is the dryness, RT60 0.00 s.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second atmosphere effect in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm100",
+      "label": "GM atmosphere effect, rack slot 4",
+      "slot_channel": 4
+    }
+  ],
+  "_dimensions": "10 of the 10 this voice's class can be judged on. `vel_range` is kept for the 17.9 dB measured above.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `fx_atmosphere.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/fx_atmosphere.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round, so the map can be confirmed rather than argued. Rendered at note 60 velocity 104, slot 10 returns a peak of -11.62 dBFS and the committed profile for GM 106 reads -11.62 at that same cell; slot 13 returns -13.96 and the profile for GM 109 reads -13.96. Two exact agreements at two points in the rack fix the numbering with nothing left to interpret. Two further readings hold it in between: slots 9 to 13 all decay while the key is still down and slots 14 to 16 all hold their level until it lifts, so the plucked-and-sustained seam lands exactly where GM puts the kalimba and the bagpipe, and every slot tracks the key it is sent across the whole grid. This slot: a monotone ladder with a lifted eighth partial (-31.5 dB over h7's -38.1) under a half-decorrelated image, holding its level for the whole gate."
+}

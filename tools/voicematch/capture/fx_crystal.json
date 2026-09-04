@@ -1,0 +1,65 @@
+{
+  "id": "fx_crystal",
+  "label": "FX 3 (crystal), sampled, close and dry",
+  "program": 98,
+  "takes": "sustained",
+  "audition_title": "libsonare crystal effect vs the sampled reference",
+  "_notes": "Every fourth semitone across the register this program is probed on, 48 to 72. Both ends were rendered before the grid was written and both are healthy -- onset at the preroll, the key tracked to within the transform's own resolution, and the level behaving at the ends as it does in the middle. Brightness across the grid at velocity 100: 298 Hz at note 48, 675 at 60 and 716 at 72.",
+  "notes": [
+    48,
+    52,
+    56,
+    60,
+    64,
+    68,
+    72
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. Measured at the middle of the grid, the peak runs 14.3 dB from velocity 16 to 100 while the spectral centroid moves 315 Hz to 675 -- so velocity reaches the filter as well as the amplifier, and a model given a level-only velocity map is wrong about brightness at both ends whatever its gain does.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: over the tail this capture records, a release and a small hall are the same falling signal, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. Three readings say dry. `capture.py calibrate` measures RT60 0.00 s on this rack; the plugin advertises no parameter matching `reverb` or `delay`; and the slots that stop at note-off leave digital silence 300 ms later, which no space does. Left to measure, what the estimate would record is convolved onto every model render before any figure is taken.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "The metrics take their sustain window between 0.6 s and 1.8 s after onset, so the gate has to outlast that with margin. This slot does not hold a level to outlast it with: it falls 40 dB in 2.54 s under the held key, so the window sits on a decay rather than on a steady state. The gate is set past the fall so the whole of it is recorded, and the tail carries what follows note-off.",
+  "gate_ms": 3000,
+  "tail": "2s",
+  "_calibration": "From `capture.py calibrate` on this rack: the reference renders identically in real time and faster than it, the same note twice is bit-identical -- so there is no round robin to put a floor under the loss -- and the measured settle minimum is well under the 2 s used. `realtime` is kept on: a note streamed late is caught only by `verify`, and what it would otherwise become is a committed measurement that is silently wrong. The independent reading worth keeping is the dryness, RT60 0.00 s.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second crystal effect in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm099",
+      "label": "GM crystal effect, rack slot 3",
+      "slot_channel": 3
+    }
+  ],
+  "_dimensions": "9 of the 10 this voice's class can be judged on. `vel_range` is kept for the 14.3 dB measured above.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "stereo",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, so what is listed here is only what that set contains and this capture cannot hold.",
+  "dimensions_na": {
+    "damper": "this slot decays under the held key -- 40 dB in 2.54 s -- so with a 3.0 s gate the key lifts on a note already far down, and what a release measurement would read there is the end of the sample rather than how the instrument is silenced"
+  },
+  "_class": "`toneclass` calls this program sustained and the reference is not: it falls 40 dB in 2.54 s under a held key. The classification decides the probe register, the metric weighting and which dimensions count as canonical, so it is a bank-level judgement rather than a capture's to make, and it is recorded here rather than worked around. What follows from it today is that `decay`, `aftersound` and `doubling` are not in this voice's canonical set even though the reference has all three.",
+  "_identity": "Which product this is captured from lives in the untracked sibling `fx_crystal.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/fx_crystal.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round, so the map can be confirmed rather than argued. Rendered at note 60 velocity 104, slot 10 returns a peak of -11.62 dBFS and the committed profile for GM 106 reads -11.62 at that same cell; slot 13 returns -13.96 and the profile for GM 109 reads -13.96. Two exact agreements at two points in the rack fix the numbering with nothing left to interpret. Two further readings hold it in between: slots 9 to 13 all decay while the key is still down and slots 14 to 16 all hold their level until it lifts, so the plucked-and-sustained seam lands exactly where GM puts the kalimba and the bagpipe, and every slot tracks the key it is sent across the whole grid. This slot: h4 at -17.3 dB is the loudest partial above the fundamental while h2 sits at -40.1 and h3 at -34.6, which is a struck-bar or bell structure rather than a filtered ladder, and the note decays while the key is still down -- 40 dB in 2.54 s. It is also the widest image of the ten at a channel correlation of 0.12."
+}
