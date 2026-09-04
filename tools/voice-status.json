@@ -5611,7 +5611,7 @@
         "engine": "vocal",
         "patch": "choir_aahs",
         "timbres": 1,
-        "profile_rows": 27,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -9177,7 +9177,7 @@
         "engine": "subtractive",
         "patch": "sfx_helicopter",
         "timbres": 1,
-        "profile_rows": 12,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,

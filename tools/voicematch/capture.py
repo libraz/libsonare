@@ -203,6 +203,10 @@ def load_config(path: Path) -> dict:
     # the whole grid's render time for the sake of ten notes.
     cfg.setdefault("tail_by_note", {})
     cfg.setdefault("preroll_ms", 100)
+    # How far past the preroll a render may begin and still be the note. See
+    # ONSET_SLACK_MS for the default and for what a capture has to measure
+    # before widening it.
+    cfg.setdefault("onset_slack_ms", ONSET_SLACK_MS)
     # How long before each note a timbre's key switch is struck. Taken out of the
     # preroll rather than added to it, so the note lands at `preroll_ms` whether a
     # timbre is switched or not and every timbre of the corpus shares one
@@ -562,6 +566,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     # comes out late. Both are compared rather than thresholded absolutely.
     print("== settle ==", file=sys.stderr)
     src = replace(base, realtime=True)
+    slack_ms = float(cfg["onset_slack_ms"])
     settle_rows = []
     # What this plugin reaches when it has had time. Step 1 renders at
     # `max(4000, base.settle_ms)`, so it is the intact reading to measure against.
@@ -573,7 +578,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
         peak, drop = float(s.get("peak", 0.0)), s.get("dropout_ms", 0)
         onset = _onset_ms(wav, int(cfg["sample_rate"])) if wav.exists() else None
         quiet = reference_peak > 0.0 and peak < reference_peak * SETTLE_PEAK_RATIO
-        late = onset is not None and onset > float(src.preroll_ms) + ONSET_SLACK_MS
+        late = onset is not None and onset > float(src.preroll_ms) + slack_ms
         ok = peak >= src.min_peak and not drop and not quiet and not late
         why = ("ok" if ok else
                "SILENT" if peak < src.min_peak else
@@ -705,6 +710,9 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         "gate_ms": cfg["gate_ms"],
         "tail": cfg["tail"],
         "preroll_ms": cfg["preroll_ms"],
+        # `verify` re-checks every render against the guard that admitted it, so
+        # it has to read the width that run used rather than today's default.
+        "onset_slack_ms": cfg["onset_slack_ms"],
         # Nothing downstream reads it — the note lands at `preroll_ms` either way
         # — but a corpus that says how it was made is what a later run compares
         # itself against.
@@ -747,6 +755,7 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
                 src, out / rel, note, vel, int(cfg["gate_ms"]), sends=config_sends(cfg),
                 floor_peak=loudest.get((timbre["id"], note), 0.0),
                 preroll_ms=float(cfg["preroll_ms"]),
+                onset_slack_ms=float(cfg["onset_slack_ms"]),
                 sample_rate=int(cfg["sample_rate"]),
             )
             loudest[(timbre["id"], note)] = max(
@@ -824,8 +833,10 @@ QUIET_TONE_SHARE = 0.8
 #
 # Being loud is exactly why nothing caught it. `QUIET_RATIO` asks whether the
 # samples arrived; this asks whether they arrived on time, which is the only
-# part of the failure that shows. A slow-attack instrument does not defeat it:
-# the test is the first sample over an absolute -80 dBFS, not the peak.
+# part of the failure that shows. The test is the first sample over an absolute
+# -80 dBFS rather than a share of the peak, which is the note-on on a struck
+# note under a preroll of exact zeros and is not on a voice that swells under a
+# preroll carrying its library's own bed beneath that line.
 #
 # The width is measured rather than chosen, because the first value chosen was
 # too wide to catch the failure it was written for. Across a 282-render drum
@@ -842,6 +853,13 @@ QUIET_TONE_SHARE = 0.8
 # because the library's room tone is already sounding before the strike, and a
 # late render inside one of those is invisible here. `capture.py verify` names
 # them as energy before the note.
+#
+# A capture may widen it with `onset_slack_ms`, because the width above is
+# measured on struck notes and an absolute threshold answers a timing question
+# with a level: a voice that swells from nothing crosses the line later the
+# quieter the cell is, so the refusals land on one end of the velocity axis. A
+# capture that widens it says what it measured, the way a `dimensions_na` entry
+# does — the alternative is a grid with cells missing and the reason in prose.
 ONSET_SLACK_MS = 10.0
 #: Absolute level that counts as the render having begun. Well under anything an
 #: instrument radiates and well over a silent preroll, which is exactly zero.
@@ -884,6 +902,7 @@ def _tone_share(path: Path, note: int, sr: int, preroll_ms: float) -> float | No
 
 def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
                  *, floor_peak: float, preroll_ms: float = 0.0,
+                 onset_slack_ms: float = ONSET_SLACK_MS,
                  sample_rate: int = 48000, attempts: int = 5,
                  sends: tuple[int, int, int] | None = None) -> dict:
     """One corpus render, retried while it comes back too quiet to be the note.
@@ -942,13 +961,13 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
             summary["quiet_tone_share"] = round(share, 4)
         onset = _onset_ms(out, sample_rate)
         summary["onset_ms"] = None if onset is None else round(onset, 2)
-        if onset is not None and onset > preroll_ms + ONSET_SLACK_MS:
+        if onset is not None and onset > preroll_ms + onset_slack_ms:
             # See ONSET_SLACK_MS. Loud enough to pass the ratio above and not
             # the note: retried rather than recorded.
             last = (f"the render begins {onset:.0f} ms in against a {preroll_ms:.0f} ms "
                     f"preroll: this is not the note")
             continue
-        if src.keyswitch and onset is not None and onset < preroll_ms - ONSET_SLACK_MS:
+        if src.keyswitch and onset is not None and onset < preroll_ms - onset_slack_ms:
             # A key switch is supposed to select rather than sound, and a library
             # that gives it a voice is a click under every measurement of that
             # timbre — at a level the peak, the tone share and the late-onset
@@ -983,7 +1002,7 @@ MELODIC_SHARE = 0.5
 
 
 def _pitch_probe(src: AuSource, scratch: Path, channel: int, velocity: int,
-                 gate_ms: int, sample_rate: int) -> dict:
+                 gate_ms: int, sample_rate: int, onset_slack_ms: float) -> dict:
     """Stage one: does this slot answer a note number with that note's pitch?
 
     The discriminator is deliberately not a fact about drums. `harmonic_share`
@@ -1003,7 +1022,7 @@ def _pitch_probe(src: AuSource, scratch: Path, channel: int, velocity: int,
         try:
             _render_note(replace(src, channel=channel), wav, note, velocity, gate_ms,
                          floor_peak=0.0, preroll_ms=float(src.preroll_ms),
-                         sample_rate=sample_rate)
+                         onset_slack_ms=onset_slack_ms, sample_rate=sample_rate)
         except AuRenderError as exc:
             return {"error": str(exc)[:200]}
         audio, sr = read_wav(wav)
@@ -1053,6 +1072,7 @@ def holds_a_whole_kit(distinct_peak_bands: int, notes_measured: int) -> bool:
 
 def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, ...],
                   velocity: int, gate_ms: int, sample_rate: int,
+                  onset_slack_ms: float,
                   reference: dict[tuple[int, int], list[float]],
                   band_edge: float | None) -> dict:
     """Stage two: how far this slot's diagnostic hits sit from the known kit's.
@@ -1080,7 +1100,7 @@ def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, 
         try:
             _render_note(replace(src, channel=channel), wav, note, velocity, gate_ms,
                          floor_peak=0.0, preroll_ms=float(src.preroll_ms),
-                         sample_rate=sample_rate)
+                         onset_slack_ms=onset_slack_ms, sample_rate=sample_rate)
         except AuRenderError as exc:
             per_note[note] = {"error": str(exc)[:120]}
             continue
@@ -1142,6 +1162,7 @@ def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
     scratch.mkdir(parents=True, exist_ok=True)
     gate_ms = int(cfg.get("gate_ms", 50))
     sample_rate = int(cfg["sample_rate"])
+    slack_ms = float(cfg["onset_slack_ms"])
     reference, band_edge = _reference_bands(cfg["id"])
     groups = note_groups(cfg)
     # One note per declared family: a kit differs from a melodic slot across the
@@ -1158,10 +1179,11 @@ def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
         if verbose:
             print(f"  ch {channel:2d}{' (control)' if control else ''}", file=sys.stderr)
         entry: dict = {"control": control, "pitch": _pitch_probe(
-            base, scratch, channel, velocity, gate_ms, sample_rate)}
+            base, scratch, channel, velocity, gate_ms, sample_rate, slack_ms)}
         if not entry["pitch"].get("melodic") and diagnostic and reference:
             entry["kit"] = _kit_likeness(base, scratch, channel, diagnostic, velocity,
-                                         gate_ms, sample_rate, reference, band_edge)
+                                         gate_ms, sample_rate, slack_ms, reference,
+                                         band_edge)
         report["channels"][str(channel)] = entry
 
     _write(scratch / "report.json", report)
@@ -1231,7 +1253,8 @@ def verify(out: Path) -> int:
         # the file is not the note, and a corpus carrying one produces a
         # reference profile that looks exactly like a good one.
         onset = _onset_ms(path, sr)
-        if onset is not None and onset > manifest["preroll_ms"] + ONSET_SLACK_MS:
+        slack = float(manifest.get("onset_slack_ms", ONSET_SLACK_MS))
+        if onset is not None and onset > manifest["preroll_ms"] + slack:
             faults.append(f"{row['id']}: begins {onset:.0f} ms in, against a "
                           f"{manifest['preroll_ms']:.0f} ms preroll — not the note")
             continue

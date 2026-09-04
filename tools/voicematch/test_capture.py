@@ -416,17 +416,56 @@ def test_a_render_is_timed_from_where_its_audio_actually_begins(tmp_path):
 
 
 def test_the_onset_test_reads_the_first_sample_over_a_floor_not_the_peak():
-    """A slow-attack instrument must not be mistaken for a late render.
+    """What the threshold finds is where the render left its own preroll floor.
 
-    The threshold is absolute and far under anything an instrument radiates, so
-    what it finds is where the render stopped being digital silence — which is
-    the note-on however long the swell after it takes.
+    On a struck note that is the note-on, because the preroll is exactly zero
+    and the strike crosses an absolute floor within a sample of it. It is not
+    the note-on on a voice that swells under a preroll carrying its library's
+    own bed below that floor: there the crossing sits partway up the swell and
+    moves with velocity, which is what `onset_slack_ms` exists for.
     """
     assert capture.ONSET_FLOOR_DBFS <= -60.0
     # Wide enough that a real preroll's jitter never trips it, narrow enough
     # that the failure it was written for — 150 ms at the very least, and up to
     # 843 — cannot get through.
     assert 10.0 <= capture.ONSET_SLACK_MS <= 100.0
+
+
+def test_a_capture_can_widen_the_onset_guard_and_the_default_stays_put(tmp_path, monkeypatch):
+    """A swelling voice's late crossing is admitted only where it is declared.
+
+    The same render is refused under the measured default and taken under a
+    widened one, so the widening reaches the guard rather than being prose in a
+    capture definition.
+    """
+    out = tmp_path / "n060_v032.wav"
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(len(calls))
+        _render_file(out, 122.0, peak=0.02)
+        return SimpleNamespace(returncode=0,
+                               stdout=json.dumps({"peak": 0.02, "seconds": 2.0}), stderr="")
+
+    monkeypatch.setattr(capture.subprocess, "run", fake_run)
+    monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
+    src = AuSource(plugin="aumu:test:test")
+    with pytest.raises(capture.AuRenderError):
+        capture._render_note(src, out, 60, 32, 50, floor_peak=0.0,
+                             preroll_ms=100.0, sample_rate=SR, attempts=1)
+    summary = capture._render_note(src, out, 60, 32, 50, floor_peak=0.0,
+                                   preroll_ms=100.0, onset_slack_ms=30.0,
+                                   sample_rate=SR, attempts=1)
+    assert summary["onset_ms"] == pytest.approx(122.0, abs=1.0)
+
+
+def test_a_capture_that_says_nothing_about_the_onset_guard_gets_the_measured_width(tmp_path):
+    """The default is filled in, so every manifest records the width it used."""
+    cfg = {"id": "x", "plugin": "aumu:test:test", "notes": [60], "velocities": [64],
+           "timbres": [{"id": "t"}]}
+    path = tmp_path / "x.json"
+    path.write_text(json.dumps(cfg))
+    assert capture.load_config(path)["onset_slack_ms"] == capture.ONSET_SLACK_MS
 
 
 def test_a_late_render_is_retried_rather_than_recorded(tmp_path, monkeypatch):
