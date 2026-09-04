@@ -53,6 +53,8 @@ Nothing in the sequence is an analysis note: every per-hit measurement assumes a
 
 The map is applied to the **oracle side only**: libsonare ships GM's layout because that is what a MIDI file is written against, and correcting the model would calibrate this reference's idiosyncrasy into the product. A mapped row prints as `41>48`.
 
+Both readers apply it, and for a while only one did. `profile.py compare` has always mapped; the `Corpus` a fit scores against did not carry the field at all, so `autofit.py --drum-note 41 --corpus <kit>` struck the model's smallest tom against the reference's largest and fitted it to a drum an octave away — with nothing to notice, since the run reports a loss and not a pairing. **A declaration is only as good as the readers that see it**, which is the same failure the `room` field had. `--drum-note` and `--notes` name the note the MODEL is struck on, because that is what the fit's knobs belong to; `Corpus.capture_slot` is where the two numberings meet, and the reference assembly stays in the capture's own.
+
 **The kit-relation term needs none of this**, and that is a design decision rather than a coincidence. It compares each family's sorted contrasts, so a family is a set and has no order to disagree about; the six toms group correctly whichever key holds which drum. What that buys is a measurement of the series that stands whether or not a map was ever written, and what it costs is that the term cannot see a **permuted** family — placement stays the per-note terms' job. See the [`kit` term](loss.md#percussion-terms).
 
 What is **still** not covered: the kit assignment itself, and anything that needs two members struck together.

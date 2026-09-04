@@ -1360,7 +1360,7 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
 # --------------------------------------------------------------------------- #
 def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
                   gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True,
-                  channel=1, groups=None, rig=None, room=None) -> Path:
+                  channel=1, groups=None, rig=None, room=None, note_map=None) -> Path:
     """A miniature capture: one short tone per slot, plus the manifest beside it.
 
     `seconds` is a number for a grid captured at one flat tail, or a note-keyed
@@ -1403,8 +1403,46 @@ def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
     # looks, and it has to stay distinguishable from an explicit `none`.
     if room is not None:
         header["room"] = room
+    if note_map is not None:
+        header["note_map"] = note_map
     (root / "manifest.json").write_text(json.dumps(header))
     return root
+
+
+def test_a_capture_that_lays_its_instruments_out_differently_is_answered_note_for_note(
+    tmp_path,
+):
+    """The kit reference ascends its six toms as 45, 47, 48, 50, 41, 43, so a
+    model that follows General MIDI has to be struck on the note of the same
+    RANK or every tom is fitted against a different sized drum. `profile.py
+    compare` has always read `note_map`; the corpus the fit scores against did
+    not, so the two disagreed about which drum a number meant."""
+    root = _write_corpus(tmp_path / "c", notes=(60, 72), velocities=(56,),
+                         note_map={"60": 72, "72": 60})
+    corpus = load_corpus(root)
+    assert corpus.note_map == {60: 72, 72: 60}
+    # The probe strikes the model's notes, in the captured notes' order.
+    probe = corpus_pattern(corpus)
+    assert [n.note for n in probe.notes] == [72, 60]
+    assert [corpus.capture_slot(n.note) for n in probe.notes] == [60, 72]
+
+    # The reference is what it was recorded as. "Applied to the oracle side
+    # only" means the MODEL moves to meet it, so the assembly is untouched and
+    # a slot still holds the note it was captured on: the first is 60's pitch,
+    # under a probe that strikes 72 there.
+    plain_root = _write_corpus(tmp_path / "d", notes=(60, 72), velocities=(56,))
+    plain_corpus = load_corpus(plain_root)
+    assert np.allclose(corpus_oracle(corpus, probe, 48000),
+                       corpus_oracle(plain_corpus, corpus_pattern(plain_corpus), 48000))
+    first = corpus_oracle(corpus, probe, 48000)[4800:24800, 0]
+    peak = float(np.argmax(np.abs(np.fft.rfft(first)))) * 48000.0 / len(first)
+    assert peak == pytest.approx(440.0 * 2 ** ((60 - 69) / 12.0), rel=0.02)
+
+    # A capture that declared nothing is untouched: both numberings agree.
+    bare = load_corpus(_write_corpus(tmp_path / "e"))
+    assert bare.note_map == {}
+    assert bare.played_notes() == bare.notes
+    assert [n.note for n in corpus_pattern(bare).notes] == [60, 60, 72, 72]
 
 
 def test_a_corpus_probe_is_laid_out_by_the_capture_not_by_a_builder(tmp_path):

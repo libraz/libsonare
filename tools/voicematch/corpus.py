@@ -103,6 +103,10 @@ class Corpus:
     #: not, and a single number for both truncates the cymbals to the kick's
     #: window — which is the whole reason the longer tail was captured.
     slots: dict[tuple[int, int], float] = field(default_factory=dict)
+    #: Captured note -> the model note that answers it, where the reference does
+    #: not lay its instruments out the way the model does. Empty for every
+    #: capture whose numbering the model already agrees with. See `_note_map`.
+    note_map: dict[int, int] = field(default_factory=dict)
 
     def slot_count(self) -> int:
         return len(self.notes) * len(self.velocities)
@@ -110,6 +114,22 @@ class Corpus:
     def slot_for(self, note: int, velocity: int) -> float:
         """The analysis window for one slot: exactly what was recorded for it."""
         return self.slots.get((note, velocity), self.slot_s)
+
+    def played_notes(self) -> tuple[int, ...]:
+        """The notes the MODEL is struck on, one per captured note, in its order."""
+        return tuple(self.note_map.get(n, n) for n in self.notes)
+
+    def capture_slot(self, played: int) -> int:
+        """Which captured note a model note is scored against — `note_map` backwards.
+
+        Everything read off the reference stays in the capture's numbering (the
+        render, its recorded window, its `tail_by_note` entry) and everything
+        struck stays in the model's, so this is the one place the two meet.
+        """
+        return self._reverse_map().get(played, played)
+
+    def _reverse_map(self) -> dict[int, int]:
+        return {v: k for k, v in self.note_map.items()}
 
     def percussive(self) -> bool:
         """Whether this corpus's note numbers select instruments, not pitches."""
@@ -190,6 +210,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         channel=_note_channel(manifest, entry),
         groups=_groups(manifest),
         slots=slots,
+        note_map=_note_map(manifest),
     )
 
 
@@ -406,6 +427,35 @@ def _groups(manifest: dict) -> dict[str, tuple[int, ...]]:
     return {str(name): tuple(int(n) for n in notes) for name, notes in raw.items()}
 
 
+def _note_map(manifest: dict) -> dict[int, int]:
+    """Which model note answers each captured note, from the manifest or its config.
+
+    Same two-step as `_groups`. Declared because a reference is free to lay its
+    kit out however it likes and this one does: its six toms ascend as 45, 47,
+    48, 50, 41, 43, so scoring a model that follows General MIDI note for note
+    fits each tom against a different sized drum. Applied to the oracle side
+    only — libsonare ships GM's layout because that is what a MIDI file is
+    written against, and correcting the model would calibrate one reference's
+    idiosyncrasy into the product.
+
+    Empty everywhere means the two sides agree about what a note number means,
+    which is every capture but this one.
+    """
+    import json
+
+    if "note_map" in manifest:
+        raw = manifest.get("note_map") or {}
+    else:
+        raw = {}
+        for candidate in _config_paths(manifest.get("config", "")):
+            try:
+                raw = json.loads(candidate.read_text()).get("note_map") or {}
+            except (OSError, ValueError):
+                continue
+            break
+    return {int(k): int(v) for k, v in raw.items()}
+
+
 def _tail_seconds(tail) -> float:
     """Read the manifest's tail field, which is written as '500ms', '2s' or a number."""
     return parse_seconds(tail)
@@ -426,18 +476,24 @@ def corpus_pattern(
     A grid this size is not free — sixty slots of ten seconds is ten minutes of
     audio per render — so `notes` and `velocities` cut it, and the caller is
     expected to report the length it chose.
+
+    `notes` is in the MODEL's numbering, because it names what will be struck
+    and because a fit's knobs are the struck note's. Where the capture declared
+    a `note_map` the two numberings differ, and `capture_slot` is what turns a
+    struck note back into the render it is scored against.
     """
-    picked_notes = tuple(notes) if notes else corpus.notes
+    picked_notes = tuple(notes) if notes else corpus.played_notes()
     picked_vels = tuple(velocities) if velocities else corpus.velocities
     missing = [
-        (n, v) for n in picked_notes for v in picked_vels if (n, v) not in corpus.renders
+        (n, v) for n in picked_notes for v in picked_vels
+        if (corpus.capture_slot(n), v) not in corpus.renders
     ]
     if missing:
         shown = ", ".join(f"n{n}/v{v}" for n, v in missing[:6])
         raise ValueError(
             f"the {corpus.timbre} corpus has no capture for {len(missing)} of the requested "
             f"slots ({shown}{', ...' if len(missing) > 6 else ''}); it covers notes "
-            f"{','.join(str(n) for n in corpus.notes)} at velocities "
+            f"{','.join(str(n) for n in corpus.played_notes())} at velocities "
             f"{','.join(str(v) for v in corpus.velocities)}"
         )
 
@@ -447,7 +503,10 @@ def corpus_pattern(
     for n in picked_notes:
         for v in picked_vels:
             seq.append(Note(n, v, t, corpus.gate_s))
-            last_slot = corpus.slot_for(n, v)
+            # The window is the reference render's, so it is read in the
+            # capture's numbering: `tail_by_note` names the notes it recorded
+            # long, and those are the keys the plugin was struck on.
+            last_slot = corpus.slot_for(corpus.capture_slot(n), v)
             t += last_slot
     # The trailing pad is the final slot's own, not the grid's longest: it is
     # there so the last note is not cut off, and every earlier note is spaced by
@@ -481,11 +540,15 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
             f"resampling a reference"
         )
     last = max(pattern.notes, key=lambda n: n.start)
-    total = int(round((last.start + corpus.slot_for(last.note, last.velocity)) * sr))
+    total = int(round(
+        (last.start + corpus.slot_for(corpus.capture_slot(last.note), last.velocity)) * sr))
     out: np.ndarray | None = None
     skip = int(round(corpus.preroll_s * sr))
+    # The pattern is written in the model's numbering; the renders are filed
+    # under the notes the reference was struck on. See `Corpus.capture_slot`.
     for note in pattern.notes:
-        path = corpus.renders.get((note.note, note.velocity))
+        slot_note = corpus.capture_slot(note.note)
+        path = corpus.renders.get((slot_note, note.velocity))
         if path is None:
             continue
         audio, wav_sr = read_wav(path)
@@ -497,7 +560,7 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
             out = np.zeros((total, audio.shape[1]), dtype=np.float64)
         seg = audio[skip:]
         start = int(round(note.start * sr))
-        slot = corpus.slot_for(note.note, note.velocity)
+        slot = corpus.slot_for(slot_note, note.velocity)
         room = min(len(seg), total - start, int(round(slot * sr)))
         if room > 0:
             out[start : start + room] += seg[:room]
@@ -509,10 +572,12 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
 def describe(corpus: Corpus, pattern: Pattern) -> str:
     """One line naming what a run is about to score against, and what it costs."""
     last = max(pattern.notes, key=lambda n: n.start)
-    seconds = last.start + corpus.slot_for(last.note, last.velocity)
+    seconds = last.start + corpus.slot_for(corpus.capture_slot(last.note), last.velocity)
+    # `g` rather than a fixed precision: a kit's gate is 50 ms and rounding it
+    # to the nearest second printed "0 s gate" on every drum run.
     return (
         f"corpus oracle: {corpus.label} — {len(pattern.notes)} slots "
         f"({len({n.note for n in pattern.notes})} notes x "
         f"{len({n.velocity for n in pattern.notes})} velocities), "
-        f"{corpus.gate_s:.0f} s gate, {seconds / 60.0:.1f} min of audio per render"
+        f"{corpus.gate_s:g} s gate, {seconds / 60.0:.1f} min of audio per render"
     )
