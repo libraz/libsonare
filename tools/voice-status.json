@@ -8896,23 +8896,24 @@
       "tone_class": "noise",
       "patch": "reverse_cymbal",
       "engine": "percussion",
-      "capture": null,
+      "capture": "reverse_cymbal",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "reverse_cymbal",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "attack",
-            "stereo",
             "centroid_pct",
             "vel_range",
             "decay"
@@ -8927,7 +8928,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p120-guitar-fret-noise",
@@ -8939,23 +8940,24 @@
       "tone_class": "noise",
       "patch": "sfx_guitar_fret",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "guitar_fret_noise",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_guitar_fret",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "attack",
-            "stereo",
             "centroid_pct",
             "vel_range",
             "decay"
@@ -8970,7 +8972,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p121-breath-noise",
@@ -8982,23 +8984,24 @@
       "tone_class": "noise",
       "patch": "sfx_breath",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "breath_noise",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_breath",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "attack",
-            "stereo",
             "centroid_pct",
             "vel_range",
             "decay"
@@ -9013,7 +9016,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p122-seashore",
@@ -9025,15 +9028,15 @@
       "tone_class": "noise",
       "patch": "sfx_seashore",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "seashore",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_seashore",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
@@ -9056,7 +9059,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p123-bird-tweet",
@@ -9068,23 +9071,24 @@
       "tone_class": "noise",
       "patch": "sfx_bird_tweet",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "bird_tweet",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_bird_tweet",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "attack",
-            "stereo",
             "centroid_pct",
             "vel_range",
             "decay"
@@ -9099,7 +9103,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p124-telephone-ring",
@@ -9111,23 +9115,24 @@
       "tone_class": "noise",
       "patch": "sfx_telephone_ring",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "telephone_ring",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_telephone_ring",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "attack",
-            "stereo",
             "centroid_pct",
             "vel_range",
             "decay"
@@ -9142,7 +9147,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p125-helicopter",
@@ -9154,15 +9159,15 @@
       "tone_class": "noise",
       "patch": "sfx_helicopter",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "helicopter",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_helicopter",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 12,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
@@ -9185,7 +9190,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p126-applause",
@@ -9197,15 +9202,15 @@
       "tone_class": "noise",
       "patch": "sfx_applause",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "applause",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_applause",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
@@ -9228,7 +9233,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p127-gunshot",
@@ -9240,23 +9245,24 @@
       "tone_class": "noise",
       "patch": "sfx_gunshot",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "gunshot",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_gunshot",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 15,
         "gate_state": null,
         "coverage": {
           "canonical": 5,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "attack",
-            "stereo",
             "centroid_pct",
             "vel_range",
             "decay"
@@ -9271,7 +9277,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "kit000-standard-kit",

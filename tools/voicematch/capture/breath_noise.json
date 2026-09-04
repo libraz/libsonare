@@ -1,0 +1,55 @@
+{
+  "id": "breath_noise",
+  "label": "Breath Noise, sampled, close and dry",
+  "program": 121,
+  "takes": "noise",
+  "audition_title": "libsonare breath noise vs the sampled reference",
+  "_notes": "A voice with no pitch still answers the key on this rack, and the grid is three notes because of it. Every one of the nine effect slots transposes with the note played, each at its own fixed rate: rendered at notes 36, 48 and 60, the spectral centroid over the event moves by a constant factor per octave on all nine, and on every slot the two one-octave ratios agree with the square root of the two-octave ratio to within five per cent -- which is the prediction a single transposition rate makes and a switch between sample layers does not. The rates run from 0.10 to 0.87 semitones of pitch per semitone of key across the rack. A single-note grid would have put one point on a live axis, and the axis is where the model and the reference presently disagree most: seven of these programs are voiced entirely from frequencies written in hertz -- six from a noise oscillator behind a filter whose key-tracking weight is left at zero, and the reverse cymbal from a mode bank on a fixed base frequency -- so their spectrum does not move with the key at all, while the two voiced from a pitched oscillator move with it faster than the reference does. This slot transposes at 0.87.",
+  "notes": [
+    48,
+    60,
+    72
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live on every slot of the ten, at 15.9 to 27.9 dB between velocity 16 and 100, so none of them needed the exclusion a flat velocity response would have forced.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's 1526 advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. Three independent readings say there is none here. `calibrate` measures RT60 0.00 s; with the rack loaded not one of the 1526 parameters the plugin advertises matches `reverb`, `delay` or `room`; and the shortest voice on the rack is decisive on its own -- slot 4's note at the top of its compass lasts 36 ms and is followed by digital silence, which no space permits.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Sized to the event rather than to a phrase: the sound is 342 ms at middle C and lengthens toward the bottom of the grid as it transposes, and the gate clears the longest cell with room to spare. It ends by itself well before the key lifts, so what the tail records is silence and the fact that there is silence.",
+  "gate_ms": 1000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, which its already-captured siblings were recorded against and whose settings this capture adopts so the slots of one rack stay comparable. The settle is kept at eight seconds rather than the two the recipe suggests, which is the siblings' choice and is upheld here: the rack renders bit-identically across seven pairs at three gate and settle combinations, but one calibration run in eight reported two renders differing and did not reproduce, so the margin is bought rather than the measurement risked. `realtime` is kept on for the same reason -- a note streamed late is caught only by `verify`, and what it would otherwise become is a committed measurement that is silently wrong.",
+  "realtime": true,
+  "settle_ms": 8000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second breath noise in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm122",
+      "label": "GM breath noise, rack slot 10",
+      "slot_channel": 10
+    }
+  ],
+  "_dimensions": "4 of the 5 a voice with no pitch can be judged on. `centroid_pct` carries most of the identity here -- with no partials to place, where the energy sits and how it moves with the key is most of what distinguishes this from its neighbours -- and `vel_range` is live at 27.9 dB between velocity 16 and 100.",
+  "dimensions": [
+    "attack",
+    "centroid_pct",
+    "vel_range",
+    "decay"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, 550 dB under the signal, so the width is zero by construction rather than by voicing"
+  },
+  "_identity": "Which product this is captured from lives in the untracked sibling `breath_noise.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/breath_noise.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements rather than argued from a spectrum: six of its sixteen slots were captured in an earlier round. Rendered under each of those captures' own gates at a cell its profile holds, slot 1 returns a peak of -13.81 dBFS against a committed -13.81, slot 2 returns -18.62 against -18.62, slot 5 returns -16.48 against -16.48 and slot 7 returns -13.65 against -13.65. Four exact agreements fix slot n as GM program 111+n with nothing left to interpret. This slot: the most steeply key-tracked slot on the rack, at 0.87 semitones of pitch per semitone of key against 0.10 to 0.56 for the rest, and the widest in velocity at 27.9 dB against 15.9 to 22.7. Neither names the instrument on its own, so this slot is read off the confirmed numbering with its own measurements recorded beside it."
+}
