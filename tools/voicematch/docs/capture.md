@@ -28,9 +28,9 @@ Renders that are cheap to reproduce stay in `out/` and `out/au_cache/`, both git
 
 ## Shipped capture definitions
 
-`capture/piano.json`, `capture/harpsichord.json`, `capture/drums.json`, `capture/pipe_organ.json`. The grand's holds a long gate and a short tail because on a piano note-off is the damper — the free decay a model has to match happens while the key is still down. The harpsichord's is shorter, because its jack drops the moment the key is released and what follows is a fast damping plus the jack's own noise.
+One `capture/<id>.json` per instrument, and `reference/<id>.json` beside it for each that has been measured; `make voice-status` is the roll-up of which bank voice each answers and how far it has got. They are not listed here — a hand-written index of a directory drifts from it silently, and this one already had, still naming four long after the directory had outgrown them.
 
-Committed references: `reference/piano.json`, `harpsichord.json`, `drums.json`, `pipe_organ.json`, plus the gate files `drums_gate.json` and `pipe_organ_gate.json`.
+What is worth reading across them is that the gate is an argument rather than a default, and every definition makes it in its own `_stimulus` note. The grand's is long with a short tail, because on a piano note-off is the damper and the free decay a model has to match happens while the key is still down. The harpsichord's is shorter, because its jack drops the moment the key is released and what follows is a fast damping plus the jack's own noise. On a synth rack the same question splits the rack: the slots that stop at note-off record half a second of tail and the ones that release record two.
 
 ## Writing a capture definition for a new plugin
 
@@ -108,6 +108,7 @@ Tracked `capture/<id>.json`:
 | `preroll_ms` / `sample_rate` | render lead-in, and the rate everything is measured at | `100` / `48000` |
 | `keyswitch_lead_ms` | how long before each note a switched timbre's key is struck. Comes out of `preroll_ms`, so it has to be smaller than it — see above | `0` |
 | `dry` | switch off every effect section the plugin advertises | `true` |
+| `room` | whether the recording carries a space — `none` or `present`, and absent means unclassified. `none` is what stops `measure` recording one it cannot distinguish from a long release — see below | `"unclassified"` |
 | `rig` | whether an amplifier, a cabinet or a rotary speaker stands between the instrument and the microphone in this reference — `none` or `baked`, and absent means unclassified | `"unclassified"` |
 | `params` | anything else, as `Name=value` | `[]` |
 
@@ -120,6 +121,10 @@ Untracked `capture/<id>.local.json`, folded over the above:
 | `timbres[]` | `id` (matching the tracked one) plus `preset` and a product-specific `label`, and `keyswitch` where the variants are switched from the keyboard — which key selects which articulation is the library's own map and names it as surely as a preset path does |
 
 **A rack's slot names are not a description of what the slot does.** On the harpsichord rack the slot called `Digi` decays over 36 seconds and the one called `Ambient` decays in 3. That is why that capture sets `dry: false` and measures each timbre's room instead: the switch cannot be trusted where the effects are per-slot sends rather than a section the plugin advertises. Measure before believing a name, and record which slots came out dry — a slot's own room is what a later `compare` corrects the model with.
+
+**`dry` cannot answer the room question either, and neither can the measurement.** `dry` is an instruction to the host — switch off whatever the plugin advertises — so a rack that advertises nothing is written `dry: false` while being completely dry. What `room` answers is what the recording contains, and over the seconds after note-off a release and a small hall are the same falling signal. Every guard around `estimate_room` separates a room from *one note's* decay, and a release is not one note's: it is one envelope generator, so it gives the whole compass the same decay exactly as a room does and the per-note agreement test passes on it. The high-frequency plausibility gate does not catch it either — it refuses a ring that damps its highs no faster than its lows, and a release through a lowpass damps them faster, which is the signature it is looking for.
+
+Measured on one GM rack, which is its own control: the eight slots that stop at note-off recorded no space at all, while six of the eight that release recorded one each, of 0.64 to 2.22 s, correlating 0.87 with their own release times. Six sources in one room cannot report six rooms. Left in the profile those entries are convolved onto every model render before any figure is taken, which lands hardest on `damper` — the dimension a released voice is most worth judging on. So the capture answers, and `none` is the answer that stops the estimate; absent still measures, which is what every capture written before the field did.
 
 **`dry` and `rig` are different questions, and dryness cannot answer the second.** Dryness is looked for as a tail and a cabinet has none — it is a filter rather than a space — so a close-mic'd amplified guitar reads dry with its whole rig inside it. `rig: "none"` is a reference captured at the instrument's own boundary, which is what a fit is for; `"baked"` is one recorded through an amplifier, which is an acceptance target and never a fit target, because a rig is nonlinear and offers no inverse to correct with the way a room does ([voicing.md](../../../src/midi/synth/docs/voicing.md)).
 

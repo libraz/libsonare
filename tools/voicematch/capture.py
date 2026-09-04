@@ -102,6 +102,21 @@ RIG_NONE = "none"
 RIG_BAKED = "baked"
 RIG_VALUES = (RIG_UNCLASSIFIED, RIG_NONE, RIG_BAKED)
 
+#: What a capture's `room` may answer, and `dry` cannot stand in for this one
+#: either: `dry` is an instruction to the host — switch off whatever the plugin
+#: advertises — so a rack that advertises nothing is written `dry: false` while
+#: being completely dry. What this field answers is what the recording contains,
+#: and a note-tail estimate cannot decide it: over the two seconds after note-off
+#: a synth pad's release and a small hall are the same falling signal. Measured
+#: on one GM rack, the eight slots that stop at note-off recorded no space while
+#: six of the eight that release recorded one each, of 0.64 to 2.22 s,
+#: correlating 0.87 with their own release times — six sources in one room cannot
+#: each report a different room. Absent is `unclassified` and never "no room".
+ROOM_UNCLASSIFIED = "unclassified"
+ROOM_NONE = "none"
+ROOM_PRESENT = "present"
+ROOM_VALUES = (ROOM_UNCLASSIFIED, ROOM_NONE, ROOM_PRESENT)
+
 
 def model_rig(rig: str) -> bool:
     """Whether the model side should render with the bank's rig, given a capture's answer.
@@ -218,6 +233,16 @@ def load_config(path: Path) -> dict:
         raise ValueError(
             f"{cfg.get('id', path.name)}: rig is one of {', '.join(RIG_VALUES)}, "
             f"not {cfg['rig']!r}"
+        )
+    # And whether it carries a room, which `dry` cannot answer either (see
+    # ROOM_VALUES). `none` is what stops `profile.py measure` recording a space
+    # it cannot distinguish from a long release; unclassified measures, which is
+    # what every capture written before this field did.
+    cfg.setdefault("room", ROOM_UNCLASSIFIED)
+    if cfg["room"] not in ROOM_VALUES:
+        raise ValueError(
+            f"{cfg.get('id', path.name)}: room is one of {', '.join(ROOM_VALUES)}, "
+            f"not {cfg['room']!r}"
         )
     cfg.setdefault("params", [])
     # Which instrument this capture is a reference for. The capture is the only

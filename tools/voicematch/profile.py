@@ -74,8 +74,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from capture import (  # noqa: E402
-    DEFAULT_CONFIG, PERCUSSION_CHANNEL, RIG_UNCLASSIFIED, load_config, model_rig, note_groups,
-    note_map, out_root, tail_seconds,
+    DEFAULT_CONFIG, PERCUSSION_CHANNEL, RIG_UNCLASSIFIED, ROOM_NONE, ROOM_UNCLASSIFIED,
+    load_config, model_rig, note_groups, note_map, out_root, tail_seconds,
 )
 from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
@@ -737,7 +737,8 @@ def measurement_stamp(profile: dict, out_path: Path) -> str:
 
 
 def measure_rooms(manifest: dict, corpus_dir: Path, declared: set[str],
-                  preroll_s: float, gate_s: float) -> dict:
+                  preroll_s: float, gate_s: float,
+                  answer: str = ROOM_UNCLASSIFIED) -> dict:
     """The space each timbre was recorded in, where its own grid can say.
 
     Recorded here rather than measured at comparison time because `compare` reads
@@ -757,7 +758,20 @@ def measure_rooms(manifest: dict, corpus_dir: Path, declared: set[str],
     and a probe whose windows are gates rather than notes all come back as no
     room. A timbre with no entry is compared as rendered, which on all but a few
     captures is the right answer and the one this records.
+
+    **None of that reaches a source whose own release lasts as long as a small
+    hall**, because every guard here separates a room from *one note's* decay and
+    a release belongs to every note exactly as a room does — it is one envelope
+    generator, so the agreement test above passes on it perfectly. The capture is
+    the only thing that can answer, which is what `room: none` is for, and it is
+    the same answer `takes` has always asked the capture for rather than guessing.
     """
+    if answer == ROOM_NONE:
+        print("  the capture answers `room: none`, so no space is measured — "
+              "a note-tail estimate cannot tell a room from a long release, and "
+              "the one it would record is convolved onto every model render "
+              "before any figure is taken", file=sys.stderr)
+        return {}
     by_timbre: dict[str, dict[int, tuple[int, Path]]] = {}
     for rec in manifest["renders"]:
         if rec["timbre"] not in declared:
@@ -877,7 +891,8 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
               file=sys.stderr)
         rows = sweep(band_edge)
 
-    rooms = measure_rooms(manifest, corpus_dir, declared, preroll_s, gate_s)
+    rooms = measure_rooms(manifest, corpus_dir, declared, preroll_s, gate_s,
+                          str(cfg.get("room", ROOM_UNCLASSIFIED)))
 
     tracked = json.loads(Path(cfg["_path"]).read_text())
     profile = {
@@ -2167,8 +2182,12 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
     selected = [t for t in build_takes(set_name, program) if not only or t.id in only]
     # The capture says whether its reference carries a room; nothing here can
     # tell one from an instrument's own long release, and guessing the wrong way
-    # invents a building and convolves it onto every figure below.
-    wet = not cfg.get("dry", True)
+    # invents a building and convolves it onto every figure below. `room` is the
+    # field that answers it. `dry` stands in where nobody has: it is an
+    # instruction to the host rather than a reading of the recording, so it says
+    # wet for a rack that merely advertises no effect section to switch off.
+    room_answer = str(cfg.get("room", ROOM_UNCLASSIFIED))
+    wet = False if room_answer == ROOM_NONE else not cfg.get("dry", True)
     # And whether it carries a rig, which is a different question a dryness test
     # cannot answer: a cabinet is a filter rather than a space.
     rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))

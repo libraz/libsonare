@@ -270,6 +270,122 @@ def test_every_shipped_capture_answers_the_rig_question_legibly():
         assert load_config(CAPTURE_DIR / f"{name}.json")["rig"] in RIG_VALUES
 
 
+def test_a_capture_that_says_nothing_about_a_room_reads_as_unclassified(tmp_path):
+    """Not as "no room". A note-tail estimate cannot tell a room from a long
+    release, so a capture that never answered is a question nobody put rather
+    than an answer of no — and the estimator still runs, which is what every
+    capture written before the field did."""
+    from capture import ROOM_NONE, ROOM_UNCLASSIFIED, load_config
+
+    cfg = load_config(_rig_config(tmp_path))
+    assert cfg["room"] == ROOM_UNCLASSIFIED
+    assert cfg["room"] != ROOM_NONE
+
+
+def test_each_room_answer_survives_the_loader(tmp_path):
+    from capture import ROOM_VALUES, load_config
+
+    for value in ROOM_VALUES:
+        assert load_config(_rig_config(tmp_path, room=value))["room"] == value
+
+
+def test_a_room_answer_the_loader_does_not_know_is_refused(tmp_path):
+    """A misspelling would read as unclassified, which turns a declared `none`
+    back into a measurement — and that measurement is convolved onto every model
+    render before any figure is taken."""
+    from capture import load_config
+
+    with pytest.raises(ValueError, match="room is one of"):
+        load_config(_rig_config(tmp_path, room="dry"))
+
+
+def test_every_shipped_capture_answers_the_room_question_legibly():
+    """Whatever they say, the loader has to understand it."""
+    from capture import ROOM_VALUES, load_config
+
+    shipped = shipped_captures()
+    assert shipped, "no capture definitions found to check"
+    for name in shipped:
+        assert load_config(CAPTURE_DIR / f"{name}.json")["room"] in ROOM_VALUES
+
+
+def _released_note(sr: int, *, preroll: float, gate: float, tail: float,
+                   rt60: float, f0: float = 220.0) -> np.ndarray:
+    """A held tone whose release is a plain envelope, damped faster up the stack.
+
+    There is no room in this signal at all: every partial is switched on at the
+    onset and falls under its own exponential from note-off. The tilt is the
+    point — a release through a lowpass damps its highs faster than its lows,
+    which is the one physical signature `estimate_room` has for telling a room
+    from an instrument's own ring.
+    """
+    n = int(sr * (preroll + gate + tail))
+    t = np.arange(n) / sr
+    a, b = int(sr * preroll), int(sr * preroll) + int(sr * gate)
+    since_off = np.arange(n - b) / sr
+    out = np.zeros(n)
+    for k in range(1, 25):
+        hz = f0 * k
+        if hz >= sr / 2:
+            break
+        rt_k = rt60 * (500.0 / max(hz, 500.0)) ** 0.35
+        env = np.zeros(n)
+        env[a:b] = 1.0
+        env[b:] = 10.0 ** (-60.0 * since_off / rt_k / 20.0)
+        out += np.sin(2.0 * np.pi * hz * t) * env / k
+    return out * 0.25
+
+
+def _release_corpus(root: Path, *, rt60: float) -> tuple[dict, Path]:
+    """A four-note grid of `_released_note`, with the manifest `measure_rooms` reads."""
+    from wavio import write_wav
+
+    sr, preroll, gate, tail = 48000, 0.1, 3.0, 2.0
+    notes = [48, 60, 72, 84]
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "t").mkdir(exist_ok=True)
+    renders = []
+    for note in notes:
+        rel = f"t/n{note:03d}_v100.wav"
+        write_wav(root / rel, _released_note(sr, preroll=preroll, gate=gate,
+                                             tail=tail, rt60=rt60,
+                                             f0=440.0 * 2 ** ((note - 69) / 12)), sr)
+        renders.append({"id": rel[:-4], "timbre": "t", "note": note,
+                        "velocity": 100, "path": rel})
+    return {"renders": renders}, root
+
+
+def test_a_release_with_no_room_in_it_is_recorded_as_one_when_nobody_says_otherwise(tmp_path):
+    """The control half, and the reason the field had to exist.
+
+    Every guard around the estimate separates a room from *one note's* decay, and
+    a release is not one note's: it is one envelope generator, so it gives every
+    note of the compass the same decay exactly as a room does and the agreement
+    test passes on it perfectly. The plausibility gate does not catch it either —
+    it refuses a ring that damps its highs no faster than its lows, and a release
+    through a lowpass damps them faster, which is what a room looks like.
+    """
+    manifest, corpus = _release_corpus(tmp_path / "c", rt60=1.6)
+    rooms = profile_module.measure_rooms(manifest, corpus, {"t"}, 0.1, 3.0)
+    assert "t" in rooms, "the estimator no longer reads a release as a room"
+    assert rooms["t"]["rt60_s"] > 0.35
+    # The agreement guard is what it got past, so pin that rather than the count:
+    # a majority of the compass reported the same space, which is the reading the
+    # guard exists to require and the one a release satisfies by construction.
+    entry = rooms["t"]
+    assert entry["notes_measured"] * 2 > entry["notes_probed"]
+
+
+def test_a_capture_that_answers_room_none_has_no_space_recorded(tmp_path):
+    """The same audio, with the capture answering. Nothing is measured, because
+    the answer is the only thing that can be right here."""
+    from capture import ROOM_NONE
+
+    manifest, corpus = _release_corpus(tmp_path / "c", rt60=1.6)
+    rooms = profile_module.measure_rooms(manifest, corpus, {"t"}, 0.1, 3.0, ROOM_NONE)
+    assert rooms == {}
+
+
 def test_the_identity_overlay_matches_timbres_by_id(tmp_path):
     """The tracked half holds the method, the untracked half holds the product.
 
