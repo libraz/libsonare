@@ -454,10 +454,13 @@ TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi]
   REQUIRE(gm_fallback_patch(0, 61).mode == SynthEngineMode::kBrass);  // Brass Section
   REQUIRE(gm_fallback_patch(0, 62).mode == SynthEngineMode::kFm);     // Synth Brass 1
   // String Ensemble 1/2 (GM 48-49) are the bowed waveguide in section; the two
-  // Synth Strings above them stay on the family's supersaw.
+  // Synth Strings above them are subtractive stacks, each with its own patch.
   REQUIRE(gm_fallback_patch(0, 48).mode == SynthEngineMode::kBowedString);
   REQUIRE(gm_fallback_patch(0, 49).mode == SynthEngineMode::kBowedString);
   REQUIRE(gm_fallback_patch(0, 50).mode == SynthEngineMode::kSubtractive);
+  REQUIRE(gm_fallback_patch(0, 51).mode == SynthEngineMode::kSubtractive);
+  // The pair is voiced apart: the wider stack is the second of them.
+  REQUIRE(gm_fallback_patch(0, 51).detune_cents > gm_fallback_patch(0, 50).detune_cents);
   // Reed family (GM 64-71); the clarinet is the only cylinder, the saxes cones.
   REQUIRE(gm_fallback_patch(0, 64).mode == SynthEngineMode::kReed);  // Soprano Sax
   REQUIRE(gm_fallback_patch(0, 71).mode == SynthEngineMode::kReed);  // Clarinet

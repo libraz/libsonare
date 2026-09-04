@@ -5505,15 +5505,15 @@
       "name": "Synth Strings 1",
       "group": "48-55 Ensemble",
       "tone_class": "sustained",
-      "patch": "fam6",
+      "patch": "synth_strings_1",
       "engine": "subtractive",
       "capture": "synth_strings_1",
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam6",
+        "patch": "synth_strings_1",
         "timbres": 1,
         "profile_rows": 35,
         "gate_state": null,
@@ -5543,7 +5543,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p051-synth-strings-2",
@@ -5553,15 +5553,15 @@
       "name": "Synth Strings 2",
       "group": "48-55 Ensemble",
       "tone_class": "sustained",
-      "patch": "fam6",
+      "patch": "synth_strings_2",
       "engine": "subtractive",
       "capture": "synth_strings_2",
-      "stage": 0.0,
-      "stage_name": "untouched",
+      "stage": 0.2,
+      "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
-        "patch": "fam6",
+        "patch": "synth_strings_2",
         "timbres": 1,
         "profile_rows": 35,
         "gate_state": null,
@@ -5591,7 +5591,7 @@
         "structure": null,
         "music": null
       },
-      "next": "no deliberate voice: pick an engine and write a patch"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p052-choir-aahs",

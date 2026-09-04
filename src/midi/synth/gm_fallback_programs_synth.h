@@ -146,6 +146,41 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_bass_lead.key_track = 0.4f;
   o.lead_bass_lead.gain = 0.63f;
 
+  // Synth Strings (GM 50, 51). Both hold a note that swells and falls by about
+  // 10 dB, and the two differ in what that motion is made of: the second's rate
+  // is proportional to f0 across the two octaves measured, which is the unison
+  // beating and nothing else, while the first's goes as f0^0.67 and so carries a
+  // part that does not track the key.
+  NativeSynthPatch strings{};
+  strings.waveform = VaWaveform::kSaw;
+  strings.unison = 5;
+  strings.drift_cents = 4.0f;
+  strings.stereo_spread = 0.6f;
+  strings.lfo_rate_hz = 4.6f;
+  strings.lfo_to_pitch_cents = 4.0f;
+  strings.gain = 0.5f;
+
+  // Synth Strings 1 (GM 50): the brighter and slower of the pair. The stack is
+  // narrow enough that its beating alone would track the key, so the key-fixed
+  // part of the swell is an LFO on the amplitude rather than more detuning.
+  o.synth_strings_1 = strings;
+  o.synth_strings_1.detune_cents = 17.0f;
+  o.synth_strings_1.cutoff_hz = 5200.0f;
+  o.synth_strings_1.amp_env = fallback_env(350.0f, 600.0f, 0.8f, 800.0f);
+  o.synth_strings_1.lfo2_rate_hz = 3.5f;
+  o.synth_strings_1.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.25f};
+  // The pair's own balance, not the absolute level: the references come from
+  // one rack at one setting, so the 1.7 dB this sits above its sibling is the
+  // instrument, while what they share against the bank is the rack's output.
+  o.synth_strings_1.gain = 0.53f;
+
+  // Synth Strings 2 (GM 51): darker, faster to speak, and twice as wide. The
+  // width is the whole of its movement, so it takes no amplitude LFO.
+  o.synth_strings_2 = strings;
+  o.synth_strings_2.detune_cents = 36.0f;
+  o.synth_strings_2.cutoff_hz = 3200.0f;
+  o.synth_strings_2.amp_env = fallback_env(270.0f, 500.0f, 0.8f, 700.0f);
+
   // The shared pad: a supersaw that arrives slowly, drifts, and spreads.
   NativeSynthPatch pad{};
   pad.waveform = VaWaveform::kSaw;

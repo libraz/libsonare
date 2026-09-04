@@ -69,6 +69,8 @@ struct ProgramOverrides {
   NativeSynthPatch choir_aahs;          // program 52 (open-vowel vocal body)
   NativeSynthPatch voice_oohs;          // program 53 (darker closed vowel)
   NativeSynthPatch synth_voice;         // program 54 (brighter synthetic vowel)
+  NativeSynthPatch synth_strings_1;     // program 50 (bright stack, part-fixed shimmer)
+  NativeSynthPatch synth_strings_2;     // program 51 (wide stack, beat tracks the key)
   NativeSynthPatch tinkle_bell;         // program 112 (high metal chime, percussion)
   NativeSynthPatch agogo;               // program 113 (two-tone metal bell)
   NativeSynthPatch steel_drums;         // program 114 (tuned steel pan)
@@ -247,6 +249,8 @@ struct ProgramOverrides {
   X(choir_aahs)                       \
   X(voice_oohs)                       \
   X(synth_voice)                      \
+  X(synth_strings_1)                  \
+  X(synth_strings_2)                  \
   X(tinkle_bell)                      \
   X(agogo)                            \
   X(steel_drums)                      \

@@ -325,6 +325,11 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().string_ensemble_1;
     case 49:  // String Ensemble 2 (slower, warmer)
       return program_overrides().string_ensemble_2;
+    // Synth strings (subtractive, the family's own stack rather than a bow).
+    case 50:  // Synth Strings 1
+      return program_overrides().synth_strings_1;
+    case 51:  // Synth Strings 2
+      return program_overrides().synth_strings_2;
     // Brass family (physical lip reed). SynthBrass (62-63) stays on the FM
     // family sketch.
     case 56:  // Trumpet
