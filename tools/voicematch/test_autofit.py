@@ -576,10 +576,16 @@ def test_one_empty_band_cannot_decide_the_whole_objective():
     assert percussion_terms([model], [oracle])["band"] <= 24.0
 
 
-def test_an_unfittable_band_decay_is_skipped_not_counted_as_agreement():
+def test_an_unfittable_band_decay_is_charged_not_counted_as_agreement():
+    """A band only the REFERENCE has a rate for used to be skipped, and this test
+    read the skip back as 0.0 — which is the term's best score, so the name and
+    the assertion said opposite things. A rate the model does not produce is a
+    disagreement; an absence on the reference's own side is still nobody's."""
     model = _hit([0.0], [None, -30.0])
     oracle = _hit([0.0], [-20.0, -30.0])
-    assert percussion_terms([model], [oracle])["bdecay"] == 0.0
+    assert percussion_terms([model], [oracle])["bdecay"] == pytest.approx(3.0)
+    both_absent = _hit([0.0], [None, -30.0])
+    assert percussion_terms([model], [both_absent])["bdecay"] == 0.0
 
 
 def test_the_percussion_and_harmonic_paths_share_one_mismatch_rule():

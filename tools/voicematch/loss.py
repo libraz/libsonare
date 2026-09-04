@@ -1467,24 +1467,20 @@ def percussion_terms(
         for a, b in zip(m["band_decay_db_s"], o["band_decay_db_s"]):
             if b is None or abs(b) < BDECAY_MIN_RATE_DB_S:
                 continue
+            bdecay_bins += 1
             if a is None or abs(a) < BDECAY_MIN_RATE_DB_S:
-                # Skipped rather than charged at the cap, and this is the one
-                # place the `_absent_or` doctrine does NOT apply. There, an
-                # absent model value means the model failed to sound. Here it
-                # means the estimator refused: the energy curve did not fall far
-                # enough, or was not straight enough to have a rate, or the
-                # window ended first. Charging a measurement failure would make
-                # the term noisiest exactly where it is least certain.
-                #
-                # Nothing is lost by the skip, because a model that genuinely
-                # stopped sounding is already caught elsewhere: `band` compares
-                # a profile normalised to each side's own loudest band, `level`
-                # and `crest` read the untouched signal, and `_fell_silent`
-                # rejects the render outright.
+                # Charged its worst rather than skipped. This sum is divided by
+                # the row count and not by the bins that survived it, so a skip
+                # here is a straight discount and a shorter hit buys one: taking
+                # the kick's `amp_env.decay_ms` to its floor leaves 12 of its 48
+                # bands with a measurable rate, and the term reads as improved
+                # while the hit is four times too short. The reference measured
+                # this band, so a model giving it no rate at all disagrees by at
+                # least the cap.
+                totals["bdecay"] += BDECAY_OCTAVE_CAP
                 continue
             totals["bdecay"] += min(abs(math.log2(abs(a) / abs(b))),
                                     BDECAY_OCTAVE_CAP)
-            bdecay_bins += 1
         totals["env"] += abs(m["attack_ms"] - o["attack_ms"]) / 5.0
         totals["env"] += abs(m["decay_ms"] - o["decay_ms"]) / 100.0
         totals["env"] += abs(m["crest_db"] - o["crest_db"]) / 3.0
@@ -1516,7 +1512,11 @@ def percussion_terms(
     # How many band cells the comparison actually charged for. Reported for the
     # same reason `tnr_notes` is: with the reference's floored bands skipped,
     # a low count means the capture is narrower than the analysis range and the
-    # term is speaking for fewer bands than it looks like.
+    # term is speaking for fewer bands than it looks like. Both count what the
+    # REFERENCE offered, so neither moves with the candidate and the guard in
+    # `_went_unmeasurable` cannot fire for either — it is kept in
+    # `TERM_COUNT_KEYS` so that a skip reintroduced on the model side is caught
+    # rather than silently unguarded.
     out["band_bins"] = float(band_bins)
     out["bdecay_bins"] = float(bdecay_bins)
     out["level_offset_db"] = offset

@@ -395,6 +395,26 @@ def test_a_decay_rate_is_compared_as_a_ratio_so_the_cap_means_the_same_everywher
     assert slow_pair == pytest.approx(8.0)
 
 
+def test_a_band_the_model_stops_giving_a_rate_costs_more_than_a_wrong_rate():
+    """Measured on the kick: `d035.amp_env.decay_ms` at its floor left 12 of the
+    48 bands with a measurable rate, and the term read as improved while the hit
+    was four times too short. The sum is divided by the row count, so a band the
+    estimator refuses on the model side is a discount unless it is charged."""
+    def hit(rates: list[float | None]) -> dict:
+        return {"bands_db": [-6.0] * 25, "band_decay_db_s": rates,
+                "attack_ms": 3.0, "decay_ms": 200.0, "crest_db": 20.0,
+                "note": 35, "velocity": 100}
+
+    reference = hit([-115.0] * 8)
+    wrong = percussion_terms([hit([-530.0] * 8)], [reference])
+    silent = percussion_terms([hit([None] * 8)], [reference])
+    assert silent["bdecay"] > wrong["bdecay"]
+    # The denominator is what the reference offered, so it does not move either.
+    assert silent["bdecay_bins"] == wrong["bdecay_bins"] == 8.0
+    # A band the reference itself has no rate for is still nobody's charge.
+    assert percussion_terms([hit([None] * 8)], [hit([None] * 8)])["bdecay"] == 0.0
+
+
 def test_a_cymbal_is_given_room_to_decay_and_a_snare_is_not():
     """Every cymbal's measured decay sat within 40 ms of the old 1.8 s ceiling."""
     assert drum_gap_for((38,)) == 2.0
