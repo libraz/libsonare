@@ -620,6 +620,10 @@ def test_a_drum_spec_comes_from_the_note_not_from_the_program_map():
     # The clamp bound belongs to the field, so a `dNNN` key inherits it.
     buzz = next(e for e in spec if e["tunable"] == "d038.percussion.wire_buzz")
     assert (buzz["min"], buzz["max"]) == (0.0, 4.0)
+    # `--program-only` leaves the engine behind. A fit over one drum note has
+    # nothing that could object to a constant every percussion voice reads.
+    alone = {e["tunable"] for e in auto_spec(0, cat, drum_note=38, patch_only=True)}
+    assert alone == {"d038.percussion.wire_buzz", "d038.amp_env.decay_ms"}
 
 
 def test_an_unknown_drum_note_is_a_clear_error_not_an_empty_spec():

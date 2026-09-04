@@ -351,7 +351,8 @@ def _offered(field: str) -> bool:
 
 
 def auto_spec(
-    program: int, catalogue: Catalogue, *, drum_note: int | None = None, bank: int = 0
+    program: int, catalogue: Catalogue, *, drum_note: int | None = None, bank: int = 0,
+    patch_only: bool = False,
 ) -> list[dict]:
     """Build a knob spec for `program` from the library's own catalogue.
 
@@ -360,6 +361,12 @@ def auto_spec(
     and the calibration constants of the engine that patch runs on (its
     physics — shared with every other program on that engine, so moving one
     moves them all).
+
+    `patch_only` drops the second group. A fit over one voice cannot attribute
+    a shared constant to it — that is why the bank registry gives the engines
+    their own units — and a run over a grid of voices in turn moves the ground
+    under the ones already done. The values it writes are real either way; what
+    is missing is any voice that would have objected.
 
     `drum_note` selects a drum-note patch instead. A drum note is not a GM
     program — the program selects the kit and the note selects the instrument —
@@ -402,7 +409,8 @@ def auto_spec(
     engine = next(
         (s for s in sections if any(c.startswith(f"{s}_voice.") for c in defaults)), None
     )
-    engine_keys = sorted(k for k in defaults if engine and k.startswith(f"{engine}_voice."))
+    engine_keys = [] if patch_only else sorted(
+        k for k in defaults if engine and k.startswith(f"{engine}_voice."))
 
     spec: list[dict] = []
     for k in patch_keys + engine_keys:

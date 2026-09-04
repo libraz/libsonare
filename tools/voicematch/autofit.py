@@ -1347,13 +1347,15 @@ def run(args, argv: list[str] | None = None) -> int:
         return 0
 
     if auto:
-        spec = auto_spec(args.program, catalogue, drum_note=args.drum_note, bank=args.bank)
+        spec = auto_spec(args.program, catalogue, drum_note=args.drum_note, bank=args.bank,
+                         patch_only=args.program_only)
         subject = (f"drum note {args.drum_note}" if args.drum_note is not None
                    else f"program {args.program} bank {args.bank}")
         patch = (drum_patch_key(args.drum_note) if args.drum_note is not None
                  else catalogue.patch_for(args.program, args.bank))
         print(f"--spec auto: {len(spec)} knobs for {subject} "
-              f"(patch {patch!r} + its engine)", file=sys.stderr)
+              f"(patch {patch!r}"
+              f"{' alone' if args.program_only else ' + its engine'})", file=sys.stderr)
     else:
         spec = load_spec(Path(args.spec).resolve())
         if any("." in e.get("tunable", "") for e in spec):
@@ -1518,7 +1520,14 @@ def main() -> int:
     parser.add_argument("--dump-knobs", action="store_true", dest="dump_knobs",
                         help="list every knob the library reports, with its default, and exit")
     parser.add_argument("--program-only", action="store_true", dest="program_only",
-                        help="with --dump-knobs, list only this program's patch fields")
+                        help="offer only this program's (or drum note's) own patch "
+                             "fields, leaving out the calibration constants of the "
+                             "engine underneath it, which every other program on that "
+                             "engine shares. Applies to a fit as well as to "
+                             "--dump-knobs: a fit over one voice has nothing that "
+                             "could object to a shared constant moving, and a run "
+                             "over a grid of voices in turn moves the ground under "
+                             "the ones already done")
     parser.add_argument("--room", default="auto", choices=("auto", "none"),
                         help="auto (default): measure the oracle's reverberation and place "
                              "every model render in a matching space before scoring, so a "

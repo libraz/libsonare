@@ -86,7 +86,7 @@ Full treatment in [fitting.md](fitting.md); the terms it minimises are [loss.md]
 | `--drum-note` / `--drum-gate-ms` | — / `50` | fit a percussion instrument instead |
 | `--pattern` | `sustain` (`drum` with `--drum-note`) | |
 | `--notes` / `--velocities` | the pattern's own | |
-| `--dump-knobs` / `--program-only` | off | list every knob and exit; `--program-only` narrows to this program's patch fields |
+| `--dump-knobs` / `--program-only` | off | list every knob and exit; `--program-only` narrows to this program's own patch fields, leaving out the engine constants every program on that engine shares, and narrows a fit the same way |
 
 **Oracle:** the [shared oracle block](#oracle-flags) above, plus
 
