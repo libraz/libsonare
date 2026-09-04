@@ -4708,20 +4708,22 @@
       "tone_class": "plucked-string",
       "patch": "bass_slap",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "slap_bass",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_slap",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4729,7 +4731,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
             "damper",
             "balance",
             "centroid_pct",
@@ -4747,7 +4748,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p037-slap-bass-2",
@@ -5204,15 +5205,15 @@
       "tone_class": "sustained",
       "patch": "tremolo_strings",
       "engine": "subtractive",
-      "capture": null,
+      "capture": "tremolo_strings",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "tremolo_strings",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
@@ -5240,7 +5241,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p045-pizzicato-strings",
@@ -5252,20 +5253,23 @@
       "tone_class": "plucked-string",
       "patch": "pizzicato",
       "engine": "karplus_strong",
-      "capture": null,
+      "capture": "pizzicato_strings",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "pizzicato",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 35,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -5273,8 +5277,6 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -5291,7 +5293,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p046-orchestral-harp",
@@ -5355,28 +5357,29 @@
       "tone_class": "modal",
       "patch": "timpani",
       "engine": "percussion",
-      "capture": null,
+      "capture": "timpani",
       "stage": 0.2,
       "stage_name": "voiced",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "timpani",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 25,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "stereo"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
             "tnr",
@@ -5393,7 +5396,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
     },
     {
       "slug": "p048-string-ensemble-1",

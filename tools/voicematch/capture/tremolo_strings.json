@@ -1,0 +1,61 @@
+{
+  "id": "tremolo_strings",
+  "label": "Tremolo Strings, sampled, close and dry",
+  "program": 44,
+  "takes": "sustained",
+  "audition_title": "libsonare tremolo strings vs the sampled reference",
+  "_notes": "Every sixth semitone from 48 to 84, three octaves of the range a string section is written in. All four notes tried before this definition was written are healthy and the pitch is exact at every one of them -- 130.8, 261.7, 526.7 and 1045.8 Hz against equal-tempered 130.8, 261.6, 523.3 and 1046.5 -- so nothing is transposed or mapped away. The compass is where this voice changes most: its centroid runs from 1211 Hz at the bottom to 3000 at the top.",
+  "notes": [
+    48,
+    54,
+    60,
+    66,
+    72,
+    78,
+    84
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live on all four of these, at 15.5 to 31.7 dB between velocity 16 and 100, so none needed the exclusion a flat velocity response would have forced.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's 1526 advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. Three independent readings say there is none here. `calibrate` measures RT60 0.00 s; with the rack loaded not one of the 1526 parameters the plugin advertises matches `reverb`, `delay` or `room`; and the pizzicato at slot 14 settles it on its own -- it reaches digital silence 450 ms after the string is plucked, inside a four-second gate, which no space permits.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Three seconds, which on a re-articulated bow is a count of strokes rather than a window over one: the held note fluctuates at about 7 Hz, so the gate holds some twenty of them and a model that gets the rate wrong has nowhere to hide. The voice stops at note-off rather than releasing -- it is 160 dB down 300 ms later -- so half a second of tail is more than the release needs.",
+  "gate_ms": 3000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, which its already-captured siblings were recorded against and whose settings this capture adopts so the slots of one rack stay comparable: a two-second settle against a measured minimum of 250 ms, and real time kept on although the reference renders the same either way, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement. What the recipe reports as non-determinism is worth stating precisely, because it is not round robin and a capture that recorded it as one would put a floor under the loss for nothing: two renders of the same cell correlate at 1.00000000 and peak within a thousandth of a decibel, differing only at -89 to -91 dB relative to the signal. That is one take rendered twice, not a second sample. The check is bit-identity, which is stricter than the question being asked.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second tremolo strings in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm045",
+      "label": "GM tremolo strings, rack slot 13",
+      "slot_channel": 13
+    }
+  ],
+  "_dimensions": "All 10 a sustained voice can be judged on, with none excused. `stereo` is kept and is worth saying so about: this is one of the few slots on the rack with genuine width, its channels correlating between -0.03 and 0.15 across the compass where every other slot captured here is dual mono.",
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "stereo",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_identity": "Which product this is captured from lives in the untracked sibling `tremolo_strings.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/tremolo_strings.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements rather than argued from a spectrum: nine of its sixteen slots were captured in an earlier round. Rendered under each of those captures' own gates at a cell its profile holds, slot 6 returns a peak of -13.19 dBFS against a committed -13.19, slot 12 returns -16.52 against -16.52 and slot 15 returns -14.78 against -14.78. Three exact agreements fix slot n as GM program 31+n with nothing left to interpret. This slot: read off the confirmed numbering, with one supporting measurement that is real but too narrow to identify it alone. Against the three normally bowed strings on the same rack at the same note, this slot fluctuates most inside the held note: 3.00 dB of variation about its own trend against 1.74, 2.02 and 2.30 for the cello, viola and violin, at a comparable rate near 7 Hz. That is the direction a re-articulated bow should move it and the margin is under a decibel, so it is recorded as consistent rather than as proof. A narrower test looking for one periodic rate does worse and should not be repeated: a decaying note's own fall dominates the same band, so the plucked slots score higher on it than this one does."
+}

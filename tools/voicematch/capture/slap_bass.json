@@ -1,0 +1,67 @@
+{
+  "id": "slap_bass",
+  "label": "Slap Bass 1, sampled, close and dry",
+  "program": 36,
+  "takes": "plucked",
+  "audition_title": "libsonare slap bass vs the sampled reference",
+  "_notes": "Every fourth semitone from 28 to 52, which is the grid all seven of this rack's other basses were captured against and is adopted rather than redesigned: the point of measuring an eighth is that it can be read beside them, and a grid of its own would cost exactly that. Both ends were rendered before this definition was written and both are healthy -- the level holds within 1.7 dB across the whole compass and the pitch tracks the key at each end, 40.8 Hz at note 28 against an equal-tempered 41.2 and 165.0 at note 52 against 164.8.",
+  "notes": [
+    28,
+    32,
+    36,
+    40,
+    44,
+    48,
+    52
+  ],
+  "_velocities": "Five, matching the slots of this rack captured earlier so that one axis covers the whole of it. The axis is live on all four of these, at 15.5 to 31.7 dB between velocity 16 and 100, so none needed the exclusion a flat velocity response would have forced.",
+  "velocities": [
+    32,
+    56,
+    80,
+    104,
+    127
+  ],
+  "_dry": "Nothing to switch off, measured rather than assumed: with the rack loaded not one of the plugin's 1526 advertised parameters matches `reverb` or `delay`, so `dry` has no section to act on and is left off rather than claiming an effect was disabled. What the recording contains is answered by `room`, which is a different question.",
+  "dry": false,
+  "_room": "No room, and the answer has to be declared because no note-tail measurement can reach it: a release and a small hall are the same falling signal over the tail a capture records, and the per-note agreement test that separates a room from one note's decay passes on a release perfectly. Three independent readings say there is none here. `calibrate` measures RT60 0.00 s; with the rack loaded not one of the 1526 parameters the plugin advertises matches `reverb`, `delay` or `room`; and the pizzicato at slot 14 settles it on its own -- it reaches digital silence 450 ms after the string is plucked, inside a four-second gate, which no space permits.",
+  "room": "none",
+  "params": [],
+  "_stimulus": "Six seconds, the family's, and on a plucked bass that is the measurement rather than margin around it: note-off is the player lifting a finger, so the free decay a model has to match happens while the key is still down. It is well inside the gate at both ends -- 30 dB down at four seconds at the bottom of the compass and 55 dB down at the top -- and the only abrupt edge in the render is the release itself.",
+  "gate_ms": 6000,
+  "tail": "500ms",
+  "_calibration": "From `capture.py calibrate` on this rack, which its already-captured siblings were recorded against and whose settings this capture adopts so the slots of one rack stay comparable: a two-second settle against a measured minimum of 250 ms, and real time kept on although the reference renders the same either way, because a note streamed late is caught only by `verify` and would otherwise be committed as a measurement. What the recipe reports as non-determinism is worth stating precisely, because it is not round robin and a capture that recorded it as one would put a floor under the loss for nothing: two renders of the same cell correlate at 1.00000000 and peak within a thousandth of a decibel, differing only at -89 to -91 dB relative to the signal. That is one take rendered twice, not a second sample. The check is bit-identity, which is stricter than the question being asked.",
+  "realtime": true,
+  "settle_ms": 2000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_timbres": "One, and the ladder is monotone above it, so this capture cannot move the voice past `voiced` however complete its coverage. That is a property of the source rather than of the work: the rack holds one slot per GM program, so there is no second slap bass in it to disagree with, and `source_for` takes every timbre of a capture from one plugin, so a soundfont render cannot stand in as a second. What the reference does buy is the thing there was none of before -- a measured target for `autofit` and `--diagnose`, in place of voicing this program by ear. A second timbre needs a rack authored with an alternative in it, and this capture is written so that adding one is an edit to this list rather than a re-capture.",
+  "timbres": [
+    {
+      "id": "gm037",
+      "label": "GM slap bass, rack slot 5",
+      "slot_channel": 5
+    }
+  ],
+  "_dimensions": "12 of the 13 a plucked string can be judged on. `decay` and `aftersound` carry it: this is the fastest-decaying of the eight basses on the rack, 16.0 dB down two seconds into a held note where the others sit between 0.8 and 14.9, and how a struck-then-plucked string gives its energy up is most of what separates this program from the four beside it.",
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "damper",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "vel_range",
+    "register"
+  ],
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
+  "dimensions_na": {
+    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing"
+  },
+  "_identity": "Which product this is captured from lives in the untracked sibling `slap_bass.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/slap_bass.json` and need nothing.",
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements rather than argued from a spectrum: nine of its sixteen slots were captured in an earlier round. Rendered under each of those captures' own gates at a cell its profile holds, slot 6 returns a peak of -13.19 dBFS against a committed -13.19, slot 12 returns -16.52 against -16.52 and slot 15 returns -14.78 against -14.78. Three exact agreements fix slot n as GM program 31+n with nothing left to interpret. This slot: read off the confirmed numbering, and two attempts to identify it independently are recorded here because both failed and neither is worth repeating. A slap is a percussive strike on a plucked string, so the first attempt measured how far the first 30 ms stands over the note's body in the 1.5 to 8 kHz band across all eight basses: this slot reads 21.9 dB and its slap-bass neighbour 18.8, which are the two *lowest* of the eight, against 45.7 for the picked bass and 49.1 for a synth bass. What that band ratio measures on a bass rack is how little low-frequency body a voice has under its attack, not whether the attack is a slap. The second, the same ratio against the 80 to 400 Hz band, clusters this slot with the fingered bass rather than with its own family. What is true and does separate it: it decays faster than any other bass here."
+}
