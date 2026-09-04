@@ -467,7 +467,7 @@ def mss_distance(model: np.ndarray, oracle: np.ndarray) -> float:
         # over frames, so the weighting changes which frequencies count and not
         # which moments do.
         w = _log_bin_weights(n_fft) if MSS_LOG_WEIGHTING else None
-        scale = max(float(np.average(sb, weights=w) if w is not None
+        scale = max(float(np.mean(sb @ w) if w is not None
                           else np.mean(sb)), 1e-9)
         lin = np.abs(sa - sb)
         log = np.abs(np.log(sa + 1e-5) - np.log(sb + 1e-5))
