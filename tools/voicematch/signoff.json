@@ -64,6 +64,412 @@
       "note": "Nothing unreachable and no knob inert, the second of those being new: `church_organ.pipe_organ.brightness` was the one, and it has come out of the spec because it is not whole-chorus voicing at all — the flat voicing fields are read only when `rank_count` is 0 while this registration draws six ranks, and `reed` and `radiation` beside it are dead the same way. `dyn` reads matched by construction rather than by fit, since the capture has one velocity, and eight terms carry no weight here, so their residual has never been searched. One thing the run cannot see: `ranks0.brightness` is scored live because the probe reaches C5 and C6, but the 16' it voices is pinned by a filter floor at and below C#4, so no knob here reaches the register that rank is played in."
     }
   },
+  "p026-electric-guitar-jazz": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 4
+      },
+      "spec": "auto: 48 knobs for program 26 bank 0 (patch 'electric_guitar' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 4 partial, 3 reachable, 1 matched. Spent: `hf` 609 dB, best `electric_guitar.drive` at its hi. 16 of the spec's 48 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p036-slap-bass-1": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 4
+      },
+      "spec": "auto: 48 knobs for program 36 bank 0 (patch 'bass_slap' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 5 partial, 3 reachable. Spent: `hf` 542 dB, best `ks_voice.kKsHfT60S` at its hi. 24 of the spec's 48 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p040-violin": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 53 knobs for program 40 bank 0 (patch 'violin' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 3 spent, 2 partial, 1 reachable. Spent: `harm` 23.8 dB, best `violin.lfo_to_pitch_cents` at its hi; `mod` 8.72 composite, best `violin.bowed_string.sympathetic` at its hi; `slope` 9.83 dB/s ÷10, best `violin.bowed_string.attack_ms` at its hi. 11 of the spec's 53 knobs move nothing over this probe, and 2 probe ends scored unscorable."
+    }
+  },
+  "p041-viola": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 53 knobs for program 41 bank 0 (patch 'viola' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 spent, 2 partial, 1 reachable, 1 matched. Spent: `mod` 9.93 composite, best `bowed_string_voice.kEpHystOffset` at its hi; `slope` 12.3 dB/s ÷10, best `viola.bowed_string.brightness` at its lo. 11 of the spec's 53 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p042-cello": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 53 knobs for program 42 bank 0 (patch 'cello' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 3 partial, 2 reachable. Spent: `mod` 4.52 composite, best `bowed_string_voice.kEpStribeckBase` at its lo. 10 of the spec's 53 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p044-tremolo-strings": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 20 knobs for program 44 bank 0 (patch 'tremolo_strings' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 4 partial, 2 reachable. 7 of the spec's 20 knobs move nothing over this probe."
+    }
+  },
+  "p045-pizzicato-strings": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 4
+      },
+      "spec": "auto: 49 knobs for program 45 bank 0 (patch 'pizzicato' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 4 spent, 3 partial, 2 matched. Spent: `harm` 32.5 dB, best `pizzicato.amp_env.release_ms` at its lo; `cents` 35.9 cents, best `pizzicato.ks.decay_stretch` at its hi; `init` 112 dB, best `pizzicato.ks.pickup_pos` at its hi; `slope` 16.2 dB/s ÷10, best `pizzicato.ks.octave_mix` at its hi. 22 of the spec's 49 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p047-timpani": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 3
+      },
+      "spec": "auto: 65 knobs for program 47 bank 0 (patch 'timpani' and its engine)",
+      "probe": "the corpus pattern over 5 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 spent, 4 partial. Spent: `modes` 15.9 dB + cents÷25, best `timpani.percussion.noise_decay_ms` at its hi; `hf` 400 dB, best `timpani.percussion.mode_ratios0` at its hi. 35 of the spec's 65 knobs move nothing over this probe, and 3 probe ends scored unscorable."
+    }
+  },
+  "p048-string-ensemble-1": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 53 knobs for program 48 bank 0 (patch 'string_ensemble_1' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 4 partial, 1 reachable, 1 matched. 10 of the spec's 53 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p049-string-ensemble-2": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 53 knobs for program 49 bank 0 (patch 'string_ensemble_2' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 4 partial, 1 matched. Spent: `slope` 14.8 dB/s ÷10, best `string_ensemble_2.amp_env.attack_ms` at its lo. 11 of the spec's 53 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p050-synth-strings-1": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 1
+      },
+      "spec": "auto: 21 knobs for program 50 bank 0 (patch 'synth_strings_1' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 spent, 3 partial, 1 matched. Spent: `mod` 7.79 composite, best `synth_strings_1.drive` at its hi; `env` 14.3 composite, best `synth_strings_1.lfo_rate_hz` at its lo. 5 of the spec's 21 knobs move nothing over this probe."
+    }
+  },
+  "p051-synth-strings-2": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 1
+      },
+      "spec": "auto: 21 knobs for program 51 bank 0 (patch 'synth_strings_2' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 4 partial, 2 reachable. 5 of the spec's 21 knobs move nothing over this probe."
+    }
+  },
+  "p052-choir-aahs": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 32 knobs for program 52 bank 0 (patch 'choir_aahs' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 spent, 3 partial, 1 matched. Spent: `cents` 3.88 cents, best `choir_aahs.amp_env.sustain` at its lo; `slope` 10.9 dB/s ÷10, best `choir_aahs.vocal.vibrato_depth` at its lo. 9 of the spec's 32 knobs move nothing over this probe."
+    }
+  },
+  "p053-voice-oohs": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 32 knobs for program 53 bank 0 (patch 'voice_oohs' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 3 spent, 2 partial, 1 matched. Spent: `harm` 25.1 dB, best `voice_oohs.vocal.vibrato_rate_hz` at its lo; `cents` 6.41 cents, best `voice_oohs.amp_env.sustain` at its lo; `slope` 11.9 dB/s ÷10, best `voice_oohs.vocal.vibrato_rate_hz` at its hi. 9 of the spec's 32 knobs move nothing over this probe."
+    }
+  },
+  "p054-synth-voice": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 32 knobs for program 54 bank 0 (patch 'synth_voice' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 4 partial, 1 matched. Spent: `cents` 3.81 cents, best `synth_voice.one_shot` at its hi. 9 of the spec's 32 knobs move nothing over this probe."
+    }
+  },
+  "p055-orchestra-hit": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 22 knobs for program 55 bank 0 (patch 'orchestra_hit' and its engine)",
+      "probe": "the corpus pattern over 5 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 4 partial, 1 reachable. Spent: `env` 83.9 composite, best `orchestra_hit.cutoff_hz` at its lo. 5 of the spec's 22 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p058-tuba": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 3
+      },
+      "spec": "auto: 82 knobs for program 58 bank 0 (patch 'tuba' and its engine)",
+      "probe": "the corpus pattern over 6 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 partial, 4 reachable. 19 of the spec's 82 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p059-muted-trumpet": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 3
+      },
+      "spec": "auto: 82 knobs for program 59 bank 0 (patch 'muted_trumpet' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 6 reachable. 16 of the spec's 82 knobs move nothing over this probe, and 3 probe ends scored unscorable."
+    }
+  },
+  "p065-alto-sax": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 3
+      },
+      "spec": "auto: 74 knobs for program 65 bank 0 (patch 'alto_sax' and its engine)",
+      "probe": "the corpus pattern over 7 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 partial, 4 reachable, 1 matched. 28 of the spec's 74 knobs move nothing over this probe, and 2 probe ends scored unscorable."
+    }
+  },
+  "p115-woodblock": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 3
+      },
+      "spec": "auto: 60 knobs for program 115 bank 0 (patch 'woodblock' and its engine)",
+      "probe": "the corpus pattern over 5 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 2 partial, 3 matched. Spent: `modes` 20.3 dB + cents÷25, best `woodblock.percussion.noise_cutoff_hz` at its hi. 39 of the spec's 60 knobs move nothing over this probe."
+    }
+  },
+  "p119-reverse-cymbal": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 3
+      },
+      "spec": "auto: 64 knobs for program 119 bank 0 (patch 'reverse_cymbal' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 partial, 1 reachable. 35 of the spec's 64 knobs move nothing over this probe."
+    }
+  },
+  "p120-guitar-fret-noise": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 18 knobs for program 120 bank 0 (patch 'sfx_guitar_fret' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 spent, 1 partial, 1 reachable. Spent: `mss` 2.4 ratio, best `sfx_guitar_fret.cutoff_hz` at its lo. 9 of the spec's 18 knobs move nothing over this probe."
+    }
+  },
+  "p121-breath-noise": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 19 knobs for program 121 bank 0 (patch 'sfx_breath' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 partial, 1 reachable. 3 of the spec's 19 knobs move nothing over this probe."
+    }
+  },
+  "p122-seashore": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 19 knobs for program 122 bank 0 (patch 'sfx_seashore' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 partial, 2 reachable. 3 of the spec's 19 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p123-bird-tweet": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 20 knobs for program 123 bank 0 (patch 'sfx_bird_tweet' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 1 partial, 2 reachable. 3 of the spec's 20 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p124-telephone-ring": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 19 knobs for program 124 bank 0 (patch 'sfx_telephone_ring' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 partial, 1 reachable. 7 of the spec's 19 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
+  "p125-helicopter": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 18 knobs for program 125 bank 0 (patch 'sfx_helicopter' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 4 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 3 partial. 7 of the spec's 18 knobs move nothing over this probe."
+    }
+  },
+  "p126-applause": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 18 knobs for program 126 bank 0 (patch 'sfx_applause' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 partial, 1 reachable. 7 of the spec's 18 knobs move nothing over this probe."
+    }
+  },
+  "p127-gunshot": {
+    "structure": {
+      "provenance": {
+        "date": "2026-09-05",
+        "bank_generation": 33,
+        "patch_version": 2
+      },
+      "spec": "auto: 19 knobs for program 127 bank 0 (patch 'sfx_gunshot' and its engine)",
+      "probe": "the corpus pattern over 3 notes and 5 velocities",
+      "unreachable": [],
+      "accepted": {},
+      "note": "Nothing unreachable: every weighted term has a knob that moves it. 2 spent, 1 reachable. Spent: `env` 99.4 composite, best `sfx_gunshot.env_to_cutoff_cents` at its lo; `mss` 2.44 ratio, best `sfx_gunshot.amp_env.attack_ms` at its hi. 6 of the spec's 19 knobs move nothing over this probe, and 1 probe end scored unscorable."
+    }
+  },
   "kit000-standard-kit": {
     "structure": {
       "provenance": {
