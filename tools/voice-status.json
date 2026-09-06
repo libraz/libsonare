@@ -9477,7 +9477,9 @@
       "capture": "drums",
       "stage": 0.8,
       "stage_name": "agreeing",
-      "open_candidates": [],
+      "open_candidates": [
+        "vibraslap-thinned"
+      ],
       "axes": {
         "engine": "percussion",
         "patch": null,
@@ -9507,7 +9509,7 @@
         },
         "music": null
       },
-      "next": "listen to a take and sign it off in signoff.json"
+      "next": "judge the recorded candidate(s) — vibraslap-thinned — then listen to a take and sign it off in signoff.json"
     }
   ]
 }

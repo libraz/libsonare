@@ -138,5 +138,14 @@
         "note": "the patch's own filter closed to 1.15x f0 and tracking the key, which no flute patch does today: h2-h6 goes from -19 to -38 dB and stays flat across the range for 1 dB of level. The reference sits at -70, so this is 20 of a 45 dB gap; every knob on the engine put together gives 7, and the four that give more than 3 collapse the level to a third because they are loop gain rather than timbre"
       }
     ]
+  },
+  "kit000-standard-kit": {
+    "variants": [
+      {
+        "name": "vibraslap-thinned",
+        "overrides": "d058.amp_env.attack_ms=0.166825,d058.amp_env.decay_ms=2469.47,d058.amp_env.sustain=0.326238,d058.cutoff_hz=5419.45,d058.percussion.contact=3.77709,d058.percussion.contact_ms=0.145638,d058.percussion.noise_cutoff_hz=1570.8,d058.percussion.noise_gain=0.944272,d058.percussion.noise_q=1.33667,d058.percussion.phisem_beans=1.18722,d058.percussion.phisem_energy_ms=66.6717,d058.percussion.phisem_res_hz=1802.29,d058.percussion.phisem_res_q=3.22451,d058.percussion.plate_gain=3.27864,d058.percussion.plate_hf_ratio=0.621854",
+        "note": "the vibraslap's rattle thinned out - the one key in the kit whose decay length already matches while its crest sits 10.5 dB under both references, so what is wrong is the shape inside the envelope and not its length. A fit sparsens the collisions and pulls the plate back, which is the mechanism the residual pointed at, and takes crest from 5.1x the reference kits' spread to 2.3x, brightness from 1.5x to 0.6x, attack from 1.0x to 0.4x and level from 1.8x to 1.3x. The cost is the velocity range, which goes from 0.8x to 1.3x and is the only reading that leaves the spread: hear whether a harder strike should open this instrument that much before it lands"
+      }
+    ]
   }
 }
