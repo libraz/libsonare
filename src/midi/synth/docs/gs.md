@@ -25,7 +25,9 @@ Two things follow, and both are load-bearing:
 
 The GS address space is identical between the two machines except at six points, and the SC-8850 is the superset. Targeting it therefore *includes* SC-88Pro compatibility rather than trading against it: an SC-88Pro file selects the SC-88Pro tone map (`40 4x 00` = `03`) and plays.
 
-**The tone maps exist; the SysEx route onto them does not yet.** `GsToneMap` carries SC-55, SC-88 and SC-88Pro alongside the module default, and `gm_fallback_patch` and `gm_fallback_drum_kit` both take it — but only the kit side can be heard choosing today, because sixteen of the twenty-six rhythm sets were introduced by a later map and every melodic variation voiced so far is an SC-55 tone, which all three maps reach. The map is selected by Bank Select LSB (`gs_effective_tone_map`), and `40 4x 00`/`01` are `ACCEPT` because nothing reads them. Whether the two are one parameter or two is the question that decides how they get wired, and it is the question `40 1x 16` versus RPN `00 02` below warns about: coinciding ranges are not an alias, and only an annotation in the map settles it. The accepted ranges are the SC-8850's meanwhile, so a file selecting any map is answered rather than rejected.
+**`40 4x 00` TONE MAP NUMBER and Bank Select LSB are one storage location, and a measurement settled that rather than an annotation.** The two were left apart while it was unclear whether they were one parameter or two — the question `40 1x 16` versus RPN `00 02` below warns about, where coinciding ranges are not an alias. A measured unit answers it: CC#32 lands on this address verbatim, so the SysEx route writes the field the controller writes and there is no second copy. `GsToneMap` carries the SC-8850's own map alongside SC-55, SC-88, SC-88Pro and the module default, which is the fourth value the SC-88Pro has no room for.
+
+**Only the kit side can be heard choosing, and both banks now answer it the same way.** Sixteen of the twenty-six rhythm sets were introduced by a later map, while every melodic variation voiced so far is an SC-55 tone that all maps reach — so a map is audible exactly where it fails to reach a kit. The model floor reads it through `gm_fallback_drum_kit`; the SoundFont bank resolves the program its preset is looked up by through the same rule, because a parameter must not do something different depending on which bank answered. Applied to the lookup alone, so the part keeps the program it was given.
 
 Where the two differ:
 
@@ -94,6 +96,7 @@ GS reaches the same parameter from up to three directions. **Holding a second co
 | parameter | CC | SysEx | NRPN |
 |---|---|---|---|
 | Tone number | 0 + program change | `40 1x 00`–`01` | — |
+| Tone map | 32 | `40 4x 00` | — |
 | Part level | 7 | `40 1x 19` | — |
 | Part panpot | 10 | `40 1x 1C` | — |
 | Reverb send | 91 | `40 1x 22` | — |
@@ -130,7 +133,9 @@ GS reaches the same parameter from up to three directions. **Holding a second co
 
 `40 1x 16` PITCH KEY SHIFT is likewise **not** RPN `00 02` Master Coarse Tuning, however exactly their ranges coincide — both `28`–`58` around a centred `40`, both ±24 semitones, both MSB-only. The map annotates an alias inside the row that has one, which is where every entry in the table above comes from: `(=CC# 7)`, `(= RPN#1)`, `(=NRPN# 8/CC#76)`. It annotates this row with nothing. The manual settles the reading one step up, for the pair that is documented: RPN `00 01` and `40 00 00` MASTER TUNE "are added together to determine the actual pitch sounded by each Part". Two locations that add, then, not one that overwrites — and the same for the coarse pair.
 
-The mapping is verified by a round-trip test over every pair: written from either side, read back from either side, equal.
+The mapping is verified by a round-trip test over every pair: written from either side, read back from either side, equal. That shows the two entry points agree; it cannot show the pairing is the right one, since a table pairing the wrong two addresses round-trips just as cleanly. What can is a measured unit: an alias scan sends each controller and reports which address moved, and every pair above that has been scanned lands where the table says. `make gs-unit-diff` is the address-space half of the same comparison.
+
+**RPN `00 05` Modulation Depth Range writes `40 2x 04`, and it is not decoded here yet.** The storage was inferred from the address's own power-on value; a scan confirms it, and adds that the value is converted rather than stored verbatim — a written 1 lands as `15` and a written 8 saturates at `7F`. The row joins the table above in the change that decodes it.
 
 Two rows in that table carry a reading that is not obvious from the map and is worth writing down once. `40 1x 13`'s annotation is `(=CC# 126 01/CC# 127 00)`, and those trailing bytes are the **controllers' data bytes rather than parameter values** — MIDI's Mono Mode On carries a voice count, of which `01` is the ordinary monophonic case, and Poly Mode On's data byte is always `00`. Read as parameter values they would invert the row's own default of `01` Poly. And the two controllers do something the SysEx does not: both are also All Notes Off. One storage location, two entry points, one of which silences the part on the way in.
 
