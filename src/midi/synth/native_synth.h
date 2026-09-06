@@ -692,7 +692,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.drift_rate_hz = std::clamp(patch_clamp_detail::sanitize(p.drift_rate_hz, 0.3f), 0.01f, 20.0f);
   p.pitch_offset_cents =
       std::clamp(patch_clamp_detail::sanitize(p.pitch_offset_cents, 0.0f), -4800.0f, 4800.0f);
-  p.gain = std::clamp(patch_clamp_detail::sanitize(p.gain, 0.5f), 0.0f, 4.0f);
+  // The one scale applied after the drive, the filter and the envelope, so the
+  // only lever that moves a voice's level without its timbre. The drum bank's
+  // raw voices span 33 dB and at 4 it ran out under the quietest of them.
+  p.gain = std::clamp(patch_clamp_detail::sanitize(p.gain, 0.5f), 0.0f, 16.0f);
   p.amp_env = patch_clamp_detail::clamp_env(p.amp_env);
   p.cutoff_hz = std::clamp(patch_clamp_detail::sanitize(p.cutoff_hz, 12000.0f), 10.0f, 22000.0f);
   p.resonance_q = std::clamp(patch_clamp_detail::sanitize(p.resonance_q, constants::kButterworthQ),
