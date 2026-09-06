@@ -123,6 +123,8 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x00007F, 0x00, GsParam::kSystemModeSet);
   check_row(0x00010A, 0x01, GsParam::kChannelMsgRxPort, 0x0A);
   check_row(0x00011A, 0x01, GsParam::kChannelMsgRxPort, 0x1A);
+  check_row(0x00012A, 0x02, GsParam::kChannelMsgRxPort, 0x2A);
+  check_row(0x00013A, 0x03, GsParam::kChannelMsgRxPort, 0x3A);
 
   // System parameters (40 00 xx). MASTER TUNE is one four-nibble parameter, so
   // its bytes come back as one param with the nibble position as the index.
@@ -643,16 +645,20 @@ TEST_CASE("GS address table: a masked row claims exactly its own addresses",
   CHECK_FALSE(gs_row_claims(group, 0x4F7F7F));  // the byte below
   CHECK_FALSE(gs_row_claims(group, 0x510000));  // the sibling row's block
 
-  // The two CHANNEL MSG RX PORT rows split one nibble-masked span, and each
-  // claims only its own half.
-  const GsAddressEntry* low = gs_lookup_address(0x000105);
-  const GsAddressEntry* high = gs_lookup_address(0x000115);
-  REQUIRE(low != nullptr);
-  REQUIRE(high != nullptr);
-  CHECK(low != high);
-  CHECK(low->def == 0x00);
-  CHECK(high->def == 0x01);
-  CHECK(gs_lookup_address(0x000120) == nullptr);
+  // CHANNEL MSG RX PORT is sixty-four blocks over four ports, split one row per
+  // port because each powers on holding its own port number. Each row claims
+  // only its own sixteen. The SC-88Pro's thirty-two over two ports is the other
+  // machine's; this unit answers all sixty-four (tools/gs/docs/unit-diff.md).
+  for (uint8_t port = 0; port < 4; ++port) {
+    const uint32_t addr = 0x000100u | static_cast<uint32_t>(port) << 4 | 0x05u;
+    const GsAddressEntry* row = gs_lookup_address(addr);
+    INFO("port " << static_cast<int>(port));
+    REQUIRE(row != nullptr);
+    CHECK(row->def == port);
+    CHECK(row->hi == 0x03);
+  }
+  CHECK(gs_lookup_address(0x000105) != gs_lookup_address(0x000135));
+  CHECK(gs_lookup_address(0x000140) == nullptr);
 }
 
 TEST_CASE("GS address table: the block mapping matches the SysEx layer", "[midi][gs][address]") {

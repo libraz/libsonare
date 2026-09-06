@@ -204,15 +204,22 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 142> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
     {0x00007F, 0, GsParam::kSystemModeSet, GsLevel::kAudible, 1, 0x00, 0x00, 0x00, nullptr},
-    {0x000100, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x01, 0x00,
-     "libsonare receives one port, so a channel has no second port to be assigned to"},
-    {0x000110, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x01, 0x01,
-     "libsonare receives one port, so a channel has no second port to be assigned to"},
+    // Sixty-four blocks over four ports, one row per port because the power-on
+    // default is the port's own number. The SC-88Pro's thirty-two over two ports
+    // is the other machine's, and the SC-8850's map is what this table follows.
+    {0x000100, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x03, 0x00,
+     "libsonare receives one port, so a channel has no other port to be assigned to"},
+    {0x000110, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x03, 0x01,
+     "libsonare receives one port, so a channel has no other port to be assigned to"},
+    {0x000120, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x03, 0x02,
+     "libsonare receives one port, so a channel has no other port to be assigned to"},
+    {0x000130, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x03, 0x03,
+     "libsonare receives one port, so a channel has no other port to be assigned to"},
 
     // User drum sets (21 dn rr): two kits a file builds note by note and a
     // rhythm part selects with program 64 or 65. d is the set, n the parameter,
