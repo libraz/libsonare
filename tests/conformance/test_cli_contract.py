@@ -552,6 +552,19 @@ class CliContractSelfTest(unittest.TestCase):
         )
         self.assertEqual(CHECKER._resolve_executable("python3"), "python3")
 
+    def test_only_a_file_the_build_reads_counts_as_a_straddling_source(self) -> None:
+        """A docs edit under src/ is not artifact skew, and cannot be rebuilt away.
+
+        `src/` carries the specification pages beside the code, so taking every
+        file made a markdown edit between two link times fail the contract with
+        nothing a rebuild could clear.
+        """
+        self.assertTrue(CHECKER._is_core_source(ROOT / "src/midi/synth/gs_layer.h"))
+        self.assertTrue(CHECKER._is_core_source(ROOT / "src/midi/synth/gs_layer.cpp"))
+        self.assertTrue(CHECKER._is_core_source(ROOT / "src/CMakeLists.txt"))
+        self.assertFalse(CHECKER._is_core_source(ROOT / "src/midi/synth/docs/gs.md"))
+        self.assertFalse(CHECKER._is_core_source(ROOT / "src/midi/synth/docs"))
+
     def test_pending_payload_with_active_options_still_checks_inventory(self) -> None:
         """Payload promotion and option promotion are independent gates."""
         manifest = copy.deepcopy(self.manifest)

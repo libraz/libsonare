@@ -1773,6 +1773,22 @@ def _resolved_python_library(python_executable: str, timeout: float) -> str | No
     return completed.stdout.strip() or None
 
 
+# What counts as a core source for the skew check below: a file that can change
+# what either artifact links to. `src/` also holds the specification pages
+# (`src/midi/synth/docs/*.md`), and taking every file made a docs-only edit
+# report as artifact skew -- a failure no rebuild can clear, since nothing the
+# build reads had changed.
+_CORE_SOURCE_SUFFIXES = frozenset(
+    {".c", ".cc", ".cpp", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".inc", ".ipp"}
+)
+
+
+def _is_core_source(path: Path) -> bool:
+    return path.is_file() and (
+        path.suffix in _CORE_SOURCE_SUFFIXES or path.name == "CMakeLists.txt"
+    )
+
+
 def _straddling_source(older: float, newer: float) -> Path | None:
     """Return a core source file last modified between two artifact link times."""
     for directory in ("src", "include"):
@@ -1780,7 +1796,7 @@ def _straddling_source(older: float, newer: float) -> Path | None:
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not path.is_file():
+            if not _is_core_source(path):
                 continue
             try:
                 mtime = path.stat().st_mtime
@@ -1799,7 +1815,7 @@ def _count_sources_after(mtime: float) -> int:
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not path.is_file():
+            if not _is_core_source(path):
                 continue
             try:
                 if path.stat().st_mtime > mtime:
