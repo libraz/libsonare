@@ -271,7 +271,7 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
   if (body_size > 0 && body[body_size - 1] == 0xF7) --body_size;
   if (body_size >= 4 && body[0] == 0x7E && body[2] == 0x09 &&
       (body[3] == 0x01 || body[3] == 0x03)) {
-    out.kind = GsSysExKind::kGmReset;
+    out.kind = body[3] == 0x01 ? GsSysExKind::kGm1Reset : GsSysExKind::kGm2Reset;
     return out;
   }
 

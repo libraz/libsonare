@@ -199,7 +199,10 @@ class Sf2Player final : public MidiInstrument {
   /// Level 1 specifies no effect controls, but real GM-mode hardware keeps its
   /// power-on reverb level, so the sends land on the GS defaults rather than at
   /// zero and a plain GM file still renders in the default room.
-  void gm_reset() noexcept;
+  ///
+  /// @p level is which System On arrived, and it changes the receive switches
+  /// the reset leaves behind rather than anything else (docs/gs.md).
+  void gm_reset(GmLevel level) noexcept;
 
   /// Currently sounding voices, SF2 + synth fallback (test/diagnostic).
   int active_voice_count() const noexcept {
@@ -236,10 +239,10 @@ class Sf2Player final : public MidiInstrument {
   }
   /// GS 40 1x 13 MONO/POLY MODE for @p channel, 0 = Mono (test/diagnostic).
   uint8_t mono_poly(uint8_t channel) const noexcept { return channels_[channel & 0x0Fu].mono_poly; }
-  /// GS 40 1x 03-12 receive switches for @p channel, one bit per GsRxSwitch.
+  /// GS receive switches for @p channel, one bit per GsRxSwitch.
   /// Exposed because a switch over a message class libsonare does not receive is
   /// held rather than discarded, and a held byte owes a way to read it back.
-  uint16_t rx_switches(uint8_t channel) const noexcept {
+  uint32_t rx_switches(uint8_t channel) const noexcept {
     return channels_[channel & 0x0Fu].rx_switches;
   }
 
@@ -384,15 +387,16 @@ class Sf2Player final : public MidiInstrument {
     /// a part that listens to none. Each part powers on to its own channel, so
     /// the reset writes it rather than a member default.
     uint8_t rx_channel = 0;
-    /// GS 40 1x 03-12: one bit per GsRxSwitch, set when the part receives that
-    /// class of message. A cleared bit drops the message on arrival, so the
-    /// value it would have written stays as the last received one left it.
-    uint16_t rx_switches = kGsRxAllOn;
+    /// GS 40 1x 03-12 and 23-24: one bit per GsRxSwitch, set when the part
+    /// receives that class of message. A cleared bit drops the message on
+    /// arrival, so the value it would have written stays as the last received
+    /// one left it.
+    uint32_t rx_switches = kGsRxAllOn;
     /// GS layer: the part's NRPN / TONE MODIFY edits.
     GsPartParams gs;
 
     bool is_drum() const noexcept { return drum_map != kGsDrumMapNone; }
-    /// Whether the part receives @p which at all (40 1x 03-12).
+    /// Whether the part receives @p which at all.
     bool receives(GsRxSwitch which) const noexcept {
       return (rx_switches & gs_rx_switch_bit(which)) != 0;
     }

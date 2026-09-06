@@ -106,6 +106,8 @@ enum class GsLevel : uint8_t {
   X(kPartRxPortamento)       \
   X(kPartRxSostenuto)        \
   X(kPartRxSoft)             \
+  X(kPartRxBankSelect)       \
+  X(kPartRxBankSelectLsb)    \
   X(kPartMonoPoly)           \
   X(kPartAssignMode)         \
   X(kUseForRhythmPart)       \
@@ -222,7 +224,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 160> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 162> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -465,6 +467,14 @@ inline constexpr std::array<GsAddressEntry, 160> kGsAddressTable = {{
     {0x401021, 0x000F00, GsParam::kPartChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     // The reverb send's 28 is the GS power-on 40 the reset already installs.
     {0x401022, 0x000F00, GsParam::kPartReverbSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28, nullptr},
+    // The last two receive switches, printed apart from the block at 03-12
+    // because they came in with the bank-select rules rather than with the rest.
+    // GsRxSwitch carries both halves in one bit order, and the first gates CC0
+    // and CC32 alike while the second zeroes the LSB rather than refusing it.
+    {0x401023, 0x000F00, GsParam::kPartRxBankSelect, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401024, 0x000F00, GsParam::kPartRxBankSelectLsb, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
     // Two bytes making one 14-bit word centred on 40 00, which is RPN 00 01's
     // 8192. The row bounds a byte; index 0 is the MSB.
     {0x40102A, 0x000F00, GsParam::kPartPitchFineTune, GsLevel::kAudible, 2, 0x00, 0x7F, 0x40,
@@ -957,10 +967,10 @@ constexpr bool gs_ranges_are_consistent() noexcept {
 // These are evaluated out of one constexpr step budget shared by the whole
 // header, so a check's cost is paid by every other check and adding rows can
 // break an assertion that has nothing to do with them: the failure names the
-// range walk and says "possible infinite loop", which is neither. At 160 rows
-// the header compiles under clang's default 1048576 and not under half of it,
-// so a comparable growth needs the walks made cheaper again rather than a
-// -fconstexpr-steps on the build, which would only move the wall.
+// range walk and says "possible infinite loop", which is neither. At 162 rows
+// the header compiles under clang's default 1048576 and not under three
+// quarters of it, so a comparable growth needs the walks made cheaper again
+// rather than a -fconstexpr-steps on the build, which would only move the wall.
 static_assert(detail::gs_table_is_consistent(),
               "GS address table: a reason missing from a kIgnore/kAccept row or present on a row "
               "that takes none, a bad size/mask/range/default, or two rows claiming one address");

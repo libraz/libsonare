@@ -211,9 +211,11 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   // part's default one, so the two numbers are visibly separate here.
   check_row(0x401002, 0x09, GsParam::kPartRxChannel, 0, 9);
   check_row(0x401F02, 0x10, GsParam::kPartRxChannel, 0, 15);
-  // The sixteen receive switches, each on a different block so the decode is
+  // The eighteen receive switches, each on a different block so the decode is
   // checked over the part nibble as well as over the low byte. The switch bit is
-  // read off the low byte, which is what these addresses pin.
+  // read off the low byte, which is what these addresses pin — the last two
+  // included, since theirs is the one place the low byte and the bit index step
+  // apart.
   check_row(0x401103, 0x00, GsParam::kPartRxPitchBend, 0, 0);
   check_row(0x401204, 0x01, GsParam::kPartRxChannelPressure, 0, 1);
   check_row(0x401305, 0x00, GsParam::kPartRxProgramChange, 0, 2);
@@ -250,6 +252,8 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x401140, 0x40, GsParam::kPartScaleTuning, 0, 0);
   check_row(0x40114B, 0x36, GsParam::kPartScaleTuning, 11, 0);
   check_row(0x401022, 0x28, GsParam::kPartReverbSend, 0, 9);
+  check_row(0x401323, 0x00, GsParam::kPartRxBankSelect, 0, 2);
+  check_row(0x401C24, 0x01, GsParam::kPartRxBankSelectLsb, 0, 12);
   check_row(0x401025, 0x00, GsParam::kUndefined);
   // PITCH FINE TUNE is one 14-bit word: the two bytes come back as one param
   // with the byte position as the index, like MASTER TUNE.
@@ -977,9 +981,12 @@ const std::vector<ParseCase>& parse_value_cases() {
 /// The Universal SysEx path, which is matched ahead of the address table.
 const std::vector<ParseCase>& parse_universal_cases() {
   static const std::vector<ParseCase> cases = {
-      {{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7}, GsSysExKind::kGmReset, 0, 0},
-      {{0x7E, 0x7F, 0x09, 0x01}, GsSysExKind::kGmReset, 0, 0},
-      {{0xF0, 0x7E, 0x7F, 0x09, 0x03, 0xF7}, GsSysExKind::kGmReset, 0, 0},
+      {{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7}, GsSysExKind::kGm1Reset, 0, 0},
+      {{0x7E, 0x7F, 0x09, 0x01}, GsSysExKind::kGm1Reset, 0, 0},
+      // GM2 is its own kind rather than GM1's: the two leave the bank-select
+      // switches differently, which is measured on a unit and not a reading.
+      {{0xF0, 0x7E, 0x7F, 0x09, 0x03, 0xF7}, GsSysExKind::kGm2Reset, 0, 0},
+      {{0x7E, 0x7F, 0x09, 0x03}, GsSysExKind::kGm2Reset, 0, 0},
       // GM System Off is not a reset.
       {{0xF0, 0x7E, 0x7F, 0x09, 0x02, 0xF7}, GsSysExKind::kNone, 0, 0},
       {{0xF0, 0x7E, 0x7F, 0x09}, GsSysExKind::kNone, 0, 0},
@@ -1303,21 +1310,20 @@ TEST_CASE("GS decode: the unknown counter separates a gap from a claimed address
   CHECK(unknowns(0x401015) == 0);
   CHECK(unknowns(0x400302) == 0);
   REQUIRE(gs_lookup_range(0x400302) != nullptr);
-  // The finding: 40 1x 23 RX BANK SELECT sits above REVERB SEND LEVEL and below
-  // the undefined run at 40 1x 25 with no row and no range of its own, so it
-  // counts. The manual defines it, so the absence is a gap awaiting a row rather
-  // than a decision; this case wants any such address and no file writes this
-  // one, which is the only reason it was picked over a busier gap.
-  REQUIRE(gs_lookup_address(0x401023) == nullptr);
-  REQUIRE(gs_lookup_range(0x401023) == nullptr);
-  CHECK(unknowns(0x401023) == 1);
+  // The finding: 40 04 xx is between the EFX block and the part blocks, and the
+  // map's 40 group runs 00, 01, 02, 03, 1x, 2x, 4x with nothing here. A probe
+  // has to be an address the map defines nothing at, or it stops being one the
+  // day it is implemented — which is what retired the two picked before it.
+  // 40 3u xx is the other unclaimed run and is not a candidate for the same
+  // reason: it is where libsonare's own extension units live.
+  REQUIRE(gs_lookup_address(0x400400) == nullptr);
+  REQUIRE(gs_lookup_range(0x400400) == nullptr);
+  CHECK(unknowns(0x400400) == 1);
   // A second one from another family, so the counter is not being shown to work
   // in a single block. 41 mA rr is a drum-setup parameter nibble the manual does
-  // not define — the block ends at m9 — so no file writes it and nothing is
-  // planned for it, where the previous choice here was a nibble the manual DOES
-  // define and stopped being a probe as soon as it was implemented. Both carry
-  // the lookup guards above, because an address that quietly acquires a row
-  // would keep the case passing for the wrong reason.
+  // not define — the block ends at m9. Both carry the lookup guards above,
+  // because an address that quietly acquires a row would keep the case passing
+  // for the wrong reason.
   REQUIRE(gs_lookup_address(0x410A00) == nullptr);
   REQUIRE(gs_lookup_range(0x410A00) == nullptr);
   CHECK(unknowns(0x410A00) == 1);

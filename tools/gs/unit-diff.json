@@ -22,11 +22,11 @@
     "One unit is one unit. A disagreement is between this table and this machine, and a second SC-8850 has not been measured."
   ],
   "summary": {
-    "table_rows": 160,
-    "addresses_the_table_claims": 56598,
+    "table_rows": 162,
+    "addresses_the_table_claims": 56630,
     "addresses_the_unit_answered": 11990,
     "addresses_a_read_reached": 13522,
-    "addresses_with_no_row": 2776,
+    "addresses_with_no_row": 2748,
     "rows_no_read_reached": 50,
     "rows_whose_default_disagrees": 1,
     "rows_one_default_byte_cannot_express": 0,
@@ -318,86 +318,72 @@
     },
     {
       "block": "40 11",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 11 17",
         "40 11 18",
         "40 11 1A",
-        "40 11 1B",
-        "40 11 23",
-        "40 11 24"
+        "40 11 1B"
       ]
     },
     {
       "block": "40 12",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 12 17",
         "40 12 18",
         "40 12 1A",
-        "40 12 1B",
-        "40 12 23",
-        "40 12 24"
+        "40 12 1B"
       ]
     },
     {
       "block": "40 13",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 13 17",
         "40 13 18",
         "40 13 1A",
-        "40 13 1B",
-        "40 13 23",
-        "40 13 24"
+        "40 13 1B"
       ]
     },
     {
       "block": "40 14",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 14 17",
         "40 14 18",
         "40 14 1A",
-        "40 14 1B",
-        "40 14 23",
-        "40 14 24"
+        "40 14 1B"
       ]
     },
     {
       "block": "40 15",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 15 17",
         "40 15 18",
         "40 15 1A",
-        "40 15 1B",
-        "40 15 23",
-        "40 15 24"
+        "40 15 1B"
       ]
     },
     {
       "block": "40 16",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 16 17",
         "40 16 18",
         "40 16 1A",
-        "40 16 1B",
-        "40 16 23",
-        "40 16 24"
+        "40 16 1B"
       ]
     },
     {
       "block": "40 17",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 17 17",
         "40 17 18",
         "40 17 1A",
-        "40 17 1B",
-        "40 17 23",
-        "40 17 24"
+        "40 17 1B"
       ]
     },
     {
@@ -410,86 +396,72 @@
     },
     {
       "block": "40 19",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 19 17",
         "40 19 18",
         "40 19 1A",
-        "40 19 1B",
-        "40 19 23",
-        "40 19 24"
+        "40 19 1B"
       ]
     },
     {
       "block": "40 1A",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 1A 17",
         "40 1A 18",
         "40 1A 1A",
-        "40 1A 1B",
-        "40 1A 23",
-        "40 1A 24"
+        "40 1A 1B"
       ]
     },
     {
       "block": "40 1B",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 1B 17",
         "40 1B 18",
         "40 1B 1A",
-        "40 1B 1B",
-        "40 1B 23",
-        "40 1B 24"
+        "40 1B 1B"
       ]
     },
     {
       "block": "40 1C",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 1C 17",
         "40 1C 18",
         "40 1C 1A",
-        "40 1C 1B",
-        "40 1C 23",
-        "40 1C 24"
+        "40 1C 1B"
       ]
     },
     {
       "block": "40 1D",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 1D 17",
         "40 1D 18",
         "40 1D 1A",
-        "40 1D 1B",
-        "40 1D 23",
-        "40 1D 24"
+        "40 1D 1B"
       ]
     },
     {
       "block": "40 1E",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 1E 17",
         "40 1E 18",
         "40 1E 1A",
-        "40 1E 1B",
-        "40 1E 23",
-        "40 1E 24"
+        "40 1E 1B"
       ]
     },
     {
       "block": "40 1F",
-      "addresses": 6,
+      "addresses": 4,
       "sample": [
         "40 1F 17",
         "40 1F 18",
         "40 1F 1A",
-        "40 1F 1B",
-        "40 1F 23",
-        "40 1F 24"
+        "40 1F 1B"
       ]
     },
     {

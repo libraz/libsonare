@@ -76,13 +76,16 @@ constexpr GsToneMap gs_tone_map_from_lsb(uint8_t bank_lsb) noexcept {
   }
 }
 
-/// The sixteen per-part receive switches at `40 1x 03`-`12`, in address order:
-/// the bit index is the address's low byte less 0x03.
+/// The eighteen per-part receive switches, in address order: sixteen at
+/// `40 1x 03`-`12` and two more at `40 1x 23`-`24`, which the map prints apart
+/// from the block because they arrived with the bank-select rules rather than
+/// with the rest. The two halves are contiguous here.
 ///
 /// A switch says whether the part receives one class of message at all, so one
 /// that is off is an absence rather than an attenuation — the part keeps
 /// whatever value it already held, and no later message of that class corrects
-/// it until the switch comes back on.
+/// it until the switch comes back on. RX BANK SELECT LSB is the one exception,
+/// and the map states it: the LSB is read as 00 rather than not read at all.
 enum class GsRxSwitch : uint8_t {
   kPitchBend,        ///< 40 1x 03
   kChannelPressure,  ///< 40 1x 04
@@ -100,23 +103,35 @@ enum class GsRxSwitch : uint8_t {
   kPortamento,       ///< 40 1x 10, CC65
   kSostenuto,        ///< 40 1x 11, CC66
   kSoft,             ///< 40 1x 12, CC67
+  kBankSelect,       ///< 40 1x 23, over CC0 and CC32 alike
+  kBankSelectLsb,    ///< 40 1x 24, over CC32's value rather than its arrival
   kCount,
 };
 
-/// Every switch on, which is what a GS Reset leaves. Rx. NRPN is the one that
-/// does not: a GM or GM2 System On clears it (docs/gs.md).
-inline constexpr uint16_t kGsRxAllOn = 0xFFFFu;
+/// Every switch on, which is what a GS Reset leaves. A GM System On clears
+/// three: Rx. NRPN whichever level it names, and the two bank-select switches
+/// for GM1 alone (docs/gs.md).
+inline constexpr uint32_t kGsRxAllOn = (1u << static_cast<uint8_t>(GsRxSwitch::kCount)) - 1u;
 
-/// The switch bit @p addr writes, for an address inside the `40 1x 03`-`12`
-/// block. Derived from the address rather than from the enumerator order, so the
-/// two cannot drift.
-constexpr uint16_t gs_rx_switch_bit(uint32_t addr) noexcept {
-  return static_cast<uint16_t>(1u << ((addr & 0xFFu) - 0x03u));
+constexpr uint32_t gs_rx_switch_bit(GsRxSwitch which) noexcept {
+  return 1u << static_cast<uint8_t>(which);
 }
 
-constexpr uint16_t gs_rx_switch_bit(GsRxSwitch which) noexcept {
-  return static_cast<uint16_t>(1u << static_cast<uint8_t>(which));
+/// The switch bit @p addr writes, for an address inside either receive-switch
+/// block. Derived from the address rather than written per row, so a row and its
+/// bit cannot drift; the break at 0x23 is the map's own.
+constexpr uint32_t gs_rx_switch_bit(uint32_t addr) noexcept {
+  const uint32_t low = addr & 0xFFu;
+  return low <= 0x12u ? 1u << (low - 0x03u)
+                      : gs_rx_switch_bit(GsRxSwitch::kBankSelect) << (low - 0x23u);
 }
+
+// The two derivations meet at each block's ends, which is where a member
+// inserted into the enumerator would part them.
+static_assert(gs_rx_switch_bit(0x401003u) == gs_rx_switch_bit(GsRxSwitch::kPitchBend));
+static_assert(gs_rx_switch_bit(0x401012u) == gs_rx_switch_bit(GsRxSwitch::kSoft));
+static_assert(gs_rx_switch_bit(0x401023u) == gs_rx_switch_bit(GsRxSwitch::kBankSelect));
+static_assert(gs_rx_switch_bit(0x401024u) == gs_rx_switch_bit(GsRxSwitch::kBankSelectLsb));
 
 /// GS NRPN part parameters, stored as signed offsets from centre (data - 64).
 /// All-zero means "no edit" (the SoundFont patch plays unmodified).
@@ -531,14 +546,32 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
 
 // --- SysEx surface ---
 
+/// Which General MIDI level a System On names. The two resets are not
+/// interchangeable: GM1 leaves the bank-select switches off and GM2 leaves them
+/// on, so a GM2 file can still reach a variation where a GM1 file cannot
+/// (docs/gs.md).
+enum class GmLevel : uint8_t {
+  kGeneralMidi1,
+  kGeneralMidi2,
+};
+
 enum class GsSysExKind : uint8_t {
   kNone = 0,
-  kGmReset,        ///< GM System On (F0 7E 7F 09 01 F7)
+  kGm1Reset,       ///< GM1 System On (F0 7E 7F 09 01 F7)
+  kGm2Reset,       ///< GM2 System On (F0 7E 7F 09 03 F7)
   kGsReset,        ///< GS Reset (F0 41 dd 42 12 40 00 7F 00 41 F7)
   kUseForRhythm,   ///< GS part rhythm assignment (40 1x 15 mm)
   kEfxPartSwitch,  ///< GS per-part EFX on/off (40 4x 22 mm): routes the part
                    ///< through the single insertion effect (value 1 = on).
 };
+
+/// Whether @p kind re-initialises the module. A named predicate rather than a
+/// comparison written out at each site, so a reset kind added later reaches
+/// every branch that resets rather than the ones someone remembered.
+constexpr bool gs_sysex_resets(GsSysExKind kind) noexcept {
+  return kind == GsSysExKind::kGsReset || kind == GsSysExKind::kGm1Reset ||
+         kind == GsSysExKind::kGm2Reset;
+}
 
 struct GsSysEx {
   GsSysExKind kind = GsSysExKind::kNone;

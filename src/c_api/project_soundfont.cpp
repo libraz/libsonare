@@ -123,7 +123,8 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
         const synth::GsSysEx msg =
             synth::parse_gs_sysex(scan.event->sysex_payload, scan.event->sysex_payload_size);
         switch (msg.kind) {
-          case synth::GsSysExKind::kGmReset:
+          case synth::GsSysExKind::kGm1Reset:
+          case synth::GsSysExKind::kGm2Reset:
           case synth::GsSysExKind::kGsReset:
             for (auto& [key, state] : states) {
               if (key.first != scan.destination_id) continue;

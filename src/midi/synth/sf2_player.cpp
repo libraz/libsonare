@@ -265,18 +265,23 @@ void Sf2Player::gs_reset() noexcept {
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
 }
 
-void Sf2Player::gm_reset() noexcept {
+void Sf2Player::gm_reset(GmLevel level) noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) all_sound_off(ch);
   // GM Level 1 specifies no effect controls, but real GM devices (SC-55 in
   // GM mode) keep their power-on reverb level; match that rather than the
   // paper reading so plain GM files keep the default room.
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
-  // The one receive switch a GM or GM2 System On leaves differently from a GS
-  // Reset: NRPN is switched OFF, since the NRPNs it would carry are Roland's
-  // rather than either GM specification's (docs/gs.md, 40 1x 0A).
-  for (ChannelState& part : channels_) {
-    part.rx_switches &= static_cast<uint16_t>(~gs_rx_switch_bit(GsRxSwitch::kNrpn));
+  // The receive switches a System On leaves differently from a GS Reset. NRPN
+  // goes off at either level, since the NRPNs it would carry are Roland's rather
+  // than either GM specification's; the two bank-select switches go off for GM1
+  // alone, which is what keeps a GM1 file on the plain program it names and
+  // still lets a GM2 file reach a variation (docs/gs.md, 40 1x 0A / 23 / 24).
+  uint32_t off = gs_rx_switch_bit(GsRxSwitch::kNrpn);
+  if (level == GmLevel::kGeneralMidi1) {
+    off |= gs_rx_switch_bit(GsRxSwitch::kBankSelect);
+    off |= gs_rx_switch_bit(GsRxSwitch::kBankSelectLsb);
   }
+  for (ChannelState& part : channels_) part.rx_switches &= ~off;
 }
 
 }  // namespace sonare::midi::synth

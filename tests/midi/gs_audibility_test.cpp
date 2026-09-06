@@ -64,7 +64,8 @@ using sonare::midi::synth::kGsAddressTable;
 constexpr uint8_t kMelodicBlock = 1;
 
 /// Block 0, which the same mapping sends to channel 9 — the rhythm part the
-/// stimulus strikes. Only the tone map is probed here.
+/// stimulus strikes. Only the tone map and the two switches over the controller
+/// that carries one are probed here.
 constexpr uint8_t kRhythmBlock = 0;
 
 /// A rhythm program whose kit a later map introduced, so an older map has
@@ -146,9 +147,10 @@ enum class Setup : uint8_t {
   /// says something once two notes are in one.
   kDrumGroupPeer,
   /// The rhythm part switched to a program whose kit a later map introduced,
-  /// which is the only state a TONE MAP write can be heard in: every melodic
+  /// which is the only state a map change can be heard in: every melodic
   /// variation voiced so far is an SC-55 tone that all maps reach, so the kit
-  /// side is the one that can fail to reach something (docs/gs.md).
+  /// side is the one that can fail to reach something (docs/gs.md). Serves the
+  /// TONE MAP row and the two switches over the controller that carries a map.
   kLaterMapKit,
   /// The rhythm part switched to a user drum set, which is the only state in
   /// which anything reads the 21 dn rr block.
@@ -321,8 +323,12 @@ Setup setup_for(const GsAddressEntry& row) {
           return Setup::kNone;
       }
     // A map is only heard where it fails to reach something, and the melodic
-    // side has nothing it can fail to reach.
+    // side has nothing it can fail to reach. The two bank-select switches are
+    // here because the map is what they gate: CC32 is the controller that
+    // carries it, so what they refuse is a map change.
     case GsParam::kPartToneMapNumber:
+    case GsParam::kPartRxBankSelect:
+    case GsParam::kPartRxBankSelectLsb:
       return Setup::kLaterMapKit;
     // A group is a relation, so one note in it chokes nothing.
     case GsParam::kDrumAssignGroup:
@@ -404,9 +410,12 @@ constexpr uint32_t kProbeDrumNote = 38;
 /// stimulus strikes. A channel-nibble row (00 01 xx) is probed at channel 0,
 /// which its base address already carries.
 uint32_t probe_address(const GsAddressEntry& row) {
-  // The one part row whose effect is on the rhythm part rather than the melodic
-  // one, so it is probed at the block channel 9 reads.
-  if (row.param == GsParam::kPartToneMapNumber) return row.addr | (uint32_t{kRhythmBlock} << 8);
+  // The part rows whose effect is on the rhythm part rather than the melodic
+  // one, so they are probed at the block channel 9 reads.
+  if (row.param == GsParam::kPartToneMapNumber || row.param == GsParam::kPartRxBankSelect ||
+      row.param == GsParam::kPartRxBankSelectLsb) {
+    return row.addr | (uint32_t{kRhythmBlock} << 8);
+  }
   if (row.mask == 0x000F00u) return row.addr | (static_cast<uint32_t>(kMelodicBlock) << 8);
   if (row.mask == 0x00F07Fu) return row.addr | kProbeDrumNote;
   // A whole-block row is probed at its part page rather than at mid byte 00, so
@@ -582,12 +591,13 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
 /// for the switch to have refused anything. The moment chosen is the one that
 /// serves all of them — a pedal needs keys already held to capture or to hold,
 /// and una corda and portamento need a note still to be struck.
-/// True for the receive-switch block (`40 1x 03`-`12`) and nothing else, read
-/// off the address as the switch bit itself is, so the two cannot disagree about
-/// which rows are in the block.
+/// True for the receive-switch blocks (`40 1x 03`-`12` and `23`-`24`) and
+/// nothing else, read off the address as the switch bit itself is, so the two
+/// cannot disagree about which rows are in them.
 bool needs_live_stimulus(const GsAddressEntry& row) {
   const uint32_t low = row.addr & 0xFFu;
-  return (row.addr & 0xFFF000u) == 0x401000u && low >= 0x03u && low <= 0x12u;
+  if ((row.addr & 0xFFF000u) != 0x401000u) return false;
+  return (low >= 0x03u && low <= 0x12u) || low == 0x23u || low == 0x24u;
 }
 
 void stimulus_for(Sf2Player& p, const GsAddressEntry& row) {
@@ -648,6 +658,16 @@ void stimulus_for(Sf2Player& p, const GsAddressEntry& row) {
       break;
     case GsParam::kPartRxSoft:
       cc(p, ch, 67, 127);
+      break;
+    case GsParam::kPartRxBankSelect:
+    case GsParam::kPartRxBankSelectLsb:
+      // The SC-55 map onto the rhythm part, where the setup left a kit an older
+      // map cannot reach — the melodic side has nothing a map can fail to reach.
+      // The note behind it is the message's point: a kit is read at the strike,
+      // and the model bank voices this note across kits where it voices the
+      // stimulus's other one alike.
+      cc(p, gs_part_block_to_channel(kRhythmBlock), 32, 0x01);
+      note_on(p, gs_part_block_to_channel(kRhythmBlock), kProbeDrumNote, 110);
       break;
     default:
       break;
@@ -809,10 +829,13 @@ Mirror mirror_state(const GsAddressEntry& row, const std::vector<uint8_t>& probe
     player.handle_sysex(msg.data(), msg.size());
   }
   if (rx_block) {
-    // One word holds all sixteen, so the comparison is over the whole of it as
-    // it is over the whole of the two structs below.
-    const uint8_t part = gs_part_block_to_channel(kMelodicBlock);
-    const uint16_t before = player.rx_switches(part);
+    // One word holds all eighteen, so the comparison is over the whole of it as
+    // it is over the whole of the two structs below. The part is the one the
+    // probe addresses rather than the melodic one, since two of the switches are
+    // probed on the rhythm part.
+    const uint8_t part =
+        gs_part_block_to_channel(static_cast<uint8_t>((probe_address(row) >> 8) & 0x0Fu));
+    const uint32_t before = player.rx_switches(part);
     player.handle_sysex(probe.data(), probe.size());
     return player.rx_switches(part) != before ? Mirror::kStored : Mirror::kNotStored;
   }

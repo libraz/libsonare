@@ -358,9 +358,9 @@ TEST_CASE("a GS assign group replaces the kit piece's own class", "[midi][sf2][g
 
 TEST_CASE("parse_gs_sysex recognises the GS/GM messages", "[midi][sf2][gslayer]") {
   const uint8_t gm_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
-  REQUIRE(parse_gs_sysex(gm_on, sizeof(gm_on)).kind == GsSysExKind::kGmReset);
+  REQUIRE(parse_gs_sysex(gm_on, sizeof(gm_on)).kind == GsSysExKind::kGm1Reset);
   const uint8_t gm2_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x03, 0xF7};
-  REQUIRE(parse_gs_sysex(gm2_on, sizeof(gm2_on)).kind == GsSysExKind::kGmReset);
+  REQUIRE(parse_gs_sysex(gm2_on, sizeof(gm2_on)).kind == GsSysExKind::kGm2Reset);
 
   const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
   REQUIRE(parse_gs_sysex(gs_reset, sizeof(gs_reset)).kind == GsSysExKind::kGsReset);
@@ -843,6 +843,144 @@ TEST_CASE("SYSTEM MODE SET resets, and only on the value the target accepts",
     // The default bend range is two semitones, so a full bend puts the 500 Hz
     // note at 561 Hz; a reset would have put it back at 500.
     REQUIRE(sounded_frequency(player) == Approx(561.0).margin(6.0));
+  }
+}
+
+TEST_CASE("the bank-select receive switches refuse and zero", "[midi][sf2][gslayer]") {
+  using sonare::midi::synth::gs_rx_switch_bit;
+  using sonare::midi::synth::GsRxSwitch;
+
+  // One sample at three pitches, so which bank answered is read off the note.
+  // The GM2 melodic bank MSB is what puts the LSB in charge of the bank number
+  // (gs_effective_bank), which is what makes the LSB switch observable at all.
+  const auto banks_fixture = []() {
+    Sf2Builder b;
+    std::vector<float> square(128);
+    for (size_t i = 0; i < square.size(); ++i) {
+      double v = 0.0;
+      for (int h = 1; h <= 9; h += 2) {
+        v += std::sin(kTwoPi * h * static_cast<double>(i) / 64.0) / h;
+      }
+      square[i] = 0.6f * static_cast<float>(v);
+    }
+    const int sq = b.add_sample("square500", square, 32000, 60, 0, 128);
+    const auto tuned = [&](int semitones, const char* name) {
+      Sf2Builder::ZoneSpec zone;
+      zone.gens.push_back({54 /*sampleModes*/, 1});
+      if (semitones != 0) {
+        zone.gens.push_back({51 /*coarseTune*/, static_cast<int16_t>(semitones)});
+      }
+      zone.target = sq;
+      return b.add_instrument(name, {zone});
+    };
+    const int plain = tuned(0, "plain");
+    const int up = tuned(12, "up");
+    const int down = tuned(-12, "down");
+    Sf2Builder::ZoneSpec pz;
+    pz.target = plain;
+    b.add_preset("Bank 0", 0, 0, {pz});
+    pz.target = up;
+    b.add_preset("Bank 8", 8, 0, {pz});
+    pz.target = down;
+    b.add_preset("Bank 3", 3, 0, {pz});
+    const auto bytes = b.build();
+    auto sf2 = std::make_shared<Sf2File>();
+    std::string error;
+    REQUIRE(sf2->parse(bytes.data(), bytes.size(), &error));
+    return std::shared_ptr<const Sf2File>(sf2);
+  };
+
+  const auto make = [&banks_fixture]() {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    auto player = std::make_unique<Sf2Player>(cfg);
+    player->set_soundfont(banks_fixture());
+    player->prepare(kOutRate, 256);
+    return player;
+  };
+  const auto cc = [](Sf2Player& p, uint8_t controller, uint8_t value) {
+    p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, controller, value)));
+  };
+  const auto switch_off = [](Sf2Player& p, uint8_t low_byte) {
+    // 40 11 xx: part 1, which is channel 0.
+    const uint8_t addr[3] = {0x40, 0x11, low_byte};
+    const int sum = addr[0] + addr[1] + addr[2];
+    const uint8_t msg[] = {
+        0xF0,    0x41,    0x10,    0x42, 0x12,
+        addr[0], addr[1], addr[2], 0x00, static_cast<uint8_t>((128 - (sum % 128)) & 0x7F),
+        0xF7};
+    REQUIRE(p.handle_sysex(msg, sizeof(msg)));
+  };
+  const auto sounded = [](Sf2Player& p) {
+    p.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    return estimate_frequency(render(p, 24000).left, 4800);
+  };
+
+  SECTION("RX BANK SELECT covers the MSB as well as the LSB") {
+    auto open = make();
+    cc(*open, 0, 8);
+    REQUIRE(sounded(*open) == Approx(1000.0).margin(10.0));
+
+    auto shut = make();
+    switch_off(*shut, 0x23);
+    cc(*shut, 0, 8);
+    REQUIRE(sounded(*shut) == Approx(500.0).margin(5.0));
+  }
+
+  // The two switches are told apart from one starting state: the part already on
+  // bank 3 through the GM2 melodic MSB, and the same message arriving after each
+  // switch is closed. Refusing leaves the part where it was; zeroing does not.
+  const auto on_bank_3 = [&](Sf2Player& p) {
+    cc(p, 0, 0x79);  // GM2 melodic: the bank number is the LSB
+    cc(p, 32, 3);
+  };
+
+  SECTION("the control: with both switches open the LSB is what picks the bank") {
+    // Without this the two sections below both pass on a part that never left
+    // bank 0, one of them for exactly the wrong reason.
+    auto p = make();
+    on_bank_3(*p);
+    REQUIRE(sounded(*p) == Approx(250.0).margin(5.0));
+  }
+
+  SECTION("RX BANK SELECT refuses the message, so the part keeps its bank") {
+    auto p = make();
+    on_bank_3(*p);
+    switch_off(*p, 0x23);
+    cc(*p, 32, 0);
+    REQUIRE(sounded(*p) == Approx(250.0).margin(5.0));
+  }
+
+  SECTION("RX BANK SELECT LSB reads the message as 00 instead") {
+    auto p = make();
+    on_bank_3(*p);
+    switch_off(*p, 0x24);
+    cc(*p, 32, 3);
+    REQUIRE(sounded(*p) == Approx(500.0).margin(5.0));
+  }
+
+  SECTION("a GM1 System On closes the bank pair and NRPN, a GM2 System On closes NRPN alone") {
+    const uint32_t bank_bits =
+        gs_rx_switch_bit(GsRxSwitch::kBankSelect) | gs_rx_switch_bit(GsRxSwitch::kBankSelectLsb);
+    const uint32_t nrpn = gs_rx_switch_bit(GsRxSwitch::kNrpn);
+    const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
+    const uint8_t gm1_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+    const uint8_t gm2_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x03, 0xF7};
+    const auto after = [&make](const uint8_t* msg, size_t size) {
+      auto p = make();
+      REQUIRE(p->handle_sysex(msg, size));
+      return p->rx_switches(0);
+    };
+    // Measured on a unit rather than read off the map, which states the first
+    // two and not the third (docs/gs.md).
+    CHECK((after(gs_reset, sizeof(gs_reset)) & (bank_bits | nrpn)) == (bank_bits | nrpn));
+    CHECK((after(gm1_on, sizeof(gm1_on)) & (bank_bits | nrpn)) == 0);
+    CHECK((after(gm2_on, sizeof(gm2_on)) & (bank_bits | nrpn)) == bank_bits);
   }
 }
 

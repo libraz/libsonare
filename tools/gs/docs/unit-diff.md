@@ -10,7 +10,7 @@
 
 The two answer different questions and neither substitutes for the other.
 
-`address-census.json` says what **real files reach**, and it is blind to any address they never send. `40 1x 03`–`12` is the sharpest case: the machine answers all 256 of them and the corpus of 2 233 files touches exactly one, in one file. A gate anchored on the corpus can be green while a whole block of the map has no row.
+`address-census.json` says what **real files reach**, and it is blind to any address they never send. The receive switches are the sharpest case: the machine answers all 288 of them — `40 1x 03`–`12` and `40 1x 23`–`24` — and the corpus of 2 233 files touches exactly one, in one file. A gate anchored on the corpus can be green while a whole block of the map has no row.
 
 The unit diff says what **the machine answers**, and it is blind to everything the machine will not read back. Together they bound the table from both sides.
 

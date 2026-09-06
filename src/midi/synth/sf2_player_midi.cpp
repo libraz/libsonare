@@ -19,13 +19,12 @@ namespace {
 
 using ::sonare::constants::kCentsPerSemitone;
 
-/// Whether a part holding @p rx_switches receives @p u at all (GS 40 1x 03-12,
-/// GsRxSwitch). Control changes answer to their own switch as well as to the
-/// master one, and that pair is decided in control_change, where the controller
-/// number is known. Polyphonic pressure is deliberately absent: nothing below
-/// acts on it, so gating it here would dress a switch that guards nothing as one
-/// that does.
-bool receives_message(uint16_t rx_switches, const Ump& u) noexcept {
+/// Whether a part holding @p rx_switches receives @p u at all (GsRxSwitch).
+/// Control changes answer to their own switch as well as to the master one, and
+/// that pair is decided in control_change, where the controller number is known.
+/// Polyphonic pressure is deliberately absent: nothing below acts on it, so
+/// gating it here would dress a switch that guards nothing as one that does.
+bool receives_message(uint32_t rx_switches, const Ump& u) noexcept {
   const auto on = [rx_switches](GsRxSwitch which) {
     return (rx_switches & gs_rx_switch_bit(which)) != 0;
   };
@@ -43,14 +42,21 @@ bool receives_message(uint16_t rx_switches, const Ump& u) noexcept {
 }
 
 /// The receive switch @p controller answers to, or kCount for one no switch
-/// names. The eight named controllers are the manual's own list. CC5 PORTAMENTO
-/// TIME and CC84 PORTAMENTO CONTROL are not on it and are left ungated: the
-/// switch is named for the controller that turns portamento on, and widening it
-/// to the two that shape a glide would be reading something the map does not
-/// say. Data entry is absent for the opposite reason — it belongs to whichever
-/// parameter number is selected, so its switch is decided at the value.
+/// names. The named controllers are the map's own list. CC5 PORTAMENTO TIME and
+/// CC84 PORTAMENTO CONTROL are not on it and are left ungated: the switch is
+/// named for the controller that turns portamento on, and widening it to the two
+/// that shape a glide would be reading something the map does not say. Data
+/// entry is absent for the opposite reason — it belongs to whichever parameter
+/// number is selected, so its switch is decided at the value.
+///
+/// RX BANK SELECT covers both halves of the bank number, and RX BANK SELECT LSB
+/// is not here at all: it does not decide whether CC32 arrives but what it is
+/// worth on arrival, so it belongs where the value is stored.
 GsRxSwitch rx_switch_for_controller(uint8_t controller) noexcept {
   switch (controller) {
+    case 0:
+    case 32:
+      return GsRxSwitch::kBankSelect;
     case 1:
       return GsRxSwitch::kModulation;
     case 7:
@@ -795,7 +801,11 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       refresh_part_rig(ch);
       break;
     case 32:  // Bank select LSB
-      st.bank_lsb = value;
+      // RX BANK SELECT LSB off reads the byte as 00 rather than refusing it, so
+      // a part whose map was moved goes back to the module's own rather than
+      // staying where the last accepted message left it. The one switch in the
+      // set that writes something when it is off.
+      st.bank_lsb = st.receives(GsRxSwitch::kBankSelectLsb) ? value : 0;
       refresh_channel_mod(ch);
       refresh_part_rig(ch);
       break;
@@ -975,9 +985,15 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
       if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
         channels_[ch].program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
-        if ((u.words[0] & 0x01u) != 0) {
+        // A MIDI 2.0 program change carries the bank inside itself, so the two
+        // bank-select switches decide these fields as they decide CC0 and CC32:
+        // one storage location, and a second transport to it does not get to
+        // arrive past a switch that closed the first.
+        if ((u.words[0] & 0x01u) != 0 && channels_[ch].receives(GsRxSwitch::kBankSelect)) {
           channels_[ch].bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
-          channels_[ch].bank_lsb = static_cast<uint8_t>(u.words[1] & 0x7Fu);
+          channels_[ch].bank_lsb = channels_[ch].receives(GsRxSwitch::kBankSelectLsb)
+                                       ? static_cast<uint8_t>(u.words[1] & 0x7Fu)
+                                       : 0;
         }
       } else {
         channels_[ch].program = u.note_number();

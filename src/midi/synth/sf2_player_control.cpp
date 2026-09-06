@@ -18,8 +18,11 @@ namespace sonare::midi::synth {
 bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   const GsSysEx msg = parse_gs_sysex(data, size);
   switch (msg.kind) {
-    case GsSysExKind::kGmReset:
-      gm_reset();
+    case GsSysExKind::kGm1Reset:
+      gm_reset(GmLevel::kGeneralMidi1);
+      return true;
+    case GsSysExKind::kGm2Reset:
+      gm_reset(GmLevel::kGeneralMidi2);
       return true;
     case GsSysExKind::kGsReset:
       gs_reset();
@@ -242,8 +245,8 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         st.rx_channel = w.value;
         rx_dirty = true;
         break;
-      // The sixteen receive switches share one body: the bit comes from the
-      // address, so a row added to the block is carried without a case of its
+      // The eighteen receive switches share one body: the bit comes from the
+      // address, so a row added to either block is carried without a case of its
       // own having to agree with the enumerator order.
       case GsParam::kPartRxPitchBend:
       case GsParam::kPartRxChannelPressure:
@@ -260,11 +263,11 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartRxHold1:
       case GsParam::kPartRxPortamento:
       case GsParam::kPartRxSostenuto:
-      case GsParam::kPartRxSoft: {
-        const uint16_t bit = gs_rx_switch_bit(w.addr);
-        st.rx_switches = w.value != 0
-                             ? static_cast<uint16_t>(st.rx_switches | bit)
-                             : static_cast<uint16_t>(st.rx_switches & static_cast<uint16_t>(~bit));
+      case GsParam::kPartRxSoft:
+      case GsParam::kPartRxBankSelect:
+      case GsParam::kPartRxBankSelectLsb: {
+        const uint32_t bit = gs_rx_switch_bit(w.addr);
+        st.rx_switches = w.value != 0 ? (st.rx_switches | bit) : (st.rx_switches & ~bit);
         break;
       }
       case GsParam::kPartScaleTuning:
@@ -637,7 +640,8 @@ bool Sf2Player::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
   // message). The caller (on_control_sysex) only realises on a true return.
   const GsSysEx msg = parse_gs_sysex(data, size);
   switch (msg.kind) {
-    case GsSysExKind::kGmReset:
+    case GsSysExKind::kGm1Reset:
+    case GsSysExKind::kGm2Reset:
     case GsSysExKind::kGsReset:
       // A GS/GM reset clears the EFX unit and the part switches (Thru): the
       // routing structure changes, so a full rebuild is required.
@@ -744,7 +748,7 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
   // for the same reason the EFX mirror is. They need no rebuild: the new state
   // goes to the audio thread as coefficients through the queue.
   const GsSysEx msg = parse_gs_sysex(data, size);
-  bool changed = msg.kind == GsSysExKind::kGsReset || msg.kind == GsSysExKind::kGmReset;
+  bool changed = gs_sysex_resets(msg.kind);
   if (changed) {
     sys_fx_ = {};
     master_eq_ = {};
