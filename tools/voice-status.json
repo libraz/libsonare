@@ -9492,16 +9492,14 @@
           "complete": true
         },
         "agreement": {
-          "inside": 5,
+          "inside": 7,
           "total": 8,
           "outside": {
-            "band_decay": 4.51,
-            "band_shape": 1.39,
-            "level": 1.32
+            "band_shape": 1.09
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
@@ -9509,7 +9507,7 @@
         },
         "music": null
       },
-      "next": "listen to a take and sign it off in signoff.json"
+      "next": "a shared calibration unit has moved since the diagnosis and nothing can attribute it: re-run autofit --diagnose"
     }
   ]
 }

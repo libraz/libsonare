@@ -1,9 +1,9 @@
 {
-  "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps the magnitude of the signed median and 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel. Re-record only in the same change as the behaviour that justifies it.",
+  "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps the magnitude of the signed median and 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "kit-a",
   "margin": 1.25,
   "reference_measured_utc": "2026-08-27T10:13:08+00:00",
-  "recorded_utc": "2026-09-02T06:50:24+00:00",
+  "recorded_utc": "2026-09-06T04:04:25+00:00",
   "reference_spread": {
     "attack": 2.5,
     "band_decay": 51.2393,
@@ -16,36 +16,44 @@
   },
   "bounds": {
     "band_tilt": {
-      "median": 6.778,
-      "abs_median": 8.442
+      "median": 6.556,
+      "abs_median": 6.556,
+      "rows": 282
     },
     "band_shape": {
-      "median": 20.471,
-      "abs_median": 20.471
+      "median": 16.111,
+      "abs_median": 16.111,
+      "rows": 282
     },
     "band_decay": {
-      "median": 288.568,
-      "abs_median": 313.62
+      "median": 51.239,
+      "abs_median": 51.239,
+      "rows": 273
     },
     "attack": {
       "median": 2.5,
-      "abs_median": 3.75
+      "abs_median": 2.5,
+      "rows": 282
     },
     "crest": {
       "median": 2.12,
-      "abs_median": 3.119
+      "abs_median": 2.344,
+      "rows": 282
     },
     "centroid_pct": {
       "median": 48.77,
-      "abs_median": 60.32
+      "abs_median": 48.77,
+      "rows": 282
     },
     "level": {
-      "median": 16.887,
-      "abs_median": 16.887
+      "median": 11.181,
+      "abs_median": 12.5,
+      "rows": 282
     },
     "vel_range": {
       "median": 4.16,
-      "abs_median": 4.16
+      "abs_median": 4.16,
+      "rows": 47
     }
   }
 }
