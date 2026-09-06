@@ -1656,19 +1656,24 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         )
     summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [])
     spread = percussion_reference_spread(profile, list(summary))
-    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'spread':>8} "
+    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} "
           f"{'x spread':>9} {'rows':>5}")
     for k, row in summary.items():
         s_k = spread.get(k)
         ratio = (row["abs_median"] / s_k) if s_k and s_k > 0 else None
         print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
-              f"{row['abs_median']:9.2f} "
+              f"{row['abs_median']:9.2f} {row['p90']:8.2f} "
               f"{(f'{s_k:8.2f}' if s_k is not None else '       -')} "
               f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} {row['n']:5d}")
     print("\n  A kit has no register to average along: every row is a different "
           "instrument,\n  so the signed median says only how the kit leans as a whole and the "
           "absolute\n  one is the column to read. `band shape` is a magnitude already and its "
           "two\n  columns are the same number by construction.")
+    print("\n  `p90` is the 90th percentile of the same absolute error, and it is the column "
+          "that\n  sees a handful of bad instruments: a kit can sit inside its spread on both "
+          "median\n  columns while nearly half its rows are outside it. Read `p90` against "
+          "`spread`\n  the same way, and where the two medians and `p90` disagree, the "
+          "disagreement is\n  the finding — a few instruments are wrong rather than the kit.")
     if spread:
         print("\n  `spread` is how far the REFERENCE KITS sit from each other on the same "
               "dimension,\n  by the same arithmetic, so `x spread` reads the same in dB, "
@@ -2545,18 +2550,21 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         print_register_profile(register, register_spread_by_note(profile))
     summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [])
     spread = reference_spread(profile, list(summary))
-    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'spread':>8} {'x spread':>9} {'rows':>5}")
+    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} {'x spread':>9} {'rows':>5}")
     for k, row in summary.items():
         s_k = spread.get(k)
         ratio = (row["abs_median"] / s_k) if s_k and s_k > 0 else None
         print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
-              f"{row['abs_median']:9.2f} "
+              f"{row['abs_median']:9.2f} {row['p90']:8.2f} "
               f"{(f'{s_k:8.2f}' if s_k is not None else '       -')} "
               f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} {row['n']:5d}")
     print("\n  The signed median is what the voice is doing on average and the absolute one "
           "is\n  how far any given note is from the reference. They part company exactly where "
           "a\n  summary is least trustworthy: errors of opposite sign in different registers "
-          "cancel\n  in the first column and do not in the second.")
+          "cancel\n  in the first column and do not in the second. `p90` is the 90th "
+          "percentile of\n  that absolute error, and it parts company with both wherever the "
+          "defect is a few\n  notes rather than the register: a minority of bad rows cannot "
+          "move a median.")
     print("\n  `spread` is how far the REFERENCES sit from each other on the same dimension, "
           "by\n  the same arithmetic, so `x spread` reads the same in cents, dB, milliseconds "
           "and\n  percent: 1.0x is as close to them as they are to one another, which is as "
@@ -2763,18 +2771,26 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
 
 
 def summarize_deltas(deltas: dict[str, list[float]]) -> dict[str, dict]:
-    """Reduce each dimension's per-row deltas to the pair of numbers a gate reads.
+    """Reduce each dimension's per-row deltas to the numbers a gate reads.
 
-    Two numbers rather than one, because the signed median alone cannot fail on
-    a defect that is symmetric across the keyboard. The brightness column once
-    read +0.16 % of the reference centroid while individual notes were between
-    26 and 660 % out — the bass was dark by as much as the treble was bright,
-    and the median of the signed errors said the voice was correct to a sixth of
-    a percent. The absolute median is what that summary was missing.
+    Three rather than one, because a median hides a defect in two different
+    ways and each column answers one of them. The signed median alone cannot
+    fail on a defect that is symmetric across the keyboard: the brightness
+    column once read +0.16 % of the reference centroid while individual notes
+    were between 26 and 660 % out — the bass was dark by as much as the treble
+    was bright. The absolute median is what that summary was missing.
+
+    But an absolute median is still a median, so it only moves once half the
+    grid is out, and the same brightness example describes a TAIL rather than a
+    sign cancellation. Measured on the drum kit, every scalar dimension read
+    between 0.6x and 0.9x of the references' own spread — inside, on both
+    median columns — while 28 to 46 % of rows sat outside that spread and the
+    worst row ran to 78x it. `p90` is the column that fails on a minority of
+    bad rows, which is the shape a per-note defect actually takes.
     """
     return {
         k: {"median": float(np.median(v)), "abs_median": float(np.median(np.abs(v))),
-            "n": len(v)}
+            "p90": float(np.percentile(np.abs(v), 90)), "n": len(v)}
         for k, v in deltas.items()
     }
 
@@ -2840,7 +2856,7 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
             failures.append(
                 f"{DELTA_LABELS.get(key, key)}: median over {now} rows, bound recorded "
                 f"from {was} — not the same population")
-        for stat in ("median", "abs_median"):
+        for stat in ("median", "abs_median", "p90"):
             limit = bound.get(stat)
             if limit is None:
                 continue
@@ -2858,6 +2874,15 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
     if ungated:
         print(f"  {', '.join(DELTA_LABELS.get(k, k) for k in ungated)}: measured, no bound "
               f"recorded — nothing here holds it. Re-record with --write-gate.")
+    # A gate written before `p90` existed carries only its two median columns,
+    # and the loop above skips a stat with no bound. That is the same silence as
+    # an ungated dimension and reads the same way -- as a tail that was fine --
+    # so it is reported rather than left to the reader to notice was missing.
+    tailless = [k for k, b in bounds.items() if "p90" not in b]
+    if tailless:
+        print(f"  no tail bound on {len(tailless)} of {len(bounds)} dimensions: these predate "
+              f"the p90 column, so a minority of bad rows passes them. Re-record with "
+              f"--write-gate.")
     widest = max((now for _k, now, _was in evidence), default=0)
     thin = [(k, now) for k, now, _was in evidence
             if widest and 2 * now < widest and k not in PER_NOTE_DIMENSIONS]
@@ -2909,6 +2934,10 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         bounds[key] = {
             "median": round(max(abs(row["median"]) * margin, floor), 3),
             "abs_median": round(max(row["abs_median"] * margin, floor), 3),
+            # The tail, held to the same floor as the medians: a p90 tighter
+            # than the references' own disagreement would fail on which of them
+            # the model was compared against rather than on the model.
+            "p90": round(max(row["p90"] * margin, floor), 3),
             # The grid rows that survived censoring into this median. One voice
             # records its decay bound from 18 of 50, and without this a later
             # run compares against it as though the whole grid had spoken.
@@ -2916,12 +2945,16 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         }
     gate_path.parent.mkdir(parents=True, exist_ok=True)
     gate_path.write_text(json.dumps({
-        "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps "
-             "the magnitude of the signed median and 'abs_median' caps the median absolute "
-             "error, which is the one that can fail when errors of opposite sign cancel. "
-             "'rows' is how many of the grid's rows survived censoring into that median, so a "
-             "later run can tell whether it is comparing against the same population. "
-             "Re-record only in the same change as the behaviour that justifies it.",
+        "_": "Bounds the compare table is held to. All three are absolute limits: 'median' "
+             "caps the magnitude of the signed median, 'abs_median' caps the median absolute "
+             "error, which is the one that can fail when errors of opposite sign cancel, and "
+             "'p90' caps the 90th percentile of that absolute error, which is the one that "
+             "can fail when a minority of rows is far out and the median is not. A dimension "
+             "can sit inside both medians while nearly half its rows are outside the "
+             "references' own spread. 'rows' is how many of the grid's rows survived "
+             "censoring into that median, so a later run can tell whether it is comparing "
+             "against the same population. Re-record only in the same change as the "
+             "behaviour that justifies it.",
         "timbre": timbre,
         "margin": margin,
         # Which reference generation these were measured against, and when. Both

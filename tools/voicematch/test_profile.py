@@ -952,13 +952,51 @@ def test_a_declared_dimension_that_was_not_measured_is_named(capsys):
 
 def test_every_gate_dimension_has_a_floor_under_its_bound(tmp_path):
     """A bound at zero fails on measurement noise, and then it gets switched off."""
-    summary = {k: {"median": 0.0, "abs_median": 0.0, "n": 4}
+    summary = {k: {"median": 0.0, "abs_median": 0.0, "p90": 0.0, "n": 4}
                for k in profile_module.DELTA_LABELS}
     gate = tmp_path / "gate.json"
     profile_module.write_gate_file(summary, gate, "ref", 1.25)
     bounds = json.loads(gate.read_text())["bounds"]
     assert set(bounds) == set(profile_module.DELTA_LABELS)
-    assert all(b["median"] > 0.0 and b["abs_median"] > 0.0 for b in bounds.values())
+    assert all(b["median"] > 0.0 and b["abs_median"] > 0.0 and b["p90"] > 0.0
+               for b in bounds.values())
+
+
+def test_a_tail_neither_median_can_see_is_summarized(tmp_path):
+    """Nine good rows and one bad one: the medians read clean and p90 does not.
+
+    This is the shape a per-note defect takes on a kit, where every row is a
+    different instrument and a handful of them can be far out without the
+    grid's middle moving at all.
+    """
+    summary = profile_module.summarize_deltas({"centroid_pct": [0.1] * 9 + [600.0]})
+    row = summary["centroid_pct"]
+    assert row["median"] == pytest.approx(0.1)
+    assert row["abs_median"] == pytest.approx(0.1)
+    assert row["p90"] > 100 * row["abs_median"]
+
+
+def test_a_gate_fails_on_the_tail_alone(tmp_path):
+    """A bound may hold on both medians and still be exceeded on p90."""
+    gate = tmp_path / "gate.json"
+    gate.write_text(json.dumps({"timbre": "ref", "bounds": {
+        "centroid_pct": {"median": 1.0, "abs_median": 1.0, "p90": 5.0}}}))
+    summary = profile_module.summarize_deltas({"centroid_pct": [0.1] * 9 + [600.0]})
+    assert profile_module.check_gate(summary, gate, "ref") == 1
+
+
+def test_a_gate_without_a_tail_bound_says_so(tmp_path, capsys):
+    """A gate written before p90 holds nothing on the tail, and reports it.
+
+    The check loop skips a stat with no bound, so silence here would read as a
+    tail that was fine -- the same failure as a dimension with no bound at all.
+    """
+    gate = tmp_path / "gate.json"
+    gate.write_text(json.dumps({"timbre": "ref", "bounds": {
+        "centroid_pct": {"median": 1e9, "abs_median": 1e9}}}))
+    summary = profile_module.summarize_deltas({"centroid_pct": [0.1] * 9 + [600.0]})
+    assert profile_module.check_gate(summary, gate, "ref") == 0
+    assert "no tail bound" in capsys.readouterr().out
 
 
 # --------------------------------------------------------------------------- #
@@ -974,7 +1012,7 @@ def _gate(tmp_path, **rows):
 
 
 def _summary(**rows):
-    return {k: {"median": 0.0, "abs_median": 0.0, "n": n} for k, n in rows.items()}
+    return {k: {"median": 0.0, "abs_median": 0.0, "p90": 0.0, "n": n} for k, n in rows.items()}
 
 
 def test_a_bound_measured_on_the_same_evidence_holds(tmp_path):
