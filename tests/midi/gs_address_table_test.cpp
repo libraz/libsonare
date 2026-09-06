@@ -211,6 +211,25 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   // part's default one, so the two numbers are visibly separate here.
   check_row(0x401002, 0x09, GsParam::kPartRxChannel, 0, 9);
   check_row(0x401F02, 0x10, GsParam::kPartRxChannel, 0, 15);
+  // The sixteen receive switches, each on a different block so the decode is
+  // checked over the part nibble as well as over the low byte. The switch bit is
+  // read off the low byte, which is what these addresses pin.
+  check_row(0x401103, 0x00, GsParam::kPartRxPitchBend, 0, 0);
+  check_row(0x401204, 0x01, GsParam::kPartRxChannelPressure, 0, 1);
+  check_row(0x401305, 0x00, GsParam::kPartRxProgramChange, 0, 2);
+  check_row(0x401406, 0x01, GsParam::kPartRxControlChange, 0, 3);
+  check_row(0x401507, 0x00, GsParam::kPartRxPolyPressure, 0, 4);
+  check_row(0x401608, 0x01, GsParam::kPartRxNoteMessage, 0, 5);
+  check_row(0x401709, 0x00, GsParam::kPartRxRpn, 0, 6);
+  check_row(0x40180A, 0x01, GsParam::kPartRxNrpn, 0, 7);
+  check_row(0x40190B, 0x00, GsParam::kPartRxModulation, 0, 8);
+  check_row(0x401A0C, 0x01, GsParam::kPartRxVolume, 0, 10);
+  check_row(0x401B0D, 0x00, GsParam::kPartRxPanpot, 0, 11);
+  check_row(0x401C0E, 0x01, GsParam::kPartRxExpression, 0, 12);
+  check_row(0x401D0F, 0x00, GsParam::kPartRxHold1, 0, 13);
+  check_row(0x401E10, 0x01, GsParam::kPartRxPortamento, 0, 14);
+  check_row(0x401F11, 0x00, GsParam::kPartRxSostenuto, 0, 15);
+  check_row(0x401012, 0x01, GsParam::kPartRxSoft, 0, 9);
   check_row(0x401913, 0x00, GsParam::kPartMonoPoly, 0, 8);
   check_row(0x401514, 0x02, GsParam::kPartAssignMode, 0, 4);
   check_row(0x401015, 0x01, GsParam::kUseForRhythmPart, 0, 9);

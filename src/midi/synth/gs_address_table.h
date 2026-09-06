@@ -90,6 +90,22 @@ enum class GsLevel : uint8_t {
   X(kEfxSendEqSwitch)        \
   X(kPartToneNumber)         \
   X(kPartRxChannel)          \
+  X(kPartRxPitchBend)        \
+  X(kPartRxChannelPressure)  \
+  X(kPartRxProgramChange)    \
+  X(kPartRxControlChange)    \
+  X(kPartRxPolyPressure)     \
+  X(kPartRxNoteMessage)      \
+  X(kPartRxRpn)              \
+  X(kPartRxNrpn)             \
+  X(kPartRxModulation)       \
+  X(kPartRxVolume)           \
+  X(kPartRxPanpot)           \
+  X(kPartRxExpression)       \
+  X(kPartRxHold1)            \
+  X(kPartRxPortamento)       \
+  X(kPartRxSostenuto)        \
+  X(kPartRxSoft)             \
   X(kPartMonoPoly)           \
   X(kPartAssignMode)         \
   X(kUseForRhythmPart)       \
@@ -206,7 +222,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 160> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -370,6 +386,44 @@ inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
     // that write it leave two parts on one channel — so a message reaches however
     // many parts claim its channel, not one.
     {0x401002, 0x000F00, GsParam::kPartRxChannel, GsLevel::kAudible, 1, 0x00, 0x10, 0x09, nullptr},
+    // The sixteen receive switches, one row each rather than one row of sixteen:
+    // they do not all carry the same level, and a row that folded them would have
+    // to claim one for all. Each is OFF/ON and powers on ON. GsRxSwitch holds the
+    // bit order, which is this address order.
+    {0x401003, 0x000F00, GsParam::kPartRxPitchBend, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401004, 0x000F00, GsParam::kPartRxChannelPressure, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401005, 0x000F00, GsParam::kPartRxProgramChange, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401006, 0x000F00, GsParam::kPartRxControlChange, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    // The one switch that gates nothing, because polyphonic pressure is not
+    // received at all — the same reason its controller-destination rows are
+    // ACCEPT (docs/gs.md). Held rather than discarded, since it is a value whose
+    // consumer does not exist yet: it becomes AUDIBLE the day per-note pressure
+    // does, with nothing here to change.
+    {0x401007, 0x000F00, GsParam::kPartRxPolyPressure, GsLevel::kState, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401008, 0x000F00, GsParam::kPartRxNoteMessage, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401009, 0x000F00, GsParam::kPartRxRpn, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+    // A GS Reset leaves this ON and a GM or GM2 System On clears it, which is the
+    // one default in the block that depends on which reset arrived. `def` is the
+    // GS Reset state, as every default here is.
+    {0x40100A, 0x000F00, GsParam::kPartRxNrpn, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+    {0x40100B, 0x000F00, GsParam::kPartRxModulation, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x40100C, 0x000F00, GsParam::kPartRxVolume, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+    {0x40100D, 0x000F00, GsParam::kPartRxPanpot, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+    {0x40100E, 0x000F00, GsParam::kPartRxExpression, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x40100F, 0x000F00, GsParam::kPartRxHold1, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
+    {0x401010, 0x000F00, GsParam::kPartRxPortamento, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401011, 0x000F00, GsParam::kPartRxSostenuto, GsLevel::kAudible, 1, 0x00, 0x01, 0x01,
+     nullptr},
+    {0x401012, 0x000F00, GsParam::kPartRxSoft, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
     // 00 Mono / 01 Poly, and the same storage location CC126 and CC127 write.
     {0x401013, 0x000F00, GsParam::kPartMonoPoly, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
     // 00 SINGLE / 01 LIMITED-MULTI / 02 FULL-MULTI. The default is 01 for every
@@ -844,6 +898,22 @@ constexpr uint32_t gs_range_block_count(const GsAddressRange& r) noexcept {
   return (r.mask & 0x000F00u) != 0 ? 16u : 1u;
 }
 
+/// Whether two ranges share an address.
+///
+/// Both are confined to one mid byte by the caller's own check, so they can only
+/// meet where their mid bytes coincide: the high nibble has to match outright,
+/// and the low nibble has to match unless one of them is free to move over it.
+/// Written this way rather than by expanding each mask into its sixteen blocks
+/// and comparing all 256 pairs — that is the obvious form and it costs the
+/// constexpr step budget, which this header has already had to be restructured
+/// for once and which a growing table spends faster than anything else here.
+constexpr bool gs_ranges_meet(const GsAddressRange& a, const GsAddressRange& b) noexcept {
+  if ((a.lo_addr & 0xFFF000u) != (b.lo_addr & 0xFFF000u)) return false;
+  const bool either_moves = (a.mask & 0x000F00u) != 0 || (b.mask & 0x000F00u) != 0;
+  if (!either_moves && (a.lo_addr & 0x000F00u) != (b.lo_addr & 0x000F00u)) return false;
+  return (a.lo_addr & 0xFFu) <= (b.hi_addr & 0xFFu) && (b.lo_addr & 0xFFu) <= (a.hi_addr & 0xFFu);
+}
+
 constexpr bool gs_ranges_are_consistent() noexcept {
   for (size_t i = 0; i < kGsUndefinedRanges.size(); ++i) {
     const GsAddressRange& r = kGsUndefinedRanges[i];
@@ -854,29 +924,22 @@ constexpr bool gs_ranges_are_consistent() noexcept {
     // above 7F, which are not GS addresses, and it is what lets the walk below
     // decide a row on the block base alone. Split such a range instead.
     if ((r.lo_addr & 0xFFFF00u) != (r.hi_addr & 0xFFFF00u)) return false;
-    // Both checks below expand the mask into the blocks it reaches rather than
-    // comparing masked bases: the variable nibble is the LOW nibble of the mid
-    // byte, so clearing it in an unmasked address destroys which block that
-    // address was in and a comparison across two different masks silently means
-    // something else.
+    // Neither comparison below clears a masked base to compare it with an
+    // unmasked one: the variable nibble is the LOW nibble of the mid byte, so
+    // clearing it destroys which block the address was in and a comparison
+    // across two different masks silently means something else.
     const uint32_t blocks = gs_range_block_count(r);
     for (size_t j = 0; j < i; ++j) {
-      const GsAddressRange& o = kGsUndefinedRanges[j];
-      for (uint32_t b = 0; b < blocks; ++b) {
-        for (uint32_t ob = 0; ob < gs_range_block_count(o); ++ob) {
-          if ((r.lo_addr | (b << 8)) <= (o.hi_addr | (ob << 8)) &&
-              (o.lo_addr | (ob << 8)) <= (r.hi_addr | (b << 8))) {
-            return false;
-          }
-        }
-      }
+      if (gs_ranges_meet(r, kGsUndefinedRanges[j])) return false;
     }
-    // Row-outermost, with the high-16 test lifted out of the address walk: a
-    // row that cannot claim the block's base cannot claim anything in the
-    // range, so all but a handful skip the walk entirely. The nesting is not
-    // cosmetic — walking every (block, address, row) triple exhausts the
-    // constexpr step budget once the table passes about eighty rows.
+    // Row-outermost, with the high byte tested once per row and the rest of the
+    // high-16 test lifted out of the address walk: no mask reaches the high
+    // byte, so a row on another one cannot claim anything here, and that is most
+    // rows. The nesting is not cosmetic — walking every (block, address, row)
+    // triple exhausts the constexpr step budget once the table passes about
+    // eighty rows, and the budget is spent across this whole header.
     for (const GsAddressEntry& e : kGsAddressTable) {
+      if ((r.lo_addr & 0xFF0000u) != (e.addr & 0xFF0000u)) continue;
       for (uint32_t block = 0; block < blocks; ++block) {
         const uint32_t base = r.lo_addr | (block << 8);
         if ((base & ~e.mask & 0xFFFF00u) != (e.addr & 0xFFFF00u)) continue;
@@ -891,6 +954,13 @@ constexpr bool gs_ranges_are_consistent() noexcept {
 
 }  // namespace detail
 
+// These are evaluated out of one constexpr step budget shared by the whole
+// header, so a check's cost is paid by every other check and adding rows can
+// break an assertion that has nothing to do with them: the failure names the
+// range walk and says "possible infinite loop", which is neither. At 160 rows
+// the header compiles under clang's default 1048576 and not under half of it,
+// so a comparable growth needs the walks made cheaper again rather than a
+// -fconstexpr-steps on the build, which would only move the wall.
 static_assert(detail::gs_table_is_consistent(),
               "GS address table: a reason missing from a kIgnore/kAccept row or present on a row "
               "that takes none, a bad size/mask/range/default, or two rows claiming one address");

@@ -34,6 +34,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -155,6 +156,12 @@ enum class Setup : uint8_t {
   /// That, and the set's SECOND note put in a group — what the drum setup's
   /// assign-group row needs, needed again one layer down.
   kUserDrumSetGroupPeer,
+  /// Channel aftertouch routed to AMPLITUDE CONTROL at -100 %, so that a
+  /// pressure message arriving later takes the part to silence. The routing is
+  /// setup and the pressure is stimulus: what the RX CH PRESSURE switch decides
+  /// is whether the message arrives at all, which only a message sent after the
+  /// switch was written can show.
+  kAftertouchRouted,
 };
 
 const char* setup_name(Setup setup) {
@@ -189,6 +196,8 @@ const char* setup_name(Setup setup) {
       return "later-map-kit";
     case Setup::kUserDrumSetGroupPeer:
       return "user-drum-set-group-peer";
+    case Setup::kAftertouchRouted:
+      return "aftertouch-routed";
   }
   return "?";
 }
@@ -231,6 +240,9 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
       // leaves it alone. The controller that moves is sent below.
       return {dt1(0x402042u | (kMelodicBlock << 8), {0x00}),
               dt1(0x402052u | (kMelodicBlock << 8), {0x00})};
+    case Setup::kAftertouchRouted:
+      // Source 2 is channel aftertouch and destination 2 is AMPLITUDE CONTROL.
+      return {dt1(0x402022u | (kMelodicBlock << 8), {0x00})};
     case Setup::kBendApplied:
     case Setup::kModWheelUp:
     case Setup::kAftertouchUp:
@@ -281,6 +293,10 @@ Setup setup_for(const GsAddressEntry& row) {
     // the controller it names is moved.
     case GsParam::kPartCtrlSourceNumber:
       return Setup::kAssignableRouted;
+    // Channel pressure carries no destination of its own at power-on, so a
+    // switch over it needs one before the pressure can be worth anything.
+    case GsParam::kPartRxChannelPressure:
+      return Setup::kAftertouchRouted;
     // A controller destination is a depth: it says what its source at full is
     // worth, so it says nothing until that source is off its rest position.
     // Which source is the address's, not the row's — the block is a matrix and
@@ -557,6 +573,87 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
   }
 }
 
+/// The messages a row needs the stimulus to send WHILE it plays, sent with the
+/// melodic part's notes already sounding and its retrigger still to come.
+///
+/// A receive switch decides whether a class of message arrives at all, so unlike
+/// every other row it cannot be read from a value applied before the notes: the
+/// probe is written first, and something of that class has to turn up afterwards
+/// for the switch to have refused anything. The moment chosen is the one that
+/// serves all of them — a pedal needs keys already held to capture or to hold,
+/// and una corda and portamento need a note still to be struck.
+/// True for the receive-switch block (`40 1x 03`-`12`) and nothing else, read
+/// off the address as the switch bit itself is, so the two cannot disagree about
+/// which rows are in the block.
+bool needs_live_stimulus(const GsAddressEntry& row) {
+  const uint32_t low = row.addr & 0xFFu;
+  return (row.addr & 0xFFF000u) == 0x401000u && low >= 0x03u && low <= 0x12u;
+}
+
+void stimulus_for(Sf2Player& p, const GsAddressEntry& row) {
+  const uint8_t ch = gs_part_block_to_channel(kMelodicBlock);
+  switch (row.param) {
+    case GsParam::kPartRxPitchBend:
+      p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, ch, 16383)));
+      break;
+    case GsParam::kPartRxChannelPressure:
+      // Full pressure onto the amplitude destination the setup routed at -100 %.
+      p.on_event(0, event(sonare::midi::make_midi1_channel_pressure(0, ch, 127)));
+      break;
+    case GsParam::kPartRxProgramChange:
+      // The fixture's second melodic preset, voiced unlike the first.
+      p.on_event(0, event(sonare::midi::make_midi1_program_change(0, ch, 127)));
+      break;
+    case GsParam::kPartRxControlChange:
+    case GsParam::kPartRxVolume:
+      cc(p, ch, 7, 0);
+      break;
+    case GsParam::kPartRxRpn:
+      // COARSE TUNING an octave down, which no other row here writes.
+      cc(p, ch, 101, 0);
+      cc(p, ch, 100, 2);
+      cc(p, ch, 6, 52);
+      break;
+    case GsParam::kPartRxNrpn:
+      // TVF CUTOFF fully CLOSED. Opening it says nothing on a voice whose filter
+      // is already wide, which is every voice the fixture carries; closing one
+      // darkens whatever it was.
+      cc(p, ch, 99, 0x01);
+      cc(p, ch, 98, 0x20);
+      cc(p, ch, 6, 0);
+      break;
+    case GsParam::kPartRxModulation:
+      cc(p, ch, 1, 127);
+      break;
+    case GsParam::kPartRxPanpot:
+      cc(p, ch, 10, 0);
+      break;
+    case GsParam::kPartRxExpression:
+      cc(p, ch, 11, 0);
+      break;
+    case GsParam::kPartRxHold1:
+      cc(p, ch, 64, 127);
+      break;
+    case GsParam::kPartRxPortamento:
+      // A glide time first, which no switch gates, then the switch's own
+      // controller, then a note the part has not just played: a glide whose
+      // source and target are one key is no glide, and the retrigger below is
+      // the key the part is already holding.
+      cc(p, ch, 5, 80);
+      cc(p, ch, 65, 127);
+      note_on(p, ch, 67, 100);
+      break;
+    case GsParam::kPartRxSostenuto:
+      cc(p, ch, 66, 127);
+      break;
+    case GsParam::kPartRxSoft:
+      cc(p, ch, 67, 127);
+      break;
+    default:
+      break;
+  }
+}
+
 /// One stimulus, able to reveal every kind of row: a melodic part sustaining a
 /// chord (mono/poly, assign mode, tuning, level, pan), a rhythm part sounding
 /// drum notes, a retrigger of a held note (SINGLE assign mode), a release well
@@ -587,8 +684,15 @@ struct BankGap {
   const char* why;
 };
 
-/// Empty, and worth keeping so: every row this gate probes reaches both banks.
-constexpr std::array<BankGap, 0> kBankGaps = {};
+/// One entry, and the gap is CC67's rather than the switch's: a soft pedal
+/// reshapes the piano fallback's action, and a sampled voice plays back what was
+/// recorded. Giving the SoundFont bank a soft pedal closes it, and the entry has
+/// to go in the same change.
+constexpr std::array<BankGap, 1> kBankGaps = {{
+    {GsParam::kPartRxSoft, Bank::kSoundFont,
+     "una corda reshapes the model bank's piano action; a sampled voice carries its own "
+     "recorded voicing, so CC67 reaches nothing to switch off here"},
+}};
 
 const BankGap* bank_gap_for(const GsAddressEntry& row, Bank bank) {
   for (const BankGap& gap : kBankGaps) {
@@ -598,9 +702,12 @@ const BankGap* bank_gap_for(const GsAddressEntry& row, Bank bank) {
 }
 
 /// @param probe  DT1 messages under test; empty renders the baseline.
+/// @param row  The row being probed, for the messages it needs sent mid-render.
+///   The baseline carries the same ones, or the difference measured would be the
+///   stimulus rather than the parameter.
 /// @param accepted  Set false when the player refused one of them.
 StereoRender render(Bank bank, Setup setup, const std::vector<std::vector<uint8_t>>& probe,
-                    bool* accepted = nullptr) {
+                    const GsAddressEntry& row, bool* accepted = nullptr) {
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
   // Offline: process() realises a pending EFX chain and system-effect state
@@ -643,6 +750,9 @@ StereoRender render(Bank bank, Setup setup, const std::vector<std::vector<uint8_
 
   chans[0] += kSegment;
   chans[1] += kSegment;
+  // With the melodic part's keys held and its retrigger still to come, which is
+  // the one moment that serves every receive switch.
+  stimulus_for(player, row);
   note_on(player, 0, 60, 100);  // retrigger: SINGLE stops the held one
   note_on(player, 9, 42, 110);
   player.process(chans, 2, kSegment);
@@ -685,17 +795,26 @@ enum class Mirror : uint8_t {
 /// over the whole struct.
 ///
 /// Modelled for the patch-common / system-effect (40 01 xx) and EFX (40 03 xx)
-/// blocks only — the master, part and EQ mirrors have no accessor of this shape,
-/// and no row outside kAudible sits in them.
+/// blocks, and for the part's receive switches — the master and EQ mirrors have
+/// no accessor of this shape, and no row outside kAudible sits in them.
 Mirror mirror_state(const GsAddressEntry& row, const std::vector<uint8_t>& probe) {
   const uint32_t block = row.addr & 0xFFFF00u;
-  if (block != 0x400100u && block != 0x400300u) return Mirror::kUnmodelled;
+  const bool rx_block = needs_live_stimulus(row);
+  if (block != 0x400100u && block != 0x400300u && !rx_block) return Mirror::kUnmodelled;
   Sf2PlayerConfig cfg;
   cfg.realize_efx_inline = true;
   cfg.synth_fallback = false;
   Sf2Player player(cfg);
   for (const std::vector<uint8_t>& msg : setup_writes(setup_for(row))) {
     player.handle_sysex(msg.data(), msg.size());
+  }
+  if (rx_block) {
+    // One word holds all sixteen, so the comparison is over the whole of it as
+    // it is over the whole of the two structs below.
+    const uint8_t part = gs_part_block_to_channel(kMelodicBlock);
+    const uint16_t before = player.rx_switches(part);
+    player.handle_sysex(probe.data(), probe.size());
+    return player.rx_switches(part) != before ? Mirror::kStored : Mirror::kNotStored;
   }
   const GsSystemEffects before_fx = player.gs_system_effects();
   const GsEfx before_efx = player.gs_efx();
@@ -731,11 +850,16 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
   // rather than per row.
   REQUIRE(gs_part_block_to_channel(kMelodicBlock) == 0);
 
-  std::map<std::pair<Bank, Setup>, StereoRender> baselines;
-  auto baseline = [&baselines](Bank bank, Setup setup) -> const StereoRender& {
-    const std::pair<Bank, Setup> key{bank, setup};
+  // Keyed on the stimulus as well as the setup: a row that needs a message sent
+  // mid-render needs a baseline carrying it, and every row that needs none can
+  // still share one.
+  std::map<std::tuple<Bank, Setup, GsParam>, StereoRender> baselines;
+  auto baseline = [&baselines](Bank bank, Setup setup,
+                               const GsAddressEntry& row) -> const StereoRender& {
+    const std::tuple<Bank, Setup, GsParam> key{
+        bank, setup, needs_live_stimulus(row) ? row.param : GsParam::kUnknown};
     auto it = baselines.find(key);
-    if (it == baselines.end()) it = baselines.emplace(key, render(bank, setup, {})).first;
+    if (it == baselines.end()) it = baselines.emplace(key, render(bank, setup, {}, row)).first;
     return it->second;
   };
 
@@ -769,14 +893,14 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
     ++probed;
 
     for (const Bank bank : {Bank::kSoundFont, Bank::kModel}) {
-      const StereoRender& base = baseline(bank, setup);
+      const StereoRender& base = baseline(bank, setup, row);
       const double base_peak = peak(base);
       // A silent baseline scores every row as unheard for a reason that is not
       // the row's.
       INFO(row_text(row, probe, setup, bank));
       REQUIRE(base_peak > 1.0e-4);
 
-      const StereoRender probed_render = render(bank, setup, {message}, &accepted);
+      const StereoRender probed_render = render(bank, setup, {message}, row, &accepted);
       const double delta = max_difference(base, probed_render);
       const double relative = delta / base_peak;
       const Finding finding{probe_address(row), row_text(row, probe, setup, bank), relative};

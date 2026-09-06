@@ -242,6 +242,31 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         st.rx_channel = w.value;
         rx_dirty = true;
         break;
+      // The sixteen receive switches share one body: the bit comes from the
+      // address, so a row added to the block is carried without a case of its
+      // own having to agree with the enumerator order.
+      case GsParam::kPartRxPitchBend:
+      case GsParam::kPartRxChannelPressure:
+      case GsParam::kPartRxProgramChange:
+      case GsParam::kPartRxControlChange:
+      case GsParam::kPartRxPolyPressure:
+      case GsParam::kPartRxNoteMessage:
+      case GsParam::kPartRxRpn:
+      case GsParam::kPartRxNrpn:
+      case GsParam::kPartRxModulation:
+      case GsParam::kPartRxVolume:
+      case GsParam::kPartRxPanpot:
+      case GsParam::kPartRxExpression:
+      case GsParam::kPartRxHold1:
+      case GsParam::kPartRxPortamento:
+      case GsParam::kPartRxSostenuto:
+      case GsParam::kPartRxSoft: {
+        const uint16_t bit = gs_rx_switch_bit(w.addr);
+        st.rx_switches = w.value != 0
+                             ? static_cast<uint16_t>(st.rx_switches | bit)
+                             : static_cast<uint16_t>(st.rx_switches & static_cast<uint16_t>(~bit));
+        break;
+      }
       case GsParam::kPartScaleTuning:
         if (w.index < st.scale_tuning.size()) st.scale_tuning[w.index] = w.value;
         break;

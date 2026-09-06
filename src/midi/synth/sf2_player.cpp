@@ -271,6 +271,12 @@ void Sf2Player::gm_reset() noexcept {
   // GM mode) keep their power-on reverb level; match that rather than the
   // paper reading so plain GM files keep the default room.
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
+  // The one receive switch a GM or GM2 System On leaves differently from a GS
+  // Reset: NRPN is switched OFF, since the NRPNs it would carry are Roland's
+  // rather than either GM specification's (docs/gs.md, 40 1x 0A).
+  for (ChannelState& part : channels_) {
+    part.rx_switches &= static_cast<uint16_t>(~gs_rx_switch_bit(GsRxSwitch::kNrpn));
+  }
 }
 
 }  // namespace sonare::midi::synth

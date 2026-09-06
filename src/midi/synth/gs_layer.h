@@ -76,6 +76,48 @@ constexpr GsToneMap gs_tone_map_from_lsb(uint8_t bank_lsb) noexcept {
   }
 }
 
+/// The sixteen per-part receive switches at `40 1x 03`-`12`, in address order:
+/// the bit index is the address's low byte less 0x03.
+///
+/// A switch says whether the part receives one class of message at all, so one
+/// that is off is an absence rather than an attenuation — the part keeps
+/// whatever value it already held, and no later message of that class corrects
+/// it until the switch comes back on.
+enum class GsRxSwitch : uint8_t {
+  kPitchBend,        ///< 40 1x 03
+  kChannelPressure,  ///< 40 1x 04
+  kProgramChange,    ///< 40 1x 05
+  kControlChange,    ///< 40 1x 06, the master switch over every controller below
+  kPolyPressure,     ///< 40 1x 07
+  kNoteMessage,      ///< 40 1x 08
+  kRpn,              ///< 40 1x 09
+  kNrpn,             ///< 40 1x 0A
+  kModulation,       ///< 40 1x 0B, CC1
+  kVolume,           ///< 40 1x 0C, CC7
+  kPanpot,           ///< 40 1x 0D, CC10
+  kExpression,       ///< 40 1x 0E, CC11
+  kHold1,            ///< 40 1x 0F, CC64
+  kPortamento,       ///< 40 1x 10, CC65
+  kSostenuto,        ///< 40 1x 11, CC66
+  kSoft,             ///< 40 1x 12, CC67
+  kCount,
+};
+
+/// Every switch on, which is what a GS Reset leaves. Rx. NRPN is the one that
+/// does not: a GM or GM2 System On clears it (docs/gs.md).
+inline constexpr uint16_t kGsRxAllOn = 0xFFFFu;
+
+/// The switch bit @p addr writes, for an address inside the `40 1x 03`-`12`
+/// block. Derived from the address rather than from the enumerator order, so the
+/// two cannot drift.
+constexpr uint16_t gs_rx_switch_bit(uint32_t addr) noexcept {
+  return static_cast<uint16_t>(1u << ((addr & 0xFFu) - 0x03u));
+}
+
+constexpr uint16_t gs_rx_switch_bit(GsRxSwitch which) noexcept {
+  return static_cast<uint16_t>(1u << static_cast<uint8_t>(which));
+}
+
 /// GS NRPN part parameters, stored as signed offsets from centre (data - 64).
 /// All-zero means "no edit" (the SoundFont patch plays unmodified).
 struct GsPartParams {

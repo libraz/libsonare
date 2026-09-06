@@ -19,6 +19,65 @@ namespace {
 
 using ::sonare::constants::kCentsPerSemitone;
 
+/// Whether a part holding @p rx_switches receives @p u at all (GS 40 1x 03-12,
+/// GsRxSwitch). Control changes answer to their own switch as well as to the
+/// master one, and that pair is decided in control_change, where the controller
+/// number is known. Polyphonic pressure is deliberately absent: nothing below
+/// acts on it, so gating it here would dress a switch that guards nothing as one
+/// that does.
+bool receives_message(uint16_t rx_switches, const Ump& u) noexcept {
+  const auto on = [rx_switches](GsRxSwitch which) {
+    return (rx_switches & gs_rx_switch_bit(which)) != 0;
+  };
+  if (u.is_note_on() || u.is_note_off()) return on(GsRxSwitch::kNoteMessage);
+  switch (static_cast<UmpStatus>(u.status_nibble())) {
+    case UmpStatus::kProgramChange:
+      return on(GsRxSwitch::kProgramChange);
+    case UmpStatus::kPitchBend:
+      return on(GsRxSwitch::kPitchBend);
+    case UmpStatus::kChannelPressure:
+      return on(GsRxSwitch::kChannelPressure);
+    default:
+      return true;
+  }
+}
+
+/// The receive switch @p controller answers to, or kCount for one no switch
+/// names. The eight named controllers are the manual's own list. CC5 PORTAMENTO
+/// TIME and CC84 PORTAMENTO CONTROL are not on it and are left ungated: the
+/// switch is named for the controller that turns portamento on, and widening it
+/// to the two that shape a glide would be reading something the map does not
+/// say. Data entry is absent for the opposite reason — it belongs to whichever
+/// parameter number is selected, so its switch is decided at the value.
+GsRxSwitch rx_switch_for_controller(uint8_t controller) noexcept {
+  switch (controller) {
+    case 1:
+      return GsRxSwitch::kModulation;
+    case 7:
+      return GsRxSwitch::kVolume;
+    case 10:
+      return GsRxSwitch::kPanpot;
+    case 11:
+      return GsRxSwitch::kExpression;
+    case 64:
+      return GsRxSwitch::kHold1;
+    case 65:
+      return GsRxSwitch::kPortamento;
+    case 66:
+      return GsRxSwitch::kSostenuto;
+    case 67:
+      return GsRxSwitch::kSoft;
+    case 98:
+    case 99:
+      return GsRxSwitch::kNrpn;
+    case 100:
+    case 101:
+      return GsRxSwitch::kRpn;
+    default:
+      return GsRxSwitch::kCount;
+  }
+}
+
 /// Longest CC5 portamento glide, matching the ceiling clamp_synth_patch puts on
 /// a patch's own glide_ms.
 constexpr float kPortamentoMaxMs = 5000.0f;
@@ -694,6 +753,26 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
 void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
+  // GS RX switches (40 1x 06, and 0B-12 for the eight named controllers): a part
+  // that does not receive the message never sees the value, so this precedes
+  // even the position record below — an assignable source pointed at a
+  // controller the part refuses reads where that controller last was, not where
+  // an unreceived message would have put it.
+  //
+  // 120-127 are MIDI's channel mode messages rather than controllers, and the
+  // map has no switch over them: RX CONTROL CHANGE sits beside one switch per
+  // named controller, all of them below 120. Leaving them through also keeps
+  // CC126/127's alias onto 40 1x 13 unconditional, and keeps a panic able to
+  // stop a note on a part that has stopped taking controllers.
+  if (controller < 120 && !st.receives(GsRxSwitch::kControlChange)) return;
+  const GsRxSwitch gated = rx_switch_for_controller(controller);
+  if (gated != GsRxSwitch::kCount && !st.receives(gated)) return;
+  if (controller == 6 || controller == 38) {
+    // Data entry carries whichever parameter number is selected, so the switch
+    // that applies is the selection's. With neither selected the value reaches
+    // nothing anyway, and RPN is the harmless attribution.
+    if (!st.receives(st.params.selected_nrpn() ? GsRxSwitch::kNrpn : GsRxSwitch::kRpn)) return;
+  }
   // Every controller's position is recorded before the switch decides what this
   // one means, because an assignable source of the 40 2x block names a
   // controller by number and has to read where it sits whatever else it does.
@@ -880,6 +959,11 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
   if (parts == 0) return;
   for (uint8_t ch = 0; ch < 16; ++ch) {
     if ((parts & (1u << ch)) == 0) continue;
+    // GS RX switches (40 1x 03-12): whether the part receives this class of
+    // message at all. A dropped message leaves the part holding what the last
+    // received one left, which is not the same as receiving a neutral value.
+    // Polyphonic pressure has no branch below, so its switch guards nothing.
+    if (!receives_message(channels_[ch].rx_switches, u)) continue;
     if (u.is_note_on()) {
       const uint8_t vel7 =
           u.message_type() == UmpMessageType::kMidi1ChannelVoice

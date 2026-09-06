@@ -236,6 +236,12 @@ class Sf2Player final : public MidiInstrument {
   }
   /// GS 40 1x 13 MONO/POLY MODE for @p channel, 0 = Mono (test/diagnostic).
   uint8_t mono_poly(uint8_t channel) const noexcept { return channels_[channel & 0x0Fu].mono_poly; }
+  /// GS 40 1x 03-12 receive switches for @p channel, one bit per GsRxSwitch.
+  /// Exposed because a switch over a message class libsonare does not receive is
+  /// held rather than discarded, and a held byte owes a way to read it back.
+  uint16_t rx_switches(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].rx_switches;
+  }
 
   /// Captured GS insertion-effect (EFX) unit state (the raw 40 03 xx wire).
   /// Exposed for the adapter layer that realises it and for diagnostics.
@@ -378,10 +384,18 @@ class Sf2Player final : public MidiInstrument {
     /// a part that listens to none. Each part powers on to its own channel, so
     /// the reset writes it rather than a member default.
     uint8_t rx_channel = 0;
+    /// GS 40 1x 03-12: one bit per GsRxSwitch, set when the part receives that
+    /// class of message. A cleared bit drops the message on arrival, so the
+    /// value it would have written stays as the last received one left it.
+    uint16_t rx_switches = kGsRxAllOn;
     /// GS layer: the part's NRPN / TONE MODIFY edits.
     GsPartParams gs;
 
     bool is_drum() const noexcept { return drum_map != kGsDrumMapNone; }
+    /// Whether the part receives @p which at all (40 1x 03-12).
+    bool receives(GsRxSwitch which) const noexcept {
+      return (rx_switches & gs_rx_switch_bit(which)) != 0;
+    }
     /// Whether the part receives @p note at all (40 1x 1D/1E). A range whose low
     /// is above its high receives nothing, which is what the two bytes say.
     bool receives_key(uint8_t note) const noexcept {
