@@ -49,8 +49,11 @@ rests on its own patch and the shared set.
 
 Both block `settled`; they are named apart so the next action can say which one
 happened. A kit has no single patch unit — its voices are its drum notes — so
-the drum kinds stand in for the patch version it does not have, and it is dated
-against those together with the shared ones.
+the drum kinds stand in for the patch version it does not have, and moving them
+makes its record `stale` exactly as a patch bump does. That is read separately
+from the shared units rather than as one generation folding both together: with
+the two merged, fitting forty-three of the kit's own notes reported as
+`unverified` and said a shared unit had moved when none had.
 """
 
 from __future__ import annotations
@@ -80,18 +83,28 @@ class Provenance:
     bank_generation: int = 0
     patch_version: int = 0
 
-    def state(self, shared_generation: int, patch_version: int) -> str:
+    def state(self, shared_generation: int, patch_version: int,
+              own_generation: int = 0) -> str:
         """`current`, `stale` or `unverified` against the registry as it stands.
 
-        The second argument is the generation at which a *shared* calibration
+        The first argument is the generation at which a *shared* calibration
         unit last moved, not the registry's current one. A record is evidence
         about its own patch and about the constants under it, and nothing else:
         another voice's patch moving cannot reach this one, so comparing
         against the bare generation retires a diagnosis every time any of the
         297 patch and drum units is touched -- while saying, wrongly, that a
         shared unit had moved.
+
+        `own_generation` is for a voice with no single patch unit to be versioned
+        by. A kit's own voices are its drum notes, and forty-three of them moving
+        is the voice itself changing -- `stale`, the same as a patch bump. Dating
+        it by a generation that folds the drum kinds into the shared ones instead
+        makes that read as `unverified` and report a shared unit as having moved
+        when none did.
         """
         if patch_version and self.patch_version and patch_version > self.patch_version:
+            return STALE
+        if own_generation and self.bank_generation and own_generation > self.bank_generation:
             return STALE
         if shared_generation and self.bank_generation and shared_generation > self.bank_generation:
             return UNVERIFIED
@@ -231,17 +244,19 @@ def moved_generation(path: Path, kinds: set[str]) -> int:
                 for h in (u.get("history") or [])), default=0)
 
 
-def axis(claim: Structure | Music | None, dating: int, patch_version: int) -> dict | None:
+def axis(claim: Structure | Music | None, dating: int, patch_version: int,
+         own_generation: int = 0) -> dict | None:
     """One claim as `status.py` records it, or None where nothing is recorded.
 
-    `dating` is the generation the claim is held against, which is
-    `shared_generation` for a voice with a patch of its own and the bare
-    generation for a kit. See `Provenance.state`.
+    `dating` is the generation at which a shared unit last moved, and the pair
+    after it says what the claim's own voice is versioned by: a patch version
+    where it has one, a generation over the kinds standing in for it where it
+    does not. See `Provenance.state`.
     """
     if claim is None:
         return None
     out: dict = {
-        "state": claim.provenance.state(dating, patch_version),
+        "state": claim.provenance.state(dating, patch_version, own_generation),
         "date": claim.provenance.date,
     }
     if isinstance(claim, Structure):

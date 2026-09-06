@@ -280,7 +280,9 @@ def _last_step(axes: dict) -> str:
     if structure is None:
         return "record a structural residual with autofit --diagnose"
     if structure["state"] == signoff.STALE:
-        return "the patch has moved since the diagnosis: re-run autofit --diagnose"
+        # A kit has no patch to name; what moved is one of its own drum notes.
+        what = "the patch" if axes.get("patch") else "a voice of this kit"
+        return f"{what} has moved since the diagnosis: re-run autofit --diagnose"
     if structure["state"] == signoff.UNVERIFIED:
         return ("a shared calibration unit has moved since the diagnosis and nothing can "
                 "attribute it: re-run autofit --diagnose")
@@ -303,7 +305,7 @@ def build(catalogue) -> list[dict]:
     claims = signoff.load()
     generation, unit_versions = signoff.bank_versions(BANK_VERSIONS)
     shared_gen = signoff.moved_generation(BANK_VERSIONS, {"shared"})
-    kit_gen = signoff.moved_generation(BANK_VERSIONS, {"shared", "drum"})
+    drum_gen = signoff.moved_generation(BANK_VERSIONS, {"drum"})
     rows = []
     for v in voices:
         cap = v.capture
@@ -316,7 +318,7 @@ def build(catalogue) -> list[dict]:
         # A kit's voices are its drum notes, so it has no single patch unit:
         # the drum kinds stand in for the patch version it does not have.
         patch_version = unit_versions.get(v.patch or "", 0)
-        dating = kit_gen if v.kit else shared_gen
+        own_gen = drum_gen if v.kit else 0
         axes = {
             "engine": engine_for(v, catalogue),
             "patch": v.patch or None,
@@ -325,8 +327,8 @@ def build(catalogue) -> list[dict]:
             "gate_state": facts["gate_state"],
             "coverage": coverage(v, cap.raw if cap else {}, gate),
             "agreement": gate_agreement(gate),
-            "structure": signoff.axis(claim.structure, dating, patch_version),
-            "music": signoff.axis(claim.music, dating, patch_version),
+            "structure": signoff.axis(claim.structure, shared_gen, patch_version, own_gen),
+            "music": signoff.axis(claim.music, shared_gen, patch_version, own_gen),
         }
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])

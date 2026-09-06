@@ -119,6 +119,21 @@ def test_a_kit_has_no_patch_version_and_still_expires():
     assert p.state(20, 0) == signoff.UNVERIFIED
 
 
+def test_a_kits_own_drum_note_moving_makes_it_stale_not_unverified():
+    """Forty-three of its notes were fitted and it reported a shared unit.
+
+    A kit is dated by the drum kinds because it has no patch unit, and that is
+    the same claim a patch version makes: the voice itself changed. Folding the
+    two generations together loses the distinction in the one direction that
+    matters, since `unverified` reads as "something under this voice moved and
+    nothing can attribute it" when the thing that moved was the voice.
+    """
+    p = signoff.Provenance(bank_generation=31)
+    assert p.state(31, 0, 34) == signoff.STALE
+    assert p.state(34, 0, 31) == signoff.UNVERIFIED
+    assert p.state(31, 0, 31) == signoff.CURRENT
+
+
 def test_moved_generation_reads_only_the_named_kinds(tmp_path):
     reg = tmp_path / "bank-versions.json"
     reg.write_text(json.dumps({
@@ -133,7 +148,7 @@ def test_moved_generation_reads_only_the_named_kinds(tmp_path):
     }))
     assert signoff.moved_generation(reg, {"shared"}) == 26
     # A kit has no patch unit of its own, so the drum kinds stand in for one.
-    assert signoff.moved_generation(reg, {"shared", "drum"}) == 30
+    assert signoff.moved_generation(reg, {"drum"}) == 30
     assert signoff.moved_generation(reg, {"patch"}) == 32
 
 

@@ -106,6 +106,16 @@ def test_a_gate_that_was_never_written_is_named_as_one_to_write():
     assert "re-record" in stale
 
 
+def test_a_stale_diagnosis_names_what_moved_and_a_kit_has_no_patch_to_name():
+    """"the patch has moved" is a sentence a kit's entry cannot say truthfully."""
+    stale = {"state": "stale", "date": "", "unreachable": [], "accepted": [],
+             "open": []}
+    voice = status.next_action(_axes(structure=stale), 4, [])
+    kit = status.next_action(_axes(patch=None, structure=stale), 4, [])
+    assert "the patch has moved" in voice
+    assert "a voice of this kit has moved" in kit
+
+
 def test_coverage_is_all_or_nothing():
     """One unexcused gap holds the voice below `covered`, whatever the rest are."""
     assert status.stage_for(_axes(coverage={"complete": False, "gaps": ["body"]})) == 2
