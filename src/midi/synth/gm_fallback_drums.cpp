@@ -227,11 +227,12 @@ constexpr DrumPatches build_drum_patches() noexcept {
 // of the two — a value some real kit actually uses, taking no side on which.
 // A key is moved only where the peak and the RMS reading agree on the
 // direction, and by the smaller of the two; a decay or a brightness moving
-// takes the level with it, so the balance is re-measured after any fit. Keys 37
-// and 40 sit at `gain`'s ceiling of 4 and still measure 1.9 and 9.4 dB under
-// the nearer kit — a voice too quiet rather than a gain too low. The lever
-// itself is exact: `gain` is applied after the drive, the filter and the
-// envelope, and doubling it moves the rendered peak +6.02 dB at every velocity.
+// takes the level with it, so the balance is re-measured after any fit. Four
+// keys sit at `gain`'s ceiling of 4 and still measure under the nearer kit —
+// 40 by 9.4 dB, 36 by 3.5, 37 by 2.5 and 52 by 0.4 — which is a voice too
+// quiet rather than a gain too low. The lever itself is exact: `gain` applies
+// after the drive, the filter and the envelope, so doubling it moves the
+// rendered peak +6.02 dB at every velocity and moves no other dimension.
 SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
   const DrumPatches d = build_drum_patches();
   std::array<NativeSynthPatch, 128> t{};
@@ -424,9 +425,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[35].percussion.tone_gain = 0.180484f;
   t[35].percussion.wire_buzz = 2.09007f;
   t[35].stereo_spread = 0.187262f;
-  t[35].gain = 1.1841f;
+  t[35].gain = 2.7519f;
   t[36] = d.kick;
-  t[36].gain = 1.8234f;
+  t[36].gain = 4.0f;
   t[46] = d.open_hat;
   // The six toms start from one patch because they are key-tracked — the struck
   // key sets the head frequency — and then part company below, each fitted
@@ -503,7 +504,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[45].percussion.shell_weight[2] = 0.227623f;
   t[45].percussion.tone_direct = 0.534888f;
   t[45].percussion.wire_threshold = 3.31008f;
-  t[45].gain = 1.5066f;
+  t[45].gain = 1.8134f;
   t[50].amp_env.attack_ms = 1.13446f;
   t[50].amp_env.decay_ms = 60.7551f;
   t[50].cutoff_hz = 9241.57f;
@@ -576,7 +577,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[48].percussion.tone_direct = 0.463782f;
   t[48].percussion.wire_threshold = 2.77501f;
   t[48].resonance_q = 0.5f;
-  t[48].gain = 1.374f;
+  t[48].gain = 1.7916f;
   t[41].amp_env.attack_ms = 1.30323f;
   t[41].amp_env.decay_ms = 55.9659f;
   t[41].amp_env.sustain = 0.0983869f;
@@ -608,7 +609,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[41].percussion.tone_gain = 3.0687f;
   t[41].percussion.wire_buzz = 0.123627f;
   t[41].stereo_spread = 0.13347f;
-  t[41].gain = 1.1763f;
+  t[41].gain = 1.3631f;
   t[43].amp_env.attack_ms = 0.0214768f;
   t[43].amp_env.decay_ms = 58.724f;
   t[43].amp_env.sustain = 0.111286f;
@@ -644,7 +645,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[43].percussion.shell_num_modes = 1;
   t[43].percussion.wire_cutoff_hz = 909.225f;
   t[43].percussion.wire_threshold = 0.752055f;
-  t[43].gain = 1.1548f;
+  t[43].gain = 1.246f;
 
   // --- cymbals ---
   //
@@ -1113,7 +1114,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
                      0.5f);  // Cowbell (587/845 Hz)
   t[56].gain = 1.6652f;
   t[67] = make_metal(1200.0f, {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f, 0.45f);  // High Agogo
-  t[67].gain = 0.5678f;
+  t[67].gain = 0.6823f;
   t[68] = make_metal(900.0f, {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.30f, 0.45f);  // Low Agogo
   t[68].amp_env.attack_ms = 0.299523f;
   t[68].amp_env.decay_ms = 848.795f;
@@ -1182,7 +1183,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[80].percussion.wire_cutoff_hz = 1202.78f;
   t[80].percussion.wire_threshold = 2.69225f;
   t[80].percussion.tone_direct = 0.871336f;
-  t[80].gain = 0.7389f;
+  t[80].gain = 2.0281f;
   t[81].percussion.exclusive_class = 3;
   t[81].amp_env.attack_ms = 0.0964563f;
   t[81].amp_env.decay_ms = 1586.8f;
@@ -1585,7 +1586,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].percussion.shell_weight[3] = 1.28435f;
   t[38].percussion.tone_direct = 0.0695634f;
   t[38].resonance_q = 2.24364f;
-  t[38].gain = 3.2849f;  // Acoustic Snare
+  t[38].gain = 3.5606f;  // Acoustic Snare
   t[39].percussion.noise_air_hz = 1459.44f;
   t[39].gain = 2.5615f;  // Hand Clap
   t[39].amp_env.attack_ms = 3.87415f;
@@ -1667,7 +1668,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[51].percussion.noise_cutoff_hz = 2263.25f;
   t[51].resonance_q = 6.59868f;
   t[51].percussion.mode_ratios[2] = 1.87896f;
-  t[51].gain = 0.8177f;  // Ride 1
+  t[51].gain = 0.7432f;  // Ride 1
   t[51].amp_env.attack_ms = 0.228377f;
   t[51].amp_env.decay_ms = 2449.86f;
   t[51].percussion.contact = 0.233992f;

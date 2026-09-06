@@ -3,7 +3,7 @@
   "timbre": "kit-a",
   "margin": 1.25,
   "reference_measured_utc": "2026-08-27T10:13:08+00:00",
-  "recorded_utc": "2026-09-06T08:31:31+00:00",
+  "recorded_utc": "2026-09-06T10:12:02+00:00",
   "reference_spread": {
     "attack": 2.5,
     "band_decay": 51.2393,
@@ -46,8 +46,8 @@
       "rows": 282
     },
     "level": {
-      "median": 11.269,
-      "abs_median": 11.269,
+      "median": 10.619,
+      "abs_median": 10.619,
       "rows": 282
     },
     "vel_range": {
