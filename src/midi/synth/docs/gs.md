@@ -8,6 +8,8 @@ Per-address detail — offsets, ranges, defaults — is not restated here. It co
 
 Two blocks have since been read out of the SC-8850's own map rather than inherited: the **part parameters `40 1x 00`–`4B`**, where the two machines turn out to list address for address the same set, and the six difference points above. Closing the gap elsewhere is reading the map, not re-deriving anything.
 
+**The gap is also closed by measurement, and that is the half a manual cannot give.** `make gs-unit-diff` compares this table against an archive of what an individual SC-8850 answered, and the work list it produces is `tools/gs/unit-diff.json` (`tools/gs/docs/unit-diff.md` reads it). It is the other half of the address census next to it: the census says what real files reach and is blind to any address they never send, and the machine answers a great many they never send. `00 01 xx` was the first thing it found — thirty-two blocks over two ports where the machine has sixty-four over four, which is the SC-88Pro's map sitting in a table that claims to follow the SC-8850's, and which no corpus could have shown because every file that writes the address writes a value both machines accept.
+
 **This page is normative and says nothing about progress.** It describes what must be true, not what is true today; an item here that the code does not yet do is work outstanding rather than a documentation error. Coverage is a number the address table and its test produce, not a status section that would drift the moment it was written.
 
 ## What is being made compatible is the control protocol, not the sound
@@ -180,6 +182,8 @@ These are decisions, not gaps. Each one is here because it would otherwise be re
 The hardware allows exactly one insertion effect for the whole module — "you can select one Insertion effect, and specify for each Part whether or not the sound will be routed through the effect", and turning it on for two parts mixes them into that one unit. That is a limit of the machine, not a property of GS worth preserving, and libsonare lifts it.
 
 **The extension is reachable only from addresses a spec-compliant file cannot send.** That is what makes it safe without a feature flag: a GS file is inert against it by construction, and the behaviour it gets is exactly the hardware's.
+
+**That safety rests on the hardware having nothing at `40 3u xx`, and it is now measured rather than read.** The claim was the manual's — neither map carries a row there — which is an argument about a document rather than about a machine. `make gs-unit-diff` reports the number of extension addresses a read reached on the unit, and it is zero of the 480. A row appearing there is a collision and the flag argument reopens.
 
 - **Unit 0 stays at `40 03 xx`, unchanged.** Its semantics, defaults and parameter layout are the manual's.
 - **Units 1–15 live at `40 3u xx`** (`u` = `1`–`F`), each with the identical `00`–`1F` layout. `40 30`–`40 3F` carries no row in either the SC-88Pro or the SC-8850 map, so nothing collides.
