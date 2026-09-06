@@ -225,13 +225,13 @@ constexpr DrumPatches build_drum_patches() noexcept {
 // much as an instrument's property. So a gain here is moved only when this kit
 // falls outside the range the two of them span, and only as far as the nearer
 // of the two — a value some real kit actually uses, taking no side on which.
-// Re-measured once the voices were fitted, because a decay or a brightness
-// moving takes the level with it: 8 of the 47 mapped keys were still inside,
-// and moving the rest took the kit from 259 dB outside the span in total to 61,
-// with no key further out than before. A key is moved only where the peak and
-// the RMS reading agree on the direction, and by the smaller of the two. Three
-// keys cannot reach the range at all — 37, 40 and 52 want more than `gain`'s
-// ceiling of 4 has left, which is a voice too quiet rather than a gain too low.
+// A key is moved only where the peak and the RMS reading agree on the
+// direction, and by the smaller of the two; a decay or a brightness moving
+// takes the level with it, so the balance is re-measured after any fit. Keys 37
+// and 40 sit at `gain`'s ceiling of 4 and still measure 1.9 and 9.4 dB under
+// the nearer kit — a voice too quiet rather than a gain too low. The lever
+// itself is exact: `gain` is applied after the drive, the filter and the
+// envelope, and doubling it moves the rendered peak +6.02 dB at every velocity.
 SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
   const DrumPatches d = build_drum_patches();
   std::array<NativeSynthPatch, 128> t{};
