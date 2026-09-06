@@ -30,6 +30,7 @@ from metrics import (  # noqa: E402
     attack_low_bands,
     attack_peaks,
     audibility_weights,
+    band_tilt_db,
     MIN_PARTIALS_FOR_B,
     estimate_inharmonicity_b,
     ladder_present,
@@ -485,7 +486,7 @@ def mss_distance(model: np.ndarray, oracle: np.ndarray) -> float:
 # — and the unused terms stay at zero weight.
 LOSS_TERMS = ("harm", "modes", "cents", "tnr", "mod", "env", "init", "slope",
               "tail", "hf", "lf", "stiff", "level", "crest", "dyn", "mss",
-              "band", "bdecay", "kit")
+              "band", "bdecay", "tilt", "bright", "kit")
 
 # Smallest value a term is normalised against, in that term's own units: 1 dB of
 # harmonic-profile error, 1 cent, 1 dB of excess noise, and so on. Without a
@@ -498,6 +499,10 @@ TERM_FLOORS = {
     "tail": 0.1, "hf": 1.0, "lf": 1.0, "stiff": 1.0,
     "level": 0.5, "crest": 0.5, "dyn": 0.5,
     "mss": 0.01, "band": 1.0, "bdecay": 0.1,
+    # A decibel of tilt and five per cent of centroid: both are quantities a
+    # listener names before anything else about a kit piece, and both are well
+    # inside what two takes of the same drum differ by.
+    "tilt": 1.0, "bright": 5.0,
     # A tenth of a doubling: about a semitone and a half of pitch, 7 % of a
     # decay, or 0.6 dB of level. Below that the relation is inside the
     # reference's own strike-to-strike variation.
@@ -543,7 +548,17 @@ PITCHED_TERMS = ("harm", "cents", "tnr", "mod", "init", "slope", "tail", "hf",
 #: relations across, and only a percussion capture has one — a pitched voice's
 #: between-note relations are `dyn` and `level`, which are the whole grid rather
 #: than a family inside it.
-PERCUSSION_TERMS = ("band", "bdecay", "lf", "kit") + _SHARED_TERMS
+#: `tilt` and `bright` are percussion-only, and they exist because `band` cannot
+#: stand in for them. `band` is an L1 over 25 bands with each side normalised to
+#: its OWN loudest band, so it charges a magnitude per band and never a
+#: direction, and when a candidate's loudest band moves the anchor moves with
+#: it: a whole-kit fit brought `band` down from 16.4 to 15.5 dB while taking the
+#: tilt from 6.8 to 9.4 dB and the centroid from 39 % to 75 % over its
+#: reference — the one dimension of eight that had been inside the reference
+#: kits' own spread, pushed outside it. These two are the gate's own arithmetic,
+#: read from the same `band_tilt_db` and the same centroid ratio, so a fit
+#: optimises the quantity the kit is judged on rather than a proxy for it.
+PERCUSSION_TERMS = ("band", "bdecay", "tilt", "bright", "lf", "kit") + _SHARED_TERMS
 
 
 def measured_terms(percussive: bool) -> tuple[str, ...]:
@@ -1454,8 +1469,15 @@ def percussion_terms(
         # fixed everything.
         return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
-    band_bins = bdecay_bins = 0
+    band_bins = bdecay_bins = tilt_hits = bright_hits = 0
     for m, o in zip(model_rows, oracle_rows_):
+        tilt_m, tilt_o = band_tilt_db(m.get("bands_db")), band_tilt_db(o.get("bands_db"))
+        if tilt_m is not None and tilt_o is not None:
+            totals["tilt"] += abs(tilt_m - tilt_o)
+            tilt_hits += 1
+        if o.get("centroid_hz") and m.get("centroid_hz"):
+            totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
+            bright_hits += 1
         for a, b in zip(m["bands_db"], o["bands_db"]):
             if b <= BAND_REFERENCE_FLOOR_DB:
                 # The reference has floored this band. See
@@ -1519,6 +1541,10 @@ def percussion_terms(
     # rather than silently unguarded.
     out["band_bins"] = float(band_bins)
     out["bdecay_bins"] = float(bdecay_bins)
+    # Both skip when either side has no profile or no centroid to read, which a
+    # candidate can cause by rendering silence, so both are counted and guarded.
+    out["tilt_hits"] = float(tilt_hits)
+    out["bright_hits"] = float(bright_hits)
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out
@@ -1584,6 +1610,21 @@ def cli_weights(args) -> dict[str, float]:
     return {t: w for t, w in weights.items() if t in group and w > 0.0}
 
 
+def refused_weights(args) -> list[str]:
+    """Terms asked for on the command line that this probe cannot produce.
+
+    `cli_weights` drops them, correctly and without a word, which is how a drum
+    fit spent a round under `--w-hf 1`: `percussion_terms` never computes `hf`,
+    so the weight multiplied a constant 0.0 and two runs differing only in that
+    flag came back byte-identical. The flag was accepted, echoed nowhere and
+    changed nothing. Only what was explicitly given is reported — the class
+    defaults are filtered by the same rule on purpose.
+    """
+    group = set(measured_terms(getattr(args, "percussive", False)))
+    return [t for t in LOSS_TERMS
+            if t not in group and (getattr(args, f"w_{t}", None) or 0.0) > 0.0]
+
+
 # Which key carries the count of data points each averaged term was measured
 # over. Every one of these terms skips the points it cannot use and divides by
 # the survivors, and every one of them already reported its count — this is the
@@ -1607,6 +1648,8 @@ TERM_COUNT_KEYS = {
     "dyn": "dyn_groups",
     "band": "band_bins",
     "bdecay": "bdecay_bins",
+    "tilt": "tilt_hits",
+    "bright": "bright_hits",
     "lf": "lf_notes",
     # The one most likely to go blind of any of them: a relation is dropped
     # whenever the reference stops holding it or a member stops supplying a

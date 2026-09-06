@@ -282,4 +282,26 @@ def run_stages(evaluator, knobs: list[Knob], args, optimizer) -> list[float]:
           f"{total_evals - len(evaluator.trajectory)} evaluations, CLI weights ==",
           file=sys.stderr)
     evaluator.restage(cli_weights(args), "all")
+    base = _better_seed(evaluator, knobs, base)
     return optimizer(evaluator, [replace(k, start_value=v) for k, v in zip(knobs, base)], args)
+
+
+def _better_seed(evaluator, knobs: list[Knob], base: list[float]) -> list[float]:
+    """Whichever of the staged point and the defaults the final weights prefer.
+
+    An early stage optimises under its own narrow weights, so nothing stops it
+    handing over a point that is worse than the defaults under the weights the
+    answer is judged by — measured at 2.2x the defaults on one drum note, whose
+    final stage then spent its whole budget climbing back to 1.15 and wrote that
+    regression to source. Both points are already rendered, so the comparison is
+    two cache hits, and scoring them here also puts the defaults in `best_values`
+    where they act as a floor under whatever the search does next.
+    """
+    defaults = [k.start_value for k in knobs]
+    staged, plain = evaluator(base), evaluator(defaults)
+    if staged <= plain:
+        return base
+    print(f"stages: the staged point scores {staged:.4f} against the defaults' {plain:.4f} "
+          f"under the CLI weights — starting the final stage from the defaults instead",
+          file=sys.stderr)
+    return defaults

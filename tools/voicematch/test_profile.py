@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import profile as profile_module  # noqa: E402
 from capture import note_groups, note_map  # noqa: E402
 from loss import _kit_terms, kit_report  # noqa: E402
+import metrics as metrics_module  # noqa: E402
 from metrics import _spectrum  # noqa: E402
 
 SR = 48000
@@ -677,23 +678,23 @@ def test_the_definition_a_manifest_names_is_found_from_any_directory(monkeypatch
 
 def test_the_band_comparisons_report_a_direction_and_a_magnitude_separately():
     """Tilt says which way a hit is wrong; shape says how much that failed to explain."""
-    flat = [0.0] * len(profile_module.THIRD_OCTAVE_CENTERS)
-    assert profile_module.band_tilt_db(flat) == pytest.approx(0.0)
+    flat = [0.0] * len(metrics_module.THIRD_OCTAVE_CENTERS)
+    assert metrics_module.band_tilt_db(flat) == pytest.approx(0.0)
     assert profile_module.band_shape_error_db(flat, flat) == pytest.approx(0.0)
 
     bright = [
-        0.0 if c >= profile_module.TILT_HIGH_HZ else -12.0
-        for c in profile_module.THIRD_OCTAVE_CENTERS
+        0.0 if c >= metrics_module.TILT_HIGH_HZ else -12.0
+        for c in metrics_module.THIRD_OCTAVE_CENTERS
     ]
-    assert profile_module.band_tilt_db(bright) == pytest.approx(12.0)
+    assert metrics_module.band_tilt_db(bright) == pytest.approx(12.0)
     # Same tilt, different spectrum: a resonance in the wrong band with a hole
     # beside it cancels out of the tilt and has to survive in the magnitude.
     lumpy = list(flat)
     lumpy[3], lumpy[4] = 9.0, -9.0
-    assert profile_module.band_tilt_db(lumpy) == pytest.approx(0.0, abs=1e-9)
+    assert metrics_module.band_tilt_db(lumpy) == pytest.approx(0.0, abs=1e-9)
     assert profile_module.band_shape_error_db(lumpy, flat) > 2.0
 
-    assert profile_module.band_tilt_db(None) is None
+    assert metrics_module.band_tilt_db(None) is None
     assert profile_module.band_shape_error_db([], [0.0]) is None
 
 

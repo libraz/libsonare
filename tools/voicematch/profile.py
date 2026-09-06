@@ -80,8 +80,8 @@ from capture import (  # noqa: E402
 from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
     INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
-    SILENT_WINDOW_DB, THIRD_OCTAVE_CENTERS, _db, _peak_near, _rms_envelope,
-    _spectrum, _under_peak_db, analyze_hit, band_edges_by_timbre,
+    SILENT_WINDOW_DB, _db, _peak_near, _rms_envelope,
+    _spectrum, _under_peak_db, analyze_hit, band_edges_by_timbre, band_tilt_db,
     fit_partial_series, ladder_present, midi_to_hz, partial_hz,
     shared_band_edge, to_mono,
 )
@@ -103,13 +103,6 @@ CAPTURE_DIR = Path(__file__).resolve().parent / "capture"
 # string with one ruler. They were the same numbers when they were written twice;
 # a quantity defined in two places only stays equal until one of them is tuned.
 MAX_PARTIALS = MAX_FIT_PARTIALS
-# The 1/3-octave band centres `analyze_hit` reports, split into the two ends the
-# tilt is taken between. The middle is left out on purpose: a kit's body lives
-# there and every piece of it puts energy there, so including it averages the
-# two ends towards each other and the tilt stops separating a dull snare from a
-# bright one.
-TILT_LOW_HZ = 500.0
-TILT_HIGH_HZ = 2000.0
 # A model render whose loudest sample is under this is a kit piece the GM
 # fallback does not voice, not a quiet one. `analyze_hit` normalises the band
 # profile to its own loudest band, so silence comes back as a flat spectrum and
@@ -1402,24 +1395,6 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
         mm, rr = float(np.median(swing[mk])), float(np.median(swing[rk]))
         print(f"  {label:22s} model {mm:+7.2f}   ref {rr:+7.2f}   error {mm - rr:+7.2f}")
     return 0
-
-
-def band_tilt_db(bands_db: list[float] | None) -> float | None:
-    """How much of a hit sits above 2 kHz rather than below 500 Hz.
-
-    `analyze_hit` normalises the band profile to its own loudest band, so a
-    whole-spectrum level offset has already been divided out and the only thing
-    left to compare is the shape. This is the one number of that shape a listener
-    would name first: a kit piece is dull or bright before it is anything else.
-    """
-    if not bands_db:
-        return None
-    centres = np.asarray(THIRD_OCTAVE_CENTERS[:len(bands_db)], dtype=np.float64)
-    vals = np.asarray(bands_db[:len(centres)], dtype=np.float64)
-    low, high = vals[centres <= TILT_LOW_HZ], vals[centres >= TILT_HIGH_HZ]
-    if not len(low) or not len(high):
-        return None
-    return float(np.mean(high) - np.mean(low))
 
 
 def band_shape_error_db(model: list[float] | None, ref: list[float] | None) -> float | None:

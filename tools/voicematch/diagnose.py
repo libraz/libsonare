@@ -74,6 +74,7 @@ TERM_UNITS = {
     "lf": "dB", "dyn": "dB per 64 velocity", "stiff": "cents",
     "level": "dB", "crest": "dB", "mss": "ratio", "band": "dB",
     "bdecay": "octaves of decay rate", "modes": "dB + cents÷25", "mod": "composite",
+    "tilt": "dB", "bright": "% of the reference centroid",
     "kit": "doublings",
 }
 
@@ -94,6 +95,11 @@ TERM_MEANS = {
     "mss": "the whole timeline, at four spectral resolutions",
     "band": "the third-octave level profile",
     "bdecay": "how fast each octave band dies, as a ratio to the reference's rate",
+    "tilt": "which way the spectrum leans — the level above 2 kHz against the "
+            "level below 500 Hz, which `band` measures the magnitude of and "
+            "never the direction",
+    "bright": "where the hit's energy sits, as a percentage of the reference's "
+              "own centroid",
     "modes": "the partials as measured — where they actually are, not where a "
              "harmonic series predicts. The only pitched reading a bar, a bell "
              "or a membrane has",

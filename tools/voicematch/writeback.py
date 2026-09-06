@@ -310,8 +310,39 @@ def _splice_field_lines(
             last = m
         indent = re.match(r"[ \t]*", last.group(0)).group(0)
         block = "\n".join(indent + line for line in append)
-        text = text[: last.end()] + "\n" + block + text[last.end() :]
+        end = _statement_end(text, last.start())
+        text = text[:end] + "\n" + block + text[end:]
     return text
+
+
+def _statement_end(text: str, start: int) -> int:
+    """The end of the line that closes the statement beginning at `start`.
+
+    A table entry wraps whenever its arguments do not fit, and appending after
+    the matched *line* then lands inside the argument list. That is a syntax
+    error rather than a subtle one, and it does not stop with the note that
+    caused it: the cowbell's `make_metal(...)` took a fitted block into the
+    middle of its call, and the twenty-six drum notes after it each failed at
+    the rebuild their fit begins with.
+
+    Depth counts `()` `[]` `{}` with `//` comments cut off first, since the
+    table's own comments carry unbalanced parens (`// Cowbell (587/845 Hz)`).
+    A scan that finds no closing `;` falls back to the anchor line, which is
+    where this appended before.
+    """
+    depth = 0
+    pos = start
+    while pos < len(text):
+        eol = text.find("\n", pos)
+        if eol == -1:
+            eol = len(text)
+        code = text[pos:eol].split("//", 1)[0]
+        depth += sum(ch in "([{" for ch in code) - sum(ch in ")]}" for ch in code)
+        if depth <= 0 and ";" in code:
+            return eol
+        pos = eol + 1
+    eol = text.find("\n", start)
+    return len(text) if eol == -1 else eol
 
 
 def _current_text(path: Path, base: dict[Path, str] | None) -> str:

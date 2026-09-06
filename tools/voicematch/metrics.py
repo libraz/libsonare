@@ -1835,6 +1835,37 @@ def note_onset(mono: np.ndarray, sr: int, note: Note, window_end: float) -> floa
     return _hit_onset(mono, sr, note.start, window_end)
 
 
+#: The two ends of the 1/3-octave profile a hit's tilt is taken between. The
+#: middle is left out on purpose: a kit's body lives there and every piece of it
+#: puts energy there, so including it averages the two ends towards each other
+#: and the tilt stops separating a dull snare from a bright one.
+TILT_LOW_HZ = 500.0
+TILT_HIGH_HZ = 2000.0
+
+
+def band_tilt_db(bands_db: list[float] | None) -> float | None:
+    """How much of a hit sits above 2 kHz rather than below 500 Hz.
+
+    `analyze_hit` normalises the band profile to its own loudest band, so a
+    whole-spectrum level offset has already been divided out and the only thing
+    left to compare is the shape. This is the one number of that shape a listener
+    would name first: a kit piece is dull or bright before it is anything else.
+
+    Here rather than beside the comparison that reads it, because the loss reads
+    it too and the two must be one ruler. They were the same arithmetic written
+    once; a fit scored against a tilt defined anywhere but where the gate's tilt
+    is defined would optimise a quantity the gate does not measure.
+    """
+    if not bands_db:
+        return None
+    centres = np.asarray(THIRD_OCTAVE_CENTERS[:len(bands_db)], dtype=np.float64)
+    vals = np.asarray(bands_db[:len(centres)], dtype=np.float64)
+    low, high = vals[centres <= TILT_LOW_HZ], vals[centres >= TILT_HIGH_HZ]
+    if not len(low) or not len(high):
+        return None
+    return float(np.mean(high) - np.mean(low))
+
+
 #: How far a band's across-instrument spread may fall below the capture's own
 #: typical spread and still be called informative. Half: a band that separates
 #: the kit half as well as the capture does on average is degraded but is still

@@ -180,6 +180,12 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
 #: whatever the kit piece is.
 PERCUSSION_WEIGHTS: dict[str, float] = {
     "band": 1.0, "bdecay": 1.0, "env": 1.0, "modes": 0.5, "crest": 0.5,
+    # Which way the spectrum leans and where its energy sits. Level with the
+    # profile they are drawn from, because `band` measures a magnitude per band
+    # and neither of these: a whole-kit fit under `band` alone improved it while
+    # taking the tilt and the centroid the wrong way, and brightness was the one
+    # gated dimension of eight that had been inside the reference kits' spread.
+    "tilt": 1.0, "bright": 1.0,
     # Weighted as heavily as the whole band profile it is drawn from, because
     # it is one region against that profile's twenty-five bands and the kick is
     # the loudest thing in the kit. See `loss._perc_lf_terms`.

@@ -254,6 +254,7 @@ from loss import (  # noqa: E402
     cli_weights,
     mss_distance,
     probe_rows,
+    refused_weights,
     score_terms,
 )
 from diagnose import run_diagnosis  # noqa: E402
@@ -1021,6 +1022,40 @@ class Evaluator:
         return results
 
 
+def winner_or_defaults(knobs, best_values: list[float], evaluator,
+                       validation: dict | None = None) -> list[float]:
+    """The fit's winner, unless something measured says it is worse than the start.
+
+    Two readings can say that, and both are refusals to write rather than
+    findings to report on the way past:
+
+    Every stage's loss is a ratio against the compiled-in defaults, so those
+    score exactly 1.0 and anything above it is a search that never found its own
+    start point. Only meaningful while the loss is normalised — `--raw-loss` has
+    no such reference point and is left alone.
+
+    A hold-out is the same failure measured better: it scores the winner on
+    notes or velocities the fit never saw, and it is the only reading in the run
+    that can speak for anywhere but the probe. A winner that loses there is
+    fitted to the probe, and writing it is how a fit trades a whole voice for
+    three velocities. A wash is not a loss — an "unchanged off the probe" result
+    improved the measured objective and is worse nowhere, so it is kept, and the
+    verdict is printed above this either way.
+    """
+    if getattr(evaluator, "normalize", False) and evaluator.best_loss > 1.0:
+        print(f"\nthe winner scores {evaluator.best_loss:.4f} against the defaults' 1.0 — "
+              f"keeping the defaults, since a fit that lost to its own start point has "
+              f"nothing to write", file=sys.stderr)
+        return [k.start_value for k in knobs]
+    if validation and validation["best"] - validation["start"] > 0.005:
+        print(f"\nthe winner scores {validation['best']:.4f} against the defaults' "
+              f"{validation['start']:.4f} on the held-out {validation['axis']} — keeping "
+              f"the defaults, since values that lose where the fit could not see are "
+              f"fitted to the probe", file=sys.stderr)
+        return [k.start_value for k in knobs]
+    return best_values
+
+
 def report_pinned(knobs, best_values: list[float]) -> list[str]:
     """Name every knob whose result sits on the end of its range.
 
@@ -1305,6 +1340,12 @@ def run(args, argv: list[str] | None = None) -> int:
           f"{'percussion' if args.percussive else 'harmonic'} metric set; weights "
           + " ".join(f"{t}={w:g}" for t, w in weights.items() if w > 0.0),
           file=sys.stderr)
+    refused = refused_weights(args)
+    if refused:
+        print(f"  --w-{' --w-'.join(refused)}: this metric set does not produce "
+              f"{'that term' if len(refused) == 1 else 'those terms'}, so the weight is "
+              f"multiplying a constant zero and the run is the same without it",
+              file=sys.stderr)
 
     # A catalogue is needed whenever a spec might name a per-program patch field
     # (which has no declaration in src/ to validate against) and always for
@@ -1461,6 +1502,12 @@ def run(args, argv: list[str] | None = None) -> int:
 
         if evaluator.best_values is not None:
             best_values = evaluator.best_values
+        # Before the report, because the hold-out decides which values the report
+        # is about: it is scored on the winner and can then refuse it.
+        validation = validate(
+            args, build_dir, knobs, [k.start_value for k in knobs], best_values, ir_path
+        )
+        best_values = winner_or_defaults(knobs, best_values, evaluator, validation)
 
         pinned = report_pinned(knobs, best_values)
         if pinned:
@@ -1475,9 +1522,7 @@ def run(args, argv: list[str] | None = None) -> int:
         extra = {
             "room": room.to_dict() if room is not None else None,
             "pinned": pinned,
-            "validation": validate(
-                args, build_dir, knobs, [k.start_value for k in knobs], best_values, ir_path
-            ),
+            "validation": validation,
         }
     report_result(knobs, pristine, best_values, evaluator, args, extra)
     return 0
@@ -1637,6 +1682,15 @@ def main() -> int:
                              "percussion analogue of the harmonic ladder")
     parser.add_argument("--w-bdecay", type=float, default=None, dest="w_bdecay",
                         help="drum fits: weight on the per-octave-band decay-slope term")
+    parser.add_argument("--w-tilt", type=float, default=None, dest="w_tilt",
+                        help="drum fits: weight on how far the hit's 2 kHz-and-up level "
+                             "sits from its 500 Hz-and-down level, against the same "
+                             "difference in the reference. A direction, which --w-band "
+                             "has none of")
+    parser.add_argument("--w-bright", type=float, default=None, dest="w_bright",
+                        help="drum fits: weight on the spectral centroid as a percentage "
+                             "of the reference's. The gate's own arithmetic, so a fit "
+                             "moves the quantity the kit is judged on")
     parser.add_argument("--w-kit", type=float, default=None, dest="w_kit",
                         help="drum fits: weight on the RELATIONS INSIDE THE KIT — the tom "
                              "series, the hi-hat trio, the cymbals — as the sorted contrasts "

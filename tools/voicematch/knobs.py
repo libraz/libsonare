@@ -341,7 +341,18 @@ UNIDENTIFIABLE_FIELDS = frozenset({"gain"})
 #: first zero of J0 while dropping alpha1 below alpha0, leaving a mode set no
 #: membrane has. The mode *ratios* stay fittable: a real head genuinely detunes
 #: away from the ideal set, and that is what a ratio is for.
-STRUCTURAL_FIELD_PREFIXES = ("mode_alpha",)
+#:
+#: `base_freq_hz` and `shell_freq_hz` are the same case one level up: they are
+#: what the instrument IS rather than how it is voiced. The drum table sets them
+#: where each patch is built, from the spec or from a measurement — "GM pins one
+#: head frequency per key" for the fixed-pitch membranes, the TR-808's 587 and
+#: 845 Hz for the cowbell, the sampled kit's measured 315 Hz peak for the closed
+#: hat — and the C++ voice tests assert several of them by frequency. Offered,
+#: they become a free spectral-shaping parameter: a whole-kit fit moved 34 of
+#: them, taking the low timbale's head from 200 Hz to 6682, the cowbell's from
+#: 587 to 4487 and the open hi-hat's from 315 to 16, which is not a retuned drum
+#: but a different object that happens to match the reference's band profile.
+STRUCTURAL_FIELD_PREFIXES = ("mode_alpha", "base_freq_hz", "shell_freq_hz")
 
 
 def _offered(field: str) -> bool:

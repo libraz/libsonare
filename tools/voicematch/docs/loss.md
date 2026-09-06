@@ -84,6 +84,8 @@ The drum set is per-metric-set rather than per class: the percussion metric set 
 
 An explicit `--w-*` still wins, and a spec's `weights` block sits between the two — the class supplies only what neither names. A per-note weight inherited from the class is dropped on a probe with no analysis notes rather than refused, while one named on the command line is still refused, because asking for a measurement the probe cannot take is a mistake worth reporting and inheriting one is not the caller saying anything.
 
+**A weight on a term the probe's metric set does not produce is dropped, and the run now names it.** `percussion_terms` computes `band` `bdecay` `env` `level` `crest` `dyn` `modes` `lf` `kit` `mss` and nothing else, so `--w-hf` on a drum fit multiplies a constant 0.0 — which is that term's best score — and two runs differing only in the flag come back byte-identical. Dropping it is right; dropping it in silence cost one drum round its belief that an axis had been weighted. Only what was asked for is reported, since a class default the probe cannot produce is not the caller saying anything either.
+
 Putting the weights in the spec makes a fit reproducible from one file:
 
 ```json

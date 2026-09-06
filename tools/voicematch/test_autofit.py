@@ -31,7 +31,13 @@ import loss as loss_module  # noqa: E402
 import report as report_module  # noqa: E402
 import voicematch  # noqa: E402
 from _repo import REPO_ROOT  # noqa: E402
-from autofit import Evaluator, check_holdout_oracle, resolve_probe, validate  # noqa: E402
+from autofit import (  # noqa: E402
+    Evaluator,
+    check_holdout_oracle,
+    resolve_probe,
+    validate,
+    winner_or_defaults,
+)
 from build_lib import configure_build  # noqa: E402
 from catalogue import Catalogue  # noqa: E402
 from knobs import (  # noqa: E402
@@ -48,6 +54,7 @@ from loss import (  # noqa: E402
     loss_terms,
     percussion_terms,
     probe_rows,
+    refused_weights,
     score_terms,
 )
 import json  # noqa: E402
@@ -89,8 +96,9 @@ from render_model import DEFAULT_DYLIB, check_gm_fallback  # noqa: E402
 from render_oracle import oracle_may_carry_room  # noqa: E402
 from report import report_result  # noqa: E402
 from room import DRY  # noqa: E402
-from staging import screen_knobs, stage_of, staged_indices  # noqa: E402
+from staging import _better_seed, screen_knobs, stage_of, staged_indices  # noqa: E402
 from writeback import (  # noqa: E402
+    DRUM_TABLE_FILE,
     TUNING_LAYER_FILE,
     array_members,
     key_to_member_path,
@@ -538,9 +546,14 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
     # 1/3-octave profile cannot resolve. None of the harmonic ones: a hit has no
     # fundamental, so a ladder or an intonation error would be measuring a
     # frequency the sound does not contain.
-    assert set(weights) == {"band", "bdecay", "lf", "env", "modes", "crest"}
+    assert set(weights) == {"band", "bdecay", "tilt", "bright", "lf", "env",
+                            "modes", "crest"}
     assert not {"harm", "cents", "tnr", "init", "slope", "tail", "hf",
                 "stiff", "mod"} & set(weights)
+    # `band` is an L1 per band and carries no direction, so the lean of the
+    # spectrum and where its energy sits are their own terms — the two the kit's
+    # gate names and the two a whole-kit fit under `band` alone took backwards.
+    assert weights["tilt"] == 1.0 and weights["bright"] == 1.0
     # `lf` is in both sets under one name and is not one measurement. For a
     # pitched voice it is the attack's low bands; here it is the kick's whole
     # region of the 1/3-octave profile, which `band` averages away.
@@ -556,6 +569,23 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
     assert cli_weights(_probe_args(program=0))["env"] == 1.0
 
 
+def test_a_weight_this_metric_set_cannot_produce_is_named_rather_than_dropped():
+    """`--w-hf 1` on a drum probe is accepted, echoed nowhere and changes nothing.
+
+    `percussion_terms` never computes `hf`, so the weight multiplies a constant
+    0.0 — the best score that term has — and two runs differing only in the flag
+    came back byte-identical. Dropping it is right; dropping it in silence is
+    how a round gets spent believing an axis was weighted.
+    """
+    drum = _probe_args(percussive=True, drum_note=35, w_hf=1.0, w_tail=0.5, w_band=2.0)
+    assert refused_weights(drum) == ["tail", "hf"]
+    assert "hf" not in cli_weights(drum) and cli_weights(drum)["band"] == 2.0
+    # The same weight on the probe that does produce the term is not a finding.
+    assert refused_weights(_probe_args(percussive=False, w_hf=1.0)) == []
+    # Nor is a class default the probe cannot produce: only what was asked for.
+    assert refused_weights(_probe_args(percussive=True, drum_note=35)) == []
+
+
 def _hit(bands, decay, attack=1.0, decay_ms=200.0, crest=10.0) -> dict:
     return {"bands_db": bands, "band_decay_db_s": decay, "attack_ms": attack,
             "decay_ms": decay_ms, "crest_db": crest}
@@ -567,6 +597,37 @@ def test_a_matching_hit_scores_zero_on_every_percussion_term():
     assert terms["band"] == 0.0
     assert terms["bdecay"] == 0.0
     assert terms["env"] == 0.0
+
+
+def test_the_lean_of_the_spectrum_is_scored_where_the_band_profile_cannot_see_it():
+    """`band` charges a magnitude per band and never a direction.
+
+    A whole-kit fit under it improved the profile from 16.4 to 15.5 dB while
+    taking the tilt from 6.8 to 9.4 dB and the centroid from 39 % to 75 % over
+    its reference — brightness being the one of eight gated dimensions that had
+    been inside the reference kits' own spread. Two hits equidistant from the
+    reference in profile terms, one dull and one bright, are the shape of that:
+    `band` cannot tell them apart and `tilt` puts them on opposite sides.
+    """
+    from metrics import THIRD_OCTAVE_CENTERS
+
+    def sloped(step: float) -> list[float]:
+        return [0.0 if c < 2000.0 else step for c in THIRD_OCTAVE_CENTERS]
+
+    ref = _hit(sloped(0.0), [-20.0], attack=1.0)
+    bright, dull = _hit(sloped(+6.0), [-20.0]), _hit(sloped(-6.0), [-20.0])
+    assert (percussion_terms([bright], [ref])["band"]
+            == percussion_terms([dull], [ref])["band"])
+    assert percussion_terms([bright], [ref])["tilt"] == pytest.approx(6.0)
+    assert percussion_terms([dull], [ref])["tilt"] == pytest.approx(6.0)
+    # The direction survives where it is read: a hit that leans the same way as
+    # the reference costs nothing however far both lean.
+    both = _hit(sloped(+6.0), [-20.0])
+    assert percussion_terms([both], [_hit(sloped(+6.0), [-20.0])])["tilt"] == 0.0
+    # And the centroid is the gate's own ratio, absent when the reference has none.
+    assert percussion_terms([{**bright, "centroid_hz": 4000.0}],
+                            [{**ref, "centroid_hz": 2000.0}])["bright"] == pytest.approx(100.0)
+    assert percussion_terms([bright], [ref])["bright_hits"] == 0.0
 
 
 def test_one_empty_band_cannot_decide_the_whole_objective():
@@ -676,6 +737,30 @@ def test_a_modes_bessel_zero_is_not_offered_but_its_ratio_is():
     assert "d036.percussion.mode_decay_s" in offered
 
 
+def test_the_pitch_a_drum_is_built_with_is_not_offered_but_its_voicing_is():
+    """`base_freq_hz` and `shell_freq_hz` say what the instrument is, not how it sounds.
+
+    The drum table sets both where each patch is built, from the spec or from a
+    measurement, and the C++ voice tests assert several of them by frequency.
+    Offered to a search they become a free spectral-shaping parameter: a
+    whole-kit fit moved 34, taking the low timbale's head from 200 Hz to 6682
+    and the open hi-hat's from 315 to 16 while every kit-level dimension
+    improved, because a different object can match the same band profile.
+    """
+    cat = Catalogue(
+        defaults={"d066.percussion.base_freq_hz": 200.0,
+                  "d066.percussion.shell_freq_hz0": 180.0,
+                  "d066.percussion.mode_ratios1": 1.59,
+                  "d066.percussion.mode_decay_s": 0.22},
+        programs={},
+        bounds={},
+    )
+    offered = {e["tunable"] for e in auto_spec(0, cat, drum_note=66)}
+    assert "d066.percussion.base_freq_hz" not in offered
+    assert "d066.percussion.shell_freq_hz0" not in offered
+    assert {"d066.percussion.mode_ratios1", "d066.percussion.mode_decay_s"} <= offered
+
+
 def test_the_report_states_how_far_the_winner_moved_the_level():
     """Always, and not only when it is large: the quiet case is the one to confirm."""
     import io
@@ -763,6 +848,28 @@ def test_a_note_assigned_in_a_chain_still_finds_its_anchor():
     edited = write_drum_fields({43: [("percussion.tone_gain", 0.7)]})
     text = next(iter(edited.values()))
     assert "t[43].percussion.tone_gain = 0.7f;" in text
+
+
+def test_a_note_whose_table_line_wraps_is_written_after_the_whole_statement():
+    """The cowbell's `make_metal(...)` wraps, and its comment carries a paren.
+
+    Appending after the matched line put the fitted block inside the argument
+    list. That is not a subtle failure and it does not stop at the note that
+    caused it: the tree stopped compiling, and each of the twenty-six drum notes
+    after it failed at the rebuild its own fit begins with.
+    """
+    table = (REPO_ROOT / DRUM_TABLE_FILE).resolve()
+    # Synthetic rather than the real table, whose t[56] block is whatever the
+    # last fit left there.
+    before = ("  t[56] = make_metal(587.0f, {1.0f, 1.44f}, 2, 0.25f,\n"
+              "                     0.5f);  // Cowbell (587/845 Hz)\n"
+              "  t[67] = make_metal(1200.0f, {1.0f, 2.7f}, 2, 0.25f, 0.45f);\n")
+    text = write_drum_fields({56: [("percussion.tone_gain", 0.7)]}, {table: before})[table]
+    lines = text.splitlines()
+    written = next(i for i, ln in enumerate(lines) if "t[56].percussion.tone_gain" in ln)
+    # The call is still one statement and the closing line keeps its comment.
+    assert lines[written - 1].strip() == "0.5f);  // Cowbell (587/845 Hz)"
+    assert lines[written + 1].strip().startswith("t[67] =")
 
 
 # --------------------------------------------------------------------------- #
@@ -2630,6 +2737,70 @@ def test_a_screen_that_moves_nothing_is_an_error_rather_than_a_full_knob_list():
     knobs = [_reach_knob("a", 0.0, 1.0, 0.5), _reach_knob("b", 0.0, 1.0, 0.5)]
     with pytest.raises(RuntimeError, match="0 of 2 knobs move the loss at all"):
         screen_knobs(_FakeEvaluator(lambda v: 1.0), knobs, _screen_args())
+
+
+def test_a_stage_that_walks_somewhere_worse_hands_the_defaults_to_the_final_stage():
+    """An early stage optimises under weights the answer is not judged by.
+
+    Nothing in the staged fit compared the point it hands over against the
+    defaults under the CLI weights, so a decay stage scored on `bdecay`/`env`
+    alone could walk the voice 2.2x worse overall and the final stage would
+    spend its whole budget climbing back. Measured on drum note 45, which ended
+    at 1.15 and wrote that regression to source.
+    """
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.5), _reach_knob("b", 0.0, 1.0, 0.5)]
+    seen = []
+
+    def response(values):
+        seen.append(list(values))
+        return 2.2 if values == [1.0, 1.0] else 1.0
+
+    assert _better_seed(_FakeEvaluator(response), knobs, [1.0, 1.0]) == [0.5, 0.5]
+    # Both points scored, so the defaults are in the evaluator's best either way
+    # and act as a floor under whatever the final stage does next.
+    assert seen == [[1.0, 1.0], [0.5, 0.5]]
+
+
+def test_a_stage_that_walks_somewhere_better_keeps_it():
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.5), _reach_knob("b", 0.0, 1.0, 0.5)]
+
+    def response(values):
+        return 0.4 if values == [1.0, 1.0] else 1.0
+
+    assert _better_seed(_FakeEvaluator(response), knobs, [1.0, 1.0]) == [1.0, 1.0]
+
+
+def test_a_fit_that_lost_to_its_own_start_point_writes_nothing():
+    """The defaults score 1.0 by construction, so above it is a lost search."""
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
+    lost = argparse.Namespace(normalize=True, best_loss=1.1536)
+    assert winner_or_defaults(knobs, [0.9], lost) == [0.25]
+    won = argparse.Namespace(normalize=True, best_loss=0.5071)
+    assert winner_or_defaults(knobs, [0.9], won) == [0.9]
+    # --raw-loss has no reference point, so there is nothing to compare against.
+    raw = argparse.Namespace(normalize=False, best_loss=1.1536)
+    assert winner_or_defaults(knobs, [0.9], raw) == [0.9]
+
+
+def test_a_winner_that_loses_off_the_probe_writes_nothing_either():
+    """The hold-out is the same failure measured where the fit could not see.
+
+    Refitting the kick from its own fitted values reached 0.8692 on the three
+    probe velocities and 1.1924 on the three held out — values traded for the
+    probe, which write-back took without asking. A wash is not a loss: an
+    unchanged result improved the measured objective and is worse nowhere.
+    """
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
+    won = argparse.Namespace(normalize=True, best_loss=0.8692)
+    overfit = {"axis": "velocities", "held_out": "48,88,112",
+               "start": 1.0, "best": 1.1924}
+    assert winner_or_defaults(knobs, [0.9], won, overfit) == [0.25]
+    generalises = {**overfit, "best": 0.4803}
+    assert winner_or_defaults(knobs, [0.9], won, generalises) == [0.9]
+    wash = {**overfit, "best": 1.0043}
+    assert winner_or_defaults(knobs, [0.9], won, wash) == [0.9]
+    # No hold-out asked for, no verdict to act on.
+    assert winner_or_defaults(knobs, [0.9], won, None) == [0.9]
 
 
 def test_a_screen_that_moves_something_still_narrows_to_it():
