@@ -1639,7 +1639,10 @@ def main() -> int:
     parser.add_argument("--screen", action="store_true",
                         help="probe each knob at both ends first and drop the ones that do "
                              "not move the loss, then fit only the rest. Costs 2 evaluations "
-                             "per knob out of --max-evals; the dropped knobs are named")
+                             "per knob out of --max-evals; the dropped knobs are named. Both "
+                             "ends and nothing between them, so a knob whose clamp is a guard "
+                             "rail rather than a search range can be dropped for looking flat "
+                             "across an interval it is only good in the middle of")
     parser.add_argument("--screen-threshold", type=float, default=0.002,
                         dest="screen_threshold",
                         help="smallest loss change over a knob's whole range that counts as "

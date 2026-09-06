@@ -403,6 +403,14 @@ def print_report(diag: Diagnosis, *, out_path: str = "") -> None:
                   f"effect only\n  appears along an axis the probe holds fixed is inert "
                   f"HERE and nowhere else —\n  a velocity-curve control cannot move a "
                   f"single-velocity probe, and reads exactly\n  like a dead one.")
+        print("\n  And every knob here was judged at the two ENDS of what the engine accepts, "
+              "never\n  between them. Where those bounds are guard rails rather than a search "
+              "range — a\n  time in milliseconds allowed out to 20 seconds, a frequency "
+              "allowed to Nyquist —\n  both ends can be worse than the value that ships while "
+              "an interior one is much\n  better, and the knob reads weak or dead either way. "
+              "One drum note's envelope\n  attack took its dimension from 11.6x the "
+              "references' spread to 1.6x at a value\n  the probe never tried. Sweep a "
+              "wide-clamped knob by hand before believing this\n  list.")
 
     if out_path:
         from pathlib import Path
