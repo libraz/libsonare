@@ -6,10 +6,12 @@
 #include <tuple>
 
 #include "midi/synth/gs_address_table.h"
+#include "midi/synth/pitch.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
 
+using ::sonare::constants::kCentsPerOctave;
 using ::sonare::constants::kCentsPerSemitone;
 
 namespace {
@@ -114,6 +116,19 @@ float gs_key_shift_cents(uint8_t value) noexcept {
   // outside it, and the corpus does reach 6F at 40 00 05.
   return static_cast<float>(std::clamp(static_cast<int>(value & 0x7Fu), 0x28, 0x58) - 0x40) *
          kCentsPerSemitone;
+}
+
+float gs_pitch_offset_fine_cents(uint8_t value, uint8_t note) noexcept {
+  // Clamped to the manual's aggregate 08-F8: the row bounds a nibble, which
+  // admits words the parameter's own range excludes.
+  const float hz =
+      static_cast<float>(std::clamp(static_cast<int>(value), 0x08, 0xF8) - 0x80) * 0.1f;
+  if (hz == 0.0f) return 0.0f;
+  const float f0 = note_to_hz(note);
+  // Bounded at the lowest key's own pitch: a full -12 Hz reaches zero and below
+  // from note 7 down, and reaches under the keyboard from note 15 down. A bound
+  // to keep the ratio positive rather than a modelled behaviour.
+  return kCentsPerOctave * std::log2(std::max(f0 + hz, note_to_hz(uint8_t{0})) / f0);
 }
 
 void gs_master_pan_gains(uint8_t value, float* left, float* right) noexcept {

@@ -177,7 +177,11 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   }
   const uint16_t bank = effective_bank(channel);
   const bool is_drum = bank == kDrumBank;
-  const float scale_cents = gs_scale_tuning_cents(ch.scale_tuning, note);
+  // The two per-note pitch offsets: a temperament indexed by the struck key,
+  // and PITCH OFFSET FINE, whose Hertz become an interval only once there is a
+  // note to work it out against.
+  const float note_pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
+                                 gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
   const GsDrumNoteParams gd = drum_note_params(ch, is_drum, note);
   // GS RX NOTE ON (41 m8 rr / 21 d8 rr): a note the kit has switched off is not
   // sounded at all, so this precedes every choice of bank below — a note refused
@@ -269,11 +273,11 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       // GS layer: NRPN part edits + per-note drum-kit overrides.
       apply_gs_part_params(params, ch.gs);
       apply_gs_drum_params(params, gd);
-      // SCALE TUNING is the struck key's, not the sounding note's: it is a
-      // temperament of the keyboard, so a kit piece PLAY NOTE NUMBER redirected
-      // to keeps the tuning of the key that asked for it.
-      if (scale_cents != 0.0f) {
-        params.pitch_increment *= std::exp2(static_cast<double>(scale_cents) / 1200.0);
+      // Both offsets are the struck key's, not the sounding note's: a
+      // temperament belongs to the keyboard, so a kit piece PLAY NOTE NUMBER
+      // redirected to keeps the tuning of the key that asked for it.
+      if (note_pitch_cents != 0.0f) {
+        params.pitch_increment *= std::exp2(static_cast<double>(note_pitch_cents) / 1200.0);
       }
       // A TVF CUTOFF CONTROL destination engages the filter the way a TONE
       // MODIFY cutoff does, and on the part rather than on the controller: a
@@ -441,10 +445,11 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // the same conversion the SoundFont bank's apply_gs_part_params uses: a
   // parameter must not do something different because this bank answered.
   GsPartMod part_mod = gs_part_mod(ch.gs);
-  // SCALE TUNING is per note where the other eight are per part, so it is set
-  // on the way past rather than built with them; the struck key indexes it, as
-  // it does on the SoundFont bank.
-  part_mod.pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note);
+  // SCALE TUNING and PITCH OFFSET FINE are per note where the other eight are
+  // per part, so they are set on the way past rather than built with them; the
+  // struck key indexes both, as it does on the SoundFont bank.
+  part_mod.pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
+                         gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
   // Same reason the SoundFont bank engages its filter here: the offset itself
   // arrives per sample from the controller, so what the note-on has to settle
   // is only whether there is a filter for it to reach.

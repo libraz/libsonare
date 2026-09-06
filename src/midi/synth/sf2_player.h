@@ -230,6 +230,11 @@ class Sf2Player final : public MidiInstrument {
   uint8_t pitch_key_shift(uint8_t channel) const noexcept {
     return channels_[channel & 0x0Fu].pitch_key_shift;
   }
+  /// GS 40 1x 17-18 PITCH OFFSET FINE for @p channel as the byte its two
+  /// nibbles make, 80 = centre (test/diagnostic).
+  uint8_t pitch_offset_fine(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].pitch_offset_fine;
+  }
   /// GS 40 00 05 MASTER KEY-SHIFT as its raw byte, 40 = centre
   /// (test/diagnostic).
   uint8_t master_key_shift() const noexcept { return master_.key_shift; }
@@ -362,6 +367,11 @@ class Sf2Player final : public MidiInstrument {
     /// coincide, so it adds rather than overwriting; and unlike every other
     /// tuning field it does not reach a rhythm part (docs/gs.md).
     uint8_t pitch_key_shift = 0x40;
+    /// GS SysEx 40 1x 17-18 PITCH OFFSET FINE as the one byte its two nibbles
+    /// make, 80 = centre. Unlike every other tuning field it is a frequency
+    /// rather than an interval, so it is converted per note rather than folded
+    /// into the part's constant offset (docs/gs.md).
+    uint8_t pitch_offset_fine = 0x80;
     /// GS SysEx 40 1x 14 ASSIGN MODE. Only 0 (SINGLE) branches: 1 and 2 differ
     /// on the hardware in how many stale duplicates of a note it keeps before
     /// stealing, which is a voice budget rather than a behaviour (docs/gs.md).

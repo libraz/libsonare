@@ -984,6 +984,130 @@ TEST_CASE("the bank-select receive switches refuse and zero", "[midi][sf2][gslay
   }
 }
 
+TEST_CASE("PITCH OFFSET FINE shifts by hertz, not by an interval", "[midi][sf2][gslayer]") {
+  // A pure sine rather than the file's filtered square: the claim under test is
+  // a 12 Hz difference at half a kilohertz, which the square's harmonics blur
+  // past. And tuned to concert pitch rather than to the file's convenient 500 Hz
+  // — the offset is a shift of the NOTE's frequency, so a sample whose root key
+  // sounds at some other pitch measures the parameter against the wrong number.
+  const auto sine_fixture = []() {
+    Sf2Builder b;
+    std::vector<float> sine(128);
+    for (size_t i = 0; i < sine.size(); ++i) {
+      sine[i] = 0.6f * static_cast<float>(std::sin(kTwoPi * static_cast<double>(i) / 128.0));
+    }
+    // One cycle in 128 samples, so the rate is 128 x middle C: note 60 sounds
+    // 261.625 Hz, which is note_to_hz(60) to within a thousandth of a hertz.
+    const int sid = b.add_sample("sineC4", sine, 33488, 60, 0, 128);
+    Sf2Builder::ZoneSpec zone;
+    zone.gens.push_back({54 /*sampleModes*/, 1});
+    zone.target = sid;
+    Sf2Builder::ZoneSpec pz;
+    pz.target = b.add_instrument("sineinst", {zone});
+    b.add_preset("Sine", 0, 0, {pz});
+    const auto bytes = b.build();
+    auto sf2 = std::make_shared<Sf2File>();
+    std::string error;
+    REQUIRE(sf2->parse(bytes.data(), bytes.size(), &error));
+    return std::shared_ptr<const Sf2File>(sf2);
+  };
+  const auto make = [&sine_fixture]() {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    auto player = std::make_unique<Sf2Player>(cfg);
+    player->set_soundfont(sine_fixture());
+    player->prepare(kOutRate, 256);
+    return player;
+  };
+  // 40 11 17-18, part 1 = channel 0. The two nibbles go as one run, which is the
+  // only way the corpus ever writes them and the only way the hardware takes a
+  // nibblized parameter.
+  const auto set_offset = [](Sf2Player& p, uint8_t combined) {
+    const uint8_t hi = static_cast<uint8_t>(combined >> 4);
+    const uint8_t lo = static_cast<uint8_t>(combined & 0x0Fu);
+    const int sum = 0x40 + 0x11 + 0x17 + hi + lo;
+    const uint8_t msg[] = {0xF0,
+                           0x41,
+                           0x10,
+                           0x42,
+                           0x12,
+                           0x40,
+                           0x11,
+                           0x17,
+                           hi,
+                           lo,
+                           static_cast<uint8_t>((128 - (sum % 128)) & 0x7F),
+                           0xF7};
+    REQUIRE(p.handle_sysex(msg, sizeof(msg)));
+    CHECK(p.pitch_offset_fine(0) == combined);
+  };
+  const auto sounded = [](Sf2Player& p, uint8_t note) {
+    p.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 127)));
+    return estimate_frequency(render(p, 24000).left, 4800);
+  };
+
+  SECTION("the centre 80 is the identity, on the byte and in the render") {
+    auto player = make();
+    CHECK(player->pitch_offset_fine(0) == 0x80);
+    const double untouched = sounded(*player, 60);
+    auto written = make();
+    set_offset(*written, 0x80);
+    CHECK(sounded(*written, 60) == Approx(untouched).margin(0.01));
+  }
+
+  SECTION("the offset is the same number of hertz at both octaves") {
+    // F8 is the manual's +12.0 Hz, onto 261.625 and 523.25. An interval-shaped
+    // parameter reading the same byte would put the upper octave at 547.25 Hz,
+    // which is what the second margin excludes: it is narrower than the 12 Hz
+    // between the two readings, so this cannot pass under both.
+    auto low = make();
+    set_offset(*low, 0xF8);
+    CHECK(sounded(*low, 60) == Approx(273.6).margin(1.0));
+    auto high = make();
+    set_offset(*high, 0xF8);
+    CHECK(sounded(*high, 72) == Approx(535.2).margin(2.0));
+  }
+
+  SECTION("08 is the same shift downwards") {
+    auto player = make();
+    set_offset(*player, 0x08);
+    CHECK(sounded(*player, 60) == Approx(249.6).margin(1.0));
+  }
+
+  SECTION("the converter is finite at the bottom of the keyboard") {
+    using sonare::midi::synth::gs_pitch_offset_fine_cents;
+    // 08 is -12.0 Hz, which the lowest keys' own frequencies are under. The
+    // bound is what keeps the ratio positive; without it note 7 and below take
+    // the logarithm of a negative number.
+    CHECK(gs_pitch_offset_fine_cents(0x80, 0) == 0.0f);
+    // The bound's own fixed point: note 0 IS the lowest key, so a downward
+    // offset leaves it where it is. Every key above it moves.
+    CHECK(gs_pitch_offset_fine_cents(0x08, 0) == 0.0f);
+    for (uint8_t note = 1; note < 24; ++note) {
+      INFO("note " << static_cast<int>(note));
+      CHECK(std::isfinite(gs_pitch_offset_fine_cents(0x08, note)));
+      CHECK(gs_pitch_offset_fine_cents(0x08, note) < 0.0f);
+    }
+    // Note 16 is the first key the bound leaves alone: 20.6 Hz less 12 is above
+    // the lowest key's 8.18, so the cents are the shift's own.
+    CHECK(gs_pitch_offset_fine_cents(0x08, 16) ==
+          Approx(1200.0 * std::log2(8.6017 / 20.6017)).margin(0.5));
+  }
+
+  SECTION("a word below the parameter's own range is bounded, not wrapped") {
+    // The row bounds a nibble, so 00 00 decodes and is stored; the aggregate
+    // range is the converter's, and it holds the word at 08.
+    auto player = make();
+    set_offset(*player, 0x00);
+    CHECK(sounded(*player, 60) == Approx(249.6).margin(1.0));
+  }
+}
+
 TEST_CASE("GS drum kit names", "[midi][sf2][gslayer]") {
   REQUIRE(gs_drum_kit_name(0) == "Standard");
   REQUIRE(gs_drum_kit_name(25) == "TR-808");

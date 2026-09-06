@@ -238,6 +238,14 @@ constexpr float gs_scale_tuning_cents(const GsScaleTuning& scale, uint8_t note) 
   return static_cast<float>(static_cast<int>(scale[(note & 0x7Fu) % 12u]) - 0x40);
 }
 
+/// PITCH OFFSET FINE (40 1x 17-18) as the cents it offsets @p note by. The two
+/// nibbles make one 08-F8 byte centred on 80 in 0.1-Hz steps, and the parameter
+/// is a fixed FREQUENCY shift rather than a fixed interval — the manual's point
+/// in printing it beside RPN 00 01 — so the interval it works out to belongs to
+/// the note. Both voice banks take it from here for the reason scale tuning is
+/// shared. Zero at the centre, which leaves an untuned render bit-identical.
+float gs_pitch_offset_fine_cents(uint8_t value, uint8_t note) noexcept;
+
 /// The GS system parameters at 40 00 xx that are not the effect block. Every
 /// field holds its GS power-on value, so a default-constructed instance is the
 /// reset state and a render that never saw one of these writes is untouched.

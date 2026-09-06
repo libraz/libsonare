@@ -306,6 +306,15 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         // is: a part that becomes drums later still has to stop taking it.
         st.pitch_key_shift = w.value;
         break;
+      case GsParam::kPartPitchOffsetFine:
+        // Nibblized, high nibble first. The aggregate 08-F8 is not enforced
+        // here: a pair arrives a byte at a time, so the intermediate word can
+        // sit outside a range the finished one is inside of.
+        st.pitch_offset_fine =
+            w.index == 0
+                ? static_cast<uint8_t>(((w.value & 0x0Fu) << 4) | (st.pitch_offset_fine & 0x0Fu))
+                : static_cast<uint8_t>((st.pitch_offset_fine & 0xF0u) | (w.value & 0x0Fu));
+        break;
       case GsParam::kPartToneModify:
         gs_apply_tone_modify(st.gs, w.index, w.value);
         break;

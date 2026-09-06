@@ -370,6 +370,11 @@ Probe probe_for(const GsAddressEntry& row) {
       // the manual's own maximum, 07E8 = +100 cents.
       return {{0x00, 0x07, 0x0E, 0x08},
               "the row bounds a nibble; the aggregate word has its own range"};
+    case GsParam::kPartPitchOffsetFine:
+      // The two nibbles are one 08-F8 byte, so 0F in both asks for FF — outside
+      // the range the converter bounds. The probe is the manual's own maximum,
+      // F8 = +12.0 Hz.
+      return {{0x0F, 0x08}, "the row bounds a nibble; the aggregate byte has its own range"};
     case GsParam::kEfxType:
       // 7F 7F is a type no adapter realises, so no chain is built and the part
       // is never bussed. 01 10 is Overdrive, which realises.

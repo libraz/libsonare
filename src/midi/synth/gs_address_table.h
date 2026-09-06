@@ -112,6 +112,7 @@ enum class GsLevel : uint8_t {
   X(kPartAssignMode)         \
   X(kUseForRhythmPart)       \
   X(kPartKeyShift)           \
+  X(kPartPitchOffsetFine)    \
   X(kPartLevel)              \
   X(kPartKeyRangeLow)        \
   X(kPartKeyRangeHigh)       \
@@ -224,7 +225,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 162> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 163> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -441,6 +442,13 @@ inline constexpr std::array<GsAddressEntry, 162> kGsAddressTable = {{
     // exactly their ranges coincide: the map annotates every alias it has and
     // annotates this one with nothing (docs/gs.md).
     {0x401016, 0x000F00, GsParam::kPartKeyShift, GsLevel::kAudible, 1, 0x28, 0x58, 0x40, nullptr},
+    // Two nibbles making one 08-F8 byte centred on 80, a tenth of a Hertz a
+    // step. The row bounds a nibble as MASTER TUNE's does and the aggregate
+    // range belongs to the converter. Alone among the pitch parameters it shifts
+    // by a fixed FREQUENCY rather than a fixed interval, so its cents are a
+    // function of the note; `def` is the first byte's, the second powering on 00.
+    {0x401017, 0x000F00, GsParam::kPartPitchOffsetFine, GsLevel::kAudible, 2, 0x00, 0x0F, 0x08,
+     nullptr},
     // The rest of this block is the CC/SysEx/NRPN alias set (docs/gs.md): each
     // row writes the one storage location its controller already owns, so the
     // default here is the controller's own power-on value rather than a second.
@@ -967,7 +975,7 @@ constexpr bool gs_ranges_are_consistent() noexcept {
 // These are evaluated out of one constexpr step budget shared by the whole
 // header, so a check's cost is paid by every other check and adding rows can
 // break an assertion that has nothing to do with them: the failure names the
-// range walk and says "possible infinite loop", which is neither. At 162 rows
+// range walk and says "possible infinite loop", which is neither. At 163 rows
 // the header compiles under clang's default 1048576 and not under three
 // quarters of it, so a comparable growth needs the walks made cheaper again
 // rather than a -fconstexpr-steps on the build, which would only move the wall.
