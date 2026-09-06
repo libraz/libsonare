@@ -872,6 +872,22 @@ def test_a_note_whose_table_line_wraps_is_written_after_the_whole_statement():
     assert lines[written + 1].strip().startswith("t[67] =")
 
 
+def test_a_labelled_assignment_is_replaced_rather_than_shadowed():
+    """A trailing comment made the line invisible, so a second one was appended.
+
+    The second assignment wins silently, which leaves the label — and whatever
+    comment stands above it — describing a value nothing uses. Four of the drum
+    table's cymbals were carrying such a pair, one of them a `// at the clamp`
+    note on a dead line.
+    """
+    table = (REPO_ROOT / DRUM_TABLE_FILE).resolve()
+    before = ("  t[49] = make_cymbal(3600.0f, 1.10f);\n"
+              "  t[49].gain = 1.2698f;  // Crash 1\n")
+    text = write_drum_fields({49: [("gain", 0.6029)]}, {table: before})[table]
+    assert text.count("t[49].gain") == 1
+    assert "t[49].gain = 0.6029f;  // Crash 1" in text
+
+
 # --------------------------------------------------------------------------- #
 # The room probe
 # --------------------------------------------------------------------------- #

@@ -289,11 +289,19 @@ def _splice_field_lines(
     after the anchor rather than at a fixed offset is what keeps the assignment
     inside the block that builds the patch and ahead of whatever the table does
     with it afterwards.
+
+    The existing-line pattern allows a trailing `//` comment and carries it
+    across. Without that it matched only a bare statement, so a labelled line
+    (`t[49].gain = 1.2698f;  // Crash 1`) read as absent and the fitted value was
+    appended below it instead: a second assignment that silently wins, leaving
+    the label — and any comment above it — describing a value nothing uses. Four
+    of the drum table's cymbals were carrying such a pair.
     """
     append: list[str] = []
     for path, value in sorted(fields):
         member = f"{prefix}{path}"
-        existing = re.compile(rf"^([ \t]*){re.escape(member)}\s*=\s*[^;]+;[ \t]*$", re.M)
+        existing = re.compile(
+            rf"^([ \t]*){re.escape(member)}\s*=\s*[^;]+;([ \t]*//[^\n]*)?$", re.M)
         # A count takes an integer literal. `2.0f` into an `int` member is a
         # -Wliteral-conversion error under this tree's -Werror, so the type has
         # to reach the literal — see `_typed_members`.
@@ -301,7 +309,8 @@ def _splice_field_lines(
                    else f"{format_value(value)}f")
         line = f"{member} = {literal};"
         if existing.search(text):
-            text = existing.sub(lambda m, s=line: f"{m.group(1)}{s}", text, count=1)
+            text = existing.sub(
+                lambda m, s=line: f"{m.group(1)}{s}{m.group(2) or ''}", text, count=1)
         else:
             append.append(line)
     if append:
