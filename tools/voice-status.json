@@ -9499,15 +9499,15 @@
           }
         },
         "structure": {
-          "state": "unverified",
-          "date": "2026-09-03",
+          "state": "current",
+          "date": "2026-09-06",
           "unreachable": [],
           "accepted": [],
           "open": []
         },
         "music": null
       },
-      "next": "a shared calibration unit has moved since the diagnosis and nothing can attribute it: re-run autofit --diagnose"
+      "next": "listen to a take and sign it off in signoff.json"
     }
   ]
 }
