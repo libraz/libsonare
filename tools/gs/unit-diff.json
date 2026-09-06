@@ -1,0 +1,1625 @@
+{
+  "generated_by": "tools/gs/check_unit.py",
+  "unit": {
+    "unit_id": "roland-sc8850-01",
+    "model": "SC-8850",
+    "identity_reply": "F0 7E 10 06 02 41 42 00 00 06 00 00 00 00 F7"
+  },
+  "derived_from": {
+    "meta.json": "predates the archive's record envelope",
+    "power-on-state.json": "predates the archive's record envelope",
+    "boundary-probe.json": "predates the archive's record envelope",
+    "write-probe-wholemap.json": "predates the archive's record envelope"
+  },
+  "what_the_comparison_cannot_see": [
+    "No row is shown to be absent from the machine. A read that answers nothing leaves the address unproven, because a block read starting earlier reaches addresses a single-byte read does not -- which is the boundary probe's own finding about this unit.",
+    "The extent a read reached is taken as contiguous, the count being all the boundary probe keeps. It bounds the reach; it does not say each address inside it answered on its own.",
+    "The window blocks are excluded, so nothing is said about them at all.",
+    "A range is compared only against the values the write probe actually sent; a value it never tried is neither inside nor outside as far as this is concerned.",
+    "Levels are libsonare's own promises about its implementation and are not a property of the machine, so they are reported and never compared.",
+    "One unit is one unit. A disagreement is between this table and this machine, and a second SC-8850 has not been measured."
+  ],
+  "summary": {
+    "table_rows": 144,
+    "addresses_the_table_claims": 56342,
+    "addresses_the_unit_answered": 11990,
+    "addresses_a_read_reached": 13522,
+    "addresses_with_no_row": 3032,
+    "rows_no_read_reached": 50,
+    "rows_whose_default_disagrees": 1,
+    "rows_one_default_byte_cannot_express": 2,
+    "rows_whose_range_disagrees": 6,
+    "blanket_rows_not_compared": 2,
+    "defaults_excused_by_a_decision": 21,
+    "stale_default_exclusions": 0,
+    "extension_addresses_reached": 0
+  },
+  "extension_at_40_3u_xx": {
+    "addresses": 480,
+    "reached_by_a_read": 0,
+    "sample_reached": [],
+    "what_it_means": "The extra insertion-effect units live at 40 3u xx because the hardware has nothing there, which is what makes them unreachable from a spec-compliant file. Any address answered here is a collision and the extension is not safe without a flag."
+  },
+  "addresses_with_no_row": [
+    {
+      "block": "20 00",
+      "addresses": 112,
+      "sample": [
+        "20 00 00",
+        "20 00 01",
+        "20 00 02",
+        "20 00 03",
+        "20 00 04",
+        "20 00 05"
+      ]
+    },
+    {
+      "block": "20 01",
+      "addresses": 112,
+      "sample": [
+        "20 01 00",
+        "20 01 01",
+        "20 01 02",
+        "20 01 03",
+        "20 01 04",
+        "20 01 05"
+      ]
+    },
+    {
+      "block": "20 02",
+      "addresses": 112,
+      "sample": [
+        "20 02 00",
+        "20 02 01",
+        "20 02 02",
+        "20 02 03",
+        "20 02 04",
+        "20 02 05"
+      ]
+    },
+    {
+      "block": "20 03",
+      "addresses": 112,
+      "sample": [
+        "20 03 00",
+        "20 03 01",
+        "20 03 02",
+        "20 03 03",
+        "20 03 04",
+        "20 03 05"
+      ]
+    },
+    {
+      "block": "20 04",
+      "addresses": 112,
+      "sample": [
+        "20 04 00",
+        "20 04 01",
+        "20 04 02",
+        "20 04 03",
+        "20 04 04",
+        "20 04 05"
+      ]
+    },
+    {
+      "block": "20 05",
+      "addresses": 112,
+      "sample": [
+        "20 05 00",
+        "20 05 01",
+        "20 05 02",
+        "20 05 03",
+        "20 05 04",
+        "20 05 05"
+      ]
+    },
+    {
+      "block": "20 06",
+      "addresses": 112,
+      "sample": [
+        "20 06 00",
+        "20 06 01",
+        "20 06 02",
+        "20 06 03",
+        "20 06 04",
+        "20 06 05"
+      ]
+    },
+    {
+      "block": "20 07",
+      "addresses": 112,
+      "sample": [
+        "20 07 00",
+        "20 07 01",
+        "20 07 02",
+        "20 07 03",
+        "20 07 04",
+        "20 07 05"
+      ]
+    },
+    {
+      "block": "20 08",
+      "addresses": 112,
+      "sample": [
+        "20 08 00",
+        "20 08 01",
+        "20 08 02",
+        "20 08 03",
+        "20 08 04",
+        "20 08 05"
+      ]
+    },
+    {
+      "block": "20 09",
+      "addresses": 112,
+      "sample": [
+        "20 09 00",
+        "20 09 01",
+        "20 09 02",
+        "20 09 03",
+        "20 09 04",
+        "20 09 05"
+      ]
+    },
+    {
+      "block": "20 0A",
+      "addresses": 112,
+      "sample": [
+        "20 0A 00",
+        "20 0A 01",
+        "20 0A 02",
+        "20 0A 03",
+        "20 0A 04",
+        "20 0A 05"
+      ]
+    },
+    {
+      "block": "20 10",
+      "addresses": 112,
+      "sample": [
+        "20 10 00",
+        "20 10 01",
+        "20 10 02",
+        "20 10 03",
+        "20 10 04",
+        "20 10 05"
+      ]
+    },
+    {
+      "block": "20 11",
+      "addresses": 112,
+      "sample": [
+        "20 11 00",
+        "20 11 01",
+        "20 11 02",
+        "20 11 03",
+        "20 11 04",
+        "20 11 05"
+      ]
+    },
+    {
+      "block": "20 12",
+      "addresses": 112,
+      "sample": [
+        "20 12 00",
+        "20 12 01",
+        "20 12 02",
+        "20 12 03",
+        "20 12 04",
+        "20 12 05"
+      ]
+    },
+    {
+      "block": "20 13",
+      "addresses": 112,
+      "sample": [
+        "20 13 00",
+        "20 13 01",
+        "20 13 02",
+        "20 13 03",
+        "20 13 04",
+        "20 13 05"
+      ]
+    },
+    {
+      "block": "20 14",
+      "addresses": 112,
+      "sample": [
+        "20 14 00",
+        "20 14 01",
+        "20 14 02",
+        "20 14 03",
+        "20 14 04",
+        "20 14 05"
+      ]
+    },
+    {
+      "block": "20 15",
+      "addresses": 112,
+      "sample": [
+        "20 15 00",
+        "20 15 01",
+        "20 15 02",
+        "20 15 03",
+        "20 15 04",
+        "20 15 05"
+      ]
+    },
+    {
+      "block": "20 16",
+      "addresses": 112,
+      "sample": [
+        "20 16 00",
+        "20 16 01",
+        "20 16 02",
+        "20 16 03",
+        "20 16 04",
+        "20 16 05"
+      ]
+    },
+    {
+      "block": "20 17",
+      "addresses": 112,
+      "sample": [
+        "20 17 00",
+        "20 17 01",
+        "20 17 02",
+        "20 17 03",
+        "20 17 04",
+        "20 17 05"
+      ]
+    },
+    {
+      "block": "20 18",
+      "addresses": 112,
+      "sample": [
+        "20 18 00",
+        "20 18 01",
+        "20 18 02",
+        "20 18 03",
+        "20 18 04",
+        "20 18 05"
+      ]
+    },
+    {
+      "block": "20 19",
+      "addresses": 112,
+      "sample": [
+        "20 19 00",
+        "20 19 01",
+        "20 19 02",
+        "20 19 03",
+        "20 19 04",
+        "20 19 05"
+      ]
+    },
+    {
+      "block": "20 1A",
+      "addresses": 112,
+      "sample": [
+        "20 1A 00",
+        "20 1A 01",
+        "20 1A 02",
+        "20 1A 03",
+        "20 1A 04",
+        "20 1A 05"
+      ]
+    },
+    {
+      "block": "40 10",
+      "addresses": 18,
+      "sample": [
+        "40 10 03",
+        "40 10 04",
+        "40 10 05",
+        "40 10 06",
+        "40 10 07",
+        "40 10 08"
+      ]
+    },
+    {
+      "block": "40 11",
+      "addresses": 22,
+      "sample": [
+        "40 11 03",
+        "40 11 04",
+        "40 11 05",
+        "40 11 06",
+        "40 11 07",
+        "40 11 08"
+      ]
+    },
+    {
+      "block": "40 12",
+      "addresses": 22,
+      "sample": [
+        "40 12 03",
+        "40 12 04",
+        "40 12 05",
+        "40 12 06",
+        "40 12 07",
+        "40 12 08"
+      ]
+    },
+    {
+      "block": "40 13",
+      "addresses": 22,
+      "sample": [
+        "40 13 03",
+        "40 13 04",
+        "40 13 05",
+        "40 13 06",
+        "40 13 07",
+        "40 13 08"
+      ]
+    },
+    {
+      "block": "40 14",
+      "addresses": 22,
+      "sample": [
+        "40 14 03",
+        "40 14 04",
+        "40 14 05",
+        "40 14 06",
+        "40 14 07",
+        "40 14 08"
+      ]
+    },
+    {
+      "block": "40 15",
+      "addresses": 22,
+      "sample": [
+        "40 15 03",
+        "40 15 04",
+        "40 15 05",
+        "40 15 06",
+        "40 15 07",
+        "40 15 08"
+      ]
+    },
+    {
+      "block": "40 16",
+      "addresses": 22,
+      "sample": [
+        "40 16 03",
+        "40 16 04",
+        "40 16 05",
+        "40 16 06",
+        "40 16 07",
+        "40 16 08"
+      ]
+    },
+    {
+      "block": "40 17",
+      "addresses": 22,
+      "sample": [
+        "40 17 03",
+        "40 17 04",
+        "40 17 05",
+        "40 17 06",
+        "40 17 07",
+        "40 17 08"
+      ]
+    },
+    {
+      "block": "40 18",
+      "addresses": 18,
+      "sample": [
+        "40 18 03",
+        "40 18 04",
+        "40 18 05",
+        "40 18 06",
+        "40 18 07",
+        "40 18 08"
+      ]
+    },
+    {
+      "block": "40 19",
+      "addresses": 22,
+      "sample": [
+        "40 19 03",
+        "40 19 04",
+        "40 19 05",
+        "40 19 06",
+        "40 19 07",
+        "40 19 08"
+      ]
+    },
+    {
+      "block": "40 1A",
+      "addresses": 22,
+      "sample": [
+        "40 1A 03",
+        "40 1A 04",
+        "40 1A 05",
+        "40 1A 06",
+        "40 1A 07",
+        "40 1A 08"
+      ]
+    },
+    {
+      "block": "40 1B",
+      "addresses": 22,
+      "sample": [
+        "40 1B 03",
+        "40 1B 04",
+        "40 1B 05",
+        "40 1B 06",
+        "40 1B 07",
+        "40 1B 08"
+      ]
+    },
+    {
+      "block": "40 1C",
+      "addresses": 22,
+      "sample": [
+        "40 1C 03",
+        "40 1C 04",
+        "40 1C 05",
+        "40 1C 06",
+        "40 1C 07",
+        "40 1C 08"
+      ]
+    },
+    {
+      "block": "40 1D",
+      "addresses": 22,
+      "sample": [
+        "40 1D 03",
+        "40 1D 04",
+        "40 1D 05",
+        "40 1D 06",
+        "40 1D 07",
+        "40 1D 08"
+      ]
+    },
+    {
+      "block": "40 1E",
+      "addresses": 22,
+      "sample": [
+        "40 1E 03",
+        "40 1E 04",
+        "40 1E 05",
+        "40 1E 06",
+        "40 1E 07",
+        "40 1E 08"
+      ]
+    },
+    {
+      "block": "40 1F",
+      "addresses": 22,
+      "sample": [
+        "40 1F 03",
+        "40 1F 04",
+        "40 1F 05",
+        "40 1F 06",
+        "40 1F 07",
+        "40 1F 08"
+      ]
+    },
+    {
+      "block": "41 0F",
+      "addresses": 112,
+      "sample": [
+        "41 0F 00",
+        "41 0F 01",
+        "41 0F 02",
+        "41 0F 03",
+        "41 0F 04",
+        "41 0F 05"
+      ]
+    },
+    {
+      "block": "41 1F",
+      "addresses": 112,
+      "sample": [
+        "41 1F 00",
+        "41 1F 01",
+        "41 1F 02",
+        "41 1F 03",
+        "41 1F 04",
+        "41 1F 05"
+      ]
+    }
+  ],
+  "rows_no_read_reached": [
+    {
+      "param": "kSystemModeSet",
+      "level": "AUDIBLE",
+      "address": "00 00 7F",
+      "addresses": 1,
+      "sample": [
+        "00 00 7F"
+      ],
+      "why": null
+    },
+    {
+      "param": "kModeSet",
+      "level": "AUDIBLE",
+      "address": "40 00 7F",
+      "addresses": 1,
+      "sample": [
+        "40 00 7F"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayMacro",
+      "level": "AUDIBLE",
+      "address": "40 01 50",
+      "addresses": 1,
+      "sample": [
+        "40 01 50"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayPreLpf",
+      "level": "STATE",
+      "address": "40 01 51",
+      "addresses": 1,
+      "sample": [
+        "40 01 51"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayTimeCenter",
+      "level": "AUDIBLE",
+      "address": "40 01 52",
+      "addresses": 1,
+      "sample": [
+        "40 01 52"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayTimeRatioLeft",
+      "level": "STATE",
+      "address": "40 01 53",
+      "addresses": 1,
+      "sample": [
+        "40 01 53"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayTimeRatioRight",
+      "level": "STATE",
+      "address": "40 01 54",
+      "addresses": 1,
+      "sample": [
+        "40 01 54"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayLevelCenter",
+      "level": "STATE",
+      "address": "40 01 55",
+      "addresses": 1,
+      "sample": [
+        "40 01 55"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayLevelLeft",
+      "level": "STATE",
+      "address": "40 01 56",
+      "addresses": 1,
+      "sample": [
+        "40 01 56"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayLevelRight",
+      "level": "STATE",
+      "address": "40 01 57",
+      "addresses": 1,
+      "sample": [
+        "40 01 57"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayLevel",
+      "level": "AUDIBLE",
+      "address": "40 01 58",
+      "addresses": 1,
+      "sample": [
+        "40 01 58"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelayFeedback",
+      "level": "AUDIBLE",
+      "address": "40 01 59",
+      "addresses": 1,
+      "sample": [
+        "40 01 59"
+      ],
+      "why": null
+    },
+    {
+      "param": "kDelaySendToReverb",
+      "level": "STATE",
+      "address": "40 01 5A",
+      "addresses": 1,
+      "sample": [
+        "40 01 5A"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartPitchFineTune",
+      "level": "AUDIBLE",
+      "address": "40 10 2A",
+      "addresses": 32,
+      "sample": [
+        "40 10 2A",
+        "40 10 2B",
+        "40 11 2A",
+        "40 11 2B",
+        "40 12 2A",
+        "40 12 2B"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartDelaySend",
+      "level": "AUDIBLE",
+      "address": "40 10 2C",
+      "addresses": 16,
+      "sample": [
+        "40 10 2C",
+        "40 11 2C",
+        "40 12 2C",
+        "40 13 2C",
+        "40 14 2C",
+        "40 15 2C"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartScaleTuning",
+      "level": "AUDIBLE",
+      "address": "40 10 40",
+      "addresses": 192,
+      "sample": [
+        "40 10 40",
+        "40 10 41",
+        "40 10 42",
+        "40 10 43",
+        "40 10 44",
+        "40 10 45"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartBendPitchControl",
+      "level": "AUDIBLE",
+      "address": "40 20 10",
+      "addresses": 16,
+      "sample": [
+        "40 20 10",
+        "40 21 10",
+        "40 22 10",
+        "40 23 10",
+        "40 24 10",
+        "40 25 10"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartBendDest",
+      "level": "ACCEPT",
+      "address": "40 20 11",
+      "addresses": 48,
+      "sample": [
+        "40 20 11",
+        "40 20 12",
+        "40 20 13",
+        "40 21 11",
+        "40 21 12",
+        "40 21 13"
+      ],
+      "why": "recognised; the bend is routed to pitch alone, so its other destinations name nothing"
+    },
+    {
+      "param": "kPartBendDest",
+      "level": "ACCEPT",
+      "address": "40 20 14",
+      "addresses": 48,
+      "sample": [
+        "40 20 14",
+        "40 20 15",
+        "40 20 16",
+        "40 21 14",
+        "40 21 15",
+        "40 21 16"
+      ],
+      "why": "recognised; the bend is routed to pitch alone, so its other destinations name nothing"
+    },
+    {
+      "param": "kPartBendDest",
+      "level": "ACCEPT",
+      "address": "40 20 17",
+      "addresses": 16,
+      "sample": [
+        "40 20 17",
+        "40 21 17",
+        "40 22 17",
+        "40 23 17",
+        "40 24 17",
+        "40 25 17"
+      ],
+      "why": "recognised; the bend is routed to pitch alone, so its other destinations name nothing"
+    },
+    {
+      "param": "kPartBendDest",
+      "level": "ACCEPT",
+      "address": "40 20 18",
+      "addresses": 48,
+      "sample": [
+        "40 20 18",
+        "40 20 19",
+        "40 20 1A",
+        "40 21 18",
+        "40 21 19",
+        "40 21 1A"
+      ],
+      "why": "recognised; the bend is routed to pitch alone, so its other destinations name nothing"
+    },
+    {
+      "param": "kPartCtrlPitch",
+      "level": "AUDIBLE",
+      "address": "40 20 20",
+      "addresses": 16,
+      "sample": [
+        "40 20 20",
+        "40 21 20",
+        "40 22 20",
+        "40 23 20",
+        "40 24 20",
+        "40 25 20"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlTvfCutoff",
+      "level": "AUDIBLE",
+      "address": "40 20 21",
+      "addresses": 16,
+      "sample": [
+        "40 20 21",
+        "40 21 21",
+        "40 22 21",
+        "40 23 21",
+        "40 24 21",
+        "40 25 21"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlAmplitude",
+      "level": "AUDIBLE",
+      "address": "40 20 22",
+      "addresses": 16,
+      "sample": [
+        "40 20 22",
+        "40 21 22",
+        "40 22 22",
+        "40 23 22",
+        "40 24 22",
+        "40 25 22"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1Rate",
+      "level": "AUDIBLE",
+      "address": "40 20 23",
+      "addresses": 16,
+      "sample": [
+        "40 20 23",
+        "40 21 23",
+        "40 22 23",
+        "40 23 23",
+        "40 24 23",
+        "40 25 23"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1PitchDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 24",
+      "addresses": 16,
+      "sample": [
+        "40 20 24",
+        "40 21 24",
+        "40 22 24",
+        "40 23 24",
+        "40 24 24",
+        "40 25 24"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1TvfDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 25",
+      "addresses": 16,
+      "sample": [
+        "40 20 25",
+        "40 21 25",
+        "40 22 25",
+        "40 23 25",
+        "40 24 25",
+        "40 25 25"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1TvaDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 26",
+      "addresses": 16,
+      "sample": [
+        "40 20 26",
+        "40 21 26",
+        "40 22 26",
+        "40 23 26",
+        "40 24 26",
+        "40 25 26"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCafDest",
+      "level": "ACCEPT",
+      "address": "40 20 27",
+      "addresses": 16,
+      "sample": [
+        "40 20 27",
+        "40 21 27",
+        "40 22 27",
+        "40 23 27",
+        "40 24 27",
+        "40 25 27"
+      ],
+      "why": "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"
+    },
+    {
+      "param": "kPartCafDest",
+      "level": "ACCEPT",
+      "address": "40 20 28",
+      "addresses": 48,
+      "sample": [
+        "40 20 28",
+        "40 20 29",
+        "40 20 2A",
+        "40 21 28",
+        "40 21 29",
+        "40 21 2A"
+      ],
+      "why": "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"
+    },
+    {
+      "param": "kPartCtrlPitch",
+      "level": "AUDIBLE",
+      "address": "40 20 40",
+      "addresses": 16,
+      "sample": [
+        "40 20 40",
+        "40 21 40",
+        "40 22 40",
+        "40 23 40",
+        "40 24 40",
+        "40 25 40"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlTvfCutoff",
+      "level": "AUDIBLE",
+      "address": "40 20 41",
+      "addresses": 16,
+      "sample": [
+        "40 20 41",
+        "40 21 41",
+        "40 22 41",
+        "40 23 41",
+        "40 24 41",
+        "40 25 41"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlAmplitude",
+      "level": "AUDIBLE",
+      "address": "40 20 42",
+      "addresses": 16,
+      "sample": [
+        "40 20 42",
+        "40 21 42",
+        "40 22 42",
+        "40 23 42",
+        "40 24 42",
+        "40 25 42"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1Rate",
+      "level": "AUDIBLE",
+      "address": "40 20 43",
+      "addresses": 16,
+      "sample": [
+        "40 20 43",
+        "40 21 43",
+        "40 22 43",
+        "40 23 43",
+        "40 24 43",
+        "40 25 43"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1PitchDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 44",
+      "addresses": 16,
+      "sample": [
+        "40 20 44",
+        "40 21 44",
+        "40 22 44",
+        "40 23 44",
+        "40 24 44",
+        "40 25 44"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1TvfDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 45",
+      "addresses": 16,
+      "sample": [
+        "40 20 45",
+        "40 21 45",
+        "40 22 45",
+        "40 23 45",
+        "40 24 45",
+        "40 25 45"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1TvaDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 46",
+      "addresses": 16,
+      "sample": [
+        "40 20 46",
+        "40 21 46",
+        "40 22 46",
+        "40 23 46",
+        "40 24 46",
+        "40 25 46"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCc1Dest",
+      "level": "ACCEPT",
+      "address": "40 20 47",
+      "addresses": 16,
+      "sample": [
+        "40 20 47",
+        "40 21 47",
+        "40 22 47",
+        "40 23 47",
+        "40 24 47",
+        "40 25 47"
+      ],
+      "why": "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"
+    },
+    {
+      "param": "kPartCc1Dest",
+      "level": "ACCEPT",
+      "address": "40 20 48",
+      "addresses": 48,
+      "sample": [
+        "40 20 48",
+        "40 20 49",
+        "40 20 4A",
+        "40 21 48",
+        "40 21 49",
+        "40 21 4A"
+      ],
+      "why": "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"
+    },
+    {
+      "param": "kPartCtrlPitch",
+      "level": "AUDIBLE",
+      "address": "40 20 50",
+      "addresses": 16,
+      "sample": [
+        "40 20 50",
+        "40 21 50",
+        "40 22 50",
+        "40 23 50",
+        "40 24 50",
+        "40 25 50"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlTvfCutoff",
+      "level": "AUDIBLE",
+      "address": "40 20 51",
+      "addresses": 16,
+      "sample": [
+        "40 20 51",
+        "40 21 51",
+        "40 22 51",
+        "40 23 51",
+        "40 24 51",
+        "40 25 51"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlAmplitude",
+      "level": "AUDIBLE",
+      "address": "40 20 52",
+      "addresses": 16,
+      "sample": [
+        "40 20 52",
+        "40 21 52",
+        "40 22 52",
+        "40 23 52",
+        "40 24 52",
+        "40 25 52"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1Rate",
+      "level": "AUDIBLE",
+      "address": "40 20 53",
+      "addresses": 16,
+      "sample": [
+        "40 20 53",
+        "40 21 53",
+        "40 22 53",
+        "40 23 53",
+        "40 24 53",
+        "40 25 53"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1PitchDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 54",
+      "addresses": 16,
+      "sample": [
+        "40 20 54",
+        "40 21 54",
+        "40 22 54",
+        "40 23 54",
+        "40 24 54",
+        "40 25 54"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1TvfDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 55",
+      "addresses": 16,
+      "sample": [
+        "40 20 55",
+        "40 21 55",
+        "40 22 55",
+        "40 23 55",
+        "40 24 55",
+        "40 25 55"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCtrlLfo1TvaDepth",
+      "level": "AUDIBLE",
+      "address": "40 20 56",
+      "addresses": 16,
+      "sample": [
+        "40 20 56",
+        "40 21 56",
+        "40 22 56",
+        "40 23 56",
+        "40 24 56",
+        "40 25 56"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartCc2Dest",
+      "level": "ACCEPT",
+      "address": "40 20 57",
+      "addresses": 16,
+      "sample": [
+        "40 20 57",
+        "40 21 57",
+        "40 22 57",
+        "40 23 57",
+        "40 24 57",
+        "40 25 57"
+      ],
+      "why": "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"
+    },
+    {
+      "param": "kPartCc2Dest",
+      "level": "ACCEPT",
+      "address": "40 20 58",
+      "addresses": 48,
+      "sample": [
+        "40 20 58",
+        "40 20 59",
+        "40 20 5A",
+        "40 21 58",
+        "40 21 59",
+        "40 21 5A"
+      ],
+      "why": "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"
+    },
+    {
+      "param": "kPartEqSwitch",
+      "level": "AUDIBLE",
+      "address": "40 40 20",
+      "addresses": 16,
+      "sample": [
+        "40 40 20",
+        "40 41 20",
+        "40 42 20",
+        "40 43 20",
+        "40 44 20",
+        "40 45 20"
+      ],
+      "why": null
+    },
+    {
+      "param": "kPartEfxAssign",
+      "level": "AUDIBLE",
+      "address": "40 40 22",
+      "addresses": 16,
+      "sample": [
+        "40 40 22",
+        "40 41 22",
+        "40 42 22",
+        "40 43 22",
+        "40 44 22",
+        "40 45 22"
+      ],
+      "why": null
+    }
+  ],
+  "default_disagreements": [
+    {
+      "param": "kEfxSendToReverb",
+      "address": "40 03 17",
+      "table_default": 40,
+      "instances_read": 1,
+      "disagreeing_addresses": 1,
+      "sample": [
+        {
+          "address": "40 03 17",
+          "unit_holds": 0
+        }
+      ]
+    }
+  ],
+  "defaults_one_row_cannot_express": [
+    {
+      "param": "kPartRxChannel",
+      "address": "40 10 02",
+      "table_default": 9,
+      "instances_read": 16,
+      "disagreeing_addresses": 15,
+      "sample": [
+        {
+          "address": "40 1F 02",
+          "unit_holds": 15
+        },
+        {
+          "address": "40 1E 02",
+          "unit_holds": 14
+        },
+        {
+          "address": "40 1D 02",
+          "unit_holds": 13
+        },
+        {
+          "address": "40 1C 02",
+          "unit_holds": 12
+        },
+        {
+          "address": "40 1B 02",
+          "unit_holds": 11
+        },
+        {
+          "address": "40 1A 02",
+          "unit_holds": 10
+        }
+      ],
+      "distinct_values_on_the_unit": 16
+    },
+    {
+      "param": "kUseForRhythmPart",
+      "address": "40 10 15",
+      "table_default": 0,
+      "instances_read": 16,
+      "disagreeing_addresses": 1,
+      "sample": [
+        {
+          "address": "40 10 15",
+          "unit_holds": 1
+        }
+      ],
+      "distinct_values_on_the_unit": 2
+    }
+  ],
+  "range_disagreements": [
+    {
+      "param": "kUserDrumSourceMap",
+      "address": "21 0A 00",
+      "table_range": [
+        0,
+        3
+      ],
+      "too_narrow_at": 448,
+      "too_wide_at": 448,
+      "sample_too_narrow": [
+        {
+          "address": "21 1A 6F",
+          "unit_accepted": [
+            4
+          ]
+        },
+        {
+          "address": "21 1A 6E",
+          "unit_accepted": [
+            4
+          ]
+        },
+        {
+          "address": "21 1A 6D",
+          "unit_accepted": [
+            4
+          ]
+        },
+        {
+          "address": "21 1A 6C",
+          "unit_accepted": [
+            4
+          ]
+        },
+        {
+          "address": "21 1A 6B",
+          "unit_accepted": [
+            4
+          ]
+        },
+        {
+          "address": "21 1A 6A",
+          "unit_accepted": [
+            4
+          ]
+        }
+      ],
+      "sample_too_wide": [
+        {
+          "address": "21 1A 6F",
+          "unit_would_not_take": [
+            0
+          ]
+        },
+        {
+          "address": "21 1A 6E",
+          "unit_would_not_take": [
+            0
+          ]
+        },
+        {
+          "address": "21 1A 6D",
+          "unit_would_not_take": [
+            0
+          ]
+        },
+        {
+          "address": "21 1A 6C",
+          "unit_would_not_take": [
+            0
+          ]
+        },
+        {
+          "address": "21 1A 6B",
+          "unit_would_not_take": [
+            0
+          ]
+        },
+        {
+          "address": "21 1A 6A",
+          "unit_would_not_take": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "param": "kMasterTune",
+      "address": "40 00 00",
+      "table_range": [
+        0,
+        15
+      ],
+      "too_narrow_at": 0,
+      "too_wide_at": 1,
+      "sample_too_narrow": [],
+      "sample_too_wide": [
+        {
+          "address": "40 00 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            11,
+            15
+          ]
+        }
+      ]
+    },
+    {
+      "param": "kEfxType",
+      "address": "40 03 00",
+      "table_range": [
+        0,
+        127
+      ],
+      "too_narrow_at": 0,
+      "too_wide_at": 1,
+      "sample_too_narrow": [],
+      "sample_too_wide": [
+        {
+          "address": "40 03 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            11,
+            15,
+            31,
+            63,
+            126,
+            127
+          ]
+        }
+      ]
+    },
+    {
+      "param": "kPartCtrlSourceNumber",
+      "address": "40 10 1F",
+      "table_range": [
+        0,
+        127
+      ],
+      "too_narrow_at": 0,
+      "too_wide_at": 28,
+      "sample_too_narrow": [],
+      "sample_too_wide": [
+        {
+          "address": "40 1F 1F",
+          "unit_would_not_take": [
+            126,
+            127
+          ]
+        },
+        {
+          "address": "40 1F 20",
+          "unit_would_not_take": [
+            126,
+            127
+          ]
+        },
+        {
+          "address": "40 1E 1F",
+          "unit_would_not_take": [
+            126,
+            127
+          ]
+        },
+        {
+          "address": "40 1E 20",
+          "unit_would_not_take": [
+            126,
+            127
+          ]
+        },
+        {
+          "address": "40 1D 1F",
+          "unit_would_not_take": [
+            126,
+            127
+          ]
+        },
+        {
+          "address": "40 1D 20",
+          "unit_would_not_take": [
+            126,
+            127
+          ]
+        }
+      ]
+    },
+    {
+      "param": "kPartToneMapNumber",
+      "address": "40 40 00",
+      "table_range": [
+        0,
+        4
+      ],
+      "too_narrow_at": 0,
+      "too_wide_at": 16,
+      "sample_too_narrow": [],
+      "sample_too_wide": [
+        {
+          "address": "40 4F 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "address": "40 4E 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "address": "40 4D 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "address": "40 4C 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "address": "40 4B 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "address": "40 4A 00",
+          "unit_would_not_take": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ]
+    },
+    {
+      "param": "kPartToneMap0Number",
+      "address": "40 40 01",
+      "table_range": [
+        1,
+        4
+      ],
+      "too_narrow_at": 0,
+      "too_wide_at": 16,
+      "sample_too_narrow": [],
+      "sample_too_wide": [
+        {
+          "address": "40 4F 01",
+          "unit_would_not_take": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "address": "40 4E 01",
+          "unit_would_not_take": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "address": "40 4D 01",
+          "unit_would_not_take": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "address": "40 4C 01",
+          "unit_would_not_take": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "address": "40 4B 01",
+          "unit_would_not_take": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "address": "40 4A 01",
+          "unit_would_not_take": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  ],
+  "blanket_rows_not_compared": [
+    {
+      "param": "kOppositeGroupBlock",
+      "address": "50 00 00",
+      "addresses": 16384,
+      "level": "IGNORE",
+      "why": "libsonare receives one port, so there is no second group of parts to address"
+    },
+    {
+      "param": "kOppositeGroupBlock",
+      "address": "51 00 00",
+      "addresses": 16384,
+      "level": "IGNORE",
+      "why": "libsonare receives one port, so there is no second group's drum setup to address"
+    }
+  ],
+  "stale_default_exclusions": []
+}

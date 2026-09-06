@@ -4,7 +4,7 @@
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
-       gs-census gs-census-header gs-census-check \
+       gs-census gs-census-header gs-census-check gs-address-table-json gs-unit-diff gs-unit-diff-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
@@ -351,6 +351,29 @@ gs-census-check:
 	python3 tools/gs/gen_census_header.py --census tools/gs/address-census.json \
 	    --out /tmp/gs_address_census_check.inc
 	diff -u tests/midi/gs_address_census.inc /tmp/gs_address_census_check.inc
+
+# The address table against a measured unit. The census above says what real
+# files reach and is blind to any address they never send; this says what the
+# machine itself answers, which is the other half and the one that closes the
+# provenance gap gs.md declares. The archive is external (SOUNDINGS_UNIT) and its
+# licence is its own, so the diff is committed and a fresh clone reads the work
+# list without fetching it. See tools/gs/docs/unit-diff.md.
+SOUNDINGS_UNIT ?= ../soundings/data/units/roland-sc8850-01
+GS_TABLE_JSON := .cache/gs-address-table.json
+
+gs-address-table-json:
+	@mkdir -p .cache
+	$(CXX) -std=c++17 -I src -o .cache/gs_dump_address_table tools/gs/dump_address_table.cpp
+	.cache/gs_dump_address_table > $(GS_TABLE_JSON)
+
+gs-unit-diff: gs-address-table-json
+	python3 tools/gs/check_unit.py --table $(GS_TABLE_JSON) \
+	    --unit $(SOUNDINGS_UNIT) --out tools/gs/unit-diff.json
+
+gs-unit-diff-check: gs-address-table-json
+	python3 tools/gs/check_unit.py --table $(GS_TABLE_JSON) \
+	    --unit $(SOUNDINGS_UNIT) --out /tmp/gs_unit_diff_check.json
+	diff -u tools/gs/unit-diff.json /tmp/gs_unit_diff_check.json
 
 # Shared public-input schema plus public streaming field/flag/default snapshot.
 # Also gates request-object coverage: every one-shot facade export keeps a
