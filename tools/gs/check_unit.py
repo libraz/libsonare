@@ -71,6 +71,19 @@ DEFAULT_IS_NOT_THE_MACHINES = {
     "kPatchName": "ACCEPT; a name, and the unit powers on holding its own",
 }
 
+# The write probe's own verdict on each byte it wrote, which is what says whether
+# that byte's accepted set is a measurement of the range at all.
+#
+# `accepts` and `clamps` both bound the range exactly: a clamp reports the nearest
+# value the machine would hold, so the accepted set is still the machine's range.
+# `refuses out of range` does the same by returning the original. An `unchanging`
+# byte is none of these -- the archive's own words are that "a clamp and a refusal
+# cannot be told apart" there -- so its accepted set is a single value the byte
+# already held, and reading that as a range would report every row over a
+# write-only or whole-parameter-only address as too wide by its whole span.
+RANGE_IS_MEASURED = frozenset({"accepts", "clamps", "refuses out of range"})
+RANGE_UNDECIDED = "unchanging, so a clamp and a refusal cannot be told apart"
+
 # The extra insertion-effect units libsonare adds at `40 3u xx` for u = 1..F
 # (gs.md, "The extensions libsonare adds"). The property that makes them safe
 # without a feature flag is that a spec-compliant file cannot reach them, which
@@ -226,6 +239,7 @@ def main() -> int:
         "default_disagreements": [],
         "defaults_one_row_cannot_express": [],
         "range_disagreements": [],
+        "ranges_the_probe_could_not_decide": [],
         "blanket_rows_not_compared": [],
         "stale_default_exclusions": [],
     }
@@ -294,19 +308,20 @@ def main() -> int:
 
     # 3. Reset defaults against the state the unit powers up in. Only the first
     #    byte of a row carries a default the table models (gs_address_table.h).
-    #    A row holds one default byte for every instance of its parameter, so the
-    #    comparison only means something where the machine holds one value across
-    #    them all. Where the machine's instances disagree with each other -- a part
-    #    whose power-on receive channel is its own block's, a drum note carrying
-    #    what its kit specifies -- no single byte can be right for all of them, and
-    #    that is a statement about the row's shape rather than about its value.
-    #    Reported apart, because both halves are findings and only one is a value
-    #    to correct.
+    #    A row's instances need not share one -- a part powers on listening to its
+    #    own receive channel -- so the expected value is taken per address from
+    #    `reset_not_def`, which the dump fills by calling gs_reset_default rather
+    #    than by restating its rule here. Where the machine's instances disagree
+    #    with each other and the table names no exception, no single byte can be
+    #    right for all of them, and that is a statement about the row's shape
+    #    rather than about its value. Reported apart, because both halves are
+    #    findings and only one is a value to correct.
     power_on_values = {parsed(a): int(v, 16) for a, v in power_on["values"].items()}
     excused: set[str] = set()
     for row in table["rows"]:
         if row["param"] in blanket:
             continue
+        expected_at = row["reset_not_def"]
         held: list[tuple[int, int]] = []
         for bits in submasks(row["mask"]):
             addr = row["addr"] | bits
@@ -316,17 +331,23 @@ def main() -> int:
         if not held:
             continue
         distinct = {v for _, v in held}
-        disagreeing = [(a, v) for a, v in held if v != row["def"]]
+        disagreeing = [(a, v) for a, v in held if v != expected_at.get(spelled(a), row["def"])]
         if not disagreeing:
             continue
         entry = {
             "param": row["param"],
             "address": row["address"],
             "table_default": row["def"],
+            "table_names_exceptions": len(expected_at),
             "instances_read": len(held),
             "disagreeing_addresses": len(disagreeing),
             "sample": [
-                {"address": spelled(a), "unit_holds": v} for a, v in disagreeing[: args.samples]
+                {
+                    "address": spelled(a),
+                    "table_expects": expected_at.get(spelled(a), row["def"]),
+                    "unit_holds": v,
+                }
+                for a, v in disagreeing[: args.samples]
             ],
         }
         if row["param"] in DEFAULT_IS_NOT_THE_MACHINES:
@@ -350,16 +371,26 @@ def main() -> int:
     #    probed value inside it that the unit would not take says it is too wide.
     #    A value the probe never sent says nothing either way, which is why both
     #    halves are drawn from `wrote_read` rather than from the whole 0..7F.
+    #
+    #    A byte the probe could not decide is excluded rather than counted as
+    #    agreement, and reported on its own: the archive says outright that a
+    #    clamp and a refusal are indistinguishable there, so its accepted set is
+    #    the one value the byte already held and comparing a range to it would
+    #    manufacture a disagreement the size of the row.
     for row in table["rows"]:
         if row["param"] in blanket:
             continue
         too_narrow: list[dict] = []
         too_wide: list[dict] = []
+        undecided: list[str] = []
         for bits in submasks(row["mask"]):
             for i in range(row["size"]):
                 addr = advance(row["addr"] | bits, i)
                 probe = accepted.get(addr)
                 if probe is None:
+                    continue
+                if probe["classification"] not in RANGE_IS_MEASURED:
+                    undecided.append(spelled(addr))
                     continue
                 took = {int(v, 16) for v in probe["accepted"]}
                 sent = {int(pair[0], 16) for pair in probe["wrote_read"]}
@@ -369,6 +400,17 @@ def main() -> int:
                     too_narrow.append({"address": spelled(addr), "unit_accepted": outside})
                 if refused:
                     too_wide.append({"address": spelled(addr), "unit_would_not_take": refused})
+        if undecided:
+            findings["ranges_the_probe_could_not_decide"].append(
+                {
+                    "param": row["param"],
+                    "address": row["address"],
+                    "table_range": [row["lo"], row["hi"]],
+                    "undecided_at": len(undecided),
+                    "sample": undecided[: args.samples],
+                    "why": RANGE_UNDECIDED,
+                }
+            )
         if too_narrow or too_wide:
             findings["range_disagreements"].append(
                 {
@@ -425,6 +467,13 @@ def main() -> int:
             "The window blocks are excluded, so nothing is said about them at all.",
             "A range is compared only against the values the write probe actually sent; a "
             "value it never tried is neither inside nor outside as far as this is concerned.",
+            "A range is compared only where the probe reached a verdict. A byte it read "
+            "back unchanged for every value is carried apart, since the machine's answer "
+            "there is one held value rather than a range.",
+            "Whether the machine clamps an out-of-range value or refuses it is not "
+            "compared. It bounds the range either way, which is what is being read here, "
+            "and which of the two libsonare does is a decision gs.md takes rather than a "
+            "property the table records.",
             "Levels are libsonare's own promises about its implementation and are not a "
             "property of the machine, so they are reported and never compared.",
             "One unit is one unit. A disagreement is between this table and this machine, "
@@ -442,6 +491,7 @@ def main() -> int:
                 findings["defaults_one_row_cannot_express"]
             ),
             "rows_whose_range_disagrees": len(findings["range_disagreements"]),
+            "rows_the_probe_could_not_decide": len(findings["ranges_the_probe_could_not_decide"]),
             "blanket_rows_not_compared": len(findings["blanket_rows_not_compared"]),
             "defaults_excused_by_a_decision": len(excused),
             "stale_default_exclusions": len(findings["stale_default_exclusions"]),

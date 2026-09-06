@@ -28,6 +28,7 @@ using sonare::midi::synth::gs_decode_writes;
 using sonare::midi::synth::gs_lookup_address;
 using sonare::midi::synth::gs_param_name;
 using sonare::midi::synth::gs_part_block_to_channel;
+using sonare::midi::synth::gs_reset_default;
 using sonare::midi::synth::gs_sysex_frame;
 using sonare::midi::synth::gs_value_in_range;
 using sonare::midi::synth::GsAddressEntry;
@@ -1517,6 +1518,49 @@ TEST_CASE("GS decode: a run through the patch-common block", "[midi][gs][address
       CHECK(decoded.writes[i].index == i);
     }
     CHECK(decoded.unknown == 0);
+  }
+}
+
+TEST_CASE("GS address table: a part's reset default can be the part's own", "[midi][gs][address]") {
+  // Both rules are what the SC-8850 was measured to power on holding, at all
+  // sixteen instances of each row (tools/gs/unit-diff.json). `def` alone says
+  // one of the sixteen, so a reader taking it for the row would have the other
+  // fifteen wrong.
+  SECTION("every part listens to its own channel") {
+    const GsAddressEntry* entry = gs_lookup_address(0x401002);
+    REQUIRE(entry != nullptr);
+    for (uint8_t block = 0; block < 16; ++block) {
+      const uint32_t addr = 0x401002u | (static_cast<uint32_t>(block) << 8);
+      INFO("block " << static_cast<int>(block));
+      CHECK(gs_reset_default(*entry, addr) == gs_part_block_to_channel(block));
+    }
+    CHECK(entry->def == gs_reset_default(*entry, entry->addr));
+  }
+  SECTION("only part 10 powers on as a rhythm part") {
+    const GsAddressEntry* entry = gs_lookup_address(0x401015);
+    REQUIRE(entry != nullptr);
+    for (uint8_t block = 0; block < 16; ++block) {
+      const uint32_t addr = 0x401015u | (static_cast<uint32_t>(block) << 8);
+      INFO("block " << static_cast<int>(block));
+      CHECK(gs_reset_default(*entry, addr) == (block == 0 ? 0x01 : 0x00));
+    }
+    CHECK(entry->def == 0x01);
+  }
+  SECTION("every other row answers with its own def") {
+    size_t varying = 0;
+    for (const GsAddressEntry& row : kGsAddressTable) {
+      for (uint32_t block = 0; block < 16; ++block) {
+        if ((row.mask & 0x000F00u) == 0 && block != 0) break;
+        const uint32_t addr = row.addr | (block << 8);
+        if (gs_reset_default(row, addr) != row.def) {
+          ++varying;
+          CHECK((row.param == GsParam::kPartRxChannel || row.param == GsParam::kUseForRhythmPart));
+        }
+      }
+    }
+    // Fifteen receive channels plus fifteen melodic parts. A rule reaching a row
+    // it was not written for would raise this, and so would one going inert.
+    CHECK(varying == 30);
   }
 }
 

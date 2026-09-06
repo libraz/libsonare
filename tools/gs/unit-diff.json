@@ -16,6 +16,8 @@
     "The extent a read reached is taken as contiguous, the count being all the boundary probe keeps. It bounds the reach; it does not say each address inside it answered on its own.",
     "The window blocks are excluded, so nothing is said about them at all.",
     "A range is compared only against the values the write probe actually sent; a value it never tried is neither inside nor outside as far as this is concerned.",
+    "A range is compared only where the probe reached a verdict. A byte it read back unchanged for every value is carried apart, since the machine's answer there is one held value rather than a range.",
+    "Whether the machine clamps an out-of-range value or refuses it is not compared. It bounds the range either way, which is what is being read here, and which of the two libsonare does is a decision gs.md takes rather than a property the table records.",
     "Levels are libsonare's own promises about its implementation and are not a property of the machine, so they are reported and never compared.",
     "One unit is one unit. A disagreement is between this table and this machine, and a second SC-8850 has not been measured."
   ],
@@ -27,8 +29,9 @@
     "addresses_with_no_row": 3032,
     "rows_no_read_reached": 50,
     "rows_whose_default_disagrees": 1,
-    "rows_one_default_byte_cannot_express": 2,
-    "rows_whose_range_disagrees": 6,
+    "rows_one_default_byte_cannot_express": 0,
+    "rows_whose_range_disagrees": 0,
+    "rows_the_probe_could_not_decide": 6,
     "blanket_rows_not_compared": 2,
     "defaults_excused_by_a_decision": 21,
     "stale_default_exclusions": 0,
@@ -1214,153 +1217,21 @@
       "param": "kEfxSendToReverb",
       "address": "40 03 17",
       "table_default": 40,
+      "table_names_exceptions": 0,
       "instances_read": 1,
       "disagreeing_addresses": 1,
       "sample": [
         {
           "address": "40 03 17",
+          "table_expects": 40,
           "unit_holds": 0
         }
       ]
     }
   ],
-  "defaults_one_row_cannot_express": [
-    {
-      "param": "kPartRxChannel",
-      "address": "40 10 02",
-      "table_default": 9,
-      "instances_read": 16,
-      "disagreeing_addresses": 15,
-      "sample": [
-        {
-          "address": "40 1F 02",
-          "unit_holds": 15
-        },
-        {
-          "address": "40 1E 02",
-          "unit_holds": 14
-        },
-        {
-          "address": "40 1D 02",
-          "unit_holds": 13
-        },
-        {
-          "address": "40 1C 02",
-          "unit_holds": 12
-        },
-        {
-          "address": "40 1B 02",
-          "unit_holds": 11
-        },
-        {
-          "address": "40 1A 02",
-          "unit_holds": 10
-        }
-      ],
-      "distinct_values_on_the_unit": 16
-    },
-    {
-      "param": "kUseForRhythmPart",
-      "address": "40 10 15",
-      "table_default": 0,
-      "instances_read": 16,
-      "disagreeing_addresses": 1,
-      "sample": [
-        {
-          "address": "40 10 15",
-          "unit_holds": 1
-        }
-      ],
-      "distinct_values_on_the_unit": 2
-    }
-  ],
-  "range_disagreements": [
-    {
-      "param": "kUserDrumSourceMap",
-      "address": "21 0A 00",
-      "table_range": [
-        0,
-        3
-      ],
-      "too_narrow_at": 448,
-      "too_wide_at": 448,
-      "sample_too_narrow": [
-        {
-          "address": "21 1A 6F",
-          "unit_accepted": [
-            4
-          ]
-        },
-        {
-          "address": "21 1A 6E",
-          "unit_accepted": [
-            4
-          ]
-        },
-        {
-          "address": "21 1A 6D",
-          "unit_accepted": [
-            4
-          ]
-        },
-        {
-          "address": "21 1A 6C",
-          "unit_accepted": [
-            4
-          ]
-        },
-        {
-          "address": "21 1A 6B",
-          "unit_accepted": [
-            4
-          ]
-        },
-        {
-          "address": "21 1A 6A",
-          "unit_accepted": [
-            4
-          ]
-        }
-      ],
-      "sample_too_wide": [
-        {
-          "address": "21 1A 6F",
-          "unit_would_not_take": [
-            0
-          ]
-        },
-        {
-          "address": "21 1A 6E",
-          "unit_would_not_take": [
-            0
-          ]
-        },
-        {
-          "address": "21 1A 6D",
-          "unit_would_not_take": [
-            0
-          ]
-        },
-        {
-          "address": "21 1A 6C",
-          "unit_would_not_take": [
-            0
-          ]
-        },
-        {
-          "address": "21 1A 6B",
-          "unit_would_not_take": [
-            0
-          ]
-        },
-        {
-          "address": "21 1A 6A",
-          "unit_would_not_take": [
-            0
-          ]
-        }
-      ]
-    },
+  "defaults_one_row_cannot_express": [],
+  "range_disagreements": [],
+  "ranges_the_probe_could_not_decide": [
     {
       "param": "kMasterTune",
       "address": "40 00 00",
@@ -1368,26 +1239,37 @@
         0,
         15
       ],
-      "too_narrow_at": 0,
-      "too_wide_at": 1,
-      "sample_too_narrow": [],
-      "sample_too_wide": [
-        {
-          "address": "40 00 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            11,
-            15
-          ]
-        }
-      ]
+      "undecided_at": 1,
+      "sample": [
+        "40 00 00"
+      ],
+      "why": "unchanging, so a clamp and a refusal cannot be told apart"
+    },
+    {
+      "param": "kEqLowGain",
+      "address": "40 02 01",
+      "table_range": [
+        52,
+        76
+      ],
+      "undecided_at": 1,
+      "sample": [
+        "40 02 01"
+      ],
+      "why": "unchanging, so a clamp and a refusal cannot be told apart"
+    },
+    {
+      "param": "kEqHighGain",
+      "address": "40 02 03",
+      "table_range": [
+        52,
+        76
+      ],
+      "undecided_at": 1,
+      "sample": [
+        "40 02 03"
+      ],
+      "why": "unchanging, so a clamp and a refusal cannot be told apart"
     },
     {
       "param": "kEfxType",
@@ -1396,85 +1278,11 @@
         0,
         127
       ],
-      "too_narrow_at": 0,
-      "too_wide_at": 1,
-      "sample_too_narrow": [],
-      "sample_too_wide": [
-        {
-          "address": "40 03 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            11,
-            15,
-            31,
-            63,
-            126,
-            127
-          ]
-        }
-      ]
-    },
-    {
-      "param": "kPartCtrlSourceNumber",
-      "address": "40 10 1F",
-      "table_range": [
-        0,
-        127
+      "undecided_at": 1,
+      "sample": [
+        "40 03 00"
       ],
-      "too_narrow_at": 0,
-      "too_wide_at": 28,
-      "sample_too_narrow": [],
-      "sample_too_wide": [
-        {
-          "address": "40 1F 1F",
-          "unit_would_not_take": [
-            126,
-            127
-          ]
-        },
-        {
-          "address": "40 1F 20",
-          "unit_would_not_take": [
-            126,
-            127
-          ]
-        },
-        {
-          "address": "40 1E 1F",
-          "unit_would_not_take": [
-            126,
-            127
-          ]
-        },
-        {
-          "address": "40 1E 20",
-          "unit_would_not_take": [
-            126,
-            127
-          ]
-        },
-        {
-          "address": "40 1D 1F",
-          "unit_would_not_take": [
-            126,
-            127
-          ]
-        },
-        {
-          "address": "40 1D 20",
-          "unit_would_not_take": [
-            126,
-            127
-          ]
-        }
-      ]
+      "why": "unchanging, so a clamp and a refusal cannot be told apart"
     },
     {
       "param": "kPartToneMapNumber",
@@ -1483,65 +1291,16 @@
         0,
         4
       ],
-      "too_narrow_at": 0,
-      "too_wide_at": 16,
-      "sample_too_narrow": [],
-      "sample_too_wide": [
-        {
-          "address": "40 4F 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4
-          ]
-        },
-        {
-          "address": "40 4E 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4
-          ]
-        },
-        {
-          "address": "40 4D 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4
-          ]
-        },
-        {
-          "address": "40 4C 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4
-          ]
-        },
-        {
-          "address": "40 4B 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4
-          ]
-        },
-        {
-          "address": "40 4A 00",
-          "unit_would_not_take": [
-            1,
-            2,
-            3,
-            4
-          ]
-        }
-      ]
+      "undecided_at": 16,
+      "sample": [
+        "40 4F 00",
+        "40 4E 00",
+        "40 4D 00",
+        "40 4C 00",
+        "40 4B 00",
+        "40 4A 00"
+      ],
+      "why": "unchanging, so a clamp and a refusal cannot be told apart"
     },
     {
       "param": "kPartToneMap0Number",
@@ -1550,59 +1309,16 @@
         1,
         4
       ],
-      "too_narrow_at": 0,
-      "too_wide_at": 16,
-      "sample_too_narrow": [],
-      "sample_too_wide": [
-        {
-          "address": "40 4F 01",
-          "unit_would_not_take": [
-            1,
-            2,
-            3
-          ]
-        },
-        {
-          "address": "40 4E 01",
-          "unit_would_not_take": [
-            1,
-            2,
-            3
-          ]
-        },
-        {
-          "address": "40 4D 01",
-          "unit_would_not_take": [
-            1,
-            2,
-            3
-          ]
-        },
-        {
-          "address": "40 4C 01",
-          "unit_would_not_take": [
-            1,
-            2,
-            3
-          ]
-        },
-        {
-          "address": "40 4B 01",
-          "unit_would_not_take": [
-            1,
-            2,
-            3
-          ]
-        },
-        {
-          "address": "40 4A 01",
-          "unit_would_not_take": [
-            1,
-            2,
-            3
-          ]
-        }
-      ]
+      "undecided_at": 16,
+      "sample": [
+        "40 4F 01",
+        "40 4E 01",
+        "40 4D 01",
+        "40 4C 01",
+        "40 4B 01",
+        "40 4A 01"
+      ],
+      "why": "unchanging, so a clamp and a refusal cannot be told apart"
     }
   ],
   "blanket_rows_not_compared": [

@@ -67,17 +67,39 @@ std::string quoted(const char* text) {
   return out + "\"";
 }
 
+/// The instances of @p e whose reset value is not `def`, spelled address -> value.
+///
+/// A row whose parts do not share a default is a function rather than a byte, so
+/// the reader is handed the answers instead of the rule: teaching it to derive
+/// them would be a second copy of gs_reset_default, in another language, free to
+/// drift. Empty for all but two rows.
+std::string reset_exceptions(const GsAddressEntry& e) {
+  if ((e.mask & 0x000F00u) == 0) return "";
+  std::string out;
+  for (uint32_t block = 0; block < 16; ++block) {
+    const uint32_t addr = e.addr | (block << 8);
+    const uint8_t reset = sonare::midi::synth::gs_reset_default(e, addr);
+    if (reset == e.def) continue;
+    if (!out.empty()) out += ", ";
+    out += "\"" + spelled(addr) + "\": " + std::to_string(reset);
+  }
+  return out;
+}
+
 }  // namespace
 
 int main() {
   std::printf("{\n  \"rows\": [\n");
   for (size_t i = 0; i < kGsAddressTable.size(); ++i) {
     const GsAddressEntry& e = kGsAddressTable[i];
+    const std::string exceptions = reset_exceptions(e);
     std::printf(
         "    {\"address\": \"%s\", \"addr\": %u, \"mask\": %u, \"param\": \"%s\", "
-        "\"level\": \"%s\", \"size\": %u, \"lo\": %u, \"hi\": %u, \"def\": %u, \"why\": %s}%s\n",
+        "\"level\": \"%s\", \"size\": %u, \"lo\": %u, \"hi\": %u, \"def\": %u, "
+        "\"reset_not_def\": {%s}, \"why\": %s}%s\n",
         spelled(e.addr).c_str(), e.addr, e.mask, param_name(e.param), level_name(e.level), e.size,
-        e.lo, e.hi, e.def, quoted(e.why).c_str(), i + 1 == kGsAddressTable.size() ? "" : ",");
+        e.lo, e.hi, e.def, exceptions.c_str(), quoted(e.why).c_str(),
+        i + 1 == kGsAddressTable.size() ? "" : ",");
   }
   std::printf("  ],\n  \"undefined_ranges\": [\n");
   for (size_t i = 0; i < kGsUndefinedRanges.size(); ++i) {

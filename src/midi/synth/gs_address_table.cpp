@@ -70,18 +70,6 @@ const GsAddressRange* gs_lookup_range(uint32_t addr) noexcept {
   return nullptr;
 }
 
-uint8_t gs_address_block_index(uint32_t addr, uint32_t mask) noexcept {
-  if ((mask & 0x000F00u) != 0) {
-    const uint8_t nibble = static_cast<uint8_t>((addr >> 8) & 0x0Fu);
-    const uint8_t block = static_cast<uint8_t>((addr >> 8) & 0xF0u);
-    const bool part_block =
-        ((addr >> 16) & 0x7Fu) == 0x40 && (block == 0x10 || block == 0x20 || block == 0x40);
-    return part_block ? gs_part_block_to_channel(nibble) : nibble;
-  }
-  if ((mask & 0x00F000u) != 0) return static_cast<uint8_t>((addr >> 12) & 0x0Fu);
-  return 0;
-}
-
 size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
                         uint32_t* unknown_writes) noexcept {
   if (!frame.valid || frame.command != kGsCommandDt1 || frame.model != kGsModelId) return 0;

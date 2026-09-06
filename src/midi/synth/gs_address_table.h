@@ -177,9 +177,11 @@ struct GsAddressEntry {
   /// Accepted value range, inclusive. A value outside it is ignored, never
   /// clamped (gs_value_in_range).
   uint8_t lo, hi;
-  /// Reset default of the row's FIRST byte. A multi-byte row whose bytes do not
-  /// share one default (MASTER TUNE, `00 04 00 00`) carries only that first
-  /// byte here; the rest belongs to the reset implementation.
+  /// Reset default at the row's BASE address — first byte, every variable nibble
+  /// zero. A multi-byte row whose bytes do not share one default (MASTER TUNE,
+  /// `00 04 00 00`) carries only that first byte here; the rest belongs to the
+  /// reset implementation. A row whose instances reset differently is not a byte
+  /// at all: ask gs_reset_default, which agrees with this field by construction.
   uint8_t def;
   /// Required for kIgnore and kAccept, nullptr otherwise — an exclusion without
   /// a reason is not allowed.
@@ -251,8 +253,10 @@ inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
      nullptr},
     // The map narrows which generation the source program may come from, and
     // every kit kGsDrumKits voices is reachable without it, so a written map can
-    // only take a kit away. It is held nowhere for that reason.
-    {0x210A00, 0x00F07F, GsParam::kUserDrumSourceMap, GsLevel::kAccept, 1, 0x00, 0x03, 0x00,
+    // only take a kit away. It is held nowhere for that reason. It numbers the
+    // generations from one, as TONE MAP-0 NUMBER does: a measured unit refuses 00
+    // and takes 04, over 448 addresses.
+    {0x210A00, 0x00F07F, GsParam::kUserDrumSourceMap, GsLevel::kAccept, 1, 0x01, 0x04, 0x01,
      "the source program reaches every kit on its own; the map can only narrow that to one "
      "generation"},
     {0x210B00, 0x00F07F, GsParam::kUserDrumSourceProgram, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
@@ -360,11 +364,11 @@ inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
     // rather than a second storage location. Every corpus value is one: bank
     // MSBs of 00, 01, 08, 0A, 10, 18 and 20, and no program byte above 7F.
     {0x401000, 0x000F00, GsParam::kPartToneNumber, GsLevel::kAudible, 2, 0x00, 0x7F, 0x00, nullptr},
-    // The MIDI channel the part listens to, 10 being none. The first address is
-    // part 10's, so this default is its channel; every part powers on to its own
-    // and the reset owns that. Real files use it to LAYER — 34 of the 40 corpus
-    // files that write it leave two parts on one channel — so a message reaches
-    // however many parts claim its channel, not one.
+    // The MIDI channel the part listens to, 10 being none. Every part powers on
+    // to its own, so `def` is the base address's alone and gs_reset_default owns
+    // the other fifteen. Real files use it to LAYER — 34 of the 40 corpus files
+    // that write it leave two parts on one channel — so a message reaches however
+    // many parts claim its channel, not one.
     {0x401002, 0x000F00, GsParam::kPartRxChannel, GsLevel::kAudible, 1, 0x00, 0x10, 0x09, nullptr},
     // 00 Mono / 01 Poly, and the same storage location CC126 and CC127 write.
     {0x401013, 0x000F00, GsParam::kPartMonoPoly, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
@@ -373,9 +377,9 @@ inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
     // belongs to the SC-55 map, which is not the target.
     {0x401014, 0x000F00, GsParam::kPartAssignMode, GsLevel::kAudible, 1, 0x00, 0x02, 0x01, nullptr},
     // Part 10 powers on at 01 (drum map 1) and every other part at 00, which one
-    // def cannot say; the row carries the melodic default and the reset owns the
-    // exception.
-    {0x401015, 0x000F00, GsParam::kUseForRhythmPart, GsLevel::kAudible, 1, 0x00, 0x02, 0x00,
+    // def cannot say; the base address is part 10's, so `def` is 01 and
+    // gs_reset_default owns the melodic parts.
+    {0x401015, 0x000F00, GsParam::kUseForRhythmPart, GsLevel::kAudible, 1, 0x00, 0x02, 0x01,
      nullptr},
     // PITCH KEY SHIFT is its own parameter and not RPN 00 02's alias, however
     // exactly their ranges coincide: the map annotates every alias it has and
@@ -399,8 +403,10 @@ inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
     // CC1 / CC2 CONTROLLER NUMBER: which MIDI controller drives each of the two
     // assignable sources of the 40 2x block. Two bytes whose power-on values
     // differ (CC16 and CC17), so the row carries the first and GsWrite::index
-    // tells them apart, as MASTER TUNE's does.
-    {0x40101F, 0x000F00, GsParam::kPartCtrlSourceNumber, GsLevel::kAudible, 2, 0x00, 0x7F, 0x10,
+    // tells them apart, as MASTER TUNE's does. The range stops at CC95: a
+    // measured unit clamps both bytes there, and what sits above is the data-entry
+    // and channel-mode block rather than anything a source could follow.
+    {0x40101F, 0x000F00, GsParam::kPartCtrlSourceNumber, GsLevel::kAudible, 2, 0x00, 0x5F, 0x10,
      nullptr},
     {0x401021, 0x000F00, GsParam::kPartChorusSend, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     // The reverb send's 28 is the GS power-on 40 the reset already installs.
@@ -712,7 +718,38 @@ constexpr uint8_t gs_part_block_to_channel(uint8_t block) noexcept {
 /// part for the part blocks (40 1x / 40 2x / 40 4x), the raw nibble for an EFX
 /// unit (40 3u) or a drum map (41 mn), and 0 when the row has no variable
 /// nibble.
-uint8_t gs_address_block_index(uint32_t addr, uint32_t mask) noexcept;
+constexpr uint8_t gs_address_block_index(uint32_t addr, uint32_t mask) noexcept {
+  if ((mask & 0x000F00u) != 0) {
+    const uint8_t nibble = static_cast<uint8_t>((addr >> 8) & 0x0Fu);
+    const uint8_t block = static_cast<uint8_t>((addr >> 8) & 0xF0u);
+    const bool part_block =
+        ((addr >> 16) & 0x7Fu) == 0x40 && (block == 0x10 || block == 0x20 || block == 0x40);
+    return part_block ? gs_part_block_to_channel(nibble) : nibble;
+  }
+  if ((mask & 0x00F000u) != 0) return static_cast<uint8_t>((addr >> 12) & 0x0Fu);
+  return 0;
+}
+
+/// The value @p addr resets to, for a row that owns it.
+///
+/// Most rows reset every instance to `def`. Two do not, because their default is
+/// a property of the part rather than of the parameter, and one byte cannot hold
+/// sixteen answers. This function is the only place that says which — a prose
+/// note on the row would be invisible to the table self-check and to the unit
+/// comparison, both of which read this.
+constexpr uint8_t gs_reset_default(const GsAddressEntry& entry, uint32_t addr) noexcept {
+  switch (entry.param) {
+    // Every part powers on listening to its own channel, which is what the block
+    // index already is.
+    case GsParam::kPartRxChannel:
+      return gs_address_block_index(addr, entry.mask);
+    // Only part 10 powers on as a rhythm part, on drum map 1.
+    case GsParam::kUseForRhythmPart:
+      return gs_address_block_index(addr, entry.mask) == 9 ? 1u : 0u;
+    default:
+      return entry.def;
+  }
+}
 
 // --- Decode ---
 
@@ -781,6 +818,18 @@ constexpr bool gs_table_is_consistent() noexcept {
     if ((e.addr & e.mask) != 0) return false;                // variable nibbles are zero in addr
     if (gs_row_low_end(e) > 0x7Fu) return false;             // a row never carries past its byte
     if (e.lo > e.hi || e.def < e.lo || e.def > e.hi) return false;
+    // `def` is the base address's reset value, so a row with a per-instance rule
+    // still leaves one number a reader of the table can trust, and the rule and
+    // the field cannot part company.
+    if (gs_reset_default(e, e.addr) != e.def) return false;
+    // Every instance's reset value has to be one the row would accept, or the
+    // machine powers on holding a value its own range rejects.
+    if ((e.mask & 0x000F00u) != 0) {
+      for (uint32_t block = 0; block < 16; ++block) {
+        const uint8_t reset = gs_reset_default(e, e.addr | (block << 8));
+        if (reset < e.lo || reset > e.hi) return false;
+      }
+    }
     if (i > 0 && kGsAddressTable[i - 1].addr >= e.addr) return false;
     for (size_t j = 0; j < i; ++j) {
       if (gs_rows_overlap(kGsAddressTable[j], e)) return false;
