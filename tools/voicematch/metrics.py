@@ -143,6 +143,15 @@ HIT_ONSET_SEARCH_SEC = 1.0
 # tolerance is stable and is what a rise time means in any case.
 HIT_ATTACK_TOLERANCE_DB = -3.0
 
+# Below this the attack measures the ruler. An RMS window half full of a step is
+# already 3.01 dB down, so the first frame that can clear the tolerance sits half
+# a window in whatever the hit does before it: a step, a single-sample impulse
+# and ramps of 0.1 and 0.5 ms all measure 1.00 ms. Above the floor the reading is
+# monotone but reads low -- a true 5 ms rise comes back 4, a 10 comes back 9 and
+# a 30 comes back 25 -- so a model pinned here against a reference well above it
+# understates the gap and never invents one.
+ATTACK_FLOOR_MS = HIT_ENVELOPE_WIN_MS / 2.0
+
 
 def midi_to_hz(note: int) -> float:
     return 440.0 * 2.0 ** ((note - 69) / 12.0)
@@ -1772,6 +1781,12 @@ class HitMetrics:
     centroid_hz: float
     onset_ms: float                      # strike, relative to the note-on
     attack_ms: float
+    #: The attack sat at or under what the envelope window can resolve, so the
+    #: number is the ruler and not the hit -- the counterpart of `decay_capped`
+    #: at the other end. A step, an impulse and a 0.5 ms ramp all measure the
+    #: same, because an RMS window half full of a step is already within the
+    #: -3 dB the attack is read at.
+    attack_floored: bool
     decay_ms: float
     decay_capped: bool
     crest_db: float
@@ -2062,6 +2077,7 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
         centroid_hz=round(centroid, 1),
         onset_ms=round((onset - note.start) * 1000.0, 2),
         attack_ms=round(attack_ms, 2),
+        attack_floored=attack_ms <= ATTACK_FLOOR_MS,
         decay_ms=round(decay_ms, 1),
         decay_capped=capped,
         crest_db=round(crest_db, 2),

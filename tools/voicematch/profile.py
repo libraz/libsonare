@@ -79,7 +79,7 @@ from capture import (  # noqa: E402
 )
 from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
 from metrics import (  # noqa: E402
-    INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
+    ATTACK_FLOOR_MS, INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
     SILENT_WINDOW_DB, _db, _peak_near, _rms_envelope,
     _spectrum, _under_peak_db, analyze_hit, band_edges_by_timbre, band_tilt_db,
     fit_partial_series, ladder_present, midi_to_hz, partial_hz,
@@ -1685,6 +1685,25 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         print("\n  No `spread`: this capture has one reference kit, so no dimension can be "
               "judged\n  against anything but itself. A second kit is what makes the column "
               "exist.")
+
+    # An attack at the envelope window's floor is the ruler rather than the hit,
+    # and the `attack` column above cannot say so: it is a difference, and a
+    # difference between a floored reading and a real one looks like any other.
+    # Derived from the recorded number rather than read from `attack_floored`,
+    # so a profile measured before that field existed reports the same.
+    floored = {side: sum(1 for m, r in kit_rows
+                         if (m if side == "model" else r).get("attack_ms", 1e9)
+                         <= ATTACK_FLOOR_MS)
+               for side in ("model", "reference")}
+    if kit_rows and floored["model"]:
+        total = len(kit_rows)
+        print(f"\n  {floored['model']} of {total} model rows and {floored['reference']} of "
+              f"{total} reference rows sit at\n  the attack floor "
+              f"({ATTACK_FLOOR_MS:g} ms), where a step, an impulse and a "
+              f"{ATTACK_FLOOR_MS:g} ms ramp all\n  measure the same. Those rows say "
+              f"the attack is no slower than that and nothing\n  more, so an `attack` delta "
+              f"taken against a reference above the floor is a LOWER\n  bound on the gap. It "
+              f"understates and never invents.")
 
     print_kit_relations(kit_rows, note_groups(cfg))
 

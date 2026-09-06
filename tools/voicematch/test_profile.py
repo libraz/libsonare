@@ -8,6 +8,7 @@ bin, a dynamic range read off a single velocity.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -703,6 +704,58 @@ def test_a_band_that_decayed_on_only_one_side_is_left_out_of_the_decay_average()
     assert profile_module.mean_band_decay_delta([1.0, None, 3.0],
                                                 [0.0, 2.0, None]) == pytest.approx(1.0)
     assert profile_module.mean_band_decay_delta([None], [1.0]) is None
+
+
+def _attack_of(sig, sr=48000):
+    """The attack rule `analyze_hit` applies, on a bare signal."""
+    t, env = metrics_module._rms_envelope(
+        sig, sr, hop_ms=metrics_module.HIT_ENVELOPE_HOP_MS,
+        win_ms=metrics_module.HIT_ENVELOPE_WIN_MS)
+    peak = float(np.max(env))
+    reached = np.where(env >= peak * 10.0 ** (metrics_module.HIT_ATTACK_TOLERANCE_DB / 20.0))[0]
+    return float(t[int(reached[0]) if reached.size else int(np.argmax(env))] * 1000.0)
+
+
+def test_the_attack_metric_has_a_floor_and_it_is_where_the_constant_says():
+    """Anything faster than half the envelope window measures the ruler.
+
+    An RMS window half full of a step is already 3.01 dB down, which is the
+    tolerance the attack is read at, so a step, an impulse and a ramp inside the
+    floor cannot be told apart. More than half the drum kit's model rows sit
+    here, and a delta taken from one is a lower bound on the gap rather than a
+    measurement of it.
+    """
+    sr = 48000
+    noise = np.random.default_rng(0).standard_normal(int(0.3 * sr))
+    impulse = np.zeros(int(0.3 * sr))
+    impulse[0] = 1.0
+    assert _attack_of(noise) == pytest.approx(metrics_module.ATTACK_FLOOR_MS)
+    assert _attack_of(impulse) == pytest.approx(metrics_module.ATTACK_FLOOR_MS)
+    inside = noise.copy()
+    k = int(sr * metrics_module.ATTACK_FLOOR_MS / 2000.0)
+    inside[:k] *= np.linspace(0.0, 1.0, k)
+    assert _attack_of(inside) == pytest.approx(metrics_module.ATTACK_FLOOR_MS)
+
+    # Above the floor it separates rise times again, and reads low rather than
+    # high -- which is the direction that keeps a floored model honest.
+    slow = noise.copy()
+    k = int(sr * 0.030)
+    slow[:k] *= np.linspace(0.0, 1.0, k)
+    measured = _attack_of(slow)
+    assert metrics_module.ATTACK_FLOOR_MS < measured < 30.0
+
+
+def test_a_hit_records_whether_its_attack_was_floored():
+    """The counterpart of `decay_capped`, and it has to be in the row to be read."""
+    sr = 48000
+    noise = np.random.default_rng(1).standard_normal(int(0.3 * sr))
+    slow = noise.copy()
+    k = int(sr * 0.030)
+    slow[:k] *= np.linspace(0.0, 1.0, k)
+    assert _attack_of(noise) <= metrics_module.ATTACK_FLOOR_MS
+    assert _attack_of(slow) > metrics_module.ATTACK_FLOOR_MS
+    assert "attack_floored" in {f.name for f in
+                                dataclasses.fields(metrics_module.HitMetrics)}
 
 
 def test_the_model_grid_is_not_measured_into_the_reference_it_is_measured_against():
