@@ -50,6 +50,7 @@ enum class GsToneMap : uint8_t {
   kSc55 = 1,           ///< CC#32 = 1: the SC-55 tone map.
   kSc88 = 2,           ///< CC#32 = 2: the SC-88 tone map.
   kSc88Pro = 3,        ///< CC#32 = 3: the SC-88Pro tone map.
+  kSc8850 = 4,         ///< CC#32 = 4: the SC-8850's own map, which the target has.
 };
 
 /// The tone map a Bank Select LSB value selects. Values outside the defined
@@ -68,6 +69,8 @@ constexpr GsToneMap gs_tone_map_from_lsb(uint8_t bank_lsb) noexcept {
       return GsToneMap::kSc88;
     case 3:
       return GsToneMap::kSc88Pro;
+    case 4:
+      return GsToneMap::kSc8850;
     default:
       return GsToneMap::kModuleDefault;
   }

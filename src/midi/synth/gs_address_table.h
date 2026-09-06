@@ -546,14 +546,15 @@ inline constexpr std::array<GsAddressEntry, 144> kGsAddressTable = {{
      "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
 
     // Tone map (40 4x 00-01): which generation of the sound set a part plays
-    // from. The maps themselves exist and are audible through Bank Select LSB;
-    // what is missing is this route onto them. Ranges are the SC-8850's.
-    {0x404000, 0x000F00, GsParam::kPartToneMapNumber, GsLevel::kAccept, 1, 0x00, 0x04, 0x00,
-     "GsToneMap is selected by Bank Select LSB (gs_effective_tone_map); this route onto it is "
-     "not wired yet"},
+    // from. TONE MAP NUMBER is one storage location with Bank Select LSB, which
+    // a measured unit settles rather than an annotation in the map. MAP-0 NUMBER
+    // says which map MAP-0 stands for and has no controller of its own. Ranges
+    // are the SC-8850's.
+    {0x404000, 0x000F00, GsParam::kPartToneMapNumber, GsLevel::kAudible, 1, 0x00, 0x04, 0x00,
+     nullptr},
     {0x404001, 0x000F00, GsParam::kPartToneMap0Number, GsLevel::kAccept, 1, 0x01, 0x04, 0x04,
-     "GsToneMap is selected by Bank Select LSB (gs_effective_tone_map); this route onto it is "
-     "not wired yet"},
+     "which map MAP-0 resolves to; libsonare reads the map a part selects and never MAP-0's own "
+     "indirection"},
 
     // Part EQ switch (40 4x 20): whether the master EQ at 40 02 xx reaches this
     // part. Powers on ON, so a file that never writes it still gets the EQ.

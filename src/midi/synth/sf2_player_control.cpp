@@ -229,6 +229,15 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         }
         rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
         break;
+      case GsParam::kPartToneMapNumber:
+        // The storage Bank Select LSB writes, not a second copy of it. The two
+        // were left apart while it was unclear whether they were one parameter,
+        // and a measured unit settles it: CC#32 lands on this address verbatim
+        // (tools/gs/docs/unit-diff.md). It resolves a preset, so the rig binding
+        // is refreshed for the reason a tone number refreshes it.
+        st.bank_lsb = w.value;
+        rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+        break;
       case GsParam::kPartRxChannel:
         st.rx_channel = w.value;
         rx_dirty = true;

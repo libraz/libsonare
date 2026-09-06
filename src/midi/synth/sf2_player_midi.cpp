@@ -127,7 +127,16 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // built note by note, so both the kit this strike sounds and the note within
   // it come from the set rather than from the part and the key.
   const GsUserDrumSource* us = user_drum_source(ch, is_drum, note);
-  const uint8_t kit_program = us != nullptr ? us->program : ch.program;
+  uint8_t kit_program = us != nullptr ? us->program : ch.program;
+  // The selected tone map decides which kits exist, and both banks answer it
+  // through the same rule rather than one each: the model floor reads the map in
+  // gm_fallback_drum_kit, and here the program the preset is looked up by falls
+  // back to Standard for a kit the map does not define. Applied only to the
+  // lookup, so the part keeps the program it was given.
+  if (is_drum &&
+      gs_drum_kit_entry(kit_program, gs_effective_tone_map(ch.bank_msb, ch.bank_lsb)) == nullptr) {
+    kit_program = 0;
+  }
   // No SoundFont / uncovered program -> the data-free synth floor.
   const int preset_idx = soundfont_ != nullptr ? resolve_preset(bank, kit_program) : -1;
   if (preset_idx < 0) {

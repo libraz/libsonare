@@ -62,6 +62,14 @@ using sonare::midi::synth::kGsAddressTable;
 /// rhythm part, where the key-shift and mono/poly rows are exempt by the manual.
 constexpr uint8_t kMelodicBlock = 1;
 
+/// Block 0, which the same mapping sends to channel 9 — the rhythm part the
+/// stimulus strikes. Only the tone map is probed here.
+constexpr uint8_t kRhythmBlock = 0;
+
+/// A rhythm program whose kit a later map introduced, so an older map has
+/// something to fail to reach. Program 1 is Standard 2, since the SC-88.
+constexpr uint8_t kLaterMapKitProgram = 1;
+
 const char* level_name(GsLevel level) {
   switch (level) {
     case GsLevel::kAudible:
@@ -136,6 +144,11 @@ enum class Setup : uint8_t {
   /// The rhythm part's SECOND note put in a group, where an assign group only
   /// says something once two notes are in one.
   kDrumGroupPeer,
+  /// The rhythm part switched to a program whose kit a later map introduced,
+  /// which is the only state a TONE MAP write can be heard in: every melodic
+  /// variation voiced so far is an SC-55 tone that all maps reach, so the kit
+  /// side is the one that can fail to reach something (docs/gs.md).
+  kLaterMapKit,
   /// The rhythm part switched to a user drum set, which is the only state in
   /// which anything reads the 21 dn rr block.
   kUserDrumSet,
@@ -172,6 +185,8 @@ const char* setup_name(Setup setup) {
       return "drum-group-peer";
     case Setup::kUserDrumSet:
       return "user-drum-set";
+    case Setup::kLaterMapKit:
+      return "later-map-kit";
     case Setup::kUserDrumSetGroupPeer:
       return "user-drum-set-group-peer";
   }
@@ -220,6 +235,7 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
     case Setup::kModWheelUp:
     case Setup::kAftertouchUp:
     case Setup::kAssignableUp:
+    case Setup::kLaterMapKit:
     case Setup::kUserDrumSet:
       return {};
   }
@@ -288,6 +304,10 @@ Setup setup_for(const GsAddressEntry& row) {
         default:
           return Setup::kNone;
       }
+    // A map is only heard where it fails to reach something, and the melodic
+    // side has nothing it can fail to reach.
+    case GsParam::kPartToneMapNumber:
+      return Setup::kLaterMapKit;
     // A group is a relation, so one note in it chokes nothing.
     case GsParam::kDrumAssignGroup:
       return Setup::kDrumGroupPeer;
@@ -342,6 +362,11 @@ Probe probe_for(const GsAddressEntry& row) {
       // cents onto a cutoff above the band leaves every partial where it was.
       // lo is the same edit downwards, which the same zone can show.
       return {{0x00}, "hi raises a cutoff that is already above the signal"};
+    case GsParam::kPartToneMapNumber:
+      // hi is the SC-8850's own map, which reaches every kit the bank has and so
+      // renders exactly as the default does. 01 is the SC-55 map, the one that
+      // fails to reach a kit a later map introduced.
+      return {{0x01}, "hi reaches every kit, as the default does"};
     case GsParam::kPartAssignMode:
       // 01 LIMITED-MULTI and 02 FULL-MULTI are one behaviour here and only 00
       // SINGLE branches (docs/gs.md), so hi is inert by design.
@@ -363,6 +388,9 @@ constexpr uint32_t kProbeDrumNote = 38;
 /// stimulus strikes. A channel-nibble row (00 01 xx) is probed at channel 0,
 /// which its base address already carries.
 uint32_t probe_address(const GsAddressEntry& row) {
+  // The one part row whose effect is on the rhythm part rather than the melodic
+  // one, so it is probed at the block channel 9 reads.
+  if (row.param == GsParam::kPartToneMapNumber) return row.addr | (uint32_t{kRhythmBlock} << 8);
   if (row.mask == 0x000F00u) return row.addr | (static_cast<uint32_t>(kMelodicBlock) << 8);
   if (row.mask == 0x00F07Fu) return row.addr | kProbeDrumNote;
   // A whole-block row is probed at its part page rather than at mid byte 00, so
@@ -461,6 +489,9 @@ std::shared_ptr<const Sf2File> fixture() {
     // and reads as inert on this bank however well it works.
     pz.target = sine_inst;
     b.add_preset("Kit 2", 128, 127, {pz});
+    // The later-map kit, voiced unlike the Standard kit at 128/0 so that a map
+    // which cannot reach it renders audibly differently on this bank too.
+    b.add_preset("Kit 3", 128, kLaterMapKitProgram, {pz});
 
     const auto bytes = b.build();
     auto sf2 = std::make_shared<Sf2File>();
@@ -513,6 +544,10 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
     // it. Already at 127 by default, and sent anyway: the part reads a source's
     // position from the controller MOVING, not from what it happens to be.
     cc(p, ch, 11, 127);
+  } else if (setup == Setup::kLaterMapKit) {
+    // The rhythm part onto a kit only a later map defines. With the default map
+    // this sounds that kit, so the probe's older map is the only difference.
+    p.on_event(0, event(sonare::midi::make_midi1_program_change(0, 9, kLaterMapKitProgram)));
   } else if (setup == Setup::kUserDrumSet || setup == Setup::kUserDrumSetGroupPeer) {
     // Set 1, on the rhythm part the stimulus strikes. With nothing written to
     // the set this sounds the Standard kit, which is what the part was already

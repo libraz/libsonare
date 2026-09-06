@@ -175,15 +175,17 @@ TEST_CASE("gs_effective_bank is the one bank-resolution rule", "[midi][synth][gm
 TEST_CASE("Bank Select LSB selects the GS tone map", "[midi][synth][gm]") {
   using sonare::midi::synth::gs_tone_map_from_lsb;
   using sonare::midi::synth::GsToneMap;
-  // The three maps an SC-88Pro-class module addresses through CC#32.
+  // The four maps the target addresses through CC#32. The fourth is the
+  // SC-8850's own, which the SC-88Pro has no value for.
   REQUIRE(gs_tone_map_from_lsb(1) == GsToneMap::kSc55);
   REQUIRE(gs_tone_map_from_lsb(2) == GsToneMap::kSc88);
   REQUIRE(gs_tone_map_from_lsb(3) == GsToneMap::kSc88Pro);
+  REQUIRE(gs_tone_map_from_lsb(4) == GsToneMap::kSc8850);
   // Unset, and every value that names no map, read as the module's own default:
   // a module that never saw the message is already playing that map, so an
   // unrecognised one must sound it rather than nothing.
   REQUIRE(gs_tone_map_from_lsb(0) == GsToneMap::kModuleDefault);
-  for (int lsb = 4; lsb < 128; ++lsb) {
+  for (int lsb = 5; lsb < 128; ++lsb) {
     INFO("bank LSB " << lsb);
     REQUIRE(gs_tone_map_from_lsb(static_cast<uint8_t>(lsb)) == GsToneMap::kModuleDefault);
   }
