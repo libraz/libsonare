@@ -227,12 +227,13 @@ constexpr DrumPatches build_drum_patches() noexcept {
 // of the two — a value some real kit actually uses, taking no side on which.
 // A key is moved only where the peak and the RMS reading agree on the
 // direction, and by the smaller of the two; a decay or a brightness moving
-// takes the level with it, so the balance is re-measured after any fit. Four
-// keys sit at `gain`'s ceiling of 4 and still measure under the nearer kit —
-// 40 by 9.4 dB, 36 by 3.5, 37 by 2.5 and 52 by 0.4 — which is a voice too
-// quiet rather than a gain too low. The lever itself is exact: `gain` applies
-// after the drive, the filter and the envelope, so doubling it moves the
-// rendered peak +6.02 dB at every velocity and moves no other dimension.
+// takes the level with it, so the balance is re-measured after any fit. What
+// holds a key short of the range is that rule and not the knob: the bank's raw
+// voices span 33 dB before any gain is applied, and `gain` is the only lever
+// that moves one without its timbre, so its clamp carries the whole spread.
+// The lever is exact — applied after the drive, the filter and the envelope,
+// doubling it moves the rendered peak +6.02 dB at every velocity and moves no
+// other dimension of the comparison.
 SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
   const DrumPatches d = build_drum_patches();
   std::array<NativeSynthPatch, 128> t{};
@@ -427,7 +428,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[35].stereo_spread = 0.187262f;
   t[35].gain = 2.7519f;
   t[36] = d.kick;
-  t[36].gain = 4.0f;
+  t[36].gain = 5.2037f;
   t[46] = d.open_hat;
   // The six toms start from one patch because they are key-tracked — the struck
   // key sets the head frequency — and then part company below, each fitted
@@ -1621,7 +1622,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[40].percussion.wire_threshold = 1.25178f;
   t[40].resonance_q = 0.9922f;
   t[40].stereo_spread = 0.81941f;
-  t[40].gain = 4.0f;  // Electric Snare
+  t[40].gain = 7.7635f;  // Electric Snare
   //
   // The cymbal ceilings are several times higher than the drums' because the
   // plate is behind them. A cymbal's ceiling bounds the wash, and the wash is
@@ -1692,7 +1693,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[52].percussion.phisem_sound_ms = 3.0697f;
   t[52].percussion.shimmer = 1.42327f;
   t[52].percussion.mode_ratios[2] = 1.43935f;
-  t[52].gain = 4.0f;  // China
+  t[52].gain = 4.1645f;  // China
   t[52].amp_env.decay_ms = 543.272f;
   t[52].amp_env.sustain = 0.389133f;
   t[52].drive = 0.674902f;
