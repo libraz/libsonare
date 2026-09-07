@@ -101,26 +101,18 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   }
 
 #if defined(SONARE_MIDI_WITH_FX)
-  // GS EFX -> system FX send routing. A part bussed through the single GS
-  // insertion effect (config insert kNone, so it is bussed only because a GS EFX
-  // chain was realised) feeds the system reverb/chorus/delay from its
-  // POST-effect bus, scaled by the EFX unit's own send amounts (GS 40 03
-  // 17/18/19). Its pre-effect CC91/93/94 send is suppressed below so the wet
-  // tail follows the processed signal without double-sending. Parts with a
-  // static config insert keep the CC-driven pre-insert send unchanged.
+  // GS EFX -> system FX send routing. A part routed into an insertion unit
+  // sends to the system reverb/chorus/delay from that unit's POST-effect bus by
+  // the unit's own send amounts (GS 40 3u 17/18/19), so its pre-effect
+  // CC91/93/94 send is suppressed below and the wet tail follows the processed
+  // signal without double-sending. What decides it is the route, not whether the
+  // part's chain is non-empty: a part running only its own insert or the bank's
+  // default rig has no EFX sends to answer to and keeps the CC-driven send.
   std::array<bool, 16> efx_routed{};
   for (int part = 0; part < 16; ++part) {
     efx_routed[static_cast<size_t>(part)] =
-        part_bussed[static_cast<size_t>(part)] &&
-        config_.part_inserts[static_cast<size_t>(part)].type == Sf2InsertType::kNone;
+        efx != nullptr && efx->part_unit[static_cast<size_t>(part)] != Sf2RealizedEfx::kNoUnit;
   }
-  // Normalised EFX send amounts (raw 0..127 -> the CC send-depth scale). Read
-  // from the EFX mirror: offline it is render-thread-owned; in the live engine
-  // it is updated on the control thread, but a single-byte read cannot tear and
-  // a superseded value simply settles on the next block, so no lock is needed.
-  const float efx_send_reverb = kCcSendDepth * static_cast<float>(efx_.send_reverb) / 127.0f;
-  const float efx_send_chorus = kCcSendDepth * static_cast<float>(efx_.send_chorus) / 127.0f;
-  const float efx_send_delay = kCcSendDepth * static_cast<float>(efx_.send_delay) / 127.0f;
   float* rev_l = nullptr;
   float* rev_r = nullptr;
   float* cho_l = nullptr;
@@ -350,7 +342,12 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     }
   }
 
-  // Per-part insert processing, then sum the parts into the dry mix.
+  // Per-part insert processing, then either into the part's insertion unit or
+  // straight to the dry mix.
+  const bool any_unit = efx != nullptr && efx->any_unit && !unit_bus_.empty();
+  if (any_unit) {
+    std::memset(unit_bus_.data(), 0, sizeof(float) * unit_bus_.size());
+  }
   if (any_bussed) {
     for (int part = 0; part < 16; ++part) {
       if (!part_bussed[static_cast<size_t>(part)]) continue;
@@ -366,37 +363,27 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           bus_l[i] = std::tanh(drive * bus_l[i]) * makeup;
           bus_r[i] = std::tanh(drive * bus_r[i]) * makeup;
         }
-      } else {
-        // A built insert chain (config kProcessor slot, or a GS-EFX-installed
-        // one — single-stage or a composite's multi-stage rig) runs in series
-        // in place on the part's stereo bus. An empty chain is an inert no-op.
-        float* chans[2] = {bus_l, bus_r};
-        for (auto& proc : efx->chains[static_cast<size_t>(part)]) {
-          proc->process(chans, 2, n);
-        }
       }
-#if defined(SONARE_MIDI_WITH_FX)
-      // GS EFX -> system FX: feed the POST-effect bus into reverb/chorus/delay by
-      // the EFX unit's send amounts (the pre-effect CC send was suppressed for
-      // these parts), so an insertion-effect part's wet tail is generated from
-      // the processed signal rather than the clean input.
-      if (rev_l != nullptr && efx_routed[static_cast<size_t>(part)]) {
+      // The part's own chain — a config kProcessor slot, the bank's default rig,
+      // or nothing — runs in place on its stereo bus, after the built-in drive
+      // when the part carries one. An empty chain is an inert no-op.
+      float* chans[2] = {bus_l, bus_r};
+      for (auto& proc : efx->chains[static_cast<size_t>(part)]) {
+        proc->process(chans, 2, n);
+      }
+      // Routed parts merge into their unit's bus instead of reaching the mix
+      // here: the unit runs once on the sum, which is what makes two parts
+      // through one distortion intermodulate as they do on the hardware.
+      const uint8_t unit = efx->part_unit[static_cast<size_t>(part)];
+      if (unit != Sf2RealizedEfx::kNoUnit && any_unit) {
+        float* unit_l = unit_bus_.data() + static_cast<size_t>(unit) * 2 * kChunkFrames;
+        float* unit_r = unit_l + kChunkFrames;
         for (int i = 0; i < n; ++i) {
-          if (efx_send_reverb > 0.0f) {
-            rev_l[i] += bus_l[i] * efx_send_reverb;
-            rev_r[i] += bus_r[i] * efx_send_reverb;
-          }
-          if (efx_send_chorus > 0.0f) {
-            cho_l[i] += bus_l[i] * efx_send_chorus;
-            cho_r[i] += bus_r[i] * efx_send_chorus;
-          }
-          if (efx_send_delay > 0.0f) {
-            dly_l[i] += bus_l[i] * efx_send_delay;
-            dly_r[i] += bus_r[i] * efx_send_delay;
-          }
+          unit_l[i] += bus_l[i];
+          unit_r[i] += bus_r[i];
         }
+        continue;
       }
-#endif
       // A bussed part reaches the EQ bypass bus post-insert: what the mix gets
       // is what has to pass through unfiltered.
       const bool eq_bypass_part = eq_byp_l != nullptr && eq_bypassed_[static_cast<size_t>(part)];
@@ -406,6 +393,70 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         if (eq_bypass_part) {
           eq_byp_l[i] += bus_l[i];
           eq_byp_r[i] += bus_r[i];
+        }
+      }
+    }
+  }
+
+  // The insertion units, one pass each over the sum of the parts feeding them.
+  if (any_unit) {
+    for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+      if (!efx->unit_fed[unit]) continue;
+      float* unit_l = unit_bus_.data() + unit * 2 * kChunkFrames;
+      float* unit_r = unit_l + kChunkFrames;
+      float* chans[2] = {unit_l, unit_r};
+      for (auto& proc : efx->unit_chains[unit]) {
+        proc->process(chans, 2, n);
+      }
+#if defined(SONARE_MIDI_WITH_FX)
+      // GS EFX -> system FX: the unit's POST-effect bus into reverb/chorus/delay
+      // by its own send amounts (the pre-effect CC send was suppressed for every
+      // part feeding it), so the wet tail is generated from the processed signal
+      // rather than from the clean input.
+      // The send amounts are read from the unit's mirror rather than from the
+      // snapshot, so a send-only edit takes effect without rebuilding the chain
+      // and dropping its tail. Offline the mirror is render-thread-owned; live
+      // it is updated on the control thread, but a single-byte read cannot tear
+      // and a superseded value settles on the next block, so no lock is needed.
+      if (rev_l != nullptr) {
+        const GsEfx& unit_efx = efx_[unit];
+        const float send_reverb = kCcSendDepth * static_cast<float>(unit_efx.send_reverb) / 127.0f;
+        const float send_chorus = kCcSendDepth * static_cast<float>(unit_efx.send_chorus) / 127.0f;
+        const float send_delay = kCcSendDepth * static_cast<float>(unit_efx.send_delay) / 127.0f;
+        for (int i = 0; i < n; ++i) {
+          if (send_reverb > 0.0f) {
+            rev_l[i] += unit_l[i] * send_reverb;
+            rev_r[i] += unit_r[i] * send_reverb;
+          }
+          if (send_chorus > 0.0f) {
+            cho_l[i] += unit_l[i] * send_chorus;
+            cho_r[i] += unit_r[i] * send_chorus;
+          }
+          if (send_delay > 0.0f) {
+            dly_l[i] += unit_l[i] * send_delay;
+            dly_r[i] += unit_r[i] * send_delay;
+          }
+        }
+      }
+#endif
+      // A unit merges its parts, so a per-part EQ bypass downstream of it is no
+      // longer separable: it holds only where every part feeding the unit asked
+      // for it, and otherwise the unit takes the EQ, which is what every part
+      // powers on with. Read live for the same reason the sends are — the part
+      // EQ switch does not rebuild the chains.
+      bool eq_bypass_unit = eq_byp_l != nullptr;
+      if (eq_bypass_unit) {
+        for (size_t part = 0; part < 16; ++part) {
+          if (efx->part_unit[part] != unit) continue;
+          eq_bypass_unit = eq_bypass_unit && eq_bypassed_[part];
+        }
+      }
+      for (int i = 0; i < n; ++i) {
+        mix_l_[static_cast<size_t>(i)] += unit_l[i];
+        mix_r_[static_cast<size_t>(i)] += unit_r[i];
+        if (eq_bypass_unit) {
+          eq_byp_l[i] += unit_l[i];
+          eq_byp_r[i] += unit_r[i];
         }
       }
     }

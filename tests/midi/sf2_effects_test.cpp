@@ -51,6 +51,51 @@ MidiEvent event(const sonare::midi::Ump& ump) {
   return e;
 }
 
+/// A framed Roland DT1 write of @p data at @p addr, with its checksum.
+std::vector<uint8_t> dt1(uint32_t addr, std::vector<uint8_t> data) {
+  const uint8_t a0 = static_cast<uint8_t>((addr >> 16) & 0x7Fu);
+  const uint8_t a1 = static_cast<uint8_t>((addr >> 8) & 0x7Fu);
+  const uint8_t a2 = static_cast<uint8_t>(addr & 0x7Fu);
+  std::vector<uint8_t> msg{0xF0, 0x41, 0x10, 0x42, 0x12, a0, a1, a2};
+  msg.insert(msg.end(), data.begin(), data.end());
+  int sum = a0 + a1 + a2;
+  for (const uint8_t b : data) sum += b;
+  msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
+  msg.push_back(0xF7);
+  return msg;
+}
+
+/// The part-block nibble of @p channel: block 0 is the rhythm part (channel 10),
+/// blocks 1-9 are channels 1-9, blocks A-F are channels 11-16.
+uint32_t part_block(uint8_t channel) {
+  if (channel == 9) return 0;
+  return channel < 9 ? static_cast<uint32_t>(channel) + 1u : channel;
+}
+
+/// GS 40 4x 22 PART EFX ASSIGN: 00 bypass, 01 unit 0, 02-10 units 1-15.
+std::vector<uint8_t> efx_assign(uint8_t channel, uint8_t value) {
+  return dt1(0x404022u | (part_block(channel) << 8), {value});
+}
+
+/// The EFX parameter block of @p unit. Unit 0 is the spec block at 40 03 xx;
+/// the extension gives every unit the same layout at 40 3u xx (docs/gs.md).
+uint32_t efx_block(uint8_t unit) {
+  return unit == 0 ? 0x400300u : (0x403000u | (static_cast<uint32_t>(unit) << 8));
+}
+
+/// Energy at @p hz, over the settled part of the render.
+double tone_at(const std::vector<float>& buf, double hz) {
+  const double w = kTwoPi * hz / kOutRate;
+  const double coeff = 2.0 * std::cos(w);
+  double s1 = 0.0, s2 = 0.0;
+  for (size_t i = 2400; i < buf.size(); ++i) {
+    const double s0 = static_cast<double>(buf[i]) + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+  return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+}
+
 /// Fixture: program 0 = looped 1 kHz sine, program 1 = short one-shot burst,
 /// program 2 = the burst with a zone-level reverb send (gen 16 = 500 -> 0.5).
 std::shared_ptr<Sf2File> make_fixture() {
@@ -354,6 +399,157 @@ TEST_CASE("per-part processor insert runs an injected factory-built effect", "[m
   inert.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender ino = render(inert, 9600);
   REQUIRE(h3(ino.left) < 10.0 * h3(cln.left));
+}
+
+TEST_CASE("a part carries its own insert and the file's EFX in series", "[midi][sf2][gsfx]") {
+  // docs/gs.md: the slot is a chain, not a choice. A part given an insert by the
+  // host still receives the file's insertion effect, so a guitar with an
+  // amplifier does not lose the file's chorus.
+  auto factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  // Overdrive as the file's EFX, switched on for the part on channel 0.
+  const std::vector<uint8_t> efx_type = dt1(efx_block(0), {0x01, 0x10});
+  const std::vector<uint8_t> efx_on = efx_assign(0, 0x01);
+
+  auto render_case = [&](bool insert, bool efx) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.realize_efx_inline = true;
+    cfg.insert_factory = factory;
+    if (insert) {
+      cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
+      cfg.part_inserts[0].insert_name = "saturation.tube";
+      cfg.part_inserts[0].insert_params_json = R"({"driveDb":30})";
+    }
+    Sf2Player player = make_player(cfg);
+    if (efx) {
+      player.handle_sysex(efx_type.data(), efx_type.size());
+      player.handle_sysex(efx_on.data(), efx_on.size());
+    }
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    return render(player, 9600);
+  };
+
+  auto distance = [](const StereoRender& a, const StereoRender& b) {
+    double acc = 0.0;
+    for (size_t i = 2400; i < a.left.size(); ++i) {
+      const double d = static_cast<double>(a.left[i]) - static_cast<double>(b.left[i]);
+      acc += d * d;
+    }
+    return std::sqrt(acc / static_cast<double>(a.left.size() - 2400));
+  };
+
+  const StereoRender clean = render_case(false, false);
+  const StereoRender insert_only = render_case(true, false);
+  const StereoRender efx_only = render_case(false, true);
+  const StereoRender both = render_case(true, true);
+
+  // Positive controls: each stage moves the render on its own, so neither
+  // comparison below can pass on a stage that was never built.
+  REQUIRE(distance(insert_only, clean) > 1e-3);
+  REQUIRE(distance(efx_only, clean) > 1e-3);
+
+  // In series: the EFX reaches a part that already carries an insert, and the
+  // insert survives the EFX arriving.
+  REQUIRE(distance(both, insert_only) > 1e-3);
+  REQUIRE(distance(both, efx_only) > 1e-3);
+}
+
+TEST_CASE("parts assigned to one EFX unit sum into its single instance", "[midi][sf2][gsfx]") {
+  // docs/gs.md: parts summing into the unit they share is not a resource limit,
+  // it is what an effect is — two guitars into one distortion intermodulate.
+  // Two separate instances cannot produce a difference tone, so that is what
+  // separates the two arrangements: a 1 kHz part and a 1498 Hz part through one
+  // overdrive make 498 Hz, which is a harmonic of neither.
+  auto factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  const std::vector<uint8_t> overdrive = dt1(efx_block(0), {0x01, 0x10});
+
+  // Both parts on unit 0, against each part alone through the same unit. The
+  // two solo renders carry the intermodulation neither part can make by itself,
+  // which is the control: the difference tone must not already be there.
+  auto render_parts = [&](bool part_a, bool part_b) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.realize_efx_inline = true;
+    cfg.insert_factory = factory;
+    Sf2Player player = make_player(cfg);
+    player.handle_sysex(overdrive.data(), overdrive.size());
+    const std::vector<uint8_t> on_a = efx_assign(0, 0x01);
+    const std::vector<uint8_t> on_b = efx_assign(1, 0x01);
+    player.handle_sysex(on_a.data(), on_a.size());
+    player.handle_sysex(on_b.data(), on_b.size());
+    if (part_a) player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    if (part_b) player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 67, 127)));
+    return render(player, 9600);
+  };
+
+  const StereoRender a_only = render_parts(true, false);
+  const StereoRender b_only = render_parts(false, true);
+  const StereoRender both = render_parts(true, true);
+
+  // 1000 Hz and a fifth above it (1498 Hz): the difference is 498 Hz.
+  const double diff_solo = std::max(tone_at(a_only.left, 498.0), tone_at(b_only.left, 498.0));
+  const double diff_both = tone_at(both.left, 498.0);
+  // Each part is present on its own, so the render being compared is not empty.
+  REQUIRE(tone_at(a_only.left, 1000.0) > 1e3 * tone_at(a_only.left, 498.0));
+  REQUIRE(tone_at(b_only.left, 1498.0) > 1e3 * tone_at(b_only.left, 498.0));
+  // One instance, so the two parts intermodulate in it.
+  REQUIRE(diff_both > 100.0 * diff_solo);
+}
+
+TEST_CASE("each part reaches the EFX unit it was assigned", "[midi][sf2][gsfx]") {
+  // The extension gives every unit the same 00-1F layout at 40 3u xx, and
+  // 40 4x 22 selects which one a part runs through (docs/gs.md). Two parts on
+  // two units carrying different types therefore render differently, which one
+  // shared unit cannot do however it is configured.
+  auto factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  auto render_case = [&](uint8_t unit_for_part_b, uint16_t type_for_that_unit) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.realize_efx_inline = true;
+    cfg.insert_factory = factory;
+    Sf2Player player = make_player(cfg);
+    // Unit 0 is an overdrive; the second unit is whatever the case names.
+    const std::vector<uint8_t> u0 = dt1(efx_block(0), {0x01, 0x10});
+    player.handle_sysex(u0.data(), u0.size());
+    const std::vector<uint8_t> un =
+        dt1(efx_block(unit_for_part_b), {static_cast<uint8_t>(type_for_that_unit >> 8),
+                                         static_cast<uint8_t>(type_for_that_unit & 0x7Fu)});
+    if (unit_for_part_b != 0) player.handle_sysex(un.data(), un.size());
+    const std::vector<uint8_t> on_a = efx_assign(0, 0x01);
+    const std::vector<uint8_t> on_b =
+        efx_assign(1, static_cast<uint8_t>(unit_for_part_b == 0 ? 0x01 : unit_for_part_b + 1));
+    player.handle_sysex(on_a.data(), on_a.size());
+    player.handle_sysex(on_b.data(), on_b.size());
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 60, 127)));
+    return render(player, 9600);
+  };
+
+  // Part on channel 1 through unit 0 (overdrive) against the same part through
+  // unit 1 carrying a compressor: the harmonics the overdrive makes are the tell.
+  const StereoRender through_unit0 = render_case(0, 0x0110);
+  const StereoRender through_unit1 = render_case(1, 0x0130);
+  REQUIRE(tone_at(through_unit0.left, 3000.0) > 10.0 * tone_at(through_unit1.left, 3000.0));
+
+  // 40 30 xx is unit 0's own block under the extension's uniform layout, so a
+  // write there reaches the same unit 40 03 xx does.
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.realize_efx_inline = true;
+  cfg.insert_factory = factory;
+  Sf2Player aliased = make_player(cfg);
+  const std::vector<uint8_t> u0_alias = dt1(0x403000u, {0x01, 0x10});
+  const std::vector<uint8_t> on = efx_assign(1, 0x01);
+  aliased.handle_sysex(u0_alias.data(), u0_alias.size());
+  aliased.handle_sysex(on.data(), on.size());
+  aliased.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 60, 127)));
+  const StereoRender via_alias = render(aliased, 9600);
+  REQUIRE(tone_at(via_alias.left, 3000.0) > 10.0 * tone_at(through_unit1.left, 3000.0));
 }
 
 TEST_CASE("a non-finite insert sample never reaches the mix-bus state", "[midi][sf2][gsfx]") {

@@ -22,12 +22,12 @@
     "One unit is one unit. A disagreement is between this table and this machine, and a second SC-8850 has not been measured."
   ],
   "summary": {
-    "table_rows": 163,
-    "addresses_the_table_claims": 56662,
+    "table_rows": 168,
+    "addresses_the_table_claims": 57062,
     "addresses_the_unit_answered": 11990,
     "addresses_a_read_reached": 13522,
     "addresses_with_no_row": 2716,
-    "rows_no_read_reached": 50,
+    "rows_no_read_reached": 55,
     "rows_whose_default_disagrees": 1,
     "rows_one_default_byte_cannot_express": 0,
     "rows_whose_range_disagrees": 0,
@@ -38,7 +38,7 @@
     "extension_addresses_reached": 0
   },
   "extension_at_40_3u_xx": {
-    "addresses": 480,
+    "addresses": 512,
     "reached_by_a_read": 0,
     "sample_reached": [],
     "what_it_means": "The extra insertion-effect units live at 40 3u xx because the hardware has nothing there, which is what makes them unreachable from a spec-compliant file. Any address answered here is a collision and the extension is not safe without a flag."
@@ -1100,6 +1100,81 @@
         "40 21 5A"
       ],
       "why": "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"
+    },
+    {
+      "param": "kEfxType",
+      "level": "AUDIBLE",
+      "address": "40 30 00",
+      "addresses": 32,
+      "sample": [
+        "40 30 00",
+        "40 30 01",
+        "40 31 00",
+        "40 31 01",
+        "40 32 00",
+        "40 32 01"
+      ],
+      "why": null
+    },
+    {
+      "param": "kEfxParameter",
+      "level": "AUDIBLE",
+      "address": "40 30 03",
+      "addresses": 320,
+      "sample": [
+        "40 30 03",
+        "40 30 04",
+        "40 30 05",
+        "40 30 06",
+        "40 30 07",
+        "40 30 08"
+      ],
+      "why": null
+    },
+    {
+      "param": "kEfxSendToReverb",
+      "level": "AUDIBLE",
+      "address": "40 30 17",
+      "addresses": 16,
+      "sample": [
+        "40 30 17",
+        "40 31 17",
+        "40 32 17",
+        "40 33 17",
+        "40 34 17",
+        "40 35 17"
+      ],
+      "why": null
+    },
+    {
+      "param": "kEfxSendToChorus",
+      "level": "AUDIBLE",
+      "address": "40 30 18",
+      "addresses": 16,
+      "sample": [
+        "40 30 18",
+        "40 31 18",
+        "40 32 18",
+        "40 33 18",
+        "40 34 18",
+        "40 35 18"
+      ],
+      "why": null
+    },
+    {
+      "param": "kEfxSendToDelay",
+      "level": "AUDIBLE",
+      "address": "40 30 19",
+      "addresses": 16,
+      "sample": [
+        "40 30 19",
+        "40 31 19",
+        "40 32 19",
+        "40 33 19",
+        "40 34 19",
+        "40 35 19"
+      ],
+      "why": null
     },
     {
       "param": "kPartEqSwitch",

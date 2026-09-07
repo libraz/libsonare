@@ -57,6 +57,7 @@ using sonare::midi::synth::GsAddressEntry;
 using sonare::midi::synth::GsLevel;
 using sonare::midi::synth::GsParam;
 using sonare::midi::synth::kGsAddressTable;
+using sonare::midi::synth::kGsEfxUnitCount;
 
 /// GS part-parameter block 1, which gs_part_block_to_channel maps to channel 0 —
 /// the melodic part the stimulus sustains. Block 0 would be channel 9, the
@@ -208,16 +209,33 @@ const char* setup_name(Setup setup) {
 /// it needs a second note to say anything.
 constexpr uint32_t kProbeDrumPeerNote = 42;
 
-std::vector<std::vector<uint8_t>> setup_writes(Setup setup) {
+/// The parameter block of insertion unit @p unit: the spec one at 40 03 xx for
+/// unit 0, the extension's uniform 40 3u xx otherwise (docs/gs.md).
+uint32_t efx_block(uint8_t unit) {
+  return unit == 0 ? 0x400300u : (0x403000u | (static_cast<uint32_t>(unit) << 8));
+}
+
+std::vector<std::vector<uint8_t>> setup_writes(Setup setup, uint8_t unit = 0) {
   // Overdrive (01 10) is a type gs_efx_insert_chain realises as one stage, so a
-  // chain builds and the part is bussed.
-  const std::vector<uint8_t> type = dt1(0x400300, {0x01, 0x10});
-  const std::vector<uint8_t> route = dt1(0x404022u | (kMelodicBlock << 8), {0x01});
+  // chain builds and the part is bussed. The unit is the one the probed row
+  // addresses: an extension row at 40 3u xx reads nothing while the part is
+  // routed to unit 0, so arming unit 0 for it would measure an absence.
+  const std::vector<uint8_t> type = dt1(efx_block(unit), {0x01, 0x10});
+  const std::vector<uint8_t> route =
+      dt1(0x404022u | (kMelodicBlock << 8), {static_cast<uint8_t>(unit + 1)});
   switch (setup) {
     case Setup::kNone:
       return {};
-    case Setup::kEfxTypeOnly:
-      return {type};
+    case Setup::kEfxTypeOnly: {
+      // Here the routing value IS the probe and may name any unit, so every unit
+      // carries a type. Arming unit 0 alone would make the row read as inert for
+      // every value but 01, which is a property of the setup and not of the row.
+      std::vector<std::vector<uint8_t>> armed;
+      for (uint8_t u = 0; u < kGsEfxUnitCount; ++u) {
+        armed.push_back(dt1(efx_block(u), {0x01, 0x10}));
+      }
+      return armed;
+    }
     case Setup::kEfxRouteOnly:
       return {route};
     case Setup::kEfxActive:
@@ -427,6 +445,13 @@ uint32_t probe_address(const GsAddressEntry& row) {
   // the run writes what a file addressing that block actually writes.
   if (row.mask == 0x007F00u) return row.addr | (uint32_t{0x11} << 8);
   return row.addr;
+}
+
+/// The insertion unit a row's probe addresses. Zero for every row outside the
+/// extension block, which is every row whose setup arms the spec unit.
+uint8_t efx_setup_unit(const GsAddressEntry& row) {
+  if ((row.addr & 0xFFF000u) != 0x403000u) return 0;
+  return static_cast<uint8_t>((probe_address(row) >> 8) & 0x0Fu);
 }
 
 }  // namespace
@@ -753,7 +778,7 @@ StereoRender render(Bank bank, Setup setup, const std::vector<std::vector<uint8_
     cc(player, channel, 93, 64);  // chorus send
     cc(player, channel, 94, 64);  // delay send
   }
-  for (const std::vector<uint8_t>& msg : setup_writes(setup)) {
+  for (const std::vector<uint8_t>& msg : setup_writes(setup, efx_setup_unit(row))) {
     REQUIRE(player.handle_sysex(msg.data(), msg.size()));
   }
   setup_channel_state(player, setup);
@@ -830,7 +855,7 @@ Mirror mirror_state(const GsAddressEntry& row, const std::vector<uint8_t>& probe
   cfg.realize_efx_inline = true;
   cfg.synth_fallback = false;
   Sf2Player player(cfg);
-  for (const std::vector<uint8_t>& msg : setup_writes(setup_for(row))) {
+  for (const std::vector<uint8_t>& msg : setup_writes(setup_for(row), efx_setup_unit(row))) {
     player.handle_sysex(msg.data(), msg.size());
   }
   if (rx_block) {

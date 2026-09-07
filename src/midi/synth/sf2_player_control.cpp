@@ -41,7 +41,7 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
       // mirror here on the render thread; live leaves the mirror to the control
       // thread's on_control_sysex (which realises + swaps the chains wait-free).
       if (config_.realize_efx_inline) {
-        efx_part_enabled_[msg.channel & 0x0Fu] = msg.value != 0;
+        efx_part_assign_[msg.channel & 0x0Fu] = msg.value;
         gs_efx_dirty_ = true;
       }
       return true;
@@ -60,13 +60,17 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   // User drum sets (21 dn rr), on the same thread split: a note-on reads them
   // where it reads the drum setup slab.
   if (apply_gs_user_drum_sysex(data, size)) return true;
-  // GS insertion-effect (EFX) block writes (address 40 03 xx). Offline captures
-  // the raw wire into the mirror so process() can realise it inline; live routes
-  // realisation through the control thread (on_control_sysex), so the audio
-  // thread must not touch the mirror the builder reads.
-  if (config_.realize_efx_inline && apply_gs_efx_sysex(efx_, data, size)) {
-    gs_efx_dirty_ = true;
-    return true;
+  // GS insertion-effect (EFX) block writes (40 03 xx, or 40 3u xx for one of
+  // the extension's units). Offline captures the raw wire into that unit's
+  // mirror so process() can realise it inline; live routes realisation through
+  // the control thread (on_control_sysex), so the audio thread must not touch
+  // the mirror the builder reads.
+  if (config_.realize_efx_inline) {
+    const int unit = gs_efx_addressed_unit(data, size);
+    if (unit >= 0 && apply_gs_efx_sysex(efx_[static_cast<size_t>(unit)], data, size)) {
+      gs_efx_dirty_ = true;
+      return true;
+    }
   }
   // System-effect (40 01 30-5A), master-EQ (40 02 00-03) and part EQ switch
   // (40 4x 20) writes, on the same thread split as the EFX block above.
@@ -581,41 +585,42 @@ bool json_find_number(std::string_view json, std::string_view key, float& out) {
 
 std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
   auto out = std::make_shared<Sf2RealizedEfx>();
+  out->part_unit.fill(Sf2RealizedEfx::kNoUnit);
   for (int part = 0; part < 16; ++part) {
     const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
     const bool static_insert = insert.type != Sf2InsertType::kNone;
     std::vector<std::unique_ptr<rt::ProcessorBase>>& chain = out->chains[static_cast<size_t>(part)];
     // A config kProcessor slot is a caller-owned static insert built once from
-    // its name; it always busses the part regardless of the EFX unit.
-    if (insert.type == Sf2InsertType::kProcessor) {
-      if (config_.insert_factory && !insert.insert_name.empty()) {
-        auto proc = config_.insert_factory(insert.insert_name, insert.insert_params_json);
-        if (proc != nullptr) {
-          proc->prepare(sample_rate_, kChunkFrames);
-          chain.push_back(std::move(proc));
-        }
+    // its name; it always busses the part regardless of the EFX unit. It runs
+    // ahead of the file's EFX rather than instead of it — a part may carry both
+    // and they are in series (docs/gs.md), so a guitar with an amplifier still
+    // gets the file's chorus.
+    if (insert.type == Sf2InsertType::kProcessor && config_.insert_factory &&
+        !insert.insert_name.empty()) {
+      auto proc = config_.insert_factory(insert.insert_name, insert.insert_params_json);
+      if (proc != nullptr) {
+        proc->prepare(sample_rate_, kChunkFrames);
+        chain.push_back(std::move(proc));
       }
-      out->part_bussed[static_cast<size_t>(part)] = true;
-      out->any_bussed = true;
-      continue;
     }
-    if (efx_.assigned && efx_part_enabled_[static_cast<size_t>(part)] && config_.insert_factory) {
-      // Realise the EFX chain (single-effect = one stage, composite = its block
-      // chain). Stages whose factory build returns null (e.g. an FX stage in a
-      // no-FX build) are skipped, so a partial chain still runs.
-      for (const GsEfxStage& stage : gs_efx_insert_chain(efx_)) {
-        auto proc = config_.insert_factory(stage.name, stage.params_json);
-        if (proc != nullptr) {
-          proc->prepare(sample_rate_, kChunkFrames);
-          chain.push_back(std::move(proc));
-        }
-      }
+    // The unit the file routed this part through, if any. The part merges into
+    // it after its own insert; the unit's chain is built once, below.
+    const int unit = config_.insert_factory
+                         ? gs_efx_assign_unit(efx_part_assign_[static_cast<size_t>(part)])
+                         : -1;
+    const bool routed = unit >= 0 && efx_[static_cast<size_t>(unit)].assigned;
+    if (routed) {
+      out->part_unit[static_cast<size_t>(part)] = static_cast<uint8_t>(unit);
+      out->unit_fed[static_cast<size_t>(unit)] = true;
+      out->any_unit = true;
     }
     // Nothing of the part's own and nothing from the file: the bank's default
     // rig for the program it is playing (docs/voicing.md). The presets bind the
     // analytic cabinet rather than a generated impulse, so the stage reports no
-    // latency and the part stays aligned with every other one.
-    if (chain.empty() && config_.insert_factory) {
+    // latency and the part stays aligned with every other one. A configured
+    // insert outranks the default whether or not the factory could build it, so
+    // the slot is what the test reads rather than the chain being empty.
+    if (chain.empty() && !static_insert && !routed && config_.insert_factory) {
       const GmFallbackRig rig = gm_rig_binding(part_rig(part));
       if (rig.id != 0) {
         std::string params = std::string("{\"preset\":\"") + rig.preset +
@@ -628,11 +633,25 @@ std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
         }
       }
     }
-    // Buss the part only when it carries a static insert (kDrive), a live EFX
-    // chain or a bank rig, so unaffected parts keep adding straight to the dry
-    // mix.
-    out->part_bussed[static_cast<size_t>(part)] = static_insert || !chain.empty();
+    // Buss the part only when it carries a static insert (kDrive), its own
+    // chain, or a route into a unit, so unaffected parts keep adding straight to
+    // the dry mix.
+    out->part_bussed[static_cast<size_t>(part)] = static_insert || !chain.empty() || routed;
     out->any_bussed = out->any_bussed || out->part_bussed[static_cast<size_t>(part)];
+  }
+  // One chain per unit, built only for a unit some part actually feeds: parts
+  // sharing a unit sum into it and it runs once (docs/gs.md). Stages whose
+  // factory build returns null (an FX stage in a no-FX build) are skipped, so a
+  // partial chain still runs.
+  for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+    if (!out->unit_fed[unit]) continue;
+    for (const GsEfxStage& stage : gs_efx_insert_chain(efx_[unit])) {
+      auto proc = config_.insert_factory(stage.name, stage.params_json);
+      if (proc != nullptr) {
+        proc->prepare(sample_rate_, kChunkFrames);
+        out->unit_chains[unit].push_back(std::move(proc));
+      }
+    }
   }
   return out;
 }
@@ -652,70 +671,71 @@ bool Sf2Player::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
     case GsSysExKind::kGm1Reset:
     case GsSysExKind::kGm2Reset:
     case GsSysExKind::kGsReset:
-      // A GS/GM reset clears the EFX unit and the part switches (Thru): the
+      // A GS/GM reset clears every EFX unit and the part assignments (Thru): the
       // routing structure changes, so a full rebuild is required.
       efx_ = {};
-      efx_part_enabled_ = {};
+      efx_part_assign_ = {};
       return true;
     case GsSysExKind::kEfxPartSwitch:
-      // Routing a part in/out of the EFX changes the active-part set: rebuild.
-      efx_part_enabled_[msg.channel & 0x0Fu] = msg.value != 0;
+      // Moving a part between units, or out of one, changes which parts feed
+      // which unit: rebuild.
+      efx_part_assign_[msg.channel & 0x0Fu] = msg.value;
       return true;
     case GsSysExKind::kUseForRhythm:
     case GsSysExKind::kNone:
       break;
   }
-  // EFX-block write (40 03 xx). A TYPE change restructures the insert chain and
-  // needs a rebuild; a parameter/send-only edit is applied to the already-built
-  // processors WITHOUT rebuilding, so their DSP state (reverb/delay tails)
-  // survives (no click/tail dropout). The parameter values are resolved to
-  // {part, stage, param_id, value} tuples on THIS (control) thread and handed to
-  // the audio thread through a wait-free SPSC queue; the audio thread applies
-  // set_parameter serialized with process() (never a cross-thread mutation of a
-  // live processor). If nothing maps to an automatable parameter, or a parameter
-  // is not realtime-safe, fall back to a full rebuild.
+  // An EFX-block write (40 03 xx, or 40 3u xx for an extension unit). A TYPE
+  // change restructures that unit's insert chain and needs a rebuild; a
+  // parameter/send-only edit is applied to the already-built processors WITHOUT
+  // rebuilding, so their DSP state (reverb/delay tails) survives (no click/tail
+  // dropout). The parameter values are resolved to {unit, stage, param_id,
+  // value} tuples on THIS (control) thread and handed to the audio thread
+  // through a wait-free SPSC queue; the audio thread applies set_parameter
+  // serialized with process() (never a cross-thread mutation of a live
+  // processor). If nothing maps to an automatable parameter, or a parameter is
+  // not realtime-safe, fall back to a full rebuild.
+  const int unit = gs_efx_addressed_unit(data, size);
+  if (unit < 0) return false;
   bool type_changed = false;
-  if (!apply_gs_efx_sysex(efx_, data, size, &type_changed)) return false;
+  if (!apply_gs_efx_sysex(efx_[static_cast<size_t>(unit)], data, size, &type_changed)) return false;
   if (type_changed) return true;
-  return enqueue_efx_param_updates();
+  return enqueue_efx_param_updates(static_cast<size_t>(unit));
 }
 
-bool Sf2Player::enqueue_efx_param_updates() {
+bool Sf2Player::enqueue_efx_param_updates(size_t unit) {
   // CONTROL thread. Reads the last-published routing (control_current) purely to
   // discover each built stage processor's JSON-key -> param-id bridge
   // (parameter_descriptors() is const and safe to read concurrently with the
-  // audio thread); it never mutates a processor here. Only GS-EFX-realised parts
-  // (config insert kNone, bussed solely because a GS EFX chain was built) share
-  // the single EFX unit's parameters; static config-insert parts are left alone.
+  // audio thread); it never mutates a processor here. The edit is the unit's, so
+  // it reaches that unit's chain and no other — a part's own insert and the
+  // bank's default rig live on the part's chain and are nobody's to automate
+  // from a GS message.
   const Sf2RealizedEfx* snapshot = efx_pub_->control_current().get();
   if (snapshot == nullptr) return true;  // nothing built yet -> rebuild
-  const std::vector<GsEfxStage> stages = gs_efx_insert_chain(efx_);
+  if (unit >= kGsEfxUnitCount || !snapshot->unit_fed[unit]) return true;
+  const std::vector<GsEfxStage> stages = gs_efx_insert_chain(efx_[unit]);
   if (stages.empty()) return true;  // Thru / unmapped -> no chain, rebuild
+  const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain = snapshot->unit_chains[unit];
+  // The published chain skips stages the factory could not build, so it is a
+  // prefix of the stage list; align positionally over the built stages.
+  const size_t count = std::min(chain.size(), stages.size());
   size_t enqueued = 0;
-  for (int part = 0; part < 16; ++part) {
-    if (config_.part_inserts[static_cast<size_t>(part)].type != Sf2InsertType::kNone) continue;
-    if (!snapshot->part_bussed[static_cast<size_t>(part)]) continue;
-    const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
-        snapshot->chains[static_cast<size_t>(part)];
-    // The published chain skips stages the factory could not build, so it is a
-    // prefix of the stage list; align positionally over the built stages.
-    const size_t count = std::min(chain.size(), stages.size());
-    for (size_t s = 0; s < count; ++s) {
-      const rt::ProcessorBase* proc = chain[s].get();
-      if (proc == nullptr) continue;
-      for (const rt::ParamDescriptor& d : proc->parameter_descriptors()) {
-        float value = 0.0f;
-        if (!json_find_number(stages[s].params_json, d.key, value)) continue;
-        // A parameter that is not realtime-safe would allocate/rebuild in
-        // set_parameter, which is illegal on the audio thread -> rebuild instead.
-        if (!proc->parameter_is_realtime_safe(d.id)) return true;
-        EfxParamUpdate update;
-        update.part = static_cast<uint8_t>(part);
-        update.stage_index = static_cast<uint8_t>(s);
-        update.param_id = d.id;
-        update.value = value;
-        if (efx_param_queue_->push(update)) ++enqueued;
-      }
+  for (size_t s = 0; s < count; ++s) {
+    const rt::ProcessorBase* proc = chain[s].get();
+    if (proc == nullptr) continue;
+    for (const rt::ParamDescriptor& d : proc->parameter_descriptors()) {
+      float value = 0.0f;
+      if (!json_find_number(stages[s].params_json, d.key, value)) continue;
+      // A parameter that is not realtime-safe would allocate/rebuild in
+      // set_parameter, which is illegal on the audio thread -> rebuild instead.
+      if (!proc->parameter_is_realtime_safe(d.id)) return true;
+      EfxParamUpdate update;
+      update.unit = static_cast<uint8_t>(unit);
+      update.stage_index = static_cast<uint8_t>(s);
+      update.param_id = d.id;
+      update.value = value;
+      if (efx_param_queue_->push(update)) ++enqueued;
     }
   }
   // Nothing matched an automatable parameter -> rebuild so the edit is not lost.
@@ -733,8 +753,9 @@ void Sf2Player::drain_efx_param_updates() noexcept {
   const Sf2RealizedEfx* snapshot = efx_pub_->current();
   EfxParamUpdate update;
   while (efx_param_queue_->pop(update)) {
-    if (snapshot == nullptr || update.part >= 16) continue;
-    const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain = snapshot->chains[update.part];
+    if (snapshot == nullptr || update.unit >= kGsEfxUnitCount) continue;
+    const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
+        snapshot->unit_chains[update.unit];
     if (update.stage_index >= chain.size()) continue;
     rt::ProcessorBase* proc = chain[update.stage_index].get();
     if (proc == nullptr) continue;

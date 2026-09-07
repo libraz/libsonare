@@ -225,7 +225,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 163> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 168> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -501,11 +501,10 @@ inline constexpr std::array<GsAddressEntry, 163> kGsAddressTable = {{
     // rate, pitch, TVF, TVA / +07-0A the same four for LFO2. Rows are split where
     // the range, the power-on default or the level changes, not per destination.
     //
-    // kAccept except where a destination names a quantity that already exists
-    // under another address: the engine routes its controllers directly rather
-    // than through a matrix, so a byte is readable exactly when the thing it
-    // asks for is already built. The wheel's cutoff and LFO1 pitch depth are
-    // the two that are (docs/gs.md's alias table); the rest have no reader.
+    // A row is kAudible exactly where libsonare both routes that destination
+    // and receives that source, and kAccept otherwise with a reason naming why
+    // THAT row is unreadable — three groups: LFO2, polyphonic aftertouch, and
+    // the bend's destinations other than pitch (docs/gs.md).
     // Modulation as a source.
     // Whole semitones above 40, the range the row already carries: the same
     // cents the bend spends, so the two add on one field.
@@ -623,6 +622,22 @@ inline constexpr std::array<GsAddressEntry, 163> kGsAddressTable = {{
     {0x402058, 0x000F00, GsParam::kPartCc2Dest, GsLevel::kAccept, 3, 0x00, 0x7F, 0x00,
      "recognised; libsonare routes LFO1 only, so a second LFO's destinations name nothing"},
 
+    // Insertion units (40 3u xx) — the libsonare extension (docs/gs.md). Every
+    // unit carries the same 00-1F layout the spec block at 40 03 xx does, and
+    // the unit number IS the address nibble, so 40 30 xx is unit 0 and reaches
+    // the same storage 40 03 xx writes. The manual gives 40 3u xx no row, which
+    // is what keeps the extension unreachable from a spec-compliant file. Only
+    // the rows the realiser reads are here; the block's IGNORE rows are the spec
+    // block's alone, since a unit that cannot be re-parameterised while it runs
+    // does not gain the ability by being numbered.
+    {0x403000, 0x000F00, GsParam::kEfxType, GsLevel::kAudible, 2, 0x00, 0x7F, 0x00, nullptr},
+    {0x403003, 0x000F00, GsParam::kEfxParameter, GsLevel::kAudible, 20, 0x00, 0x7F, 0x00, nullptr},
+    {0x403017, 0x000F00, GsParam::kEfxSendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28,
+     nullptr},
+    {0x403018, 0x000F00, GsParam::kEfxSendToChorus, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
+     nullptr},
+    {0x403019, 0x000F00, GsParam::kEfxSendToDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+
     // Tone map (40 4x 00-01): which generation of the sound set a part plays
     // from. TONE MAP NUMBER is one storage location with Bank Select LSB, which
     // a measured unit settles rather than an annotation in the map. MAP-0 NUMBER
@@ -692,7 +707,7 @@ inline constexpr std::array<GsAddressEntry, 163> kGsAddressTable = {{
 }};
 
 /// The undefined regions covered so far.
-inline constexpr std::array<GsAddressRange, 21> kGsUndefinedRanges = {{
+inline constexpr std::array<GsAddressRange, 23> kGsUndefinedRanges = {{
     {0x400110, 0x40012F, 0,
      "no row between PATCH NAME and REVERB MACRO; the SC-55/SC-88 PARTIAL RESERVE the SC-8850 "
      "dropped arrives here"},
@@ -724,6 +739,13 @@ inline constexpr std::array<GsAddressRange, 21> kGsUndefinedRanges = {{
     {0x40204B, 0x40204F, 0x000F00, "no row between the CC1 and CC2 destinations"},
     {0x40205B, 0x40205F, 0x000F00, "no row past the CC2 destinations"},
     {0x402060, 0x40207F, 0x000F00, "no row past the controller-destination block"},
+    // Extension insertion units (40 3u xx). The same two gaps the spec block
+    // has, plus the tail the extension does not carry: an extension unit is the
+    // spec block's realisable half, so a run through one crosses the rest.
+    {0x403002, 0x403002, 0x000F00, "no row between the EFX TYPE bytes and PARAMETER 1"},
+    {0x40301A, 0x40307F, 0x000F00,
+     "no row past an extension unit's sends; the spec block's control sources and send EQ switch "
+     "are its own"},
     // Tone map / EQ / EFX block. Real files write into the first of these.
     {0x404002, 0x40401F, 0x000F00, "no row between TONE MAP-0 NUMBER and the part EQ switch"},
     {0x404021, 0x404021, 0x000F00, "no row between the part EQ switch and the part EFX assign"},
@@ -950,19 +972,23 @@ constexpr bool gs_ranges_are_consistent() noexcept {
     for (size_t j = 0; j < i; ++j) {
       if (gs_ranges_meet(r, kGsUndefinedRanges[j])) return false;
     }
-    // Row-outermost, with the high byte tested once per row and the rest of the
-    // high-16 test lifted out of the address walk: no mask reaches the high
-    // byte, so a row on another one cannot claim anything here, and that is most
-    // rows. The nesting is not cosmetic — walking every (block, address, row)
-    // triple exhausts the constexpr step budget once the table passes about
-    // eighty rows, and the budget is spent across this whole header.
+    // Row-outermost, with the high byte tested once per row: no mask reaches the
+    // high byte, so a row on another one cannot claim anything here, and that is
+    // most rows. The innermost test is an extent intersection rather than a walk
+    // over every address in the range — a row claims one contiguous run of low
+    // bytes, which is the same extent model gs_rows_overlap reads, so the
+    // intersection answers exactly what the walk did at a cost independent of
+    // how wide the range is. That independence is the point: the constexpr step
+    // budget is spent across this whole header, and a walk makes a wide range
+    // cost the budget that every other check in the file also draws on.
     for (const GsAddressEntry& e : kGsAddressTable) {
       if ((r.lo_addr & 0xFF0000u) != (e.addr & 0xFF0000u)) continue;
       for (uint32_t block = 0; block < blocks; ++block) {
         const uint32_t base = r.lo_addr | (block << 8);
         if ((base & ~e.mask & 0xFFFF00u) != (e.addr & 0xFFFF00u)) continue;
-        for (uint32_t addr = r.lo_addr; addr <= r.hi_addr; ++addr) {
-          if (gs_row_claims(e, addr | (block << 8))) return false;
+        if (gs_row_low_begin(e) <= (r.hi_addr & 0xFFu) &&
+            (r.lo_addr & 0xFFu) <= gs_row_low_end(e)) {
+          return false;
         }
       }
     }
@@ -974,11 +1000,12 @@ constexpr bool gs_ranges_are_consistent() noexcept {
 
 // These are evaluated out of one constexpr step budget shared by the whole
 // header, so a check's cost is paid by every other check and adding rows can
-// break an assertion that has nothing to do with them: the failure names the
-// range walk and says "possible infinite loop", which is neither. At 163 rows
-// the header compiles under clang's default 1048576 and not under three
-// quarters of it, so a comparable growth needs the walks made cheaper again
-// rather than a -fconstexpr-steps on the build, which would only move the wall.
+// break an assertion that has nothing to do with them: the failure names a
+// check and says the expression is not constant, which reads as a defect in the
+// row that was added rather than as the budget it actually is. Growth is paid
+// for by making a walk cheaper — the range check now intersects extents instead
+// of stepping addresses — and not by a -fconstexpr-steps on the build, which
+// would only move the wall.
 static_assert(detail::gs_table_is_consistent(),
               "GS address table: a reason missing from a kIgnore/kAccept row or present on a row "
               "that takes none, a bad size/mask/range/default, or two rows claiming one address");

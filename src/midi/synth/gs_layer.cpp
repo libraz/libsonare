@@ -317,18 +317,36 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
       // being ignored, which is wider than the row's range.
       out.value = static_cast<uint8_t>(write.value <= 2 ? write.value : 1);
       break;
-    case GsParam::kPartEfxAssign:
-      out.kind = GsSysExKind::kEfxPartSwitch;
-      out.channel = write.part;
-      // Any non-zero assignment routes the part through insertion unit 0. The
-      // row accepts 02-10 for units 1-15 (docs/gs.md); nothing realises them,
-      // so they read as unit 0 rather than as a part with no effect.
-      out.value = static_cast<uint8_t>(write.value != 0 ? 1 : 0);
+    case GsParam::kPartEfxAssign: {
+      // The raw assignment: 00 bypass, 01 unit 0, 02-10 units 1-15 (docs/gs.md).
+      // Carried verbatim because gs_efx_assign_unit is what turns it into a
+      // unit, and a value collapsed to a switch here cannot be recovered. A
+      // value the row does not accept is ignored rather than read as some unit,
+      // which is the rule every address but USE FOR RHYTHM PART follows.
+      const GsAddressEntry* entry = gs_lookup_address(write.addr);
+      if (entry != nullptr && gs_value_in_range(*entry, write.value)) {
+        out.kind = GsSysExKind::kEfxPartSwitch;
+        out.channel = write.part;
+        out.value = write.value;
+      }
       break;
+    }
     default:
       break;
   }
   return out;
+}
+
+int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept {
+  if (data == nullptr || size < 4) return -1;
+  const GsFrame frame = gs_sysex_frame(data, size);
+  if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return -1;
+  const uint32_t block = frame.addr & 0xFFFF00u;
+  if (block == 0x400300u) return 0;
+  // The extension numbers a unit by its own address nibble, so 40 30 xx is
+  // unit 0 and writes the storage 40 03 xx writes (docs/gs.md).
+  if ((block & 0xFFF000u) == 0x403000u) return static_cast<int>((block >> 8) & 0x0Fu);
+  return -1;
 }
 
 bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
@@ -338,9 +356,10 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
 
   const GsFrame frame = gs_sysex_frame(data, size);
   if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return false;
-  // Insertion unit 0, address 40 03 xx. A run starting anywhere else belongs to
-  // another parameter group.
-  if ((frame.addr & 0xFFFF00u) != 0x400300u) return false;
+  // An EFX block: the spec one at 40 03 xx, or an extension unit at 40 3u xx.
+  // Which unit @p efx is is the caller's to have resolved (gs_efx_addressed_unit);
+  // a run starting anywhere else belongs to another parameter group.
+  if (gs_efx_addressed_unit(data, size) < 0) return false;
 
   std::array<GsWrite, kGsEfxBlockSize> writes{};
   const size_t decoded =

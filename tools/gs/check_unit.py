@@ -84,13 +84,16 @@ DEFAULT_IS_NOT_THE_MACHINES = {
 RANGE_IS_MEASURED = frozenset({"accepts", "clamps", "refuses out of range"})
 RANGE_UNDECIDED = "unchanging, so a clamp and a refusal cannot be told apart"
 
-# The extra insertion-effect units libsonare adds at `40 3u xx` for u = 1..F
+# The insertion-effect units libsonare addresses at `40 3u xx` for u = 0..F
 # (gs.md, "The extensions libsonare adds"). The property that makes them safe
 # without a feature flag is that a spec-compliant file cannot reach them, which
 # rests on the hardware having nothing there. gs.md asserts that from the manual;
-# here it is checked against the machine.
+# here it is checked against the machine. `40 30 xx` is included because the
+# extension numbers a unit by its own address nibble, which makes that block a
+# second way into unit 0 rather than a hole: it is as much a claim about the
+# hardware as the other fifteen.
 EXTENSION_ADDRESSES = frozenset(
-    (0x40 << 16) | (0x30 + unit) << 8 | low for unit in range(1, 16) for low in range(0x00, 0x20)
+    (0x40 << 16) | (0x30 + unit) << 8 | low for unit in range(0, 16) for low in range(0x00, 0x20)
 )
 
 

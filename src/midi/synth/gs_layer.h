@@ -412,7 +412,26 @@ struct GsEfx {
   bool any() const noexcept { return assigned; }
 };
 
-/// Applies a GS DT1 write to the EFX block (address 40 03 xx) onto @p efx,
+/// The number of insertion units: the spec unit plus the extension's fifteen.
+inline constexpr size_t kGsEfxUnitCount = 16;
+
+/// The insertion unit a 40 4x 22 PART EFX ASSIGN @p value selects, or -1 for
+/// BYPASS. `00` bypasses, `01` is the spec unit 0, and `02`-`10` are the
+/// libsonare extension's units 1-15 (docs/gs.md). A value the row does not
+/// accept is ignored at the parse layer and so should not reach here; it answers
+/// bypass rather than a unit anyway, since the result indexes an array.
+constexpr int gs_efx_assign_unit(uint8_t value) noexcept {
+  return value == 0 || value > kGsEfxUnitCount ? -1 : static_cast<int>(value) - 1;
+}
+
+/// The insertion unit an EFX-block write addresses, or -1 for a write outside
+/// every EFX block. Unit 0 is the spec block at 40 03 xx and is also reachable
+/// at 40 30 xx, where the extension's uniform layout puts it; units 1-15 are at
+/// 40 31 xx - 40 3F xx (docs/gs.md). Accepts the payload with or without F0/F7
+/// framing. Never crashes.
+int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept;
+
+/// Applies a GS DT1 write to an EFX block (address 40 03 xx or 40 3u xx) onto @p efx,
 /// handling a run of consecutive data bytes from the start address (a single
 /// parameter write or a full-block dump). Bytes addressing reserved/unknown
 /// offsets are preserved by being ignored, never dropping the message. Accepts

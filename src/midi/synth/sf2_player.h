@@ -29,6 +29,7 @@
 /// Determinism: no RNG, no wall clock; voice stealing, effects and rendering
 /// are bit-identical for identical event streams within one build.
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -71,6 +72,18 @@ namespace sonare::midi::synth {
 struct Sf2RealizedEfx {
   std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, 16> chains{};
   std::array<bool, 16> part_bussed{};
+  /// The file's insertion effects, one chain per unit rather than one per part:
+  /// parts assigned to a unit sum into it and it runs once, which is what an
+  /// effect is rather than a limit of the machine (docs/gs.md). Unit 0 is the
+  /// spec one; 1-15 are the extension's.
+  std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, kGsEfxUnitCount> unit_chains{};
+  /// The unit each part merges into after its own insert, or kNoUnit. A part
+  /// with no unit goes straight from its own bus to the mix.
+  static constexpr uint8_t kNoUnit = 0xFF;
+  std::array<uint8_t, 16> part_unit{};
+  /// Whether a unit has any part feeding it. A unit nothing feeds is not run.
+  std::array<bool, kGsEfxUnitCount> unit_fed{};
+  bool any_unit = false;
   bool any_bussed = false;
 };
 
@@ -251,9 +264,16 @@ class Sf2Player final : public MidiInstrument {
     return channels_[channel & 0x0Fu].rx_switches;
   }
 
-  /// Captured GS insertion-effect (EFX) unit state (the raw 40 03 xx wire).
+  /// Captured GS insertion-effect (EFX) unit state (the raw block wire). The
+  /// default is the spec unit at 40 03 xx; 1-15 are the extension's at 40 3u xx.
   /// Exposed for the adapter layer that realises it and for diagnostics.
-  const GsEfx& gs_efx() const noexcept { return efx_; }
+  const GsEfx& gs_efx(size_t unit = 0) const noexcept {
+    return efx_[std::min(unit, kGsEfxUnitCount - 1)];
+  }
+  /// GS 40 4x 22 PART EFX ASSIGN for @p channel, as the raw byte (test/diagnostic).
+  uint8_t gs_efx_assign(uint8_t channel) const noexcept {
+    return efx_part_assign_[channel & 0x0Fu];
+  }
 
   /// Captured GS system-effect block (the raw 40 01 30-5A wire) and master EQ
   /// block (40 02 00-03), at the GS power-on defaults until a file writes them.
@@ -540,13 +560,16 @@ class Sf2Player final : public MidiInstrument {
   /// these are scalars the render loop reads directly, so they stay on the
   /// render thread in both modes, alongside the part parameters they resemble.
   GsMasterParams master_{};
-  /// GS insertion-effect (EFX) unit state, captured from the 40 03 xx SysEx
-  /// block. The single SC-55/88 EFX unit; parsed and stored raw here so an
-  /// adapter layer can realise it. Cleared on GS/GM reset.
-  GsEfx efx_{};
-  /// Per-part EFX on/off switch (GS 40 4x 22): parts routed through the EFX.
-  std::array<bool, 16> efx_part_enabled_{};
-  /// Raised by handle_sysex() when efx_ / efx_part_enabled_ change; cleared by
+  /// GS insertion-effect (EFX) unit state, captured from the EFX SysEx blocks.
+  /// Unit 0 is the spec one at 40 03 xx; 1-15 are the libsonare extension's at
+  /// 40 3u xx (docs/gs.md). Parsed and stored raw here so an adapter layer can
+  /// realise them. Cleared on GS/GM reset.
+  std::array<GsEfx, kGsEfxUnitCount> efx_{};
+  /// Per-part EFX assignment (GS 40 4x 22), as the raw byte: 00 bypass, 01 unit
+  /// 0, 02-10 units 1-15. Kept as the byte rather than as a resolved unit so
+  /// that reading it back says what the file wrote.
+  std::array<uint8_t, 16> efx_part_assign_{};
+  /// Raised by handle_sysex() when efx_ / efx_part_assign_ change; cleared by
   /// realise_gs_efx(). Lets the audio-safe SysEx path defer the allocating
   /// insert rebuild to the control thread.
   bool gs_efx_dirty_ = false;
@@ -644,6 +667,10 @@ class Sf2Player final : public MidiInstrument {
   std::vector<float> mix_r_;
   /// 16 parts x stereo x kChunkFrames; only used when a part insert is set.
   std::vector<float> part_bus_;
+  /// 16 insertion units x stereo x kChunkFrames. A part routed through a unit
+  /// runs its own insert on its part bus and then sums into the unit's, which
+  /// is where the unit's chain runs — once, however many parts share it.
+  std::vector<float> unit_bus_;
   /// Master-EQ bypass bus, stereo x kChunkFrames. A part switched out of the EQ
   /// (GS 40 4x 20) accumulates here as well as into the mix, so the EQ runs on
   /// the difference and that part's audio passes through untouched. Only used
@@ -679,11 +706,11 @@ class Sf2Player final : public MidiInstrument {
   std::unique_ptr<std::atomic<uint64_t>> part_rigs_ = std::make_unique<std::atomic<uint64_t>>(0);
 
   /// CONTROL thread: build a fresh realised-EFX snapshot from the current EFX
-  /// mirror (efx_ / efx_part_enabled_) and the config static inserts, via the
+  /// mirror (efx_ / efx_part_assign_) and the config static inserts, via the
   /// injected factory. Allocates.
   std::shared_ptr<Sf2RealizedEfx> build_realized_efx() const;
   /// CONTROL thread: apply the insertion-effect content of a GS SysEx to the EFX
-  /// mirror (efx_ / efx_part_enabled_). Returns true when a full chain rebuild is
+  /// mirror (efx_ / efx_part_assign_). Returns true when a full chain rebuild is
   /// required (type change, reset, part switch, or a parameter that cannot be
   /// applied in place), false when the message was handled without a rebuild
   /// (parameter-only edit resolved into the EFX parameter queue, or not an EFX
@@ -695,7 +722,7 @@ class Sf2Player final : public MidiInstrument {
   /// audio thread: apply set_parameter(@c param_id, @c value) to stage
   /// @c stage_index of part @c part's realised insert chain.
   struct EfxParamUpdate {
-    uint8_t part = 0;
+    uint8_t unit = 0;
     uint8_t stage_index = 0;
     uint32_t param_id = 0;
     float value = 0.0f;
@@ -802,7 +829,7 @@ class Sf2Player final : public MidiInstrument {
   /// enqueue the resulting set_parameter tuples for the audio thread. Returns
   /// true when a full rebuild is required instead (no live chain, no automatable
   /// parameter matched, or a parameter that is not realtime-safe).
-  bool enqueue_efx_param_updates();
+  bool enqueue_efx_param_updates(size_t unit);
   /// AUDIO thread: apply every pending EFX parameter update to the current
   /// published chain, serialized with process(). RT-safe (no alloc, no lock).
   void drain_efx_param_updates() noexcept;

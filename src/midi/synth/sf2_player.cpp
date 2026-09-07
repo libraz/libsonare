@@ -173,6 +173,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   dc_x1_ = {};
   dc_y1_ = {};
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
+  // One bus per insertion unit, so parts sharing a unit sum into it and it runs
+  // once (docs/gs.md). Allocated with the part bus and on the same condition: a
+  // unit is realisable exactly where an insert factory is.
+  unit_bus_.assign(any_insert_ ? kGsEfxUnitCount * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
   eq_bypass_bus_.assign(2 * static_cast<size_t>(kChunkFrames), 0.0f);
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->prepare(sample_rate_);
@@ -230,7 +234,7 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
   // audio thread never writes the mirror the builder reads.
   if (config_.realize_efx_inline) {
     efx_ = {};
-    efx_part_enabled_ = {};
+    efx_part_assign_ = {};
     gs_efx_dirty_ = true;
     // The system-effect and master-EQ mirror splits the same way, and every one
     // of its fields defaults to its GS power-on value.
