@@ -19,10 +19,10 @@ disk rather than a weighting anyone chose:
 
     0.0  untouched   no deliberate patch: a family default on the subtractive engine
     0.2  voiced      a deliberate engine and patch answer it
-    0.4  measured    two or more reference timbres, a measured profile, a current gate
-    0.6  covered     every canonical dimension gated, or excused with a reason
-    0.8  agreeing    most gated dimensions sit inside the reference's own spread
-    1.0  settled     no structural residual, and the musical take signed off
+    0.4  targeted    a reference exists and a profile has been measured from it
+    0.6  fitted      a current gate, over every canonical dimension
+    0.8  heard       somebody listened and it is the instrument
+    1.0  settled     and calibration reaches everything the model is asked for
 
 Two properties are deliberate. The first is that **a stage is a floor, not a
 score**: a voice sits at the highest step whose predicate holds, and an open
@@ -36,17 +36,23 @@ is a gap; there is no fraction to tune and no majority to argue about. The
 piano's two exclusions were already argued in prose and are now data, which is
 the difference between an exclusion and an oversight.
 
-`agreeing` compares each gated bound against the spread of the references
-against *each other*. A voice inside that spread is as close to the instrument
-as two presets of the instrument are to one another, which is the strongest
-claim this harness can make and the reason it is the last step before the two
-that need a human.
+**One reference is enough, and the ear is what promotes a voice.** Both follow
+from `docs/objective.md`, which is the contract this ladder implements: the
+reference is the target rather than a sample of a hidden truth, so a second
+timbre is not required, and a green gate is not acceptance because voices have
+passed every recorded bound while sounding wrong. `agreement` — each gated
+bound against the spread of the references against *each other* — is still
+computed and printed where a capture happens to carry several timbres, as
+information about how much the target itself wobbles. It decides nothing.
 
-The two claims 1.0 needs are the two nothing on disk implies — a diagnosis of
-what calibration cannot reach, and somebody's word that a take is the
-instrument — so they are recorded by hand in `signoff.json`, keyed by the same
-slug everything else here is. Both expire with the bank they were taken
-against, and `signoff` tells the two ways they expire apart.
+So a gate means the mechanical work is done and locked, `heard` means somebody
+said the take is the instrument, and the two claims live by hand in
+`signoff.json` keyed by the same slug everything else here is. Both expire with
+the bank they were taken against, and `signoff` tells the two ways they expire
+apart. `settled` adds the other claim: a diagnosis of what calibration cannot
+reach, with every unreachable term accepted — an open one is a missing
+mechanism in the model rather than a limit, and naming it is what turns "nobody
+has looked" into work.
 """
 
 from __future__ import annotations
@@ -71,7 +77,7 @@ OUT_PATH = REPO_ROOT / "tools" / "voice-status.json"
 BANK_VERSIONS = REPO_ROOT / "tools" / "bank-versions.json"
 
 #: The step names, low to high. The index is the stage in fifths.
-STAGES = ("untouched", "voiced", "measured", "covered", "agreeing", "settled")
+STAGES = ("untouched", "voiced", "targeted", "fitted", "heard", "settled")
 
 #: The engine a program falls to when nothing chose one for it. Deliberate for a
 #: synth lead and a default everywhere else, which is why the untouched
@@ -220,13 +226,13 @@ def stage_for(axes: dict) -> int:
                      and (axes["patch"] or "").startswith(FAMILY_PATCH_PREFIX)))
     if untouched:
         return 0
-    if not (axes["timbres"] >= 2 and axes["profile_rows"] > 0
-            and axes["gate_state"] == "current"):
+    # One timbre is a target, not half a measurement: see `docs/objective.md`.
+    if not (axes["timbres"] >= 1 and axes["profile_rows"] > 0):
         return 1
-    if not axes["coverage"]["complete"]:
+    if not (axes["gate_state"] == "current" and axes["coverage"]["complete"]):
         return 2
-    agree = axes["agreement"]
-    if not (agree["total"] and agree["inside"] * 2 > agree["total"]):
+    music = axes["music"]
+    if not (music and music["state"] == signoff.CURRENT):
         return 3
     # `settled` needs both claims recorded, both still current against the bank,
     # and every unreachable term accepted. Unknown is not satisfied.
@@ -242,25 +248,26 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
     if stage == 1:
         if axes["timbres"] == 0:
             return "capture an oracle: no reference exists for this voice"
-        if axes["timbres"] < 2:
-            return ("capture a second reference timbre: with one, no dimension "
-                    "can be judged against the references' own spread")
-        if not axes["profile_rows"]:
-            return "measure the captured corpus into a reference profile"
+        return "measure the captured corpus into a reference profile"
+    if stage == 2:
         if axes["gate_state"] is None:
             return ("write the first gate: `profile.py compare --write-gate` against "
                     "the profile just measured")
         if axes["gate_state"] != "current":
             return (f"the gate is {axes['gate_state']}: re-record it against the "
                     f"current profile")
-    if stage == 2:
         gaps = axes["coverage"]["gaps"]
         return (f"{len(gaps)} canonical dimension(s) neither gated nor excused: "
                 f"{', '.join(gaps)}")
     if stage == 3:
-        out = axes["agreement"].get("outside") or {}
-        worst = ", ".join(f"{d} {r}x" for d, r in list(out.items())[:3])
-        return f"outside the reference spread: {worst}"
+        listen = "listen to a take and record the verdict in signoff.json"
+        if candidates:
+            return (f"judge the recorded candidate(s) — {', '.join(candidates)} — "
+                    f"then {listen}")
+        music = axes["music"]
+        if music is not None:
+            return f"the sign-off is {music['state']} against this bank: listen again"
+        return listen
     if stage == 4:
         rest = _last_step(axes)
         if candidates:
@@ -270,13 +277,13 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
 
 
 def _last_step(axes: dict) -> str:
-    """Which half of the last step is missing, and why.
+    """Why the structural claim does not yet earn the last step.
 
-    The two claims fail in four ways between them and they need different work,
-    so naming the half is the whole value of the sentence: re-running a
-    diagnosis and listening to a take are not interchangeable.
+    Only reached once the take is signed off, so the musical half is settled by
+    construction and every branch here is about the diagnosis. It fails in four
+    ways and they need different work, which is why the sentence names which.
     """
-    structure, music = axes["structure"], axes["music"]
+    structure = axes["structure"]
     if structure is None:
         return "record a structural residual with autofit --diagnose"
     if structure["state"] == signoff.STALE:
@@ -288,11 +295,8 @@ def _last_step(axes: dict) -> str:
                 "attribute it: re-run autofit --diagnose")
     if structure["open"]:
         return (f"{len(structure['open'])} term(s) no knob reaches and nobody has accepted: "
-                f"{', '.join(structure['open'])}")
-    if music is None:
-        return "listen to a take and sign it off in signoff.json"
-    if music["state"] != signoff.CURRENT:
-        return f"the sign-off is {music['state']} against this bank: listen again"
+                f"{', '.join(structure['open'])} — a missing mechanism in the model, "
+                f"or an acceptance with a reason")
     return "settled"
 
 

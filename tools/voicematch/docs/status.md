@@ -20,20 +20,22 @@ One number per voice, in fifths. Each step is a predicate over facts already on 
 |---|---|---|
 | 0.0 | untouched | no deliberate patch: a `famN` family fallback on the subtractive engine |
 | 0.2 | voiced | a deliberate engine and patch answer it |
-| 0.4 | measured | two or more reference timbres, a measured profile, a gate that is current |
-| 0.6 | covered | every canonical dimension gated, or excused with a reason |
-| 0.8 | agreeing | most gated dimensions sit inside the reference's own spread |
-| 1.0 | settled | no structural residual, and the musical take signed off |
+| 0.4 | targeted | a reference exists and a profile has been measured from it |
+| 0.6 | fitted | a gate that is current, over every canonical dimension |
+| 0.8 | heard | somebody listened and it is the instrument |
+| 1.0 | settled | and calibration reaches everything the model is asked for |
+
+**The ladder implements [`objective.md`](objective.md), and two of its steps used to say something else.** `measured` demanded two reference timbres and `agreeing` demanded that most gated dimensions sit inside those two references' mutual disagreement. Both are retired: one reference is the target rather than a draw from the distribution of real instruments, so a second is not required, and a green gate is not acceptance because voices have passed every recorded bound while sounding wrong. What replaced them is the ear, moved from a footnote at the top of the ladder to the step that promotes a voice.
 
 **A stage is a floor, not a score.** A voice sits at the highest step whose predicate holds, and an open write-back candidate is a badge rather than a demotion: a candidate nobody has adopted means there may be more to gain, not that what shipped is worse than it was.
 
 **Untouched needs the patch as well as the engine.** Subtractive is the right engine for a synth lead and the default everywhere else, so `tremolo_strings` and `orchestra_hit` are deliberate while `fam10` through `fam15` are eight synth programs sharing one patch nobody has voiced apart.
 
-**Agreement is measured against the references' own spread**, not against zero. A voice inside that spread is as close to the instrument as two presets of the instrument are to each other, which is the strongest claim this harness can make. Where a capture has one reference timbre there is no spread and no dimension can be adjudicated at all — reported as unjudgeable, which is a different answer from "none of them agree". A single dimension whose spread is zero gets the same answer for the same reason: the references agree to finer than the metric resolves, so the ratio has no denominator. The tonewheel organ's arrival is one, both registrations speaking inside a single envelope hop.
+**Agreement is still computed and printed, and it decides nothing.** Where a capture happens to carry several timbres, each gated bound is compared against how far those references sit from *each other* — a reading of how much the target itself wobbles on that dimension, which is worth knowing before spending an afternoon closing a gap the references do not agree exists. Where a capture has one timbre there is no spread and the answer is unjudgeable, which is a different answer from "none of them agree" and, since [`objective.md`](objective.md), no longer holds anything back. A single dimension whose spread is zero gets the same answer for the same reason: the references agree to finer than the metric resolves, so the ratio has no denominator. The tonewheel organ's arrival is one, both registrations speaking inside a single envelope hop.
 
-**A spread the model has no axis for is a tolerance and never a target.** The timbres of a capture usually differ by something the bank could in principle express — an instrument, a registration, a microphone position — so a voice outside the spread has somewhere to move. The sampled electric guitar's two are the ends of a *fingering* choice on one instrument, and the bank plays one string per note: the band is a real ambiguity in what a note number means on a fretted instrument, which makes sitting inside it a legitimate claim and makes moving toward either end something no fit can be asked to do. Where a capture's timbres differ that way, its `_timbres` note says so, and `agreeing` is the last step such a voice can reach on the strength of that capture alone.
+**A spread the model has no axis for is a tolerance and never a target.** The timbres of a capture usually differ by something the bank could in principle express — an instrument, a registration, a microphone position — so a voice outside the spread has somewhere to move. The sampled electric guitar's two are the ends of a *fingering* choice on one instrument, and the bank plays one string per note: the band is a real ambiguity in what a note number means on a fretted instrument, which makes sitting inside it a legitimate claim and makes moving toward either end something no fit can be asked to do. Where a capture's timbres differ that way, its `_timbres` note says so, and the printed agreement for that voice is read as a band to sit inside rather than a gap to close.
 
-**The last step's two claims are the two nothing on disk implies**, so they are recorded by hand in `signoff.json` — see [the two claims 1.0 needs](#the-two-claims-10-needs) below.
+**The top two steps' claims are the two nothing on disk implies**, so they are recorded by hand in `signoff.json` — see [the two claims 1.0 needs](#the-two-claims-10-needs) below. They are read one per step rather than together: the musical one promotes a voice to `heard`, and the structural one carries it the rest of the way.
 
 ## Coverage is all-or-nothing
 

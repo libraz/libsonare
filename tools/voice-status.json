@@ -11,8 +11,8 @@
       "patch": "fam0",
       "engine": "piano",
       "capture": "piano",
-      "stage": 0.8,
-      "stage_name": "agreeing",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "tank-3.6"
       ],
@@ -48,7 +48,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6 — then listen to a take and sign it off in signoff.json"
+      "next": "judge the recorded candidate(s) — tank-3.6 — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p000b001-acoustic-grand-piano",
@@ -265,8 +265,8 @@
       "patch": "bright_piano",
       "engine": "piano",
       "capture": "bright_piano",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
@@ -303,7 +303,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p001b001-bright-acoustic-piano",
@@ -418,8 +418,8 @@
       "patch": "electric_grand",
       "engine": "piano",
       "capture": "electric_grand",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
@@ -457,7 +457,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p002b001-electric-grand-piano",
@@ -572,8 +572,8 @@
       "patch": "honky_tonk",
       "engine": "piano",
       "capture": "honky_tonk",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
@@ -610,7 +610,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p003b001-honky-tonk-piano",
@@ -725,8 +725,8 @@
       "patch": "e_piano",
       "engine": "fm",
       "capture": "electric_piano_1",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -764,7 +764,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p004b001-electric-piano-1",
@@ -1083,8 +1083,8 @@
       "patch": "e_piano",
       "engine": "fm",
       "capture": "electric_piano_2",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -1122,7 +1122,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p005b001-electric-piano-2",
@@ -1339,8 +1339,8 @@
       "patch": "harpsichord",
       "engine": "harpsichord",
       "capture": "harpsichord",
-      "stage": 0.8,
-      "stage_name": "agreeing",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
@@ -1373,7 +1373,7 @@
         },
         "music": null
       },
-      "next": "listen to a take and sign it off in signoff.json"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p006b001-harpsichord",
@@ -1692,8 +1692,8 @@
       "patch": "clav",
       "engine": "fm",
       "capture": "clavi",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -1731,7 +1731,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p008-celesta",
@@ -1744,8 +1744,8 @@
       "patch": "celesta",
       "engine": "modal",
       "capture": "celesta",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1782,7 +1782,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p009-glockenspiel",
@@ -1795,8 +1795,8 @@
       "patch": "glockenspiel",
       "engine": "modal",
       "capture": "glockenspiel",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1833,7 +1833,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p010-music-box",
@@ -1846,8 +1846,8 @@
       "patch": "music_box",
       "engine": "modal",
       "capture": "music_box",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1884,7 +1884,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p011-vibraphone",
@@ -1897,8 +1897,8 @@
       "patch": "vibraphone",
       "engine": "modal",
       "capture": "vibraphone",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1935,7 +1935,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p011b001-vibraphone",
@@ -2048,8 +2048,8 @@
       "patch": "marimba",
       "engine": "modal",
       "capture": "marimba",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "ring-2.3x"
       ],
@@ -2088,7 +2088,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p012b001-marimba",
@@ -2201,8 +2201,8 @@
       "patch": "xylophone",
       "engine": "modal",
       "capture": "xylophone",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "ring-3.4x"
       ],
@@ -2241,7 +2241,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p014-tubular-bells",
@@ -2254,8 +2254,8 @@
       "patch": "tubular_bells",
       "engine": "modal",
       "capture": "tubular_bells",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -2292,7 +2292,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p014b001-tubular-bells",
@@ -2505,8 +2505,8 @@
       "patch": "dulcimer",
       "engine": "karplus_strong",
       "capture": "dulcimer",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -2544,7 +2544,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p016-drawbar-organ",
@@ -2557,8 +2557,8 @@
       "patch": "drawbar_organ",
       "engine": "additive",
       "capture": "drawbar_organ",
-      "stage": 0.8,
-      "stage_name": "agreeing",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
@@ -2599,7 +2599,7 @@
         },
         "music": null
       },
-      "next": "listen to a take and sign it off in signoff.json"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p016b001-drawbar-organ",
@@ -2900,8 +2900,8 @@
       "patch": "percussive_organ",
       "engine": "additive",
       "capture": "percussive_organ",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "perc-quiet",
         "perc-loud"
@@ -2939,7 +2939,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p017b001-percussive-organ",
@@ -3144,8 +3144,8 @@
       "patch": "rock_organ",
       "engine": "additive",
       "capture": "rock_organ",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "drive-least",
         "drive-mild",
@@ -3184,7 +3184,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p019-church-organ",
@@ -3197,8 +3197,8 @@
       "patch": "church_organ",
       "engine": "pipe_organ",
       "capture": "pipe_organ",
-      "stage": 0.8,
-      "stage_name": "agreeing",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "tank-3.6",
         "hall",
@@ -3239,7 +3239,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then listen to a take and sign it off in signoff.json"
+      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p019b001-church-organ",
@@ -3444,8 +3444,8 @@
       "patch": "reed_organ",
       "engine": "free_reed",
       "capture": "reed_organ",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
@@ -3479,7 +3479,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p021-accordion",
@@ -3492,8 +3492,8 @@
       "patch": "accordion",
       "engine": "free_reed",
       "capture": "accordion",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
@@ -3527,7 +3527,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p021b008-accordion",
@@ -3588,8 +3588,8 @@
       "patch": "harmonica",
       "engine": "free_reed",
       "capture": "harmonica",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
@@ -3623,7 +3623,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p023-tango-accordion",
@@ -3636,8 +3636,8 @@
       "patch": "bandoneon",
       "engine": "free_reed",
       "capture": "tango_accordion",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
@@ -3671,7 +3671,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p024-acoustic-guitar-nylon",
@@ -3684,8 +3684,8 @@
       "patch": "nylon_guitar",
       "engine": "karplus_strong",
       "capture": "nylon_guitar",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -3722,7 +3722,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p024b001-acoustic-guitar-nylon",
@@ -3939,8 +3939,8 @@
       "patch": "steel_guitar",
       "engine": "karplus_strong",
       "capture": "steel_guitar",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -3977,7 +3977,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p025b001-acoustic-guitar-steel",
@@ -4194,8 +4194,8 @@
       "patch": "electric_guitar",
       "engine": "karplus_strong",
       "capture": "jazz_guitar",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4238,7 +4238,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p027-electric-guitar-clean",
@@ -4251,8 +4251,8 @@
       "patch": "electric_guitar",
       "engine": "karplus_strong",
       "capture": "electric_guitar_di",
-      "stage": 0.8,
-      "stage_name": "agreeing",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "di-fitted"
       ],
@@ -4286,7 +4286,7 @@
         "structure": null,
         "music": null
       },
-      "next": "judge the recorded candidate(s) — di-fitted — then record a structural residual with autofit --diagnose"
+      "next": "judge the recorded candidate(s) — di-fitted — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p028-electric-guitar-muted",
@@ -4299,8 +4299,8 @@
       "patch": "muted_guitar",
       "engine": "karplus_strong",
       "capture": "muted_guitar",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4337,7 +4337,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p029-overdriven-guitar",
@@ -4350,8 +4350,8 @@
       "patch": "overdriven",
       "engine": "karplus_strong",
       "capture": "overdriven_guitar",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "di-fitted",
         "di-fitted-drive-0.75"
@@ -4391,7 +4391,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p030-distortion-guitar",
@@ -4404,8 +4404,8 @@
       "patch": "distortion",
       "engine": "karplus_strong",
       "capture": "distortion_guitar",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4442,7 +4442,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p031-guitar-harmonics",
@@ -4455,8 +4455,8 @@
       "patch": "guitar_harmonics",
       "engine": "karplus_strong",
       "capture": "guitar_harmonics",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4494,7 +4494,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p032-acoustic-bass",
@@ -4507,8 +4507,8 @@
       "patch": "bass_acoustic",
       "engine": "karplus_strong",
       "capture": "acoustic_bass",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4546,7 +4546,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p033-electric-bass-finger",
@@ -4559,8 +4559,8 @@
       "patch": "bass_fingered",
       "engine": "karplus_strong",
       "capture": "bass_fingered",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4598,7 +4598,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p034-electric-bass-pick",
@@ -4611,8 +4611,8 @@
       "patch": "bass_picked",
       "engine": "karplus_strong",
       "capture": "bass_picked",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4650,7 +4650,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p035-fretless-bass",
@@ -4663,8 +4663,8 @@
       "patch": "bass_fretless",
       "engine": "karplus_strong",
       "capture": "bass_fretless",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4702,7 +4702,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p036-slap-bass-1",
@@ -4715,8 +4715,8 @@
       "patch": "bass_slap",
       "engine": "karplus_strong",
       "capture": "slap_bass",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4760,7 +4760,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p037-slap-bass-2",
@@ -4773,8 +4773,8 @@
       "patch": "bass_pop",
       "engine": "karplus_strong",
       "capture": "bass_pop",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4812,7 +4812,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p038-synth-bass-1",
@@ -4825,8 +4825,8 @@
       "patch": "synth_bass_1",
       "engine": "subtractive",
       "capture": "synth_bass_1",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -4864,7 +4864,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p039-synth-bass-2",
@@ -4877,8 +4877,8 @@
       "patch": "synth_bass_2",
       "engine": "subtractive",
       "capture": "synth_bass_2",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -4916,7 +4916,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p040-violin",
@@ -4929,8 +4929,8 @@
       "patch": "violin",
       "engine": "bowed_string",
       "capture": "violin",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -4971,7 +4971,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p040b001-violin",
@@ -5080,8 +5080,8 @@
       "patch": "viola",
       "engine": "bowed_string",
       "capture": "viola",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -5122,7 +5122,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p042-cello",
@@ -5135,8 +5135,8 @@
       "patch": "cello",
       "engine": "bowed_string",
       "capture": "cello",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -5177,7 +5177,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p043-contrabass",
@@ -5190,8 +5190,8 @@
       "patch": "contrabass",
       "engine": "bowed_string",
       "capture": "contrabass",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -5226,7 +5226,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p044-tremolo-strings",
@@ -5239,8 +5239,8 @@
       "patch": "tremolo_strings",
       "engine": "subtractive",
       "capture": "tremolo_strings",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -5280,7 +5280,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p045-pizzicato-strings",
@@ -5293,8 +5293,8 @@
       "patch": "pizzicato",
       "engine": "karplus_strong",
       "capture": "pizzicato_strings",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -5338,7 +5338,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p046-orchestral-harp",
@@ -5351,8 +5351,8 @@
       "patch": "harp",
       "engine": "karplus_strong",
       "capture": "orchestral_harp",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -5390,7 +5390,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p047-timpani",
@@ -5403,8 +5403,8 @@
       "patch": "timpani",
       "engine": "percussion",
       "capture": "timpani",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -5447,7 +5447,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p048-string-ensemble-1",
@@ -5460,8 +5460,8 @@
       "patch": "string_ensemble_1",
       "engine": "bowed_string",
       "capture": "string_ensemble_1",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -5501,7 +5501,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p049-string-ensemble-2",
@@ -5514,8 +5514,8 @@
       "patch": "string_ensemble_2",
       "engine": "bowed_string",
       "capture": "string_ensemble_2",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -5555,7 +5555,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p050-synth-strings-1",
@@ -5568,8 +5568,8 @@
       "patch": "synth_strings_1",
       "engine": "subtractive",
       "capture": "synth_strings_1",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -5609,7 +5609,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p051-synth-strings-2",
@@ -5622,8 +5622,8 @@
       "patch": "synth_strings_2",
       "engine": "subtractive",
       "capture": "synth_strings_2",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -5663,7 +5663,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p052-choir-aahs",
@@ -5676,8 +5676,8 @@
       "patch": "choir_aahs",
       "engine": "vocal",
       "capture": "choir_aahs",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
@@ -5717,7 +5717,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p053-voice-oohs",
@@ -5730,8 +5730,8 @@
       "patch": "voice_oohs",
       "engine": "vocal",
       "capture": "voice_oohs",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
@@ -5771,7 +5771,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p054-synth-voice",
@@ -5784,8 +5784,8 @@
       "patch": "synth_voice",
       "engine": "vocal",
       "capture": "synth_voice",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
@@ -5825,7 +5825,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p055-orchestra-hit",
@@ -5838,8 +5838,8 @@
       "patch": "orchestra_hit",
       "engine": "subtractive",
       "capture": "orchestra_hit",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -5882,7 +5882,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p056-trumpet",
@@ -5895,8 +5895,8 @@
       "patch": "trumpet",
       "engine": "brass",
       "capture": "trumpet",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -5931,7 +5931,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p057-trombone",
@@ -5944,8 +5944,8 @@
       "patch": "trombone",
       "engine": "brass",
       "capture": "trombone",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -5980,7 +5980,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p058-tuba",
@@ -5993,8 +5993,8 @@
       "patch": "tuba",
       "engine": "brass",
       "capture": "tuba",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -6035,7 +6035,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p059-muted-trumpet",
@@ -6048,8 +6048,8 @@
       "patch": "muted_trumpet",
       "engine": "brass",
       "capture": "muted_trumpet",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -6090,7 +6090,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p060-french-horn",
@@ -6103,8 +6103,8 @@
       "patch": "french_horn",
       "engine": "brass",
       "capture": "french_horn",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -6138,7 +6138,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p061-brass-section",
@@ -6151,8 +6151,8 @@
       "patch": "brass_section",
       "engine": "brass",
       "capture": "brass_section",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -6186,7 +6186,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p062-synth-brass-1",
@@ -6199,8 +6199,8 @@
       "patch": "synth_brass_1",
       "engine": "fm",
       "capture": "synth_brass_1",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -6234,7 +6234,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p063-synth-brass-2",
@@ -6247,8 +6247,8 @@
       "patch": "synth_brass_2",
       "engine": "fm",
       "capture": "synth_brass_2",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -6282,7 +6282,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p064-soprano-sax",
@@ -6295,8 +6295,8 @@
       "patch": "soprano_sax",
       "engine": "reed",
       "capture": "soprano_sax",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6331,7 +6331,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p065-alto-sax",
@@ -6344,8 +6344,8 @@
       "patch": "alto_sax",
       "engine": "reed",
       "capture": "alto_sax",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6386,7 +6386,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p066-tenor-sax",
@@ -6399,8 +6399,8 @@
       "patch": "tenor_sax",
       "engine": "reed",
       "capture": "tenor_sax",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6435,7 +6435,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p067-baritone-sax",
@@ -6448,8 +6448,8 @@
       "patch": "baritone_sax",
       "engine": "reed",
       "capture": "baritone_sax",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6484,7 +6484,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p068-oboe",
@@ -6497,8 +6497,8 @@
       "patch": "oboe",
       "engine": "reed",
       "capture": "oboe",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6533,7 +6533,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p069-english-horn",
@@ -6546,8 +6546,8 @@
       "patch": "english_horn",
       "engine": "reed",
       "capture": "english_horn",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6582,7 +6582,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p070-bassoon",
@@ -6595,8 +6595,8 @@
       "patch": "bassoon",
       "engine": "reed",
       "capture": "bassoon",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6631,7 +6631,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p071-clarinet",
@@ -6644,8 +6644,8 @@
       "patch": "clarinet",
       "engine": "reed",
       "capture": "clarinet",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6680,7 +6680,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p072-piccolo",
@@ -6693,8 +6693,8 @@
       "patch": "piccolo",
       "engine": "flute",
       "capture": "piccolo",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -6729,7 +6729,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p073-flute",
@@ -6742,8 +6742,8 @@
       "patch": "concert_flute",
       "engine": "flute",
       "capture": "concert_flute",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -6778,7 +6778,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p074-recorder",
@@ -6791,8 +6791,8 @@
       "patch": "recorder",
       "engine": "flute",
       "capture": "recorder",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -6827,7 +6827,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p075-pan-flute",
@@ -6840,8 +6840,8 @@
       "patch": "pan_flute",
       "engine": "flute",
       "capture": "pan_flute",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -6876,7 +6876,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p076-blown-bottle",
@@ -6889,8 +6889,8 @@
       "patch": "blown_bottle",
       "engine": "flute",
       "capture": "blown_bottle",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -6925,7 +6925,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p077-shakuhachi",
@@ -6938,8 +6938,8 @@
       "patch": "shakuhachi",
       "engine": "flute",
       "capture": "shakuhachi",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -6974,7 +6974,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p078-whistle",
@@ -6987,8 +6987,8 @@
       "patch": "tin_whistle",
       "engine": "flute",
       "capture": "whistle",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "keyed-filter"
       ],
@@ -7025,7 +7025,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p079-ocarina",
@@ -7038,8 +7038,8 @@
       "patch": "ocarina",
       "engine": "flute",
       "capture": "ocarina",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -7074,7 +7074,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p080-lead-1-square",
@@ -7087,8 +7087,8 @@
       "patch": "lead_square",
       "engine": "subtractive",
       "capture": "lead_square",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7122,7 +7122,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p081-lead-2-sawtooth",
@@ -7135,8 +7135,8 @@
       "patch": "lead_saw",
       "engine": "subtractive",
       "capture": "lead_saw",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7170,7 +7170,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p082-lead-3-calliope",
@@ -7183,8 +7183,8 @@
       "patch": "lead_calliope",
       "engine": "subtractive",
       "capture": "lead_calliope",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7219,7 +7219,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p083-lead-4-chiff",
@@ -7232,8 +7232,8 @@
       "patch": "lead_chiff",
       "engine": "subtractive",
       "capture": "lead_chiff",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7268,7 +7268,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p084-lead-5-charang",
@@ -7281,8 +7281,8 @@
       "patch": "lead_charang",
       "engine": "subtractive",
       "capture": "lead_charang",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7317,7 +7317,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p085-lead-6-voice",
@@ -7330,8 +7330,8 @@
       "patch": "lead_voice",
       "engine": "subtractive",
       "capture": "lead_voice",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7365,7 +7365,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p086-lead-7-fifths",
@@ -7378,8 +7378,8 @@
       "patch": "lead_fifths",
       "engine": "subtractive",
       "capture": "lead_fifths",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7413,7 +7413,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p087-lead-8-bass-lead",
@@ -7426,8 +7426,8 @@
       "patch": "lead_bass_lead",
       "engine": "subtractive",
       "capture": "lead_bass_lead",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7462,7 +7462,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p088-pad-1-new-age",
@@ -7475,8 +7475,8 @@
       "patch": "pad_new_age",
       "engine": "subtractive",
       "capture": "pad_new_age",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7511,7 +7511,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p089-pad-2-warm",
@@ -7524,8 +7524,8 @@
       "patch": "pad_warm",
       "engine": "subtractive",
       "capture": "pad_warm",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7559,7 +7559,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p090-pad-3-polysynth",
@@ -7572,8 +7572,8 @@
       "patch": "pad_polysynth",
       "engine": "subtractive",
       "capture": "pad_polysynth",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7607,7 +7607,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p091-pad-4-choir",
@@ -7620,8 +7620,8 @@
       "patch": "pad_choir",
       "engine": "subtractive",
       "capture": "pad_choir",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7655,7 +7655,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p092-pad-5-bowed",
@@ -7668,8 +7668,8 @@
       "patch": "pad_bowed",
       "engine": "subtractive",
       "capture": "pad_bowed",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7704,7 +7704,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p093-pad-6-metallic",
@@ -7717,8 +7717,8 @@
       "patch": "pad_metallic",
       "engine": "subtractive",
       "capture": "pad_metallic",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7753,7 +7753,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p094-pad-7-halo",
@@ -7766,8 +7766,8 @@
       "patch": "pad_halo",
       "engine": "subtractive",
       "capture": "pad_halo",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7801,7 +7801,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p095-pad-8-sweep",
@@ -7814,8 +7814,8 @@
       "patch": "pad_sweep",
       "engine": "subtractive",
       "capture": "pad_sweep",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7849,7 +7849,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p096-fx-1-rain",
@@ -7862,8 +7862,8 @@
       "patch": "fx_rain",
       "engine": "subtractive",
       "capture": "fx_rain",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7898,7 +7898,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p097-fx-2-soundtrack",
@@ -7911,8 +7911,8 @@
       "patch": "fx_soundtrack",
       "engine": "subtractive",
       "capture": "fx_soundtrack",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7946,7 +7946,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p098-fx-3-crystal",
@@ -7959,8 +7959,8 @@
       "patch": "fx_crystal",
       "engine": "subtractive",
       "capture": "fx_crystal",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -7995,7 +7995,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p099-fx-4-atmosphere",
@@ -8008,8 +8008,8 @@
       "patch": "fx_atmosphere",
       "engine": "subtractive",
       "capture": "fx_atmosphere",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -8043,7 +8043,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p100-fx-5-brightness",
@@ -8056,8 +8056,8 @@
       "patch": "fx_brightness",
       "engine": "subtractive",
       "capture": "fx_brightness",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -8092,7 +8092,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p101-fx-6-goblins",
@@ -8105,8 +8105,8 @@
       "patch": "fx_goblins",
       "engine": "subtractive",
       "capture": "fx_goblins",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -8141,7 +8141,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p102-fx-7-echoes",
@@ -8154,8 +8154,8 @@
       "patch": "fx_echoes",
       "engine": "subtractive",
       "capture": "fx_echoes",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -8189,7 +8189,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p103-fx-8-sci-fi",
@@ -8202,8 +8202,8 @@
       "patch": "fx_sci_fi",
       "engine": "subtractive",
       "capture": "fx_sci_fi",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -8237,7 +8237,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p104-sitar",
@@ -8250,8 +8250,8 @@
       "patch": "sitar",
       "engine": "plucked_string",
       "capture": "sitar",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "plucked_string",
@@ -8289,7 +8289,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p105-banjo",
@@ -8302,8 +8302,8 @@
       "patch": "banjo",
       "engine": "karplus_strong",
       "capture": "banjo",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -8341,7 +8341,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p106-shamisen",
@@ -8354,8 +8354,8 @@
       "patch": "shamisen",
       "engine": "plucked_string",
       "capture": "shamisen",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "even-register",
         "flat-velocity"
@@ -8396,7 +8396,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p107-koto",
@@ -8409,8 +8409,8 @@
       "patch": "koto",
       "engine": "plucked_string",
       "capture": "koto",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "plucked_string",
@@ -8448,7 +8448,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p108-kalimba",
@@ -8461,8 +8461,8 @@
       "patch": "kalimba",
       "engine": "modal",
       "capture": "kalimba",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -8499,7 +8499,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p109-bag-pipe",
@@ -8512,8 +8512,8 @@
       "patch": "bag_pipe",
       "engine": "reed",
       "capture": "bagpipe",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -8551,7 +8551,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p110-fiddle",
@@ -8564,8 +8564,8 @@
       "patch": "fiddle",
       "engine": "bowed_string",
       "capture": "fiddle",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -8600,7 +8600,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p111-shanai",
@@ -8613,8 +8613,8 @@
       "patch": "shanai",
       "engine": "reed",
       "capture": "shanai",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -8652,7 +8652,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p112-tinkle-bell",
@@ -8665,8 +8665,8 @@
       "patch": "tinkle_bell",
       "engine": "percussion",
       "capture": "tinkle_bell",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -8703,7 +8703,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p113-agogo",
@@ -8716,8 +8716,8 @@
       "patch": "agogo",
       "engine": "modal",
       "capture": "agogo",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -8754,7 +8754,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p114-steel-drums",
@@ -8767,8 +8767,8 @@
       "patch": "steel_drums",
       "engine": "modal",
       "capture": "steel_drums",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -8805,7 +8805,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p115-woodblock",
@@ -8818,8 +8818,8 @@
       "patch": "woodblock",
       "engine": "percussion",
       "capture": "woodblock",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -8862,7 +8862,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p116-taiko-drum",
@@ -8875,8 +8875,8 @@
       "patch": "taiko",
       "engine": "percussion",
       "capture": "taiko",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -8913,7 +8913,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p117-melodic-tom",
@@ -8926,8 +8926,8 @@
       "patch": "melodic_tom",
       "engine": "percussion",
       "capture": "melodic_tom",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -8964,7 +8964,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p118-synth-drum",
@@ -8977,8 +8977,8 @@
       "patch": "synth_drum",
       "engine": "percussion",
       "capture": "synth_drum",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -9015,7 +9015,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p119-reverse-cymbal",
@@ -9028,8 +9028,8 @@
       "patch": "reverse_cymbal",
       "engine": "percussion",
       "capture": "reverse_cymbal",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -9065,7 +9065,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p120-guitar-fret-noise",
@@ -9078,8 +9078,8 @@
       "patch": "sfx_guitar_fret",
       "engine": "subtractive",
       "capture": "guitar_fret_noise",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9115,7 +9115,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p121-breath-noise",
@@ -9128,8 +9128,8 @@
       "patch": "sfx_breath",
       "engine": "subtractive",
       "capture": "breath_noise",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9165,7 +9165,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p122-seashore",
@@ -9178,8 +9178,8 @@
       "patch": "sfx_seashore",
       "engine": "subtractive",
       "capture": "seashore",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9214,7 +9214,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p123-bird-tweet",
@@ -9227,8 +9227,8 @@
       "patch": "sfx_bird_tweet",
       "engine": "subtractive",
       "capture": "bird_tweet",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9264,7 +9264,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p124-telephone-ring",
@@ -9277,8 +9277,8 @@
       "patch": "sfx_telephone_ring",
       "engine": "subtractive",
       "capture": "telephone_ring",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9314,7 +9314,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p125-helicopter",
@@ -9327,8 +9327,8 @@
       "patch": "sfx_helicopter",
       "engine": "subtractive",
       "capture": "helicopter",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9363,7 +9363,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p126-applause",
@@ -9376,8 +9376,8 @@
       "patch": "sfx_applause",
       "engine": "subtractive",
       "capture": "applause",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9412,7 +9412,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p127-gunshot",
@@ -9425,8 +9425,8 @@
       "patch": "sfx_gunshot",
       "engine": "subtractive",
       "capture": "gunshot",
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9462,7 +9462,7 @@
         },
         "music": null
       },
-      "next": "capture a second reference timbre: with one, no dimension can be judged against the references' own spread"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "kit000-standard-kit",
@@ -9475,8 +9475,8 @@
       "patch": null,
       "engine": "percussion",
       "capture": "drums",
-      "stage": 0.8,
-      "stage_name": "agreeing",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "vibraslap-thinned",
         "scrapers-speak"
@@ -9510,7 +9510,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — vibraslap-thinned, scrapers-speak — then listen to a take and sign it off in signoff.json"
+      "next": "judge the recorded candidate(s) — vibraslap-thinned, scrapers-speak — then listen to a take and record the verdict in signoff.json"
     }
   ]
 }

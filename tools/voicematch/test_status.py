@@ -10,6 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import signoff  # noqa: E402
 import status  # noqa: E402
 from toneclass import (  # noqa: E402
     CANONICAL_DIMENSIONS, PERCUSSION_DIMENSIONS, ToneClass, canonical_dimensions,
@@ -84,23 +85,33 @@ def test_a_named_patch_on_the_default_engine_is_not_untouched():
     assert status.stage_for(_axes(engine="subtractive", patch="orchestra_hit")) > 0
 
 
-def test_one_reference_timbre_cannot_reach_the_measured_step():
-    """With one timbre there is no spread, so no dimension can be adjudicated."""
-    assert status.stage_for(_axes(timbres=1)) == 1
+def test_one_reference_timbre_is_a_target_and_carries_the_voice_past_voiced():
+    """A reference is what the voice aims at, not a sample of a hidden truth.
+
+    Demanding a second one costs a hand-authored plugin per instrument and buys
+    a denominator `docs/objective.md` retired; with one, everything above
+    `voiced` still has to be reachable or the ladder reports 123 fitted voices
+    and 123 untouched ones as the same number.
+    """
+    assert status.stage_for(_axes(timbres=1)) > 1
+
+
+def test_no_reference_at_all_still_stops_at_voiced():
+    assert status.stage_for(_axes(timbres=0, profile_rows=0)) == 1
 
 
 def test_a_stale_gate_does_not_count_as_a_gate():
-    assert status.stage_for(_axes(gate_state="stale")) == 1
+    assert status.stage_for(_axes(gate_state="stale")) == 2
 
 
 def test_a_gate_that_was_never_written_is_named_as_one_to_write():
     """Two states, one message, and one of them read as a Python repr.
 
-    A voice whose second timbre has just arrived reaches this for the first
+    A voice whose profile has just been measured reaches this for the first
     time, and `re-record it` names an action there is nothing to re-record for.
     """
-    never = status.next_action(_axes(timbres=2, gate_state=None), 1, [])
-    stale = status.next_action(_axes(timbres=2, gate_state="stale"), 1, [])
+    never = status.next_action(_axes(gate_state=None), 2, [])
+    stale = status.next_action(_axes(gate_state="stale"), 2, [])
     assert "None" not in never
     assert "write the first gate" in never
     assert "re-record" in stale
@@ -121,23 +132,44 @@ def test_coverage_is_all_or_nothing():
     assert status.stage_for(_axes(coverage={"complete": False, "gaps": ["body"]})) == 2
 
 
-def test_a_minority_inside_the_spread_does_not_agree():
-    assert status.stage_for(
-        _axes(agreement={"inside": 1, "total": 3, "outside": {"stretch": 1.8}})) == 3
+def test_disagreeing_with_the_reference_spread_does_not_hold_a_voice_back():
+    """`agreement` is printed and decides nothing — `docs/objective.md`.
+
+    It was a promotion condition while the reference was read as one draw from
+    the distribution of real instruments. Under the objective the reference is
+    the target, so sitting outside two presets' mutual disagreement is
+    information about the target's own wobble, not a verdict on the voice.
+    """
+    apart = _axes(agreement={"inside": 1, "total": 3, "outside": {"stretch": 1.8}},
+                  music={"state": signoff.CURRENT})
+    together = _axes(music={"state": signoff.CURRENT})
+    assert status.stage_for(apart) == status.stage_for(together)
 
 
-def test_nothing_reaches_settled_while_the_last_two_facts_are_unrecorded():
-    """Unknown is not satisfied: neither a diagnose nor a sign-off is recorded."""
-    assert status.stage_for(_axes()) == 4
+def test_an_unheard_voice_stops_below_heard_however_green_it_measures():
+    """A green gate is not acceptance: voices have passed every recorded bound
+    while sounding wrong, which is why the ear is a step and not a footnote."""
+    assert status.stage_for(_axes()) == 3
+
+
+def test_a_heard_voice_still_needs_its_structural_claim():
+    """Unknown is not satisfied: the diagnosis is unrecorded."""
+    assert status.stage_for(_axes(music={"state": signoff.CURRENT})) == 4
 
 
 def test_an_open_candidate_does_not_demote_a_voice():
     """A candidate nobody adopted means there may be more to gain — not that
-    what shipped is worse than it was."""
+    what shipped is worse than it was, so it is a badge and never a predicate.
+
+    What caps this voice is the ear: it is gated over every canonical dimension
+    and nobody has signed a take off. Recomputing the stage from the axes alone
+    is what says the candidate is not quietly one of them.
+    """
     rows = _shipped()
     piano = next(r for r in rows if r["slug"] == "p000-acoustic-grand-piano")
     assert piano["open_candidates"]
-    assert piano["stage"] >= 0.8
+    assert piano["stage_name"] == "fitted"
+    assert status.stage_for(piano["axes"]) == round(piano["stage"] * 5)
 
 
 # --------------------------------------------------------------------------- #
