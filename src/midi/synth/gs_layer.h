@@ -246,6 +246,27 @@ constexpr float gs_scale_tuning_cents(const GsScaleTuning& scale, uint8_t note) 
 /// shared. Zero at the centre, which leaves an untuned render bit-identical.
 float gs_pitch_offset_fine_cents(uint8_t value, uint8_t note) noexcept;
 
+/// The velocity a part sounds @p velocity at, under VELOCITY SENSE DEPTH
+/// (40 1x 1A) and VELOCITY SENSE OFFSET (40 1x 1B), both centred on 40.
+///
+/// The curve is libsonare's: the manual gives the two a range and a default and
+/// no mapping at all, as it does MASTER VOLUME. Depth is the SLOPE and pivots on
+/// the centre of the velocity axis rather than on zero, which is what makes the
+/// parameter's name true — a depth of 0 sounds every key alike instead of
+/// silencing them, and the part stops answering velocity rather than stopping.
+/// Offset then moves the whole curve. At the power-on 40/40 the result is the
+/// written velocity exactly, so an untouched part renders bit-identically.
+///
+/// The result is clamped to 1-127: a shaped 0 is a note-off on the wire and this
+/// is a note that was struck.
+constexpr uint8_t gs_velocity_sense(uint8_t depth, uint8_t offset, uint8_t velocity) noexcept {
+  if (depth == 0x40 && offset == 0x40) return velocity;
+  const int shaped =
+      static_cast<int>((static_cast<float>(velocity) - 64.0f) * static_cast<float>(depth) / 64.0f) +
+      static_cast<int>(offset);
+  return static_cast<uint8_t>(shaped < 1 ? 1 : (shaped > 127 ? 127 : shaped));
+}
+
 /// The GS system parameters at 40 00 xx that are not the effect block. Every
 /// field holds its GS power-on value, so a default-constructed instance is the
 /// reset state and a render that never saw one of these writes is untouched.

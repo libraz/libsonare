@@ -255,6 +255,8 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x401017, 0x0F, GsParam::kPartPitchOffsetFine, 0, 9);
   check_row(0x401B18, 0x08, GsParam::kPartPitchOffsetFine, 1, 11);
   check_row(0x401119, 0x64, GsParam::kPartLevel, 0, 0);
+  check_row(0x40111A, 0x7F, GsParam::kPartVelocitySenseDepth, 0, 0);
+  check_row(0x401F1B, 0x00, GsParam::kPartVelocitySenseOffset, 0, 15);
   check_row(0x40101C, 0x40, GsParam::kPartPanpot, 0, 9);
   check_row(0x40101D, 0x00, GsParam::kPartKeyRangeLow, 0, 9);
   // CC1 / CC2 CONTROLLER NUMBER, whose two bytes are one row: the index is

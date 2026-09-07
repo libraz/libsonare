@@ -168,6 +168,12 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // note. It takes no voice, chokes nothing and does not spend the armed
   // portamento, so the test precedes all three as well as both voice banks.
   if (!ch.receives_key(note)) return;
+  // GS VELOCITY SENSE (40 1x 1A/1B): the part reshapes the struck velocity, so
+  // this precedes both voice banks and the zone velocity ranges a preset
+  // switches its layers on — a part made insensitive picks the layer the shaped
+  // velocity names rather than the one the wire carried. One conversion, not one
+  // per bank. Identity at the power-on 40/40, so an untouched part is bit-exact.
+  velocity = gs_velocity_sense(ch.velocity_sense_depth, ch.velocity_sense_offset, velocity);
   const Portamento porta = take_portamento(channel, note);
   // Mono already stops everything the part is sounding, so it subsumes SINGLE.
   if (ch.mono_poly == kGsMonoPolyMono && !ch.is_drum()) {

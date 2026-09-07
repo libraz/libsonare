@@ -411,6 +411,12 @@ class Sf2Player final : public MidiInstrument {
     /// them is refused before anything else the note-on would do.
     uint8_t key_range_low = 0x00;
     uint8_t key_range_high = 0x7F;
+    /// GS 40 1x 1A/1B VELOCITY SENSE DEPTH and OFFSET, both centred on 40. Held
+    /// as the written bytes and applied to the struck velocity at the note-on,
+    /// ahead of both voice banks and of the zone velocity ranges, because the
+    /// part reshapes the velocity rather than what any one voice does with it.
+    uint8_t velocity_sense_depth = 0x40;
+    uint8_t velocity_sense_offset = 0x40;
     /// GS 40 1x 40-4B SCALE TUNING, one byte per pitch class from C.
     GsScaleTuning scale_tuning = kGsScaleTuningEqual;
     /// GS 40 1x 02 RX CHANNEL: the MIDI channel this part listens to, or 16 for

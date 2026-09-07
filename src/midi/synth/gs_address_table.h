@@ -36,135 +36,137 @@ enum class GsLevel : uint8_t {
 
 /// Every parameter the table names, written once so the enum and the names
 /// reported by gs_param_name() cannot disagree.
-#define SONARE_GS_PARAMS(X)  \
-  X(kUnknown)                \
-  X(kUndefined)              \
-  X(kSystemModeSet)          \
-  X(kChannelMsgRxPort)       \
-  X(kMasterTune)             \
-  X(kMasterVolume)           \
-  X(kMasterKeyShift)         \
-  X(kMasterPan)              \
-  X(kModeSet)                \
-  X(kPatchName)              \
-  X(kReverbMacro)            \
-  X(kReverbCharacter)        \
-  X(kReverbPreLpf)           \
-  X(kReverbLevel)            \
-  X(kReverbTime)             \
-  X(kReverbDelayFeedback)    \
-  X(kReverbPredelay)         \
-  X(kChorusMacro)            \
-  X(kChorusPreLpf)           \
-  X(kChorusLevel)            \
-  X(kChorusFeedback)         \
-  X(kChorusDelay)            \
-  X(kChorusRate)             \
-  X(kChorusDepth)            \
-  X(kChorusSendToReverb)     \
-  X(kChorusSendToDelay)      \
-  X(kDelayMacro)             \
-  X(kDelayPreLpf)            \
-  X(kDelayTimeCenter)        \
-  X(kDelayTimeRatioLeft)     \
-  X(kDelayTimeRatioRight)    \
-  X(kDelayLevelCenter)       \
-  X(kDelayLevelLeft)         \
-  X(kDelayLevelRight)        \
-  X(kDelayLevel)             \
-  X(kDelayFeedback)          \
-  X(kDelaySendToReverb)      \
-  X(kEqLowFreq)              \
-  X(kEqLowGain)              \
-  X(kEqHighFreq)             \
-  X(kEqHighGain)             \
-  X(kEfxType)                \
-  X(kEfxParameter)           \
-  X(kEfxSendToReverb)        \
-  X(kEfxSendToChorus)        \
-  X(kEfxSendToDelay)         \
-  X(kEfxControlSource1)      \
-  X(kEfxControlDepth1)       \
-  X(kEfxControlSource2)      \
-  X(kEfxControlDepth2)       \
-  X(kEfxSendEqSwitch)        \
-  X(kPartToneNumber)         \
-  X(kPartRxChannel)          \
-  X(kPartRxPitchBend)        \
-  X(kPartRxChannelPressure)  \
-  X(kPartRxProgramChange)    \
-  X(kPartRxControlChange)    \
-  X(kPartRxPolyPressure)     \
-  X(kPartRxNoteMessage)      \
-  X(kPartRxRpn)              \
-  X(kPartRxNrpn)             \
-  X(kPartRxModulation)       \
-  X(kPartRxVolume)           \
-  X(kPartRxPanpot)           \
-  X(kPartRxExpression)       \
-  X(kPartRxHold1)            \
-  X(kPartRxPortamento)       \
-  X(kPartRxSostenuto)        \
-  X(kPartRxSoft)             \
-  X(kPartRxBankSelect)       \
-  X(kPartRxBankSelectLsb)    \
-  X(kPartMonoPoly)           \
-  X(kPartAssignMode)         \
-  X(kUseForRhythmPart)       \
-  X(kPartKeyShift)           \
-  X(kPartPitchOffsetFine)    \
-  X(kPartLevel)              \
-  X(kPartKeyRangeLow)        \
-  X(kPartKeyRangeHigh)       \
-  X(kPartScaleTuning)        \
-  X(kPartPanpot)             \
-  X(kPartChorusSend)         \
-  X(kPartReverbSend)         \
-  X(kPartPitchFineTune)      \
-  X(kPartDelaySend)          \
-  X(kPartToneModify)         \
-  X(kPartModDest)            \
-  X(kPartCtrlSourceNumber)   \
-  X(kPartCtrlPitch)          \
-  X(kPartCtrlTvfCutoff)      \
-  X(kPartCtrlAmplitude)      \
-  X(kPartCtrlLfo1Rate)       \
-  X(kPartCtrlLfo1PitchDepth) \
-  X(kPartCtrlLfo1TvfDepth)   \
-  X(kPartCtrlLfo1TvaDepth)   \
-  X(kPartBendDest)           \
-  X(kPartBendPitchControl)   \
-  X(kPartCafDest)            \
-  X(kPartPafDest)            \
-  X(kPartCc1Dest)            \
-  X(kPartCc2Dest)            \
-  X(kPartToneMapNumber)      \
-  X(kPartToneMap0Number)     \
-  X(kPartEqSwitch)           \
-  X(kPartEfxAssign)          \
-  X(kUserDrumSetName)        \
-  X(kUserDrumPlayNote)       \
-  X(kUserDrumLevel)          \
-  X(kUserDrumAssignGroup)    \
-  X(kUserDrumPanpot)         \
-  X(kUserDrumReverbSend)     \
-  X(kUserDrumChorusSend)     \
-  X(kUserDrumRxNoteOff)      \
-  X(kUserDrumRxNoteOn)       \
-  X(kUserDrumDelaySend)      \
-  X(kUserDrumSourceMap)      \
-  X(kUserDrumSourceProgram)  \
-  X(kUserDrumSourceNote)     \
-  X(kDrumMapName)            \
-  X(kDrumPlayNote)           \
-  X(kDrumLevel)              \
-  X(kDrumAssignGroup)        \
-  X(kDrumPanpot)             \
-  X(kDrumReverbSend)         \
-  X(kDrumChorusSend)         \
-  X(kDrumRxNoteOff)          \
-  X(kDrumRxNoteOn)           \
-  X(kDrumDelaySend)          \
+#define SONARE_GS_PARAMS(X)   \
+  X(kUnknown)                 \
+  X(kUndefined)               \
+  X(kSystemModeSet)           \
+  X(kChannelMsgRxPort)        \
+  X(kMasterTune)              \
+  X(kMasterVolume)            \
+  X(kMasterKeyShift)          \
+  X(kMasterPan)               \
+  X(kModeSet)                 \
+  X(kPatchName)               \
+  X(kReverbMacro)             \
+  X(kReverbCharacter)         \
+  X(kReverbPreLpf)            \
+  X(kReverbLevel)             \
+  X(kReverbTime)              \
+  X(kReverbDelayFeedback)     \
+  X(kReverbPredelay)          \
+  X(kChorusMacro)             \
+  X(kChorusPreLpf)            \
+  X(kChorusLevel)             \
+  X(kChorusFeedback)          \
+  X(kChorusDelay)             \
+  X(kChorusRate)              \
+  X(kChorusDepth)             \
+  X(kChorusSendToReverb)      \
+  X(kChorusSendToDelay)       \
+  X(kDelayMacro)              \
+  X(kDelayPreLpf)             \
+  X(kDelayTimeCenter)         \
+  X(kDelayTimeRatioLeft)      \
+  X(kDelayTimeRatioRight)     \
+  X(kDelayLevelCenter)        \
+  X(kDelayLevelLeft)          \
+  X(kDelayLevelRight)         \
+  X(kDelayLevel)              \
+  X(kDelayFeedback)           \
+  X(kDelaySendToReverb)       \
+  X(kEqLowFreq)               \
+  X(kEqLowGain)               \
+  X(kEqHighFreq)              \
+  X(kEqHighGain)              \
+  X(kEfxType)                 \
+  X(kEfxParameter)            \
+  X(kEfxSendToReverb)         \
+  X(kEfxSendToChorus)         \
+  X(kEfxSendToDelay)          \
+  X(kEfxControlSource1)       \
+  X(kEfxControlDepth1)        \
+  X(kEfxControlSource2)       \
+  X(kEfxControlDepth2)        \
+  X(kEfxSendEqSwitch)         \
+  X(kPartToneNumber)          \
+  X(kPartRxChannel)           \
+  X(kPartRxPitchBend)         \
+  X(kPartRxChannelPressure)   \
+  X(kPartRxProgramChange)     \
+  X(kPartRxControlChange)     \
+  X(kPartRxPolyPressure)      \
+  X(kPartRxNoteMessage)       \
+  X(kPartRxRpn)               \
+  X(kPartRxNrpn)              \
+  X(kPartRxModulation)        \
+  X(kPartRxVolume)            \
+  X(kPartRxPanpot)            \
+  X(kPartRxExpression)        \
+  X(kPartRxHold1)             \
+  X(kPartRxPortamento)        \
+  X(kPartRxSostenuto)         \
+  X(kPartRxSoft)              \
+  X(kPartRxBankSelect)        \
+  X(kPartRxBankSelectLsb)     \
+  X(kPartMonoPoly)            \
+  X(kPartAssignMode)          \
+  X(kUseForRhythmPart)        \
+  X(kPartKeyShift)            \
+  X(kPartPitchOffsetFine)     \
+  X(kPartLevel)               \
+  X(kPartVelocitySenseDepth)  \
+  X(kPartVelocitySenseOffset) \
+  X(kPartKeyRangeLow)         \
+  X(kPartKeyRangeHigh)        \
+  X(kPartScaleTuning)         \
+  X(kPartPanpot)              \
+  X(kPartChorusSend)          \
+  X(kPartReverbSend)          \
+  X(kPartPitchFineTune)       \
+  X(kPartDelaySend)           \
+  X(kPartToneModify)          \
+  X(kPartModDest)             \
+  X(kPartCtrlSourceNumber)    \
+  X(kPartCtrlPitch)           \
+  X(kPartCtrlTvfCutoff)       \
+  X(kPartCtrlAmplitude)       \
+  X(kPartCtrlLfo1Rate)        \
+  X(kPartCtrlLfo1PitchDepth)  \
+  X(kPartCtrlLfo1TvfDepth)    \
+  X(kPartCtrlLfo1TvaDepth)    \
+  X(kPartBendDest)            \
+  X(kPartBendPitchControl)    \
+  X(kPartCafDest)             \
+  X(kPartPafDest)             \
+  X(kPartCc1Dest)             \
+  X(kPartCc2Dest)             \
+  X(kPartToneMapNumber)       \
+  X(kPartToneMap0Number)      \
+  X(kPartEqSwitch)            \
+  X(kPartEfxAssign)           \
+  X(kUserDrumSetName)         \
+  X(kUserDrumPlayNote)        \
+  X(kUserDrumLevel)           \
+  X(kUserDrumAssignGroup)     \
+  X(kUserDrumPanpot)          \
+  X(kUserDrumReverbSend)      \
+  X(kUserDrumChorusSend)      \
+  X(kUserDrumRxNoteOff)       \
+  X(kUserDrumRxNoteOn)        \
+  X(kUserDrumDelaySend)       \
+  X(kUserDrumSourceMap)       \
+  X(kUserDrumSourceProgram)   \
+  X(kUserDrumSourceNote)      \
+  X(kDrumMapName)             \
+  X(kDrumPlayNote)            \
+  X(kDrumLevel)               \
+  X(kDrumAssignGroup)         \
+  X(kDrumPanpot)              \
+  X(kDrumReverbSend)          \
+  X(kDrumChorusSend)          \
+  X(kDrumRxNoteOff)           \
+  X(kDrumRxNoteOn)            \
+  X(kDrumDelaySend)           \
   X(kOppositeGroupBlock)
 
 /// The parameter a decoded byte addresses. kUnknown means no table row claimed
@@ -225,7 +227,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 168> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 170> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -453,6 +455,13 @@ inline constexpr std::array<GsAddressEntry, 168> kGsAddressTable = {{
     // row writes the one storage location its controller already owns, so the
     // default here is the controller's own power-on value rather than a second.
     {0x401019, 0x000F00, GsParam::kPartLevel, GsLevel::kAudible, 1, 0x00, 0x7F, 0x64, nullptr},
+    // The part's own velocity curve: 1A is its slope and 1B moves it. The manual
+    // gives them a range and no mapping, so the curve is gs_velocity_sense's and
+    // is stated in docs/gs.md rather than inferred from the row.
+    {0x40101A, 0x000F00, GsParam::kPartVelocitySenseDepth, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
+    {0x40101B, 0x000F00, GsParam::kPartVelocitySenseOffset, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40,
+     nullptr},
     // 00 is RANDOM on the hardware and centre here — a deliberate divergence
     // (docs/gs.md), so it stays inside the accepted range rather than becoming
     // an out-of-range value the apply layer would drop.
