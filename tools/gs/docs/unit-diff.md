@@ -1,10 +1,10 @@
 # The address table against a measured unit
 
-`src/midi/synth/docs/gs.md` names the SC-8850 as the target and then declares a gap in its own provenance: a row in the address table came from the **SC-88Pro** manual unless it says otherwise, and the SC-8850's own map has been checked only where a row names a difference. That is not a known error — the sampled points agree — but it means "the manual says" about an untouched row means the wrong manual's.
+`src/midi/synth/docs/gs.md` names the SC-8850 as the target, and which manual a row was written from no longer decides what it says: the two maps have been compared address by address and agree on size, data range and power-on default everywhere they overlap, so only the nine points that page lists are model-dependent at all. What is left is the document against the machine.
 
-`check_unit.py` closes that gap by measurement rather than by reading a second document. It takes the table as the code holds it and an archive of what one individual machine answered, and reports where the two disagree.
+`check_unit.py` is what closes that. It takes the table as the code holds it and an archive of what one individual machine answered, and reports where the two disagree.
 
-**It decides nothing.** A disagreement is a question — a row transcribed from the wrong manual, a real difference between the two machines, or a limit of what the probe could see — and which of those it is comes from reading the row and the record. What the tool does is make the list finite.
+**It decides nothing.** A disagreement is a question — a row transcribed wrongly, one of the nine points where the machines genuinely differ, or a limit of what the probe could see — and which of those it is comes from reading the row and the record. What the tool does is make the list finite.
 
 ## Why this is not the census
 
@@ -19,7 +19,7 @@ The unit diff says what **the machine answers**, and it is blind to everything t
 The table is read by including its header and printing it (`dump_address_table.cpp`), never by parsing the source: a parse would have to keep up with the row layout and the enumerator spellings, and would go wrong quietly the first time a field was added.
 
 - **`addresses_with_no_row`** — the machine returned a value and neither a row nor an undefined range claims the address. Grouped by block, since a gap is normally a run.
-- **`rows_no_read_reached`** — **not an absence claim.** A single-byte read that answers nothing leaves the address unproven, because a block read starting earlier reaches addresses a direct read does not, which is the archive's own finding about this unit. The list is for aiming: the candidates for an SC-88Pro-only row are inside it.
+- **`rows_no_read_reached`** — **not an absence claim.** A single-byte read that answers nothing leaves the address unproven, because a block read starting earlier reaches addresses a direct read does not, which is the archive's own finding about this unit. The list is for aiming. The address families the SC-8850 does not have are now named in `gs.md` rather than guessed at from here, so an entry falling inside one of them is expected and an entry outside them is the interesting kind.
 - **`default_disagreements`** — the machine holds one value across every instance of the parameter and it is not what the table expects there.
 - **`defaults_one_row_cannot_express`** — the machine's instances disagree with **each other** and the table names no exception for the row, so no single `def` byte can be right for all of them. A statement about the row's shape rather than its value, which is why it is reported apart. The two rows that were here — a part's power-on receive channel, the rhythm assignment only part 10 holds — are now a function of the address rather than a byte, and the expected value is taken per instance from `reset_not_def`, which the dump fills by calling `gs_reset_default`. Deriving those here instead would be a second copy of the rule, in another language, free to drift from the one the synth resets from.
 - **`range_disagreements`** — a value the write probe sent and the machine accepted from outside `[lo, hi]` (the row is too narrow), or one inside it the machine would not take (too wide). Values the probe never sent say nothing either way, which is why both halves are drawn from what it actually wrote.

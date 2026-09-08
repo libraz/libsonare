@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Compare the GS address table against what a measured unit actually answered.
 
-``src/midi/synth/docs/gs.md`` names the SC-8850 as the target and says, of the
-table the implementation walks, that a row came from the **SC-88Pro manual**
-unless it says otherwise -- "that is a gap in provenance rather than a known
-error". This closes the gap by measurement instead of by reading a second
-manual: it takes the table as the code holds it and an archive of what one
-individual unit answered, and reports where the two disagree.
+``src/midi/synth/docs/gs.md`` names the SC-8850 as the target. Which manual a row
+was written from no longer decides what it says -- the SC-88Pro and SC-8850 maps
+agree on size, data range and power-on default everywhere they overlap, and the
+nine points where they do not are listed there. What is left is the document
+against the machine, and this is what closes it: it takes the table as the code
+holds it and an archive of what one individual unit answered, and reports where
+the two disagree.
 
 **Nothing here decides anything.** A disagreement is a question -- a row
-transcribed from the wrong manual, a difference between the two machines, a
-limit of what the probe could see -- and which of those it is comes from reading
-the row and the record, not from this tool. What it does is make the list finite.
+transcribed wrongly, one of the nine points where the machines genuinely differ,
+a limit of what the probe could see -- and which of those it is comes from
+reading the row and the record, not from this tool. What it does is make the
+list finite.
 
 The archive is external and its licence is its own; the diff is committed, so a
 fresh clone reads the work list without fetching anything. Same arrangement as
@@ -321,8 +323,10 @@ def main() -> int:
     #    read that answers nothing leaves an address unproven either way -- the
     #    archive's own boundary probe says so, since a block read starting earlier
     #    reaches addresses a direct read does not. What the list is good for is
-    #    aiming: a row here is one the machine has not been asked about, and the
-    #    candidates for an SC-88Pro-only row are inside it.
+    #    aiming: a row here is one the machine has not been asked about. The
+    #    families the SC-8850 does not have are named in gs.md, so an entry
+    #    inside one of them is expected and one outside them is the interesting
+    #    kind.
     for row in table["rows"]:
         addrs = row_addresses(row)
         if any(a in reached for a in addrs):

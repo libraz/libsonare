@@ -4,7 +4,7 @@ The synth answers Roland GS. This page holds what the manual cannot: which devic
 
 Per-address detail — offsets, ranges, defaults — is not restated here. It comes from the **Roland SC-8850 Owner's Manual, Appendices, "Parameter Address Map"** (p.235 onward; `cdn.roland.com/assets/media/pdf/SC-8850_OM.pdf`), and the reasoning for an individual row lives beside that row in `gs_address_table.h`. A second copy of either here would be free to drift from the one that decides.
 
-**The manual is a proxy for the machine, and where the two disagree the machine decides.** A row came from the SC-88Pro manual unless it says otherwise, so "the manual says" about an untouched row means the wrong document's — a gap in provenance rather than a known error, since the sampled points agree. `make gs-unit-diff` closes it by measurement against an archive of what an individual SC-8850 answered, and produces the work list (`tools/gs/unit-diff.json`; `tools/gs/docs/unit-diff.md` is how to read it). The corpus census beside it (`tools/gs/docs/census.md`) bounds the table from the other side: it says what real files reach and is blind to every address they never send.
+**The manual is a proxy for the machine, and where the two disagree the machine decides.** Which of the two manuals a row was written from no longer changes what it says: the maps have been compared address by address and agree on size, data range and power-on default everywhere they overlap, so the only rows where the document matters are the nine points below. What is left is document against machine, and `make gs-unit-diff` closes that by measurement against an archive of what an individual SC-8850 answered, and produces the work list (`tools/gs/unit-diff.json`; `tools/gs/docs/unit-diff.md` is how to read it). The corpus census beside it (`tools/gs/docs/census.md`) bounds the table from the other side: it says what real files reach and is blind to every address they never send.
 
 **This page is normative and says nothing about progress.** It describes what must be true, not what is true today; an item here the code does not yet do is work outstanding rather than a documentation error. Coverage is a number the address table and its tests produce, not a status section that would drift the moment it was written.
 
@@ -19,22 +19,50 @@ Two things follow, and both are load-bearing:
 
 ## The target is the SC-8850, and that includes the SC-88Pro
 
-The GS address space is identical between the two machines except at six points, and the SC-8850 is the superset. Targeting it therefore *includes* SC-88Pro compatibility rather than trading against it: an SC-88Pro file selects the SC-88Pro tone map (`40 4x 00` = `03`) and plays.
+The two Parameter Address Maps agree on every address they share — size, data range, power-on default and alias annotation alike — and part company at ten points. At nine of them the SC-8850 is the superset, so targeting it *includes* SC-88Pro compatibility rather than trading against it: an SC-88Pro file selects the SC-88Pro tone map (`40 4x 00` = `03`) and plays. The tenth runs the other way, which is why the superset is stated as a count of points rather than as a principle. The bulk-dump space is a separate address space and has its own three differences, below.
 
 | | SC-88Pro | SC-8850 |
 |---|---|---|
 | `00 00 7F` SYSTEM MODE SET | `00`/`01` — Mode-1 / Mode-2 | Range `00`–`01`, but **only `00` acts**: "the same processing will be carried out as when GS Reset is received. Other values are ignored." Mode-1, single module, Rx only |
 | Mode-2 restrictions | seven parameters unusable in Mode-2 | none |
 | `00 01 xx` CHANNEL MSG RX PORT | 32 blocks, ports A/B | 64 blocks, ports A–D |
+| `20 b0 pp` SOURCE TONE# (MAP) | `01`–`03` | `01`–`04` |
+| `21 dA rr` SOURCE DRUM SET# (MAP) | `01`–`03` | `01`–`04` |
+| `22 ** **`–`27 ** **` user effect types and stored patches | 64 stored effect types; 16 patches, each holding a patch common and two patch parts | **absent** |
+| `40 1x 30`–`37` TONE MODIFY 1–8 | reachable from the address and NRPN `01 08`/`09`/`0A`/`20`/`21`/`63`/`64`/`66` | the same, **plus CC#71–78** — the map prints the controller in the row's own alias |
 | `40 4x 00` TONE MAP NUMBER | `00`–`03` | `00`–`04` |
 | `40 4x 01` TONE MAP-0 NUMBER | `01`–`03`, default `03` | `01`–`04`, default `04` |
 | `50 ** **` / `51 ** **` | the opposite group's blocks | absent — the port selects the group |
 
 **Two consequences worth stating because they save work rather than cost it.** There is no double-module mode to implement, and the 64 parts are four ports of sixteen rather than a second address space — so a part is still addressed by one block nibble and the port carries the group.
 
+**CC#71–78 are listed above rather than left to the GM2 paragraph because that is where they would be argued away.** They are the third entry point to `40 1x 30`–`37` and the one-storage rule's table carries them unconditionally, which is right for the target and reads as an error against the SC-88Pro's map, where the same rows name only the NRPN. A part that answers CC#74 with a filter sweep is the SC-8850 behaving as documented; narrowing it to match the older machine would be a regression dressed as a correction.
+
+**The tenth point is the one that costs something, and it costs a row rather than a mode.** A stored patch and a stored effect type are a front panel's memory, which a renderer does not have and would not gain by being told about; so `22 ** **` through `27 ** **` are `IGNORE`, one row per block, for the reason `50 ** **` is — the statement being made is that a whole layer is absent, and that is one statement however many parameters would have sat inside it. What this rules out is reading "the SC-8850 is the superset" as licence to leave the region unrowed: an address the target machine dropped is still an address a real SC-88Pro file sends, and an unrowed address is a defect.
+
+`20 bn pp` USER INSTRUMENT is not in the table above, because both machines have it: two banks of stored tone edits reachable as GS variations 64 and 65. It is `IGNORE` on the same grounds as the stored patches — a program here selects a bank preset or the model floor directly, so there is no stored tone for an edit to sit on — and it is a gap in what libsonare implements rather than a difference between the machines.
+
 A tone map is audible exactly where it fails to reach a kit: sixteen of the twenty-six rhythm sets were introduced by a later map, while every melodic variation voiced so far is an SC-55 tone that all maps reach. Both voice banks read it through the same rule, because a parameter must not do something different depending on which bank answered.
 
-The SC-8850 also answers GM2, which the SC-88Pro does not. GM2's additions are all second addresses onto GS mechanisms already present (Controller Destination onto `40 2x`, Key-Based Instrument Control onto `41 mn rr`, Scale/Octave Tuning onto `40 1x 40`–`4B`, Modulation Depth Range onto `40 2x 04`), and CC71–78 are the Tone Modify parameters. They are covered by the one-storage rule below rather than by new state.
+The SC-8850 also answers GM2, which the SC-88Pro does not. GM2's additions are all second addresses onto GS mechanisms already present (Controller Destination onto `40 2x`, Key-Based Instrument Control onto `41 mn rr`, Scale/Octave Tuning onto `40 1x 40`–`4B`, Modulation Depth Range onto `40 2x 04` and RPN `00 05`). They are covered by the one-storage rule below rather than by new state. CC#71–78 arrive with the same machine but are not GM2's doing — the SC-8850's own GS map prints them in the `40 1x 30`–`37` rows, which is why they are a line in the table above.
+
+## The bulk-dump space is a second address space, and none of it is rowed
+
+Bulk dump moves packed state rather than parameters: a `DT1` to one of these addresses carries a block of the machine's memory, not a value at a named offset, and the request that asks for one is an `RQ1` to `0C 00 00` whose size field selects content instead of length. It travels on the same command as an individual write, so real files reach it — the corpus touches `29`, `48` and `49` — and the address table has a row for none of it.
+
+| | SC-88Pro | SC-8850 |
+|---|---|---|
+| `08` SETUP | 1 packet (`08 00 00`–`08 00 7F`) | 2 packets (`08 00 00`–`08 01 7F`) |
+| `28` USER TONE BANK #64 / #65 | 11 packets each | 11 packets each |
+| `29` USER DRUM SET #65 / #66 | 12 packets each | 12 packets each |
+| `2A` USER EFX #1-64 | 16 packets | **absent** |
+| `2B` USER PATCH #1-16 | 96 packets | **absent** |
+| `48` / `49` group A, `58` / `59` group B | present | present |
+| `68` / `69` group C, `78` / `79` group D | **absent** | present |
+
+**The three differences are the parameter map's own three, restated in the other space**, which is the useful thing to know about them: `2A` and `2B` are the bulk form of the user effect types and stored patches the SC-8850 dropped, groups C and D follow from four ports against two, and SETUP grew a packet carrying them. Nothing here is an independent decision a machine switch would have to make.
+
+**Leaving the space unrowed is deliberate, and the census ceiling is what keeps it visible.** A bulk dump is state to unpack into the storage the individual addresses already own, so an `IGNORE` row would record a reason that stops being true the moment it is unpacked, and it would move the coverage ratchet by sixty addresses without one file being better understood — the move `gs_address_census_test.cpp`'s third ceiling exists to expose. These addresses get rows in the change that reads them, not before.
 
 ## Every address is assigned, and "not in the table" is not an assignment
 
@@ -47,7 +75,7 @@ Each address in the space carries exactly one of four levels. **An address with 
 | `ACCEPT` | received and discarded | does not disturb the interpretation of what follows |
 | `IGNORE` | deliberately not implemented | the reason is written in the table |
 
-The address table is one `constexpr` array, and a decoder walks it. An address the table does not name increments `unknown_writes` rather than being dropped, and tests assert that counter is zero over a corpus of real files. This is the same discipline as the parity allowlist: nothing is silently discarded, and a gap is a number rather than an absence.
+The address table is one `constexpr` array, and a decoder walks it. An address the table does not name increments `unknown_writes` rather than being dropped, and the unit tests pin that counter at zero for every message they construct. Against a corpus it is a ratchet rather than a zero: `gs_address_census_test.cpp` counts the distinct census addresses no row claims and the corpus file-touches they carry, and both ceilings only ever move down. The difference matters — the space is not covered today and the number says by how much. This is the same discipline as the parity allowlist: nothing is silently discarded, and a gap is a number rather than an absence.
 
 **Undefined regions get rows too.** A multi-byte write starting before such a region runs through it, and real files carry SC-55-era addresses the SC-8850 dropped, so they are `ACCEPT` and the unknown counter keeps meaning something. A range covers one mid byte only: one spanning two would step through low bytes above `7F`, which are not addresses.
 
