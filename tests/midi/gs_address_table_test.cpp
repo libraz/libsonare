@@ -365,6 +365,12 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x404022, 0x01, GsParam::kPartEfxAssign, 0, 9);
   check_row(0x404122, 0x10, GsParam::kPartEfxAssign, 0, 0);
 
+  // User instruments (20 bn pp): one row over the block, so the bank and
+  // parameter nibbles come back as the part and the program as the index.
+  check_row(0x200000, 0x01, GsParam::kUserInstrumentBlock, 0x00, 0);
+  check_row(0x200340, 0x40, GsParam::kUserInstrumentBlock, 0x40, 3);
+  check_row(0x201A7F, 0x7F, GsParam::kUserInstrumentBlock, 0x7F, 0x0A);
+
   // User drum sets (21 dn rr): the same shape as the drum setup block, so the
   // set nibble comes back as the part and the note as the index.
   check_row(0x210000, 0x53, GsParam::kUserDrumSetName, 0x00, 0);
@@ -385,6 +391,17 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x211B7F, 0x7F, GsParam::kUserDrumSourceProgram, 0x7F, 1);
   check_row(0x210C00, 0x2A, GsParam::kUserDrumSourceNote, 0x00, 0);
   check_row(0x211C39, 0x23, GsParam::kUserDrumSourceNote, 0x39, 1);
+
+  // The SC-88Pro's stored patches and effect types (22 ** ** - 27 ** **): an
+  // address family the SC-8850 does not have, so nothing but an SC-88Pro file
+  // reaches it and every block resolves rather than counting as unknown.
+  check_row(0x220000, 0x00, GsParam::kUserEffectBlock, 0x00, 0);
+  check_row(0x22163F, 0x7F, GsParam::kUserEffectBlock, 0x3F, 6);
+  check_row(0x230018, 0x02, GsParam::kUserPatchBlock, 0x18, 0);
+  check_row(0x240F19, 0x64, GsParam::kUserPatchBlock, 0x19, 0x0F);
+  check_row(0x250040, 0x40, GsParam::kUserPatchBlock, 0x40, 0);
+  check_row(0x260002, 0x0A, GsParam::kUserPatchBlock, 0x02, 0);
+  check_row(0x277F7F, 0x7F, GsParam::kUserPatchBlock, 0x7F, 0x0F);
 
   // Drum setup (41 mn rr): one row per parameter covers both maps and all 128
   // notes, so the map nibble comes back as the part and the note as the index.

@@ -144,6 +144,7 @@ enum class GsLevel : uint8_t {
   X(kPartToneMap0Number)      \
   X(kPartEqSwitch)            \
   X(kPartEfxAssign)           \
+  X(kUserInstrumentBlock)     \
   X(kUserDrumSetName)         \
   X(kUserDrumPlayNote)        \
   X(kUserDrumLevel)           \
@@ -157,6 +158,8 @@ enum class GsLevel : uint8_t {
   X(kUserDrumSourceMap)       \
   X(kUserDrumSourceProgram)   \
   X(kUserDrumSourceNote)      \
+  X(kUserEffectBlock)         \
+  X(kUserPatchBlock)          \
   X(kDrumMapName)             \
   X(kDrumPlayNote)            \
   X(kDrumLevel)               \
@@ -227,7 +230,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 170> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 177> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -243,6 +246,15 @@ inline constexpr std::array<GsAddressEntry, 170> kGsAddressTable = {{
      "libsonare receives one port, so a channel has no other port to be assigned to"},
     {0x000130, 0x00000F, GsParam::kChannelMsgRxPort, GsLevel::kIgnore, 1, 0x00, 0x03, 0x03,
      "libsonare receives one port, so a channel has no other port to be assigned to"},
+
+    // User instruments (20 bn pp): two banks of stored tone edits, selected as
+    // GS variations 64 and 65. Both machines define it, so this is a gap in what
+    // libsonare implements rather than a model difference. One row over the
+    // block for the same reason 50 ** ** takes one: the statement is that a
+    // whole layer is absent.
+    {0x200000, 0x007F00, GsParam::kUserInstrumentBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "a program selects a bank preset or the model floor directly, so there is no stored tone for "
+     "an edit to sit on"},
 
     // User drum sets (21 dn rr): two kits a file builds note by note and a
     // rhythm part selects with program 64 or 65. d is the set, n the parameter,
@@ -287,6 +299,27 @@ inline constexpr std::array<GsAddressEntry, 170> kGsAddressTable = {{
     // PLAY NOTE NUMBER at 41 m1 rr.
     {0x210C00, 0x00F07F, GsParam::kUserDrumSourceNote, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00,
      nullptr},
+
+    // The SC-88Pro's stored patches and effect types (22 ** ** - 27 ** **).
+    // Sixty-four user effect types, and sixteen user patches whose two patch
+    // parts each carry a full part parameter set: 2a in the map is the first
+    // half of one (a = 4 for PART1, 6 for PART2) and 2b the second (b = 5, 7).
+    // The SC-8850 dropped the whole region, so this is where "the SC-8850 is the
+    // superset" stops holding and an SC-88Pro file is the only thing that
+    // reaches it (docs/gs.md). One row per block, as 50 ** ** takes one.
+    {0x220000, 0x007F00, GsParam::kUserEffectBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "a stored effect type is a panel memory, and a renderer realises a chain from the type and "
+     "parameters the file sends"},
+    {0x230000, 0x007F00, GsParam::kUserPatchBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "the common half of a stored patch; a renderer has no panel memory to recall one from"},
+    {0x240000, 0x007F00, GsParam::kUserPatchBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "a stored patch's PART1, first half; a renderer has no panel memory to recall one from"},
+    {0x250000, 0x007F00, GsParam::kUserPatchBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "a stored patch's PART1, second half; a renderer has no panel memory to recall one from"},
+    {0x260000, 0x007F00, GsParam::kUserPatchBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "a stored patch's PART2, first half; a renderer has no panel memory to recall one from"},
+    {0x270000, 0x007F00, GsParam::kUserPatchBlock, GsLevel::kIgnore, 128, 0x00, 0x7F, 0x00,
+     "a stored patch's PART2, second half; a renderer has no panel memory to recall one from"},
 
     // System parameters (40 00 xx).
     // MASTER TUNE is four nibbles making one 0018-07E8 word; the row bounds the
