@@ -6,12 +6,74 @@
     "identity_reply": "F0 7E 10 06 02 41 42 00 00 06 00 00 00 00 F7"
   },
   "derived_from": {
-    "meta.json": "predates the archive's record envelope",
-    "power-on-state.json": "predates the archive's record envelope",
-    "boundary-probe.json": "predates the archive's record envelope",
-    "write-probe-wholemap.json": "predates the archive's record envelope"
+    "meta.json": {
+      "schema_version": 1,
+      "unit_id": "roland-sc8850-01",
+      "stage": null,
+      "invocation": null,
+      "measured_at": null,
+      "midi_device_id": null,
+      "not_recorded": {
+        "fields": [
+          "stage",
+          "invocation",
+          "measured_at"
+        ],
+        "why": "No command wrote this record: it is kept by hand, so there is no stage that produced it, no arguments it was given and no moment it was captured at. The date below is the day it first entered the repository.",
+        "first_published": "2026-09-01"
+      }
+    },
+    "power-on/whole-map.json": {
+      "schema_version": 1,
+      "unit_id": "roland-sc8850-01",
+      "stage": "power-on",
+      "invocation": null,
+      "measured_at": null,
+      "midi_device_id": null,
+      "not_recorded": {
+        "fields": [
+          "invocation",
+          "measured_at"
+        ],
+        "why": "This run predates the record envelope. Neither the arguments it was given nor the moment it was taken is held anywhere in what it wrote, so neither can be recovered without inventing it. Everything here that is not null was recovered from the record and the directory it sits in. The date below is the day the record first entered the repository, which bounds the measurement from above and is not when it was taken.",
+        "first_published": "2026-09-01"
+      }
+    },
+    "boundary/whole-map.json": {
+      "schema_version": 1,
+      "unit_id": "roland-sc8850-01",
+      "stage": "boundary",
+      "invocation": null,
+      "measured_at": null,
+      "midi_device_id": null,
+      "not_recorded": {
+        "fields": [
+          "invocation",
+          "measured_at"
+        ],
+        "why": "This run predates the record envelope. Neither the arguments it was given nor the moment it was taken is held anywhere in what it wrote, so neither can be recovered without inventing it. Everything here that is not null was recovered from the record and the directory it sits in. The date below is the day the record first entered the repository, which bounds the measurement from above and is not when it was taken.",
+        "first_published": "2026-09-06"
+      }
+    },
+    "write-probe/whole-map.json": {
+      "schema_version": 1,
+      "unit_id": "roland-sc8850-01",
+      "stage": "write-probe",
+      "invocation": null,
+      "measured_at": null,
+      "midi_device_id": "10",
+      "not_recorded": {
+        "fields": [
+          "invocation",
+          "measured_at"
+        ],
+        "why": "This run predates the record envelope. Neither the arguments it was given nor the moment it was taken is held anywhere in what it wrote, so neither can be recovered without inventing it. Everything here that is not null was recovered from the record and the directory it sits in. The date below is the day the record first entered the repository, which bounds the measurement from above and is not when it was taken.",
+        "first_published": "2026-09-04"
+      }
+    }
   },
   "what_the_comparison_cannot_see": [
+    "The four records are not shown to be one state of the machine. None of them holds the moment it was taken, so the only ordering available is the day each was published, under derived_from, and that bounds them from above rather than placing them. A setting changed between two runs would read here as a property of the unit.",
     "No row is shown to be absent from the machine. A read that answers nothing leaves the address unproven, because a block read starting earlier reaches addresses a single-byte read does not -- which is the boundary probe's own finding about this unit.",
     "The extent a read reached is taken as contiguous, the count being all the boundary probe keeps. It bounds the reach; it does not say each address inside it answered on its own.",
     "The window blocks are excluded, so nothing is said about them at all.",

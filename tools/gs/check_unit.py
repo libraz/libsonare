@@ -20,7 +20,7 @@ the address census next to it.
 Usage::
 
     check_unit.py --table .cache/gs-address-table.json \\
-                  --unit ../soundings/data/units/roland-sc8850-01 \\
+                  --unit <archive>/data/units/roland-sc8850-01 \\
                   --out tools/gs/unit-diff.json
 """
 
@@ -31,16 +31,19 @@ import json
 import sys
 from pathlib import Path
 
-# The blocks the archive says are a window rather than storage, read from the
-# record by the name the record gives them.
-#
-# That name is a sentence -- `blocks_42_to_47_and_4a_to_4f_are_a_window` -- so
-# this lookup only works for a unit whose window is at those blocks, and the next
-# unit's would be spelled differently. The finding belongs in a value that names
-# its kind; until it is, a reader has to know the answer in order to ask. Widen
-# this to read a `findings` entry once the archive carries one.
-WINDOW_KEY = "blocks_42_to_47_and_4a_to_4f_are_a_window"
-WINDOW_BLOCKS = frozenset(range(0x42, 0x48)) | frozenset(range(0x4A, 0x50))
+# The four records this reads, of the couple of hundred the archive holds. Each
+# is one run's output, filed under the directory naming the stage that wrote it,
+# and named here once so a move shows up as four edits rather than eight.
+META = "meta.json"
+POWER_ON = "power-on/whole-map.json"
+BOUNDARY = "boundary/whole-map.json"
+WRITE_PROBE = "write-probe/whole-map.json"
+RECORDS_READ = (META, POWER_ON, BOUNDARY, WRITE_PROBE)
+
+# The finding naming the blocks that are a window onto another store rather than
+# storage of their own. Read by the kind the finding gives itself, so a unit
+# whose window sits elsewhere is read correctly without this knowing where.
+WINDOW_FINDING = "blocks-that-are-a-window"
 
 # Rows whose default is deliberately not the machine's, with the decision that
 # made it so. Declared here rather than left to the reader, for the reason the
@@ -160,16 +163,47 @@ def range_addresses(entry: dict) -> list[int]:
 def load(unit: Path, name: str) -> dict:
     path = unit / name
     if not path.is_file():
-        sys.exit(f"{path} is not in the archive; this comparison needs it")
+        sys.exit(f"{path} is not in the archive; this comparison needs it{elsewhere(unit, name)}")
     return json.loads(path.read_text())
 
 
-def provenance(unit: Path, names: list[str]) -> dict:
+def elsewhere(unit: Path, name: str) -> str:
+    """What the archive's own index has under that record's stage, if anything.
+
+    A record moves with the archive's filing rather than with anything libsonare
+    decides, so the useful thing to say when one is missing is where its stage's
+    records are now -- otherwise the reader goes hunting through a directory of a
+    couple of hundred files for a name that no longer exists.
+    """
+    index = unit / "index.json"
+    if not index.is_file():
+        return ""
+    stage = Path(name).parent.name
+    files = [e["file"] for e in json.loads(index.read_text()).get("stages", {}).get(stage, [])]
+    if not files:
+        return f". The index lists no stage {stage!r}"
+    return f". The index lists under {stage!r}: {', '.join(files)}"
+
+
+def window_blocks(power_on: dict, where: str) -> frozenset:
+    """The high bytes the record says are a window, from the finding that names itself."""
+    for finding in power_on.get("findings", []):
+        if finding.get("kind") == WINDOW_FINDING:
+            return frozenset(int(b, 16) for b in finding["blocks"])
+    sys.exit(
+        f"{where} carries no {WINDOW_FINDING!r} finding. Every address in a window "
+        "mirrors another store, so counting them as answered would invent thousands "
+        "of gaps. Refusing to guess."
+    )
+
+
+def provenance(unit: Path, names: tuple[str, ...]) -> dict:
     """Which records this was derived from, and what each says about itself.
 
-    A record written before the archive carried an envelope cannot say which
-    unit or which run produced it, and saying so is more use than leaving the
-    field out: it marks the number as one whose source is the file path.
+    Copied whole rather than summarised. A record that cannot say when it was
+    taken says so in its own words, and which fields it is missing differs by
+    record -- one kept by hand has no stage either. Restating any of that here
+    would be a second copy of the archive's own account, free to drift from it.
     """
     out = {}
     for name in names:
@@ -181,7 +215,7 @@ def provenance(unit: Path, names: list[str]) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--table", required=True, help="JSON from dump_address_table")
-    ap.add_argument("--unit", required=True, help="a unit directory in a soundings archive")
+    ap.add_argument("--unit", required=True, help="a unit directory in a measurement archive")
     ap.add_argument("--out", help="where to write the diff; omitted prints the summary only")
     ap.add_argument(
         "--samples", type=int, default=6, help="concrete addresses shown per aggregated finding"
@@ -190,21 +224,16 @@ def main() -> int:
 
     unit = Path(args.unit)
     table = json.loads(Path(args.table).read_text())
-    meta = load(unit, "meta.json")
-    power_on = load(unit, "power-on-state.json")
-    boundary = load(unit, "boundary-probe.json")
-    write_probe = load(unit, "write-probe-wholemap.json")
+    meta = load(unit, META)
+    power_on = load(unit, POWER_ON)
+    boundary = load(unit, BOUNDARY)
+    write_probe = load(unit, WRITE_PROBE)
 
-    if WINDOW_KEY not in power_on:
-        sys.exit(
-            f"{unit}/power-on-state.json does not declare its window blocks under "
-            f"{WINDOW_KEY!r}. Every address in a window mirrors another store, so counting "
-            "them as answered would invent thousands of gaps. Refusing to guess."
-        )
+    windows = window_blocks(power_on, f"{unit}/{POWER_ON}")
 
     # What the unit answered with a value, less the windows, which are not
     # storage of their own. This is the hard set: each of these returned a byte.
-    answered = {parsed(a) for a in power_on["values"] if (parsed(a) >> 16) not in WINDOW_BLOCKS}
+    answered = {parsed(a) for a in power_on["values"] if (parsed(a) >> 16) not in windows}
 
     # How far a read actually got, which is further than the map says and further
     # than `answered`. The power-on sweep reads each region to its mapped end,
@@ -218,7 +247,7 @@ def main() -> int:
     reached = set(answered)
     for region in boundary["regions"]:
         start = parsed(region["address"])
-        if (start >> 16) in WINDOW_BLOCKS:
+        if (start >> 16) in windows:
             continue
         span = region["mapped_size"] + region["answered_beyond_the_mapped_end"]
         reached.update(advance(start, i) for i in range(span))
@@ -450,16 +479,13 @@ def main() -> int:
             "model": meta.get("model"),
             "identity_reply": meta.get("identity_reply"),
         },
-        "derived_from": provenance(
-            unit,
-            [
-                "meta.json",
-                "power-on-state.json",
-                "boundary-probe.json",
-                "write-probe-wholemap.json",
-            ],
-        ),
+        "derived_from": provenance(unit, RECORDS_READ),
         "what_the_comparison_cannot_see": [
+            "The four records are not shown to be one state of the machine. None of them "
+            "holds the moment it was taken, so the only ordering available is the day "
+            "each was published, under derived_from, and that bounds them from above "
+            "rather than placing them. A setting changed between two runs would read "
+            "here as a property of the unit.",
             "No row is shown to be absent from the machine. A read that answers nothing "
             "leaves the address unproven, because a block read starting earlier reaches "
             "addresses a single-byte read does not -- which is the boundary probe's own "

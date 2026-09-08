@@ -35,16 +35,18 @@ Those rows are named in `DEFAULT_IS_NOT_THE_MACHINES` with the decision behind e
 
 ## What it cannot see
 
-Carried in the diff itself, under `what_the_comparison_cannot_see`, so a reader of the file never has to come here for the caveats. In short: no row is shown absent from the machine; the reach of a read is taken as contiguous because a count is all the record keeps; the window blocks are excluded entirely; levels are libsonare's promises about its own implementation and are never compared; and one unit is one unit.
+Carried in the diff itself, under `what_the_comparison_cannot_see`, so a reader of the file never has to come here for the caveats. In short: the four records are not shown to be one state of the machine; no row is shown absent from the machine; the reach of a read is taken as contiguous because a count is all the record keeps; the window blocks are excluded entirely; levels are libsonare's promises about its own implementation and are never compared; and one unit is one unit.
 
 ## Running it
 
 ```sh
-make gs-unit-diff                                    # regenerate the committed diff
-make gs-unit-diff SOUNDINGS_UNIT=<a unit directory>  # against another machine
-make gs-unit-diff-check                              # fail if the committed diff is stale
+export GS_UNIT_ARCHIVE=<a unit directory>  # no default; see below
+make gs-unit-diff                          # regenerate the committed diff
+make gs-unit-diff-check                    # fail if the committed diff is stale
 ```
 
-The archive is external and holds measurements of a named individual machine under its own licence. `unit-diff.json` is committed so that a clone reads the work list without fetching anything, the same arrangement the census next to it has.
+The archive is external and holds measurements of a named individual machine under its own licence. `unit-diff.json` is committed so that a clone reads the work list without fetching anything, the same arrangement the census next to it has — which is also why `GS_UNIT_ARCHIVE` carries no default: a path into a tree a clone does not have would be a dead pointer rather than a convenience, and the target says so instead of failing on a missing file.
 
-The four records it reads are `meta.json`, `power-on-state.json`, `boundary-probe.json` and `write-probe-wholemap.json`, and the diff records what each of them says about itself under `derived_from` — including that it says nothing, for a record written before that archive carried provenance of its own.
+The four records it reads are `meta.json` plus the whole-map record of the `power-on`, `boundary` and `write-probe` stages. Each record's own envelope is copied whole into `derived_from`, never summarised: which fields a record cannot fill differs by record — one kept by hand has no stage that produced it, a run predating the envelope has no arguments and no moment — and restating that here would be a second copy of the archive's account, free to drift from it. **None of the four holds a measurement time**, so nothing here places them in order; the published date each carries bounds it from above and is not when it was taken.
+
+An archive is free to file its records differently, and to word a finding differently. Both are read rather than assumed: when one of the four records is missing the tool reads the archive's own `index.json` and names what that stage holds now, and the blocks that are a window come from the `blocks-that-are-a-window` finding by its kind rather than from any block numbers written here. Nothing about this unit's map is compiled in.
