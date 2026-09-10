@@ -143,6 +143,7 @@ enum class GsLevel : uint8_t {
   X(kPartToneMapNumber)       \
   X(kPartToneMap0Number)      \
   X(kPartEqSwitch)            \
+  X(kPartOutputAssign)        \
   X(kPartEfxAssign)           \
   X(kUserInstrumentBlock)     \
   X(kUserDrumSetName)         \
@@ -230,7 +231,7 @@ struct GsAddressRange {
 
 /// The defined addresses. Ascending by address; the row count is the number of
 /// addresses the implementation has taken a position on.
-inline constexpr std::array<GsAddressEntry, 177> kGsAddressTable = {{
+inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
     // System (00 00 xx / 00 01 xx).
     // SC-8850 takes 00 only and treats it as a GS reset: it has no Mode-2, so
     // the SC-88Pro's 01 falls outside the accepted range (docs/gs.md).
@@ -695,6 +696,14 @@ inline constexpr std::array<GsAddressEntry, 177> kGsAddressTable = {{
     // part. Powers on ON, so a file that never writes it still gets the EQ.
     {0x404020, 0x000F00, GsParam::kPartEqSwitch, GsLevel::kAudible, 1, 0x00, 0x01, 0x01, nullptr},
 
+    // Part output assign (40 4x 21): which output pair carries the part.
+    // 00 OUTPUT-1, 01 OUTPUT-2, 02 OUTPUT-2L, 03 OUTPUT-2R. The second pair is
+    // a jack rather than a signal-path decision, and it is dry: a measured unit
+    // moved to 01 leaves the insertion effect and the system reverb behind
+    // while a volume controller still reaches it.
+    {0x404021, 0x000F00, GsParam::kPartOutputAssign, GsLevel::kIgnore, 1, 0x00, 0x03, 0x00,
+     "libsonare renders one output pair, so there is no second one to route a part to"},
+
     // Part EFX assign (40 4x 22).
     // The manual specifies 00 BYPASS / 01 EFX; 02-10 select insertion units 1-15,
     // the libsonare extension (docs/gs.md). Narrowing hi back to 01 to restore
@@ -749,7 +758,7 @@ inline constexpr std::array<GsAddressEntry, 177> kGsAddressTable = {{
 }};
 
 /// The undefined regions covered so far.
-inline constexpr std::array<GsAddressRange, 23> kGsUndefinedRanges = {{
+inline constexpr std::array<GsAddressRange, 22> kGsUndefinedRanges = {{
     {0x400110, 0x40012F, 0,
      "no row between PATCH NAME and REVERB MACRO; the SC-55/SC-88 PARTIAL RESERVE the SC-8850 "
      "dropped arrives here"},
@@ -790,7 +799,6 @@ inline constexpr std::array<GsAddressRange, 23> kGsUndefinedRanges = {{
      "are its own"},
     // Tone map / EQ / EFX block. Real files write into the first of these.
     {0x404002, 0x40401F, 0x000F00, "no row between TONE MAP-0 NUMBER and the part EQ switch"},
-    {0x404021, 0x404021, 0x000F00, "no row between the part EQ switch and the part EFX assign"},
     {0x404023, 0x40407F, 0x000F00, "no row past the part EFX assign"},
 }};
 

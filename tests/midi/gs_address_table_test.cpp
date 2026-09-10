@@ -352,16 +352,17 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x40255B, 0x00, GsParam::kUndefined);
   check_row(0x40267F, 0x00, GsParam::kUndefined);
 
-  // Tone map (40 4x 00-01), and the three gaps the block leaves around it.
+  // Tone map (40 4x 00-01), and the two gaps the block leaves around it.
   check_row(0x404100, 0x00, GsParam::kPartToneMapNumber, 0, 0);
   check_row(0x404A00, 0x00, GsParam::kPartToneMapNumber, 0, 10);
   check_row(0x404001, 0x04, GsParam::kPartToneMap0Number, 0, 9);
   check_row(0x404F01, 0x04, GsParam::kPartToneMap0Number, 0, 15);
   check_row(0x404114, 0x00, GsParam::kUndefined);
-  check_row(0x404221, 0x00, GsParam::kUndefined);
   check_row(0x404335, 0x00, GsParam::kUndefined);
   check_row(0x404020, 0x01, GsParam::kPartEqSwitch, 0, 9);
   check_row(0x404320, 0x00, GsParam::kPartEqSwitch, 0, 2);
+  check_row(0x404021, 0x03, GsParam::kPartOutputAssign, 0, 9);
+  check_row(0x404221, 0x01, GsParam::kPartOutputAssign, 0, 1);
   check_row(0x404022, 0x01, GsParam::kPartEfxAssign, 0, 9);
   check_row(0x404122, 0x10, GsParam::kPartEfxAssign, 0, 0);
 
@@ -1644,7 +1645,9 @@ TEST_CASE("GS address table: the part EQ switch is per part and powers on ON",
   }
   // The switch claims only its own byte: its neighbours keep their own answers.
   CHECK(gs_lookup_address(0x40401F) == nullptr);
-  CHECK(gs_lookup_address(0x404021) == nullptr);
+  const GsAddressEntry* output = gs_lookup_address(0x404021);
+  REQUIRE(output != nullptr);
+  CHECK(output->param == GsParam::kPartOutputAssign);
   const GsAddressEntry* assign = gs_lookup_address(0x404022);
   REQUIRE(assign != nullptr);
   CHECK(assign->param == GsParam::kPartEfxAssign);
