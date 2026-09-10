@@ -835,8 +835,8 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        const SonareDereverbClassicalConfig* config,
                                                        float** out, size_t* out_length);
 
-/// @brief Points a dereverb config at a measured room: sets the two fields a
-///        room estimate determines and leaves the rest of @p config alone.
+/// @brief Applies a room estimate to a dereverb config IN PLACE: overwrites the
+///        two fields a measurement determines and leaves the rest alone.
 /// @details The pair to @ref sonare_estimate_room, which measures a recording
 ///   blind. What the room decides is WHERE the tail is -- @c t60_sec from the
 ///   mid-frequency reverberation time (the 500 Hz and 1 kHz octave average an
@@ -871,8 +871,8 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
 ///   caller's call and this reports no opinion on it.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL @p estimate or @p config,
 ///         or SONARE_ERROR_OUT_OF_MEMORY if the band copy it takes fails.
-SonareError sonare_mastering_repair_dereverb_config_for_room(const SonareRoomEstimate* estimate,
-                                                             SonareDereverbClassicalConfig* config);
+SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
+    const SonareRoomEstimate* estimate, SonareDereverbClassicalConfig* config);
 
 // Trimming modes for sonare_mastering_repair_trim_silence.
 #define SONARE_TRIM_SILENCE_MODE_PEAK 0

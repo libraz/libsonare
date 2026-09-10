@@ -55,9 +55,9 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
     # Config-shaping companion to the dereverb processor: it takes a room
     # estimate and an existing config rather than audio, so it is registered
     # outside the repair loop above.
-    if hasattr(lib, "sonare_mastering_repair_dereverb_config_for_room"):
-        lib.sonare_mastering_repair_dereverb_config_for_room.restype = ctypes.c_int32
-        lib.sonare_mastering_repair_dereverb_config_for_room.argtypes = [
+    if hasattr(lib, "sonare_mastering_repair_dereverb_apply_room_estimate"):
+        lib.sonare_mastering_repair_dereverb_apply_room_estimate.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_dereverb_apply_room_estimate.argtypes = [
             ctypes.POINTER(SonareRoomEstimate),
             ctypes.POINTER(SonareDereverbClassicalConfig),
         ]

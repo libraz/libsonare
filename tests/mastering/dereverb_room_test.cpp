@@ -138,16 +138,16 @@ TEST_CASE("the C surface joins a room estimate to a dereverb config",
   config.n_fft = 1024;
   config.hop_length = 256;
 
-  REQUIRE(sonare_mastering_repair_dereverb_config_for_room(&estimate, &config) == SONARE_OK);
+  REQUIRE(sonare_mastering_repair_dereverb_apply_room_estimate(&estimate, &config) == SONARE_OK);
   CHECK(config.t60_sec == Catch::Approx(1.5f));
   CHECK(config.late_delay_ms == Catch::Approx(50.0f));
   // Read AND written: the taste fields the caller set survive.
   CHECK(config.attenuation == Catch::Approx(0.9f));
   CHECK(config.n_fft == 1024);
 
-  CHECK(sonare_mastering_repair_dereverb_config_for_room(nullptr, &config) ==
+  CHECK(sonare_mastering_repair_dereverb_apply_room_estimate(nullptr, &config) ==
         SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_mastering_repair_dereverb_config_for_room(&estimate, nullptr) ==
+  CHECK(sonare_mastering_repair_dereverb_apply_room_estimate(&estimate, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
 }
 
@@ -161,7 +161,7 @@ TEST_CASE("the C surface takes every config field literally", "[mastering][derev
   estimate.band_count = bands.size();
 
   SonareDereverbClassicalConfig config{};
-  REQUIRE(sonare_mastering_repair_dereverb_config_for_room(&estimate, &config) == SONARE_OK);
+  REQUIRE(sonare_mastering_repair_dereverb_apply_room_estimate(&estimate, &config) == SONARE_OK);
   CHECK(config.t60_sec == Catch::Approx(1.0f));
   CHECK(config.late_delay_ms == Catch::Approx(20.0f));
   // Untouched fields stay at the zeros the caller left, not at any default.
@@ -181,7 +181,7 @@ TEST_CASE("an estimate with no bands at all is accepted and changes nothing",
 
   SonareDereverbClassicalConfig config{};
   SonareDereverbClassicalConfig before = config;
-  REQUIRE(sonare_mastering_repair_dereverb_config_for_room(&estimate, &config) == SONARE_OK);
+  REQUIRE(sonare_mastering_repair_dereverb_apply_room_estimate(&estimate, &config) == SONARE_OK);
   CHECK(config.t60_sec == before.t60_sec);
   CHECK(config.late_delay_ms == before.late_delay_ms);
 }

@@ -276,7 +276,7 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
   });
 }
 
-SonareError sonare_mastering_repair_dereverb_config_for_room(
+SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
     const SonareRoomEstimate* estimate, SonareDereverbClassicalConfig* config) {
   SONARE_C_API_ENTRY;
   if (!estimate || !config) return SONARE_ERROR_INVALID_PARAMETER;

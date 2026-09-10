@@ -224,6 +224,13 @@ _ALIAS_COVERAGE = {
     "trim_ex": ("trim",),
     "nnls_chroma_ex2": ("nnls_chroma",),
     "analyze_impulse_response_ex": ("analyze_impulse_response",),
+    # Same operation, and the two names differ because the two CONTRACTS do: the
+    # C entry point reads and writes a config the caller owns, while each facade
+    # takes the taste options and returns a finished config. Renaming either to
+    # match the other would put a name on it that its own behaviour contradicts.
+    "mastering_repair_dereverb_apply_room_estimate": (
+        "mastering_repair_dereverb_config_for_room",
+    ),
     # NMF warm-start variant -> the base decompose facade, which exposes the
     # `init` initialiser argument and routes to sonare_decompose_with_init.
     # (Python / WASM expose decompose_with_init by name, matched directly before

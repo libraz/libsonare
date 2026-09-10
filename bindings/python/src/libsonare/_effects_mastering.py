@@ -585,7 +585,7 @@ def mastering_repair_dereverb_config_for_room(
         into :func:`mastering_repair_dereverb_classical`.
     """
     lib = _get_lib()
-    symbol = "sonare_mastering_repair_dereverb_config_for_room"
+    symbol = "sonare_mastering_repair_dereverb_apply_room_estimate"
     if not hasattr(lib, symbol):
         raise _unsupported_effect_symbol(symbol)
     if estimate is None:
