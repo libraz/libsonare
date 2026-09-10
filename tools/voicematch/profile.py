@@ -1654,7 +1654,8 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         deltas.setdefault("vel_range", []).append(
             (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
         )
-    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [])
+    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [],
+                                cfg.get("dimensions_na") or {})
     spread = percussion_reference_spread(profile, list(summary))
     print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} "
           f"{'x spread':>9} {'rows':>5}")
@@ -2567,7 +2568,8 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     if register:
         deltas["register"] = [d for _, _, d in register]
         print_register_profile(register, register_spread_by_note(profile))
-    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [])
+    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [],
+                                cfg.get("dimensions_na") or {})
     spread = reference_spread(profile, list(summary))
     print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} {'x spread':>9} {'rows':>5}")
     for k, row in summary.items():
@@ -2684,7 +2686,8 @@ def print_register_profile(register: list[tuple[int, int, float]],
         print("  " + "  ".join(cells))
 
 
-def select_dimensions(summary: dict[str, dict], wanted: list[str]) -> dict[str, dict]:
+def select_dimensions(summary: dict[str, dict], wanted: list[str],
+                      excused: dict[str, str] | None = None) -> dict[str, dict]:
     """Narrow the summary to the dimensions this instrument is judged on.
 
     Every dimension is measured for every instrument, because measuring is
@@ -2695,12 +2698,18 @@ def select_dimensions(summary: dict[str, dict], wanted: list[str]) -> dict[str, 
     A capture that lists no dimensions is judged on all of them, which is the
     right default — an instrument earns an exclusion by having a reason.
 
+    `dimensions_na` is that reason written down, and it is subtracted here as
+    well as in the coverage report: an entry saying a measurement is invalid,
+    next to a bound recorded from that same measurement, asserts both at once.
+
     A named dimension that was not measured is reported rather than dropped:
     silence there reads as "that dimension was fine".
     """
+    if excused:
+        summary = {k: v for k, v in summary.items() if k not in excused}
     if not wanted:
         return summary
-    missing = [d for d in wanted if d not in summary]
+    missing = [d for d in wanted if d not in summary and d not in (excused or {})]
     if missing:
         print(f"\nthese dimensions are named by the capture and were not measured in this "
               f"run: {', '.join(missing)}", file=sys.stderr)
