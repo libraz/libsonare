@@ -242,10 +242,16 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
   return smooth;
 }
 
-// Phase 3: TD-PSOLA driven by a per-frame delta curve, with a spectral fallback
-// for large shifts and pass-through (with cross-fade) for unvoiced regions.
+// TD-PSOLA driven by a per-frame delta curve, with a spectral fallback for
+// large shifts and pass-through (with cross-fade) for unvoiced regions.
 Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
-                                   const std::vector<float>& smooth_deltas) const {
+                                   const std::vector<float>& deltas_semitones) const {
+  SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
+  // The curve is read by clamped frame index, so a short one reads out of
+  // bounds rather than reporting a mismatched track.
+  SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
+               ErrorCode::InvalidParameter);
+
   const int n_samples = static_cast<int>(audio.size());
   const int sr = audio.sample_rate();
   const float sr_f = static_cast<float>(sr);
@@ -319,7 +325,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       continue;
     }
     const float period_in = std::max(1.0f, sr_f / f0);
-    const float delta = interp_frame(smooth_deltas, analysis_epoch);
+    const float delta = interp_frame(deltas_semitones, analysis_epoch);
 
     // Large shifts: leave to the spectral fallback pass (skip here). Advance
     // both timelines in lock-step so the region stays time-aligned.
@@ -399,8 +405,8 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     std::vector<float> big;
     for (int f = 0; f < n_frames; ++f) {
       if (valid_voiced_frame(track, f) &&
-          std::abs(smooth_deltas[static_cast<size_t>(f)]) > kPsolaMaxSemitones) {
-        big.push_back(smooth_deltas[static_cast<size_t>(f)]);
+          std::abs(deltas_semitones[static_cast<size_t>(f)]) > kPsolaMaxSemitones) {
+        big.push_back(deltas_semitones[static_cast<size_t>(f)]);
       }
     }
     if (!big.empty()) {
