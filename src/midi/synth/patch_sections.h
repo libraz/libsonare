@@ -134,6 +134,9 @@ constexpr PercussionPatchParams blank_percussion() noexcept {
   z.noise_cutoff_hz = 0.0f;
   z.noise_q = 0.0f;
   z.noise_output = static_cast<SynthFilterOutput>(0);
+  z.noise_burst_count = 0;
+  z.noise_burst_interval_ms = 0.0f;
+  z.noise_burst_decay_ms = 0.0f;
   z.noise_air_hz = 0.0f;
   z.shell_mix = 0.0f;
   z.shell_num_modes = 0;
