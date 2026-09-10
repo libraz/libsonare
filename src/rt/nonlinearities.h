@@ -8,11 +8,33 @@
 
 namespace sonare::rt {
 
+/// Below this the closed form for log(cosh x) is two terms near log 2 that
+/// cancel, so the series takes over; at 0.5 both branches sit within a few ulp.
+inline constexpr float kLogCoshSeriesLimit = 0.5f;
+
 struct TanhNonlinearity {
   float apply(float x) const noexcept { return std::tanh(x); }
 
+  /// @brief log(cosh x), the antiderivative of tanh.
+  /// @details The closed form subtracts two quantities near log 2, so in float
+  ///   it carries an absolute error floor of one ulp of log 2 (6e-8) whatever
+  ///   the argument: under |x| ~ 3e-4 it returns zero, and negative values, for
+  ///   a function that is nonnegative everywhere. That floor is not academic —
+  ///   ADAA divides this difference by a sample step as small as its own guard,
+  ///   which turns 6e-8 into broadband noise that grows as a signal decays.
   float antiderivative(float x) const noexcept {
     const float ax = std::abs(x);
+    if (ax < kLogCoshSeriesLimit) {
+      // x^2/2 - x^4/12 + x^6/45 - 17x^8/2520 + 62x^10/28350 - 1382x^12/1871100.
+      const float u = ax * ax;
+      float s = -1382.0f / 1871100.0f;
+      s = s * u + 62.0f / 28350.0f;
+      s = s * u - 17.0f / 2520.0f;
+      s = s * u + 1.0f / 45.0f;
+      s = s * u - 1.0f / 12.0f;
+      s = s * u + 0.5f;
+      return s * u;
+    }
     return ax + std::log1p(std::exp(-2.0f * ax)) - std::log(2.0f);
   }
 };
@@ -73,9 +95,15 @@ struct ArctanNonlinearity {
     return x * std::atan(x) - 0.5f * std::log1p(x * x);
   }
 
+  /// @details Same cancellation as log(cosh): the -atan(x) and +x terms are
+  ///   both of order x and the result is x^3/6, which costs every significant
+  ///   bit in float under |x| ~ 1. Widened rather than expanded because atan's
+  ///   series only converges below 1 and no Adaa2 instantiates this, so the
+  ///   double pays nothing that runs.
   float second_antiderivative(float x) const noexcept {
-    const float x2 = x * x;
-    return 0.5f * (x2 - 1.0f) * std::atan(x) + 0.5f * x - 0.5f * x * std::log1p(x2);
+    const double d = x;
+    const double a = std::atan(d);
+    return static_cast<float>(0.5 * ((d * d - 1.0) * a + d - d * std::log1p(d * d)));
   }
 };
 
