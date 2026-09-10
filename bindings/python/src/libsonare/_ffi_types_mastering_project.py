@@ -557,17 +557,19 @@ SONARE_SYNTH_FIELD_GAIN = 1 << 23
 SONARE_SYNTH_FIELD_POLYPHONY = 1 << 24
 SONARE_SYNTH_FIELD_BUS_DRIVE = 1 << 25
 SONARE_SYNTH_FIELD_MOD_ROUTINGS = 1 << 26
+SONARE_SYNTH_FIELD_HP_CUTOFF_HZ = 1 << 27
 
 
 class SonareSynthPatch(ctypes.Structure):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 3).
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 4).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
     the base ("0 => keep"). Enum fields reserve 0 as "keep". ``present_fields``
     names the fields the caller set on purpose, so an explicit zero override is
     representable; it is honoured from ``struct_version`` 2 on. Version 3
-    adds the sample-engine block, read only by a sample patch.
+    adds the sample-engine block, read only by a sample patch; version 4 adds
+    the series highpass past it.
     """
 
     _fields_ = [
@@ -612,6 +614,7 @@ class SonareSynthPatch(ctypes.Structure):
         ("sample_loop", ctypes.c_int),
         ("sample_start_offset", ctypes.c_float),
         ("sample_key_track", ctypes.c_int),
+        ("hp_cutoff_hz", ctypes.c_float),
     ]
 
 

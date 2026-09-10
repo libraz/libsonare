@@ -401,3 +401,54 @@ TEST_CASE("unison detune is seeded deterministically per voice", "[midi][synth]"
   REQUIRE(run_voice(0, 1) != run_voice(1, 1));
   REQUIRE(run_voice(0, 1) != run_voice(0, 2));
 }
+
+TEST_CASE("the series highpass narrows the voice to a band", "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  cfg.patch.waveform = VaWaveform::kSaw;
+  cfg.patch.cutoff_hz = 2000.0f;
+
+  auto level_with_hp = [&cfg](float hp_hz) {
+    NativeSynthConfig local = cfg;
+    local.patch.hp_cutoff_hz = hp_hz;
+    NativeSynth synth(local);
+    synth.prepare(kRate, 256);
+    // A2 (45) puts the fundamental near 110 Hz, well under the highpass.
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 45, 110)));
+    const StereoRender out = render(synth, 9600);
+    return rms(out.left, 4800, 9600);
+  };
+
+  // 0 leaves the stage out entirely, which is what every existing patch asks
+  // for; 800 Hz removes the fundamental and everything under it.
+  const float wide = level_with_hp(0.0f);
+  const float banded = level_with_hp(800.0f);
+  REQUIRE(wide > 0.0f);
+  REQUIRE(banded < 0.5f * wide);
+}
+
+TEST_CASE("the series highpass keeps its own resonance out of the band", "[midi][synth]") {
+  // The patch Q belongs to the main filter: raising it must not sharpen the
+  // highpass corner, or a band would grow a peak at each end.
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  cfg.patch.waveform = VaWaveform::kSaw;
+  cfg.patch.cutoff_hz = 20000.0f;
+  cfg.patch.hp_cutoff_hz = 1000.0f;
+
+  auto level_at_q = [&cfg](float q) {
+    NativeSynthConfig local = cfg;
+    local.patch.resonance_q = q;
+    NativeSynth synth(local);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 45, 110)));
+    const StereoRender out = render(synth, 9600);
+    return rms(out.left, 4800, 9600);
+  };
+  // The main filter sits wide open at 20 kHz, so its Q has nothing to colour
+  // and the highpass corner stays where it is.
+  const float flat = level_at_q(0.707f);
+  const float sharp = level_at_q(12.0f);
+  REQUIRE(sharp < 1.1f * flat);
+  REQUIRE(sharp > 0.9f * flat);
+}

@@ -437,7 +437,8 @@ typedef struct {
    mod matrix / bus). */
 typedef struct {
   int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured;
-                                                3 => the sample-engine block at the tail is read too */
+                                                3 => the sample-engine block at the tail is read too;
+                                                4 => the series highpass at the tail is read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -509,6 +510,13 @@ typedef struct {
   int sample_loop;           /* SonareSampleLoopMode; 0 => what the bank recorded */
   float sample_start_offset; /* attack skip as a fraction of the region; 0 => base */
   int sample_key_track;      /* SonareSampleKeyTrack; 0 => base */
+
+  /* --- series highpass (struct_version 4) --- */
+  /* 12 dB/oct highpass after the main filter, the other end of a band the
+     lowpass alone cannot make. 0 => base; set SONARE_SYNTH_FIELD_HP_CUTOFF_HZ
+     in present_fields to ask for 0 as a value and switch the stage off. It
+     runs at Butterworth Q: resonance_q belongs to the main filter. */
+  float hp_cutoff_hz;
 } SonareSynthPatch;
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
@@ -543,6 +551,7 @@ typedef struct {
 /* Set with num_mod_routings == 0 to clear the base mod matrix rather than keep
    it; a non-empty table replaces the base matrix with or without the bit. */
 #define SONARE_SYNTH_FIELD_MOD_ROUTINGS (1u << 26)
+#define SONARE_SYNTH_FIELD_HP_CUTOFF_HZ (1u << 27)
 
 #ifdef __cplusplus
 // Layout guards for the previously-unversioned analysis / feature PODs. Any
@@ -591,8 +600,8 @@ static_assert(offsetof(SonareSynthPatch, gain) ==
 static_assert(offsetof(SonareSynthPatch, present_fields) ==
                   offsetof(SonareSynthPatch, bus_drive) + sizeof(float),
               "SonareSynthPatch present_fields offset changed");
-static_assert(SONARE_SYNTH_FIELD_MOD_ROUTINGS ==
-                  1u << 26,  // Highest bit in use; widening needs a struct_version bump.
+static_assert(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ ==
+                  1u << 27,  // Highest bit in use; widening needs a struct_version bump.
               "SonareSynthPatch presence bit range changed");
 #endif
 

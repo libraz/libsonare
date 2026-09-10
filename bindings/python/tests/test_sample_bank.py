@@ -172,8 +172,9 @@ def test_patch_sample_fields_round_trip_through_the_c_struct() -> None:
         sample_key_track="off",
     )
     c = patch._to_c()
-    # Version 3 is what makes the core read the block at all.
-    assert c.struct_version == 3
+    # Version 3 is what makes the core read the block at all, and every version
+    # past it is a superset, so the block keeps being read.
+    assert c.struct_version >= 3
     assert (c.sample_set, c.sample_loop, c.sample_key_track) == (3, 3, 2)
     back = SynthPatch._from_c(c)
     assert back.sample_set == 3

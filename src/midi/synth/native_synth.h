@@ -119,6 +119,13 @@ struct NativeSynthPatch {
   /// Resonance Q. The ladder / Sallen-Key models map it to their normalized
   /// feedback; Q >= kSelfOscQ reaches self-oscillation on those models.
   float resonance_q = 0.707f;
+  /// Series 12 dB/oct highpass AFTER the main filter (Hz); 0 disables the
+  /// stage. This is the second half of a lowpass-plus-highpass pair, which is
+  /// how a sampled instrument is narrowed to a band the main filter alone
+  /// cannot reach. It runs flat at Butterworth Q -- @c resonance_q belongs to
+  /// the main filter, and a resonant peak at each end of a band is not what
+  /// the pairing is for.
+  float hp_cutoff_hz = 0.0f;
   /// Pre-filter drive in [0,1]: gain-compensated tanh saturation on the
   /// oscillator mix (0 = clean).
   float drive = 0.0f;
@@ -252,6 +259,11 @@ struct NativeSynthVoice : VoiceState {
   DahdsrEnvelope amp_env;
   DahdsrEnvelope filter_env;
   SynthFilter filter;
+  /// Series highpass stage (patch hp_cutoff_hz); idle when the patch asks for
+  /// no highpass. A bare SVF rather than a second SynthFilter: this stage is
+  /// always the SVF highpass tap, so the other three models would be dead
+  /// state on every voice.
+  TptSvf hp_stage;
   FmVoiceCore fm;
   /// KS string core; the host attach()es its delay span before start() (the
   /// slab is owned by the instrument and allocated in prepare()).
@@ -735,6 +747,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.cutoff_hz = std::clamp(patch_clamp_detail::sanitize(p.cutoff_hz, 12000.0f), 10.0f, 22000.0f);
   p.resonance_q = std::clamp(patch_clamp_detail::sanitize(p.resonance_q, constants::kButterworthQ),
                              0.5f, 30.0f);
+  p.hp_cutoff_hz = std::clamp(patch_clamp_detail::sanitize(p.hp_cutoff_hz, 0.0f), 0.0f, 22000.0f);
   p.drive = std::clamp(patch_clamp_detail::sanitize(p.drive, 0.0f), 0.0f, 1.0f);
   p.filter_env = patch_clamp_detail::clamp_env(p.filter_env);
   p.env_to_cutoff_cents =

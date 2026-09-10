@@ -133,7 +133,7 @@ inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
 /// unknown enum names; unknown PRESET names are validated downstream.
 inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   SonareSynthPatch patch{};
-  patch.struct_version = 3;
+  patch.struct_version = 4;
   if (desc.isUndefined() || desc.isNull()) return patch;
   if (desc.typeOf().as<std::string>() == "string") {
     setPresetName(&patch, desc.as<std::string>());
@@ -173,6 +173,7 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   read_float("driftCents", SONARE_SYNTH_FIELD_DRIFT_CENTS, &patch.drift_cents);
   read_float("drive", SONARE_SYNTH_FIELD_DRIVE, &patch.drive);
   read_float("cutoffHz", SONARE_SYNTH_FIELD_CUTOFF_HZ, &patch.cutoff_hz);
+  read_float("hpCutoffHz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, &patch.hp_cutoff_hz);
   read_float("resonanceQ", SONARE_SYNTH_FIELD_RESONANCE_Q, &patch.resonance_q);
   read_float("keyTrack", SONARE_SYNTH_FIELD_KEY_TRACK, &patch.key_track);
   read_float("envToCutoffCents", SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
@@ -255,6 +256,7 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("filterOutput",
           enum_name(patch.filter_output, kFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
   out.set("cutoffHz", patch.cutoff_hz);
+  out.set("hpCutoffHz", patch.hp_cutoff_hz);
   out.set("resonanceQ", patch.resonance_q);
   out.set("keyTrack", patch.key_track);
   out.set("envToCutoffCents", patch.env_to_cutoff_cents);

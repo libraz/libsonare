@@ -47,6 +47,7 @@ from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD_FILTER_SUSTAIN,
     SONARE_SYNTH_FIELD_GAIN,
     SONARE_SYNTH_FIELD_GLIDE_MS,
+    SONARE_SYNTH_FIELD_HP_CUTOFF_HZ,
     SONARE_SYNTH_FIELD_KEY_TRACK,
     SONARE_SYNTH_FIELD_LFO2_RATE_HZ,
     SONARE_SYNTH_FIELD_LFO_RATE_HZ,
@@ -649,6 +650,7 @@ class SynthPatch:
     filter_model: str | int = 0
     filter_output: str | int = 0
     cutoff_hz: float | None = None
+    hp_cutoff_hz: float | None = None
     resonance_q: float | None = None
     key_track: float | None = None
     env_to_cutoff_cents: float | None = None
@@ -693,7 +695,7 @@ class SynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 3
+        c.struct_version = 4
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.
@@ -721,6 +723,7 @@ class SynthPatch:
             self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter output"
         )
         _set_float("cutoff_hz", SONARE_SYNTH_FIELD_CUTOFF_HZ, self.cutoff_hz)
+        _set_float("hp_cutoff_hz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, self.hp_cutoff_hz)
         _set_float("resonance_q", SONARE_SYNTH_FIELD_RESONANCE_Q, self.resonance_q)
         _set_float("key_track", SONARE_SYNTH_FIELD_KEY_TRACK, self.key_track)
         _set_float(
@@ -803,6 +806,7 @@ class SynthPatch:
             filter_model=_synth_enum_name(int(c.filter_model), _SYNTH_FILTER_MODELS),
             filter_output=_synth_enum_name(int(c.filter_output), _SYNTH_FILTER_OUTPUTS),
             cutoff_hz=float(c.cutoff_hz),
+            hp_cutoff_hz=float(c.hp_cutoff_hz),
             resonance_q=float(c.resonance_q),
             key_track=float(c.key_track),
             env_to_cutoff_cents=float(c.env_to_cutoff_cents),

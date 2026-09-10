@@ -703,6 +703,12 @@ export interface SynthPatch {
   filterModel?: SynthFilterModel | number;
   filterOutput?: SynthFilterOutput | number;
   cutoffHz?: number;
+  /**
+   * Series 12 dB/oct highpass after the main filter, in Hz; 0 disables the
+   * stage. The other end of a band the lowpass alone cannot make. It runs at
+   * Butterworth Q -- `resonanceQ` belongs to the main filter.
+   */
+  hpCutoffHz?: number;
   resonanceQ?: number;
   /** Cutoff keyboard tracking [0, 1]. */
   keyTrack?: number;

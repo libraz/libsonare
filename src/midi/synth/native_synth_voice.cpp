@@ -245,6 +245,10 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   filter_env.note_on();
   filter.prepare(sample_rate);
   filter.set_model(p.filter_model);
+  if (p.hp_cutoff_hz > 0.0f) {
+    hp_stage.prepare(sample_rate);
+    hp_stage.set(p.hp_cutoff_hz, constants::kButterworthQ);
+  }
 
   // The model bank's LFO has no onset delay of its own, so a GS vibrato-delay
   // edit is the only thing that can give it one.
@@ -426,6 +430,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     filter.set(fc, q);
     sample = filter.process(sample, patch->filter_output);
   }
+
+  // --- series highpass: the other end of a band the main filter cannot make ---
+  if (patch->hp_cutoff_hz > 0.0f) sample = hp_stage.process(sample).hp;
 
   // --- amplitude (wind_gain is the shared tremulant/sag level; 1.0 otherwise) ---
   // The contact transient joins here rather than upstream: it is the strike

@@ -118,6 +118,7 @@ inline bool valid_c_enum(int value, int count) noexcept { return value >= 0 && v
 /// Struct version 2 adds @c present_fields, so a caller can also override with
 /// an explicit zero; version 1 has no presence bits and cannot express one.
 /// Version 3 adds the sample-engine block, which only a sample patch reads.
+/// Version 4 adds the series highpass.
 /// Returns false (and sets @p out_error) for an unsupported struct_version or
 /// an unknown preset name. The result still passes through NativeSynth's own
 /// constructor clamping.
@@ -136,7 +137,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::VaWaveform;
 
   if (out_error) *out_error = nullptr;
-  if (c.struct_version > 3) {
+  if (c.struct_version > 4) {
     if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
     return false;
   }
@@ -244,6 +245,9 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   // Sample engine: only a version-3 caller's struct reaches this block, and
   // only a sample patch reads it, which is what keeps set 0 addressable
   // without a presence bit of its own.
+  if (c.struct_version >= 4 && (set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ) || c.hp_cutoff_hz != 0.0f)) {
+    p.hp_cutoff_hz = c.hp_cutoff_hz;
+  }
   if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
     p.sample.set_index = c.sample_set;
     if (c.sample_level != 0.0f) p.sample.level = c.sample_level;
@@ -284,7 +288,7 @@ inline constexpr uint32_t kSynthPatchAllFields =
     SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS | SONARE_SYNTH_FIELD_LFO2_RATE_HZ |
     SONARE_SYNTH_FIELD_GLIDE_MS | SONARE_SYNTH_FIELD_BODY_MIX | SONARE_SYNTH_FIELD_STEREO_SPREAD |
     SONARE_SYNTH_FIELD_GAIN | SONARE_SYNTH_FIELD_POLYPHONY | SONARE_SYNTH_FIELD_BUS_DRIVE |
-    SONARE_SYNTH_FIELD_MOD_ROUTINGS;
+    SONARE_SYNTH_FIELD_MOD_ROUTINGS | SONARE_SYNTH_FIELD_HP_CUTOFF_HZ;
 
 /// Fills a versioned C synth patch from a catalog preset (the read direction:
 /// preset name + the wrapper-section values, so hosts can inspect and tweak).
@@ -292,7 +296,7 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
                              SonareSynthPatch* out) {
   const sonare::midi::synth::NativeSynthPatch& p = preset.config.patch;
   *out = SonareSynthPatch{};
-  out->struct_version = 2;
+  out->struct_version = 4;
   out->present_fields = kSynthPatchAllFields;
   std::strncpy(out->preset, preset.name, SONARE_SYNTH_PRESET_NAME_MAX - 1);
   out->engine_mode = static_cast<int>(p.mode) + 1;
@@ -304,6 +308,7 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
   out->filter_model = static_cast<int>(p.filter_model) + 1;
   out->filter_output = static_cast<int>(p.filter_output) + 1;
   out->cutoff_hz = p.cutoff_hz;
+  out->hp_cutoff_hz = p.hp_cutoff_hz;
   out->resonance_q = p.resonance_q;
   out->key_track = p.key_track;
   out->env_to_cutoff_cents = p.env_to_cutoff_cents;
