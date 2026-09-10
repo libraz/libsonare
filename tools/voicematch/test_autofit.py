@@ -1013,7 +1013,9 @@ def test_a_sustained_note_is_never_measured_into_the_next_one(monkeypatch):
 def test_a_drum_hit_keeps_the_window_it_always_had(monkeypatch):
     probe = build_pattern("drum", 0)
     onsets = [n.start for n in probe.notes]
-    for start, end in _window_ends(probe, monkeypatch):
+    measured = _window_ends(probe, monkeypatch)
+    assert len(measured) == len(probe.analysis_notes)
+    for start, end in measured:
         later = [s for s in onsets if s > start]
         assert end == (min(later) if later else pattern_length(probe))
 
