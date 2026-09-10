@@ -311,7 +311,8 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
       row.median_hz = note.median_hz;
       row.median_cents = note.median_cents;
       row.f0_stability = note.f0_stability;
-      row.edit = SonareNoteEdit{0, 0.0f, 0.0f, 1.0f, 0};
+      row.edit = SonareNoteEdit{};
+      row.edit.time_stretch_ratio = 1.0f;
       const size_t span = note.amplitude.values.size();
       if (span > 0) {
         std::memcpy(amplitude.get() + amplitude_offset, note.amplitude.values.data(),
