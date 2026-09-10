@@ -45,6 +45,7 @@ import type {
 } from './types.js';
 import { assertProjectMidiEvents, midi1Event } from './validation.js';
 import {
+  normalizeSynthInstrument,
   projectAutomationLaneValue,
   projectClipFadeValue,
   projectLoopModeValue,
@@ -1095,7 +1096,9 @@ export class Project {
    * `destinationId` (default `0`). An object descriptor may also set
    * `useGmPrograms: true` to follow incoming GM bank/program changes (and use
    * the GM drum map on channel 10); it defaults to `false`, preserving the
-   * fixed-patch behavior. `destinationId` and `useGmPrograms` are JS binding
+   * fixed-patch behavior. An `engineMode: 'sample'` patch also takes a
+   * `sampleBank` ({@link SampleBank}) holding the PCM its keymap names.
+   * `destinationId`, `useGmPrograms` and `sampleBank` are JS binding
    * conveniences, not part of the NativeSynth patch itself. An empty array
    * renders silence. Unknown preset names throw. Deterministic for a fixed
    * project + options + patch.
@@ -1106,7 +1109,10 @@ export class Project {
     instruments: (SynthPatch | string)[] = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    return this.native.bounceWithSynthInstruments(instruments, options);
+    return this.native.bounceWithSynthInstruments(
+      instruments.map(normalizeSynthInstrument),
+      options,
+    );
   }
 
   /**
@@ -1119,7 +1125,7 @@ export class Project {
     instrument: SynthPatch | string = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    return this.native.bounceWithSynthInstruments([instrument], options);
+    return this.native.bounceWithSynthInstruments([normalizeSynthInstrument(instrument)], options);
   }
 
   /**

@@ -8,6 +8,7 @@
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
+#include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
 
@@ -439,6 +440,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   SonareWrap::Init(env, exports);
   RealtimeEngineWrap::Init(env, exports);
   ProjectWrap::Init(env, exports);
+  SampleBankWrap::Init(env, exports);
   exports.Set("engineAbiVersion", Napi::Function::New(env, EngineAbiVersion, "engineAbiVersion"));
   exports.Set("voiceChangerAbiVersion",
               Napi::Function::New(env, VoiceChangerAbiVersion, "voiceChangerAbiVersion"));

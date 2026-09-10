@@ -328,9 +328,28 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_ENGINE_PLUCKED_STRING = 13,
   SONARE_SYNTH_ENGINE_VOCAL = 14,
   SONARE_SYNTH_ENGINE_FREE_REED = 15,
-  SONARE_SYNTH_ENGINE_HARPSICHORD = 16
+  SONARE_SYNTH_ENGINE_HARPSICHORD = 16,
+  SONARE_SYNTH_ENGINE_SAMPLE = 17
 } SonareSynthEngineMode;
-#define SONARE_SYNTH_ENGINE_MODE_COUNT 17
+#define SONARE_SYNTH_ENGINE_MODE_COUNT 18
+
+/* Loop behaviour override for the sample engine. 0 keeps what the bank
+   recorded for the sample the zone names. */
+typedef enum SONARE_ENUM_BASE {
+  SONARE_SAMPLE_LOOP_DEFAULT = 0,
+  SONARE_SAMPLE_LOOP_NONE = 1,
+  SONARE_SAMPLE_LOOP_CONTINUOUS = 2,
+  SONARE_SAMPLE_LOOP_KEY_DOWN = 3
+} SonareSampleLoopMode;
+#define SONARE_SAMPLE_LOOP_MODE_COUNT 4
+
+/* Whether a sample follows the played key. 0 keeps the base patch's value. */
+typedef enum SONARE_ENUM_BASE {
+  SONARE_SAMPLE_KEY_TRACK_DEFAULT = 0,
+  SONARE_SAMPLE_KEY_TRACK_ON = 1,
+  SONARE_SAMPLE_KEY_TRACK_OFF = 2
+} SonareSampleKeyTrack;
+#define SONARE_SAMPLE_KEY_TRACK_COUNT 3
 
 /* Oscillator waveform (subtractive mode). 0 keeps the base patch's value. */
 typedef enum SONARE_ENUM_BASE {
@@ -412,7 +431,8 @@ typedef struct {
    engine shares (oscillator / filter / envelopes / LFO / glide / realism /
    mod matrix / bus). */
 typedef struct {
-  int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured */
+  int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured;
+                                                3 => the sample-engine block at the tail is read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -469,10 +489,21 @@ typedef struct {
      purpose. A set bit overrides the base with the field's value even when that
      value is zero, which the "0 => base" rule above cannot express; a clear bit
      keeps the version-1 behaviour, so a caller that only fills the fields it
-     wants to change needs no mask at all. Ignored unless struct_version is 2.
+     wants to change needs no mask at all. Honoured from struct_version 2 on.
      32 bits with 27 in use; a further extension appends a second word under a
      new struct_version rather than widening this one. */
   uint32_t present_fields;
+
+  /* --- sample engine (struct_version 3) --- */
+  /* Read only when the resolved engine is SONARE_SYNTH_ENGINE_SAMPLE, which is
+     what lets sample_set keep its natural zero: a patch voicing another engine
+     never consults this block, so set 0 stays addressable. The bank itself is
+     bound alongside the patch (see SonareSynthInstrumentBinding). */
+  int sample_set;            /* keymap set in the bound bank; negative = none */
+  float sample_level;        /* linear gain on the sample; 0 => base */
+  int sample_loop;           /* SonareSampleLoopMode; 0 => what the bank recorded */
+  float sample_start_offset; /* attack skip as a fraction of the region; 0 => base */
+  int sample_key_track;      /* SonareSampleKeyTrack; 0 => base */
 } SonareSynthPatch;
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
@@ -529,8 +560,12 @@ static_assert(offsetof(SonareAnalysisResult, bpm_candidates) ==
                   offsetof(SonareAnalysisResult, beat_count) + sizeof(size_t),
               "SonareAnalysisResult candidate layout changed");
 
-static_assert(SONARE_SYNTH_ENGINE_HARPSICHORD + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
+static_assert(SONARE_SYNTH_ENGINE_SAMPLE + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "SonareSynthEngineMode count changed");
+static_assert(SONARE_SAMPLE_LOOP_KEY_DOWN + 1 == SONARE_SAMPLE_LOOP_MODE_COUNT,
+              "SonareSampleLoopMode count changed");
+static_assert(SONARE_SAMPLE_KEY_TRACK_OFF + 1 == SONARE_SAMPLE_KEY_TRACK_COUNT,
+              "SonareSampleKeyTrack count changed");
 static_assert(SONARE_SYNTH_OSC_NOISE + 1 == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
               "SonareSynthOscWaveform count changed");
 static_assert(SONARE_SYNTH_FILTER_SALLEN_KEY + 1 == SONARE_SYNTH_FILTER_MODEL_COUNT,

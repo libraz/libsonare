@@ -13,9 +13,11 @@
 namespace sonare_node {
 
 inline constexpr const char* kSynthEngineModes[] = {
-    "default",    "subtractive",    "fm",         "karplus-strong", "modal",      "additive",
-    "percussion", "piano",          "pipe-organ", "bowed-string",   "reed",       "brass",
-    "flute",      "plucked-string", "vocal",      "free-reed",      "harpsichord"};
+    "default",    "subtractive",    "fm",         "karplus-strong", "modal",       "additive",
+    "percussion", "piano",          "pipe-organ", "bowed-string",   "reed",        "brass",
+    "flute",      "plucked-string", "vocal",      "free-reed",      "harpsichord", "sample"};
+inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuous", "key-down"};
+inline constexpr const char* kSampleKeyTracks[] = {"default", "on", "off"};
 inline constexpr const char* kSynthWaveforms[] = {"default", "sine",     "saw",
                                                   "square",  "triangle", "noise"};
 inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "moog-ladder",
@@ -31,6 +33,10 @@ inline constexpr const char* kSynthModDestinations[] = {"none", "pitch-cents", "
 
 static_assert(std::size(kSynthEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "Node SynthEngineMode table drifted from C");
+static_assert(std::size(kSampleLoopModes) == SONARE_SAMPLE_LOOP_MODE_COUNT,
+              "Node SampleLoopMode table drifted from C");
+static_assert(std::size(kSampleKeyTracks) == SONARE_SAMPLE_KEY_TRACK_COUNT,
+              "Node SampleKeyTrack table drifted from C");
 static_assert(std::size(kSynthWaveforms) == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
               "Node SynthOscWaveform table drifted from C");
 static_assert(std::size(kSynthFilterModels) == SONARE_SYNTH_FILTER_MODEL_COUNT,
@@ -98,7 +104,10 @@ inline bool SynthFieldPresent(const Napi::Object& obj, const char* key) {
 // validated downstream by the C ABI.
 inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
   *patch = SonareSynthPatch{};
-  patch->struct_version = 2;
+  // Version 3 is a superset: the sample block at the tail is read only when the
+  // resolved engine is the sample engine, so a zero-filled block is exactly
+  // version 2's behaviour for every other patch.
+  patch->struct_version = 3;
   if (desc.IsUndefined() || desc.IsNull()) return true;
 
   auto set_preset = [patch](const std::string& name) {
@@ -136,7 +145,12 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
                          SONARE_SYNTH_FILTER_OUTPUT_COUNT, "filter output",
                          &patch->filter_output) ||
       !SynthEnumProperty(env, obj, "body", kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT,
-                         "body type", &patch->body)) {
+                         "body type", &patch->body) ||
+      !SynthEnumProperty(env, obj, "sampleLoop", kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT,
+                         "sample loop mode", &patch->sample_loop) ||
+      !SynthEnumProperty(env, obj, "sampleKeyTrack", kSampleKeyTracks,
+                         SONARE_SAMPLE_KEY_TRACK_COUNT, "sample key track",
+                         &patch->sample_key_track)) {
     return false;
   }
   auto read_float = [&](const char* key, uint32_t bit, float* out) {
@@ -175,6 +189,14 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
   read_float("gain", SONARE_SYNTH_FIELD_GAIN, &patch->gain);
   read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch->polyphony);
   read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch->bus_drive);
+
+  // Sample engine (struct_version 3). No presence bits: only a sample patch
+  // reads this block, which is what keeps keymap set 0 addressable as a plain
+  // zero, and the other three keep the usual "0 => base".
+  patch->sample_set = IntProperty(obj, "sampleSet", 0);
+  patch->sample_level = FloatProperty(obj, "sampleLevel", 0.0f);
+  patch->sample_start_offset = FloatProperty(obj, "sampleStartOffset", 0.0f);
+  if (env.IsExceptionPending()) return false;
 
   Napi::Value routings = obj.Get("modRoutings");
   if (routings.IsArray()) {
@@ -266,6 +288,13 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
   out.Set("gain", patch.gain);
   out.Set("polyphony", patch.polyphony);
   out.Set("busDrive", patch.bus_drive);
+  out.Set("sampleSet", patch.sample_set);
+  out.Set("sampleLevel", patch.sample_level);
+  out.Set("sampleLoop",
+          enum_name(patch.sample_loop, kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT));
+  out.Set("sampleStartOffset", patch.sample_start_offset);
+  out.Set("sampleKeyTrack",
+          enum_name(patch.sample_key_track, kSampleKeyTracks, SONARE_SAMPLE_KEY_TRACK_COUNT));
   return out;
 }
 

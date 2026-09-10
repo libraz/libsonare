@@ -97,6 +97,7 @@ add_executable(sonare_tests
   streaming/stream_analyzer_integration_test.cpp
   streaming/stream_analyzer_long_chord_test.cpp
   rt/adaa2_test.cpp
+  rt/nonlinearities_test.cpp
   rt/biquad_design_test.cpp
   rt/k_weighting_freq_response_test.cpp
   rt/spsc_queue_test.cpp
@@ -497,6 +498,7 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_project_midi_test.cpp
     bindings/binding_project_soundfont_test.cpp
     bindings/binding_synth_patch_test.cpp
+    bindings/binding_sample_bank_test.cpp
     arrangement/c_abi_external_stems_test.cpp
   )
   # The headless-project C ABI sources are compiled into the test binary so the
@@ -511,6 +513,7 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_sample_bank.cpp
   )
   target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ARRANGEMENT=1)

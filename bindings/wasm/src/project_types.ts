@@ -1,6 +1,7 @@
 // Type-only, so the erased import adds no runtime edge to the codes module.
 import type { PROJECT_AUTOMATION_CURVE_VALUES } from './codes';
 import type { Project } from './project_class';
+import type { SampleBank } from './sample_bank';
 
 // ============================================================================
 // Headless DAW Project
@@ -220,7 +221,10 @@ export const SYNTH_ENGINE_MODES = [
   'vocal',
   'free-reed',
   'harpsichord',
+  'sample',
 ] as const;
+export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'key-down'] as const;
+export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 export const SYNTH_OSC_WAVEFORMS = [
   'default',
   'sine',
@@ -278,6 +282,90 @@ export interface SynthEnumTables {
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
 export type SynthEngineMode = (typeof SYNTH_ENGINE_MODES)[number];
+
+/**
+ * Per-patch loop override for the sample engine (`'default'` keeps what the
+ * bank recorded for the sample the zone names).
+ *
+ * A different set of values from {@link SampleDesc.loopMode}, which is the
+ * SoundFont `sampleModes` number describing the recording itself.
+ */
+export type SampleLoopMode = (typeof SAMPLE_LOOP_MODES)[number];
+
+/** Whether a sample follows the played key (`'default'` keeps the base patch's). */
+export type SampleKeyTrack = (typeof SAMPLE_KEY_TRACKS)[number];
+
+/**
+ * Loop behaviour recorded for one sample in a {@link SampleBank}.
+ *
+ * A number is the raw SoundFont `sampleModes` value the C struct carries
+ * (`0` no loop, `1` continuous, `3` while the key is held), so SF2-derived data
+ * passes through untranslated; the names are the readable spellings of the same
+ * three states. There is no `'default'`: a sample's own loop mode is where the
+ * default comes from.
+ */
+export type SampleDescLoopMode = 'none' | 'continuous' | 'key-down';
+
+/**
+ * Tuning and looping of one sample, in units relative to that sample
+ * ({@link SampleBank.addSample}).
+ *
+ * Every field is optional and the omitted state is meaningful: the empty
+ * descriptor is an unlooped sample rooted at middle C and played at the
+ * render's own rate.
+ */
+export interface SampleDesc {
+  /** MIDI key at which the sample sounds at its recorded pitch. Defaults to 60. */
+  rootKey?: number;
+  /** Fine tuning applied on top of {@link SampleDesc.rootKey}. */
+  fineTuneCents?: number;
+  /** Rate the sample was recorded at; omit to play it at the render's rate. */
+  sourceRate?: number;
+  /** Loop start, as a frame offset inside this sample. */
+  loopStart?: number;
+  /** Loop end, as a frame offset inside this sample. */
+  loopEnd?: number;
+  /**
+   * The sample's own loop behaviour. A loop that survives clamping empty is
+   * dropped, so a malformed loop plays unlooped rather than wrapping over
+   * nothing. {@link SynthPatch.sampleLoop} overrides this per patch.
+   */
+  loopMode?: SampleDescLoopMode | number;
+}
+
+/**
+ * One key/velocity rectangle mapped onto a sample ({@link SampleBank.addZone}).
+ *
+ * Every bound defaults on its own, so narrowing one edge never collapses
+ * another: an omitted upper bound is `127`, an omitted `velLo` is `1` (velocity
+ * zero is a note-off, not a dynamic), and an omitted `keyLo` is simply the
+ * lowest key. `{ keyLo: 48 }` is therefore keys 48-127 at every velocity and
+ * `{ velLo: 64 }` its exact mirror, while an empty rectangle is the whole
+ * keyboard. The one rectangle this cannot express is the single key `0`.
+ */
+export interface SampleZoneDesc {
+  /**
+   * Keymap set the zone joins; a {@link SynthPatch} names a set through
+   * {@link SynthPatch.sampleSet}. Sets below it are created. Defaults to `0`.
+   */
+  setIndex?: number;
+  /** Sample the zone plays, as returned by {@link SampleBank.addSample}. */
+  sampleIndex?: number;
+  /** Lowest key of the rectangle. Defaults to `0`. */
+  keyLo?: number;
+  /** Highest key of the rectangle. Defaults to `127`. */
+  keyHi?: number;
+  /** Lowest velocity of the rectangle. Defaults to `1`. */
+  velLo?: number;
+  /** Highest velocity of the rectangle. Defaults to `127`. */
+  velHi?: number;
+  /** Added to the sample's own fine tuning. */
+  tuneCents?: number;
+  /** Linear gain; omit for unity. */
+  gain?: number;
+  /** Pan in the voice mixer's units, `-500` to `500`. */
+  panUnits?: number;
+}
 
 /** NativeSynth oscillator waveform (`'default'` keeps the base patch's). */
 export type SynthOscWaveform = (typeof SYNTH_OSC_WAVEFORMS)[number];
@@ -374,6 +462,25 @@ export interface SynthPatch {
   polyphony?: number;
   /** Gain-neutral bus saturation [0, 1]. */
   busDrive?: number;
+  /**
+   * Bank the sample engine reads its PCM from. Binding convenience for the JS
+   * offline helpers rather than part of the patch itself, like `destinationId`:
+   * it is resolved to a native handle before the patch crosses into WASM.
+   * A `'sample'` patch bound without a bank renders silence.
+   */
+  sampleBank?: SampleBank;
+  /**
+   * Keymap set in the bound bank (negative selects none). Read only by a
+   * `'sample'` patch, which is what lets set `0` stay addressable without a
+   * "keep the base value" sentinel of its own.
+   */
+  sampleSet?: number;
+  /** Linear gain on the sample. */
+  sampleLevel?: number;
+  sampleLoop?: SampleLoopMode | number;
+  /** Attack skip, as a fraction of the mapped region. */
+  sampleStartOffset?: number;
+  sampleKeyTrack?: SampleKeyTrack | number;
 }
 
 /** Clip fade-curve for {@link Project.setClipFade}. */

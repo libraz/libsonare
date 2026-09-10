@@ -65,6 +65,7 @@ set(ADDON_SOURCES
   src/addon/project/external_stems.cpp
   src/addon/project/midi_mir.cpp
   src/addon/project/render.cpp
+  src/addon/sonare_wrap_sample_bank.cpp
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_acoustic.cpp
   src/addon/sonare_wrap_analysis.cpp
@@ -121,6 +122,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_midi.cpp
   ${SONARE_ROOT}/src/c_api/project_mir.cpp
   ${SONARE_ROOT}/src/c_api/project_soundfont.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_sample_bank.cpp
 )
 
 add_library(${PROJECT_NAME} SHARED

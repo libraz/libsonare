@@ -226,6 +226,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_midi.cpp
   c_api/project_mir.cpp
   c_api/project_soundfont.cpp
+  c_api/sonare_c_sample_bank.cpp
 )
 
 # Decide whether to enable FFmpeg integration.
@@ -1249,6 +1250,7 @@ if(BUILD_WASM)
       c_api/project_mir.cpp
       c_api/project_soundfont.cpp
       c_api/sonare_c_mixing.cpp
+      c_api/sonare_c_sample_bank.cpp
       c_api/sonare_c_project.cpp
       c_api/sonare_c_streaming_retune.cpp
       c_api/sonare_c_voice_changer.cpp

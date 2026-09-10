@@ -20,6 +20,7 @@
 
 #include "c_api/sonare_c_error_mapping.h"
 #include "wasm/bindings/common/common.h"
+#include "wasm/bindings/common/sample_bank_wasm.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -199,6 +200,11 @@ struct ProjectWasm {
   // ("saw-lead" / "va:saw-lead"), or an array of either (each entry may carry
   // a destinationId). An empty array / null / undefined produces zero
   // bindings. Unknown preset names throw.
+  //
+  // An entry may also carry `sampleBankId`, the id of a live SampleBank handle
+  // the sample engine reads its PCM from; the TS facade resolves the public
+  // `sampleBank` object to that id. Zero and omission both mean no bank, and
+  // an id whose handle has been released throws.
   val bounceWithSynthInstrument(val bindings, val options);
 
   // Loads (parses) SoundFont 2 bytes into the project (presets / sample PCM),

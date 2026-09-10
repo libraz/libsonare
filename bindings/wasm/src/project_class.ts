@@ -1,5 +1,6 @@
 import {
   assertProjectMidiEvents,
+  normalizeSynthInstrument,
   projectAutomationPointValue,
   projectAutomationTargetKindValue,
   projectLoopModeValue,
@@ -785,12 +786,19 @@ export class Project {
    * both create one default binding. Use an explicitly empty array `[]` (or
    * runtime `null`) for zero bindings. Unknown preset names throw.
    * Deterministic for a fixed project + options + patch.
+   *
+   * An `engineMode: 'sample'` patch reads its PCM from the {@link SampleBank}
+   * passed as `sampleBank`; the bank must still be alive when the bounce runs,
+   * and one bound without a bank renders silence.
    */
   bounceWithSynthInstrument(
     instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    return this.native.bounceWithSynthInstrument(instrument, options);
+    const normalized = Array.isArray(instrument)
+      ? instrument.map((entry) => normalizeSynthInstrument(entry))
+      : normalizeSynthInstrument(instrument);
+    return this.native.bounceWithSynthInstrument(normalized, options);
   }
 
   /**

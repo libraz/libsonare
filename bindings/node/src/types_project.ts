@@ -1,4 +1,6 @@
-// Type-only, so the erased import adds no runtime edge to the coercion module.
+// Type-only, so the erased import adds no runtime edge: to the coercion module
+// below, and to the bank module, which names these types back.
+import type { SampleBank } from './sample_bank.js';
 import type { PROJECT_AUTOMATION_CURVE_VALUES } from './value_coercion.js';
 
 /**
@@ -451,7 +453,12 @@ export const SYNTH_ENGINE_MODES = [
   'vocal',
   'free-reed',
   'harpsichord',
+  'sample',
 ] as const;
+
+export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'key-down'] as const;
+
+export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 
 export const SYNTH_OSC_WAVEFORMS = [
   'default',
@@ -528,6 +535,100 @@ export type SynthFilterOutput = (typeof SYNTH_FILTER_OUTPUTS)[number];
 /** NativeSynth body/formant resonance voicing (`'default'` keeps the base patch's). */
 export type SynthBodyType = (typeof SYNTH_BODY_TYPES)[number];
 
+/**
+ * Loop behaviour a {@link SynthPatch} forces on the sample it plays.
+ * `'default'` keeps whatever the bank recorded for that sample.
+ *
+ * The NUMBERS here are not the ones {@link SampleDescLoopMode} uses. This is
+ * the patch's own scale, `0` default / `1` none / `2` continuous / `3` key-down;
+ * the sample's own loop mode is SoundFont `sampleModes`, where continuous is
+ * `1` and there is no default. Use the names on both and the two cannot be
+ * confused; a number read for the wrong one turns "continuous" into "no loop".
+ */
+export type SampleLoopMode = (typeof SAMPLE_LOOP_MODES)[number];
+
+/** Whether a {@link SynthPatch} sample follows the played key (`'default'` keeps the base). */
+export type SampleKeyTrack = (typeof SAMPLE_KEY_TRACKS)[number];
+
+/**
+ * Loop behaviour recorded for one sample in a {@link SampleBank}.
+ *
+ * A number is the raw SoundFont `sampleModes` value the C struct carries
+ * (`0` no loop, `1` continuous, `3` while the key is held), so SF2-derived data
+ * passes through untranslated; the names above are the readable spellings of
+ * the same three states. There is no `'default'`: a sample's own loop mode is
+ * where the default comes from.
+ *
+ * {@link SampleLoopMode}, the patch-side override, spells the same three states
+ * with the same names but numbers them differently (`2` is continuous there).
+ * Prefer the names — a number read for the wrong scale turns "continuous" into
+ * "no loop" silently.
+ */
+export type SampleDescLoopMode = 'none' | 'continuous' | 'key-down';
+
+/**
+ * Tuning and looping of one sample, in units relative to that sample
+ * ({@link SampleBank.addSample}).
+ *
+ * Every field is optional and the omitted state is meaningful: the empty
+ * descriptor is an unlooped sample rooted at middle C and played at the
+ * render's own rate.
+ */
+export interface SampleDesc {
+  /** MIDI key at which the sample sounds at its recorded pitch. Defaults to 60. */
+  rootKey?: number;
+  /** Fine tuning applied on top of {@link rootKey}. */
+  fineTuneCents?: number;
+  /** Rate the sample was recorded at; omit to play it at the render's rate. */
+  sourceRate?: number;
+  /** Loop start, as a frame offset inside this sample. */
+  loopStart?: number;
+  /** Loop end, as a frame offset inside this sample. */
+  loopEnd?: number;
+  /**
+   * The sample's own loop behaviour, on the SoundFont `sampleModes` scale. A
+   * loop that survives clamping empty is dropped, so a malformed loop plays
+   * unlooped rather than wrapping over nothing.
+   *
+   * {@link SynthPatch.sampleLoop} overrides this per patch and numbers the same
+   * states differently, so pass the names rather than the numbers between them.
+   */
+  loopMode?: SampleDescLoopMode | number;
+}
+
+/**
+ * One key/velocity rectangle mapped onto a sample ({@link SampleBank.addZone}).
+ *
+ * Every bound defaults ON ITS OWN, so narrowing one edge never collapses
+ * another into an empty range: `{ keyLo: 48 }` is 48..127 at every velocity,
+ * `{ velLo: 64 }` is the whole keyboard at 64..127, and an empty descriptor is
+ * the whole keyboard. The one rectangle this cannot express is a zone covering
+ * nothing but key 0.
+ */
+export interface SampleZoneDesc {
+  /**
+   * Keymap set the zone joins; a {@link SynthPatch} names a set through
+   * {@link SynthPatch.sampleSet}. Sets below it are created. Defaults to `0`.
+   */
+  setIndex?: number;
+  /** Sample the zone plays, as returned by {@link SampleBank.addSample}. */
+  sampleIndex?: number;
+  /** Lowest key of the rectangle. Defaults to `0`, the lowest key. */
+  keyLo?: number;
+  /** Highest key of the rectangle. Defaults to `127`. */
+  keyHi?: number;
+  /** Lowest velocity of the rectangle. Defaults to `1`, since velocity 0 is a note-off. */
+  velLo?: number;
+  /** Highest velocity of the rectangle. Defaults to `127`. */
+  velHi?: number;
+  /** Added to the sample's own fine tuning. */
+  tuneCents?: number;
+  /** Linear gain; omit for unity. */
+  gain?: number;
+  /** Pan in the voice mixer's units, `-500` to `500`. */
+  panUnits?: number;
+}
+
 /** {@link SynthPatch} mod-matrix source. */
 export type SynthModSource = (typeof SYNTH_MOD_SOURCES)[number];
 
@@ -573,6 +674,15 @@ export interface SynthPatch {
    * NativeSynth patch field.
    */
   useGmPrograms?: boolean;
+  /**
+   * Sample bank an `engineMode: 'sample'` patch reads, for offline project
+   * bounces. Borrowed for the call: it must outlive the bounce, and adding to
+   * it while the bounce runs is not allowed. A sample patch bound without a
+   * bank renders silence rather than failing, the same way a patch naming a
+   * keymap set the bank lacks does. This is a project-bounce binding option,
+   * not a NativeSynth patch field.
+   */
+  sampleBank?: SampleBank;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
   engineMode?: SynthEngineMode | number;
@@ -623,6 +733,26 @@ export interface SynthPatch {
   polyphony?: number;
   /** Gain-neutral bus saturation [0, 1]. */
   busDrive?: number;
+  // --- sample engine (read only when the resolved engine is 'sample') ---
+  /**
+   * Keymap set in the bound {@link sampleBank}; negative selects none. Unlike
+   * every other numeric field this one has no "keep the base" sentinel, because
+   * only a sample patch reads the block — which is what keeps set `0`
+   * addressable.
+   */
+  sampleSet?: number;
+  /** Linear gain on the sample. */
+  sampleLevel?: number;
+  /**
+   * Overrides the loop mode the bank recorded for the sample
+   * ({@link SampleDesc.loopMode}). Same three states, a different numbering:
+   * pass the names, not the numbers.
+   */
+  sampleLoop?: SampleLoopMode | number;
+  /** Attack skip, as a fraction of the sampled region [0, 1]. */
+  sampleStartOffset?: number;
+  /** Whether the sample follows the played key, or sounds at its recorded pitch. */
+  sampleKeyTrack?: SampleKeyTrack | number;
 }
 
 /** Source backend a resolved MIDI program renders through. */

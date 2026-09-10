@@ -27,6 +27,7 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "midi/instrument.h"
@@ -467,10 +468,22 @@ class NativeSynth final : public MidiInstrument {
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;
 
-  /// CONTROL thread: the bank the kSample engine reads. Not owned, and it must
-  /// outlive the instrument; nullptr leaves that engine silent. Sounding voices
-  /// keep the bank they started on, so swap it while nothing is playing.
-  void set_sample_bank(const SampleBank* bank) noexcept { sample_bank_ = bank; }
+  /// CONTROL thread: the bank the kSample engine reads; nullptr leaves that
+  /// engine silent. Sounding voices keep the bank they started on, so swap it
+  /// while nothing is playing.
+  ///
+  /// Two forms. The borrowed one is for a caller that already outlives the
+  /// instrument; the owning one takes a share, which is what a host binding
+  /// wants — a caller that drops its own handle mid-render then frees nothing a
+  /// voice is reading.
+  void set_sample_bank(const SampleBank* bank) noexcept {
+    owned_sample_bank_.reset();
+    sample_bank_ = bank;
+  }
+  void set_sample_bank(std::shared_ptr<const SampleBank> bank) noexcept {
+    owned_sample_bank_ = std::move(bank);
+    sample_bank_ = owned_sample_bank_.get();
+  }
   const SampleBank* sample_bank() const noexcept { return sample_bank_; }
 
   const NativeSynthPatch& patch() const noexcept { return config_.patch; }
@@ -578,8 +591,10 @@ class NativeSynth final : public MidiInstrument {
   float dc_r_ = 0.999f;
   float bus_drive_gain_ = 0.0f;
   VoicePool<NativeSynthVoice> pool_;
-  /// Host sample bank for the kSample engine; borrowed, never owned.
+  /// Host sample bank for the kSample engine. The raw pointer is what the audio
+  /// thread reads; the share below is held only when the caller handed one over.
   const SampleBank* sample_bank_ = nullptr;
+  std::shared_ptr<const SampleBank> owned_sample_bank_;
   /// KS delay slab: one ks_slab_capacity() (three ks_buffer_capacity() spans —
   /// the primary string, the second-polarization line, and the octave-up 4'
   /// companion line) per voice slot, allocated in prepare() only when the patch

@@ -14,6 +14,7 @@
 #include <memory>
 #include <set>
 
+#include "c_api/sample_bank_internal.h"
 #include "c_api/synth_patch_common.h"
 #include "engine/track_mixer.h"
 #include "mastering/api/insert_factory.h"
@@ -1409,7 +1410,8 @@ const char* sonare_synth_enum_names(int kind) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   static const std::string kEngineModes =
       "default\nsubtractive\nfm\nkarplus-strong\nmodal\nadditive\npercussion\npiano\npipe-organ\n"
-      "bowed-string\nreed\nbrass\nflute\nplucked-string\nvocal\nfree-reed\nharpsichord";
+      "bowed-string\nreed\nbrass\nflute\nplucked-string\nvocal\nfree-reed\nharpsichord\n"
+      "sample";
   static const std::string kWaveforms = "default\nsine\nsaw\nsquare\ntriangle\nnoise";
   static const std::string kBuiltinWaveforms = "sine\nsaw\nsawtooth\nsquare\ntriangle";
   static const std::string kFilterModels = "default\nsvf\nmoog-ladder\ndiode-ladder\nsallen-key";
@@ -1503,6 +1505,12 @@ SonareError sonare_project_bounce_with_synth_instruments(
     }
     cfg.use_gm_programs = instruments[i].use_gm_programs != 0;
     owned.push_back(std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
+    // The synth takes a share, so a caller that destroys its own handle
+    // mid-bounce cannot pull the pool out from under a sounding voice.
+    if (instruments[i].sample_bank != nullptr) {
+      owned.back()->set_sample_bank(
+          std::shared_ptr<const sonare::midi::synth::SampleBank>(instruments[i].sample_bank->bank));
+    }
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);

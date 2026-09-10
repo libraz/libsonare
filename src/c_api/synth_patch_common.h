@@ -47,6 +47,8 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kFreeReed) 
               SONARE_SYNTH_ENGINE_FREE_REED);
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kHarpsichord) + 1 ==
               SONARE_SYNTH_ENGINE_HARPSICHORD);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kSample) + 1 ==
+              SONARE_SYNTH_ENGINE_SAMPLE);
 
 static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
               SONARE_SYNTH_OSC_SINE);
@@ -115,6 +117,7 @@ inline bool valid_c_enum(int value, int count) noexcept { return value >= 0 && v
 /// empty), then every non-zero struct field overrides the base ("0 => keep").
 /// Struct version 2 adds @c present_fields, so a caller can also override with
 /// an explicit zero; version 1 has no presence bits and cannot express one.
+/// Version 3 adds the sample-engine block, which only a sample patch reads.
 /// Returns false (and sets @p out_error) for an unsupported struct_version or
 /// an unknown preset name. The result still passes through NativeSynth's own
 /// constructor clamping.
@@ -133,7 +136,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::VaWaveform;
 
   if (out_error) *out_error = nullptr;
-  if (c.struct_version > 2) {
+  if (c.struct_version > 3) {
     if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
     return false;
   }
@@ -237,6 +240,30 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   if (set(SONARE_SYNTH_FIELD_GAIN) || c.gain != 0.0f) cfg.gain = c.gain;
   if (set(SONARE_SYNTH_FIELD_POLYPHONY) || c.polyphony != 0) cfg.polyphony = c.polyphony;
   if (set(SONARE_SYNTH_FIELD_BUS_DRIVE) || c.bus_drive != 0.0f) cfg.bus_drive = c.bus_drive;
+
+  // Sample engine: only a version-3 caller's struct reaches this block, and
+  // only a sample patch reads it, which is what keeps set 0 addressable
+  // without a presence bit of its own.
+  if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
+    p.sample.set_index = c.sample_set;
+    if (c.sample_level != 0.0f) p.sample.level = c.sample_level;
+    if (c.sample_start_offset != 0.0f) p.sample.start_offset01 = c.sample_start_offset;
+    switch (c.sample_loop) {
+      case SONARE_SAMPLE_LOOP_NONE:
+        p.sample.loop_override = 0;
+        break;
+      case SONARE_SAMPLE_LOOP_CONTINUOUS:
+        p.sample.loop_override = 1;
+        break;
+      case SONARE_SAMPLE_LOOP_KEY_DOWN:
+        p.sample.loop_override = 3;
+        break;
+      default:
+        break;
+    }
+    if (c.sample_key_track == SONARE_SAMPLE_KEY_TRACK_ON) p.sample.key_track = true;
+    if (c.sample_key_track == SONARE_SAMPLE_KEY_TRACK_OFF) p.sample.key_track = false;
+  }
 
   *out = cfg;
   return true;

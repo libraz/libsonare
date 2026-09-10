@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from ._project import (
     BuiltinSynthConfig,
     MidiCcBinding,
+    SampleBank,
     Sf2InstrumentConfig,
     SynthPatch,
     _cc_binding_to_c,
@@ -121,7 +122,11 @@ class _EngineMidiMixin:
         )
 
     def set_synth_instrument(
-        self, patch: SynthPatch | str | None = None, destination_id: int = 0
+        self,
+        patch: SynthPatch | str | None = None,
+        destination_id: int = 0,
+        *,
+        sample_bank: SampleBank | None = None,
     ) -> None:
         """Bind the patch-driven NativeSynth to ``destination_id`` (default 0).
 
@@ -132,14 +137,41 @@ class _EngineMidiMixin:
         binding, live MIDI input and scheduled MIDI clips routed to that
         destination render through the synth. Raises :class:`SonareError` for
         an unknown preset name.
+
+        The :class:`SampleBank` a ``"sample"`` engine patch reads normally
+        travels on :attr:`SynthPatch.sample_bank`, so the field means the same
+        thing here as it does in a bounce. The ``sample_bank`` argument is for
+        the case that cannot carry one -- a bare preset-name string -- and wins
+        over the patch's own field when both are given. Unlike the bounce, the
+        engine takes a SHARE of the bank, so the caller may close its own handle
+        straight afterwards. A sample patch bound without a bank is accepted and
+        renders silence, the same way one naming a keymap set the bank lacks
+        does.
+
+        Control-thread only: this is a structural mutation, so do not call it
+        concurrently with :meth:`process`.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_synth_instrument"):
             raise RuntimeError("libsonare was built without live-MIDI support")
-        c_patch = _synth_patch_arg(patch)._to_c()
+        resolved = _synth_patch_arg(patch)
+        bank = sample_bank if sample_bank is not None else resolved.sample_bank
+        c_patch = resolved._to_c()
+        if bank is None:
+            _check(
+                lib.sonare_engine_set_synth_instrument(
+                    self._require_handle(), int(destination_id), ctypes.byref(c_patch)
+                )
+            )
+            return
+        if not hasattr(lib, "sonare_engine_set_synth_instrument_with_bank"):
+            raise RuntimeError("libsonare was built without the sample-bank ABI")
         _check(
-            lib.sonare_engine_set_synth_instrument(
-                self._require_handle(), int(destination_id), ctypes.byref(c_patch)
+            lib.sonare_engine_set_synth_instrument_with_bank(
+                self._require_handle(),
+                int(destination_id),
+                ctypes.byref(c_patch),
+                bank._require_handle(),
             )
         )
 

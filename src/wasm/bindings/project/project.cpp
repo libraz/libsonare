@@ -92,6 +92,7 @@ void registerProjectBindings() {
   registerProjectBounce(cls);
   registerProjectMeta(cls);
   registerProjectFreeFunctions();
+  registerSampleBank();
 #endif
 }
 

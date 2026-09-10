@@ -11,6 +11,8 @@ import {
   init,
   Project,
   RealtimeEngine,
+  SAMPLE_KEY_TRACKS,
+  SAMPLE_LOOP_MODES,
   SYNTH_BODY_TYPES,
   SYNTH_ENGINE_MODES,
   SYNTH_FILTER_MODELS,
@@ -134,6 +136,37 @@ describe('Sonare WASM NativeSynth', () => {
       expect(byName.modRoutings?.[0]?.destination).toBe(name);
       expect(byOrdinal.modRoutings?.[0]?.destination).toBe(name);
     }
+  });
+
+  it('round-trips the sample-engine block by name and by ordinal', () => {
+    // The sample block has no presence bits: only a sample patch reads it, so
+    // set 0 stays addressable and a plain zero is not a "keep the base" sentinel.
+    for (const [ordinal, name] of SAMPLE_LOOP_MODES.entries()) {
+      expect(synthPatchRoundTripForTest({ sampleLoop: name }).sampleLoop).toBe(name);
+      expect(synthPatchRoundTripForTest({ sampleLoop: ordinal }).sampleLoop).toBe(name);
+    }
+    for (const [ordinal, name] of SAMPLE_KEY_TRACKS.entries()) {
+      expect(synthPatchRoundTripForTest({ sampleKeyTrack: name }).sampleKeyTrack).toBe(name);
+      expect(synthPatchRoundTripForTest({ sampleKeyTrack: ordinal }).sampleKeyTrack).toBe(name);
+    }
+    expect(
+      synthPatchRoundTripForTest({
+        engineMode: 'sample',
+        sampleSet: 2,
+        sampleLevel: 0.75,
+        sampleStartOffset: 0.25,
+      }),
+    ).toMatchObject({
+      engineMode: 'sample',
+      sampleSet: 2,
+      sampleLevel: 0.75,
+      sampleStartOffset: 0.25,
+    });
+    expect(synthPatchRoundTripForTest({}).sampleLoop).toBe('default');
+    expect(synthPatchRoundTripForTest({}).sampleKeyTrack).toBe('default');
+    expect(() =>
+      synthPatchRoundTripForTest({ sampleLoop: 'sometimes' } as unknown as SynthPatch),
+    ).toThrow();
   });
 
   it('treats explicit empty preset values as absent', () => {

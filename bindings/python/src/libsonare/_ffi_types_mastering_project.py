@@ -560,13 +560,14 @@ SONARE_SYNTH_FIELD_MOD_ROUTINGS = 1 << 26
 
 
 class SonareSynthPatch(ctypes.Structure):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 2).
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 3).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
     the base ("0 => keep"). Enum fields reserve 0 as "keep". ``present_fields``
     names the fields the caller set on purpose, so an explicit zero override is
-    representable; it is honoured only when ``struct_version`` is 2.
+    representable; it is honoured from ``struct_version`` 2 on. Version 3
+    adds the sample-engine block, read only by a sample patch.
     """
 
     _fields_ = [
@@ -606,6 +607,49 @@ class SonareSynthPatch(ctypes.Structure):
         ("polyphony", ctypes.c_int),
         ("bus_drive", ctypes.c_float),
         ("present_fields", ctypes.c_uint32),
+        ("sample_set", ctypes.c_int),
+        ("sample_level", ctypes.c_float),
+        ("sample_loop", ctypes.c_int),
+        ("sample_start_offset", ctypes.c_float),
+        ("sample_key_track", ctypes.c_int),
+    ]
+
+
+class SonareSampleDesc(ctypes.Structure):
+    """Maps to SonareSampleDesc in sonare_c_sample_bank.h.
+
+    Tuning and looping of one sample. Zero-initialise then override: an
+    unset ``root_key`` reads as middle C and an unset ``source_rate`` as the
+    render's own rate.
+    """
+
+    _fields_ = [
+        ("root_key", ctypes.c_uint8),
+        ("fine_tune_cents", ctypes.c_float),
+        ("source_rate", ctypes.c_double),
+        ("loop_start", ctypes.c_uint32),
+        ("loop_end", ctypes.c_uint32),
+        ("loop_mode", ctypes.c_int),
+    ]
+
+
+class SonareSampleZoneDesc(ctypes.Structure):
+    """Maps to SonareSampleZoneDesc in sonare_c_sample_bank.h.
+
+    One key/velocity rectangle mapped onto a sample. Every bound defaults on
+    its own: an upper bound of zero reads as 127 and ``vel_lo`` of zero as 1,
+    so an untouched rectangle is the whole keyboard at every velocity.
+    """
+
+    _fields_ = [
+        ("key_lo", ctypes.c_uint8),
+        ("key_hi", ctypes.c_uint8),
+        ("vel_lo", ctypes.c_uint8),
+        ("vel_hi", ctypes.c_uint8),
+        ("sample_index", ctypes.c_uint32),
+        ("tune_cents", ctypes.c_float),
+        ("gain", ctypes.c_float),
+        ("pan_units", ctypes.c_float),
     ]
 
 
@@ -616,6 +660,7 @@ class SonareSynthInstrumentBinding(ctypes.Structure):
         ("destination_id", ctypes.c_uint32),
         ("patch", SonareSynthPatch),
         ("use_gm_programs", ctypes.c_uint8),
+        ("sample_bank", ctypes.c_void_p),
     ]
 
 

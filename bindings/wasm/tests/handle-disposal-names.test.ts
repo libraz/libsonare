@@ -16,6 +16,7 @@ import {
   Project,
   RealtimeEngine,
   RealtimeVoiceChanger,
+  SampleBank,
   StreamAnalyzer,
   StreamingEqualizer,
   StreamingMasteringChain,
@@ -40,6 +41,7 @@ describe('WASM handle disposal names', () => {
     ['StreamAnalyzer', () => new StreamAnalyzer({ sampleRate: 22050 })],
     ['RealtimeEngine', () => new RealtimeEngine(48000, 128)],
     ['Project', () => new Project()],
+    ['SampleBank', () => new SampleBank()],
     ['Mixer', () => Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512)],
   ];
 

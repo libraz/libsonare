@@ -139,7 +139,16 @@ python = [
 #   mastering_stereo_analyze / mastering_process / mastering_pair_process /
 #   mastering_process_stereo (listed in [surface_only] below). Same op, facade
 #   spelling.
+#   engine_set_synth_instrument_with_bank: folded into each facade's
+#     set_synth_instrument as an optional sample-bank argument, which is
+#     where the bank already lives for the bounce path. The plain C entry
+#     point is the same call with no bank, so exposing both would put two
+#     names on one operation. WASM reaches the same behaviour without calling
+#     this C function at all: c_api/sonare_c_engine_midi.cpp is not in the
+#     WASM source list, so its realtime binding constructs the NativeSynth
+#     directly and hands it the same shared bank one layer lower.
 node = [
+  "engine_set_synth_instrument_with_bank",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -234,6 +243,7 @@ node = [
   "mastering_platform_from_name",
 ]
 wasm = [
+  "engine_set_synth_instrument_with_bank",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -307,6 +317,7 @@ wasm = [
   "mastering_platform_from_name",
 ]
 python = [
+  "engine_set_synth_instrument_with_bank",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -645,6 +656,15 @@ fields = [
   "sf2_instrument_config.destination_id",
   "synth_patch.destination_id",
   "synth_patch.use_gm_programs",
+  # Same fold, same struct: the sample bank is a field of the C binding rather
+  # than of the C patch, and the facades that already carry destination_id on
+  # their patch object carry it there too.
+  "synth_patch.sample_bank",
+
+  # --- category 1: a C call argument folded into the facade's request object ---
+  # sonare_sample_bank_add_zone takes the keymap set as its own argument; the
+  # facades put it in the zone request bag next to the rest of the rectangle.
+  "sample_zone_desc.set_index",
 
   # --- category 1: two C accessors merged into one facade read model ---
   # The facade's source descriptor also carries the owning audio metadata, which

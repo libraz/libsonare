@@ -79,6 +79,8 @@ class SampleBank {
 
   size_t sample_count() const noexcept { return samples_.size(); }
   size_t set_count() const noexcept { return sets_.size(); }
+  /// Frames held across every sample, for a caller enforcing a budget.
+  size_t pool_size() const noexcept { return pool_.size(); }
   const float* pool() const noexcept { return pool_.data(); }
 
   /// AUDIO thread: the first zone of @p set covering (@p key, @p velocity), or

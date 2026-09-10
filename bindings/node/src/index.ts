@@ -8,6 +8,10 @@ export * from './mixer.js';
 export * from './mixing_assistant.js';
 export * from './project.js';
 export * from './realtime_engine.js';
+// Named rather than `export *`, so a helper added to this module later cannot
+// reach the package entry without a deliberate edit and read as a parity
+// coverage gap.
+export { SampleBank } from './sample_bank.js';
 export type {
   AcousticOptions,
   AcousticResult,
@@ -206,6 +210,11 @@ export type {
   RoomEstimateResult,
   RoomGeometryOptions,
   RoomMorphOptions,
+  SampleDesc,
+  SampleDescLoopMode,
+  SampleKeyTrack,
+  SampleLoopMode,
+  SampleZoneDesc,
   Section,
   SectionTypeOrdinal,
   SendTiming,
@@ -258,6 +267,8 @@ export {
   BUILTIN_SYNTH_WAVEFORMS,
   EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
+  SAMPLE_KEY_TRACKS,
+  SAMPLE_LOOP_MODES,
   SYNTH_BODY_TYPES,
   SYNTH_ENGINE_MODES,
   SYNTH_FILTER_MODELS,

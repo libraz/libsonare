@@ -13,6 +13,7 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
+#include "c_api/sample_bank_internal.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/builtin_synth.h"
@@ -173,13 +174,15 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 #endif
 }
 
-SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
-                                               uint32_t destination_id,
-                                               const SonareSynthPatch* patch) {
+SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* engine,
+                                                         uint32_t destination_id,
+                                                         const SonareSynthPatch* patch,
+                                                         SonareSampleBank* bank) {
   SONARE_C_API_ENTRY;
   if (!engine || !patch) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  (void)bank;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -190,9 +193,19 @@ SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
+  // The synth takes a share, so the caller may destroy its handle right after.
+  if (bank != nullptr) {
+    synth->set_sample_bank(std::shared_ptr<const sonare::midi::synth::SampleBank>(bank->bank));
+  }
   return bind_engine_instrument(engine, destination_id, std::move(synth));
   SONARE_C_CATCH
 #endif
+}
+
+SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
+                                               uint32_t destination_id,
+                                               const SonareSynthPatch* patch) {
+  return sonare_engine_set_synth_instrument_with_bank(engine, destination_id, patch, nullptr);
 }
 
 SonareError sonare_engine_resolve_instrument_automation_id(SonareRealtimeEngine* engine,

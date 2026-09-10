@@ -7,6 +7,7 @@
 #include "project/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
+#include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
 
@@ -186,6 +187,11 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
         if (env.IsExceptionPending()) return env.Undefined();
         binding.use_gm_programs = BoolProperty(obj, "useGmPrograms", false) ? 1 : 0;
         if (env.IsExceptionPending()) return env.Undefined();
+        // Borrowed for the call: the JS bank object stays reachable through the
+        // instruments array for the whole synchronous bounce.
+        if (!SampleBankWrap::ReadHandle(env, obj.Get("sampleBank"), &binding.sample_bank)) {
+          return env.Undefined();  // exception already pending
+        }
       }
       if (!sonare_node::ReadSynthPatch(env, element, &binding.patch)) {
         return env.Undefined();  // exception already pending

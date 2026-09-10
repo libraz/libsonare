@@ -276,7 +276,7 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
         std::vector<std::string>{"default", "subtractive", "fm", "karplus-strong", "modal",
                                  "additive", "percussion", "piano", "pipe-organ", "bowed-string",
                                  "reed", "brass", "flute", "plucked-string", "vocal", "free-reed",
-                                 "harpsichord"});
+                                 "harpsichord", "sample"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)) ==
         std::vector<std::string>{"default", "sine", "saw", "square", "triangle", "noise"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM)) ==

@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <type_traits>
 
@@ -13,6 +14,11 @@
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
 #include "wasm/bindings/common/synth_patch_val.h"
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/sample_bank_internal.h"
+#include "wasm/bindings/common/sample_bank_wasm.h"
+#endif
 
 namespace {
 
@@ -152,7 +158,9 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
 // Binds the patch-driven NativeSynth (the full synthesizer) on a realtime
 // MIDI destination. patch is a SynthPatch object or a preset-name string
 // ("saw-lead" / "va:saw-lead"), resolving exactly like
-// Project.bounceWithSynthInstrument. Unknown preset names throw.
+// Project.bounceWithSynthInstrument. Unknown preset names throw. A sample patch
+// carries its bank as `sampleBankId`, the same key the bounce reads; the synth
+// takes a share, so the caller may release its handle right afterwards.
 void RealtimeEngineWasm::setSynthInstrument(uint32_t destination_id, val patch) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const SonareSynthPatch c_patch = sonare_wasm_synth::synthPatchFromVal(patch);
@@ -162,7 +170,12 @@ void RealtimeEngineWasm::setSynthInstrument(uint32_t destination_id, val patch) 
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   error != nullptr ? error : "invalid synth patch");
   }
-  bindInstrument(destination_id, std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
+  SonareSampleBank* bank = SampleBankWasm::fromDescriptor(patch);
+  auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
+  if (bank != nullptr) {
+    synth->set_sample_bank(std::shared_ptr<const sonare::midi::synth::SampleBank>(bank->bank));
+  }
+  bindInstrument(destination_id, std::move(synth));
 #else
   (void)destination_id;
   (void)patch;

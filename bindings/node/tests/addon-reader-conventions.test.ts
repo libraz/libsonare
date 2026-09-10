@@ -44,6 +44,7 @@ import {
   pitchCorrectTimevarying,
   RealtimeEngine,
   roomMorph,
+  SampleBank,
   StreamingEqualizer,
   spectralEdit,
   synthesizeRir,
@@ -313,6 +314,23 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     },
   },
   {
+    jsName: 'addSample',
+    invoke: (o) =>
+      withSampleBank((bank) => [
+        bank.addSample(new Float32Array(64).fill(0.5), { ...o }),
+        bank.sampleCount(),
+      ]),
+  },
+  {
+    jsName: 'addZone',
+    invoke: (o) =>
+      withSampleBank((bank) => {
+        bank.addSample(new Float32Array(64).fill(0.5));
+        bank.addZone({ ...o });
+        return bank.setCount();
+      }),
+  },
+  {
     jsName: 'setMidiClips',
     invoke: (o) =>
       withEngine((engine) =>
@@ -476,6 +494,15 @@ function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
     return body(engine);
   } finally {
     engine.destroy();
+  }
+}
+
+function withSampleBank<T>(body: (bank: SampleBank) => T): T {
+  const bank = new SampleBank();
+  try {
+    return body(bank);
+  } finally {
+    bank.destroy();
   }
 }
 

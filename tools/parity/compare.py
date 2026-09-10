@@ -101,6 +101,7 @@ DEFAULT_HANDLE_PREFIXES = (
     "free",
     "master",  # master_audio etc. handled by free-fn detection below if needed
     "project",  # SonareProject handle: project_* ops are Project class methods
+    "sample_bank",  # SonareSampleBank handle: sample_bank_* ops are SampleBank methods
 )
 
 # Free-function keys that share a handle prefix but ARE plain DSP free functions
@@ -128,6 +129,7 @@ _HANDLE_FULL_PREFIXES = (
     "strip_",
     "eq_",
     "audio_",
+    "sample_bank_",
     # SonareProject handle: e.g. ``project_split_clip`` -> facade ``Project``
     # method ``split_clip`` / ``splitClip``. Ops renamed on the facade
     # (serialize -> to_json, deserialize -> from_json, create -> ctor) are

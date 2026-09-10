@@ -15,8 +15,9 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 | metering | 28 | 28/28 | 26/28 | 28/28 | 7/28 |
 | mixing & routing | 48 | 48/48 | 48/48 | 48/48 | 2/48 |
 | project & arrangement | 141 | 134/141 | 133/141 | 133/141 | 10/141 |
-| realtime engine | 123 | 122/123 | 122/123 | 122/123 | 5/123 |
+| realtime engine | 124 | 122/124 | 122/124 | 122/124 | 5/124 |
 | room acoustics | 5 | 5/5 | 5/5 | 5/5 | 5/5 |
+| sample bank | 5 | 5/5 | 5/5 | 5/5 | 1/5 |
 | streaming | 33 | 31/33 | 31/33 | 31/33 | 7/33 |
 | voice changer | 18 | 18/18 | 18/18 | 17/18 | 3/18 |
-| **all domains** | **693** | **646/693** | **643/693** | **644/693** | **124/693** |
+| **all domains** | **699** | **651/699** | **648/699** | **649/699** | **125/699** |

@@ -698,7 +698,44 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_free_bytes.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
 
     _configure_midi_naming_signatures(lib)
+    _configure_sample_bank_signatures(lib)
     _configure_project_extra_signatures(lib)
+
+
+def _configure_sample_bank_signatures(lib: ctypes.CDLL) -> None:
+    # Host-supplied PCM for the sample synthesis engine
+    # (sonare_c_sample_bank.h). The bank is a standalone handle rather than a
+    # project member, so these sit outside the project-ABI gate above.
+    if not hasattr(lib, "sonare_sample_bank_create"):
+        return
+
+    lib.sonare_sample_bank_create.restype = ctypes.c_void_p
+    lib.sonare_sample_bank_create.argtypes = []
+
+    lib.sonare_sample_bank_destroy.restype = None
+    lib.sonare_sample_bank_destroy.argtypes = [ctypes.c_void_p]
+
+    lib.sonare_sample_bank_add_sample.restype = ctypes.c_int32
+    lib.sonare_sample_bank_add_sample.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareSampleDesc),
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+
+    lib.sonare_sample_bank_add_zone.restype = ctypes.c_int32
+    lib.sonare_sample_bank_add_zone.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(SonareSampleZoneDesc),
+    ]
+
+    for _name in ("sonare_sample_bank_sample_count", "sonare_sample_bank_set_count"):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
 
 
 def _configure_midi_naming_signatures(lib: ctypes.CDLL) -> None:

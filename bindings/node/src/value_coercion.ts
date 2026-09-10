@@ -1,3 +1,4 @@
+import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
   EngineAutomationPoint,
@@ -15,14 +16,18 @@ import type {
   ProjectLoopMode,
   ProjectTrackDesc,
   SendTiming,
+  SynthPatch,
   WarpMode,
 } from './types.js';
 
 /**
- * Internal enum/string -> numeric value coercion helpers shared by the Project
- * and Mixer facades. These map the public string/union enum spellings to the
- * integer ordinals the C ABI expects. Pure functions over type-only inputs; not
- * part of the public surface (consumed by index.ts, never re-exported).
+ * Internal coercion helpers shared by the Project, Mixer and RealtimeEngine
+ * facades: they map the public string/union enum spellings to the integer
+ * ordinals the C ABI expects, and reshape the few descriptors whose public form
+ * differs from the one the addon reads. Not part of the public surface.
+ *
+ * The SampleBank unwrap at the foot is the module's only runtime import;
+ * everything else here is a pure function over type-only inputs.
  */
 
 /** Resolve only declared enum spellings and ordinals at the JS/C ABI boundary. */
@@ -231,4 +236,25 @@ export function meterTapValue(tap: MeterTap | number): number {
 
 export function sendTimingValue(timing: SendTiming | number): number {
   return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
+}
+
+/**
+ * Swaps a facade {@link SampleBank} in a synth patch descriptor for the addon
+ * handle the native layer expects, leaving every other field alone. Shared by
+ * the offline bounce and the realtime engine, so `sampleBank` means the same
+ * thing on both.
+ */
+export function normalizeSynthInstrument(patch: SynthPatch | string): SynthPatch | string {
+  if (typeof patch === 'string' || !(patch.sampleBank instanceof SampleBank)) {
+    // Anything else passes through untouched: an omitted bank for the native
+    // layer to read as "no bank", and a value that is not a bank at all for it
+    // to reject as one catchable TypeError.
+    return patch;
+  }
+  // Reads SampleBank's private `native`. TypeScript's private is a compile-time
+  // rule, so one reviewed read beats widening the class with a handle accessor
+  // no caller wants. The field holds the addon's own bank object, which has no
+  // TypeScript type of its own; only the native layer looks at it again.
+  const handle = (patch.sampleBank as unknown as { native: SampleBank }).native;
+  return { ...patch, sampleBank: handle };
 }

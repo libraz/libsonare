@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "sonare_c_project_core.h"
+#include "sonare_c_sample_bank.h"
 #include "sonare_c_types.h"
 
 #ifdef __cplusplus
@@ -207,6 +208,12 @@ typedef struct {
   /// remains the fallback for any unsupported mapping. Zero preserves the
   /// explicit single-patch behavior.
   uint8_t use_gm_programs;
+  /// Sample bank the SONARE_SYNTH_ENGINE_SAMPLE patch reads, or NULL. Borrowed
+  /// for the call: it must outlive the bounce, and adding to it while the
+  /// bounce runs is not allowed (see @ref sonare_c_sample_bank.h). A sample
+  /// patch bound without a bank renders silence rather than failing, the same
+  /// way a patch naming a keymap set the bank lacks does.
+  SonareSampleBank* sample_bank;
 } SonareSynthInstrumentBinding;
 
 /// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to

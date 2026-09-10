@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "sonare_c_sample_bank.h"
 #include "sonare_c_types.h"
 // Realtime tempo / time-signature ramps reuse the shared segment descriptors
 // SonareProjectTempoSegment / SonareProjectTimeSignatureSegment.
@@ -687,6 +688,20 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
                                                uint32_t destination_id,
                                                const SonareSynthPatch* patch);
+
+/// @brief Like @ref sonare_engine_set_synth_instrument, and additionally binds
+///        the sample bank a SONARE_SYNTH_ENGINE_SAMPLE patch reads.
+/// @details Same patch resolution and the same control-thread contract; the
+///          only difference is @p bank, which the engine takes a share of, so
+///          the caller may destroy its own handle afterwards. Pass NULL for a
+///          patch that does not voice the sample engine — it then behaves
+///          exactly like @ref sonare_engine_set_synth_instrument. A sample
+///          patch bound WITHOUT a bank is accepted and renders silence, the
+///          same way one naming a keymap set the bank lacks does.
+SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* engine,
+                                                         uint32_t destination_id,
+                                                         const SonareSynthPatch* patch,
+                                                         SonareSampleBank* bank);
 
 /// @brief Resolves a hosted instrument's continuous parameter to its reserved
 ///        automation id.

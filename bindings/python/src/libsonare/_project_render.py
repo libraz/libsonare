@@ -229,6 +229,11 @@ class _ProjectRenderMixin:
             block_size / num_channels / sample_rate / instrument_latency_samples:
                 As :meth:`bounce` (0 takes native defaults).
 
+        A patch whose ``engine_mode`` is ``"sample"`` reads the
+        :class:`SampleBank` on its own :attr:`SynthPatch.sample_bank`, so each
+        binding carries its own; the bank is borrowed for the call, must outlive
+        the bounce, and must not be added to while the bounce runs.
+
         Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
         fixed project + options + patch. Raises :class:`SonareError` for an
         unknown preset name.
@@ -246,6 +251,9 @@ class _ProjectRenderMixin:
             c_bindings[i].destination_id = dst
             c_bindings[i].patch = patch._to_c()
             c_bindings[i].use_gm_programs = bool(auto_select_gm)
+            # Per binding, because the C struct carries the bank per binding.
+            bank = patch.sample_bank
+            c_bindings[i].sample_bank = bank._require_handle() if bank is not None else None
         options = SonareProjectBounceOptions(
             total_frames=int(total_frames),
             block_size=int(block_size),

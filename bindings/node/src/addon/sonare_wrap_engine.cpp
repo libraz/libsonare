@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "engine/common.h"
+#include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
 
@@ -761,19 +762,27 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
 // Binds the patch-driven NativeSynth to a realtime MIDI destination:
 //   setSynthInstrument(destinationId, patch)
 // where `patch` is a SynthPatch object or a preset-name string ("saw-lead" /
-// "va:saw-lead"), resolving exactly like Project.bounceWithSynthInstruments.
+// "va:saw-lead"), resolving exactly like Project.bounceWithSynthInstruments. A
+// sample patch carries its bank as the descriptor's `sampleBank`, the same key
+// the bounce reads; the engine takes a share of it.
 Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   SonareSynthPatch patch{};
+  SonareSampleBank* bank = nullptr;
   if (info.Length() > 1) {
     if (!sonare_node::ReadSynthPatch(env, info[1], &patch)) {
       return env.Undefined();  // exception already pending
     }
+    if (info[1].IsObject() && !info[1].IsArray() &&
+        !SampleBankWrap::ReadHandle(env, info[1].As<Napi::Object>().Get("sampleBank"), &bank)) {
+      return env.Undefined();  // exception already pending
+    }
   } else {
-    patch.struct_version = 2;
+    patch.struct_version = 3;
   }
-  ThrowIfError(env, sonare_engine_set_synth_instrument(engine_, destination_id, &patch));
+  ThrowIfError(env,
+               sonare_engine_set_synth_instrument_with_bank(engine_, destination_id, &patch, bank));
   return env.Undefined();
 }
 

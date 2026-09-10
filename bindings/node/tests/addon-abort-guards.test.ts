@@ -275,6 +275,14 @@ interface NativeEngine {
   captureStatus(): NativeCaptureStatus;
 }
 
+interface NativeSampleBank {
+  destroy(): void;
+  addSample(data: unknown, desc?: unknown): number;
+  addZone(setIndex: unknown, zone?: unknown): void;
+  sampleCount(): number;
+  setCount(): number;
+}
+
 interface NativeProject {
   destroy(): void;
   toJson(): string;
@@ -375,6 +383,15 @@ function withProject<T>(body: (project: NativeProject) => T): T {
     return body(project);
   } finally {
     project.destroy();
+  }
+}
+
+function withSampleBank<T>(body: (bank: NativeSampleBank) => T): T {
+  const bank = new addon.SampleBank() as NativeSampleBank;
+  try {
+    return body(bank);
+  } finally {
+    bank.destroy();
   }
 }
 
@@ -1354,6 +1371,22 @@ const CASES: AbortGuardCase[] = [
         call: () => addon.peakPick(samples(16), 'x', 'y', 1, 1, 0.1, 1),
       },
       { argument: 'delta', call: () => addon.peakPick(samples(16), 1, 1, 1, 1, 'x', 1) },
+    ],
+  },
+  {
+    name: 'SampleBank.addZone',
+    missingRequired: [],
+    // A bank is built and then read, so it has no live state a snapshot could
+    // move; the C-1 half is the whole assertion here. The byte-range row feeds
+    // two out-of-range values in a row, which is the shape that aborts when the
+    // second reader throws on the first one's pending exception.
+    rejectsArgument: [
+      { argument: 'setIndex', call: () => withSampleBank((bank) => bank.addZone('0', {})) },
+      {
+        argument: 'keyLo out of byte range',
+        call: () => withSampleBank((bank) => bank.addZone(0, { keyLo: 300, keyHi: 300 })),
+        error: RangeError,
+      },
     ],
   },
   {
@@ -2361,6 +2394,14 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => p.autoTempo(new Float32Array(4096), '48000', '0', false));
         swallow(() => p.analyzeTempo(new Float32Array(4096), '48000'));
         p.destroy();
+        const bank = new addon.SampleBank();
+        swallow(() => bank.addSample('not-audio', {}));
+        swallow(() => bank.addSample(new Float32Array(8), { rootKey: 300, loopStart: 'x' }));
+        swallow(() => bank.addSample(new Float32Array(8), { loopMode: {} }));
+        swallow(() => bank.addZone('0', {}));
+        swallow(() => bank.addZone(0, { keyLo: 300, keyHi: 300, velLo: 300, velHi: 300 }));
+        swallow(() => bank.addZone(0, 'not-an-object'));
+        bank.destroy();
       }
       process.exit(0);
     `;

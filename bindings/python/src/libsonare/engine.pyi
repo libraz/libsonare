@@ -3,7 +3,13 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping, Sequence
 
-from ._project import BuiltinSynthConfig, MidiCcBinding, Sf2InstrumentConfig, SynthPatch
+from ._project import (
+    BuiltinSynthConfig,
+    MidiCcBinding,
+    SampleBank,
+    Sf2InstrumentConfig,
+    SynthPatch,
+)
 from .types import (
     AutomationPoint,
     ClipPageRequest,
@@ -240,7 +246,11 @@ class RealtimeEngine:
         self, config: BuiltinSynthConfig | None = None, destination_id: int = 0
     ) -> None: ...
     def set_synth_instrument(
-        self, patch: SynthPatch | str | None = None, destination_id: int = 0
+        self,
+        patch: SynthPatch | str | None = None,
+        destination_id: int = 0,
+        *,
+        sample_bank: SampleBank | None = None,
     ) -> None: ...
     def resolve_instrument_automation_id(self, param_name: str, destination_id: int = 0) -> int: ...
     def load_soundfont(self, data: bytes | bytearray | memoryview) -> None: ...

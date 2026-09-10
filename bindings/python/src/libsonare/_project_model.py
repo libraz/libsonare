@@ -61,6 +61,8 @@ from ._ffi_types_mastering_project import (
     SONARE_SYNTH_PRESET_NAME_MAX,
 )
 from ._project_synth import (
+    _SAMPLE_KEY_TRACKS,
+    _SAMPLE_LOOP_MODES,
     _SYNTH_BODY_TYPES,
     _SYNTH_ENGINE_MODES,
     _SYNTH_FILTER_MODELS,
@@ -68,12 +70,17 @@ from ._project_synth import (
     _SYNTH_MOD_DESTINATIONS,
     _SYNTH_MOD_SOURCES,
     _SYNTH_OSC_WAVEFORMS,
+    _sample_key_track_value,
+    _sample_loop_value,
     _strip_va_prefix,
     _synth_enum_name,
     _synth_enum_value,
 )
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
+)
+from ._project_synth import (
+    SampleBank as SampleBank,
 )
 from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
@@ -604,6 +611,22 @@ class SynthPatch:
     Mode-specific deep parameters (FM operator stacks, modal mode tables,
     drawbar registrations, kit pieces, piano strings) travel inside the named
     presets; the struct exposes the wrapper sections every engine shares.
+
+    The ``sample_*`` fields are read only when the resolved engine is
+    ``"sample"``, which is what lets ``sample_set`` keep its natural zero: a
+    patch voicing another engine never consults them, so set 0 stays
+    addressable. ``sample_loop`` overrides what the bank recorded
+    (``"default"`` / ``"none"`` / ``"continuous"`` / ``"key-down"``) and
+    ``sample_key_track`` whether the sample follows the played key
+    (``"default"`` / ``"on"`` / ``"off"``); both accept the C ordinal too.
+
+    ``sample_bank`` carries the PCM those fields address. It is a BINDING
+    option, not a patch field -- it travels on the C binding struct rather than
+    inside the patch, so every bound destination has its own bank and two
+    destinations may carry different ones. Node and WASM spell it
+    ``sampleBank`` on the same object for the same reason. A sample patch bound
+    without a bank renders silence rather than failing, the same way one naming
+    a keymap set the bank lacks does.
     """
 
     preset: str = ""
@@ -639,12 +662,22 @@ class SynthPatch:
     gain: float | None = None
     polyphony: int | None = None
     bus_drive: float | None = None
+    sample_set: int | None = None
+    sample_level: float | None = None
+    sample_loop: str | int = 0
+    sample_start_offset: float | None = None
+    sample_key_track: str | int = 0
+    # A BINDING option rather than a NativeSynth patch field: it travels on
+    # SonareSynthInstrumentBinding, not SonareSynthPatch, so _to_c() does not
+    # carry it and _from_c() never fills it. It lives here because the C ABI
+    # gives every binding its own bank, which a per-call argument cannot.
+    sample_bank: SampleBank | None = None
 
     def _to_c(self) -> SonareSynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 2
+        c.struct_version = 3
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.
@@ -722,6 +755,15 @@ class SynthPatch:
         _set_float("gain", SONARE_SYNTH_FIELD_GAIN, self.gain)
         _set_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, self.polyphony)
         _set_float("bus_drive", SONARE_SYNTH_FIELD_BUS_DRIVE, self.bus_drive)
+        # Sample engine: no presence bits, because only a sample patch reads the
+        # block at all. That is what keeps set 0 addressable without one.
+        c.sample_set = 0 if self.sample_set is None else int(self.sample_set)
+        c.sample_level = 0.0 if self.sample_level is None else float(self.sample_level)
+        c.sample_loop = _sample_loop_value(self.sample_loop)
+        c.sample_start_offset = (
+            0.0 if self.sample_start_offset is None else float(self.sample_start_offset)
+        )
+        c.sample_key_track = _sample_key_track_value(self.sample_key_track)
         return c
 
     @classmethod
@@ -768,6 +810,11 @@ class SynthPatch:
             gain=float(c.gain),
             polyphony=int(c.polyphony),
             bus_drive=float(c.bus_drive),
+            sample_set=int(c.sample_set),
+            sample_level=float(c.sample_level),
+            sample_loop=_synth_enum_name(int(c.sample_loop), _SAMPLE_LOOP_MODES),
+            sample_start_offset=float(c.sample_start_offset),
+            sample_key_track=_synth_enum_name(int(c.sample_key_track), _SAMPLE_KEY_TRACKS),
         )
 
 

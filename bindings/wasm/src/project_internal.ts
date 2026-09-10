@@ -35,11 +35,77 @@ import type {
   ProjectTrackKind,
   ProjectWarpMapDesc,
   ProjectWarpMode,
+  SampleDesc,
+  SampleZoneDesc,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthEnumTables,
   SynthPatch,
 } from './project_types';
+// A value import, and this module's one import cycle: sample_bank.ts reaches
+// back here for projectModule(). Both directions are read inside function
+// bodies only, never while a module body runs, which is what makes the cycle
+// safe. Reading SampleBank at module scope here breaks ONE import order and
+// leaves the other working, so the property is pinned by
+// tests/sample-bank-module-cycle.test.ts rather than left to review.
+import { SampleBank } from './sample_bank';
+
+/**
+ * A synth binding as the embind layer takes it: the public `sampleBank` handle
+ * has already been resolved to the id the native registry looks the bank up by,
+ * because an embind class instance cannot travel inside a plain JS object the
+ * C++ side reads field by field.
+ */
+export type NativeSynthBinding = Omit<SynthPatch, 'sampleBank'> & { sampleBankId?: number };
+
+// Embind handle for the C++ `SampleBankWasm` class, narrowed the same way as
+// `WasmProject` below: it is registered next to the project, so a build without
+// arrangement support has neither.
+export interface WasmSampleBank {
+  readonly id: number;
+  addSample: (data: Float32Array, desc: SampleDesc) => number;
+  addZone: (setIndex: number, zone: Omit<SampleZoneDesc, 'setIndex'>) => void;
+  sampleCount: () => number;
+  setCount: () => number;
+  delete: () => void;
+}
+
+/**
+ * Swaps a facade {@link SampleBank} in a synth patch descriptor for the id the
+ * embind layer looks the native bank up by, leaving every other field alone.
+ *
+ * Shared by the offline bounce and the realtime engine so `sampleBank` means
+ * the same thing on both. It lives in this internal module rather than beside
+ * the class because it hands out an internal identity that no caller has a use
+ * for, and the entry point must not re-export it: a facade symbol with no C
+ * counterpart is an active parity finding.
+ *
+ * The cast is the only one of its kind: `released` is private, and TypeScript's
+ * private is a compile-time rule, so reading it once here beats widening the
+ * class with a method the parity tool would then read as a facade op.
+ */
+export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | string {
+  if (patch === null || typeof patch !== 'object') {
+    // A preset-name string — and, at runtime, anything else — reaches the
+    // embind layer unchanged, which is where such a value is validated.
+    return patch as NativeSynthBinding | string;
+  }
+  const { sampleBank, ...rest } = patch as SynthPatch;
+  if (!sampleBank) {
+    // Omitted, and at runtime an explicit null: both mean no bank, which a
+    // sample patch renders as silence.
+    return rest;
+  }
+  if (!(sampleBank instanceof SampleBank)) {
+    throw new TypeError('sampleBank must be a SampleBank instance');
+  }
+  if ((sampleBank as unknown as { released: boolean }).released) {
+    // The id outlives the handle, so without this the native registry would be
+    // the only thing that notices — and with a different error class than Node.
+    throw new TypeError('sampleBank is destroyed');
+  }
+  return { ...rest, sampleBankId: sampleBank.nativeId };
+}
 
 // Embind handle for the C++ `ProjectWasm` class. `SonareModule` describes the
 // raw module's free functions and does not carry bound-class handles, so the
@@ -113,7 +179,7 @@ export interface WasmProject {
     options: ProjectBounceOptions,
   ) => Float32Array;
   bounceWithSynthInstrument: (
-    bindings: SynthPatch | string | ReadonlyArray<SynthPatch | string> | undefined,
+    bindings: NativeSynthBinding | string | ReadonlyArray<NativeSynthBinding | string> | undefined,
     options: ProjectBounceOptions,
   ) => Float32Array;
   loadSoundFont: (data: Uint8Array) => void;
@@ -201,6 +267,7 @@ export interface ProjectModule {
     fromJson: (json: string) => WasmProject;
     fromJsonWithDiagnostics: (json: string) => { project: WasmProject; diagnostics: string };
   };
+  SampleBank: { new (): WasmSampleBank };
   projectAbiVersion: () => number;
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => SynthPatch;

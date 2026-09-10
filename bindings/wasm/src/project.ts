@@ -57,6 +57,11 @@ export type {
   ProjectWarpAnchor,
   ProjectWarpMapDesc,
   ProjectWarpMode,
+  SampleDesc,
+  SampleDescLoopMode,
+  SampleKeyTrack,
+  SampleLoopMode,
+  SampleZoneDesc,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SourceBackend,
@@ -79,6 +84,8 @@ export {
   PROJECT_AUTOMATION_TARGET_OPAQUE,
   PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
   PROJECT_AUTOMATION_TARGET_TRACK_PAN,
+  SAMPLE_KEY_TRACKS,
+  SAMPLE_LOOP_MODES,
   SYNTH_BODY_TYPES,
   SYNTH_ENGINE_MODES,
   SYNTH_FILTER_MODELS,
@@ -87,3 +94,4 @@ export {
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
 } from './project_types';
+export { SampleBank } from './sample_bank';

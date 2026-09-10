@@ -2,6 +2,7 @@ import { panLawCode, panModeCode, sendTimingCode, trackMonitorModeCode } from '.
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type { ProjectMidiCcBinding, SynthPatch } from './project';
+import { normalizeSynthInstrument } from './project_internal';
 import type { EqBand, PanLawInput, PanMode, SendTiming } from './public_types';
 import type {
   WasmClipPageRequest,
@@ -314,12 +315,16 @@ export class RealtimeEngine {
    * scheduled MIDI clips routed to that destination render through the synth.
    * Unknown preset names throw. An object patch's `destinationId` is a JS
    * binding convenience, not part of the NativeSynth patch itself.
+   *
+   * An `engineMode: 'sample'` patch also carries the {@link SampleBank} its
+   * keymap names. The synth takes a share of the bank, so it may be released
+   * right after this call; a sample patch bound without one renders silence.
    */
   setSynthInstrument(
     patch: SynthPatch | string = {},
     destinationId = (typeof patch === 'object' ? patch.destinationId : undefined) ?? 0,
   ): void {
-    this.native.setSynthInstrument(destinationId, patch);
+    this.native.setSynthInstrument(destinationId, normalizeSynthInstrument(patch));
   }
 
   /**

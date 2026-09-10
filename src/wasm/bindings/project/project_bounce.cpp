@@ -1,12 +1,161 @@
 /// @file project_bounce.cpp
 /// @brief Embind project facade: compile + offline bounce family, the SoundFont
-/// surface, and the NativeSynth preset / enum free functions.
+/// surface, the sample bank, and the NativeSynth preset / enum free functions.
 
 #ifdef __EMSCRIPTEN__
+
+#include <unordered_map>
 
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+
+namespace {
+
+/// Live sample banks by id. A bounce binding names a bank by the id its handle
+/// carries rather than by a raw pointer, so a released or fabricated id is an
+/// InvalidParameter instead of a use-after-free. Control thread only, which
+/// single-threaded WASM guarantees.
+std::unordered_map<uint32_t, SonareSampleBank*>& sampleBankRegistry() {
+  static std::unordered_map<uint32_t, SonareSampleBank*> registry;
+  return registry;
+}
+
+/// Ids start at 1 so zero stays available as "no bank" in a binding.
+uint32_t nextSampleBankId() {
+  static uint32_t next = 1;
+  return next++;
+}
+
+/// Optional numeric field: absent keeps @p fallback, present-but-not-a-finite-
+/// number throws rather than coercing.
+double numberField(val object, const char* key, const char* subject, double fallback) {
+  if (!hasProperty(object, key)) return fallback;
+  return requireNumberProperty(object, key, subject);
+}
+
+/// Optional unsigned-integer field, rejected before it is narrowed — a bare
+/// cast would wrap 128 to 0 and 4294967296 to nothing at all.
+double integerField(val object, const char* key, const char* subject, double max) {
+  const double value = numberField(object, key, subject, 0.0);
+  if (value < 0.0 || value > max || std::floor(value) != value) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(subject) + "." + key + " must be an integer in [0, " +
+                                      std::to_string(static_cast<long long>(max)) + "]");
+  }
+  return value;
+}
+
+/// SonareSampleDesc.loop_mode carries SoundFont sampleModes, so a NUMBER passes
+/// through as the raw SF2 value and SF2-derived data needs no translation. The
+/// names are SynthPatch.sampleLoop's spellings mapped onto that scale, matching
+/// the Node reader.
+int sampleDescLoopMode(val desc) {
+  if (!hasProperty(desc, "loopMode")) return 0;
+  const val value = desc["loopMode"];
+  if (value.typeOf().as<std::string>() == "string") {
+    const std::string name = value.as<std::string>();
+    if (name == "none") return 0;
+    if (name == "continuous") return 1;
+    if (name == "key-down") return 3;
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "Unknown sample loop mode name: '" + name + "' (expected none, continuous or key-down)");
+  }
+  return static_cast<int>(integerField(desc, "loopMode", "sample descriptor", 3.0));
+}
+
+}  // namespace
+
+SampleBankWasm::SampleBankWasm() : bank_(sonare_sample_bank_create()), id_(nextSampleBankId()) {
+  if (bank_ == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, "failed to create sample bank");
+  }
+  sampleBankRegistry().emplace(id_, bank_);
+}
+
+SampleBankWasm::~SampleBankWasm() {
+  sampleBankRegistry().erase(id_);
+  sonare_sample_bank_destroy(bank_);
+}
+
+SonareSampleBank* SampleBankWasm::lookup(uint32_t id) {
+  const auto& registry = sampleBankRegistry();
+  const auto it = registry.find(id);
+  return it != registry.end() ? it->second : nullptr;
+}
+
+uint32_t SampleBankWasm::addSample(val data, val desc) {
+  if (wasmFloat32ArrayLength(data, "sample data") == 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "sample data must not be empty");
+  }
+  const std::vector<float> frames = float32ArrayToVector(data);
+
+  SonareSampleDesc c{};
+  c.root_key = static_cast<uint8_t>(integerField(desc, "rootKey", "sample descriptor", 127.0));
+  c.fine_tune_cents =
+      static_cast<float>(numberField(desc, "fineTuneCents", "sample descriptor", 0.0));
+  c.source_rate = numberField(desc, "sourceRate", "sample descriptor", 0.0);
+  c.loop_start =
+      static_cast<uint32_t>(integerField(desc, "loopStart", "sample descriptor", 4294967295.0));
+  c.loop_end =
+      static_cast<uint32_t>(integerField(desc, "loopEnd", "sample descriptor", 4294967295.0));
+  c.loop_mode = sampleDescLoopMode(desc);
+
+  uint32_t index = 0;
+  const SonareError err =
+      sonare_sample_bank_add_sample(bank_, frames.data(), frames.size(), &c, &index);
+  if (err != SONARE_OK) throwCError(err, "failed to add a sample to the bank");
+  return index;
+}
+
+void SampleBankWasm::addZone(double set_index, val zone) {
+  // Validated on the double rather than through wasmCountArg: on wasm32 a
+  // size_t is 32 bits, so bounding its result at 2^32-1 is a tautology the
+  // compiler warns about and -Werror rejects.
+  if (!std::isfinite(set_index) || set_index < 0.0 || set_index > 4294967295.0 ||
+      std::floor(set_index) != set_index) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "setIndex must be an integer in [0, 4294967295]");
+  }
+  // An absent bag leaves the C struct zero-initialized, which the C ABI
+  // documents as the neutral zone; a present one that is not an object is a
+  // caller mistake rather than a default.
+  if (!zone.isUndefined() && !zone.isNull() && zone.typeOf().as<std::string>() != "object") {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "addZone zone must be an object");
+  }
+  SonareSampleZoneDesc c{};
+  c.sample_index =
+      static_cast<uint32_t>(integerField(zone, "sampleIndex", "sample zone", 4294967295.0));
+  // An absent bound stays zero, which the C ABI defaults per bound: 127 for an
+  // upper edge, 1 for vel_lo, the lowest key for key_lo.
+  c.key_lo = static_cast<uint8_t>(integerField(zone, "keyLo", "sample zone", 127.0));
+  c.key_hi = static_cast<uint8_t>(integerField(zone, "keyHi", "sample zone", 127.0));
+  c.vel_lo = static_cast<uint8_t>(integerField(zone, "velLo", "sample zone", 127.0));
+  c.vel_hi = static_cast<uint8_t>(integerField(zone, "velHi", "sample zone", 127.0));
+  c.tune_cents = static_cast<float>(numberField(zone, "tuneCents", "sample zone", 0.0));
+  c.gain = static_cast<float>(numberField(zone, "gain", "sample zone", 0.0));
+  c.pan_units = static_cast<float>(numberField(zone, "panUnits", "sample zone", 0.0));
+
+  const SonareError err = sonare_sample_bank_add_zone(bank_, static_cast<uint32_t>(set_index), &c);
+  if (err != SONARE_OK) throwCError(err, "failed to add a zone to the sample bank");
+}
+
+double SampleBankWasm::sampleCount() const {
+  std::size_t count = 0;
+  const SonareError err = sonare_sample_bank_sample_count(bank_, &count);
+  if (err != SONARE_OK) throwCError(err, "failed to read the bank sample count");
+  return static_cast<double>(count);
+}
+
+double SampleBankWasm::setCount() const {
+  std::size_t count = 0;
+  const SonareError err = sonare_sample_bank_set_count(bank_, &count);
+  if (err != SONARE_OK) throwCError(err, "failed to read the bank keymap set count");
+  return static_cast<double>(count);
+}
 
 val ProjectWasm::compile() {
   SonareProjectCompileResult result{};
@@ -155,6 +304,7 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
           binding.use_gm_programs =
               requireProperty<bool>(desc, "useGmPrograms", "synth instrument") ? 1 : 0;
         }
+        binding.sample_bank = SampleBankWasm::fromDescriptor(desc);
       }
       binding.patch = sonare_wasm_synth::synthPatchFromVal(desc);
       return binding;
@@ -339,6 +489,16 @@ void registerProjectBounce(class_<ProjectWasm>& cls) {
       .function("soundFontPresetCount", &ProjectWasm::soundFontPresetCount)
       .function("soundFontManifest", &ProjectWasm::soundFontManifest)
       .function("bounceWithSf2Instrument", &ProjectWasm::bounceWithSf2Instrument);
+}
+
+void registerSampleBank() {
+  class_<SampleBankWasm>("SampleBank")
+      .constructor<>()
+      .property("id", &SampleBankWasm::id)
+      .function("addSample", &SampleBankWasm::addSample)
+      .function("addZone", &SampleBankWasm::addZone)
+      .function("sampleCount", &SampleBankWasm::sampleCount)
+      .function("setCount", &SampleBankWasm::setCount);
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

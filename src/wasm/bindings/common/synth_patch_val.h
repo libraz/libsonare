@@ -20,9 +20,14 @@
 namespace sonare_wasm_synth {
 
 inline constexpr const char* kEngineModes[] = {
-    "default",    "subtractive",    "fm",         "karplus-strong", "modal",      "additive",
-    "percussion", "piano",          "pipe-organ", "bowed-string",   "reed",       "brass",
-    "flute",      "plucked-string", "vocal",      "free-reed",      "harpsichord"};
+    "default",    "subtractive",    "fm",         "karplus-strong", "modal",       "additive",
+    "percussion", "piano",          "pipe-organ", "bowed-string",   "reed",        "brass",
+    "flute",      "plucked-string", "vocal",      "free-reed",      "harpsichord", "sample"};
+// SonareSampleLoopMode, the patch's per-voice override. Distinct from the
+// SoundFont sampleModes value a SonareSampleDesc carries: the two number their
+// members differently and only the desc describes the recording itself.
+inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuous", "key-down"};
+inline constexpr const char* kSampleKeyTracks[] = {"default", "on", "off"};
 inline constexpr const char* kWaveforms[] = {"default", "sine",     "saw",
                                              "square",  "triangle", "noise"};
 inline constexpr const char* kFilterModels[] = {"default", "svf", "moog-ladder", "diode-ladder",
@@ -38,6 +43,10 @@ inline constexpr const char* kModDestinations[] = {"none", "pitch-cents", "cutof
 
 static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "WASM SynthEngineMode table drifted from C");
+static_assert(std::size(kSampleLoopModes) == SONARE_SAMPLE_LOOP_MODE_COUNT,
+              "WASM SampleLoopMode table drifted from C");
+static_assert(std::size(kSampleKeyTracks) == SONARE_SAMPLE_KEY_TRACK_COUNT,
+              "WASM SampleKeyTrack table drifted from C");
 static_assert(std::size(kWaveforms) == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
               "WASM SynthOscWaveform table drifted from C");
 static_assert(std::size(kFilterModels) == SONARE_SYNTH_FILTER_MODEL_COUNT,
@@ -123,7 +132,7 @@ inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
 /// unknown enum names; unknown PRESET names are validated downstream.
 inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   SonareSynthPatch patch{};
-  patch.struct_version = 2;
+  patch.struct_version = 3;
   if (desc.isUndefined() || desc.isNull()) return patch;
   if (desc.typeOf().as<std::string>() == "string") {
     setPresetName(&patch, desc.as<std::string>());
@@ -186,6 +195,16 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   read_float("gain", SONARE_SYNTH_FIELD_GAIN, &patch.gain);
   read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch.polyphony);
   read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch.bus_drive);
+
+  // Sample engine. No presence bits: only a sample patch reads this block, so
+  // set 0 stays addressable without one.
+  patch.sample_set = intProperty(desc, "sampleSet", 0);
+  patch.sample_level = floatProperty(desc, "sampleLevel", 0.0f);
+  patch.sample_start_offset = floatProperty(desc, "sampleStartOffset", 0.0f);
+  enumProperty(desc, "sampleLoop", kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT,
+               "sample loop mode", &patch.sample_loop);
+  enumProperty(desc, "sampleKeyTrack", kSampleKeyTracks, SONARE_SAMPLE_KEY_TRACK_COUNT,
+               "sample key track", &patch.sample_key_track);
 
   if (hasProperty(desc, "modRoutings")) {
     emscripten::val routings = desc["modRoutings"];
@@ -268,6 +287,13 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("gain", patch.gain);
   out.set("polyphony", patch.polyphony);
   out.set("busDrive", patch.bus_drive);
+  out.set("sampleSet", patch.sample_set);
+  out.set("sampleLevel", patch.sample_level);
+  out.set("sampleLoop",
+          enum_name(patch.sample_loop, kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT));
+  out.set("sampleStartOffset", patch.sample_start_offset);
+  out.set("sampleKeyTrack",
+          enum_name(patch.sample_key_track, kSampleKeyTracks, SONARE_SAMPLE_KEY_TRACK_COUNT));
   return out;
 }
 

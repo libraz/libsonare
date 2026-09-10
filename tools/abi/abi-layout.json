@@ -5849,6 +5849,102 @@
     ],
     "size": 120
   },
+  "SonareSampleDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "root_key",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "kind": "float",
+        "name": "fine_tune_cents",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "source_rate",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "loop_start",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "loop_end",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "loop_mode",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareSampleZoneDesc": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "key_lo",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "key_hi",
+        "offset": 1,
+        "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "vel_lo",
+        "offset": 2,
+        "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "vel_hi",
+        "offset": 3,
+        "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "sample_index",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "tune_cents",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "gain",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "pan_units",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
   "SonareScopeTelemetryRecord": {
     "align": 8,
     "fields": [
@@ -7020,7 +7116,7 @@
     "size": 20
   },
   "SonareSynthInstrumentBinding": {
-    "align": 4,
+    "align": 8,
     "fields": [
       {
         "kind": "unsigned",
@@ -7032,16 +7128,22 @@
         "kind": "aggregate",
         "name": "patch",
         "offset": 4,
-        "size": 264
+        "size": 284
       },
       {
         "kind": "unsigned",
         "name": "use_gm_programs",
-        "offset": 268,
+        "offset": 288,
         "size": 1
+      },
+      {
+        "kind": "pointer",
+        "name": "sample_bank",
+        "offset": 296,
+        "size": 8
       }
     ],
-    "size": 272
+    "size": 304
   },
   "SonareSynthModRouting": {
     "align": 4,
@@ -7285,9 +7387,39 @@
         "name": "present_fields",
         "offset": 260,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "sample_set",
+        "offset": 264,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "sample_level",
+        "offset": 268,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "sample_loop",
+        "offset": 272,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "sample_start_offset",
+        "offset": 276,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "sample_key_track",
+        "offset": 280,
+        "size": 4
       }
     ],
-    "size": 264
+    "size": 284
   },
   "SonareTimbreFrame": {
     "align": 4,
