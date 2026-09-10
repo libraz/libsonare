@@ -4,8 +4,8 @@
 #include <cmath>
 #include <limits>
 
-#include "editing/voice_changer/formant_bounds.h"
 #include "editing/voice_changer/realtime.h"
+#include "effects/formant_warp.h"
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/json_schema.h"

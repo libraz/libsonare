@@ -31,11 +31,18 @@ struct NoteRenderConfig {
 ///          other. A note lengthened past its own span writes into its
 ///          neighbours' samples for the same reason.
 ///
+///          Per note the order is: time stretch, pitch shift, formant warp,
+///          amplitude envelope, then gain. The formant warp is an LPC
+///          analysis-resynthesis round and runs only when the note asks for
+///          one, so an edit that leaves formant_shift_semitones at 0 costs
+///          nothing and loses nothing to it.
+///
 ///          Validation covers every note, identity or not: an unrenderable set
 ///          is unrenderable whether or not this call would touch it.
 /// @throws SonareException(InvalidParameter) on empty audio, a note whose span
 ///         is empty or reversed, overlapping source spans, a non-finite or
-///         non-positive edit field, or a non-finite config value.
+///         non-positive edit field, a non-finite or negative envelope value, or
+///         a non-finite config value.
 Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
                    const NoteRenderConfig& config = {});
 

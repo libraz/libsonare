@@ -119,6 +119,7 @@ set(SONARE_SOURCES
   feature/segment.cpp
   feature/vqt.cpp
   feature/rhythm.cpp
+  effects/formant_warp.cpp
   effects/hpss.cpp
   effects/phase_vocoder.cpp
   effects/native_spectral_stretch.cpp
@@ -667,6 +668,7 @@ if(BUILD_PITCH_EDITOR)
   add_library(sonare_pitch_editor STATIC
     editing/note_model/note_extractor.cpp
     editing/note_model/note_renderer.cpp
+    editing/note_model/note_split_merge.cpp
     editing/pitch_editor/f0_provider.cpp
     editing/pitch_editor/note_editor.cpp
     editing/pitch_editor/note_segmenter.cpp
@@ -701,7 +703,6 @@ endif()
 
 if(BUILD_VOICE_CHANGER)
   add_library(sonare_voice_changer STATIC
-    editing/voice_changer/formant_warp.cpp
     editing/voice_changer/isp_limiter.cpp
     editing/voice_changer/realtime_voice_changer.cpp
     editing/voice_changer/realtime/config.cpp

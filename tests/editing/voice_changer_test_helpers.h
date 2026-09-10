@@ -24,11 +24,10 @@
 
 #include "core/audio.h"
 #include "core/fft.h"
-#include "editing/voice_changer/formant_bounds.h"
-#include "editing/voice_changer/formant_warp.h"
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/streaming_reverb.h"
 #include "editing/voice_changer/voice_changer.h"
+#include "effects/formant_warp.h"
 #include "metering/true_peak.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -37,6 +36,13 @@
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 using namespace sonare::editing::voice_changer;
+
+// The formant warp is core-side, so the module-wide using above does not reach
+// it; these keep the cases that predate the move reading unqualified.
+using sonare::FormantWarp;
+using sonare::FormantWarpConfig;
+using sonare::kFormantFactorMax;
+using sonare::kFormantFactorMin;
 
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;

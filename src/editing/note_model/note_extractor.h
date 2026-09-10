@@ -35,4 +35,16 @@ struct NoteExtractorConfig {
 std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0Track& track,
                                       const NoteExtractorConfig& config = {});
 
+/// @brief Builds one note over @c [frame_start, frame_end) the way
+///        @ref extract_notes builds each of its own.
+/// @details The segmenter is not consulted -- the span is the caller's -- so
+///          this is how a span that came from somewhere else (a split, a merge,
+///          a host's own onset detector) gets the same measured fields as an
+///          extracted one, from the same code. The returned note has an
+///          identity edit.
+/// @throws SonareException(InvalidParameter) on the inputs @ref extract_notes
+///         rejects, or a span that is empty, reversed or outside the track.
+NoteObject make_note(const Audio& audio, const pitch_editor::F0Track& track, int frame_start,
+                     int frame_end, const NoteExtractorConfig& config = {});
+
 }  // namespace sonare::editing::note_model

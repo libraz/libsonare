@@ -2,10 +2,18 @@
 
 /// @file formant_warp.h
 /// @brief Lightweight formant-colour warp using LPC analysis context.
+///
+/// Core-side rather than voice-changer-side: note editing warps formants too,
+/// and its build option is the one the voice changer already requires.
 
 #include "core/audio.h"
 
-namespace sonare::editing::voice_changer {
+namespace sonare {
+
+/// Factor range the warp is defined over. It clamps its own factor to these, so
+/// they belong to the warp rather than to any one caller's parameter policy.
+inline constexpr float kFormantFactorMin = 0.55f;
+inline constexpr float kFormantFactorMax = 1.65f;
 
 struct FormantWarpConfig {
   float factor = 1.0f;
@@ -24,4 +32,4 @@ class FormantWarp {
   FormantWarpConfig config_{};
 };
 
-}  // namespace sonare::editing::voice_changer
+}  // namespace sonare

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "editing/voice_changer/formant_bounds.h"
+#include "effects/formant_warp.h"
 #include "util/exception.h"
 
 namespace sonare::editing::voice_changer {

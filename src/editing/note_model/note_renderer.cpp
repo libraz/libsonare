@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "effects/formant_warp.h"
 #include "effects/pitch_shift.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -18,6 +19,7 @@ namespace sonare::editing::note_model {
 namespace {
 
 using sonare::constants::kHalfPi;
+using sonare::constants::kSemitonesPerOctave;
 
 int64_t saturating_add(int64_t a, int64_t b) noexcept {
   if (b > 0 && a > std::numeric_limits<int64_t>::max() - b) {
@@ -96,6 +98,31 @@ void overlay(std::vector<float>& output, const Audio& source, const std::vector<
   }
 }
 
+/// Scales @p segment by @p envelope stretched over its whole length. The
+/// envelope is a set of gain points rather than a signal, so it is resampled by
+/// linear interpolation between its endpoints; one entry is a constant gain.
+void apply_envelope(std::vector<float>& segment, const std::vector<float>& envelope) {
+  const size_t n = segment.size();
+  const size_t points = envelope.size();
+  if (points == 0 || n == 0) return;
+  if (points == 1) {
+    for (float& sample : segment) {
+      sample *= envelope[0];
+    }
+    return;
+  }
+
+  const double step =
+      static_cast<double>(points - 1) / static_cast<double>(n > 1 ? n - 1 : size_t{1});
+  for (size_t i = 0; i < n; ++i) {
+    const double position = static_cast<double>(i) * step;
+    const size_t lo = std::min(static_cast<size_t>(position), points - 1);
+    const size_t hi = std::min(lo + 1, points - 1);
+    const float frac = static_cast<float>(position - static_cast<double>(lo));
+    segment[i] *= envelope[lo] * (1.0f - frac) + envelope[hi] * frac;
+  }
+}
+
 }  // namespace
 
 Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
@@ -109,8 +136,12 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     SONARE_CHECK(note.onset_sample >= 0 && note.length_samples() > 0, ErrorCode::InvalidParameter);
     const NoteEdit& edit = note.edit;
     SONARE_CHECK(std::isfinite(edit.pitch_shift_semitones) && std::isfinite(edit.gain_db) &&
-                     std::isfinite(edit.time_stretch_ratio) && edit.time_stretch_ratio > 0.0f,
+                     std::isfinite(edit.time_stretch_ratio) && edit.time_stretch_ratio > 0.0f &&
+                     std::isfinite(edit.formant_shift_semitones),
                  ErrorCode::InvalidParameter);
+    for (const float value : edit.amplitude_envelope) {
+      SONARE_CHECK(std::isfinite(value) && value >= 0.0f, ErrorCode::InvalidParameter);
+    }
     all_identity = all_identity && edit.is_identity();
   }
   check_disjoint_spans(notes);
@@ -152,6 +183,15 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
       segment.assign(shifted.begin(), shifted.end());
     }
     if (segment.empty()) continue;
+    if (note.edit.formant_shift_semitones != 0.0f) {
+      FormantWarpConfig warp_config;
+      // The warp takes a frequency ratio for what the edit states in semitones.
+      warp_config.factor = std::pow(2.0f, note.edit.formant_shift_semitones / kSemitonesPerOctave);
+      const Audio warped =
+          FormantWarp(warp_config).process(Audio::from_vector(segment, sample_rate));
+      segment.assign(warped.begin(), warped.end());
+    }
+    apply_envelope(segment, note.edit.amplitude_envelope);
     if (note.edit.gain_db != 0.0f) {
       const float gain = db_to_linear(note.edit.gain_db);
       for (float& sample : segment) {

@@ -1,4 +1,4 @@
-#include "editing/voice_changer/formant_warp.h"
+#include "effects/formant_warp.h"
 
 #include <algorithm>
 #include <cmath>
@@ -6,12 +6,11 @@
 #include <vector>
 
 #include "core/fft.h"
-#include "editing/voice_changer/formant_bounds.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/lpc.h"
 
-namespace sonare::editing::voice_changer {
+namespace sonare {
 
 using sonare::constants::kEpsilon;
 using sonare::constants::kSpectrumEpsilon;
@@ -175,4 +174,4 @@ Audio FormantWarp::process(const Audio& audio) const {
   return Audio::from_vector(std::move(out), sr);
 }
 
-}  // namespace sonare::editing::voice_changer
+}  // namespace sonare

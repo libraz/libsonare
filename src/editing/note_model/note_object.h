@@ -37,12 +37,32 @@ struct NoteEdit {
   float time_stretch_ratio = 1.0f;
   bool muted = false;
 
+  /// Moves the spectral envelope, in semitones, on top of whatever the pitch
+  /// shift already did to it.
+  ///
+  /// 0 runs no warp at all, so a pitch-only edit stays the clean phase-vocoder
+  /// shift it is today rather than gaining an LPC analysis-resynthesis round it
+  /// did not ask for. A pitch shift drags the formants with it, so holding them
+  /// still is -pitch_shift_semitones and the chipmunk is the default.
+  ///
+  /// The warp is defined over a factor range of [0.55, 1.65], so a shift
+  /// saturates near -10.3 and +8.7 semitones rather than being rejected.
+  float formant_shift_semitones = 0.0f;
+
+  /// Per-frame linear gain over the note's span, on top of @ref gain_db.
+  ///
+  /// Resampled to whatever length the note is rendered at, so it survives a
+  /// time stretch and does not have to match the source's frame count. Empty
+  /// leaves the note's own envelope alone, which is the identity.
+  std::vector<float> amplitude_envelope;
+
   /// @brief True when the edit changes nothing.
   /// @details Exact comparison, so a non-finite field reads as non-identity and
   ///          reaches the renderer's validation rather than passing through.
   bool is_identity() const noexcept {
     return !muted && pitch_shift_semitones == 0.0f && gain_db == 0.0f && time_offset_samples == 0 &&
-           time_stretch_ratio == 1.0f;
+           time_stretch_ratio == 1.0f && formant_shift_semitones == 0.0f &&
+           amplitude_envelope.empty();
   }
 };
 
@@ -55,8 +75,12 @@ struct NoteObject {
   int frame_start = 0;
   int frame_end = 0;
 
+  /// Median pitch of the span, or 0 when no frame of it carried a usable one --
+  /// the same way an F0 track spells an unvoiced frame. A span the segmenter
+  /// produced always has one; a span handed to @ref make_note need not.
   float median_hz = 0.0f;
-  /// Median pitch in cents above the extractor's reference_hz.
+  /// Median pitch in cents above the extractor's reference_hz. 0 both when the
+  /// median sits on reference_hz and when @ref median_hz says there is none.
   float median_cents = 0.0f;
 
   NoteCurve f0_hz;
