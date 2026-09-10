@@ -137,7 +137,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::VaWaveform;
 
   if (out_error) *out_error = nullptr;
-  if (c.struct_version > 4) {
+  if (c.struct_version > SONARE_SYNTH_PATCH_STRUCT_VERSION) {
     if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
     return false;
   }
@@ -248,6 +248,14 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   if (c.struct_version >= 4 && (set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ) || c.hp_cutoff_hz != 0.0f)) {
     p.hp_cutoff_hz = c.hp_cutoff_hz;
   }
+  if (c.struct_version >= 5) {
+    if (set(SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ) || c.sample_hold_hz != 0.0f) {
+      p.sample_hold_hz = c.sample_hold_hz;
+    }
+    if (set(SONARE_SYNTH_FIELD_BIT_DEPTH) || c.bit_depth != 0.0f) {
+      p.bit_depth = c.bit_depth;
+    }
+  }
   if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
     p.sample.set_index = c.sample_set;
     if (c.sample_level != 0.0f) p.sample.level = c.sample_level;
@@ -288,7 +296,8 @@ inline constexpr uint32_t kSynthPatchAllFields =
     SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS | SONARE_SYNTH_FIELD_LFO2_RATE_HZ |
     SONARE_SYNTH_FIELD_GLIDE_MS | SONARE_SYNTH_FIELD_BODY_MIX | SONARE_SYNTH_FIELD_STEREO_SPREAD |
     SONARE_SYNTH_FIELD_GAIN | SONARE_SYNTH_FIELD_POLYPHONY | SONARE_SYNTH_FIELD_BUS_DRIVE |
-    SONARE_SYNTH_FIELD_MOD_ROUTINGS | SONARE_SYNTH_FIELD_HP_CUTOFF_HZ;
+    SONARE_SYNTH_FIELD_MOD_ROUTINGS | SONARE_SYNTH_FIELD_HP_CUTOFF_HZ |
+    SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ | SONARE_SYNTH_FIELD_BIT_DEPTH;
 
 /// Fills a versioned C synth patch from a catalog preset (the read direction:
 /// preset name + the wrapper-section values, so hosts can inspect and tweak).
@@ -296,7 +305,7 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
                              SonareSynthPatch* out) {
   const sonare::midi::synth::NativeSynthPatch& p = preset.config.patch;
   *out = SonareSynthPatch{};
-  out->struct_version = 4;
+  out->struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
   out->present_fields = kSynthPatchAllFields;
   std::strncpy(out->preset, preset.name, SONARE_SYNTH_PRESET_NAME_MAX - 1);
   out->engine_mode = static_cast<int>(p.mode) + 1;
@@ -309,6 +318,8 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
   out->filter_output = static_cast<int>(p.filter_output) + 1;
   out->cutoff_hz = p.cutoff_hz;
   out->hp_cutoff_hz = p.hp_cutoff_hz;
+  out->sample_hold_hz = p.sample_hold_hz;
+  out->bit_depth = p.bit_depth;
   out->resonance_q = p.resonance_q;
   out->key_track = p.key_track;
   out->env_to_cutoff_cents = p.env_to_cutoff_cents;

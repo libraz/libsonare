@@ -709,6 +709,20 @@ export interface SynthPatch {
    * Butterworth Q -- `resonanceQ` belongs to the main filter.
    */
   hpCutoffHz?: number;
+  /**
+   * Rate the voice's output is held at, in Hz; 0 disables the stage. The
+   * voice's own converter, ahead of its amplitude envelope: a drum machine runs
+   * one far below the mix rate, and the aliased images that folds down are as
+   * much of its sound as its samples are. Per voice, so a kit can convert the
+   * voices a machine stores and leave its analogue ones alone.
+   */
+  sampleHoldHz?: number;
+  /**
+   * Word length the held value is quantized to, in bits; 0 disables the
+   * quantizer. Fractional values are meaningful — a converter's effective
+   * resolution is rarely a whole number of bits.
+   */
+  bitDepth?: number;
   resonanceQ?: number;
   /** Cutoff keyboard tracking [0, 1]. */
   keyTrack?: number;

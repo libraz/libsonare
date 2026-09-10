@@ -105,10 +105,11 @@ inline bool SynthFieldPresent(const Napi::Object& obj, const char* key) {
 // validated downstream by the C ABI.
 inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
   *patch = SonareSynthPatch{};
-  // Version 4 is a superset: the sample block at the tail is read only when the
-  // resolved engine is the sample engine, and the series highpass past it is
-  // inert at zero, so a zero-filled tail is exactly version 2's behaviour.
-  patch->struct_version = 4;
+  // Version 5 is a superset: the sample block at the tail is read only when the
+  // resolved engine is the sample engine, and the series highpass and converter
+  // past it are inert at zero, so a zero-filled tail is exactly version 2's
+  // behaviour.
+  patch->struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
   if (desc.IsUndefined() || desc.IsNull()) return true;
 
   auto set_preset = [patch](const std::string& name) {
@@ -168,6 +169,8 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
   read_float("drive", SONARE_SYNTH_FIELD_DRIVE, &patch->drive);
   read_float("cutoffHz", SONARE_SYNTH_FIELD_CUTOFF_HZ, &patch->cutoff_hz);
   read_float("hpCutoffHz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, &patch->hp_cutoff_hz);
+  read_float("sampleHoldHz", SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ, &patch->sample_hold_hz);
+  read_float("bitDepth", SONARE_SYNTH_FIELD_BIT_DEPTH, &patch->bit_depth);
   read_float("resonanceQ", SONARE_SYNTH_FIELD_RESONANCE_Q, &patch->resonance_q);
   read_float("keyTrack", SONARE_SYNTH_FIELD_KEY_TRACK, &patch->key_track);
   read_float("envToCutoffCents", SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
@@ -257,6 +260,8 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
           enum_name(patch.filter_output, kSynthFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
   out.Set("cutoffHz", patch.cutoff_hz);
   out.Set("hpCutoffHz", patch.hp_cutoff_hz);
+  out.Set("sampleHoldHz", patch.sample_hold_hz);
+  out.Set("bitDepth", patch.bit_depth);
   out.Set("resonanceQ", patch.resonance_q);
   out.Set("keyTrack", patch.key_track);
   out.Set("envToCutoffCents", patch.env_to_cutoff_cents);

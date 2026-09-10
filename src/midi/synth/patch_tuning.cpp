@@ -170,6 +170,9 @@ void apply_common(NativeSynthPatch& p, const Fields& f) {
   F(pitch_offset_cents);
   F(gain);
   F(cutoff_hz);
+  F(hp_cutoff_hz);
+  F(sample_hold_hz);
+  F(bit_depth);
   F(resonance_q);
   F(drive);
   F(env_to_cutoff_cents);

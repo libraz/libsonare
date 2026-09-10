@@ -129,6 +129,20 @@ struct NativeSynthPatch {
   /// Pre-filter drive in [0,1]: gain-compensated tanh saturation on the
   /// oscillator mix (0 = clean).
   float drive = 0.0f;
+
+  // --- converter (the voice's own output stage) ---
+  /// Rate the voice's output is held at (Hz); 0 = off, and the voice is then
+  /// bit-identical to one without the stage. A drum machine plays its samples
+  /// through a converter running far below the mix rate, and the aliased images
+  /// that folds down are as much of its sound as the samples are. Per voice
+  /// rather than per bus because a machine converts only the voices it stores
+  /// and leaves its analogue ones alone — crushing the bus takes the kick with
+  /// it.
+  float sample_hold_hz = 0.0f;
+  /// Word length the held value is quantized to (bits); 0 = off. Fractional
+  /// values are meaningful — the quantizer is uniform over 2^bits steps and a
+  /// converter's effective resolution is rarely a whole number of them.
+  float bit_depth = 0.0f;
   DahdsrConfig filter_env;
   /// Filter envelope -> cutoff offset at full envelope (cents).
   float env_to_cutoff_cents = 0.0f;
@@ -264,6 +278,13 @@ struct NativeSynthVoice : VoiceState {
   /// always the SVF highpass tap, so the other three models would be dead
   /// state on every voice.
   TptSvf hp_stage;
+  // Converter stage. `hold_step` is how much of a held period one sample
+  // advances, so the rate is compared against the mix rate once at note-on
+  // rather than per sample.
+  float hold_step = 0.0f;
+  float hold_phase = 0.0f;
+  float hold_value = 0.0f;
+  float quant_step = 0.0f;
   FmVoiceCore fm;
   /// KS string core; the host attach()es its delay span before start() (the
   /// slab is owned by the instrument and allocated in prepare()).
@@ -749,6 +770,16 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
                              0.5f, 30.0f);
   p.hp_cutoff_hz = std::clamp(patch_clamp_detail::sanitize(p.hp_cutoff_hz, 0.0f), 0.0f, 22000.0f);
   p.drive = std::clamp(patch_clamp_detail::sanitize(p.drive, 0.0f), 0.0f, 1.0f);
+  // The lower bound is a rate the stage can still be heard as a rate at; below
+  // it the held value lasts long enough to be a note of its own.
+  p.sample_hold_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.sample_hold_hz, 0.0f), 0.0f, 192000.0f);
+  if (p.sample_hold_hz > 0.0f) p.sample_hold_hz = std::max(p.sample_hold_hz, 100.0f);
+  // 24 is the ceiling because a float voice already resolves further than that;
+  // 1 bit is a square wave, which is where the stage stops being a converter and
+  // is still a thing someone reaches for.
+  p.bit_depth = std::clamp(patch_clamp_detail::sanitize(p.bit_depth, 0.0f), 0.0f, 24.0f);
+  if (p.bit_depth > 0.0f) p.bit_depth = std::max(p.bit_depth, 1.0f);
   p.filter_env = patch_clamp_detail::clamp_env(p.filter_env);
   p.env_to_cutoff_cents =
       std::clamp(patch_clamp_detail::sanitize(p.env_to_cutoff_cents, 0.0f), -9600.0f, 9600.0f);

@@ -7128,22 +7128,22 @@
         "kind": "aggregate",
         "name": "patch",
         "offset": 4,
-        "size": 288
+        "size": 296
       },
       {
         "kind": "unsigned",
         "name": "use_gm_programs",
-        "offset": 292,
+        "offset": 300,
         "size": 1
       },
       {
         "kind": "pointer",
         "name": "sample_bank",
-        "offset": 296,
+        "offset": 304,
         "size": 8
       }
     ],
-    "size": 304
+    "size": 312
   },
   "SonareSynthModRouting": {
     "align": 4,
@@ -7423,9 +7423,21 @@
         "name": "hp_cutoff_hz",
         "offset": 284,
         "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "sample_hold_hz",
+        "offset": 288,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "bit_depth",
+        "offset": 292,
+        "size": 4
       }
     ],
-    "size": 288
+    "size": 296
   },
   "SonareTimbreFrame": {
     "align": 4,

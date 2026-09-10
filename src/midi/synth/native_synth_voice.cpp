@@ -250,6 +250,18 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     hp_stage.set(p.hp_cutoff_hz, constants::kButterworthQ);
   }
 
+  // Converter. A hold rate at or above the mix rate holds nothing, so it is
+  // switched off rather than left to round to one sample and cost a branch per
+  // sample for no effect.
+  const float hold_rate = static_cast<float>(p.sample_hold_hz / std::max(sample_rate, 1.0));
+  hold_step = hold_rate > 0.0f && hold_rate < 1.0f ? hold_rate : 0.0f;
+  // Phase at 1 so the first sample is taken rather than a zero being held
+  // through the attack.
+  hold_phase = 1.0f;
+  hold_value = 0.0f;
+  // Two over the level count, the signal being bipolar.
+  quant_step = p.bit_depth > 0.0f ? 2.0f / std::exp2(p.bit_depth) : 0.0f;
+
   // The model bank's LFO has no onset delay of its own, so a GS vibrato-delay
   // edit is the only thing that can give it one.
   vibrato_lfo.start(sample_rate, gs_vib_delay_seconds(0.0f, part_mod.vib_delay_scale),
@@ -433,6 +445,20 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
 
   // --- series highpass: the other end of a band the main filter cannot make ---
   if (patch->hp_cutoff_hz > 0.0f) sample = hp_stage.process(sample).hp;
+
+  // --- converter: sample and hold, then quantize, in that order ---
+  // Ahead of the amplitude envelope, which is where the converter sits in the
+  // machine this models: the quantization floor is a fixed level the envelope
+  // fades along with the note, not a floor the note fades down onto.
+  if (hold_step > 0.0f) {
+    hold_phase += hold_step;
+    if (hold_phase >= 1.0f) {
+      hold_phase -= std::floor(hold_phase);
+      hold_value = sample;
+    }
+    sample = hold_value;
+  }
+  if (quant_step > 0.0f) sample = std::round(sample / quant_step) * quant_step;
 
   // --- amplitude (wind_gain is the shared tremulant/sag level; 1.0 otherwise) ---
   // The contact transient joins here rather than upstream: it is the strike

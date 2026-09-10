@@ -82,7 +82,7 @@ TEST_CASE("synth preset patches round-trip through the versioned struct",
   SonareSynthPatch patch{};
   // warm-pad: a 7-osc subtractive supersaw.
   REQUIRE(sonare_synth_preset_patch("warm-pad", &patch) == SONARE_OK);
-  REQUIRE(patch.struct_version == 2);
+  REQUIRE(patch.struct_version == SONARE_SYNTH_PATCH_STRUCT_VERSION);
   REQUIRE(std::string(patch.preset) == "warm-pad");
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_SUBTRACTIVE);
   REQUIRE(patch.waveform == SONARE_SYNTH_OSC_SAW);
@@ -126,7 +126,7 @@ TEST_CASE("synth patch enum counts match the public C ordinals", "[project][synt
   REQUIRE(SONARE_SYNTH_BODY_DEFAULT == 0);
   REQUIRE(SONARE_SYNTH_BODY_VOCAL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT);
   REQUIRE(SONARE_SYNTH_MOD_SOURCE_COUNT == 9);
-  REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 5);
+  REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 9);
 }
 
 TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][synth_patch]") {
@@ -246,7 +246,7 @@ TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch
 
   // Invalid patches are rejected.
   SonareSynthPatch bad_version{};
-  bad_version.struct_version = 4;
+  bad_version.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION + 1;
   SonareProjectBounceOptions options{};
   options.total_frames = 1024;
   SonareSynthInstrumentBinding binding{};

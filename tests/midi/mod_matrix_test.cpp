@@ -452,3 +452,78 @@ TEST_CASE("the series highpass keeps its own resonance out of the band", "[midi]
   REQUIRE(sharp < 1.1f * flat);
   REQUIRE(sharp > 0.9f * flat);
 }
+
+namespace {
+
+/// A saw voice with a flat amplitude envelope, so what the converter does is
+/// the only thing shaping the samples the assertions look at.
+std::vector<float> render_converted(float sample_hold_hz, float bit_depth, int num_samples) {
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  cfg.patch.waveform = VaWaveform::kSaw;
+  cfg.patch.cutoff_hz = 20000.0f;
+  cfg.patch.sample_hold_hz = sample_hold_hz;
+  cfg.patch.bit_depth = bit_depth;
+  // The converter is a VOICE stage and the mix bus filters what leaves it, so
+  // the bus DC blocker is switched off here: it is an IIR and it would smear the
+  // held steps and the quantizer's lattice into a continuum before either could
+  // be measured. Nothing about the stage under test depends on it.
+  cfg.dc_block = false;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 512);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 45, 110)));
+  return render(synth, num_samples).left;
+}
+
+}  // namespace
+
+TEST_CASE("the voice converter holds its output at the rate it was given", "[midi][synth]") {
+  // The hold has to be visible as repeated samples: a stage that filtered
+  // instead of held would smooth the steps away, and the aliased images those
+  // steps fold down are the reason to run a converter below the mix rate.
+  const int n = 9600;
+  const std::vector<float> held = render_converted(4800.0f, 0.0f, n);  // a tenth of the mix rate
+
+  int changes = 0;
+  for (size_t i = 4801; i < held.size(); ++i) {
+    if (held[i] != held[i - 1]) ++changes;
+  }
+  const int expected = static_cast<int>((held.size() - 4801) / 10);
+  REQUIRE(changes > expected - 3);
+  REQUIRE(changes < expected + 3);
+}
+
+TEST_CASE("the voice quantizer lands the output on a lattice", "[midi][synth]") {
+  const int n = 9600;
+  const std::vector<float> crushed = render_converted(0.0f, 4.0f, n);
+
+  // The quantizer runs before the amplitude envelope and the patch gain, so the
+  // lattice that reaches the output is the step scaled by everything after it.
+  // Its spacing is what the test can see; recover it from the smallest gap.
+  float step = 1.0f;
+  for (size_t i = 4801; i < crushed.size(); ++i) {
+    const float gap = std::abs(crushed[i] - crushed[i - 1]);
+    if (gap > 1.0e-7f && gap < step) step = gap;
+  }
+  REQUIRE(step < 0.5f);  // a lattice was found at all
+
+  int off_lattice = 0;
+  for (size_t i = 4801; i < crushed.size(); ++i) {
+    const float ratio = crushed[i] / step;
+    if (std::abs(ratio - std::round(ratio)) > 1.0e-3f) ++off_lattice;
+  }
+  REQUIRE(off_lattice == 0);
+}
+
+TEST_CASE("a converter left at zero renders the voice unchanged", "[midi][synth]") {
+  // Both halves off has to be the voicing that predates the stage, or no patch
+  // calibrated before it can be trusted afterwards.
+  const std::vector<float> plain = render_converted(0.0f, 0.0f, 4096);
+  const std::vector<float> again = render_converted(0.0f, 0.0f, 4096);
+  REQUIRE(plain == again);
+
+  // A hold rate at or above the mix rate holds nothing, so it is the same
+  // signal too — the stage switches itself off rather than repeating a sample.
+  const std::vector<float> unheld = render_converted(static_cast<float>(kRate), 0.0f, 4096);
+  REQUIRE(unheld == plain);
+}

@@ -438,7 +438,8 @@ typedef struct {
 typedef struct {
   int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured;
                                                 3 => the sample-engine block at the tail is read too;
-                                                4 => the series highpass at the tail is read too */
+                                                4 => the series highpass at the tail is read too;
+                                                5 => the converter block at the tail is read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -517,7 +518,22 @@ typedef struct {
      in present_fields to ask for 0 as a value and switch the stage off. It
      runs at Butterworth Q: resonance_q belongs to the main filter. */
   float hp_cutoff_hz;
+
+  /* --- converter (struct_version 5) --- */
+  /* The voice's own output stage, ahead of its amplitude envelope: a sample and
+     hold followed by a uniform quantizer. Per voice rather than per bus, so a
+     kit can convert the voices a machine stores and leave its analogue ones
+     alone. Each is 0 => base; set the matching present_fields bit to ask for 0
+     as a value and switch that half off. */
+  float sample_hold_hz; /* rate the output is held at; below 100 Hz is raised to it */
+  float bit_depth;      /* word length the held value is quantized to, [1,24]; fractional is fine */
 } SonareSynthPatch;
+
+/* Newest SonareSynthPatch layout. Named rather than written out at each site,
+   because every one of them — the reader's upper bound, the writer's stamp, and
+   the tests that pin "one past the newest is refused" — has to move together,
+   and a literal in any of them goes stale silently. */
+#define SONARE_SYNTH_PATCH_STRUCT_VERSION 5
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
    on purpose: their zero is already the reserved "keep base" value and every
@@ -552,6 +568,8 @@ typedef struct {
    it; a non-empty table replaces the base matrix with or without the bit. */
 #define SONARE_SYNTH_FIELD_MOD_ROUTINGS (1u << 26)
 #define SONARE_SYNTH_FIELD_HP_CUTOFF_HZ (1u << 27)
+#define SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ (1u << 28)
+#define SONARE_SYNTH_FIELD_BIT_DEPTH (1u << 29)
 
 #ifdef __cplusplus
 // Layout guards for the previously-unversioned analysis / feature PODs. Any
@@ -600,8 +618,8 @@ static_assert(offsetof(SonareSynthPatch, gain) ==
 static_assert(offsetof(SonareSynthPatch, present_fields) ==
                   offsetof(SonareSynthPatch, bus_drive) + sizeof(float),
               "SonareSynthPatch present_fields offset changed");
-static_assert(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ ==
-                  1u << 27,  // Highest bit in use; widening needs a struct_version bump.
+static_assert(SONARE_SYNTH_FIELD_BIT_DEPTH ==
+                  1u << 29,  // Highest bit in use; widening needs a struct_version bump.
               "SonareSynthPatch presence bit range changed");
 #endif
 

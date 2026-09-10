@@ -220,7 +220,7 @@ TEST_CASE("a struct_version past the newest is refused", "[project][sample_bank]
   REQUIRE(sonare_project_deserialize(doc.data(), doc.size(), &project, nullptr) == SONARE_OK);
 
   SonareSynthInstrumentBinding binding{};
-  binding.patch.struct_version = 4;
+  binding.patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION + 1;
 
   SonareProjectBounceOptions options{};
   options.sample_rate = 48000;
