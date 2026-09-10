@@ -44,6 +44,9 @@ if(BUILD_ARRANGEMENT)
   target_sources(sonare PRIVATE
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_project.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_mixer.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_stems.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/synth_catalog.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp

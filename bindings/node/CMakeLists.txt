@@ -115,6 +115,9 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/sonare_c_streaming_retune.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_project.cpp
   ${SONARE_ROOT}/src/c_api/project_bounce.cpp
+  ${SONARE_ROOT}/src/c_api/project_bounce_mixer.cpp
+  ${SONARE_ROOT}/src/c_api/project_bounce_stems.cpp
+  ${SONARE_ROOT}/src/c_api/synth_catalog.cpp
   ${SONARE_ROOT}/src/c_api/project_core.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_track.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_clip.cpp

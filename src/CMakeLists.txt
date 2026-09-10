@@ -219,6 +219,8 @@ set(SONARE_C_MIXING_SOURCES
 set(SONARE_C_PROJECT_SOURCES
   c_api/sonare_c_project.cpp
   c_api/project_bounce.cpp
+  c_api/project_bounce_mixer.cpp
+  c_api/project_bounce_stems.cpp
   c_api/project_core.cpp
   c_api/project_edit_track.cpp
   c_api/project_edit_clip.cpp
@@ -227,6 +229,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_mir.cpp
   c_api/project_soundfont.cpp
   c_api/sonare_c_sample_bank.cpp
+  c_api/synth_catalog.cpp
 )
 
 # Decide whether to enable FFmpeg integration.
@@ -1242,6 +1245,8 @@ if(BUILD_WASM)
       c_api/mixing_mixer.cpp
       c_api/mixing_strip.cpp
       c_api/project_bounce.cpp
+      c_api/project_bounce_mixer.cpp
+      c_api/project_bounce_stems.cpp
       c_api/project_core.cpp
       c_api/project_edit_clip.cpp
       c_api/project_edit_track.cpp
@@ -1254,6 +1259,7 @@ if(BUILD_WASM)
       c_api/sonare_c_project.cpp
       c_api/sonare_c_streaming_retune.cpp
       c_api/sonare_c_voice_changer.cpp
+      c_api/synth_catalog.cpp
       wasm/bindings.cpp
       wasm/bindings/analysis/quick.cpp
       wasm/bindings/analysis/quick_detailed.cpp
