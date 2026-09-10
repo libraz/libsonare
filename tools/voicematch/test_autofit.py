@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import functools
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -412,13 +413,35 @@ def test_the_patch_name_list_matches_the_x_macro():
     assert "violin" in names and "ocarina" in names and "church_organ" in names
 
 
+def _unassigned_violin_field() -> str:
+    """A `bowed_string` field the table does not set for the violin.
+
+    Chosen here rather than written down: this case needs a field that is new to
+    its block, and a round of fitting turns any named one into an assignment,
+    which leaves the case exercising the replace path while asserting the append
+    path's postcondition. That is how it went red, silently, once.
+    """
+    tables = "\n".join(p.read_text() for p in
+                       sorted((REPO_ROOT / "src/midi/synth").glob("gm_fallback_programs_*.h")))
+    assigned = set(re.findall(r"o\.violin\.bowed_string\.(\w+)\s*=", tables))
+    headers = "\n".join(p.read_text() for p in
+                        sorted((REPO_ROOT / "src/midi/synth").glob("*.h")))
+    block = re.search(r"struct\s+BowedStringPatchParams\s*\{(.*?)\n\};", headers, re.S)
+    assert block, "BowedStringPatchParams is not declared where this case looks for it"
+    declared = re.findall(r"^\s*(?:float|int|bool|uint8_t)\s+(\w+)\s*=", block.group(1), re.M)
+    free = sorted(set(declared) - assigned)
+    assert free, "every bowed_string field is assigned; pick another struct for this case"
+    return free[0]
+
+
 def test_a_new_patch_field_is_appended_to_its_block():
-    edited = write_patch_fields({"violin": [("bowed_string.bow_force", 0.61)]})
+    field = _unassigned_violin_field()
+    edited = write_patch_fields({"violin": [(f"bowed_string.{field}", 0.61)]})
     assert len(edited) == 1
     text = next(iter(edited.values()))
-    assert "o.violin.bowed_string.bow_force = 0.61f;" in text
+    assert f"o.violin.bowed_string.{field} = 0.61f;" in text
     path = next(iter(edited))
-    assert "o.violin.bowed_string.bow_force" not in path.read_text()
+    assert f"o.violin.bowed_string.{field}" not in path.read_text()
 
 
 def test_an_existing_assignment_is_replaced_not_duplicated():
