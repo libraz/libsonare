@@ -250,10 +250,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   du.ks.exc_brightness = 0.401968f;
   du.ks.vel_to_brightness = 0.657824f;
   du.ks.release_damp_s = 0.0701437f;
-  du.ks.nail = 1.0f;               // hard hammer edge
-  du.ks.pluck_style = 1.2f;        // deterministic struck excitation
-  du.ks.dispersion = 0.478882f;    // steel stiffness
-  du.ks.polarization = 0.194126f;  // course of two/three strings beat
+  du.ks.nail = 0.7f;          // hard hammer edge
+  du.ks.pluck_style = 0.6f;   // deterministic struck excitation
+  du.ks.dispersion = 0.3f;    // steel stiffness
+  du.ks.polarization = 0.3f;  // course of two/three strings beat
   du.body = BodyType::kGuitar;
   du.body_mix = 0.226243f;
   du.gain = 1.3f;
@@ -317,26 +317,17 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.nylon_guitar.ks.pick_position = 0.1313f;
   o.nylon_guitar.ks.decay_s = 8.11134f;
   o.nylon_guitar.ks.dispersion = 0.0f;
-  o.nylon_guitar.ks.nail = 0.868335f;  // fingertip flesh, rounder
+  o.nylon_guitar.ks.nail = 0.28f;  // fingertip flesh, rounder
   o.nylon_guitar.ks.tension_mod = 0.310695f;
   o.nylon_guitar.body_mix = 0.0749711f;
   o.nylon_guitar.amp_env.attack_ms = 1.37215f;
   o.nylon_guitar.amp_env.release_ms = 217.031f;
   o.nylon_guitar.amp_env.sustain = 0.800676f;
   o.nylon_guitar.cutoff_hz = 7730.12f;
-  o.nylon_guitar.drive = 0.138224f;
-  o.nylon_guitar.ks.body_coupling = 0.391253f;
   o.nylon_guitar.ks.decay_stretch = 0.328695f;
-  o.nylon_guitar.ks.keyoff_noise = 0.34891f;
-  o.nylon_guitar.ks.octave_mix = 0.895633f;
-  o.nylon_guitar.ks.pickup_pos = 0.961787f;
-  o.nylon_guitar.ks.pluck_style = 0.613465f;
-  o.nylon_guitar.ks.polarization = 0.031997f;
   o.nylon_guitar.ks.release_damp_s = 0.0585365f;
-  o.nylon_guitar.ks.slap = 0.953974f;
   o.nylon_guitar.ks.vel_to_brightness = 0.829639f;
   o.nylon_guitar.resonance_q = 4.05989f;
-  o.nylon_guitar.stereo_spread = 0.87469f;
 
   // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
   // loop, near-bridge pick, a pickup-ish lowpass instead of the open string.
@@ -486,14 +477,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harp.ks.nail = 0.365492f;
   o.harp.ks.dispersion = 0.0f;
   o.harp.ks.tension_mod = 0.0f;
-  o.harp.body_mix = 0.346789f;  // large open soundboard, less boxy than the guitar
+  o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
   o.harp.amp_env.attack_ms = 2.0517f;
   o.harp.amp_env.release_ms = 150.0f;
   o.harp.cutoff_hz = 11609.5f;
-  o.harp.ks.body_coupling = 0.678258f;
   o.harp.ks.exc_brightness = 0.923523f;
-  o.harp.ks.pluck_style = 0.981257f;
-  o.harp.ks.polarization = 0.0264973f;
   o.harp.resonance_q = 0.627799f;
 
   // Sitar (GM 104): a plucked string over the curved jawari bridge — the
@@ -753,25 +741,18 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // slot is the widest of them, and its null the lowest.
   o.reed_organ.mode = SynthEngineMode::kFreeReed;
   o.reed_organ.amp_env = fallback_env(30.0f, 0.0f, 1.0f, 120.0f);
-  o.reed_organ.cutoff_hz = 7245.46f;
+  o.reed_organ.cutoff_hz = 20000.0f;
   o.reed_organ.free_reed.brightness = 0.50f;
   o.reed_organ.free_reed.reed_stiffness = 0.40f;
   o.reed_organ.free_reed.detune = 0.12f;
-  o.reed_organ.free_reed.breath_pressure = 0.343564f;
-  o.reed_organ.free_reed.attack_ms = 27.6556f;
-  o.reed_organ.free_reed.release_ms = 50.9544f;
-  o.reed_organ.free_reed.slot_duty = 0.21543f;
-  o.reed_organ.free_reed.slot_return = 0.401115f;
-  o.reed_organ.free_reed.slot_gap = 0.5f;
-  o.reed_organ.stereo_spread = 0.405159f;
+  o.reed_organ.free_reed.breath_pressure = 0.7f;
+  o.reed_organ.free_reed.attack_ms = 30.0f;
+  o.reed_organ.free_reed.release_ms = 120.0f;
+  o.reed_organ.free_reed.slot_duty = 0.56f;
+  o.reed_organ.free_reed.slot_return = 0.8f;
+  o.reed_organ.free_reed.slot_gap = 0.41f;
+  o.reed_organ.stereo_spread = 0.18f;
   o.reed_organ.gain = 0.42f;
-  o.reed_organ.amp_env.attack_ms = 11.6171f;
-  o.reed_organ.amp_env.release_ms = 1324.79f;
-  o.reed_organ.amp_env.sustain = 0.746693f;
-  o.reed_organ.drive = 0.418227f;
-  o.reed_organ.free_reed.radiation = 0.154026f;
-  o.reed_organ.free_reed.vel_to_breath = 0.28581f;
-  o.reed_organ.resonance_q = 0.634453f;
 
   // Accordion (GM 21): the same free reed on a narrower slot. It voiced off the
   // harmonium's patch until the two were measured apart — the accordion's null
@@ -785,7 +766,6 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.accordion.amp_env.release_ms = 2424.87f;
   o.accordion.amp_env.sustain = 0.14265f;
   o.accordion.cutoff_hz = 2068.1f;
-  o.accordion.drive = 0.768916f;
   o.accordion.free_reed.attack_ms = 16.0321f;
   o.accordion.free_reed.breath_noise = 0.0118062f;
   o.accordion.free_reed.breath_pressure = 0.372382f;
@@ -794,7 +774,6 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.accordion.free_reed.release_ms = 63.9651f;
   o.accordion.free_reed.vel_to_breath = 0.927186f;
   o.accordion.resonance_q = 0.83474f;
-  o.accordion.stereo_spread = 1.0f;
 
   // Harmonica (GM 22): a small, bright free reed right at the mouth — stiff
   // little tongues speak fast with a buzzy edge, and the player's cupping
@@ -802,53 +781,27 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // than a free monopole where the bellows instruments measure as one.
   o.harmonica = o.accordion;
   o.harmonica.amp_env = fallback_env(12.0f, 0.0f, 1.0f, 90.0f);
-  o.harmonica.free_reed.brightness = 0.978189f;
+  o.harmonica.free_reed.brightness = 0.78f;
   o.harmonica.free_reed.reed_stiffness = 0.65f;
   o.harmonica.free_reed.detune = 0.15f;
-  o.harmonica.free_reed.attack_ms = 4.1087f;
-  o.harmonica.free_reed.release_ms = 541.427f;
-  o.harmonica.free_reed.radiation = 0.408548f;
-  o.harmonica.lfo_rate_hz = 1.67298f;
-  o.harmonica.lfo_to_pitch_cents = 1.62497f;
-  o.harmonica.stereo_spread = 0.61798f;
+  o.harmonica.free_reed.attack_ms = 12.0f;
+  o.harmonica.free_reed.release_ms = 90.0f;
+  o.harmonica.free_reed.radiation = 0.6f;
+  o.harmonica.lfo_rate_hz = 5.6f;
+  o.harmonica.lfo_to_pitch_cents = 8.0f;
+  o.harmonica.stereo_spread = 0.12f;
   o.harmonica.gain = 0.44f;
-  o.harmonica.amp_env.attack_ms = 41.7916f;
-  o.harmonica.amp_env.release_ms = 120.522f;
-  o.harmonica.amp_env.sustain = 0.704233f;
-  o.harmonica.cutoff_hz = 8957.73f;
-  o.harmonica.drive = 0.757725f;
-  o.harmonica.free_reed.breath_noise = 0.0f;
-  o.harmonica.free_reed.breath_pressure = 0.749225f;
-  o.harmonica.free_reed.slot_duty = 0.406355f;
-  o.harmonica.free_reed.slot_gap = 0.02f;
-  o.harmonica.free_reed.slot_return = 0.0f;
-  o.harmonica.free_reed.vel_to_breath = 0.383347f;
-  o.harmonica.resonance_q = 2.61754f;
 
   // Bandoneon (GM 23): the tango free reed. The defining trait is the musette
   // voicing — two near-unison tongues a few cents apart beat against each
   // other, producing the characteristic wet shimmer.
   o.bandoneon = o.accordion;
   o.bandoneon.amp_env = fallback_env(24.0f, 0.0f, 1.0f, 120.0f);
-  o.bandoneon.free_reed.brightness = 0.667125f;
+  o.bandoneon.free_reed.brightness = 0.55f;
   o.bandoneon.free_reed.reed_stiffness = 0.45f;
   o.bandoneon.free_reed.detune = 0.30f;
-  o.bandoneon.stereo_spread = 0.421491f;
+  o.bandoneon.stereo_spread = 0.22f;
   o.bandoneon.gain = 0.44f;
-  o.bandoneon.amp_env.attack_ms = 9.26163f;
-  o.bandoneon.amp_env.release_ms = 41.4606f;
-  o.bandoneon.amp_env.sustain = 0.950485f;
-  o.bandoneon.cutoff_hz = 8300.95f;
-  o.bandoneon.drive = 0.148367f;
-  o.bandoneon.free_reed.attack_ms = 6.98999f;
-  o.bandoneon.free_reed.breath_noise = 0.0f;
-  o.bandoneon.free_reed.breath_pressure = 0.222717f;
-  o.bandoneon.free_reed.radiation = 0.766469f;
-  o.bandoneon.free_reed.release_ms = 63.9824f;
-  o.bandoneon.free_reed.slot_duty = 0.406596f;
-  o.bandoneon.free_reed.slot_gap = 0.056729f;
-  o.bandoneon.free_reed.slot_return = 1.00436f;
-  o.bandoneon.free_reed.vel_to_breath = 0.759492f;
 
   // Orchestra Hit (GM 55): a sharp tutti stab. The ensemble family's slow pad
   // is the wrong envelope, so this overrides to a bright detuned-saw chord with
@@ -959,7 +912,6 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.voice_oohs.cutoff_hz = 3849.86f;
   o.voice_oohs.drive = 0.0f;
   o.voice_oohs.resonance_q = 0.622076f;
-  o.voice_oohs.stereo_spread = 0.436668f;
   o.voice_oohs.vocal.attack_ms = 372.937f;
   o.voice_oohs.vocal.breath_noise = 0.0970435f;
   o.voice_oohs.vocal.release_ms = 544.671f;
@@ -980,7 +932,6 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.synth_voice.amp_env.sustain = 0.671271f;
   o.synth_voice.cutoff_hz = 10033.6f;
   o.synth_voice.resonance_q = 9.075f;
-  o.synth_voice.stereo_spread = 0.871104f;
   o.synth_voice.vocal.breath_noise = 0.674236f;
   o.synth_voice.vocal.vibrato_rate_hz = 3.40342f;
 }

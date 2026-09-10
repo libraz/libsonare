@@ -338,7 +338,6 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_atmosphere.amp_env.release_ms = 714.758f;
   o.fx_atmosphere.amp_env.sustain = 0.43011f;
   o.fx_atmosphere.drift_rate_hz = 0.168613f;
-  o.fx_atmosphere.drive = 0.53879f;
 
   // FX 5 Brightness: square-wave and high-pass edge with a little brittle drive.
   o.fx_brightness = fx;
@@ -359,7 +358,6 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_brightness.amp_env.sustain = 0.108119f;
   o.fx_brightness.filter_env.attack_ms = 0.305805f;
   o.fx_brightness.filter_env.decay_ms = 21.64f;
-  o.fx_brightness.stereo_spread = 0.632226f;
 
   // FX 6 Goblins: detune, drift and seeded random pitch make a deterministic twitch.
   o.fx_goblins = fx;
@@ -384,7 +382,6 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_goblins.filter_env.decay_ms = 2326.59f;
   o.fx_goblins.filter_env.release_ms = 1133.65f;
   o.fx_goblins.filter_env.sustain = 0.377439f;
-  o.fx_goblins.stereo_spread = 0.706307f;
 
   // FX 7 Echoes: without a delay line, slow LFO gain pulses mimic repeats.
   o.fx_echoes = fx;
@@ -418,10 +415,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_sci_fi.amp_env.decay_ms = 182.175f;
   o.fx_sci_fi.amp_env.release_ms = 765.605f;
   o.fx_sci_fi.amp_env.sustain = 0.458263f;
-  o.fx_sci_fi.drive = 0.367968f;
   o.fx_sci_fi.filter_env.decay_ms = 1325.53f;
   o.fx_sci_fi.filter_env.sustain = 0.432887f;
-  o.fx_sci_fi.stereo_spread = 0.642918f;
   o.fx_sci_fi.unison = 6;
 }
 

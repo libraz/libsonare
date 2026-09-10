@@ -134,14 +134,11 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   wb.amp_env.decay_ms = 30.0073f;
   wb.amp_env.release_ms = 704.853f;
   wb.amp_env.sustain = 0.35353f;
-  wb.drive = 0.248516f;
   wb.percussion.mode_ratios[0] = 2.77762f;
   wb.percussion.noise_q = 1.52151f;
-  wb.percussion.plate_gain = 1.76481f;
   wb.percussion.plate_hf_ratio = 0.278273f;
   wb.percussion.plate_low_hz = 798.233f;
   wb.percussion.plate_t60_s = 8.16114f;
-  wb.percussion.strike_r = 0.683095f;
   wb.percussion.tone_direct = 0.23688f;
   wb.percussion.wire_threshold = 2.58015f;
   wb.resonance_q = 3.36119f;
@@ -173,23 +170,19 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ti.amp_env.decay_ms = 687.96f;
   ti.amp_env.release_ms = 11471.0f;
   ti.amp_env.sustain = 0.26644f;
-  ti.drive = 0.485602f;
   ti.percussion.contact = 0.0f;
   ti.percussion.contact_ms = 0.761066f;
   ti.percussion.mode_ratios[0] = 1.1535f;
   ti.percussion.mode_ratios[1] = 0.624269f;
   ti.percussion.noise_q = 0.619676f;
-  ti.percussion.plate_gain = 1.11975f;
   ti.percussion.plate_hf_ratio = 0.0336278f;
   ti.percussion.plate_low_hz = 623.604f;
   ti.percussion.plate_t60_s = 0.234847f;
   ti.percussion.shell_t60_s[0] = 0.111498f;
   ti.percussion.shell_weight[0] = 2.42255f;
-  ti.percussion.strike_theta = 0.944941f;
   ti.percussion.tone_direct = 0.692916f;
   ti.percussion.wire_threshold = 2.85629f;
   ti.resonance_q = 1.09065f;
-  ti.stereo_spread = 1.0f;
 
   // Melodic Tom (GM 117): a pitched tom — note-tracked membrane with a pitch
   // drop and a shell body, one patch for every tom size.
@@ -263,30 +256,23 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.gain = 0.5f;
   rc.amp_env.attack_ms = 420.044f;
   rc.amp_env.release_ms = 630.421f;
-  rc.amp_env.sustain = 0.0f;
-  rc.percussion.contact = 1.50194f;
   rc.percussion.contact_ms = 0.0507509f;
   rc.percussion.mode_ratios[0] = 1.1172f;
   rc.percussion.mode_ratios[1] = 44.9033f;
   rc.percussion.mode_ratios[2] = 1.25982f;
   rc.percussion.mode_ratios[3] = 41.3911f;
   rc.percussion.noise_q = 0.628894f;
-  rc.percussion.plate_gain = 1.26391f;
   rc.percussion.plate_hf_ratio = 0.472183f;
   rc.percussion.plate_low_hz = 153.571f;
   rc.percussion.plate_t60_s = 0.168682f;
-  rc.percussion.shell_mix = 0.350823f;
-  rc.percussion.shell_num_modes = 3;
   rc.percussion.shell_t60_s[0] = 0.0275134f;
   rc.percussion.shell_t60_s[2] = 0.008628f;
   rc.percussion.shell_t60_s[3] = 0.00686487f;
-  rc.percussion.shell_weight[0] = 0.0f;
   rc.percussion.shell_weight[2] = 0.781797f;
   rc.percussion.shell_weight[3] = 1.52081f;
   rc.percussion.tone_direct = 0.854284f;
   rc.percussion.wire_threshold = 0.0268937f;
   rc.resonance_q = 0.765824f;
-  rc.stereo_spread = 0.559725f;
 }
 
 }  // namespace sonare::midi::synth::detail

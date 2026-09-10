@@ -50,7 +50,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.violin.bowed_string.bow_speed = 0.630748f;
   o.violin.bowed_string.damping = 0.0822536f;
   o.violin.bowed_string.release_ms = 165.23f;
-  o.violin.bowed_string.vel_to_speed = 0.0f;
   o.viola = bowed(0.13f, 0.55f, 0.42f, 0.34f, 55.0f, 120.0f, 0.34f, 0.3f);
   o.viola.lfo_rate_hz = 5.43422f;
   o.viola.lfo_to_pitch_cents = 1.9526f;
@@ -58,20 +57,15 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.viola.amp_env.decay_ms = 1.78457f;
   o.viola.amp_env.release_ms = 7.06872f;
   o.viola.amp_env.sustain = 0.740741f;
-  o.viola.body_mix = 0.543377f;
   o.viola.bowed_string.attack_ms = 857.198f;
   o.viola.bowed_string.bow_force = 0.404514f;
   o.viola.bowed_string.bow_position = 0.111153f;
   o.viola.bowed_string.bow_speed = 0.781176f;
   o.viola.bowed_string.brightness = 0.385659f;
   o.viola.bowed_string.damping = 0.0577136f;
-  o.viola.bowed_string.polarization = 1.0f;
   o.viola.bowed_string.release_ms = 10.0997f;
-  o.viola.bowed_string.rosin = 0.0999858f;
   o.viola.bowed_string.stribeck = 0.730394f;
-  o.viola.bowed_string.vel_to_speed = 0.0f;
   o.viola.cutoff_hz = 2339.23f;
-  o.viola.drift_cents = 0.357855f;
   o.viola.drift_rate_hz = 0.632726f;
   o.viola.resonance_q = 0.836075f;
   o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
@@ -80,24 +74,17 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello.amp_env.attack_ms = 10.9665f;
   o.cello.amp_env.release_ms = 79.3572f;
   o.cello.amp_env.sustain = 0.733218f;
-  o.cello.body_mix = 0.392205f;
   o.cello.bowed_string.attack_ms = 346.911f;
   o.cello.bowed_string.bow_force = 0.374109f;
   o.cello.bowed_string.bow_position = 0.167379f;
   o.cello.bowed_string.bow_speed = 0.937158f;
   o.cello.bowed_string.brightness = 0.161039f;
   o.cello.bowed_string.damping = 0.355529f;
-  o.cello.bowed_string.polarization = 0.343643f;
   o.cello.bowed_string.release_ms = 66.9834f;
-  o.cello.bowed_string.rosin = 0.0908344f;
   o.cello.bowed_string.stribeck = 0.310161f;
-  o.cello.bowed_string.sympathetic = 0.474836f;
-  o.cello.bowed_string.vel_to_speed = 0.0f;
   o.cello.cutoff_hz = 12130.9f;
-  o.cello.drift_cents = 6.36638f;
   o.cello.drift_rate_hz = 0.0730796f;
   o.cello.resonance_q = 0.5f;
-  o.cello.stereo_spread = 0.448744f;
   // Contrabass (GM 43): the one member of the family with a reference, and fitted
   // to it. The bridge reflection filter is fixed in Hz, so at these pitches its
   // whole range sits above every partial and the darkening has to come from the
@@ -120,17 +107,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.contrabass.amp_env.decay_ms = 58.9522f;
   o.contrabass.amp_env.sustain = 0.579043f;
   o.contrabass.amp_env.release_ms = 109.666f;
-  o.contrabass.body_mix = 0.234188f;
   o.contrabass.bowed_string.attack_ms = 92.5436f;
   o.contrabass.bowed_string.bow_force = 0.806606f;
   o.contrabass.bowed_string.bow_position = 0.36863f;
-  o.contrabass.bowed_string.brightness = 0.0f;
   o.contrabass.bowed_string.damping = 0.516476f;
-  o.contrabass.bowed_string.polarization = 0.712981f;
-  o.contrabass.bowed_string.rosin = 0.136388f;
-  o.contrabass.drift_cents = 0.905229f;
   o.contrabass.drift_rate_hz = 1.61494f;
-  o.contrabass.stereo_spread = 0.643792f;
 
   // Fiddle (GM 110): the same violin, bowed the other way. A short hard stroke
   // near the bridge with the rosin audible and next to no vibrato — the
@@ -158,7 +139,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_1.cutoff_hz = 3136.31f;
   o.string_ensemble_1.bowed_string.polarization = 0.150685f;
   o.string_ensemble_1.bowed_string.sympathetic = 0.364805f;
-  o.string_ensemble_1.bowed_string.rosin = 0.138954f;  // twenty bows average the grit out
+  o.string_ensemble_1.bowed_string.rosin = 0.06f;  // twenty bows average the grit out
   o.string_ensemble_1.drift_cents = 9.6654f;
   o.string_ensemble_1.stereo_spread = 0.0631312f;
   o.string_ensemble_1.lfo_rate_hz = 1.87579f;
@@ -166,7 +147,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_1.amp_env.decay_ms = 45.3946f;
   o.string_ensemble_1.amp_env.release_ms = 849.558f;
   o.string_ensemble_1.amp_env.sustain = 0.838679f;
-  o.string_ensemble_1.body_mix = 0.139682f;
   o.string_ensemble_1.bowed_string.attack_ms = 37.4924f;
   o.string_ensemble_1.bowed_string.bow_force = 0.139013f;
   o.string_ensemble_1.bowed_string.bow_position = 0.296798f;
@@ -175,7 +155,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_1.bowed_string.damping = 0.196473f;
   o.string_ensemble_1.bowed_string.release_ms = 121.014f;
   o.string_ensemble_1.bowed_string.stribeck = 0.439863f;
-  o.string_ensemble_1.bowed_string.vel_to_speed = 0.0f;
   o.string_ensemble_1.drift_rate_hz = 1.69817f;
   o.string_ensemble_1.resonance_q = 1.39165f;
   o.string_ensemble_2 = o.string_ensemble_1;
@@ -188,19 +167,13 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_2.amp_env.decay_ms = 38.483f;
   o.string_ensemble_2.amp_env.release_ms = 432.057f;
   o.string_ensemble_2.amp_env.sustain = 0.613685f;
-  o.string_ensemble_2.body_mix = 0.230208f;
   o.string_ensemble_2.bowed_string.bow_force = 0.790656f;
   o.string_ensemble_2.bowed_string.bow_position = 0.105649f;
   o.string_ensemble_2.bowed_string.bow_speed = 0.627663f;
-  o.string_ensemble_2.bowed_string.polarization = 0.283925f;
   o.string_ensemble_2.bowed_string.release_ms = 110.201f;
-  o.string_ensemble_2.bowed_string.rosin = 0.598081f;
   o.string_ensemble_2.bowed_string.stribeck = 0.778821f;
-  o.string_ensemble_2.bowed_string.sympathetic = 0.245508f;
-  o.string_ensemble_2.bowed_string.vel_to_speed = 0.0f;
   o.string_ensemble_2.drift_rate_hz = 0.0354479f;
   o.string_ensemble_2.lfo_rate_hz = 0.365881f;
-  o.string_ensemble_2.lfo_to_pitch_cents = 3.74762f;
   o.string_ensemble_2.resonance_q = 0.688613f;
 
   // Reed woodwind (GM 64-71): one single-reed waveguide voiced across the
@@ -252,16 +225,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.soprano_sax.amp_env.decay_ms = 36.0348f;
   o.soprano_sax.amp_env.release_ms = 25.3763f;
   o.soprano_sax.amp_env.sustain = 0.851871f;
-  o.soprano_sax.body_mix = 0.313128f;
-  o.soprano_sax.drift_cents = 1.28687f;
   o.soprano_sax.drift_rate_hz = 0.578362f;
-  o.soprano_sax.drive = 0.566457f;
   o.soprano_sax.reed.attack_ms = 2.25692f;
   o.soprano_sax.reed.breath_noise = 0.527053f;
   o.soprano_sax.reed.breath_pressure = 0.157512f;
   o.soprano_sax.reed.brightness = 0.448914f;
   o.soprano_sax.reed.chiff_ms = 8.15432f;
-  o.soprano_sax.reed.cone_growth = 0.969163f;
   o.soprano_sax.reed.damping = 0.263819f;
   o.soprano_sax.reed.reed_opening = 0.778698f;
   o.soprano_sax.reed.reed_stiffness = 0.618202f;
@@ -291,14 +260,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.amp_env.attack_ms = 31.8048f;
   o.tenor_sax.amp_env.release_ms = 269.651f;
   o.tenor_sax.amp_env.sustain = 0.796456f;
-  o.tenor_sax.body_mix = 0.547225f;
-  o.tenor_sax.drift_cents = 0.748389f;
   o.tenor_sax.drift_rate_hz = 0.52401f;
   o.tenor_sax.reed.attack_ms = 3.44883f;
   o.tenor_sax.reed.breath_pressure = 0.529918f;
-  o.tenor_sax.reed.brightness = 0.0f;
   o.tenor_sax.reed.chiff_ms = 23.6422f;
-  o.tenor_sax.reed.cone_growth = 0.0299245f;
   o.tenor_sax.reed.damping = 0.853888f;
   o.tenor_sax.reed.release_ms = 265.076f;
   o.tenor_sax.reed.vel_to_breath = 0.605556f;
@@ -319,8 +284,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.amp_env.attack_ms = 14.9192f;
   o.oboe.amp_env.release_ms = 560.0f;
   o.oboe.amp_env.sustain = 0.462463f;
-  o.oboe.body_mix = 0.449975f;
-  o.oboe.drift_cents = 1.22404f;
   o.oboe.drift_rate_hz = 0.0802635f;
   o.oboe.reed.attack_ms = 3.587f;
   o.oboe.reed.breath_noise = 0.413193f;
@@ -328,7 +291,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.reed.brightness = 0.522692f;
   o.oboe.reed.chiff = 0.687938f;
   o.oboe.reed.chiff_ms = 4.25196f;
-  o.oboe.reed.cone_growth = 0.508838f;
   o.oboe.reed.damping = 0.14149f;
   o.oboe.reed.reed_opening = 1.0f;
   o.oboe.reed.reed_stiffness = 0.924031f;
@@ -343,7 +305,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.amp_env.decay_ms = 233.7f;
   o.english_horn.amp_env.release_ms = 15.7681f;
   o.english_horn.amp_env.sustain = 0.39408f;
-  o.english_horn.drift_cents = 0.422867f;
   o.english_horn.drift_rate_hz = 0.136536f;
   o.english_horn.reed.attack_ms = 7.41553f;
   o.english_horn.reed.breath_noise = 0.109483f;
@@ -353,12 +314,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.reed.chiff_ms = 8.32053f;
   o.english_horn.reed.damping = 0.82913f;
   o.english_horn.reed.reed_opening = 0.694686f;
-  o.english_horn.reed.reed_stiffness = 0.0f;
   o.english_horn.reed.release_ms = 115.826f;
-  o.english_horn.reed.tonehole = 0.810623f;
   o.english_horn.reed.vel_to_breath = 0.49538f;
   o.english_horn.resonance_q = 0.982102f;
-  o.english_horn.stereo_spread = 0.750981f;
   o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 2.808f);
   o.bassoon.reed.closing_pressure = 0.507749f;
   o.bassoon.reed.flow_gain = 0.628207f;
@@ -368,8 +326,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bassoon.amp_env.attack_ms = 32.2785f;
   o.bassoon.amp_env.release_ms = 40.9668f;
   o.bassoon.amp_env.sustain = 0.77613f;
-  o.bassoon.body_mix = 0.367216f;
-  o.bassoon.drift_cents = 0.506588f;
   o.bassoon.drift_rate_hz = 0.683934f;
   o.bassoon.reed.attack_ms = 36.7159f;
   o.bassoon.reed.breath_noise = 0.62601f;
@@ -377,12 +333,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bassoon.reed.brightness = 0.685527f;
   o.bassoon.reed.chiff = 0.505784f;
   o.bassoon.reed.chiff_ms = 1.5f;
-  o.bassoon.reed.cone_growth = 0.156145f;
-  o.bassoon.reed.damping = 0.0f;
   o.bassoon.reed.release_ms = 35.1109f;
   o.bassoon.reed.vel_to_breath = 0.156748f;
   o.bassoon.resonance_q = 1.23723f;
-  o.bassoon.stereo_spread = 0.579139f;
   o.clarinet = reed(false, 0.40f, 0.50f, 0.54f, 0.30f, 25.0f, 90.0f, 0.72f, 0.25f, 0.6f);
   o.clarinet.cutoff_hz = 4800.0f;
   o.clarinet.lfo_rate_hz = 5.0f;
@@ -401,10 +354,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bag_pipe.amp_env.decay_ms = 3.87963f;
   o.bag_pipe.amp_env.release_ms = 73.1983f;
   o.bag_pipe.amp_env.sustain = 0.725002f;
-  o.bag_pipe.body_mix = 0.670034f;
-  o.bag_pipe.drift_cents = 0.824828f;
   o.bag_pipe.drift_rate_hz = 0.0886129f;
-  o.bag_pipe.drive = 0.288228f;
   o.bag_pipe.reed.attack_ms = 2.67067f;
   o.bag_pipe.reed.breath_pressure = 0.514945f;
   o.bag_pipe.reed.brightness = 0.34615f;
@@ -412,7 +362,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bag_pipe.reed.damping = 0.691793f;
   o.bag_pipe.reed.reed_opening = 0.781414f;
   o.bag_pipe.reed.reed_stiffness = 0.183843f;
-  o.bag_pipe.reed.tonehole = 0.171903f;
   o.bag_pipe.resonance_q = 6.75404f;
 
   // Shanai (GM 111): a double reed on a wooden cone into a flared METAL bell,
@@ -429,15 +378,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shanai.amp_env.decay_ms = 532.262f;
   o.shanai.amp_env.release_ms = 42.667f;
   o.shanai.amp_env.sustain = 0.663066f;
-  o.shanai.body_mix = 0.328694f;
-  o.shanai.drift_cents = 0.360877f;
   o.shanai.drift_rate_hz = 1.3923f;
   o.shanai.reed.attack_ms = 1.81075f;
   o.shanai.reed.breath_noise = 0.0763358f;
   o.shanai.reed.breath_pressure = 0.165558f;
   o.shanai.reed.brightness = 0.848084f;
   o.shanai.reed.chiff_ms = 2.83683f;
-  o.shanai.reed.cone_growth = 0.240359f;
   o.shanai.reed.damping = 0.760238f;
   o.shanai.reed.reed_opening = 0.314303f;
   o.shanai.reed.reed_stiffness = 0.901321f;
@@ -505,21 +451,17 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.trombone.amp_env.release_ms = 99.453f;
   o.trombone.amp_env.sustain = 0.743293f;
   o.trombone.brass.attack_ms = 5.5069f;
-  o.trombone.brass.breath_noise = 0.0f;
   o.trombone.brass.breath_pressure = 0.735302f;
   o.trombone.brass.brightness = 0.245804f;
   o.trombone.brass.chiff = 0.287488f;
   o.trombone.brass.chiff_ms = 7.27184f;
   o.trombone.brass.damping = 0.99069f;
-  o.trombone.brass.dynamic_lip = 0.159523f;
   o.trombone.brass.lip_damping = 1.0f;
   o.trombone.brass.lip_tension = 0.900029f;
   o.trombone.brass.release_ms = 31.8924f;
   o.trombone.brass.vel_to_breath = 0.656219f;
-  o.trombone.drift_cents = 0.950734f;
   o.trombone.drift_rate_hz = 0.506794f;
   o.trombone.resonance_q = 1.30183f;
-  o.trombone.stereo_spread = 0.289744f;
   o.tuba = brass(true, 0.42f, 0.70f, 0.38f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.92f);
   // The tuba and the muted trumpet have no reference; their flare cutoffs follow
   // the bore, below the trombone's and level with the trumpet's respectively.
@@ -545,19 +487,14 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.muted_trumpet.amp_env.release_ms = 52.7576f;
   o.muted_trumpet.amp_env.sustain = 0.790166f;
   o.muted_trumpet.brass.attack_ms = 7.69449f;
-  o.muted_trumpet.brass.breath_noise = 0.0f;
   o.muted_trumpet.brass.breath_pressure = 0.231571f;
   o.muted_trumpet.brass.chiff = 0.0574322f;
   o.muted_trumpet.brass.chiff_ms = 37.0073f;
   o.muted_trumpet.brass.damping = 0.563597f;
-  o.muted_trumpet.brass.dynamic_lip = 0.773093f;
-  o.muted_trumpet.brass.half_valve = 0.537336f;
   o.muted_trumpet.brass.lip_damping = 0.926993f;
   o.muted_trumpet.brass.lip_tension = 0.798806f;
   o.muted_trumpet.brass.release_ms = 12.0762f;
   o.muted_trumpet.brass.vel_to_breath = 0.198345f;
-  o.muted_trumpet.drift_cents = 0.0814285f;
-  o.muted_trumpet.drive = 0.30826f;
   o.muted_trumpet.resonance_q = 1.11169f;
   o.french_horn = brass(true, 0.50f, 0.55f, 0.48f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.88f);
   o.french_horn.cutoff_hz = 1600.0f;
@@ -584,21 +521,16 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section.amp_env.decay_ms = 0.813926f;
   o.brass_section.amp_env.release_ms = 38.0346f;
   o.brass_section.amp_env.sustain = 0.714046f;
-  o.brass_section.body_mix = 0.578947f;
   o.brass_section.brass.attack_ms = 15.993f;
-  o.brass_section.brass.breath_noise = 0.0f;
   o.brass_section.brass.breath_pressure = 0.847405f;
   o.brass_section.brass.brightness = 0.945981f;
   o.brass_section.brass.chiff_ms = 5.41661f;
   o.brass_section.brass.damping = 0.288396f;
-  o.brass_section.brass.dynamic_lip = 0.434202f;
-  o.brass_section.brass.half_valve = 0.624039f;
   o.brass_section.brass.lip_damping = 0.803849f;
   o.brass_section.brass.lip_tension = 0.944813f;
   o.brass_section.brass.release_ms = 118.929f;
   o.brass_section.brass.vel_to_breath = 0.169958f;
   o.brass_section.drift_rate_hz = 2.87174f;
-  o.brass_section.drive = 0.0775139f;
   o.brass_section.resonance_q = 0.506819f;
 
   // Air-jet flute (GM 72-79): one edge-tone waveguide voiced across the
@@ -633,7 +565,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.piccolo.flute.overblow = 0.294968f;
   o.piccolo.amp_env.release_ms = 35.4431f;
   o.piccolo.cutoff_hz = 2655.32f;
-  o.piccolo.drift_cents = 0.643112f;
   o.piccolo.drift_rate_hz = 0.0349556f;
   o.piccolo.drive = 0.0f;
   o.piccolo.flute.attack_ms = 8.84122f;
@@ -641,7 +572,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.piccolo.flute.brightness = 0.371516f;
   o.piccolo.flute.chiff = 0.63686f;
   o.piccolo.flute.chiff_ms = 1.68815f;
-  o.piccolo.flute.edge_hysteresis = 0.275139f;
   o.piccolo.flute.end_reflection = 0.685393f;
   o.piccolo.flute.jet_ratio = 0.516196f;
   o.piccolo.flute.jet_reflection = 0.21914f;
@@ -676,7 +606,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shakuhachi.amp_env.release_ms = 83.7378f;
   o.shakuhachi.amp_env.sustain = 0.624315f;
   o.shakuhachi.cutoff_hz = 7643.73f;
-  o.shakuhachi.drift_cents = 1.11338f;
   o.shakuhachi.drift_rate_hz = 0.0677458f;
   o.shakuhachi.flute.attack_ms = 8.93819f;
   o.shakuhachi.flute.breath_noise = 0.668968f;
@@ -688,13 +617,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shakuhachi.flute.end_reflection = 0.913557f;
   o.shakuhachi.flute.jet_ratio = 0.542106f;
   o.shakuhachi.flute.jet_reflection = 0.901881f;
-  o.shakuhachi.flute.jet_turbulence = 0.679966f;
   o.shakuhachi.flute.release_ms = 65.8372f;
   o.shakuhachi.flute.vel_to_breath = 0.680257f;
-  o.shakuhachi.flute.vibrato_depth = 0.428739f;
   o.shakuhachi.flute.vibrato_rate_hz = 5.21179f;
   o.shakuhachi.resonance_q = 0.5f;
-  o.shakuhachi.stereo_spread = 0.213273f;
   o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
   o.tin_whistle.flute.overblow = 0.25f;
   o.ocarina = flute(0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
@@ -703,11 +629,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.ocarina.amp_env.release_ms = 7.68608f;
   o.ocarina.amp_env.sustain = 0.32307f;
   o.ocarina.cutoff_hz = 3667.94f;
-  o.ocarina.drift_cents = 8.50081f;
   o.ocarina.drift_rate_hz = 0.0312387f;
   o.ocarina.drive = 0.0f;
   o.ocarina.flute.attack_ms = 2.303f;
-  o.ocarina.flute.breath_noise = 0.0f;
   o.ocarina.flute.breath_pressure = 0.719247f;
   o.ocarina.flute.brightness = 0.302582f;
   o.ocarina.flute.chiff = 0.14569f;
@@ -715,8 +639,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.ocarina.flute.end_reflection = 0.877128f;
   o.ocarina.flute.jet_ratio = 0.518187f;
   o.ocarina.flute.jet_reflection = 0.141403f;
-  o.ocarina.flute.jet_turbulence = 0.542315f;
-  o.ocarina.flute.overblow = 0.131624f;
   o.ocarina.flute.release_ms = 224.812f;
   o.ocarina.flute.vel_to_breath = 0.21608f;
   o.ocarina.resonance_q = 0.5f;
