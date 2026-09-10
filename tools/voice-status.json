@@ -33,14 +33,15 @@
           "complete": true
         },
         "agreement": {
-          "inside": 10,
+          "inside": 9,
           "total": 11,
           "outside": {
-            "stereo": 1.45
+            "stereo": 1.46,
+            "aftersound": 1.16
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
@@ -273,37 +274,38 @@
         "patch": "bright_piano",
         "timbres": 1,
         "profile_rows": 45,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [],
           "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p001b001-bright-acoustic-piano",
@@ -426,38 +428,39 @@
         "patch": "electric_grand",
         "timbres": 1,
         "profile_rows": 44,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p002b001-electric-grand-piano",
@@ -580,37 +583,38 @@
         "patch": "honky_tonk",
         "timbres": 1,
         "profile_rows": 45,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [],
           "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p003b001-honky-tonk-piano",
@@ -733,38 +737,39 @@
         "patch": "e_piano",
         "timbres": 1,
         "profile_rows": 45,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "stretch",
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p004b001-electric-piano-1",
@@ -1091,38 +1096,39 @@
         "patch": "e_piano",
         "timbres": 1,
         "profile_rows": 45,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "stretch",
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p005b001-electric-piano-2",
@@ -1365,7 +1371,7 @@
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
@@ -1700,38 +1706,39 @@
         "patch": "clav",
         "timbres": 1,
         "profile_rows": 45,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "stretch",
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p008-celesta",
@@ -1752,10 +1759,10 @@
         "patch": "celesta",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 6,
           "excused": [
             "balance",
             "stereo"
@@ -1764,25 +1771,26 @@
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "damper",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "body",
+            "centroid_pct",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p009-glockenspiel",
@@ -1803,10 +1811,10 @@
         "patch": "glockenspiel",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 6,
           "excused": [
             "balance",
             "stereo"
@@ -1815,25 +1823,26 @@
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "damper",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "body",
+            "centroid_pct",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p010-music-box",
@@ -1854,10 +1863,10 @@
         "patch": "music_box",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 7,
           "excused": [
             "stereo"
           ],
@@ -1865,26 +1874,27 @@
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p011-vibraphone",
@@ -1905,37 +1915,38 @@
         "patch": "vibraphone",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p011b001-vibraphone",
@@ -2058,37 +2069,38 @@
         "patch": "marimba",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p012b001-marimba",
@@ -2211,10 +2223,10 @@
         "patch": "xylophone",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 7,
           "excused": [
             "stereo"
           ],
@@ -2222,26 +2234,27 @@
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p014-tubular-bells",
@@ -2262,37 +2275,38 @@
         "patch": "tubular_bells",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "balance",
             "stereo",
             "tnr"
           ],
           "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "centroid_pct",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p014b001-tubular-bells",
@@ -2513,38 +2527,39 @@
         "patch": "dulcimer",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
           "gaps": [
             "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "2 canonical dimension(s) neither gated nor excused: stretch, damper"
     },
     {
       "slug": "p016-drawbar-organ",
@@ -2587,7 +2602,7 @@
           ]
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-03",
           "unreachable": [
             "cents"
@@ -2900,8 +2915,8 @@
       "patch": "percussive_organ",
       "engine": "additive",
       "capture": "percussive_organ",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "perc-quiet",
         "perc-loud"
@@ -2911,35 +2926,35 @@
         "patch": "percussive_organ",
         "timbres": 1,
         "profile_rows": 9,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "tnr",
             "vel_range"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "judge the recorded candidate(s) — perc-quiet, perc-loud — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p017b001-percussive-organ",
@@ -3144,8 +3159,8 @@
       "patch": "rock_organ",
       "engine": "additive",
       "capture": "rock_organ",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "drive-least",
         "drive-mild",
@@ -3156,35 +3171,35 @@
         "patch": "rock_organ",
         "timbres": 1,
         "profile_rows": 45,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "tnr"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "judge the recorded candidate(s) — drive-least, drive-mild, drive-hard — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p019-church-organ",
@@ -3231,7 +3246,7 @@
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
@@ -3444,42 +3459,42 @@
       "patch": "reed_organ",
       "engine": "free_reed",
       "capture": "reed_organ",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
         "patch": "reed_organ",
         "timbres": 1,
         "profile_rows": 40,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p021-accordion",
@@ -3492,42 +3507,42 @@
       "patch": "accordion",
       "engine": "free_reed",
       "capture": "accordion",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
         "patch": "accordion",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p021b008-accordion",
@@ -3588,42 +3603,42 @@
       "patch": "harmonica",
       "engine": "free_reed",
       "capture": "harmonica",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
         "patch": "harmonica",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p023-tango-accordion",
@@ -3636,42 +3651,42 @@
       "patch": "bandoneon",
       "engine": "free_reed",
       "capture": "tango_accordion",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
         "patch": "bandoneon",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p024-acoustic-guitar-nylon",
@@ -3684,45 +3699,45 @@
       "patch": "nylon_guitar",
       "engine": "karplus_strong",
       "capture": "nylon_guitar",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "nylon_guitar",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 13,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p024b001-acoustic-guitar-nylon",
@@ -3947,37 +3962,38 @@
         "patch": "steel_guitar",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [],
           "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p025b001-acoustic-guitar-steel",
@@ -4202,35 +4218,36 @@
         "patch": "electric_guitar",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [],
           "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -4238,7 +4255,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p027-electric-guitar-clean",
@@ -4254,7 +4271,18 @@
       "stage": 0.6,
       "stage_name": "fitted",
       "open_candidates": [
-        "di-fitted"
+        "di-fitted",
+        "di-fitted-sustained",
+        "amp-cleanCombo",
+        "amp-chimeEdge",
+        "amp-classicCrunch",
+        "amp-tweedGrind",
+        "amp-britStack",
+        "amp-modernLead",
+        "amp-rectifierChug",
+        "amp-coldBiasBuzz",
+        "amp-bassDi",
+        "amp-bassRig"
       ],
       "axes": {
         "engine": "karplus_strong",
@@ -4286,7 +4314,7 @@
         "structure": null,
         "music": null
       },
-      "next": "judge the recorded candidate(s) — di-fitted — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — di-fitted, di-fitted-sustained, amp-cleanCombo, amp-chimeEdge, amp-classicCrunch, amp-tweedGrind, amp-britStack, amp-modernLead, amp-rectifierChug, amp-coldBiasBuzz, amp-bassDi, amp-bassRig — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p028-electric-guitar-muted",
@@ -4307,37 +4335,38 @@
         "patch": "muted_guitar",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 9,
           "excused": [],
           "gaps": [
-            "stretch",
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
     },
     {
       "slug": "p029-overdriven-guitar",
@@ -4350,8 +4379,8 @@
       "patch": "overdriven",
       "engine": "karplus_strong",
       "capture": "overdriven_guitar",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "di-fitted",
         "di-fitted-drive-0.75"
@@ -4361,37 +4390,37 @@
         "patch": "overdriven",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 13,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "judge the recorded candidate(s) — di-fitted, di-fitted-drive-0.75 — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p030-distortion-guitar",
@@ -4404,45 +4433,45 @@
       "patch": "distortion",
       "engine": "karplus_strong",
       "capture": "distortion_guitar",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "distortion",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 13,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p031-guitar-harmonics",
@@ -4463,38 +4492,39 @@
         "patch": "guitar_harmonics",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "balance",
             "body"
           ],
           "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "attack",
-            "stereo",
-            "damper",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p032-acoustic-bass",
@@ -4507,46 +4537,46 @@
       "patch": "bass_acoustic",
       "engine": "karplus_strong",
       "capture": "acoustic_bass",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_acoustic",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p033-electric-bass-finger",
@@ -4559,46 +4589,46 @@
       "patch": "bass_fingered",
       "engine": "karplus_strong",
       "capture": "bass_fingered",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_fingered",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p034-electric-bass-pick",
@@ -4611,46 +4641,46 @@
       "patch": "bass_picked",
       "engine": "karplus_strong",
       "capture": "bass_picked",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_picked",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p035-fretless-bass",
@@ -4663,46 +4693,46 @@
       "patch": "bass_fretless",
       "engine": "karplus_strong",
       "capture": "bass_fretless",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_fretless",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p036-slap-bass-1",
@@ -4715,44 +4745,44 @@
       "patch": "bass_slap",
       "engine": "karplus_strong",
       "capture": "slap_bass",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "bass_slap",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -4760,7 +4790,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p037-slap-bass-2",
@@ -4781,38 +4811,39 @@
         "patch": "bass_pop",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p038-synth-bass-1",
@@ -4825,46 +4856,46 @@
       "patch": "synth_bass_1",
       "engine": "subtractive",
       "capture": "synth_bass_1",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "synth_bass_1",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "aftersound",
             "decay",
             "doubling",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p039-synth-bass-2",
@@ -4877,46 +4908,46 @@
       "patch": "synth_bass_2",
       "engine": "subtractive",
       "capture": "synth_bass_2",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "synth_bass_2",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "aftersound",
             "decay",
             "doubling",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p040-violin",
@@ -4929,41 +4960,41 @@
       "patch": "violin",
       "engine": "bowed_string",
       "capture": "violin",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "violin",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -4971,7 +5002,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p040b001-violin",
@@ -5080,41 +5111,41 @@
       "patch": "viola",
       "engine": "bowed_string",
       "capture": "viola",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "viola",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5122,7 +5153,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p042-cello",
@@ -5135,41 +5166,41 @@
       "patch": "cello",
       "engine": "bowed_string",
       "capture": "cello",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "cello",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5177,7 +5208,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p043-contrabass",
@@ -5190,43 +5221,43 @@
       "patch": "contrabass",
       "engine": "bowed_string",
       "capture": "contrabass",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "contrabass",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p044-tremolo-strings",
@@ -5239,40 +5270,40 @@
       "patch": "tremolo_strings",
       "engine": "subtractive",
       "capture": "tremolo_strings",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "tremolo_strings",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5280,7 +5311,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p045-pizzicato-strings",
@@ -5301,36 +5332,37 @@
         "patch": "pizzicato",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "damper",
             "stereo"
           ],
           "gaps": [
-            "stretch",
             "decay",
             "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "doubling"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5338,7 +5370,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
     },
     {
       "slug": "p046-orchestral-harp",
@@ -5351,46 +5383,46 @@
       "patch": "harp",
       "engine": "karplus_strong",
       "capture": "orchestral_harp",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "harp",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 12,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p047-timpani",
@@ -5403,43 +5435,43 @@
       "patch": "timpani",
       "engine": "percussion",
       "capture": "timpani",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "timpani",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5447,7 +5479,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p048-string-ensemble-1",
@@ -5460,40 +5492,40 @@
       "patch": "string_ensemble_1",
       "engine": "bowed_string",
       "capture": "string_ensemble_1",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "string_ensemble_1",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5501,7 +5533,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p049-string-ensemble-2",
@@ -5514,40 +5546,40 @@
       "patch": "string_ensemble_2",
       "engine": "bowed_string",
       "capture": "string_ensemble_2",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "string_ensemble_2",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5555,7 +5587,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p050-synth-strings-1",
@@ -5576,32 +5608,33 @@
         "patch": "synth_strings_1",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [],
           "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5609,7 +5642,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p051-synth-strings-2",
@@ -5630,32 +5663,33 @@
         "patch": "synth_strings_2",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [],
           "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5663,7 +5697,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p052-choir-aahs",
@@ -5676,40 +5710,40 @@
       "patch": "choir_aahs",
       "engine": "vocal",
       "capture": "choir_aahs",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
         "patch": "choir_aahs",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5717,7 +5751,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p053-voice-oohs",
@@ -5738,32 +5772,33 @@
         "patch": "voice_oohs",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [],
           "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5771,7 +5806,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p054-synth-voice",
@@ -5792,32 +5827,33 @@
         "patch": "synth_voice",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [],
           "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5825,7 +5861,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p055-orchestra-hit",
@@ -5846,10 +5882,10 @@
         "patch": "orchestra_hit",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 7,
           "excused": [
             "damper",
             "stereo"
@@ -5857,24 +5893,25 @@
           "gaps": [
             "decay",
             "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "doubling"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5882,7 +5919,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
     },
     {
       "slug": "p056-trumpet",
@@ -5895,43 +5932,43 @@
       "patch": "trumpet",
       "engine": "brass",
       "capture": "trumpet",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "trumpet",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p057-trombone",
@@ -5944,43 +5981,43 @@
       "patch": "trombone",
       "engine": "brass",
       "capture": "trombone",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "trombone",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p058-tuba",
@@ -5993,41 +6030,41 @@
       "patch": "tuba",
       "engine": "brass",
       "capture": "tuba",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "tuba",
         "timbres": 1,
         "profile_rows": 30,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -6035,7 +6072,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p059-muted-trumpet",
@@ -6048,41 +6085,41 @@
       "patch": "muted_trumpet",
       "engine": "brass",
       "capture": "muted_trumpet",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "muted_trumpet",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -6090,7 +6127,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p060-french-horn",
@@ -6103,42 +6140,42 @@
       "patch": "french_horn",
       "engine": "brass",
       "capture": "french_horn",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "french_horn",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p061-brass-section",
@@ -6151,42 +6188,42 @@
       "patch": "brass_section",
       "engine": "brass",
       "capture": "brass_section",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "brass_section",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p062-synth-brass-1",
@@ -6199,42 +6236,42 @@
       "patch": "synth_brass_1",
       "engine": "fm",
       "capture": "synth_brass_1",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "synth_brass_1",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p063-synth-brass-2",
@@ -6247,42 +6284,42 @@
       "patch": "synth_brass_2",
       "engine": "fm",
       "capture": "synth_brass_2",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "synth_brass_2",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p064-soprano-sax",
@@ -6295,43 +6332,43 @@
       "patch": "soprano_sax",
       "engine": "reed",
       "capture": "soprano_sax",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "soprano_sax",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p065-alto-sax",
@@ -6344,41 +6381,41 @@
       "patch": "alto_sax",
       "engine": "reed",
       "capture": "alto_sax",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "alto_sax",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -6386,7 +6423,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p066-tenor-sax",
@@ -6407,35 +6444,36 @@
         "patch": "tenor_sax",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p067-baritone-sax",
@@ -6448,43 +6486,43 @@
       "patch": "baritone_sax",
       "engine": "reed",
       "capture": "baritone_sax",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "baritone_sax",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p068-oboe",
@@ -6497,43 +6535,43 @@
       "patch": "oboe",
       "engine": "reed",
       "capture": "oboe",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "oboe",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p069-english-horn",
@@ -6546,43 +6584,43 @@
       "patch": "english_horn",
       "engine": "reed",
       "capture": "english_horn",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "english_horn",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p070-bassoon",
@@ -6595,43 +6633,43 @@
       "patch": "bassoon",
       "engine": "reed",
       "capture": "bassoon",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "bassoon",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p071-clarinet",
@@ -6644,43 +6682,43 @@
       "patch": "clarinet",
       "engine": "reed",
       "capture": "clarinet",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "clarinet",
         "timbres": 1,
         "profile_rows": 50,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p072-piccolo",
@@ -6693,43 +6731,43 @@
       "patch": "piccolo",
       "engine": "flute",
       "capture": "piccolo",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "piccolo",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p073-flute",
@@ -6742,43 +6780,43 @@
       "patch": "concert_flute",
       "engine": "flute",
       "capture": "concert_flute",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "concert_flute",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p074-recorder",
@@ -6791,43 +6829,43 @@
       "patch": "recorder",
       "engine": "flute",
       "capture": "recorder",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "recorder",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p075-pan-flute",
@@ -6840,43 +6878,43 @@
       "patch": "pan_flute",
       "engine": "flute",
       "capture": "pan_flute",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "pan_flute",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p076-blown-bottle",
@@ -6889,43 +6927,43 @@
       "patch": "blown_bottle",
       "engine": "flute",
       "capture": "blown_bottle",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "blown_bottle",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p077-shakuhachi",
@@ -6938,43 +6976,43 @@
       "patch": "shakuhachi",
       "engine": "flute",
       "capture": "shakuhachi",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "shakuhachi",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p078-whistle",
@@ -6987,8 +7025,8 @@
       "patch": "tin_whistle",
       "engine": "flute",
       "capture": "whistle",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "keyed-filter"
       ],
@@ -6997,35 +7035,35 @@
         "patch": "tin_whistle",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "judge the recorded candidate(s) — keyed-filter — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p079-ocarina",
@@ -7038,43 +7076,43 @@
       "patch": "ocarina",
       "engine": "flute",
       "capture": "ocarina",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "ocarina",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p080-lead-1-square",
@@ -7087,42 +7125,42 @@
       "patch": "lead_square",
       "engine": "subtractive",
       "capture": "lead_square",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_square",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p081-lead-2-sawtooth",
@@ -7135,42 +7173,42 @@
       "patch": "lead_saw",
       "engine": "subtractive",
       "capture": "lead_saw",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_saw",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p082-lead-3-calliope",
@@ -7183,43 +7221,43 @@
       "patch": "lead_calliope",
       "engine": "subtractive",
       "capture": "lead_calliope",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_calliope",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p083-lead-4-chiff",
@@ -7232,43 +7270,43 @@
       "patch": "lead_chiff",
       "engine": "subtractive",
       "capture": "lead_chiff",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_chiff",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p084-lead-5-charang",
@@ -7281,43 +7319,43 @@
       "patch": "lead_charang",
       "engine": "subtractive",
       "capture": "lead_charang",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_charang",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p085-lead-6-voice",
@@ -7330,42 +7368,42 @@
       "patch": "lead_voice",
       "engine": "subtractive",
       "capture": "lead_voice",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_voice",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p086-lead-7-fifths",
@@ -7378,42 +7416,42 @@
       "patch": "lead_fifths",
       "engine": "subtractive",
       "capture": "lead_fifths",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_fifths",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p087-lead-8-bass-lead",
@@ -7426,43 +7464,43 @@
       "patch": "lead_bass_lead",
       "engine": "subtractive",
       "capture": "lead_bass_lead",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_bass_lead",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p088-pad-1-new-age",
@@ -7475,43 +7513,43 @@
       "patch": "pad_new_age",
       "engine": "subtractive",
       "capture": "pad_new_age",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_new_age",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p089-pad-2-warm",
@@ -7524,42 +7562,42 @@
       "patch": "pad_warm",
       "engine": "subtractive",
       "capture": "pad_warm",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_warm",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p090-pad-3-polysynth",
@@ -7572,42 +7610,42 @@
       "patch": "pad_polysynth",
       "engine": "subtractive",
       "capture": "pad_polysynth",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_polysynth",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p091-pad-4-choir",
@@ -7620,42 +7658,42 @@
       "patch": "pad_choir",
       "engine": "subtractive",
       "capture": "pad_choir",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_choir",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p092-pad-5-bowed",
@@ -7668,43 +7706,43 @@
       "patch": "pad_bowed",
       "engine": "subtractive",
       "capture": "pad_bowed",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_bowed",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p093-pad-6-metallic",
@@ -7717,43 +7755,43 @@
       "patch": "pad_metallic",
       "engine": "subtractive",
       "capture": "pad_metallic",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_metallic",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p094-pad-7-halo",
@@ -7774,34 +7812,35 @@
         "patch": "pad_halo",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [],
           "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "damper"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p095-pad-8-sweep",
@@ -7814,42 +7853,42 @@
       "patch": "pad_sweep",
       "engine": "subtractive",
       "capture": "pad_sweep",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_sweep",
         "timbres": 1,
         "profile_rows": 28,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p096-fx-1-rain",
@@ -7862,43 +7901,43 @@
       "patch": "fx_rain",
       "engine": "subtractive",
       "capture": "fx_rain",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_rain",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p097-fx-2-soundtrack",
@@ -7911,42 +7950,42 @@
       "patch": "fx_soundtrack",
       "engine": "subtractive",
       "capture": "fx_soundtrack",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_soundtrack",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p098-fx-3-crystal",
@@ -7959,43 +7998,43 @@
       "patch": "fx_crystal",
       "engine": "subtractive",
       "capture": "fx_crystal",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_crystal",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "damper"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p099-fx-4-atmosphere",
@@ -8008,42 +8047,42 @@
       "patch": "fx_atmosphere",
       "engine": "subtractive",
       "capture": "fx_atmosphere",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_atmosphere",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p100-fx-5-brightness",
@@ -8056,43 +8095,43 @@
       "patch": "fx_brightness",
       "engine": "subtractive",
       "capture": "fx_brightness",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_brightness",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p101-fx-6-goblins",
@@ -8105,43 +8144,43 @@
       "patch": "fx_goblins",
       "engine": "subtractive",
       "capture": "fx_goblins",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_goblins",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p102-fx-7-echoes",
@@ -8154,42 +8193,42 @@
       "patch": "fx_echoes",
       "engine": "subtractive",
       "capture": "fx_echoes",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_echoes",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p103-fx-8-sci-fi",
@@ -8202,42 +8241,42 @@
       "patch": "fx_sci_fi",
       "engine": "subtractive",
       "capture": "fx_sci_fi",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "fx_sci_fi",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "stereo",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stereo",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p104-sitar",
@@ -8250,46 +8289,46 @@
       "patch": "sitar",
       "engine": "plucked_string",
       "capture": "sitar",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "plucked_string",
         "patch": "sitar",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p105-banjo",
@@ -8310,38 +8349,39 @@
         "patch": "banjo",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 8,
           "excused": [
             "damper",
             "stereo"
           ],
           "gaps": [
-            "stretch",
             "decay",
             "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "doubling"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
     },
     {
       "slug": "p106-shamisen",
@@ -8354,8 +8394,8 @@
       "patch": "shamisen",
       "engine": "plucked_string",
       "capture": "shamisen",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "even-register",
         "flat-velocity"
@@ -8365,38 +8405,38 @@
         "patch": "shamisen",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "judge the recorded candidate(s) — even-register, flat-velocity — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p107-koto",
@@ -8409,46 +8449,46 @@
       "patch": "koto",
       "engine": "plucked_string",
       "capture": "koto",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "plucked_string",
         "patch": "koto",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 0,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p108-kalimba",
@@ -8461,45 +8501,46 @@
       "patch": "kalimba",
       "engine": "modal",
       "capture": "kalimba",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "kalimba",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p109-bag-pipe",
@@ -8512,46 +8553,46 @@
       "patch": "bag_pipe",
       "engine": "reed",
       "capture": "bagpipe",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "bag_pipe",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "aftersound",
             "decay",
             "doubling",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p110-fiddle",
@@ -8564,43 +8605,43 @@
       "patch": "fiddle",
       "engine": "bowed_string",
       "capture": "fiddle",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "fiddle",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p111-shanai",
@@ -8613,46 +8654,46 @@
       "patch": "shanai",
       "engine": "reed",
       "capture": "shanai",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "shanai",
         "timbres": 1,
         "profile_rows": 30,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "aftersound",
             "decay",
             "doubling",
             "stereo"
           ],
-          "gaps": [
-            "stretch",
-            "body",
-            "attack",
-            "damper",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "damper",
+            "register",
+            "stretch",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p112-tinkle-bell",
@@ -8665,45 +8706,45 @@
       "patch": "tinkle_bell",
       "engine": "percussion",
       "capture": "tinkle_bell",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "tinkle_bell",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "balance",
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p113-agogo",
@@ -8716,45 +8757,45 @@
       "patch": "agogo",
       "engine": "modal",
       "capture": "agogo",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "agogo",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 9,
           "excused": [
             "balance",
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p114-steel-drums",
@@ -8767,45 +8808,45 @@
       "patch": "steel_drums",
       "engine": "modal",
       "capture": "steel_drums",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "steel_drums",
         "timbres": 1,
         "profile_rows": 30,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "balance",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p115-woodblock",
@@ -8826,10 +8867,10 @@
         "patch": "woodblock",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 5,
           "excused": [
             "balance",
             "damper",
@@ -8839,22 +8880,23 @@
             "decay",
             "aftersound",
             "doubling",
-            "body",
-            "attack",
-            "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "body"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "register",
+            "tnr",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -8862,7 +8904,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, body"
     },
     {
       "slug": "p116-taiko-drum",
@@ -8875,45 +8917,45 @@
       "patch": "taiko",
       "engine": "percussion",
       "capture": "taiko",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "taiko",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "damper",
             "tnr"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "balance",
-            "centroid_pct",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p117-melodic-tom",
@@ -8934,10 +8976,10 @@
         "patch": "melodic_tom",
         "timbres": 1,
         "profile_rows": 30,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 7,
           "excused": [
             "damper",
             "tnr"
@@ -8945,26 +8987,27 @@
           "gaps": [
             "decay",
             "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "balance",
-            "centroid_pct",
-            "vel_range",
-            "register"
+            "doubling"
           ],
           "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "register",
+            "stereo",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
     },
     {
       "slug": "p118-synth-drum",
@@ -8977,45 +9020,45 @@
       "patch": "synth_drum",
       "engine": "percussion",
       "capture": "synth_drum",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
         "patch": "synth_drum",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 0,
+          "gated": 10,
           "excused": [
             "damper",
             "tnr"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "body",
-            "attack",
-            "stereo",
-            "balance",
-            "centroid_pct",
-            "vel_range",
-            "register"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "register",
+            "stereo",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p119-reverse-cymbal",
@@ -9036,17 +9079,14 @@
         "patch": "reverse_cymbal",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 3,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "attack",
-            "centroid_pct",
-            "vel_range",
             "decay"
           ],
           "complete": false
@@ -9054,10 +9094,14 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9065,7 +9109,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: decay"
     },
     {
       "slug": "p120-guitar-fret-noise",
@@ -9078,36 +9122,36 @@
       "patch": "sfx_guitar_fret",
       "engine": "subtractive",
       "capture": "guitar_fret_noise",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_guitar_fret",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 4,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "attack",
-            "centroid_pct",
-            "vel_range",
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "decay",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9115,7 +9159,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p121-breath-noise",
@@ -9136,17 +9180,14 @@
         "patch": "sfx_breath",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 3,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "attack",
-            "centroid_pct",
-            "vel_range",
             "decay"
           ],
           "complete": false
@@ -9154,10 +9195,14 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9165,7 +9210,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "1 canonical dimension(s) neither gated nor excused: decay"
     },
     {
       "slug": "p122-seashore",
@@ -9178,35 +9223,35 @@
       "patch": "sfx_seashore",
       "engine": "subtractive",
       "capture": "seashore",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_seashore",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 5,
           "excused": [],
-          "gaps": [
-            "attack",
-            "stereo",
-            "centroid_pct",
-            "vel_range",
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "decay",
+            "stereo",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9214,7 +9259,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p123-bird-tweet",
@@ -9227,36 +9272,36 @@
       "patch": "sfx_bird_tweet",
       "engine": "subtractive",
       "capture": "bird_tweet",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_bird_tweet",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 4,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "attack",
-            "centroid_pct",
-            "vel_range",
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "decay",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9264,7 +9309,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p124-telephone-ring",
@@ -9277,36 +9322,36 @@
       "patch": "sfx_telephone_ring",
       "engine": "subtractive",
       "capture": "telephone_ring",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_telephone_ring",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 4,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "attack",
-            "centroid_pct",
-            "vel_range",
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "decay",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9314,7 +9359,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p125-helicopter",
@@ -9327,35 +9372,35 @@
       "patch": "sfx_helicopter",
       "engine": "subtractive",
       "capture": "helicopter",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_helicopter",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 5,
           "excused": [],
-          "gaps": [
-            "attack",
-            "stereo",
-            "centroid_pct",
-            "vel_range",
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "decay",
+            "stereo",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9363,7 +9408,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p126-applause",
@@ -9376,35 +9421,35 @@
       "patch": "sfx_applause",
       "engine": "subtractive",
       "capture": "applause",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_applause",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 5,
           "excused": [],
-          "gaps": [
-            "attack",
-            "stereo",
-            "centroid_pct",
-            "vel_range",
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "decay",
+            "stereo",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9412,7 +9457,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p127-gunshot",
@@ -9425,36 +9470,36 @@
       "patch": "sfx_gunshot",
       "engine": "subtractive",
       "capture": "gunshot",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "sfx_gunshot",
         "timbres": 1,
         "profile_rows": 15,
-        "gate_state": null,
+        "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 0,
+          "gated": 4,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "attack",
-            "centroid_pct",
-            "vel_range",
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "unjudgeable": [
+            "attack",
+            "centroid_pct",
+            "decay",
+            "vel_range"
+          ]
         },
         "structure": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9462,7 +9507,7 @@
         },
         "music": null
       },
-      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "kit000-standard-kit",
@@ -9502,7 +9547,7 @@
           }
         },
         "structure": {
-          "state": "current",
+          "state": "unverified",
           "date": "2026-09-06",
           "unreachable": [],
           "accepted": [],

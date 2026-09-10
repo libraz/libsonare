@@ -1,0 +1,64 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "gm076",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-09-02T06:38:24+00:00",
+  "recorded_utc": "2026-09-09T16:50:03+00:00",
+  "reference_spread": {},
+  "bounds": {
+    "stretch": {
+      "median": 2.231,
+      "abs_median": 2.781,
+      "p90": 5.241,
+      "rows": 35
+    },
+    "tnr": {
+      "median": 10.1,
+      "abs_median": 10.1,
+      "p90": 16.148,
+      "rows": 35
+    },
+    "damper": {
+      "median": 43.75,
+      "abs_median": 43.75,
+      "p90": 43.75,
+      "rows": 35
+    },
+    "attack": {
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 40.0,
+      "rows": 35
+    },
+    "body": {
+      "median": 7.775,
+      "abs_median": 7.775,
+      "p90": 18.133,
+      "rows": 35
+    },
+    "balance": {
+      "median": 14.165,
+      "abs_median": 14.165,
+      "p90": 21.515,
+      "rows": 35
+    },
+    "centroid_pct": {
+      "median": 10.392,
+      "abs_median": 10.392,
+      "p90": 19.724,
+      "rows": 35
+    },
+    "vel_range": {
+      "median": 9.213,
+      "abs_median": 9.213,
+      "p90": 9.755,
+      "rows": 7
+    },
+    "register": {
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 2.732,
+      "rows": 35
+    }
+  }
+}

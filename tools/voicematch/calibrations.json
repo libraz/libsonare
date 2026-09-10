@@ -81,6 +81,61 @@
         "name": "di-fitted",
         "overrides": "electric_guitar.ks.brightness=0.944272,electric_guitar.ks.exc_brightness=0.326238,electric_guitar.cutoff_hz=1297.44,electric_guitar.ks.vel_to_brightness=0.944272,electric_guitar.ks.pick_position=0.190983",
         "note": "what a fit against the direct reference returns. It closes most of the gap it was aimed at - the voice sits 12 dB over that reference at 2 kHz rising to 40 at 6.35 - and it is a candidate rather than a fit because one product at the pickup can bound a voice and cannot target it: nothing here says whether this reference's darkness is the instrument or the library. These keys reach programs 26 and 27 only; the same fit on the amplified end is filed under p029, which is where it can be heard against a reference that carries a rig"
+      },
+      {
+        "name": "di-fitted-sustained",
+        "overrides": "electric_guitar.amp_env.attack_ms=0.782119,electric_guitar.amp_env.release_ms=114.878,electric_guitar.cutoff_hz=20739.1,electric_guitar.ks.body_coupling=0.271601,electric_guitar.ks.decay_s=13.929,electric_guitar.ks.decay_stretch=1,electric_guitar.ks.dispersion=0.0784294,electric_guitar.ks.exc_brightness=0.940952,electric_guitar.ks.nail=0.759909,electric_guitar.ks.pick_position=0.170356,electric_guitar.ks.pickup_pos=0.193898,electric_guitar.ks.pluck_style=0.548331,electric_guitar.ks.polarization=0,electric_guitar.ks.release_damp_s=0.155102,electric_guitar.ks.tension_mod=0.28938,electric_guitar.ks.vel_to_brightness=0.718297,electric_guitar.resonance_q=0.835381",
+        "note": "the same reference fitted again with the decay bounded to what that reference measures: a median 5.91 dB/s over its own gate, so 10.2 s to 60 dB, against the 4.5 s the table states. It generalises - two held-out notes score 0.877 where the probe scores 0.893 - and it lands the whole-grid level within 0.6 dB of the reference where the shipped voice sits 5.0 dB under. It is a candidate rather than a fit because of what it costs the note's shape: rendered crest falls from 18.4 dB to 13.8 against the reference's own 20.6, which leaves the bound amplifier 2.7 dB of compression where the rig case asks for 3.0, and that gap is the pick transient rather than any knob here - none of the excitation knobs ends at a limit. Letting the decay run free instead reaches 36 s and 8.9 dB of crest, which inverts the rig relation outright"
+      },
+      {
+        "name": "amp-cleanCombo",
+        "overrides": "gm_fallback_map.kRigCleanPreset=0,gm_fallback_map.kRigCleanLevelDb=48.34",
+        "note": "the same voice through the cleanCombo amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-chimeEdge",
+        "overrides": "gm_fallback_map.kRigCleanPreset=1,gm_fallback_map.kRigCleanLevelDb=40.29",
+        "note": "the same voice through the chimeEdge amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-classicCrunch",
+        "overrides": "gm_fallback_map.kRigCleanPreset=2,gm_fallback_map.kRigCleanLevelDb=37.76",
+        "note": "the same voice through the classicCrunch amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-tweedGrind",
+        "overrides": "gm_fallback_map.kRigCleanPreset=3,gm_fallback_map.kRigCleanLevelDb=42.88",
+        "note": "the same voice through the tweedGrind amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-britStack",
+        "overrides": "gm_fallback_map.kRigCleanPreset=4,gm_fallback_map.kRigCleanLevelDb=42.52",
+        "note": "the same voice through the britStack amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-modernLead",
+        "overrides": "gm_fallback_map.kRigCleanPreset=5,gm_fallback_map.kRigCleanLevelDb=30.30",
+        "note": "the same voice through the modernLead amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-rectifierChug",
+        "overrides": "gm_fallback_map.kRigCleanPreset=6,gm_fallback_map.kRigCleanLevelDb=35.67",
+        "note": "the same voice through the rectifierChug amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-coldBiasBuzz",
+        "overrides": "gm_fallback_map.kRigCleanPreset=7,gm_fallback_map.kRigCleanLevelDb=57.33",
+        "note": "the same voice through the coldBiasBuzz amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-bassDi",
+        "overrides": "gm_fallback_map.kRigCleanPreset=8,gm_fallback_map.kRigCleanLevelDb=46.76",
+        "note": "the same voice through the bassDi amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+      },
+      {
+        "name": "amp-bassRig",
+        "overrides": "gm_fallback_map.kRigCleanPreset=9,gm_fallback_map.kRigCleanLevelDb=39.51",
+        "note": "the same voice through the bassRig amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       }
     ]
   },

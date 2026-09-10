@@ -1,9 +1,9 @@
 {
-  "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps the magnitude of the signed median and 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel. Re-record only in the same change as the behaviour that justifies it.",
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "grand-274",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:38:36+00:00",
-  "recorded_utc": "2026-09-02T06:50:38+00:00",
+  "recorded_utc": "2026-09-09T16:53:33+00:00",
   "reference_spread": {
     "aftersound": 1.16,
     "attack": 5.0,
@@ -20,47 +20,69 @@
   "bounds": {
     "stretch": {
       "median": 4.18,
-      "abs_median": 4.18
+      "abs_median": 4.18,
+      "p90": 11.135,
+      "rows": 60
     },
     "decay": {
       "median": 0.775,
-      "abs_median": 0.869
+      "abs_median": 0.969,
+      "p90": 3.044,
+      "rows": 50
     },
     "attack": {
       "median": 6.25,
-      "abs_median": 6.25
+      "abs_median": 6.25,
+      "p90": 19.375,
+      "rows": 60
     },
     "aftersound": {
-      "median": 1.406,
-      "abs_median": 1.812
+      "median": 1.681,
+      "abs_median": 2.075,
+      "p90": 6.24,
+      "rows": 50
     },
     "doubling": {
       "median": 4.87,
-      "abs_median": 5.419
+      "abs_median": 5.419,
+      "p90": 29.2,
+      "rows": 50
     },
     "stereo": {
-      "median": 0.414,
-      "abs_median": 0.497
+      "median": 0.418,
+      "abs_median": 0.502,
+      "p90": 0.823,
+      "rows": 60
     },
     "balance": {
       "median": 6.899,
-      "abs_median": 6.899
+      "abs_median": 6.899,
+      "p90": 16.517,
+      "rows": 56
     },
     "centroid_pct": {
       "median": 25.931,
-      "abs_median": 33.914
+      "abs_median": 33.914,
+      "p90": 130.846,
+      "rows": 60
     },
     "body": {
       "median": 7.26,
-      "abs_median": 7.26
+      "abs_median": 7.26,
+      "p90": 18.664,
+      "rows": 40
     },
     "vel_range": {
       "median": 0.92,
-      "abs_median": 1.787
+      "abs_median": 2.163,
+      "p90": 4.045,
+      "rows": 15
     },
     "register": {
       "median": 1.285,
-      "abs_median": 2.0
+      "abs_median": 2.0,
+      "p90": 8.205,
+      "rows": 60
     }
   }
 }

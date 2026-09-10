@@ -1,0 +1,70 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "gm048",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-09-04T14:47:00+00:00",
+  "recorded_utc": "2026-09-09T16:50:26+00:00",
+  "reference_spread": {},
+  "bounds": {
+    "tnr": {
+      "median": 5.412,
+      "abs_median": 5.412,
+      "p90": 9.005,
+      "rows": 25
+    },
+    "attack": {
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 40.0,
+      "rows": 25
+    },
+    "balance": {
+      "median": 46.886,
+      "abs_median": 46.886,
+      "p90": 55.177,
+      "rows": 20
+    },
+    "centroid_pct": {
+      "median": 22.279,
+      "abs_median": 22.279,
+      "p90": 46.491,
+      "rows": 25
+    },
+    "decay": {
+      "median": 22.762,
+      "abs_median": 22.762,
+      "p90": 36.9,
+      "rows": 20
+    },
+    "aftersound": {
+      "median": 29.194,
+      "abs_median": 29.194,
+      "p90": 55.29,
+      "rows": 20
+    },
+    "doubling": {
+      "median": 61.944,
+      "abs_median": 61.944,
+      "p90": 76.11,
+      "rows": 20
+    },
+    "body": {
+      "median": 31.225,
+      "abs_median": 31.225,
+      "p90": 31.786,
+      "rows": 10
+    },
+    "vel_range": {
+      "median": 3.875,
+      "abs_median": 3.875,
+      "p90": 3.987,
+      "rows": 5
+    },
+    "register": {
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.0,
+      "rows": 25
+    }
+  }
+}

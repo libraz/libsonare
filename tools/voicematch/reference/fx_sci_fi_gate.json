@@ -1,0 +1,70 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "gm104",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-09-04T10:50:22+00:00",
+  "recorded_utc": "2026-09-09T16:49:30+00:00",
+  "reference_spread": {},
+  "bounds": {
+    "stretch": {
+      "median": 111.287,
+      "abs_median": 111.287,
+      "p90": 199.973,
+      "rows": 35
+    },
+    "tnr": {
+      "median": 49.75,
+      "abs_median": 49.75,
+      "p90": 54.708,
+      "rows": 35
+    },
+    "damper": {
+      "median": 50.0,
+      "abs_median": 112.5,
+      "p90": 362.5,
+      "rows": 35
+    },
+    "attack": {
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 48.75,
+      "rows": 35
+    },
+    "body": {
+      "median": 77.463,
+      "abs_median": 77.463,
+      "p90": 81.328,
+      "rows": 35
+    },
+    "stereo": {
+      "median": 0.27,
+      "abs_median": 0.27,
+      "p90": 0.27,
+      "rows": 35
+    },
+    "balance": {
+      "median": 6.127,
+      "abs_median": 6.127,
+      "p90": 13.943,
+      "rows": 35
+    },
+    "centroid_pct": {
+      "median": 58.26,
+      "abs_median": 58.26,
+      "p90": 87.478,
+      "rows": 35
+    },
+    "vel_range": {
+      "median": 13.35,
+      "abs_median": 13.35,
+      "p90": 15.103,
+      "rows": 7
+    },
+    "register": {
+      "median": 1.0,
+      "abs_median": 1.05,
+      "p90": 4.02,
+      "rows": 35
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "gm024",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-09-02T06:38:52+00:00",
+  "recorded_utc": "2026-09-09T16:50:26+00:00",
+  "reference_spread": {},
+  "bounds": {
+    "stretch": {
+      "median": 4.696,
+      "abs_median": 4.696,
+      "p90": 5.461,
+      "rows": 35
+    },
+    "tnr": {
+      "median": 6.275,
+      "abs_median": 6.275,
+      "p90": 12.977,
+      "rows": 35
+    },
+    "damper": {
+      "median": 25.0,
+      "abs_median": 25.0,
+      "p90": 25.0,
+      "rows": 35
+    },
+    "attack": {
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 75.0,
+      "rows": 35
+    },
+    "body": {
+      "median": 49.8,
+      "abs_median": 49.8,
+      "p90": 63.208,
+      "rows": 35
+    },
+    "stereo": {
+      "median": 0.27,
+      "abs_median": 0.27,
+      "p90": 0.27,
+      "rows": 35
+    },
+    "balance": {
+      "median": 6.857,
+      "abs_median": 6.857,
+      "p90": 9.727,
+      "rows": 35
+    },
+    "centroid_pct": {
+      "median": 8.639,
+      "abs_median": 10.56,
+      "p90": 16.591,
+      "rows": 35
+    },
+    "vel_range": {
+      "median": 14.688,
+      "abs_median": 14.688,
+      "p90": 14.877,
+      "rows": 7
+    },
+    "register": {
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.0,
+      "rows": 35
+    }
+  }
+}

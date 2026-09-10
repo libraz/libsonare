@@ -1,0 +1,82 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "gm035",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-09-02T06:37:21+00:00",
+  "recorded_utc": "2026-09-09T16:48:55+00:00",
+  "reference_spread": {},
+  "bounds": {
+    "stretch": {
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.0,
+      "rows": 35
+    },
+    "decay": {
+      "median": 0.5,
+      "abs_median": 1.038,
+      "p90": 2.58,
+      "rows": 35
+    },
+    "tnr": {
+      "median": 1.625,
+      "abs_median": 3.537,
+      "p90": 9.335,
+      "rows": 35
+    },
+    "attack": {
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 40.0,
+      "rows": 35
+    },
+    "aftersound": {
+      "median": 1.81,
+      "abs_median": 1.81,
+      "p90": 4.113,
+      "rows": 35
+    },
+    "doubling": {
+      "median": 15.537,
+      "abs_median": 15.537,
+      "p90": 25.89,
+      "rows": 35
+    },
+    "balance": {
+      "median": 2.452,
+      "abs_median": 9.828,
+      "p90": 23.926,
+      "rows": 35
+    },
+    "centroid_pct": {
+      "median": 19.604,
+      "abs_median": 26.665,
+      "p90": 82.664,
+      "rows": 35
+    },
+    "damper": {
+      "median": 193.75,
+      "abs_median": 193.75,
+      "p90": 193.75,
+      "rows": 1
+    },
+    "body": {
+      "median": 32.219,
+      "abs_median": 32.219,
+      "p90": 38.862,
+      "rows": 10
+    },
+    "vel_range": {
+      "median": 5.975,
+      "abs_median": 5.975,
+      "p90": 7.242,
+      "rows": 7
+    },
+    "register": {
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.888,
+      "rows": 35
+    }
+  }
+}
