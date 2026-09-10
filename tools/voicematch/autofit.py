@@ -280,6 +280,20 @@ from smf import write_smf  # noqa: E402
 from staging import SubEvaluator, run_stages, screen_knobs  # noqa: E402
 from writeback import materialize, restore, write_edits  # noqa: E402
 
+# The split modules below hold what this file used to define inline. Every
+# importer reads this module by name and the tests patch attributes on it, so
+# the whole surface is re-exported here.
+# ruff: noqa: F401
+from autofit_report import report_pinned, winner_or_defaults  # noqa: E402
+from autofit_resolve import (  # noqa: E402
+    _score,
+    apply_spec_weights,
+    catalogue_pattern,
+    check_holdout_oracle,
+    resolve_corpus,
+    resolve_probe,
+)
+
 SR = 48000
 #: Under this much inter-channel correlation, summing a stereo reference to mono
 #: comb-filters it enough to matter — a spaced close pair on a piano runs around
@@ -295,213 +309,6 @@ LEVEL_DRIFT_PENALTY_PER_DB = 0.1
 # --------------------------------------------------------------------------- #
 # The probe: what is rendered, and what comes back measured
 # --------------------------------------------------------------------------- #
-def _score(program: int, pattern_name: str, notes_csv: str, velocities_csv: str = "",
-           corpus: Corpus | None = None, gate_ms: int = 0):
-    kwargs = {}
-    if notes_csv:
-        kwargs["notes"] = tuple(int(n) for n in notes_csv.split(","))
-    if velocities_csv:
-        kwargs["velocities"] = tuple(int(v) for v in velocities_csv.split(","))
-    if gate_ms:
-        kwargs["dur"] = gate_ms / 1000.0
-    # A corpus probe is laid out by the capture rather than by a builder: its
-    # note list, its gate and its slot spacing all come from the manifest, so
-    # the model renders the same stimulus the reference was recorded under.
-    pattern = corpus_pattern(corpus, **kwargs) if corpus is not None \
-        else build_pattern(pattern_name, program, **kwargs)
-    return pattern, pattern_length(pattern), pattern.analysis_notes
-
-
-def resolve_corpus(args) -> Corpus | None:
-    """Load the capture manifest a corpus run scores against, if there is one."""
-    path = getattr(args, "corpus", "")
-    if not path:
-        return None
-    return load_corpus(path, getattr(args, "corpus_timbre", ""))
-
-
-def catalogue_pattern(args) -> str:
-    """The pattern name the knob dump renders under.
-
-    The dump exists to make the library sound the voice once and report every
-    key it consulted, so any pattern that sounds it will do — but it renders in
-    a subprocess that builds the probe from a name alone, and a corpus probe is
-    built from a manifest that subprocess is not given. Sounding the same notes
-    as a sustain probe reports the same keys.
-    """
-    return "sustain" if args.pattern == "corpus" else args.pattern
-
-
-def check_holdout_oracle(args) -> None:
-    """Refuse a hold-out check that would be scored against the wrong audio.
-
-    `--oracle-wav` is one fixed rendering of one probe: it ignores the score
-    entirely, so a hold-out run asking for different notes gets the *fitted*
-    notes' audio back and compares the model's held-out register against it.
-    The comparison still produces a number, and the sustain pattern's timeline
-    does not depend on pitch, so nothing downstream looks wrong — the report
-    then states that the values do or do not generalise on the strength of a
-    measurement taken against other notes.
-
-    The fix is a second rendering, `--validate-oracle-wav`, of the probe
-    exported for the held-out set. Every other oracle route re-renders from the
-    score and needs nothing. Checked before the fit rather than after it,
-    because the alternative is discovering it hours later.
-    """
-    if not getattr(args, "oracle_wav", ""):
-        if getattr(args, "validate_oracle_wav", ""):
-            raise ValueError(
-                "--validate-oracle-wav belongs with --oracle-wav: the fit and its "
-                "hold-out have to be scored against the same reference, and this run's "
-                "fit oracle is rendered here rather than supplied"
-            )
-        return
-    percussive = getattr(args, "percussive", False)
-    held = (getattr(args, "validate_velocities", "") if percussive
-            else getattr(args, "validate_notes", ""))
-    if not held or getattr(args, "validate_oracle_wav", ""):
-        return
-    axis = "--validate-velocities" if percussive else "--validate-notes"
-    flag = "--velocities" if percussive else "--notes"
-    raise ValueError(
-        f"{axis} with --oracle-wav needs its own reference: the WAV is a fixed "
-        f"rendering of the fitted probe, so the hold-out would be scored against the "
-        f"audio of the notes the fit already saw. Export the hold-out probe "
-        f"(`voicematch.py export-probe --pattern {args.pattern} {flag} {held}`), render "
-        f"it the same way, and pass it as --validate-oracle-wav; or drop {axis}."
-    )
-
-
-def resolve_probe(args) -> None:
-    """Settle the probe the whole run scores against, and what it can measure.
-
-    `--drum-note` is the one flag that changes the shape of a run rather than a
-    value in it: it moves the probe onto the drum channel, where a note number
-    selects an instrument rather than a pitch, and swaps the harmonic metric set
-    for the percussion one. Everything downstream reads `args.percussive` rather
-    than re-deriving it, so the decision is made once and in one place.
-    """
-    if args.drum_note is not None:
-        if not 0 <= args.drum_note < 128:
-            raise ValueError(f"--drum-note must be 0..127, got {args.drum_note}")
-        if args.pattern == "sustain":  # the melodic default; an explicit one wins
-            args.pattern = "drum"
-        if not args.notes:
-            args.notes = str(args.drum_note)
-    corpus = resolve_corpus(args)
-    if corpus is not None:
-        # A corpus and a drum note go together exactly when the corpus is itself
-        # a kit, captured on the drum channel. Against a pitched corpus the two
-        # are still alternatives — the probe would sound a channel the capture
-        # has no recordings for, and every slot would score model against
-        # silence.
-        if args.drum_note is not None and not corpus.percussive():
-            raise ValueError(
-                f"--drum-note needs a corpus captured on MIDI channel "
-                f"{CORPUS_PERCUSSION_CHANNEL}; the {corpus.timbre!r} corpus is a grid of "
-                f"pitched single notes, so a drum probe would score a channel it has no "
-                f"captures for"
-            )
-        if args.drum_note is None and corpus.percussive():
-            raise ValueError(
-                f"the {corpus.timbre!r} corpus is a kit, captured on MIDI channel "
-                f"{CORPUS_PERCUSSION_CHANNEL}; pass --drum-note N so the fit knows which "
-                f"piece's knobs to move — a kit has one patch per note and no register to "
-                f"interpolate across"
-            )
-        if getattr(args, "oracle_wav", ""):
-            raise ValueError(
-                "--corpus and --oracle-wav both name the reference; a corpus run assembles "
-                "its oracle from the capture, so drop one of them"
-            )
-        # A reference that carries a rig is an acceptance target and never a fit
-        # target, so the refusal comes before anything is built rather than hours
-        # in. `--diagnose` measures which knobs reach which term rather than
-        # moving any of them towards the reference, and is exempt; `--grid`
-        # evaluates the same objective a fit would search and is not.
-        if not getattr(args, "diagnose", False):
-            check_rig(corpus, args.program,
-                      allow=getattr(args, "allow_rigged_oracle", False))
-        args.pattern = "corpus"
-    elif not getattr(args, "diagnose", False):
-        # No capture, so no record of a rig — and the hazard is the same size.
-        # What the route means by carrying no record is not the same for all
-        # three of them, which is what `check_oracle_rig` sorts out.
-        check_oracle_rig(args, args.program,
-                         allow=getattr(args, "allow_rigged_oracle", False))
-    pattern, _, analysis_notes = _score(
-        args.program, args.pattern, args.notes, args.velocities, corpus=corpus,
-        gate_ms=getattr(args, "drum_gate_ms", 0),
-    )
-    if corpus is not None:
-        print(describe(corpus, pattern), file=sys.stderr)
-    args.percussive = pattern.percussive
-    # Whether the probe has anything to measure a note at a time. `cli_weights`
-    # fills unset weights from the instrument's class, and on a pattern with no
-    # analysis notes every per-note term it would supply has nothing to read —
-    # so the class defaults collapse to the whole-timeline ones instead of being
-    # supplied and then refused. A weight named on the command line is still
-    # refused, because asking for a measurement the probe cannot take is a
-    # mistake worth reporting rather than one worth silently dropping.
-    args.has_analysis_notes = bool(analysis_notes)
-    # Whether this probe has any kit relation to read. The families come from
-    # the capture, so a fit without a corpus has none, and a fit that narrowed
-    # the grid to one drum note has none either — the term is about a family,
-    # and one member is not one. Supplied as a class default, so it is dropped
-    # rather than refused; an explicit --w-kit is refused below.
-    probe_notes = {n.note for n in pattern.analysis_notes}
-    args.has_kit_groups = any(
-        len(probe_notes.intersection(members)) >= KIT_MIN_MEMBERS
-        for members in (getattr(corpus, "groups", None) or {}).values()
-    )
-    if args.percussive and args.drum_note is None:
-        raise ValueError(
-            f"pattern {args.pattern!r} probes the drum channel; pass --drum-note N so the "
-            f"fit knows which drum note's knobs to move"
-        )
-    if args.drum_note is not None and not args.percussive:
-        raise ValueError(
-            f"--drum-note needs a drum-channel pattern; {args.pattern!r} is written on "
-            f"channel 1 and would sound a pitch rather than the kit"
-        )
-    check_holdout_oracle(args)
-    # The dynamics term is fitted per pitch across velocity, so a probe that
-    # sounds every note once has nothing for it to fit. Refused rather than
-    # scored, because its unmeasurable value is 0.0 and 0.0 is also its best
-    # possible score: weighted on a `sustain` probe it would report a perfect
-    # dynamics match on every candidate and quietly dilute the whole objective.
-    if cli_weights(args).get("dyn", 0.0) > 0.0:
-        spread = {n.note: set() for n in pattern.analysis_notes}
-        for n in pattern.analysis_notes:
-            spread[n.note].add(n.velocity)
-        if not any(len(v) >= 2 for v in spread.values()):
-            raise ValueError(
-                f"--w-dyn fits brightness against velocity per pitch, and pattern "
-                f"{args.pattern!r} sounds each note at a single velocity, so there is no "
-                f"curve to fit. Use --pattern velocity, a drum probe, or drop --w-dyn."
-            )
-    # Same shape as the dynamics refusal, on the other between-note axis. An
-    # unscorable `kit` is 0.0, which is also its best value, so a run weighting
-    # it against a probe with no family in it would report a perfect kit on
-    # every candidate.
-    if getattr(args, "w_kit", None) and not args.has_kit_groups:
-        raise ValueError(
-            f"--w-kit scores the relations inside a kit's own families, and this run has "
-            f"none to read: pattern {args.pattern!r} covers fewer than {KIT_MIN_MEMBERS} "
-            f"members of any family its capture declares. --drum-note narrows the grid to "
-            f"that one note on its own, so name the whole family with --notes (the six "
-            f"toms, the three hi-hats), or drop --w-kit."
-        )
-    if not analysis_notes:
-        per_note = {t: w for t, w in cli_weights(args).items() if t != "mss" and w > 0.0}
-        if per_note:
-            raise ValueError(
-                f"pattern {args.pattern!r} has no analyzable notes, so the per-note terms "
-                f"{sorted(per_note)} have nothing to measure. Weight only --w-mss, or "
-                f"pick a pattern with analysis notes."
-            )
-
-
 def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, float | None]:
     """Resolve the oracle once: per-note metrics, mono render, its room, its band edge.
 
@@ -1022,70 +829,6 @@ class Evaluator:
         return results
 
 
-def winner_or_defaults(knobs, best_values: list[float], evaluator,
-                       validation: dict | None = None) -> list[float]:
-    """The fit's winner, unless something measured says it is worse than the start.
-
-    Two readings can say that, and both are refusals to write rather than
-    findings to report on the way past:
-
-    Every stage's loss is a ratio against the compiled-in defaults, so those
-    score exactly 1.0 and anything above it is a search that never found its own
-    start point. Only meaningful while the loss is normalised — `--raw-loss` has
-    no such reference point and is left alone.
-
-    A hold-out is the same failure measured better: it scores the winner on
-    notes or velocities the fit never saw, and it is the only reading in the run
-    that can speak for anywhere but the probe. A winner that loses there is
-    fitted to the probe, and writing it is how a fit trades a whole voice for
-    three velocities. A wash is not a loss — an "unchanged off the probe" result
-    improved the measured objective and is worse nowhere, so it is kept, and the
-    verdict is printed above this either way.
-    """
-    if getattr(evaluator, "normalize", False) and evaluator.best_loss > 1.0:
-        print(f"\nthe winner scores {evaluator.best_loss:.4f} against the defaults' 1.0 — "
-              f"keeping the defaults, since a fit that lost to its own start point has "
-              f"nothing to write", file=sys.stderr)
-        return [k.start_value for k in knobs]
-    if validation and validation["best"] - validation["start"] > 0.005:
-        print(f"\nthe winner scores {validation['best']:.4f} against the defaults' "
-              f"{validation['start']:.4f} on the held-out {validation['axis']} — keeping "
-              f"the defaults, since values that lose where the fit could not see are "
-              f"fitted to the probe", file=sys.stderr)
-        return [k.start_value for k in knobs]
-    return best_values
-
-
-def report_pinned(knobs, best_values: list[float]) -> list[str]:
-    """Name every knob whose result sits on the end of its range.
-
-    A search reports the best point it was allowed to visit, and a range that
-    does not contain the answer produces one indistinguishable from a range that
-    does: the value pins to the bound and is written back as an optimum. It is
-    the most expensive failure this tool has, because nothing about the output
-    looks wrong — the loss went down, the diff is small, the report is clean.
-    The treble decay constant was searched over [0.5, 3.0] when it wanted 5.0,
-    and 3.0 is what such a run would have reported.
-
-    A pinned knob is not automatically wrong. A bound the engine enforces is a
-    real end of the space, and an optimum genuinely sitting there is a result.
-    What it is never safe to do is read it as an interior optimum, so it is
-    named and the run says which end and how to widen it.
-
-    Every knob is checked, not only the ones that moved. A start value the spec
-    had to clamp into range starts pinned and stays pinned, and that is the case
-    worth catching most: it never appears in a start-to-best diff, because by
-    that measure nothing happened.
-    """
-    pinned = []
-    for knob, value in zip(knobs, best_values):
-        end = at_bound(knob, value)
-        if end is not None:
-            limit = knob.lo if end == "minimum" else knob.hi
-            pinned.append(f"{knob.label} = {value:g} at its {end} ({limit:g})")
-    return pinned
-
-
 def holdout_scorer(args, build_dir, knobs, room_ir):
     """A callable that scores one knob vector on the held-out probe, or None.
 
@@ -1291,42 +1034,6 @@ def render_metrics_main(argv: list[str]) -> int:
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
-def apply_spec_weights(args, argv: list[str]) -> None:
-    """Let a spec set the term weights it needs, unless the command line said otherwise.
-
-    Most of the `--w-*` flags default to zero, which means a fit run without
-    them scores only the harmonic ladder, the intonation and the noise floor —
-    every envelope, decay, level and attack term silent. That default is right
-    for nothing in particular and has to be overridden per voice, from memory,
-    on every run. A spec that carries its own weights makes the run
-    reproducible from one file.
-
-    An explicit flag always wins, decided by whether it appears in argv rather
-    than by comparing against the default, so passing a flag its own default
-    value still counts as having asked for it.
-    """
-    if args.spec == "auto":
-        return
-    spec_weights = load_spec_weights(Path(args.spec).resolve())
-    if not spec_weights:
-        return
-    explicit = {a.split("=", 1)[0] for a in argv if a.startswith("--w-")}
-    applied = []
-    for term, value in spec_weights.items():
-        if term not in LOSS_TERMS:
-            raise ValueError(
-                f"spec {args.spec}: {term!r} is not a loss term "
-                f"(they are {', '.join(LOSS_TERMS)})"
-            )
-        flag = f"--w-{term}"
-        if flag in explicit:
-            continue
-        setattr(args, f"w_{term}", value)
-        applied.append(f"{term}={value:g}")
-    if applied:
-        print(f"spec weights: {' '.join(applied)}", file=sys.stderr)
-
-
 def run(args, argv: list[str] | None = None) -> int:
     build_dir = (REPO_ROOT / args.build_dir).resolve()
     if build_dir.name == "build-python-shared":
