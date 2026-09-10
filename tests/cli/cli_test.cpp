@@ -24,7 +24,9 @@
 #include <string>
 #include <vector>
 
-#include "cli_support.h"
+#include "cli/sonare_cli_args.h"
+#include "cli/sonare_cli_json.h"
+#include "cli/sonare_cli_registry.h"
 #include "core/audio.h"
 #include "core/audio_io.h"
 #include "sonare.h"
