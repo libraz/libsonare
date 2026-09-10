@@ -3,7 +3,7 @@
   "timbre": "gm128",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T13:48:12+00:00",
-  "recorded_utc": "2026-09-09T16:49:31+00:00",
+  "recorded_utc": "2026-09-10T00:31:20+00:00",
   "reference_spread": {},
   "bounds": {
     "decay": {
@@ -25,9 +25,9 @@
       "rows": 15
     },
     "vel_range": {
-      "median": 13.9,
-      "abs_median": 13.9,
-      "p90": 14.02,
+      "median": 13.888,
+      "abs_median": 13.888,
+      "p90": 14.018,
       "rows": 3
     }
   }

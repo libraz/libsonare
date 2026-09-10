@@ -3,19 +3,19 @@
   "timbre": "gm123",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T13:45:40+00:00",
-  "recorded_utc": "2026-09-09T16:50:10+00:00",
+  "recorded_utc": "2026-09-10T00:31:27+00:00",
   "reference_spread": {},
   "bounds": {
     "decay": {
       "median": 0.5,
       "abs_median": 0.5,
-      "p90": 0.963,
+      "p90": 0.862,
       "rows": 15
     },
     "attack": {
       "median": 243.75,
       "abs_median": 243.75,
-      "p90": 468.75,
+      "p90": 350.0,
       "rows": 15
     },
     "stereo": {
@@ -25,9 +25,9 @@
       "rows": 15
     },
     "centroid_pct": {
-      "median": 557.822,
-      "abs_median": 557.822,
-      "p90": 824.978,
+      "median": 565.908,
+      "abs_median": 565.908,
+      "p90": 829.374,
       "rows": 15
     },
     "vel_range": {

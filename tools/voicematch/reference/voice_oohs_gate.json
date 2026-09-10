@@ -3,7 +3,7 @@
   "timbre": "gm054",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T16:50:20+00:00",
-  "recorded_utc": "2026-09-09T16:50:34+00:00",
+  "recorded_utc": "2026-09-10T00:31:36+00:00",
   "reference_spread": {},
   "bounds": {
     "stretch": {
@@ -55,9 +55,9 @@
       "rows": 7
     },
     "register": {
-      "median": 1.313,
-      "abs_median": 3.363,
-      "p90": 8.993,
+      "median": 1.375,
+      "abs_median": 3.088,
+      "p90": 9.208,
       "rows": 35
     }
   }

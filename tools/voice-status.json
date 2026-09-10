@@ -6633,8 +6633,8 @@
       "patch": "bassoon",
       "engine": "reed",
       "capture": "bassoon",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6644,12 +6644,14 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 9,
+          "gated": 8,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "damper"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -6659,7 +6661,6 @@
             "balance",
             "body",
             "centroid_pct",
-            "damper",
             "register",
             "stretch",
             "tnr",
@@ -6669,7 +6670,7 @@
         "structure": null,
         "music": null
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p071-clarinet",
