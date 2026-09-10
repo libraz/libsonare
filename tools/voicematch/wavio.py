@@ -1,7 +1,9 @@
 """Tiny stdlib WAV I/O for the voice-match harness.
 
-Writing goes through 16-bit PCM, so both renderers' outputs carry identical
-quantization noise (~-96 dBFS, far below any timbre metric of interest).
+Writing defaults to 16-bit PCM, so both renderers' outputs carry identical
+quantization noise (~-96 dBFS, far below any timbre metric of interest). A file
+written to be listened to takes 24 instead, because a shared gain can leave a
+quiet version of a take too few bits at the level a listener judges it at.
 
 Reading accepts what a DAW or plugin host actually writes — PCM 8/16/24/32 and
 IEEE float 32/64, including WAVE_FORMAT_EXTENSIBLE — because an externally
@@ -22,17 +24,35 @@ WAVE_FORMAT_IEEE_FLOAT = 0x0003
 WAVE_FORMAT_EXTENSIBLE = 0xFFFE
 
 
-def write_wav(path: Path | str, audio: np.ndarray, sr: int) -> None:
-    """Write a (frames,) or (frames, channels) float array as 16-bit PCM."""
+def write_wav(path: Path | str, audio: np.ndarray, sr: int, bits: int = 16) -> None:
+    """Write a (frames,) or (frames, channels) float array as PCM.
+
+    Rounds rather than truncates. Truncation biases every sample toward zero by
+    up to a full step, which is an error correlated with the signal and is heard
+    as grit rather than as hiss; rounding halves it and leaves it uncorrelated.
+
+    `bits` is 24 where a file is listened to rather than measured. One gain
+    serves every version of a take, so a voice sitting far under the loudest one
+    is written with only the bits that gain leaves it: at 44 dB down, 16 bits
+    leave about 20 dB of headroom over the quantization floor, which is audible
+    and reads as a fault in the voice rather than in the file.
+    """
     if audio.ndim == 1:
         audio = audio[:, None]
     clipped = np.clip(audio, -1.0, 1.0)
-    pcm = (clipped * 32767.0).astype("<i2")
+    if bits == 16:
+        pcm = np.rint(clipped * 32767.0).astype("<i2")
+        raw = pcm.tobytes()
+    elif bits == 24:
+        v = np.rint(clipped * float((1 << 23) - 1)).astype("<i4")
+        raw = np.ascontiguousarray(v.view("u1").reshape(-1, 4)[:, :3]).tobytes()
+    else:
+        raise ValueError(f"unsupported PCM width: {bits}-bit")
     with wave.open(str(path), "wb") as w:
-        w.setnchannels(pcm.shape[1])
-        w.setsampwidth(2)
+        w.setnchannels(clipped.shape[1])
+        w.setsampwidth(bits // 8)
         w.setframerate(sr)
-        w.writeframes(pcm.tobytes())
+        w.writeframes(raw)
 
 
 def _decode(raw: bytes, fmt: int, bits: int) -> np.ndarray:

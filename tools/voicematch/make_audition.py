@@ -135,14 +135,15 @@ import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 from render_model import render_model
 smf, out, seconds, sr = sys.argv[1], sys.argv[2], float(sys.argv[3]), int(sys.argv[4])
+rig = sys.argv[5] != "0"
 with open(smf, "rb") as fh:
-    a = np.asarray(render_model(fh.read(), seconds, sr), dtype=np.float32)
+    a = np.asarray(render_model(fh.read(), seconds, sr, rig=rig), dtype=np.float32)
 np.save(out, a.mean(axis=1) if a.ndim > 1 else a)
 '''
 
 
 def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
-                   lib_path: str = "") -> np.ndarray:
+                   lib_path: str = "", rig: bool = True) -> np.ndarray:
     """One take under one override set, in its own interpreter."""
     env = dict(os.environ)
     if lib_path:
@@ -157,7 +158,7 @@ def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
         out_path = Path(tmp) / "render.npy"
         proc = subprocess.run(
             [sys.executable, "-c", _VARIANT_WORKER, str(smf_path), str(out_path),
-             str(seconds), str(sr)],
+             str(seconds), str(sr), "1" if rig else "0"],
             capture_output=True, text=True, env=env, cwd=str(REPO_ROOT))
         if proc.returncode:
             raise RuntimeError(proc.stderr[-4000:])
@@ -233,7 +234,7 @@ def archive_references(archive: Path, capture_id: str, take_id: str,
     directory = archive / capture_id / take_id
     directory.mkdir(parents=True, exist_ok=True)
     for name, audio in renders.items():
-        write_wav(directory / f"{name}.wav", np.clip(audio * gain, -1.0, 1.0), SR)
+        write_wav(directory / f"{name}.wav", np.clip(audio * gain, -1.0, 1.0), SR, bits=24)
     index = archive / "index.json"
     data = json.loads(index.read_text()) if index.exists() else {}
     data.setdefault(capture_id, {})[take_id] = {
@@ -243,8 +244,24 @@ def archive_references(archive: Path, capture_id: str, take_id: str,
     index.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
+#: Prefix every knob that belongs to the rig rather than to the instrument.
+RIG_KNOB_PREFIX = "gm_fallback_map.kRig"
+
+
+def moves_the_instrument(overrides: str) -> bool:
+    """Whether a variant changes anything the direct signal would show.
+
+    A variant that only turns the amplifier cannot change the direct render at
+    all, so pairing one with a DI costs a render per take to produce a second
+    copy of `model-di`. The amp sweeps are ten variants wide, which is sixty
+    such renders on one voice.
+    """
+    keys = [k.split("=", 1)[0].strip() for k in overrides.split(",") if "=" in k]
+    return any(not k.startswith(RIG_KNOB_PREFIX) for k in keys)
+
+
 def build_sources(voice: Voice, timbres: list[dict],
-                  variants: list[Variant]) -> dict:
+                  variants: list[Variant], di: bool = False) -> dict:
     """The page's version switch, split into a model row and a reference row.
 
     Seven versions of a take is an ordinary number once a couple of candidate
@@ -260,6 +277,16 @@ def build_sources(voice: Voice, timbres: list[dict],
         "role": "model",
         "detail": detail,
     }}
+    if di:
+        sources["model-di"] = {
+            "label": "libsonare NativeSynth (GM fallback), direct",
+            "role": "model",
+            "detail": "the same voice with the bank's rig cleared, which is where "
+                      "the instrument itself stops. `model` is what ships and what "
+                      "the reference is comparable with, since a module's samples "
+                      "of this program have an amplifier recorded into them; this "
+                      "is what the rig is being asked to work on.",
+        }
     for variant in variants:
         sources[variant.name] = {
             "label": f"libsonare NativeSynth (GM fallback), {variant.name}",
@@ -269,6 +296,16 @@ def build_sources(voice: Voice, timbres: list[dict],
             # after the question that built it.
             "detail": variant.detail,
         }
+        if di and moves_the_instrument(variant.overrides):
+            sources[f"{variant.name}-di"] = {
+                "label": f"libsonare NativeSynth (GM fallback), {variant.name}, direct",
+                "role": "model",
+                "detail": "the same candidate with the bank's rig cleared. A setting "
+                          "that moves the instrument is judged where the instrument "
+                          "ends, since an amplifier in front of it both hides a change "
+                          "and invents one: it compresses, so it narrows whatever the "
+                          "candidate did to the decay. — " + variant.detail,
+            }
     reference_of = voice.capture.label.split(",")[0] if voice.capture else ""
     for t in timbres:
         sources[t["id"]] = {
@@ -313,8 +350,10 @@ def reference_note(voice: Voice, timbres: list[dict], model_sends: str = "auto")
 
 
 def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
-                variants: list[Variant], archive: Path | None) -> dict:
+                variants: list[Variant], archive: Path | None,
+                di_state: dict | None = None) -> dict:
     """Every version of one take, written out, as the manifest item describing it."""
+    di_state = {} if di_state is None else di_state
     total = take.duration()
     channel = 9 if voice.kit else take.channel
     # A page is heard, not measured, so the model renders the way it SHIPS.
@@ -352,6 +391,23 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
                         else render_model(smf, total, SR))
     print("  model", file=sys.stderr)
 
+    # The bank binds an amplifier after some voices and `model` is the product
+    # sound, so without this the page cannot play the instrument on its own --
+    # the surface that renders the direct signal exists and reached no listener.
+    # Which programs are bound is asked by rendering rather than mirrored from
+    # the table: an identical render means nothing was bound, and a rig added to
+    # a voice later shows up here without this file being told about it. Asked
+    # once per voice rather than once per take, since a voice with no rig would
+    # otherwise pay for a duplicate render of every take it has -- six programs
+    # in the bank are bound and the rest would render twice for nothing.
+    if di_state.get("bound") is not False:
+        di = (render_variant(smf, total, SR, "", args.lib, rig=False) if args.lib
+              else render_model(smf, total, SR, rig=False))
+        di_state["bound"] = digest(di) != digest(renders["model"])
+        if di_state["bound"]:
+            renders["model-di"] = di
+            print("  model-di", file=sys.stderr)
+
     # The BASELINE is in the set, not just the variants. What has to be caught
     # is a library with the override layer compiled out, where nothing an
     # override says reaches the render — and a voice with one recorded setting
@@ -369,6 +425,14 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         if variant.overrides:
             digests.add(digest(audio))
         print(f"  {variant.name}", file=sys.stderr)
+        # A candidate for a rigged voice gets its direct render too, by the same
+        # rule `model-di` is asked by: the amplifier compresses, so it narrows
+        # whatever the candidate did to the decay and a listener judging the
+        # instrument through it is judging the wrong end of the chain.
+        if di_state.get("bound") and moves_the_instrument(variant.overrides):
+            renders[f"{variant.name}-di"] = render_variant(
+                smf, total, SR, variant.overrides, args.lib, rig=False)
+            print(f"  {variant.name}-di", file=sys.stderr)
 
     cfg = voice.capture
     held = (archived_references(archive, cfg.id, take.id, timbres)
@@ -438,7 +502,7 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     for key, audio in renders.items():
         rel = Path(take.id) / f"{key}.wav"
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
-        write_wav(out / rel, np.clip(audio * gain, -1.0, 1.0), SR)
+        write_wav(out / rel, np.clip(audio * gain, -1.0, 1.0), SR, bits=24)
         tracks[key] = str(rel)
 
     return {
@@ -500,8 +564,9 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
 
     items = []
     variant_digests: dict[str, set[str]] = {}
+    di_state: dict = {}
     for take in selected:
-        item = render_take(take, voice, timbres, out, args, variants, archive)
+        item = render_take(take, voice, timbres, out, args, variants, archive, di_state)
         variant_digests[take.id] = item.pop("_digests")
         items.append(item)
 
@@ -522,7 +587,9 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
             "difference between them is real. "
             + reference_note(voice, timbres, args.model_sends)),
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "sources": build_sources(voice, timbres, variants),
+        "sources": build_sources(
+            voice, timbres, variants,
+            di=any("model-di" in (i.get("tracks") or {}) for i in items)),
         "items": items,
     }
     out.mkdir(parents=True, exist_ok=True)
