@@ -309,6 +309,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                                      static_cast<size_t>(voice_index) * plucked_string_capacity_,
                                  plucked_string_capacity_);
   }
+  voice->sampler.attach(sample_bank_);
   if (!harpsichord_buffers_.empty()) {
     voice->harpsichord.attach(
         harpsichord_buffers_.data() + static_cast<size_t>(voice_index) * harpsichord_stride_,

@@ -581,6 +581,9 @@ void walk_fields(NativeSynthPatch& p, const Fields& f) {
       apply_fm(p, f);
       break;
     case SynthEngineMode::kSubtractive:
+    // The sample engine's fields address host data rather than model
+    // behaviour, so there is nothing here a reference could fit.
+    case SynthEngineMode::kSample:
       break;
   }
 }
@@ -622,6 +625,8 @@ const char* mode_name(SynthEngineMode mode) {
       return "free_reed";
     case SynthEngineMode::kHarpsichord:
       return "harpsichord";
+    case SynthEngineMode::kSample:
+      return "sample";
   }
   return "subtractive";
 }

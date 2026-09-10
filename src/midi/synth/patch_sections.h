@@ -369,9 +369,19 @@ constexpr HarpsichordPatchParams blank_harpsichord() noexcept {
   return z;
 }
 
+constexpr SamplePatchParams blank_sample() noexcept {
+  SamplePatchParams z{};
+  z.set_index = 0;
+  z.level = 0.0f;
+  z.loop_override = 0;
+  z.start_offset01 = 0.0f;
+  z.key_track = false;
+  return z;
+}
+
 /// Returns @p patch with every engine section other than the one `mode` selects
 /// replaced by zeroes. `kSubtractive` voices none of them, so it blanks all
-/// fifteen.
+/// sixteen.
 constexpr NativeSynthPatch strip_unvoiced_sections(const NativeSynthPatch& patch) noexcept {
   NativeSynthPatch p = patch;
   if (p.mode != SynthEngineMode::kFm) p.fm = blank_fm();
@@ -389,6 +399,7 @@ constexpr NativeSynthPatch strip_unvoiced_sections(const NativeSynthPatch& patch
   if (p.mode != SynthEngineMode::kVocal) p.vocal = blank_vocal();
   if (p.mode != SynthEngineMode::kFreeReed) p.free_reed = blank_free_reed();
   if (p.mode != SynthEngineMode::kHarpsichord) p.harpsichord = blank_harpsichord();
+  if (p.mode != SynthEngineMode::kSample) p.sample = blank_sample();
   return p;
 }
 

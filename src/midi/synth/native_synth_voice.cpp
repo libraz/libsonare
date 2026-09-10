@@ -194,6 +194,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     free_reed.start(p.free_reed, sample_rate, voiced_note, velocity,
                     voice_seed(voice_index, voiced_note, age));
   }
+  if (p.mode == SynthEngineMode::kSample) {
+    sampler.start(p.sample, sample_rate, voiced_note, velocity);
+  }
   if (p.mode == SynthEngineMode::kHarpsichord) {
     harpsichord.start(p.harpsichord, sample_rate, voiced_note, velocity,
                       voice_seed(voice_index, voiced_note, age));
@@ -262,6 +265,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   // Body/formant resonance + seeded stereo scatter (realism polish).
   body.start(p.body, sample_rate, base_freq_hz, p.body_mix);
   pan_spread_units = 500.0f * p.stereo_spread * seq.bipolar_at(104);
+  // A keymap zone places its sample, which is a constant for the voice's life
+  // and so joins the scatter rather than the per-sample pan sum.
+  if (p.mode == SynthEngineMode::kSample) pan_spread_units += sampler.pan_units();
 
   // Glide: start offset in cents from the previous note, decaying through a
   // one-pole sized so the pitch lands within ~5% in glide_ms.
@@ -378,6 +384,15 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = free_reed.render(common);
   } else if (patch->mode == SynthEngineMode::kHarpsichord) {
     sample = harpsichord.render(common);
+  } else if (patch->mode == SynthEngineMode::kSample) {
+    sample = sampler.render(common, key_down);
+    // A one-shot region that ran out ends the voice; the amp envelope would
+    // otherwise hold the slot open on silence for its whole release.
+    if (sampler.finished()) {
+      active = false;
+      amp_env.kill();
+      return 0.0f;
+    }
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];

@@ -421,6 +421,7 @@ if(BUILD_ARRANGEMENT)
     midi/fm_voice_test.cpp
     midi/ks_voice_test.cpp
     midi/harpsichord_voice_test.cpp
+    midi/sample_voice_test.cpp
     midi/string_loop_test.cpp
     midi/modal_voice_test.cpp
     midi/percussion_voice_test.cpp

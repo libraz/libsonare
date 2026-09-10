@@ -645,6 +645,9 @@ bool is_dedicated_model_engine(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kFm:
     case SynthEngineMode::kAdditive:
     case SynthEngineMode::kVocal:
+    // Host PCM rather than a model of the program, and the bank never voices
+    // it: whether a sample is a good violin is the host's claim, not ours.
+    case SynthEngineMode::kSample:
       return false;
   }
   return false;

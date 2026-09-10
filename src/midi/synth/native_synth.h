@@ -50,6 +50,8 @@
 #include "midi/synth/pipe_organ_voice.h"
 #include "midi/synth/plucked_string_voice.h"
 #include "midi/synth/reed_voice.h"
+#include "midi/synth/sample_bank.h"
+#include "midi/synth/sample_voice.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/vocal_voice.h"
 #include "midi/synth/voice_pool.h"
@@ -75,6 +77,7 @@ enum class SynthEngineMode : int {
   kVocal = 13,          // source-filter glottal + formant voice (vocal_voice.h)
   kFreeReed = 14,       // driven free-reed accordion / harmonica (free_reed_voice.h)
   kHarpsichord = 15,    // jack-and-plectrum string choirs (harpsichord_voice.h)
+  kSample = 16,         // host-supplied PCM through the subtractive chain (sample_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -198,6 +201,9 @@ struct NativeSynthPatch {
 
   /// Jack-and-plectrum string choirs (used when mode == kHarpsichord).
   HarpsichordPatchParams harpsichord;
+
+  /// Keymap into the host's sample bank (used when mode == kSample).
+  SamplePatchParams sample;
 };
 
 /// Per-note GS drum overrides applied to a fallback percussion voice at
@@ -279,6 +285,8 @@ struct NativeSynthVoice : VoiceState {
   FreeReedVoiceCore free_reed;
   /// Harpsichord core; the host attach()es its registration slab before start().
   HarpsichordVoiceCore harpsichord;
+  /// Host PCM source; like KS, the host attach()es the bank before start().
+  SampleVoiceCore sampler;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -459,6 +467,12 @@ class NativeSynth final : public MidiInstrument {
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;
 
+  /// CONTROL thread: the bank the kSample engine reads. Not owned, and it must
+  /// outlive the instrument; nullptr leaves that engine silent. Sounding voices
+  /// keep the bank they started on, so swap it while nothing is playing.
+  void set_sample_bank(const SampleBank* bank) noexcept { sample_bank_ = bank; }
+  const SampleBank* sample_bank() const noexcept { return sample_bank_; }
+
   const NativeSynthPatch& patch() const noexcept { return config_.patch; }
   /// Instrument master gain (test/diagnostic; the automated kGain target).
   float gain() const noexcept { return config_.gain; }
@@ -564,6 +578,8 @@ class NativeSynth final : public MidiInstrument {
   float dc_r_ = 0.999f;
   float bus_drive_gain_ = 0.0f;
   VoicePool<NativeSynthVoice> pool_;
+  /// Host sample bank for the kSample engine; borrowed, never owned.
+  const SampleBank* sample_bank_ = nullptr;
   /// KS delay slab: one ks_slab_capacity() (three ks_buffer_capacity() spans —
   /// the primary string, the second-polarization line, and the octave-up 4'
   /// companion line) per voice slot, allocated in prepare() only when the patch
@@ -1160,6 +1176,15 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   // board radiating more than what drives it is not a board.
   p.harpsichord.board_diffuse_db = std::clamp(
       patch_clamp_detail::sanitize(p.harpsichord.board_diffuse_db, -120.0f), -120.0f, 0.0f);
+  // A negative set is the "no keymap" sentinel; anything else is an index the
+  // bank either has or does not, which is its business rather than the clamp's.
+  if (p.sample.set_index < -1) p.sample.set_index = -1;
+  p.sample.level = std::clamp(patch_clamp_detail::sanitize(p.sample.level, 1.0f), 0.0f, 8.0f);
+  if (p.sample.loop_override != 1 && p.sample.loop_override != 3 && p.sample.loop_override != 0) {
+    p.sample.loop_override = -1;
+  }
+  p.sample.start_offset01 =
+      std::clamp(patch_clamp_detail::sanitize(p.sample.start_offset01, 0.0f), 0.0f, 0.999f);
   // Bound by the enum's last member, not a literal: the literal was 4 and
   // outlived kVocal being added at 5, so every vocal body was reset to none.
   if (static_cast<int>(p.body) < 0 ||
