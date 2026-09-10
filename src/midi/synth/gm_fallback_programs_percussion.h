@@ -107,52 +107,89 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   // The mallet carries the reference's own velocity tilt: its upper partials
   // rise 1 to 12 dB from the softest row to the loudest, steeper the higher the
   // mode, which is the curve's shape.
-  sd.modal.strike_brightness = 1.0f;
-  sd.modal.vel_to_brightness = 0.22f;
+  sd.modal.strike_brightness = 0.969458f;
+  sd.modal.vel_to_brightness = 0.164306f;
   sd.modal.release_damp_s = 0.45f;  // nothing damps a pan; it rings its own fall
   // The modal core radiates about 8 dB hotter than the membrane one did for the
   // same gain, so this is set from the reference's own peak rather than kept.
   sd.gain = 0.52f;
+  sd.amp_env.attack_ms = 0.030005f;
 
   // Woodblock (GM 115): a single high-Q wood resonance with a short stick click.
   NativeSynthPatch& wb = o.woodblock;
   wb.mode = SynthEngineMode::kPercussion;
   wb.amp_env = fallback_env(0.3f, 100.0f, 0.0f, 40.0f);
-  wb.cutoff_hz = 20000.0f;
+  wb.cutoff_hz = 5582.96f;
   wb.percussion.num_modes = 1;
   wb.percussion.mode_ratios = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   wb.percussion.base_freq_hz = 0.0f;
-  wb.percussion.mode_decay_s = 0.06f;
-  wb.percussion.tone_gain = 0.9f;
-  wb.percussion.noise_gain = 0.3f;
-  wb.percussion.noise_decay_ms = 4.0f;
-  wb.percussion.noise_cutoff_hz = 2400.0f;
+  wb.percussion.mode_decay_s = 0.134876f;
+  wb.percussion.tone_gain = 4.0f;
+  wb.percussion.noise_gain = 1.37027f;
+  wb.percussion.noise_decay_ms = 14.579f;
+  wb.percussion.noise_cutoff_hz = 2904.06f;
   wb.percussion.noise_output = SynthFilterOutput::kBandpass;
   wb.gain = 0.6f;
+  wb.amp_env.attack_ms = 0.039043f;
+  wb.amp_env.decay_ms = 30.0073f;
+  wb.amp_env.release_ms = 704.853f;
+  wb.amp_env.sustain = 0.35353f;
+  wb.drive = 0.248516f;
+  wb.percussion.mode_ratios[0] = 2.77762f;
+  wb.percussion.noise_q = 1.52151f;
+  wb.percussion.plate_gain = 1.76481f;
+  wb.percussion.plate_hf_ratio = 0.278273f;
+  wb.percussion.plate_low_hz = 798.233f;
+  wb.percussion.plate_t60_s = 8.16114f;
+  wb.percussion.strike_r = 0.683095f;
+  wb.percussion.tone_direct = 0.23688f;
+  wb.percussion.wire_threshold = 2.58015f;
+  wb.resonance_q = 3.36119f;
 
   // Taiko (GM 116): a large struck membrane — the full Rayleigh mode set, a
   // strong strike pitch drop and a low shell boom.
   NativeSynthPatch& ti = o.taiko;
   ti.mode = SynthEngineMode::kPercussion;
   ti.amp_env = fallback_env(0.5f, 700.0f, 0.0f, 200.0f);
-  ti.cutoff_hz = 20000.0f;
+  ti.cutoff_hz = 15123.5f;
   ti.percussion.num_modes = 5;
   ti.percussion.base_freq_hz = 0.0f;
-  ti.percussion.mode_decay_s = 0.5f;
-  ti.percussion.tone_gain = 0.9f;
-  ti.percussion.pitch_drop = 0.5f;
-  ti.percussion.pitch_drop_ms = 45.0f;
-  ti.percussion.noise_gain = 0.2f;
-  ti.percussion.noise_decay_ms = 20.0f;
-  ti.percussion.noise_cutoff_hz = 1200.0f;
+  ti.percussion.mode_decay_s = 1.55947f;
+  ti.percussion.tone_gain = 3.63643f;
+  ti.percussion.pitch_drop = 0.134927f;
+  ti.percussion.pitch_drop_ms = 29.931f;
+  ti.percussion.noise_gain = 2.93126f;
+  ti.percussion.noise_decay_ms = 1.94051f;
+  ti.percussion.noise_cutoff_hz = 161.898f;
   ti.percussion.noise_output = SynthFilterOutput::kLowpass;
-  ti.percussion.strike_r = 0.4f;
-  ti.percussion.shell_mix = 0.2f;
+  ti.percussion.strike_r = 0.559041f;
+  ti.percussion.shell_mix = 0.806885f;
   ti.percussion.shell_num_modes = 1;
   ti.percussion.shell_freq_hz = {90.0f, 0.0f, 0.0f, 0.0f};
   ti.percussion.shell_t60_s = {0.14f, 0.0f, 0.0f, 0.0f};
   ti.percussion.shell_weight = {1.0f, 0.0f, 0.0f, 0.0f};
   ti.gain = 1.1f;
+  ti.amp_env.attack_ms = 0.0415506f;
+  ti.amp_env.decay_ms = 687.96f;
+  ti.amp_env.release_ms = 11471.0f;
+  ti.amp_env.sustain = 0.26644f;
+  ti.drive = 0.485602f;
+  ti.percussion.contact = 0.0f;
+  ti.percussion.contact_ms = 0.761066f;
+  ti.percussion.mode_ratios[0] = 1.1535f;
+  ti.percussion.mode_ratios[1] = 0.624269f;
+  ti.percussion.noise_q = 0.619676f;
+  ti.percussion.plate_gain = 1.11975f;
+  ti.percussion.plate_hf_ratio = 0.0336278f;
+  ti.percussion.plate_low_hz = 623.604f;
+  ti.percussion.plate_t60_s = 0.234847f;
+  ti.percussion.shell_t60_s[0] = 0.111498f;
+  ti.percussion.shell_weight[0] = 2.42255f;
+  ti.percussion.strike_theta = 0.944941f;
+  ti.percussion.tone_direct = 0.692916f;
+  ti.percussion.wire_threshold = 2.85629f;
+  ti.resonance_q = 1.09065f;
+  ti.stereo_spread = 1.0f;
 
   // Melodic Tom (GM 117): a pitched tom — note-tracked membrane with a pitch
   // drop and a shell body, one patch for every tom size.
@@ -183,19 +220,25 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   NativeSynthPatch& sy = o.synth_drum;
   sy.mode = SynthEngineMode::kPercussion;
   sy.amp_env = fallback_env(0.5f, 500.0f, 0.0f, 150.0f);
-  sy.cutoff_hz = 20000.0f;
-  sy.percussion.num_modes = 1;
+  sy.cutoff_hz = 19737.0f;
+  sy.percussion.num_modes = 3;
   sy.percussion.mode_ratios = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   sy.percussion.base_freq_hz = 0.0f;
-  sy.percussion.mode_decay_s = 0.4f;
-  sy.percussion.tone_gain = 1.0f;
-  sy.percussion.pitch_drop = 1.0f;
-  sy.percussion.pitch_drop_ms = 60.0f;
-  sy.percussion.noise_gain = 0.1f;
-  sy.percussion.noise_decay_ms = 20.0f;
-  sy.percussion.noise_cutoff_hz = 1500.0f;
+  sy.percussion.mode_decay_s = 0.327662f;
+  sy.percussion.tone_gain = 2.1383f;
+  sy.percussion.pitch_drop = 0.125f;
+  sy.percussion.pitch_drop_ms = 158.244f;
+  sy.percussion.noise_gain = 2.45124f;
+  sy.percussion.noise_decay_ms = 19.0869f;
+  sy.percussion.noise_cutoff_hz = 1598.29f;
   sy.percussion.noise_output = SynthFilterOutput::kLowpass;
   sy.gain = 1.0f;
+  sy.amp_env.attack_ms = 0.359235f;
+  sy.amp_env.decay_ms = 354.08f;
+  sy.amp_env.release_ms = 125.499f;
+  sy.percussion.mode_ratios[0] = 0.942332f;
+  sy.percussion.noise_q = 0.704471f;
+  sy.resonance_q = 3.41885f;
 
   // Reverse Cymbal (GM 119): the core has no reverse playback, so the swell is
   // approximated with a long attack (the wash rises over the held note) into a
@@ -205,19 +248,45 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.mode = SynthEngineMode::kPercussion;
   rc.amp_env = fallback_env(1400.0f, 0.0f, 1.0f, 60.0f);  // long swell, short cut
   rc.cutoff_hz = 20000.0f;
-  rc.percussion.num_modes = 4;
+  rc.percussion.num_modes = 2;
   rc.percussion.mode_ratios = {1.0f, 1.34f, 1.72f, 2.15f, 0.0f, 0.0f};
   rc.percussion.base_freq_hz = 3600.0f;  // unpitched crash body
-  rc.percussion.mode_decay_s = 1.4f;
-  rc.percussion.tone_gain = 0.2f;
-  rc.percussion.noise_gain = 0.9f;
-  rc.percussion.noise_decay_ms = 2000.0f;  // outlasts the attack swell
-  rc.percussion.noise_cutoff_hz = 5500.0f;
+  rc.percussion.mode_decay_s = 2.33456f;
+  rc.percussion.tone_gain = 1.56376f;
+  rc.percussion.noise_gain = 3.57332f;
+  rc.percussion.noise_decay_ms = 13114.9f;  // outlasts the attack swell
+  rc.percussion.noise_cutoff_hz = 2004.84f;
   rc.percussion.noise_output = SynthFilterOutput::kHighpass;
-  rc.percussion.shimmer = 6.0f;
-  rc.percussion.shimmer_attack_ms = 400.0f;
-  rc.percussion.shimmer_cutoff_hz = 9000.0f;
+  rc.percussion.shimmer = 14.0612f;
+  rc.percussion.shimmer_attack_ms = 172.315f;
+  rc.percussion.shimmer_cutoff_hz = 530.586f;
   rc.gain = 0.5f;
+  rc.amp_env.attack_ms = 420.044f;
+  rc.amp_env.release_ms = 630.421f;
+  rc.amp_env.sustain = 0.0f;
+  rc.percussion.contact = 1.50194f;
+  rc.percussion.contact_ms = 0.0507509f;
+  rc.percussion.mode_ratios[0] = 1.1172f;
+  rc.percussion.mode_ratios[1] = 44.9033f;
+  rc.percussion.mode_ratios[2] = 1.25982f;
+  rc.percussion.mode_ratios[3] = 41.3911f;
+  rc.percussion.noise_q = 0.628894f;
+  rc.percussion.plate_gain = 1.26391f;
+  rc.percussion.plate_hf_ratio = 0.472183f;
+  rc.percussion.plate_low_hz = 153.571f;
+  rc.percussion.plate_t60_s = 0.168682f;
+  rc.percussion.shell_mix = 0.350823f;
+  rc.percussion.shell_num_modes = 3;
+  rc.percussion.shell_t60_s[0] = 0.0275134f;
+  rc.percussion.shell_t60_s[2] = 0.008628f;
+  rc.percussion.shell_t60_s[3] = 0.00686487f;
+  rc.percussion.shell_weight[0] = 0.0f;
+  rc.percussion.shell_weight[2] = 0.781797f;
+  rc.percussion.shell_weight[3] = 1.52081f;
+  rc.percussion.tone_direct = 0.854284f;
+  rc.percussion.wire_threshold = 0.0268937f;
+  rc.resonance_q = 0.765824f;
+  rc.stereo_spread = 0.559725f;
 }
 
 }  // namespace sonare::midi::synth::detail

@@ -325,42 +325,66 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // FX 4 Atmosphere: wide drift supplies the motion possible in a one-note voice.
   o.fx_atmosphere = fx;
   o.fx_atmosphere.waveform = VaWaveform::kSaw;
-  o.fx_atmosphere.unison = 7;
-  o.fx_atmosphere.detune_cents = 35.0f;
-  o.fx_atmosphere.drift_cents = 12.0f;
+  o.fx_atmosphere.unison = 4;
+  o.fx_atmosphere.detune_cents = 16.0786f;
+  o.fx_atmosphere.drift_cents = 2.1774f;
   o.fx_atmosphere.amp_env = fallback_env(1200.0f, 1800.0f, 0.75f, 1800.0f);
-  o.fx_atmosphere.cutoff_hz = 1300.0f;
-  o.fx_atmosphere.resonance_q = 1.0f;
-  o.fx_atmosphere.stereo_spread = 0.9f;
+  o.fx_atmosphere.cutoff_hz = 512.731f;
+  o.fx_atmosphere.resonance_q = 0.572042f;
+  o.fx_atmosphere.stereo_spread = 0.626456f;
   o.fx_atmosphere.gain = 0.52f;
+  o.fx_atmosphere.amp_env.attack_ms = 26.0488f;
+  o.fx_atmosphere.amp_env.decay_ms = 26.4543f;
+  o.fx_atmosphere.amp_env.release_ms = 714.758f;
+  o.fx_atmosphere.amp_env.sustain = 0.43011f;
+  o.fx_atmosphere.drift_rate_hz = 0.168613f;
+  o.fx_atmosphere.drive = 0.53879f;
 
   // FX 5 Brightness: square-wave and high-pass edge with a little brittle drive.
   o.fx_brightness = fx;
   o.fx_brightness.waveform = VaWaveform::kSquare;
-  o.fx_brightness.unison = 3;
-  o.fx_brightness.detune_cents = 8.0f;
+  o.fx_brightness.unison = 6;
+  o.fx_brightness.detune_cents = 9.34699f;
   o.fx_brightness.amp_env = fallback_env(4.0f, 550.0f, 0.35f, 260.0f);
   o.fx_brightness.filter_output = SynthFilterOutput::kHighpass;
-  o.fx_brightness.cutoff_hz = 7600.0f;
-  o.fx_brightness.resonance_q = 2.0f;
+  o.fx_brightness.cutoff_hz = 76.5675f;
+  o.fx_brightness.resonance_q = 0.841841f;
   o.fx_brightness.filter_env = fallback_env(1.0f, 180.0f, 0.0f, 150.0f);
-  o.fx_brightness.env_to_cutoff_cents = 1200.0f;
-  o.fx_brightness.drive = 0.15f;
+  o.fx_brightness.env_to_cutoff_cents = 127.403f;
+  o.fx_brightness.drive = 0.362055f;
   o.fx_brightness.gain = 0.5f;
+  o.fx_brightness.amp_env.attack_ms = 0.605543f;
+  o.fx_brightness.amp_env.decay_ms = 188.751f;
+  o.fx_brightness.amp_env.release_ms = 734.285f;
+  o.fx_brightness.amp_env.sustain = 0.108119f;
+  o.fx_brightness.filter_env.attack_ms = 0.305805f;
+  o.fx_brightness.filter_env.decay_ms = 21.64f;
+  o.fx_brightness.stereo_spread = 0.632226f;
 
   // FX 6 Goblins: detune, drift and seeded random pitch make a deterministic twitch.
   o.fx_goblins = fx;
   o.fx_goblins.waveform = VaWaveform::kSquare;
   o.fx_goblins.unison = 2;
   o.fx_goblins.detune_cents = 48.0f;
-  o.fx_goblins.drift_cents = 8.0f;
+  o.fx_goblins.drift_cents = 2.775f;
   o.fx_goblins.amp_env = fallback_env(40.0f, 250.0f, 0.55f, 350.0f);
-  o.fx_goblins.cutoff_hz = 1900.0f;
-  o.fx_goblins.resonance_q = 3.0f;
+  o.fx_goblins.cutoff_hz = 380.199f;
+  o.fx_goblins.resonance_q = 0.539422f;
   o.fx_goblins.filter_env = fallback_env(2.0f, 160.0f, 0.1f, 200.0f);
-  o.fx_goblins.env_to_cutoff_cents = 2600.0f;
+  o.fx_goblins.env_to_cutoff_cents = 981.231f;
   o.fx_goblins.mod_matrix.routes[0] = {ModSource::kRandom, ModDestination::kPitchCents, 80.0f};
   o.fx_goblins.gain = 0.54f;
+  o.fx_goblins.amp_env.attack_ms = 144.178f;
+  o.fx_goblins.amp_env.decay_ms = 882.691f;
+  o.fx_goblins.amp_env.release_ms = 750.351f;
+  o.fx_goblins.amp_env.sustain = 0.498283f;
+  o.fx_goblins.drift_rate_hz = 1.70823f;
+  o.fx_goblins.drive = 0.0f;
+  o.fx_goblins.filter_env.attack_ms = 15.4188f;
+  o.fx_goblins.filter_env.decay_ms = 2326.59f;
+  o.fx_goblins.filter_env.release_ms = 1133.65f;
+  o.fx_goblins.filter_env.sustain = 0.377439f;
+  o.fx_goblins.stereo_spread = 0.706307f;
 
   // FX 7 Echoes: without a delay line, slow LFO gain pulses mimic repeats.
   o.fx_echoes = fx;
@@ -374,19 +398,31 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_echoes.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, -0.65f};
   o.fx_echoes.stereo_spread = 0.55f;
   o.fx_echoes.gain = 0.55f;
+  o.fx_echoes.amp_env.decay_ms = 449.135f;
+  o.fx_echoes.amp_env.release_ms = 803.905f;
+  o.fx_echoes.amp_env.sustain = 0.308815f;
 
   // FX 8 Sci-Fi: an opening resonant radio band with a slow synthetic sweep.
   o.fx_sci_fi = fx;
   o.fx_sci_fi.waveform = VaWaveform::kNoise;
   o.fx_sci_fi.amp_env = fallback_env(20.0f, 1000.0f, 0.2f, 500.0f);
   o.fx_sci_fi.filter_output = SynthFilterOutput::kBandpass;
-  o.fx_sci_fi.cutoff_hz = 900.0f;
-  o.fx_sci_fi.resonance_q = 12.0f;
+  o.fx_sci_fi.cutoff_hz = 116.446f;
+  o.fx_sci_fi.resonance_q = 3.24272f;
   o.fx_sci_fi.filter_env = fallback_env(1.0f, 500.0f, 0.0f, 250.0f);
-  o.fx_sci_fi.env_to_cutoff_cents = 4800.0f;
+  o.fx_sci_fi.env_to_cutoff_cents = 61.0453f;
   o.fx_sci_fi.lfo2_rate_hz = 1.1f;
   o.fx_sci_fi.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 800.0f};
   o.fx_sci_fi.gain = 0.6f;
+  o.fx_sci_fi.amp_env.attack_ms = 70.7156f;
+  o.fx_sci_fi.amp_env.decay_ms = 182.175f;
+  o.fx_sci_fi.amp_env.release_ms = 765.605f;
+  o.fx_sci_fi.amp_env.sustain = 0.458263f;
+  o.fx_sci_fi.drive = 0.367968f;
+  o.fx_sci_fi.filter_env.decay_ms = 1325.53f;
+  o.fx_sci_fi.filter_env.sustain = 0.432887f;
+  o.fx_sci_fi.stereo_spread = 0.642918f;
+  o.fx_sci_fi.unison = 6;
 }
 
 /// GM 38-39 and 62-63, the four synth programs that sit outside 80-103. They
@@ -456,8 +492,8 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // everything above — h3 to h6 all sit within 6 dB of each other at every note
   // and every velocity, so there is no series above the knee to shape.
   o.synth_bass_1 = sbass;
-  o.synth_bass_1.cutoff_hz = 180.925f;
-  o.synth_bass_1.resonance_q = 1.23538f;
+  o.synth_bass_1.cutoff_hz = 183.385f;
+  o.synth_bass_1.resonance_q = 1.05669f;
   // The reference falls 0.06 dB/s under a held key, which is nearly flat and is
   // not nothing: at a dead-flat sustain the envelope has no peak to find and the
   // comparison's onset term reads wherever the argmax lands, 2.2 s in.
@@ -466,19 +502,28 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // 6.6 dB apart in held RMS at E2 and are the only same-envelope comparison
   // either of them has, so each moves half of it off the family's 0.5.
   o.synth_bass_1.gain = 0.342f;
+  o.synth_bass_1.amp_env.attack_ms = 1.16318f;
+  o.synth_bass_1.amp_env.decay_ms = 2294.75f;
+  o.synth_bass_1.amp_env.release_ms = 8.40542f;
+  o.synth_bass_1.amp_env.sustain = 0.812374f;
 
   // Synth Bass 2 (GM 39): a deeper series (h3 to h6 fall 21 dB across an
   // octave) and an attack that lengthens with velocity, which the filter
   // envelope carries since the amp attack cannot answer velocity.
   o.synth_bass_2 = sbass;
   o.synth_bass_2.filter_model = SynthFilterModel::kMoogLadder;
-  o.synth_bass_2.cutoff_hz = 221.42f;
-  o.synth_bass_2.resonance_q = 4.8522f;
-  o.synth_bass_2.vel_to_cutoff_cents = 566.563f;
-  o.synth_bass_2.env_to_cutoff_cents = 167.184f;
+  o.synth_bass_2.cutoff_hz = 181.399f;
+  o.synth_bass_2.resonance_q = 6.71441f;
+  o.synth_bass_2.vel_to_cutoff_cents = 394.698f;
+  o.synth_bass_2.env_to_cutoff_cents = 283.833f;
   o.synth_bass_2.amp_env = fallback_env(16.7184f, 0.0f, 1.0f, 36.9329f);
   o.synth_bass_2.filter_env = fallback_env(120.0f, 400.0f, 1.0f, 150.0f);
   o.synth_bass_2.gain = 0.731f;
+  o.synth_bass_2.amp_env.attack_ms = 3.43138f;
+  o.synth_bass_2.amp_env.release_ms = 19.9631f;
+  o.synth_bass_2.filter_env.attack_ms = 45.369f;
+  o.synth_bass_2.filter_env.release_ms = 354.786f;
+  o.synth_bass_2.filter_env.sustain = 0.619768f;
 
   // Synth Brass 1 (GM 62): the family stack with the feedback operator off, and
   // the fit put it there on its own, against the range floor. It is the wider
