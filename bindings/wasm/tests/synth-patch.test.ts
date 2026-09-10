@@ -5,7 +5,6 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { SynthPatch } from '../dist/index.js';
 import {
   BUILTIN_SYNTH_WAVEFORMS,
   init,
@@ -26,6 +25,7 @@ import {
 } from '../dist/index.js';
 import { setSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
+import type { SynthPatch } from '../src/project_types.js';
 
 function peak(audio: Float32Array): number {
   let p = 0;
