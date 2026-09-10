@@ -19,7 +19,7 @@ constexpr float kMaxUnsignedFeedback = 0.95f;
 
 /// REVERB TIME. The manual gives no time scale, so the span carries a
 /// measurement: an SC-8850 at power-on Hall 2 (64) decays 1.97 s over
-/// 500 Hz-1 kHz, where 12 s had put it at 3.20. Its HF fall is not adopted.
+/// 500 Hz-1 kHz. That is the RT60 asked of the tank, which rings ~0.2 s longer.
 constexpr float kReverbTimeMinSeconds = 0.2f;
 constexpr float kReverbTimeSpanSeconds = 6.97f;
 

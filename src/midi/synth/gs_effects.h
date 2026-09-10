@@ -41,8 +41,11 @@ struct GsEffectsConfig {
   bool enable_reverb = true;
   bool enable_chorus = true;
   bool enable_delay = true;
-  float reverb_decay = 0.7f;    ///< Tank feedback, [0, 0.98].
-  float reverb_damping = 0.4f;  ///< HF damping, [0, 1].
+  float reverb_decay = 0.7f;  ///< Tank feedback, [0, 0.98].
+  /// Tank one-pole coefficient, [0, 1] — a brightness, not a damping: 1 passes
+  /// everything and 0 stops the feedback path. gs_system_effects.h has what a
+  /// measured unit says about the column that feeds it.
+  float reverb_damping = 0.4f;
   float chorus_rate_hz = 0.8f;
   float chorus_depth_ms = 6.0f;
   float delay_time_ms = 340.0f;

@@ -217,6 +217,19 @@ inline constexpr std::array<GsReverbMacroParams, 8> kGsReverbMacros{{
 /// What a REVERB CHARACTER selects beyond the addressed parameters. Characters
 /// 6-7 sound the delay unit instead of the reverb; GS has no damping address,
 /// so the character carries it.
+///
+/// `damping` reaches DattorroReverbConfig::damping, which is the tank's one-pole
+/// coefficient and runs the other way from its name: a higher value passes more
+/// and 0 stops the feedback path entirely. The column is therefore a brightness
+/// and the entries below descend from the brightest, which is not the order the
+/// character names suggest. It is uncalibrated: one measured unit's power-on
+/// Hall 2 falls 2.04x slower at 63 Hz than at 8 kHz, and this tank reads 3.85x
+/// at the value below and 2.29x wide open, so the column cannot reach the one
+/// character there is a measurement for. Raising it also lengthens the mid band
+/// (1 kHz RT60 2.08 s to 2.49 s across the range), so it is not an independent
+/// high-frequency control and cannot be fitted without the time moving with it.
+/// The last two entries hold 0 because nothing reads them — those characters
+/// sound the delay unit — rather than because they are the darkest.
 struct GsReverbCharacterInfo {
   bool delay_type;
   float damping;
