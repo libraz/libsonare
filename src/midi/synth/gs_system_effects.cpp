@@ -17,11 +17,11 @@ constexpr float kReturnLevelUnity = 64.0f;
 constexpr float kMaxDelayFeedback = 0.9f;
 constexpr float kMaxUnsignedFeedback = 0.95f;
 
-/// REVERB TIME. The manual gives 0-127 with no time scale; a squared law over
-/// 0.2-12 s puts the power-on Hall 2 (64) at 3.2 s and keeps the short end
-/// usable, which an exponential between the same endpoints cannot.
+/// REVERB TIME. The manual gives no time scale, so the span carries a
+/// measurement: an SC-8850 at power-on Hall 2 (64) decays 1.97 s over
+/// 500 Hz-1 kHz, where 12 s had put it at 3.20. Its HF fall is not adopted.
 constexpr float kReverbTimeMinSeconds = 0.2f;
-constexpr float kReverbTimeSpanSeconds = 11.8f;
+constexpr float kReverbTimeSpanSeconds = 6.97f;
 
 /// CHORUS RATE. No curve given; 0.122 Hz per step spans 0-15.5 Hz and puts the
 /// power-on default (3) at a 0.37 Hz chorus.

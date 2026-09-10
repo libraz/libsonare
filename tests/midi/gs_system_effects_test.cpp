@@ -258,7 +258,11 @@ TEST_CASE("GS scalar conversions span their documented ranges", "[midi][synth][g
 
   SECTION("reverb time rises with the byte and stays inside its endpoints") {
     CHECK(gs_reverb_time_seconds(0) == Approx(0.2).epsilon(1e-4));
-    CHECK(gs_reverb_time_seconds(127) == Approx(12.0).epsilon(1e-4));
+    CHECK(gs_reverb_time_seconds(127) == Approx(7.17).epsilon(1e-4));
+    // The power-on byte is what the span was set by: a measured SC-8850 decays
+    // 1.97 s over 500 Hz-1 kHz at Hall 2. Pinned here so the one point the curve
+    // is fitted to cannot move without this saying so.
+    CHECK(gs_reverb_time_seconds(64) == Approx(1.97).epsilon(1e-3));
     for (int v = 0; v < 127; ++v) {
       INFO(byte_name("value", v));
       CHECK(gs_reverb_time_seconds(static_cast<uint8_t>(v)) <
