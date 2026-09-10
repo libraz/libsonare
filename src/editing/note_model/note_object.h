@@ -49,6 +49,13 @@ struct NoteEdit {
   /// saturates near -10.3 and +8.7 semitones rather than being rejected.
   float formant_shift_semitones = 0.0f;
 
+  /// Scales the vibrato measured over the note, stated as a change from it:
+  /// 0 keeps it, -1 flattens it, +1 doubles it. Applying it needs a pitch
+  /// curve, so a note carrying none is rejected rather than left alone.
+  float vibrato_depth_change = 0.0f;
+  /// The same, for the slow drift around the note's centre pitch.
+  float drift_change = 0.0f;
+
   /// Per-frame linear gain over the note's span, on top of @ref gain_db.
   ///
   /// Resampled to whatever length the note is rendered at, so it survives a
@@ -62,7 +69,7 @@ struct NoteEdit {
   bool is_identity() const noexcept {
     return !muted && pitch_shift_semitones == 0.0f && gain_db == 0.0f && time_offset_samples == 0 &&
            time_stretch_ratio == 1.0f && formant_shift_semitones == 0.0f &&
-           amplitude_envelope.empty();
+           vibrato_depth_change == 0.0f && drift_change == 0.0f && amplitude_envelope.empty();
   }
 };
 

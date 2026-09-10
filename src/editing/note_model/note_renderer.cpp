@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "editing/note_model/pitch_decomposition.h"
+#include "editing/pitch_editor/pitch_corrector.h"
 #include "effects/formant_warp.h"
 #include "effects/pitch_shift.h"
 #include "util/constants.h"
@@ -18,6 +20,7 @@
 namespace sonare::editing::note_model {
 namespace {
 
+using sonare::constants::kCentsPerSemitone;
 using sonare::constants::kHalfPi;
 using sonare::constants::kSemitonesPerOctave;
 
@@ -123,6 +126,49 @@ void apply_envelope(std::vector<float>& segment, const std::vector<float>& envel
   }
 }
 
+/// True when at least one frame carries a pitch decompose_pitch can measure.
+bool has_usable_pitch(const std::vector<float>& f0_hz) noexcept {
+  return std::any_of(f0_hz.begin(), f0_hz.end(),
+                     [](float hz) { return hz > 0.0f && std::isfinite(hz); });
+}
+
+/// Rescales the note's own drift and vibrato by the edit's two changes and
+/// repitches @p segment through them. The deltas are a change from the measured
+/// curve, so -1 cancels a component and 0 leaves it alone. Duration-preserving,
+/// so the segment keeps its length for the rest of the chain.
+void apply_pitch_curve(std::vector<float>& segment, const NoteObject& note, int sample_rate,
+                       const NoteRenderConfig& config) {
+  const PitchDecomposition split = decompose_pitch(note, config.decomposition);
+  const size_t n = note.f0_hz.values.size();
+  // Unreachable while validation and decompose_pitch agree on what a usable
+  // curve is; an error rather than a skip so that they cannot part silently.
+  SONARE_CHECK(split.drift.size() == n, ErrorCode::InvalidParameter);
+
+  std::vector<float> deltas(n);
+  for (size_t i = 0; i < n; ++i) {
+    deltas[i] = (split.drift[i] * note.edit.drift_change +
+                 split.vibrato[i] * note.edit.vibrato_depth_change) /
+                kCentsPerSemitone;
+  }
+
+  // The note's own frames, which is the cadence the deltas are stated over.
+  pitch_editor::F0Track track;
+  track.f0_hz = note.f0_hz.values;
+  track.voiced.resize(n);
+  for (size_t i = 0; i < n; ++i) {
+    track.voiced[i] = track.f0_hz[i] > 0.0f && std::isfinite(track.f0_hz[i]);
+  }
+  track.sample_rate = sample_rate;
+  track.frame_rate_hz = note.f0_hz.frame_rate_hz;
+
+  pitch_editor::PitchCorrectionConfig correction;
+  correction.backend = config.stretch_backend;
+  const Audio repitched =
+      pitch_editor::PitchCorrector(correction)
+          .resynthesize(Audio::from_vector(segment, sample_rate), track, deltas);
+  segment.assign(repitched.begin(), repitched.end());
+}
+
 }  // namespace
 
 Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
@@ -137,8 +183,17 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     const NoteEdit& edit = note.edit;
     SONARE_CHECK(std::isfinite(edit.pitch_shift_semitones) && std::isfinite(edit.gain_db) &&
                      std::isfinite(edit.time_stretch_ratio) && edit.time_stretch_ratio > 0.0f &&
-                     std::isfinite(edit.formant_shift_semitones),
+                     std::isfinite(edit.formant_shift_semitones) &&
+                     std::isfinite(edit.vibrato_depth_change) && std::isfinite(edit.drift_change),
                  ErrorCode::InvalidParameter);
+    // A pitch-curve edit with no curve to read is a wiring bug, not a no-op.
+    // The frames are scanned too: a median can outlive every frame that
+    // produced it, and decompose_pitch reports such a note as unmeasured.
+    if (edit.vibrato_depth_change != 0.0f || edit.drift_change != 0.0f) {
+      SONARE_CHECK(note.median_hz > 0.0f && note.f0_hz.frame_rate_hz > 0.0f &&
+                       has_usable_pitch(note.f0_hz.values),
+                   ErrorCode::InvalidParameter);
+    }
     for (const float value : edit.amplitude_envelope) {
       SONARE_CHECK(std::isfinite(value) && value >= 0.0f, ErrorCode::InvalidParameter);
     }
@@ -167,6 +222,9 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     if (note.edit.muted) continue;
 
     std::vector<float> segment(audio.begin() + onset, audio.begin() + offset);
+    if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
+      apply_pitch_curve(segment, note, sample_rate, config);
+    }
     if (note.edit.time_stretch_ratio != 1.0f) {
       TimeStretchConfig stretch_config;
       stretch_config.backend = config.stretch_backend;

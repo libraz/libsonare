@@ -669,6 +669,7 @@ if(BUILD_PITCH_EDITOR)
     editing/note_model/note_extractor.cpp
     editing/note_model/note_renderer.cpp
     editing/note_model/note_split_merge.cpp
+    editing/note_model/pitch_decomposition.cpp
     editing/pitch_editor/f0_provider.cpp
     editing/pitch_editor/note_editor.cpp
     editing/pitch_editor/note_segmenter.cpp

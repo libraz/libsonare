@@ -12,6 +12,7 @@
 
 #include "core/audio.h"
 #include "editing/note_model/note_object.h"
+#include "editing/note_model/pitch_decomposition.h"
 #include "effects/time_stretch.h"
 
 namespace sonare::editing::note_model {
@@ -20,6 +21,9 @@ struct NoteRenderConfig {
   /// Equal-power cross-fade at each edited note's edges.
   float fade_ms = 5.0f;
   StretchBackend stretch_backend = StretchBackend::NativeSpectral;
+  /// Where the vibrato and drift edits cut the pitch curve. Copy it from the
+  /// @ref PitchDecomposition a host drew from rather than restating the cutoff.
+  PitchDecompositionConfig decomposition{};
 };
 
 /// @brief Renders @p notes over @p audio.
@@ -31,18 +35,22 @@ struct NoteRenderConfig {
 ///          other. A note lengthened past its own span writes into its
 ///          neighbours' samples for the same reason.
 ///
-///          Per note the order is: time stretch, pitch shift, formant warp,
-///          amplitude envelope, then gain. The formant warp is an LPC
-///          analysis-resynthesis round and runs only when the note asks for
-///          one, so an edit that leaves formant_shift_semitones at 0 costs
-///          nothing and loses nothing to it.
+///          Per note the order is: pitch curve, time stretch, pitch shift,
+///          formant warp, amplitude envelope, then gain. The pitch curve goes
+///          first because the note's F0 track describes the source audio, and
+///          nothing later in the chain preserves the frame-to-sample mapping it
+///          is read through. The formant warp is an LPC analysis-resynthesis
+///          round and runs only when the note asks for one, so an edit that
+///          leaves formant_shift_semitones at 0 costs nothing and loses nothing
+///          to it.
 ///
 ///          Validation covers every note, identity or not: an unrenderable set
 ///          is unrenderable whether or not this call would touch it.
 /// @throws SonareException(InvalidParameter) on empty audio, a note whose span
 ///         is empty or reversed, overlapping source spans, a non-finite or
-///         non-positive edit field, a non-finite or negative envelope value, or
-///         a non-finite config value.
+///         non-positive edit field, a non-finite or negative envelope value, a
+///         non-finite config value, or a vibrato/drift edit on a note that
+///         carries no usable pitch curve to apply it to.
 Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
                    const NoteRenderConfig& config = {});
 
