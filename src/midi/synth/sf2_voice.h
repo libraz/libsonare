@@ -32,6 +32,7 @@
 #include <cstdint>
 
 #include "midi/synth/envelope.h"
+#include "midi/synth/sample_reader.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/svf.h"
 #include "midi/synth/voice_pool.h"
@@ -269,9 +270,8 @@ float sf2_cc_gain(uint8_t value) noexcept;
 
 /// One playing SF2 voice (lives in a VoicePool inside Sf2Player).
 struct Sf2Voice : VoiceState {
-  const float* data = nullptr;  // sample pool base (read-only)
+  SampleReader reader;
   Sf2VoiceParams params;
-  double pos = 0.0;
   float velocity_gain = 1.0f;
   DahdsrEnvelope env;
   DahdsrEnvelope mod_env;

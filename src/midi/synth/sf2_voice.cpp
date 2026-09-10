@@ -214,9 +214,8 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
 
 void Sf2Voice::start(const float* pool_data, const Sf2VoiceParams& p, double sample_rate,
                      float velocity_gain_in) noexcept {
-  data = pool_data;
   params = p;
-  pos = static_cast<double>(p.start);
+  reader.start(pool_data, SampleRegion{p.start, p.end, p.loop_start, p.loop_end, p.loop_mode});
   velocity_gain = velocity_gain_in;
   key_down = true;
   releasing = false;
@@ -256,7 +255,7 @@ void Sf2Voice::choke(double sample_rate) noexcept {
 }
 
 float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
-  if (!active || data == nullptr) return 0.0f;
+  if (!active || !reader.valid()) return 0.0f;
 
   // Refresh the cached stereo pan gains when zone pan + CC10 changed.
   const float pan_units = params.pan_units + mod.pan_units;
@@ -267,36 +266,13 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
     gain_right = gains.right;
   }
 
-  const bool looping = params.loop_mode == 1 || (params.loop_mode == 3 && key_down);
-
-  // Wrap into the loop (also catches increments larger than the loop).
-  if (looping) {
-    const double loop_len =
-        static_cast<double>(params.loop_end) - static_cast<double>(params.loop_start);
-    if (!std::isfinite(pos)) {
-      active = false;
-      env.kill();
-      return 0.0f;
-    }
-    if (pos >= static_cast<double>(params.loop_end) && loop_len > 0.0) {
-      pos = static_cast<double>(params.loop_start) +
-            std::fmod(pos - static_cast<double>(params.loop_start), loop_len);
-    }
-  } else if (pos >= static_cast<double>(params.end)) {
+  const bool looping = reader.looping(key_down);
+  if (!reader.wrap(looping)) {
     active = false;
     env.kill();
     return 0.0f;
   }
-
-  // Linear interpolation; the second tap wraps across the loop seam.
-  const uint32_t i0 = static_cast<uint32_t>(pos);
-  const float mu = static_cast<float>(pos - static_cast<double>(i0));
-  uint32_t i1 = i0 + 1;
-  if (looping && i1 >= params.loop_end) i1 = params.loop_start;
-  if (i1 >= params.end) i1 = params.end > 0 ? params.end - 1 : 0;
-  const float y0 = data[i0];
-  const float y1 = data[i1];
-  float sample = y0 + mu * (y1 - y0);
+  float sample = reader.read(looping);
 
   // --- modulation sources ---
   const float mod_env_level = mod_env.next();
@@ -318,9 +294,9 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
                             vib_lfo_value * (params.vib_lfo_to_pitch + mod.extra_vibrato_cents) +
                             glide_cents;
   if (pitch_cents != 0.0f) {
-    pos += params.pitch_increment * std::exp2(static_cast<double>(pitch_cents) / 1200.0);
+    reader.advance(params.pitch_increment * std::exp2(static_cast<double>(pitch_cents) / 1200.0));
   } else {
-    pos += params.pitch_increment;
+    reader.advance(params.pitch_increment);
   }
 
   // --- filter: Fc = zone Fc + modEnv + modLFO (cents) ---

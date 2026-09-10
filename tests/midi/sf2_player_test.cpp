@@ -566,12 +566,12 @@ TEST_CASE("Sf2Voice wraps sustained loops in constant time", "[midi][sf2]") {
   Sf2Voice voice;
   voice.start(pool, params, kOutRate, 1.0f);
   voice.active = true;
-  voice.pos = 1.0e12;
+  voice.reader.set_position(1.0e12);
 
   const float sample = voice.render({});
 
   REQUIRE(std::isfinite(sample));
-  REQUIRE(voice.pos < 3.0);
+  REQUIRE(voice.reader.position() < 3.0);
 }
 
 TEST_CASE("Sf2Player applies GS per-note drum NRPN to the fallback voice", "[midi][sf2]") {
