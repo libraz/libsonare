@@ -139,7 +139,7 @@ int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
 
 // The four voice-changer commands below stay registered in the CLI's command
 // table regardless of BUILD_VOICE_CHANGER (see get_commands() in
-// tools/sonare_cli.cpp), so a build without the voice changer must still
+// tools/cli/sonare_cli.cpp), so a build without the voice changer must still
 // answer the subcommand -- with a NotImplemented diagnostic mapped to the
 // CLI's not-supported exit code -- instead of failing to link.
 #if defined(SONARE_WITH_VOICE_CHANGER)

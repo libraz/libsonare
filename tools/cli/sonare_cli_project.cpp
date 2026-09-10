@@ -23,13 +23,13 @@
 // of the success line, while a plain run prints the success line to stdout and
 // the same diagnostics to stderr.
 //
-// Usage exit code, mirroring kExitUsage in tools/sonare_cli.cpp. A missing or
+// Usage exit code, mirroring kExitUsage in tools/cli/sonare_cli.cpp. A missing or
 // blank `project` subcommand is a usage error, which is a different class from
 // the invalid-parameter code a plain `1` carries.
 constexpr int kExitUsage = 2;
 
 // Invalid-parameter exit code, mirroring kExitInvalidParameter in
-// tools/sonare_cli.cpp. This is what a plain `1` from any handler normalizes
+// tools/cli/sonare_cli.cpp. This is what a plain `1` from any handler normalizes
 // to, so a branch only spells it out when it is returning the code alongside
 // others (see project_exit_code).
 constexpr int kExitInvalidParameter = 3;

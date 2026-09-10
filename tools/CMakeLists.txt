@@ -1,14 +1,17 @@
 # CLI tool
 add_executable(sonare
-  sonare_cli.cpp
+  cli/sonare_cli.cpp
   cli/sonare_cli_analysis.cpp
+  cli/sonare_cli_args.cpp
   cli/sonare_cli_common.cpp
+  cli/sonare_cli_console.cpp
   cli/sonare_cli_dsp.cpp
   cli/sonare_cli_features_metering.cpp
+  cli/sonare_cli_json.cpp
   cli/sonare_cli_mastering_mixing.cpp
   cli/sonare_cli_processing.cpp
   cli/sonare_cli_project.cpp
-  cli_support.cpp
+  cli/sonare_cli_registry.cpp
 )
 
 target_link_libraries(sonare PRIVATE sonare_core)

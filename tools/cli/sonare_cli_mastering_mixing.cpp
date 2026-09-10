@@ -542,7 +542,7 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     params.push_back({"band0.attackMs", args.get_float("attack-ms", 5.0f)});
     params.push_back({"band0.releaseMs", args.get_float("release-ms", 50.0f)});
     // "--lookahead-ms" is registered as an alias of "--detector-delay-ms" (see
-    // cli_support.cpp), so this lookup already resolves either spelling; the
+    // sonare_cli_registry.cpp), so this lookup already resolves either spelling; the
     // constructed key is always the canonical "detectorDelayMs".
     params.push_back({"band0.detectorDelayMs", args.get_float("detector-delay-ms", 0.0f)});
     params.push_back({"band0.sidechainFreqHz", args.get_float("sidechain-freq-hz", -1.0f)});

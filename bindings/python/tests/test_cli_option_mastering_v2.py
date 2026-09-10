@@ -363,7 +363,7 @@ def test_mixing_preset_default_matches_the_native_cli() -> None:
     )
     assert action.default == "vocalReverbSend"
 
-    native = Path(__file__).resolve().parents[3] / "tools" / "cli_support.cpp"
+    native = Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_registry.cpp"
     text = native.read_text(encoding="utf-8")
     assert 'string_value("preset", "vocalReverbSend")' in text
 

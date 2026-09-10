@@ -10,7 +10,10 @@ FetchContent_MakeAvailable(Catch2)
 # Test executable
 add_executable(sonare_tests
   test_main.cpp
-  ${PROJECT_SOURCE_DIR}/tools/cli_support.cpp
+  ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_args.cpp
+  ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_console.cpp
+  ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_json.cpp
+  ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_registry.cpp
   util/math_utils_test.cpp
   util/numeric_overflow_guard_test.cpp
   util/types_test.cpp

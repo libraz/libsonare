@@ -85,9 +85,12 @@
 #ifdef SONARE_WITH_ARRANGEMENT
 #include <sonare/sonare_c_project.h>
 #endif
-#include "cli_support.h"
 #include "quick.h"
 #include "sonare.h"
+#include "sonare_cli_args.h"
+#include "sonare_cli_console.h"
+#include "sonare_cli_json.h"
+#include "sonare_cli_registry.h"
 #include "util/frame.h"
 #include "util/json.h"
 #include "util/padding.h"

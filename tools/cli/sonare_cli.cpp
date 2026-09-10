@@ -1,7 +1,7 @@
 /// @file sonare_cli.cpp
 /// @brief Command-line interface for sonare audio analysis.
 
-#include "cli/sonare_cli.h"
+#include "sonare_cli.h"
 
 // ============================================================================
 // Command Registry
