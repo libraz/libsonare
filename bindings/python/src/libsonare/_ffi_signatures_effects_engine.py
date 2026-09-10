@@ -192,6 +192,35 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    # sonare_extract_notes + sonare_free_note_objects + sonare_render_notes
+    if hasattr(lib, "sonare_extract_notes"):
+        lib.sonare_extract_notes.restype = ctypes.c_int32
+        lib.sonare_extract_notes.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_int32),
+            ctypes.c_size_t,
+            ctypes.c_float,
+            ctypes.POINTER(SonareNoteExtractorConfig),
+            ctypes.POINTER(SonareNoteObjectsResult),
+        ]
+        lib.sonare_free_note_objects.restype = None
+        lib.sonare_free_note_objects.argtypes = [ctypes.POINTER(SonareNoteObjectsResult)]
+        lib.sonare_render_notes.restype = ctypes.c_int32
+        lib.sonare_render_notes.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareNoteObject),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareNoteRenderConfig),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     # sonare_voice_change
     lib.sonare_voice_change.restype = ctypes.c_int32
     lib.sonare_voice_change.argtypes = [

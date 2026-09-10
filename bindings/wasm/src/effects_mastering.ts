@@ -1,4 +1,5 @@
 export {
+  extractNotes,
   harmonic,
   hpss,
   normalize,
@@ -9,6 +10,7 @@ export {
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
   pitchShift,
+  renderNotes,
   spectralEdit,
   timeStretch,
 } from './effects_transform';

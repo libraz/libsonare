@@ -135,6 +135,7 @@ add_executable(sonare_tests
   api/sonare_c_mixing_features_test.cpp
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
+  api/sonare_c_note_objects_test.cpp
   api/sonare_c_metering_extra_test.cpp
   conformance/public_input_conformance_test.cpp
   librosa/convert_test.cpp

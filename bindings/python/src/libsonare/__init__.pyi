@@ -27,6 +27,12 @@ from .analyzer import (
     MixerStereoResult as MixerStereoResult,
 )
 from .analyzer import (
+    NoteEdit as NoteEdit,
+)
+from .analyzer import (
+    NoteObject as NoteObject,
+)
+from .analyzer import (
     RealtimeVoiceChanger as RealtimeVoiceChanger,
 )
 from .analyzer import (
@@ -169,6 +175,9 @@ from .analyzer import (
 )
 from .analyzer import (
     estimate_tuning as estimate_tuning,
+)
+from .analyzer import (
+    extract_notes as extract_notes,
 )
 from .analyzer import (
     fix_frames as fix_frames,
@@ -493,6 +502,9 @@ from .analyzer import (
 )
 from .analyzer import (
     remix_aligned_intervals as remix_aligned_intervals,
+)
+from .analyzer import (
+    render_notes as render_notes,
 )
 from .analyzer import (
     resample as resample,

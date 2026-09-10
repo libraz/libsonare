@@ -150,6 +150,134 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
 SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,
                              int offset_sample, int target_onset_sample, float** out,
                              size_t* out_length);
+// ============================================================================
+// Effects - Note objects
+// ============================================================================
+
+/// @brief Versioned configuration for @ref sonare_extract_notes.
+/// @details Zero-initialize for the defaults (50 cents, 30 ms, A4 = 440 Hz,
+///          voiced threshold 0.5). @c struct_version 0 and 1 both select the
+///          version-1 layout. Every float takes its default at 0, so a zeroed
+///          struct and a NULL pointer behave alike.
+typedef struct {
+  int32_t struct_version;
+  float segmentation_threshold_cents;
+  float min_note_ms;
+  float reference_hz;
+  /// Value of @c voiced_prob at or above which a frame counts as voiced. Read
+  /// only when @c voiced is NULL. 0 keeps the default 0.5.
+  ///
+  /// pYIN's @c voiced_prob is a frame's voiced observation mass and rises with
+  /// F0 for a fixed frame length, so the 0.5 default silently drops low
+  /// registers: pass its @c voiced_flag through @c voiced instead.
+  float voiced_threshold;
+} SonareNoteExtractorConfig;
+
+/// @brief Versioned configuration for @ref sonare_render_notes.
+/// @details Zero-initialize for the default 5 ms fade. @c struct_version 0 and 1
+///          both select the version-1 layout.
+typedef struct {
+  int32_t struct_version;
+  /// Equal-power cross-fade at each edited note's edges. 0 keeps the default
+  /// 5 ms; a hard cut is deliberately not selectable, because the seam it
+  /// leaves behind is a click.
+  float fade_ms;
+} SonareNoteRenderConfig;
+
+/// @brief A pending, non-destructive change to one note.
+/// @details Zero-initializing gives the identity edit: @c time_stretch_ratio 0
+///          reads as 1, so a zeroed struct changes nothing.
+typedef struct {
+  /// Moves the note along the timeline. Negative moves it earlier.
+  int64_t time_offset_samples;
+  float pitch_shift_semitones;
+  float gain_db;
+  /// >1 lengthens the note, <1 shortens it; pitch is preserved. 0 reads as 1.
+  float time_stretch_ratio;
+  /// Non-zero silences the note's span; the other fields then do not apply.
+  int32_t muted;
+} SonareNoteEdit;
+
+/// One editable note. Sample bounds are half-open into the source audio; frame
+/// bounds are half-open into the caller's own F0 track.
+typedef struct {
+  int64_t onset_sample;
+  int64_t offset_sample;
+  /// Index of this note's first RMS value in the owning result's @c amplitude
+  /// array; the note occupies @c frame_end - @c frame_start entries from there.
+  /// Set on output and ignored by @ref sonare_render_notes.
+  int64_t amplitude_offset;
+  int32_t frame_start;
+  int32_t frame_end;
+  float median_hz;
+  /// Median pitch in cents above the config's @c reference_hz.
+  float median_cents;
+  /// Pitch steadiness in [0, 1], from the median absolute deviation of the
+  /// span's cents against the segmentation threshold. 1 is perfectly steady.
+  ///
+  /// The only quality figure a note carries. A voiced fraction would be one
+  /// too, but the segmenter emits maximal voiced runs, so it is 1 for every
+  /// note it can produce and measures nothing.
+  float f0_stability;
+  SonareNoteEdit edit;
+} SonareNoteObject;
+
+/// Heap-owned note-object output. Release with @ref sonare_free_note_objects.
+/// @details The per-note F0 curve is not repeated here: it is the caller's own
+///          @c f0_hz sliced by @c [frame_start, frame_end). The amplitude curve
+///          is new, so it is returned -- one RMS per F0 frame over that frame's
+///          samples, concatenated in note order.
+typedef struct {
+  SonareNoteObject* notes;
+  size_t count;
+  float* amplitude;
+  size_t amplitude_count;
+} SonareNoteObjectsResult;
+
+/// @brief Extract editable note objects from audio and an F0 track.
+/// @details Spans come from the same segmenter @ref sonare_note_segments uses.
+///          Each note additionally carries its median pitch, its two measured
+///          quality figures, and its slice of the amplitude curve. Every
+///          returned note has the identity edit.
+/// @param samples Source audio; @p length must be non-zero.
+/// @param f0_hz Per-frame F0 in Hz, @p n_frames entries. Every value must be
+///        finite and non-negative; zero denotes an unvoiced frame.
+/// @param voiced_prob Per-frame voicing in [0, 1], or NULL. Read only when
+///        @p voiced is NULL, and then required.
+/// @param voiced Per-frame voiced flags (non-zero = voiced), or NULL.
+/// @param n_frames Number of F0 frames; must be non-zero.
+/// @param frame_rate F0 frames per second; must be finite and > 0.
+/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param out Receives a heap-owned result, cleared before validation. An empty
+///        segmentation is returned as NULL pointers with zero counts.
+SonareError sonare_extract_notes(const float* samples, size_t length, int sample_rate,
+                                 const float* f0_hz, const float* voiced_prob,
+                                 const int32_t* voiced, size_t n_frames, float frame_rate,
+                                 const SonareNoteExtractorConfig* config,
+                                 SonareNoteObjectsResult* out);
+void sonare_free_note_objects(SonareNoteObjectsResult* result);
+
+/// @brief Render edited note objects over their source audio.
+/// @details Reads only each note's sample span and its @c edit; the frame
+///          bounds, medians, metrics and amplitude offset are ignored, so a
+///          host may pass back exactly what @ref sonare_extract_notes produced.
+///          A note whose edit is the identity is not resynthesized, so a set
+///          whose edits are all identity reproduces the input bit for bit.
+///
+///          Overlap is checked on the source spans only. Where
+///          @c time_offset_samples lands a note is not, and a note lengthened
+///          past its own span writes into its neighbours' samples, so two moved
+///          or stretched notes may be written over each other.
+/// @param notes May be NULL when @p note_count is 0.
+/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param out Receives the rendered audio, which has the input's length.
+/// @note The returned array is heap-allocated and MUST be released with
+///       @ref sonare_free_floats.
+SonareError sonare_render_notes(const float* samples, size_t length, int sample_rate,
+                                const SonareNoteObject* notes, size_t note_count,
+                                const SonareNoteRenderConfig* config, float** out,
+                                size_t* out_length);
+
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);

@@ -3827,6 +3827,168 @@
     ],
     "size": 140
   },
+  "SonareNoteEdit": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "time_offset_samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "pitch_shift_semitones",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "gain_db",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "time_stretch_ratio",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "muted",
+        "offset": 20,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareNoteExtractorConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "segmentation_threshold_cents",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_note_ms",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reference_hz",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "voiced_threshold",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareNoteObject": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "onset_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "offset_sample",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "amplitude_offset",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "frame_start",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "frame_end",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "median_hz",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "median_cents",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "f0_stability",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "edit",
+        "offset": 48,
+        "size": 24
+      }
+    ],
+    "size": 72
+  },
+  "SonareNoteObjectsResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "notes",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "amplitude",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "amplitude_count",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
   "SonareNotePairValidation": {
     "align": 4,
     "fields": [
@@ -3850,6 +4012,24 @@
       }
     ],
     "size": 12
+  },
+  "SonareNoteRenderConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fade_ms",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
   },
   "SonareNoteSegment": {
     "align": 4,

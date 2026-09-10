@@ -590,6 +590,65 @@ def voice_change(
     formant_factor: float = 1.0,
 ) -> list[float]: ...
 
+class NoteEdit:
+    time_offset_samples: int
+    pitch_shift_semitones: float
+    gain_db: float
+    time_stretch_ratio: float
+    muted: bool
+    def __init__(
+        self,
+        time_offset_samples: int = 0,
+        pitch_shift_semitones: float = 0.0,
+        gain_db: float = 0.0,
+        time_stretch_ratio: float = 1.0,
+        muted: bool = False,
+    ) -> None: ...
+
+class NoteObject:
+    onset_sample: int
+    offset_sample: int
+    frame_start: int
+    frame_end: int
+    median_hz: float
+    median_cents: float
+    f0_stability: float
+    amplitude: np.ndarray[Any, Any]
+    edit: NoteEdit
+    def __init__(
+        self,
+        onset_sample: int = 0,
+        offset_sample: int = 0,
+        frame_start: int = 0,
+        frame_end: int = 0,
+        median_hz: float = 0.0,
+        median_cents: float = 0.0,
+        f0_stability: float = 0.0,
+        amplitude: np.ndarray[Any, Any] = ...,
+        edit: NoteEdit = ...,
+    ) -> None: ...
+
+def extract_notes(
+    samples: FloatSamples,
+    sample_rate: int,
+    f0_hz: FloatSamples,
+    frame_rate: float,
+    *,
+    voiced: IntSamples | None = None,
+    voiced_prob: FloatSamples | None = None,
+    segmentation_threshold_cents: float | None = None,
+    min_note_ms: float | None = None,
+    reference_hz: float | None = None,
+    voiced_threshold: float | None = None,
+) -> list[NoteObject]: ...
+def render_notes(
+    samples: FloatSamples,
+    sample_rate: int,
+    notes: Sequence[NoteObject],
+    *,
+    fade_ms: float | None = None,
+) -> np.ndarray[Any, Any]: ...
+
 class SpectralRegionOp:
     start_sample: int
     end_sample: int

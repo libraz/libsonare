@@ -446,6 +446,13 @@ python = [
 # the ops array and a redundant count would let them disagree; same ergonomic
 # options-fold + array-length derivation already accepted for midi_route_events.
 # Remapped to C order internally (addon / embind / ctypes). Not order drift.
+# extract_notes (python): C is (f0_hz, voiced_prob, voiced, n_frames, frame_rate,
+# config). The facade exposes (f0_hz, frame_rate, ...) and DERIVES n_frames from
+# the f0_hz array length, then folds the SonareNoteExtractorConfig fields and the
+# voiced / voiced_prob companion arrays into keyword args. Same ergonomic
+# options-fold + array-length derivation already accepted for
+# pitch_correct_timevarying, whose C signature this one mirrors. Remapped to C
+# order in the ctypes wrapper. Not order drift.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -505,6 +512,7 @@ python = [
   "midi_cc_learn",
   "midi_route_events",
   "spectral_edit",
+  "extract_notes",
   "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
   "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
@@ -700,6 +708,16 @@ fields = [
   # WASM computes it in the result converter, and all three define it as
   # `end - start`, so the three agree on both the name and the value.
   "chord.duration",
+
+  # --- category 1: a shared buffer + per-record offset -> one array per record ---
+  # C returns every note's RMS curve concatenated into one `amplitude` array on
+  # SonareNoteObjectsResult, so each note carries `amplitude_offset` to find its
+  # slice. Both JS facades cut the slice in the wrapper and hand each note its
+  # own `amplitude` typed array, which leaves the offset with nothing to index —
+  # it is a C memory-layout detail, not a property of a note. The ctypes mirror
+  # keeps the C shape, so Python is not affected.
+  "note_object.amplitude_offset",
+  "note_object.amplitude",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model

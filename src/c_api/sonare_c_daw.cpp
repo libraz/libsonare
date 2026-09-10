@@ -1,9 +1,13 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
+#include <vector>
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
+#include "editing/note_model/note_extractor.h"
+#include "editing/note_model/note_renderer.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #endif
@@ -23,6 +27,30 @@ bool valid_pitch_track_f0(float f0_hz, bool voiced, int sample_rate) {
     return !voiced && std::isnan(f0_hz);
   }
   return f0_hz >= 0.0f && f0_hz <= 0.5f * static_cast<float>(sample_rate);
+}
+
+/// Resolves a versioned note-extractor config onto the core defaults. Every
+/// float takes its default at 0, matching sonare_note_segments.
+SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
+                                     editing::note_model::NoteExtractorConfig& out) {
+  if (config == nullptr) return SONARE_OK;
+  if (config->struct_version < 0 || config->struct_version > 1) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!std::isfinite(config->segmentation_threshold_cents) || !std::isfinite(config->min_note_ms) ||
+      !std::isfinite(config->reference_hz) || !std::isfinite(config->voiced_threshold) ||
+      config->segmentation_threshold_cents < 0.0f || config->min_note_ms < 0.0f ||
+      config->reference_hz < 0.0f || config->voiced_threshold < 0.0f ||
+      config->voiced_threshold > 1.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (config->segmentation_threshold_cents > 0.0f) {
+    out.segmenter.segmentation_threshold_cents = config->segmentation_threshold_cents;
+  }
+  if (config->min_note_ms > 0.0f) out.segmenter.min_note_ms = config->min_note_ms;
+  if (config->reference_hz > 0.0f) out.segmenter.reference_hz = config->reference_hz;
+  if (config->voiced_threshold > 0.0f) out.voiced_threshold = config->voiced_threshold;
+  return SONARE_OK;
 }
 
 }  // namespace
@@ -209,6 +237,153 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, onset_sample, offset_sample,
                               stretch_ratio, out, out_length);
+#endif
+}
+
+SonareError sonare_extract_notes(const float* samples, size_t length, int sample_rate,
+                                 const float* f0_hz, const float* voiced_prob,
+                                 const int32_t* voiced, size_t n_frames, float frame_rate,
+                                 const SonareNoteExtractorConfig* config,
+                                 SonareNoteObjectsResult* out) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  out->notes = nullptr;
+  out->count = 0;
+  out->amplitude = nullptr;
+  out->amplitude_count = 0;
+
+  if (f0_hz == nullptr || n_frames == 0 ||
+      n_frames > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+      (voiced == nullptr && voiced_prob == nullptr) || !std::isfinite(frame_rate) ||
+      !(frame_rate > 0.0f)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  editing::note_model::NoteExtractorConfig extractor_config;
+  const SonareError config_error = resolve_extractor_config(config, extractor_config);
+  if (config_error != SONARE_OK) return config_error;
+
+  for (size_t i = 0; i < n_frames; ++i) {
+    if (!std::isfinite(f0_hz[i]) || f0_hz[i] < 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
+    if (voiced == nullptr &&
+        (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    editing::pitch_editor::F0Track track;
+    track.sample_rate = sample_rate;
+    // Left at 0 deliberately: the extractor derives the hop from the cadence,
+    // which is the rate the caller actually stated.
+    track.hop_length = 0;
+    track.frame_rate_hz = frame_rate;
+    track.f0_hz.assign(f0_hz, f0_hz + n_frames);
+    track.voiced.resize(n_frames);
+    for (size_t i = 0; i < n_frames; ++i) {
+      track.voiced[i] =
+          voiced ? voiced[i] != 0 : voiced_prob[i] >= extractor_config.voiced_threshold;
+    }
+
+    const std::vector<editing::note_model::NoteObject> notes =
+        editing::note_model::extract_notes(audio, track, extractor_config);
+    if (notes.empty()) return SONARE_OK;
+
+    size_t total_frames = 0;
+    for (const editing::note_model::NoteObject& note : notes) {
+      total_frames += note.amplitude.values.size();
+    }
+
+    auto c_notes = std::make_unique<SonareNoteObject[]>(notes.size());
+    std::unique_ptr<float[]> amplitude;
+    if (total_frames > 0) amplitude = std::make_unique<float[]>(total_frames);
+
+    int64_t amplitude_offset = 0;
+    for (size_t i = 0; i < notes.size(); ++i) {
+      const editing::note_model::NoteObject& note = notes[i];
+      SonareNoteObject& row = c_notes[i];
+      row.onset_sample = note.onset_sample;
+      row.offset_sample = note.offset_sample;
+      row.amplitude_offset = amplitude_offset;
+      row.frame_start = note.frame_start;
+      row.frame_end = note.frame_end;
+      row.median_hz = note.median_hz;
+      row.median_cents = note.median_cents;
+      row.f0_stability = note.f0_stability;
+      row.edit = SonareNoteEdit{0, 0.0f, 0.0f, 1.0f, 0};
+      const size_t span = note.amplitude.values.size();
+      if (span > 0) {
+        std::memcpy(amplitude.get() + amplitude_offset, note.amplitude.values.data(),
+                    span * sizeof(float));
+      }
+      amplitude_offset += static_cast<int64_t>(span);
+    }
+
+    out->count = notes.size();
+    out->notes = c_notes.release();
+    out->amplitude_count = total_frames;
+    out->amplitude = amplitude.release();
+    return SONARE_OK;
+  });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
+                              frame_rate, config, out);
+#endif
+}
+
+void sonare_free_note_objects(SonareNoteObjectsResult* result) {
+  if (result == nullptr) return;
+  delete[] result->notes;
+  delete[] result->amplitude;
+  result->notes = nullptr;
+  result->count = 0;
+  result->amplitude = nullptr;
+  result->amplitude_count = 0;
+}
+
+SonareError sonare_render_notes(const float* samples, size_t length, int sample_rate,
+                                const SonareNoteObject* notes, size_t note_count,
+                                const SonareNoteRenderConfig* config, float** out,
+                                size_t* out_length) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  editing::note_model::NoteRenderConfig render_config;
+  if (config != nullptr) {
+    if (config->struct_version < 0 || config->struct_version > 1) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (!std::isfinite(config->fade_ms) || config->fade_ms < 0.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (config->fade_ms > 0.0f) render_config.fade_ms = config->fade_ms;
+  }
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    std::vector<editing::note_model::NoteObject> core_notes(note_count);
+    for (size_t i = 0; i < note_count; ++i) {
+      // Only the span and the edit are read; carrying the rest across would be
+      // fields the renderer never looks at.
+      core_notes[i].onset_sample = notes[i].onset_sample;
+      core_notes[i].offset_sample = notes[i].offset_sample;
+      editing::note_model::NoteEdit& edit = core_notes[i].edit;
+      edit.time_offset_samples = notes[i].edit.time_offset_samples;
+      edit.pitch_shift_semitones = notes[i].edit.pitch_shift_semitones;
+      edit.gain_db = notes[i].edit.gain_db;
+      // A zeroed SonareNoteEdit must be the identity, so 0 reads as 1 here.
+      edit.time_stretch_ratio =
+          notes[i].edit.time_stretch_ratio == 0.0f ? 1.0f : notes[i].edit.time_stretch_ratio;
+      edit.muted = notes[i].edit.muted != 0;
+    }
+    Audio result = editing::note_model::render_notes(audio, core_notes, render_config);
+    return copy_audio_result(result, out, out_length);
+  });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, notes, note_count, config, out,
+                              out_length);
 #endif
 }
 

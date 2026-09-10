@@ -208,3 +208,63 @@ class SonareSpectralRegionOp(ctypes.Structure):
         ("gain_db", ctypes.c_float),
         ("mode", ctypes.c_int),
     ]
+
+
+class SonareNoteExtractorConfig(ctypes.Structure):
+    """Maps to SonareNoteExtractorConfig in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int32),
+        ("segmentation_threshold_cents", ctypes.c_float),
+        ("min_note_ms", ctypes.c_float),
+        ("reference_hz", ctypes.c_float),
+        ("voiced_threshold", ctypes.c_float),
+    ]
+
+
+class SonareNoteRenderConfig(ctypes.Structure):
+    """Maps to SonareNoteRenderConfig in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int32),
+        ("fade_ms", ctypes.c_float),
+    ]
+
+
+class SonareNoteEdit(ctypes.Structure):
+    """Maps to SonareNoteEdit in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("time_offset_samples", ctypes.c_int64),
+        ("pitch_shift_semitones", ctypes.c_float),
+        ("gain_db", ctypes.c_float),
+        ("time_stretch_ratio", ctypes.c_float),
+        ("muted", ctypes.c_int32),
+    ]
+
+
+class SonareNoteObject(ctypes.Structure):
+    """Maps to SonareNoteObject in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("onset_sample", ctypes.c_int64),
+        ("offset_sample", ctypes.c_int64),
+        ("amplitude_offset", ctypes.c_int64),
+        ("frame_start", ctypes.c_int32),
+        ("frame_end", ctypes.c_int32),
+        ("median_hz", ctypes.c_float),
+        ("median_cents", ctypes.c_float),
+        ("f0_stability", ctypes.c_float),
+        ("edit", SonareNoteEdit),
+    ]
+
+
+class SonareNoteObjectsResult(ctypes.Structure):
+    """Maps to SonareNoteObjectsResult in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("notes", ctypes.POINTER(SonareNoteObject)),
+        ("count", ctypes.c_size_t),
+        ("amplitude", ctypes.POINTER(ctypes.c_float)),
+        ("amplitude_count", ctypes.c_size_t),
+    ]

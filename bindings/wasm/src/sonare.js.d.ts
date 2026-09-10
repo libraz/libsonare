@@ -8,6 +8,8 @@
  */
 
 import type {
+  NoteObject,
+  NoteObjectInput,
   ProgressCallback,
   SonareCapabilities,
   SpectralRegionOp,
@@ -1816,6 +1818,26 @@ export interface SonareModule {
     onsetSample: number,
     offsetSample: number,
     targetOnsetSample: number,
+  ) => Float32Array;
+  extractNotes: (
+    samples: Float32Array,
+    sampleRate: number,
+    f0Hz: Float32Array,
+    voicedProb: Float32Array | undefined,
+    voiced: Float32Array | undefined,
+    frameRate: number,
+    options: {
+      segmentationThresholdCents?: number;
+      minNoteMs?: number;
+      referenceHz?: number;
+      voicedThreshold?: number;
+    },
+  ) => NoteObject[];
+  renderNotes: (
+    samples: Float32Array,
+    sampleRate: number,
+    notes: readonly NoteObjectInput[],
+    options: { fadeMs?: number },
   ) => Float32Array;
   voiceChange: (
     samples: Float32Array,

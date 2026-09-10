@@ -155,6 +155,104 @@ export interface NoteStretchOptions {
   stretchRatio?: number;
 }
 
+/** Segmentation tuning for {@link extractNotes}. All fields are optional. */
+export interface NoteExtractorOptions {
+  /** Cents of pitch change that start a new note. Default 50. */
+  segmentationThresholdCents?: number;
+  /** Shortest span kept as a note. Default 30 ms. */
+  minNoteMs?: number;
+  /** Reference pitch the `medianCents` of each note is measured against. Default 440. */
+  referenceHz?: number;
+  /**
+   * Value of `voicedProb` at or above which a frame counts as voiced. Read only
+   * when `voiced` is omitted. Default 0.5.
+   *
+   * pYIN's `voicedProb` is a frame's voiced observation mass and rises with F0
+   * for a fixed frame length, so this default silently drops low registers —
+   * pass `pitchPyin`'s `voicedFlag` through `voiced` instead.
+   */
+  voicedThreshold?: number;
+}
+
+/**
+ * A pending, non-destructive change to one note. {@link extractNotes} attaches
+ * the identity edit (no move, no transpose, unity gain and stretch, unmuted) to
+ * every note it returns; {@link renderNotes} applies whatever the caller has
+ * changed.
+ */
+export interface NoteEdit {
+  /**
+   * Moves the note along the timeline; negative moves it earlier. Where the note
+   * lands is not bounds-checked, so a moved note may overwrite a neighbour.
+   */
+  timeOffsetSamples: number;
+  /** Transpose applied to the note's span. */
+  pitchShiftSemitones: number;
+  /** Level change applied to the note's span. */
+  gainDb: number;
+  /** `>1` lengthens the note, `<1` shortens it; pitch is preserved. */
+  timeStretchRatio: number;
+  /** Silences the note's span; the other fields then do not apply. */
+  muted: boolean;
+}
+
+/**
+ * A {@link NoteEdit} as supplied to {@link renderNotes}. Every field is optional
+ * and an omitted one is the identity, so `{}` leaves the note untouched.
+ */
+export type NoteEditInput = Partial<NoteEdit>;
+
+/**
+ * One editable note returned by {@link extractNotes}.
+ *
+ * Sample bounds are half-open into the source audio; frame bounds are half-open
+ * into the caller's own `f0Hz` track. The per-note F0 curve is deliberately not
+ * repeated here — it is `f0Hz.subarray(frameStart, frameEnd)`.
+ *
+ * `onsetSample` and `offsetSample` are 64-bit on the C side and arrive as JS
+ * numbers, which are exact up to `Number.MAX_SAFE_INTEGER`.
+ */
+export interface NoteObject {
+  /** First sample of the note's span. */
+  onsetSample: number;
+  /** One past the last sample of the span. */
+  offsetSample: number;
+  /** First frame of the span in the caller's `f0Hz` track. */
+  frameStart: number;
+  /** One past the last frame of the span. */
+  frameEnd: number;
+  /** Median measured pitch over the span, in Hz. */
+  medianHz: number;
+  /** Median pitch in cents above the request's `referenceHz`. */
+  medianCents: number;
+  /**
+   * Pitch steadiness in `[0, 1]`; 1 is perfectly steady.
+   *
+   * The only quality figure a note carries. A voiced fraction would be one too,
+   * but the segmenter emits maximal voiced runs, so it is 1 for every note it
+   * can produce and measures nothing.
+   */
+  f0Stability: number;
+  /** One RMS value per frame of the span (`frameEnd - frameStart` entries). */
+  amplitude: Float32Array;
+  /** This note's pending edit; the identity as returned. */
+  edit: NoteEdit;
+}
+
+/**
+ * A note handed to {@link renderNotes}. Only the span and the edit are read, so
+ * a {@link NoteObject} straight from {@link extractNotes} can be passed back
+ * with its `edit` changed and nothing else.
+ */
+export interface NoteObjectInput {
+  /** First sample of the note's span. */
+  onsetSample: number;
+  /** One past the last sample of the span. */
+  offsetSample: number;
+  /** Omit for the identity edit. */
+  edit?: NoteEditInput;
+}
+
 /** Options for {@link noteMove}. */
 export interface NoteMoveOptions {
   onsetSample?: number;

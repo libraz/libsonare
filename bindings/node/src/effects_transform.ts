@@ -2,7 +2,10 @@ import { resolveFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type {
   HpssResult,
+  NoteExtractorOptions,
   NoteMoveOptions,
+  NoteObject,
+  NoteObjectInput,
   NoteStretchOptions,
   PitchCorrectOptions,
   SpectralEditOptions,
@@ -90,6 +93,38 @@ export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, Pi
 
 export interface NoteStretchRequest extends EffectSamplesRequest, NoteStretchOptions {}
 export interface NoteMoveRequest extends EffectSamplesRequest, NoteMoveOptions {}
+
+export interface ExtractNotesRequest extends EffectSamplesRequest, NoteExtractorOptions {
+  /**
+   * Sample rate in Hz. Required: `minNoteMs` and the per-frame RMS windows are
+   * converted to samples with this rate, so a wrong/omitted value silently
+   * segments differently.
+   */
+  sampleRate: number;
+  /** Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. */
+  f0Hz: Float32Array;
+  /** F0 frames per second. */
+  frameRate: number;
+  /** Per-frame voiced flags (truthy = voiced). Takes precedence over `voicedProb`. */
+  voiced?: VoicedFlags;
+  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  voicedProb?: Float32Array;
+}
+
+export interface RenderNotesRequest extends EffectSamplesRequest {
+  /**
+   * Sample rate in Hz. Required: `fadeMs` is converted to samples with this
+   * rate, so a wrong/omitted value changes the cross-fade length.
+   */
+  sampleRate: number;
+  /** The notes to render, with their edits. Source spans must not overlap. */
+  notes: readonly NoteObjectInput[];
+  /**
+   * Equal-power cross-fade at each edited note's edges. Default 5 ms; a hard cut
+   * is deliberately not selectable, because the seam it leaves is a click.
+   */
+  fadeMs?: number;
+}
 
 function assertPitchTrackLengths(
   f0Hz: Float32Array,
@@ -467,4 +502,101 @@ export function noteMove(
     request.offsetSample ?? request.samples.length,
     request.targetOnsetSample ?? 0,
   );
+}
+
+/**
+ * Segment audio and a caller-supplied F0 track into editable note objects.
+ *
+ * Each note carries its sample span, its frame span into the caller's own
+ * `f0Hz`, its median pitch, two measured quality figures, its own amplitude
+ * (RMS-per-frame) curve, and the identity {@link NoteEdit}. Change the edits and
+ * hand the notes to {@link renderNotes} to hear them; nothing is applied here.
+ *
+ * The per-note F0 curve is deliberately not returned — it is already the
+ * caller's, as `f0Hz.subarray(note.frameStart, note.frameEnd)`.
+ *
+ * Voicing comes from `voiced` when given, and otherwise from `voicedProb`
+ * thresholded at `voicedThreshold`; at least one of the two is required. Prefer
+ * `voiced`: `voicedProb` rises with F0 for a fixed frame length, so a fixed
+ * threshold silently drops low-register notes.
+ *
+ * @param request - Audio, its sample rate, the F0 track and its frame rate,
+ *   plus the optional segmentation tuning.
+ * @returns One {@link NoteObject} per segmented note, in time order. A pitch
+ *   track that segments into nothing returns an empty array.
+ * @throws {TypeError} `frameRate` is not a finite number, or neither `voiced`
+ *   nor `voicedProb` was given.
+ * @throws {RangeError} `sampleRate` is out of the supported range, or `voiced` /
+ *   `voicedProb` do not have the same length as `f0Hz`.
+ *
+ * @example
+ * ```ts
+ * const pitch = pitchPyin({ samples, sampleRate });
+ * const notes = extractNotes({
+ *   samples,
+ *   sampleRate,
+ *   f0Hz: pitch.f0,
+ *   voiced: pitch.voicedFlag,
+ *   frameRate: sampleRate / 512,
+ *   minNoteMs: 40,
+ * });
+ *
+ * // Lift the second note by a semitone and drop it 3 dB.
+ * notes[1].edit.pitchShiftSemitones = 1;
+ * notes[1].edit.gainDb = -3;
+ * const edited = renderNotes({ samples, sampleRate, notes });
+ * ```
+ */
+export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
+  const { samples, sampleRate, f0Hz, frameRate, voiced, ...options } = request;
+  assertSampleRate('extractNotes', sampleRate);
+  if (typeof frameRate !== 'number' || !Number.isFinite(frameRate)) {
+    throw new TypeError('extractNotes: frameRate must be a finite number');
+  }
+  if (voiced === undefined && options.voicedProb === undefined) {
+    throw new TypeError('extractNotes: one of voiced or voicedProb is required');
+  }
+  assertPitchTrackLengths(f0Hz, voiced, options.voicedProb);
+  return addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
+    ...options,
+    voiced: voiced ? toVoicedInt32(voiced) : undefined,
+  });
+}
+
+/**
+ * Render edited note objects over their source audio.
+ *
+ * Only each note's `onsetSample`, `offsetSample` and `edit` are read, so the
+ * notes {@link extractNotes} returned can be handed straight back. A note whose
+ * edit is the identity is not resynthesized, so a set whose edits are all
+ * identity reproduces the input bit for bit. The result has the input's length.
+ *
+ * Overlap is checked on the source spans only. Where `timeOffsetSamples` lands a
+ * note is not, and a note lengthened past its own span writes into its
+ * neighbours' samples, so two moved or stretched notes may overwrite each other.
+ *
+ * @param request - Audio, its sample rate, the notes to render, and the
+ *   optional edge cross-fade.
+ * @returns The rendered audio, the same length as `samples`.
+ * @throws {TypeError} `notes` is not an array.
+ * @throws {RangeError} `sampleRate` is out of the supported range.
+ *
+ * @example
+ * ```ts
+ * const notes = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate });
+ *
+ * // Silence the third note and leave the rest untouched.
+ * const muted = notes.map((note, index) =>
+ *   index === 2 ? { ...note, edit: { ...note.edit, muted: true } } : note,
+ * );
+ * const output = renderNotes({ samples, sampleRate, notes: muted, fadeMs: 10 });
+ * ```
+ */
+export function renderNotes(request: RenderNotesRequest): Float32Array {
+  const { samples, sampleRate, notes, ...options } = request;
+  assertSampleRate('renderNotes', sampleRate);
+  if (!Array.isArray(notes)) {
+    throw new TypeError('renderNotes: notes must be an array');
+  }
+  return addon.renderNotes(samples, sampleRate, notes, options);
 }

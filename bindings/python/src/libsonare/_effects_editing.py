@@ -7,6 +7,8 @@ import dataclasses
 from collections.abc import Sequence
 from numbers import Integral
 
+import numpy as np
+
 from ._ffi import (
     SONARE_PITCH_TARGET_FIXED_MIDI,
     SONARE_PITCH_TARGET_SCALE,
@@ -15,6 +17,11 @@ from ._ffi import (
     SONARE_SPECTRAL_EDIT_MODE_HEAL,
     SONARE_SPECTRAL_EDIT_MODE_MUTE,
     SonareHpssResult,
+    SonareNoteEdit,
+    SonareNoteExtractorConfig,
+    SonareNoteObject,
+    SonareNoteObjectsResult,
+    SonareNoteRenderConfig,
     SonarePitchCorrectionConfig,
     SonareSpectralEditConfig,
     SonareSpectralRegionOp,
@@ -27,6 +34,7 @@ from ._runtime import (
     _call_float_transform,
     _check,
     _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _out_float_array,
@@ -41,6 +49,9 @@ from .types import HpssResult
 
 _DEFAULT_EFFECT_N_FFT = 2048
 _DEFAULT_EFFECT_HOP_LENGTH = 512
+
+# Both note-object configs are at layout version 1; 0 selects the same layout.
+_NOTE_STRUCT_VERSION = 1
 
 
 def _unsupported_effect_symbol(symbol: str) -> SonareError:
@@ -565,6 +576,292 @@ def note_move(
         ctypes.c_int(resolved_offset),
         ctypes.c_int(target_onset_sample),
     )
+
+
+@dataclasses.dataclass
+class NoteEdit:
+    """A pending, non-destructive change to one :class:`NoteObject`.
+
+    The default instance is the identity edit, so a note carrying it is left
+    untouched by :func:`render_notes` (and a set whose edits are all identity
+    reproduces the input exactly). Mutate the fields in place to schedule work:
+
+    Attributes:
+        time_offset_samples: Moves the note along the timeline; negative moves
+            it earlier.
+        pitch_shift_semitones: Transposes the note; pitch only, duration is
+            unchanged.
+        gain_db: Level change applied over the note's span.
+        time_stretch_ratio: ``>1`` lengthens the note, ``<1`` shortens it, with
+            pitch preserved.
+        muted: ``True`` silences the note's span; the other fields then do not
+            apply.
+    """
+
+    time_offset_samples: int = 0
+    pitch_shift_semitones: float = 0.0
+    gain_db: float = 0.0
+    time_stretch_ratio: float = 1.0
+    muted: bool = False
+
+
+@dataclasses.dataclass
+class NoteObject:
+    """One editable note returned by :func:`extract_notes`.
+
+    Sample bounds are half-open into the source audio; frame bounds are
+    half-open into the caller's own F0 track, so the note's pitch curve is
+    ``f0_hz[frame_start:frame_end]`` — it is deliberately not repeated here.
+    The amplitude curve is measured by the extractor and therefore is: it is one
+    RMS value per F0 frame, already sliced to this note.
+
+    :func:`render_notes` reads only ``onset_sample``, ``offset_sample`` and
+    ``edit``, so a host may hand back exactly what :func:`extract_notes`
+    produced, or build a bare ``NoteObject(onset_sample=..., offset_sample=...)``
+    for a span it found some other way.
+
+    Attributes:
+        onset_sample: First sample of the note.
+        offset_sample: One past the last sample of the note.
+        frame_start: First F0 frame of the note.
+        frame_end: One past the last F0 frame of the note.
+        median_hz: Median pitch of the span in Hz.
+        median_cents: Median pitch in cents above the extractor's
+            ``reference_hz``.
+        f0_stability: Pitch steadiness in ``[0, 1]``; 1 is perfectly steady.
+        amplitude: ``float32`` RMS curve, one value per frame of the span. Not
+            part of ``==``, which compares the span, the metrics and the edit.
+        edit: The pending :class:`NoteEdit`, identity on a freshly extracted
+            note.
+    """
+
+    onset_sample: int = 0
+    offset_sample: int = 0
+    frame_start: int = 0
+    frame_end: int = 0
+    median_hz: float = 0.0
+    median_cents: float = 0.0
+    f0_stability: float = 0.0
+    # Out of the comparison: an ndarray field makes the generated __eq__ raise
+    # on ambiguous truth. The span already determines this curve.
+    amplitude: np.ndarray = dataclasses.field(
+        default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
+    )
+    edit: NoteEdit = dataclasses.field(default_factory=NoteEdit)
+
+
+@_guard_buffer("samples", "f0_hz")
+def extract_notes(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int,
+    f0_hz: Sequence[float] | list[float] | np.ndarray,
+    frame_rate: float,
+    *,
+    voiced: Sequence[int] | list[int] | np.ndarray | None = None,
+    voiced_prob: Sequence[float] | list[float] | np.ndarray | None = None,
+    segmentation_threshold_cents: float | None = None,
+    min_note_ms: float | None = None,
+    reference_hz: float | None = None,
+    voiced_threshold: float | None = None,
+) -> list[NoteObject]:
+    """Extract editable note objects from audio and a caller-supplied F0 track.
+
+    Spans come from the same segmenter :func:`note_segments` uses, so the two
+    agree on where the notes are; each note here additionally carries its median
+    pitch, two measured quality figures, its own slice of the amplitude curve,
+    and an identity :class:`NoteEdit` ready to be filled in. Feed the result
+    back to :func:`render_notes` to hear the edits.
+
+    Args:
+        samples: Source audio (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz.
+        f0_hz: Per-frame F0 in Hz, one entry per analysis frame. Every value
+            must be finite and non-negative; zero denotes an unvoiced frame.
+        frame_rate: F0 frames per second; must be finite and positive.
+        voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
+            ``voiced_prob``; pass :func:`pitch_pyin`'s ``voiced_flag`` here.
+        voiced_prob: Per-frame voicing probability in ``[0, 1]``, read ONLY when
+            ``voiced`` is ``None``. pYIN's ``voiced_prob`` is a frame's voiced
+            observation mass and rises with F0 for a fixed frame length, so
+            thresholding it drops entire low registers — prefer ``voiced``.
+        segmentation_threshold_cents: Pitch jump that starts a new note;
+            ``None`` keeps the library default (50 cents).
+        min_note_ms: Shortest note kept; ``None`` keeps the default (30 ms).
+        reference_hz: Reference for ``median_cents``; ``None`` keeps the default
+            (A4 = 440 Hz).
+        voiced_threshold: Value of ``voiced_prob`` at or above which a frame
+            counts as voiced; ``None`` keeps the default (0.5). Ignored when
+            ``voiced`` is supplied.
+
+    Returns:
+        List of :class:`NoteObject` in time order; empty when the F0 track
+        segments into no stable notes.
+
+    Raises:
+        SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
+            either has a different length than ``f0_hz``, or if a buffer is
+            empty or non-finite.
+
+    Example:
+        >>> pitch = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512)
+        >>> notes = libsonare.extract_notes(
+        ...     samples,
+        ...     sr,
+        ...     pitch.f0,
+        ...     sr / 512,
+        ...     voiced=[int(v) for v in pitch.voiced_flag],
+        ... )
+        >>> notes[0].edit.gain_db = -6.0
+        >>> quieter = libsonare.render_notes(samples, sr, notes)
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_extract_notes"):
+        raise _unsupported_effect_symbol("sonare_extract_notes")
+    if voiced is None and voiced_prob is None:
+        raise SonareValueError("extract_notes: pass voiced or voiced_prob")
+
+    c_array, length = _to_c_float_array(samples)
+    f0_array, n_frames = _to_c_float_array(f0_hz)
+    prob_array = None
+    if voiced_prob is not None:
+        prob_array, prob_len = _to_c_float_array(voiced_prob)
+        if prob_len != n_frames:
+            raise SonareValueError("extract_notes: voiced_prob must have f0_hz's length")
+    voiced_array = None
+    if voiced is not None:
+        voiced_array, voiced_len = _to_c_int_array(voiced)
+        if voiced_len != n_frames:
+            raise SonareValueError("extract_notes: voiced must have f0_hz's length")
+
+    config = SonareNoteExtractorConfig(
+        _NOTE_STRUCT_VERSION,
+        0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,
+        0.0 if min_note_ms is None else min_note_ms,
+        0.0 if reference_hz is None else reference_hz,
+        0.0 if voiced_threshold is None else voiced_threshold,
+    )
+    out = SonareNoteObjectsResult()
+    rc = lib.sonare_extract_notes(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        f0_array,
+        prob_array,
+        voiced_array,
+        ctypes.c_size_t(n_frames),
+        ctypes.c_float(frame_rate),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        # Copy the concatenated RMS curve out once, then hand every note its own
+        # slice so no caller has to redo the amplitude-offset arithmetic.
+        amplitude = _from_c_float_array(out.amplitude, out.amplitude_count)
+        return [_note_from_c(out.notes[i], amplitude) for i in range(out.count)]
+    finally:
+        lib.sonare_free_note_objects(ctypes.byref(out))
+
+
+def _note_from_c(row: SonareNoteObject, amplitude: np.ndarray) -> NoteObject:
+    """Build one :class:`NoteObject` from a C row and the shared RMS curve."""
+    start = int(row.amplitude_offset)
+    stop = start + int(row.frame_end) - int(row.frame_start)
+    return NoteObject(
+        onset_sample=int(row.onset_sample),
+        offset_sample=int(row.offset_sample),
+        frame_start=int(row.frame_start),
+        frame_end=int(row.frame_end),
+        median_hz=float(row.median_hz),
+        median_cents=float(row.median_cents),
+        f0_stability=float(row.f0_stability),
+        amplitude=amplitude[start:stop].copy(),
+        edit=NoteEdit(
+            time_offset_samples=int(row.edit.time_offset_samples),
+            pitch_shift_semitones=float(row.edit.pitch_shift_semitones),
+            gain_db=float(row.edit.gain_db),
+            time_stretch_ratio=float(row.edit.time_stretch_ratio),
+            muted=bool(row.edit.muted),
+        ),
+    )
+
+
+@_guard_buffer("samples")
+def render_notes(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int,
+    notes: Sequence[NoteObject],
+    *,
+    fade_ms: float | None = None,
+) -> np.ndarray:
+    """Render edited note objects over their source audio.
+
+    Only each note's ``onset_sample``, ``offset_sample`` and ``edit`` are read,
+    so the list :func:`extract_notes` returned can be passed straight back. A
+    note whose edit is the identity is not resynthesized, so a set whose edits
+    are all identity reproduces the input exactly.
+
+    Overlap is checked on the *source* spans only. Where an edit's
+    ``time_offset_samples`` lands a note is not, and a note lengthened past its
+    own span writes into its neighbours' samples, so two moved or stretched
+    notes may be written over each other.
+
+    Args:
+        samples: Source audio (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz.
+        notes: Notes to render; an empty sequence returns the input unchanged.
+        fade_ms: Equal-power cross-fade at each edited note's edges; ``None``
+            keeps the library default (5 ms). A hard cut is deliberately not
+            selectable, because the seam it leaves behind is a click.
+
+    Returns:
+        ``numpy.ndarray`` of ``float32`` with the same length as the input.
+
+    Raises:
+        SonareValueError: If ``samples`` is empty or non-finite.
+        SonareError: If the C call rejects the request (e.g. a note span that
+            overlaps another's).
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_render_notes"):
+        raise _unsupported_effect_symbol("sonare_render_notes")
+
+    c_array, length = _to_c_float_array(samples)
+    note_count = len(notes)
+    c_notes = None
+    if note_count > 0:
+        c_notes = (SonareNoteObject * note_count)()
+        for i, note in enumerate(notes):
+            # Only the span and the edit are read; the frame bounds, medians and
+            # metrics stay zeroed rather than being marshalled for nothing.
+            c_notes[i].onset_sample = int(note.onset_sample)
+            c_notes[i].offset_sample = int(note.offset_sample)
+            c_notes[i].edit = SonareNoteEdit(
+                int(note.edit.time_offset_samples),
+                float(note.edit.pitch_shift_semitones),
+                float(note.edit.gain_db),
+                float(note.edit.time_stretch_ratio),
+                1 if note.edit.muted else 0,
+            )
+
+    config = SonareNoteRenderConfig(
+        _NOTE_STRUCT_VERSION,
+        0.0 if fade_ms is None else fade_ms,
+    )
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_render_notes(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                c_notes,
+                ctypes.c_size_t(note_count),
+                ctypes.byref(config),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        )
+        return _from_c_float_array(out, out_length.value)
 
 
 _SPECTRAL_EDIT_MODE_NAMES: dict[str, int] = {

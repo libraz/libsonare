@@ -2,7 +2,10 @@ import { resolveFftOptions } from './_fft_options';
 import { getSonareModule } from './module_state';
 import type {
   HpssResult,
+  NoteExtractorOptions,
   NoteMoveOptions,
+  NoteObject,
+  NoteObjectInput,
   NoteStretchOptions,
   PitchCorrectOptions,
   SpectralEditOptions,
@@ -121,6 +124,42 @@ export interface NoteStretchRequest extends NoteStretchOptions, ValidateOptions 
 export interface NoteMoveRequest extends NoteMoveOptions, ValidateOptions {
   samples: Float32Array;
   sampleRate?: number;
+}
+
+/** Canonical request form for {@link extractNotes}. */
+export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptions {
+  samples: Float32Array;
+  /**
+   * Sample rate in Hz. Required: `minNoteMs` and the per-frame RMS windows are
+   * converted to samples with this rate, so a wrong/omitted value silently
+   * segments differently.
+   */
+  sampleRate: number;
+  /** Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. */
+  f0Hz: Float32Array;
+  /** F0 frames per second. */
+  frameRate: number;
+  /** Per-frame voiced flags (truthy = voiced). Takes precedence over `voicedProb`. */
+  voiced?: VoicedFlags;
+  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
+  voicedProb?: Float32Array;
+}
+
+/** Canonical request form for {@link renderNotes}. */
+export interface RenderNotesRequest extends ValidateOptions {
+  samples: Float32Array;
+  /**
+   * Sample rate in Hz. Required: `fadeMs` is converted to samples with this
+   * rate, so a wrong/omitted value changes the cross-fade length.
+   */
+  sampleRate: number;
+  /** The notes to render, with their edits. Source spans must not overlap. */
+  notes: readonly NoteObjectInput[];
+  /**
+   * Equal-power cross-fade at each edited note's edges. Default 5 ms; a hard cut
+   * is deliberately not selectable, because the seam it leaves is a click.
+   */
+  fadeMs?: number;
 }
 
 export interface NormalizeRequest extends ValidateOptions {
@@ -599,6 +638,112 @@ export function noteMove(
     request.offsetSample ?? request.samples.length,
     request.targetOnsetSample ?? 0,
   );
+}
+
+/**
+ * Extract editable note objects from audio and a caller-supplied F0 track.
+ *
+ * The track is segmented into monophonic notes; each note carries its span in
+ * source samples, its span in the track's own frames, its median pitch, two
+ * measured quality figures, its per-frame amplitude (RMS) curve, and an identity
+ * {@link NoteEdit}. Edit the notes and hand them to {@link renderNotes} to apply
+ * the result — the source audio is never mutated, and a set whose edits are all
+ * identity renders back to the input bit for bit.
+ *
+ * The per-note F0 curve is deliberately not returned: it is the caller's own
+ * `f0Hz` sliced by `[frameStart, frameEnd)`. The amplitude curve is measured
+ * here, so it is, one entry per F0 frame over that note's span.
+ *
+ * Voicing comes from `voiced` (truthy = voiced). `voicedProb` is read only when
+ * `voiced` is absent, and then a frame counts as voiced at or above
+ * `voicedThreshold` (default 0.5). At least one of the two is required. Because
+ * `voicedProb` from pYIN rises with F0 for a fixed frame length, prefer passing
+ * a {@link PitchResult}'s `voicedFlag` through `voiced`.
+ *
+ * @param request - Audio, F0 track, frame cadence and segmenter options
+ * @returns One {@link NoteObject} per segmented note, in time order; an empty
+ *   array when the track segments to nothing
+ * @throws RangeError when `voiced` / `voicedProb` do not match `f0Hz` in length,
+ *   or the samples/sample rate fail the shared input checks
+ * @throws SonareError (`InvalidParameter`) on an empty `f0Hz`, a non-positive
+ *   `frameRate`, a negative or non-finite `f0Hz` value, a `voicedProb` outside
+ *   `[0, 1]`, or a negative option value
+ *
+ * @example
+ * ```ts
+ * const { f0Hz, voicedFlag } = pitchPyin(samples, sampleRate);
+ * const notes = extractNotes({
+ *   samples,
+ *   sampleRate,
+ *   f0Hz,
+ *   voiced: voicedFlag,
+ *   frameRate: sampleRate / 512,
+ *   minNoteMs: 40,
+ * });
+ * // Lift the second note by a semitone and mute the third.
+ * notes[1].edit.pitchShiftSemitones = 1;
+ * notes[2].edit.muted = true;
+ * const edited = renderNotes({ samples, sampleRate, notes });
+ * ```
+ */
+export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
+  assertSamples('extractNotes', request.samples, request.validate !== false);
+  assertSampleRate('extractNotes', request.sampleRate);
+  if (request.voiced && request.voiced.length !== request.f0Hz.length) {
+    throw new RangeError('extractNotes: voiced length must match f0Hz length');
+  }
+  if (request.voicedProb && request.voicedProb.length !== request.f0Hz.length) {
+    throw new RangeError('extractNotes: voicedProb length must match f0Hz length');
+  }
+  const voicedF32 = request.voiced ? toVoicedFloat32(request.voiced) : undefined;
+  return requireModule().extractNotes(
+    request.samples,
+    request.sampleRate,
+    request.f0Hz,
+    request.voicedProb,
+    voicedF32,
+    request.frameRate,
+    request,
+  );
+}
+
+/**
+ * Render edited note objects back over their source audio.
+ *
+ * Only a note whose edit is non-identity is resynthesized; the source passes
+ * through everywhere else, so a set of untouched {@link extractNotes} output
+ * reproduces the input exactly. The output has the input's length: an edit that
+ * pushes a note past either end is truncated there.
+ *
+ * Only each note's `onsetSample`, `offsetSample` and `edit` are read, so an
+ * extracted note can be passed back as-is, or a note can be built by hand from
+ * those three fields alone. Overlap is checked on the source spans only — where
+ * `timeOffsetSamples` lands a note is not, and a note lengthened past its own
+ * span writes into its neighbours' samples, so two moved or stretched notes may
+ * be written over each other.
+ *
+ * @param request - Source audio, the notes to render, and the cross-fade length
+ * @returns The rendered audio, the same length and sample rate as the input
+ * @throws RangeError when the samples or sample rate fail the shared input checks
+ * @throws SonareError (`InvalidParameter`) on a note whose span is empty,
+ *   reversed or missing, overlapping source spans, a non-finite or non-positive
+ *   edit field, or a negative `fadeMs`
+ *
+ * @example
+ * ```ts
+ * const notes = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate });
+ *
+ * // Silence the third note and leave the rest untouched.
+ * const muted = notes.map((note, index) =>
+ *   index === 2 ? { ...note, edit: { ...note.edit, muted: true } } : note,
+ * );
+ * const rendered = renderNotes({ samples, sampleRate, notes: muted, fadeMs: 10 });
+ * ```
+ */
+export function renderNotes(request: RenderNotesRequest): Float32Array {
+  assertSamples('renderNotes', request.samples, request.validate !== false);
+  assertSampleRate('renderNotes', request.sampleRate);
+  return requireModule().renderNotes(request.samples, request.sampleRate, request.notes, request);
 }
 
 /**

@@ -8,6 +8,8 @@
 #include <limits>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "editing/note_model/note_extractor.h"
+#include "editing/note_model/note_renderer.h"
 #include "util/constants.h"
 #include "wasm/bindings/common/common.h"
 
@@ -292,6 +294,173 @@ val js_note_move(val samples, int sample_rate, int onset_sample, int offset_samp
   region.offset_sample = offset_sample;
   editing::pitch_editor::NoteEditor editor;
   Audio result = editor.move_note(audio, region, target_onset_sample);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
+namespace {
+
+// Every field takes its default at 0 or absent, mirroring
+// SonareNoteExtractorConfig.
+editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options) {
+  editing::note_model::NoteExtractorConfig config;
+  const float threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
+  const float min_note_ms = floatProperty(options, "minNoteMs", 0.0f);
+  const float reference_hz = floatProperty(options, "referenceHz", 0.0f);
+  const float voiced_threshold = floatProperty(options, "voicedThreshold", 0.0f);
+  if (!std::isfinite(threshold_cents) || !std::isfinite(min_note_ms) ||
+      !std::isfinite(reference_hz) || !std::isfinite(voiced_threshold) || threshold_cents < 0.0f ||
+      min_note_ms < 0.0f || reference_hz < 0.0f || voiced_threshold < 0.0f ||
+      voiced_threshold > 1.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "extractNotes: config values must be finite and non-negative, and "
+                          "voicedThreshold must be in [0, 1]");
+  }
+  if (threshold_cents > 0.0f) config.segmenter.segmentation_threshold_cents = threshold_cents;
+  if (min_note_ms > 0.0f) config.segmenter.min_note_ms = min_note_ms;
+  if (reference_hz > 0.0f) config.segmenter.reference_hz = reference_hz;
+  if (voiced_threshold > 0.0f) config.voiced_threshold = voiced_threshold;
+  return config;
+}
+
+// Reads one note's span and pending edit; every other field of a JS note object
+// is ignored, exactly as render_notes ignores the rest of a NoteObject.
+editing::note_model::NoteObject renderableNoteFromVal(const val& row) {
+  editing::note_model::NoteObject note;
+  note.onset_sample =
+      static_cast<int64_t>(requireNumberProperty(row, "onsetSample", "renderNotes note"));
+  note.offset_sample =
+      static_cast<int64_t>(requireNumberProperty(row, "offsetSample", "renderNotes note"));
+  const val edit = objectProperty(row, "edit");
+  if (hasProperty(edit, "timeOffsetSamples")) {
+    note.edit.time_offset_samples = static_cast<int64_t>(
+        requireNumberProperty(edit, "timeOffsetSamples", "renderNotes note.edit"));
+  }
+  note.edit.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
+  note.edit.gain_db = floatProperty(edit, "gainDb", 0.0f);
+  const float stretch_ratio = floatProperty(edit, "timeStretchRatio", 0.0f);
+  // A zeroed edit must be the identity, so 0 reads as 1 (SonareNoteEdit).
+  note.edit.time_stretch_ratio = stretch_ratio == 0.0f ? 1.0f : stretch_ratio;
+  note.edit.muted = boolProperty(edit, "muted", false);
+  return note;
+}
+
+}  // namespace
+
+// Note objects: editable notes extracted from audio plus a caller-supplied F0
+// track, and the render pass that writes an edited set back over that audio.
+// Field names and defaults mirror the C ABI (sonare_extract_notes /
+// sonare_render_notes) with two deliberate differences: the per-note F0 curve is
+// not surfaced, because it is the caller's own f0Hz sliced by [frameStart,
+// frameEnd), and each note carries its own amplitude array instead of an
+// amplitudeOffset into one concatenated buffer, which is a C-ABI memory-layout
+// detail with no meaning here.
+val js_extract_notes(val samples, int sample_rate, val f0_hz, val voiced_prob, val voiced,
+                     float frame_rate, val options) {
+  const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
+  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  if (!has_voiced && !has_prob) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "extractNotes: voiced or voicedProb is required");
+  }
+  if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "extractNotes: frameRate must be a finite positive number");
+  }
+  std::size_t cumulative_count = 0;
+  accumulateWasmFloat32ArrayLength(samples, "samples", "extractNotes input", &cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "extractNotes input", &cumulative_count);
+  if (has_voiced) {
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", "extractNotes input", &cumulative_count);
+  }
+  if (has_prob) {
+    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", "extractNotes input",
+                                     &cumulative_count);
+  }
+
+  const editing::note_model::NoteExtractorConfig config = noteExtractorConfigFromVal(options);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  const size_t n_frames = f0.size();
+  if (n_frames == 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "extractNotes: f0Hz must not be empty");
+  }
+  std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
+  std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
+  if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "extractNotes: voiced and voicedProb must match f0Hz length");
+  }
+  for (size_t i = 0; i < n_frames; ++i) {
+    if (!std::isfinite(f0[i]) || f0[i] < 0.0f) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "extractNotes: f0Hz values must be finite and non-negative");
+    }
+    // voicedProb is read only when voiced is absent, so it is validated only then.
+    if (!has_voiced && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "extractNotes: voicedProb values must be in [0, 1]");
+    }
+  }
+
+  editing::pitch_editor::F0Track track;
+  track.sample_rate = sample_rate;
+  // Left at 0 deliberately: the cadence rule then reads frame_rate_hz, which is
+  // the rate the caller actually stated.
+  track.hop_length = 0;
+  track.frame_rate_hz = frame_rate;
+  track.f0_hz = f0;
+  track.voiced.resize(n_frames);
+  for (size_t i = 0; i < n_frames; ++i) {
+    track.voiced[i] = has_voiced ? voiced_vec[i] != 0.0f : prob_vec[i] >= config.voiced_threshold;
+  }
+
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  const std::vector<editing::note_model::NoteObject> notes =
+      editing::note_model::extract_notes(audio, track, config);
+
+  val out = val::array();
+  for (const editing::note_model::NoteObject& note : notes) {
+    val row = val::object();
+    // Sample positions cross as plain JS numbers rather than BigInt, matching
+    // every other int64 field on this surface.
+    row.set("onsetSample", static_cast<double>(note.onset_sample));
+    row.set("offsetSample", static_cast<double>(note.offset_sample));
+    row.set("frameStart", note.frame_start);
+    row.set("frameEnd", note.frame_end);
+    row.set("medianHz", note.median_hz);
+    row.set("medianCents", note.median_cents);
+    row.set("f0Stability", note.f0_stability);
+    row.set("amplitude", vectorToFloat32Array(note.amplitude.values));
+    val edit = val::object();
+    edit.set("timeOffsetSamples", static_cast<double>(note.edit.time_offset_samples));
+    edit.set("pitchShiftSemitones", note.edit.pitch_shift_semitones);
+    edit.set("gainDb", note.edit.gain_db);
+    edit.set("timeStretchRatio", note.edit.time_stretch_ratio);
+    edit.set("muted", note.edit.muted);
+    row.set("edit", edit);
+    out.call<void>("push", row);
+  }
+  return out;
+}
+
+val js_render_notes(val samples, int sample_rate, val notes, val options) {
+  editing::note_model::NoteRenderConfig config;
+  const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
+  if (!std::isfinite(fade_ms) || fade_ms < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "renderNotes: fadeMs must be finite and non-negative");
+  }
+  if (fade_ms > 0.0f) config.fade_ms = fade_ms;
+
+  const std::size_t count = wasmArrayLikeLength(notes, "renderNotes notes");
+  std::vector<editing::note_model::NoteObject> core_notes;
+  core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
+  for (std::size_t i = 0; i < count; ++i) {
+    core_notes.push_back(renderableNoteFromVal(notes[i]));
+  }
+
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Audio result = editing::note_model::render_notes(audio, core_notes, config);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
@@ -723,6 +892,8 @@ void registerEffectsAudioBindings() {
   function("pitchCorrectTimevarying", &js_pitch_correct_timevarying);
   function("noteStretch", &js_note_stretch);
   function("noteMove", &js_note_move);
+  function("extractNotes", &js_extract_notes);
+  function("renderNotes", &js_render_notes);
   function("voiceChange", &js_voice_change);
   function("voiceChangeRealtime", &js_voice_change_realtime);
   function("decompose", &js_decompose);

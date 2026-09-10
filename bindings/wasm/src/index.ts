@@ -95,6 +95,7 @@ export type {
   VoiceChangeRequest,
 } from './effects_mastering';
 export {
+  extractNotes,
   harmonic,
   hpss,
   masterAudio,
@@ -149,12 +150,14 @@ export {
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
   pitchShift,
+  renderNotes,
   spectralEdit,
   timeStretch,
   voiceChange,
   voiceChangeRealtime,
 } from './effects_mastering';
 export type {
+  ExtractNotesRequest,
   HarmonicRequest,
   HpssRequest,
   NormalizeMode,
@@ -166,6 +169,7 @@ export type {
   PitchCorrectToMidiRequest,
   PitchCorrectToMidiTimevaryingRequest,
   PitchShiftRequest,
+  RenderNotesRequest,
   SpectralEditRequest,
   TimeStretchRequest,
 } from './effects_transform';
@@ -578,6 +582,11 @@ export type {
   MixOptions,
   MixResult,
   MixTrackAlignment,
+  NoteEdit,
+  NoteEditInput,
+  NoteExtractorOptions,
+  NoteObject,
+  NoteObjectInput,
   NoteSegment,
   NoteStretchOptions,
   PairAnalysis,

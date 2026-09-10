@@ -27,6 +27,7 @@ import {
   analyze,
   decomposeStems,
   estimateMeter,
+  extractNotes,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
@@ -44,6 +45,7 @@ import {
   pcen,
   pitchCorrectTimevarying,
   RealtimeEngine,
+  renderNotes,
   roomMorph,
   SampleBank,
   StreamingEqualizer,
@@ -211,6 +213,30 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       Array.from(
         pitchCorrectTimevarying(sine(4096, 220), new Float32Array(16).fill(220), SR, 256, o),
+      ),
+  },
+  {
+    jsName: 'extractNotes',
+    invoke: (o) =>
+      extractNotes({
+        ...o,
+        samples: sine(4096, 220),
+        sampleRate: SR,
+        f0Hz: new Float32Array(16).fill(220),
+        voicedProb: new Float32Array(16).fill(0.9),
+        frameRate: SR / 256,
+      }),
+  },
+  {
+    jsName: 'renderNotes',
+    invoke: (o) =>
+      Array.from(
+        renderNotes({
+          ...o,
+          samples: sine(4096, 220),
+          sampleRate: SR,
+          notes: [{ ...o, onsetSample: 512, offsetSample: 2048, edit: { ...o, gainDb: -6 } }],
+        }),
       ),
   },
   {
