@@ -1245,6 +1245,8 @@ if(BUILD_WASM)
       c_api/mixing_mixer.cpp
       c_api/mixing_strip.cpp
       c_api/project_bounce.cpp
+      c_api/project_bounce_mixer.cpp
+      c_api/project_bounce_stems.cpp
       c_api/project_core.cpp
       c_api/project_edit_clip.cpp
       c_api/project_edit_track.cpp
