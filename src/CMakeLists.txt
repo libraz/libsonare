@@ -743,6 +743,7 @@ if(BUILD_ARRANGEMENT)
     midi/clock_sync.cpp
     midi/capture.cpp
     midi/builtin_synth.cpp
+    midi/layered_instrument.cpp
     midi/synth/envelope.cpp
     midi/synth/oscillator.cpp
     midi/synth/filter_models.cpp
