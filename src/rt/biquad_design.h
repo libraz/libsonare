@@ -55,6 +55,9 @@ BiquadCoeffs rbj_lowpass(float w0, float q);
 BiquadCoeffs rbj_highpass(float w0, float q);
 BiquadCoeffs rbj_bandpass(float w0, float q);
 BiquadCoeffs rbj_notch(float w0, float q);
+/// @brief Second-order all-pass: unit magnitude at every frequency, with the
+///        phase rotating through 360 degrees around @p w0 at a rate @p q sets.
+BiquadCoeffs rbj_allpass(float w0, float q);
 BiquadCoeffs rbj_peak(float w0, float q, float gain_db);
 BiquadCoeffs rbj_high_shelf(float w0, float q, float gain_db);
 BiquadCoeffs rbj_low_shelf(float w0, float q, float gain_db);

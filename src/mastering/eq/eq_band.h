@@ -17,6 +17,12 @@ enum class EqBandType {
   Notch,
   TiltShelf,
   FlatTilt,
+  /// Unit magnitude everywhere; the band exists for the phase rotation it puts
+  /// around its frequency, which is what aligns two sources that fight each
+  /// other there. Nothing on a magnitude display moves, so a caller offering it
+  /// has to say what it is. Not available in LinearPhase, which has no phase to
+  /// give it.
+  AllPass,
 };
 
 enum class BiquadCoeffMode {

@@ -538,7 +538,7 @@ void sonare_eq_destroy(SonareEq* eq);
 /// @brief Sets one of the @c SONARE_EQ_MAX_BANDS equalizer bands from JSON.
 /// @details @p index is in [0, SONARE_EQ_MAX_BANDS). Accepted fields are
 /// @c type (Peak, LowShelf, HighShelf, LowPass, HighPass, BandPass, Notch,
-/// TiltShelf, or FlatTilt), @c frequencyHz, @c gainDb, @c q, @c enabled,
+/// TiltShelf, FlatTilt, or AllPass), @c frequencyHz, @c gainDb, @c q, @c enabled,
 /// @c coeffMode (Rbj or Vicanek), @c slopeDbOct, @c placement (Stereo, Left,
 /// Right, Mid, or Side), @c phase (Inherit, ZeroLatency, NaturalPhase, or
 /// LinearPhase), @c soloed, @c bypassed, @c proportionalQ, and
@@ -596,6 +596,24 @@ SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_chan
 /// @details Refreshed by every @ref sonare_eq_process call; see
 /// @ref SonareEqSnapshot for what each field holds.
 SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out);
+/// @brief Writes the composite magnitude of the equalizer's bands, in dB, at
+/// each of @p count frequencies.
+/// @details The curve to draw over an analyzer. Built from the same coefficient
+/// design, tilt expansion and cut-slope cascade the audio path uses, so it
+/// states what the equalizer does rather than what its settings look like, and
+/// it carries the output gain, the gain scale, and whatever each dynamic band is
+/// applying at the moment of the call. Disabled, bypassed and — when anything is
+/// soloed — unsoloed bands drop out, and a soloed band is drawn as the band pass
+/// it is heard as. Linear-phase bands are included: the phase mode changes the
+/// phase, not the magnitude.
+/// @param placement Which signal path the curve is for: 0 Stereo, 1 Left,
+/// 2 Right, 3 Mid, 4 Side. A band placed on Stereo is on every path; one placed
+/// elsewhere appears only on its own, a mid band having no per-channel magnitude
+/// to fold into a left or right curve.
+/// @param frequencies_hz @p count frequencies, each clamped to [0 Hz, Nyquist].
+/// @param out_db Receives @p count values; may alias nothing else.
+SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
+                                         const float* frequencies_hz, size_t count, float* out_db);
 
 void sonare_free_mastering_result(SonareMasteringResult* result);
 void sonare_free_mastering_stereo_result(SonareMasteringStereoResult* result);

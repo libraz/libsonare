@@ -718,3 +718,192 @@ TEST_CASE("EqualizerProcessor validates expanded backend capacity before prepare
 
   REQUIRE_NOTHROW(eq.prepare(48000.0, 512));
 }
+
+namespace {
+
+/// The gain the processor really applies at @p hz, in dB, measured by pushing a
+/// sine through it. This is the oracle the drawn curve is checked against: a
+/// response function that agreed only with its own arithmetic would be a second
+/// implementation free to drift from the audio.
+float measured_gain_db(const EqBand& band, float hz, int sample_rate) {
+  const int n = sample_rate / 4;
+  EqualizerProcessor eq;
+  eq.set_band(0, band);
+  eq.prepare(sample_rate, n);
+  std::vector<float> buf = sine(hz, sample_rate, n);
+  const float in = rms_tail(buf, static_cast<size_t>(n) / 2);
+  process(eq, buf);
+  const float out = rms_tail(buf, static_cast<size_t>(n) / 2);
+  return 20.0f * std::log10(std::max(out, 1.0e-12f) / std::max(in, 1.0e-12f));
+}
+
+float curve_at(const EqualizerProcessor& eq, float hz) {
+  float out = 0.0f;
+  eq.magnitude_response_db(StereoPlacement::Stereo, &hz, 1, &out);
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("the drawn EQ curve is the gain the processor applies", "[mastering][eq]") {
+  // Every band type that survives to a single section, at a frequency where its
+  // own shape is doing something, checked against a measurement rather than
+  // against the design it came from.
+  constexpr int sample_rate = 48000;
+  const float probes[] = {80.0f, 200.0f, 1000.0f, 4000.0f, 9000.0f};
+
+  auto check = [&](const EqBand& band) {
+    EqualizerProcessor eq;
+    eq.set_band(0, band);
+    eq.prepare(sample_rate, 512);
+    for (float hz : probes) {
+      const float measured = measured_gain_db(band, hz, sample_rate);
+      const float drawn = curve_at(eq, hz);
+      INFO("band type " << static_cast<int>(band.type) << " at " << hz << " Hz");
+      REQUIRE_THAT(drawn, WithinAbs(measured, 0.2f));
+    }
+  };
+
+  check(EqBand{EqBandType::Peak, 1000.0f, 6.0f, 1.5f, true});
+  check(EqBand{EqBandType::Peak, 3000.0f, -9.0f, 4.0f, true});
+  check(EqBand{EqBandType::LowShelf, 200.0f, 5.0f, kButterworthQ, true});
+  check(EqBand{EqBandType::HighShelf, 6000.0f, -4.0f, kButterworthQ, true});
+  check(EqBand{EqBandType::HighPass, 300.0f, 0.0f, kButterworthQ, true});
+  check(EqBand{EqBandType::LowPass, 5000.0f, 0.0f, kButterworthQ, true});
+  check(EqBand{EqBandType::BandPass, 1000.0f, 0.0f, 1.0f, true});
+}
+
+TEST_CASE("the drawn EQ curve follows a cut band's slope", "[mastering][eq]") {
+  // A cut steeper than 12 dB/oct is a cascade, and a curve that read the band
+  // instead of the cascade would draw every slope as 12.
+  constexpr int sample_rate = 48000;
+  EqBand band{EqBandType::HighPass, 1000.0f, 0.0f, kButterworthQ, true};
+  band.slope_db_oct = 48;
+
+  EqualizerProcessor eq;
+  eq.set_band(0, band);
+  eq.prepare(sample_rate, 512);
+
+  // Two octaves down, well into the stopband where the slope is asymptotic.
+  const float upper = curve_at(eq, 250.0f);
+  const float lower = curve_at(eq, 125.0f);
+  REQUIRE_THAT(upper - lower, WithinAbs(48.0f, 1.5f));
+
+  REQUIRE_THAT(curve_at(eq, 250.0f), WithinAbs(measured_gain_db(band, 250.0f, sample_rate), 0.3f));
+}
+
+TEST_CASE("the drawn EQ curve honours a tilt band's two shelves", "[mastering][eq]") {
+  // TiltShelf is not a section at all — it reaches the audio path as a pair of
+  // shelves, and the curve has to expand it the same way rather than throw.
+  constexpr int sample_rate = 48000;
+  EqualizerProcessor eq;
+  eq.set_band(0, EqBand{EqBandType::TiltShelf, 1000.0f, 8.0f, kButterworthQ, true});
+  eq.prepare(sample_rate, 512);
+
+  REQUIRE(curve_at(eq, 100.0f) < -2.0f);   // tilted down at the bottom
+  REQUIRE(curve_at(eq, 10000.0f) > 2.0f);  // and up at the top
+
+  const EqBand tilt_band{EqBandType::TiltShelf, 1000.0f, 8.0f, kButterworthQ, true};
+  REQUIRE_THAT(curve_at(eq, 100.0f),
+               WithinAbs(measured_gain_db(tilt_band, 100.0f, sample_rate), 0.3f));
+}
+
+TEST_CASE("the drawn EQ curve is flat with nothing switched on", "[mastering][eq]") {
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, 512);
+  const float freqs[] = {20.0f, 1000.0f, 20000.0f};
+  float out[3] = {9.0f, 9.0f, 9.0f};
+  eq.magnitude_response_db(StereoPlacement::Stereo, freqs, 3, out);
+  for (float v : out) {
+    REQUIRE_THAT(v, WithinAbs(0.0f, 1.0e-6f));
+  }
+}
+
+TEST_CASE("the drawn EQ curve drops a bypassed band and answers a soloed one", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  EqBand peak{EqBandType::Peak, 1000.0f, 9.0f, 1.5f, true};
+  EqBand shelf{EqBandType::HighShelf, 6000.0f, 9.0f, kButterworthQ, true};
+
+  EqualizerProcessor eq;
+  eq.set_band(0, peak);
+  eq.set_band(1, shelf);
+  eq.prepare(sample_rate, 512);
+  REQUIRE(curve_at(eq, 10000.0f) > 6.0f);
+
+  shelf.bypassed = true;
+  eq.set_band(1, shelf);
+  REQUIRE_THAT(curve_at(eq, 10000.0f), WithinAbs(0.0f, 0.5f));
+
+  // Soloing the peak is heard as a band pass, so the curve has to fall away from
+  // its centre rather than stay at the band's own +9 dB.
+  shelf.bypassed = false;
+  eq.set_band(1, shelf);
+  peak.soloed = true;
+  eq.set_band(0, peak);
+  REQUIRE(curve_at(eq, 1000.0f) > curve_at(eq, 10000.0f) + 12.0f);
+}
+
+TEST_CASE("the drawn EQ curve keeps a mid band off the left path", "[mastering][eq]") {
+  // A mid band has no per-channel magnitude to fold in, while a stereo band runs
+  // on every path — including mid and side, which it commutes with.
+  EqBand mid{EqBandType::Peak, 1000.0f, 9.0f, 1.5f, true};
+  mid.placement = StereoPlacement::Mid;
+  EqBand wide{EqBandType::Peak, 4000.0f, 6.0f, 1.5f, true};
+
+  EqualizerProcessor eq;
+  eq.set_band(0, mid);
+  eq.set_band(1, wide);
+  eq.prepare(48000.0, 512);
+
+  const float hz[] = {1000.0f, 4000.0f};
+  float on_left[2] = {0.0f, 0.0f};
+  float on_mid[2] = {0.0f, 0.0f};
+  eq.magnitude_response_db(StereoPlacement::Left, hz, 2, on_left);
+  eq.magnitude_response_db(StereoPlacement::Mid, hz, 2, on_mid);
+
+  REQUIRE_THAT(on_left[0], WithinAbs(0.0f, 0.5f));  // the mid band is not on it
+  REQUIRE(on_mid[0] > 6.0f);                        // but it is on the mid path
+  REQUIRE(on_left[1] > 4.0f);                       // the stereo band is on both
+  REQUIRE(on_mid[1] > 4.0f);
+}
+
+TEST_CASE("the drawn EQ curve carries the output gain", "[mastering][eq]") {
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, 512);
+  eq.set_output_gain_db(-3.0f);
+  REQUIRE_THAT(curve_at(eq, 1000.0f), WithinAbs(-3.0f, 1.0e-5f));
+}
+
+TEST_CASE("an all-pass band passes every magnitude and rotates the phase", "[mastering][eq]") {
+  // The property is that nothing on a magnitude display moves, which is exactly
+  // what makes a band type easy to wire in wrong and never notice.
+  constexpr int sample_rate = 48000;
+  const EqBand band{EqBandType::AllPass, 1000.0f, 0.0f, 0.7f, true};
+
+  EqualizerProcessor eq;
+  eq.set_band(0, band);
+  eq.prepare(sample_rate, 512);
+  for (float hz : {50.0f, 500.0f, 1000.0f, 5000.0f, 15000.0f}) {
+    INFO(hz << " Hz");
+    REQUIRE_THAT(curve_at(eq, hz), WithinAbs(0.0f, 0.01f));
+    REQUIRE_THAT(measured_gain_db(band, hz, sample_rate), WithinAbs(0.0f, 0.05f));
+  }
+
+  // A gain-only check would pass on a bypassed band too, so the signal has to
+  // have actually changed.
+  const int n = 2048;
+  std::vector<float> filtered = sine(1000.0f, sample_rate, n);
+  const std::vector<float> dry = filtered;
+  EqualizerProcessor phase_eq;
+  phase_eq.set_band(0, band);
+  phase_eq.prepare(sample_rate, n);
+  process(phase_eq, filtered);
+  REQUIRE(max_abs_difference(filtered, dry) > 0.1f);
+}
+
+TEST_CASE("an all-pass band is refused where it would be a wire", "[mastering][eq]") {
+  EqBand band{EqBandType::AllPass, 1000.0f, 0.0f, 0.7f, true};
+  band.phase = PhaseMode::LinearPhase;
+  EqualizerProcessor eq;
+  REQUIRE_THROWS(eq.set_band(0, band));
+}

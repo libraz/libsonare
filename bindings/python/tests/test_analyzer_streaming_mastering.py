@@ -183,6 +183,76 @@ def test_streaming_equalizer_match_configures_bands() -> None:
         assert any(gain > 0.5 for gain in eq.spectrum().band_gain_db)
 
 
+def test_streaming_equalizer_magnitude_response_follows_a_peak_band() -> None:
+    """magnitude_response() reads a +6 dB peak at its centre and flat away from it."""
+    from libsonare import StreamingEqualizer
+
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        eq.set_band(
+            0,
+            {"type": "Peak", "frequencyHz": 1000.0, "gainDb": 6.0, "q": 1.0, "enabled": True},
+        )
+        centre, low, high = eq.magnitude_response([1000.0, 40.0, 16000.0])
+        assert 5.5 < centre < 6.5
+        assert abs(low) < 0.5
+        assert abs(high) < 0.5
+
+
+def test_streaming_equalizer_magnitude_response_is_flat_without_bands() -> None:
+    """With nothing enabled every placement reads 0 dB at every frequency."""
+    from libsonare import StreamingEqualizer
+
+    frequencies = [20.0, 100.0, 1000.0, 10000.0]
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        for placement in ("stereo", "left", "right", "mid", "side"):
+            response = eq.magnitude_response(frequencies, placement=placement)
+            assert len(response) == len(frequencies)
+            assert all(abs(value) < 1e-3 for value in response)
+
+
+def test_streaming_equalizer_magnitude_response_respects_band_placement() -> None:
+    """A band placed on one side is absent from the other side's curve."""
+    from libsonare import StreamingEqualizer
+
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        eq.set_band(
+            0,
+            {
+                "type": "Peak",
+                "frequencyHz": 1000.0,
+                "gainDb": 6.0,
+                "q": 1.0,
+                "enabled": True,
+                "placement": "left",
+            },
+        )
+        (left,) = eq.magnitude_response([1000.0], placement="left")
+        (right,) = eq.magnitude_response([1000.0], placement="right")
+        assert 5.5 < left < 6.5
+        assert abs(right) < 0.5
+
+
+def test_streaming_equalizer_magnitude_response_flat_for_all_pass_band() -> None:
+    """An AllPass band rotates phase only, so it moves nothing on the magnitude curve."""
+    from libsonare import StreamingEqualizer
+
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        eq.set_band(0, {"type": "AllPass", "frequencyHz": 1000.0, "q": 1.0, "enabled": True})
+        response = eq.magnitude_response([200.0, 1000.0, 8000.0])
+        assert all(abs(value) < 0.1 for value in response)
+
+
+def test_streaming_equalizer_magnitude_response_rejects_unknown_placement() -> None:
+    """An unknown placement is rejected by the binding, not forwarded as an ordinal."""
+    from libsonare import SonareValueError, StreamingEqualizer
+
+    with (
+        StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq,
+        pytest.raises(SonareValueError),
+    ):
+        eq.magnitude_response([1000.0], placement="rear")
+
+
 def test_streaming_mastering_chain_rejects_denoise() -> None:
     """StreamingMasteringChain refuses configurations enabling repair.denoise."""
     from libsonare import StreamingMasteringChain

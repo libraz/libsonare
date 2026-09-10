@@ -36,7 +36,8 @@ export type EqBandType =
   | 'BandPass'
   | 'Notch'
   | 'TiltShelf'
-  | 'FlatTilt';
+  | 'FlatTilt'
+  | 'AllPass';
 
 /** Biquad coefficient design mode. */
 export type EqCoeffMode = 'Rbj' | 'Vicanek';

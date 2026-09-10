@@ -92,6 +92,7 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
   Napi::Value ProcessStereo(const Napi::CallbackInfo& info);
+  Napi::Value MagnitudeResponse(const Napi::CallbackInfo& info);
   Napi::Value Spectrum(const Napi::CallbackInfo& info);
   Napi::Value Match(const Napi::CallbackInfo& info);
   Napi::Value Destroy(const Napi::CallbackInfo& info);

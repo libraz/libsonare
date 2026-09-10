@@ -34,4 +34,8 @@ std::optional<PhaseMode> phase_mode_from_string(std::string_view value);
 ///        not a transportable value on that surface and is rejected.
 std::optional<PhaseMode> phase_mode_from_int(int mode);
 
+/// @brief Parses a placement ordinal. 0 is Stereo — a real value here, unlike
+///        the phase mode above, where 0 means "unset".
+std::optional<StereoPlacement> placement_from_int(int placement);
+
 }  // namespace sonare::mastering::eq

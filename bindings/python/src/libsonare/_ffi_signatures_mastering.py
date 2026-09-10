@@ -332,6 +332,15 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_void_p,
                 ctypes.POINTER(SonareEqSnapshot),
             ]
+            if hasattr(lib, "sonare_eq_magnitude_response"):
+                lib.sonare_eq_magnitude_response.restype = ctypes.c_int32
+                lib.sonare_eq_magnitude_response.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_int,
+                    ctypes.POINTER(ctypes.c_float),
+                    ctypes.c_size_t,
+                    ctypes.POINTER(ctypes.c_float),
+                ]
         if hasattr(lib, "sonare_mastering_preset_names"):
             lib.sonare_mastering_preset_names.restype = ctypes.c_char_p
             lib.sonare_mastering_preset_names.argtypes = []

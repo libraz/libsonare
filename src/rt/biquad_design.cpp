@@ -151,6 +151,17 @@ BiquadCoeffs rbj_notch(float w0, float q) {
   return normalize(1.0, -2.0 * cos_w0, 1.0, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha);
 }
 
+BiquadCoeffs rbj_allpass(float w0, float q) {
+  const double q_value = checked_q(q);
+  const double cos_w0 = std::cos(w0);
+  const double sin_w0 = std::sin(w0);
+  const double alpha = sin_w0 / (2.0 * q_value);
+  // The numerator is the denominator reversed, which is what puts every zero at
+  // the reciprocal of a pole and holds the magnitude at exactly 1.
+  return normalize(1.0 - alpha, -2.0 * cos_w0, 1.0 + alpha, 1.0 + alpha, -2.0 * cos_w0,
+                   1.0 - alpha);
+}
+
 BiquadCoeffs rbj_peak(float w0, float q, float gain_db) {
   const double q_value = checked_q(q);
   const double cos_w0 = std::cos(w0);

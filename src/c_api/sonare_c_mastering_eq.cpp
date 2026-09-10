@@ -31,6 +31,12 @@ sonare::mastering::eq::PhaseMode parse_phase(int mode) {
   return *parsed;
 }
 
+sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
+  const auto parsed = sonare::mastering::eq::placement_from_int(placement);
+  if (!parsed) throw SonareException(ErrorCode::InvalidParameter, "unknown EQ band placement");
+  return *parsed;
+}
+
 }  // namespace
 
 SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
@@ -163,6 +169,18 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
     if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     eq->processor.process(channels, num_channels, num_samples);
+    return SONARE_OK;
+    SONARE_C_CATCH
+  }
+
+  SonareError sonare_eq_magnitude_response(
+      const SonareEq* eq, int placement, const float* frequencies_hz, size_t count, float* out_db) {
+    SONARE_C_API_ENTRY;
+    if (!eq || (count > 0 && (!frequencies_hz || !out_db))) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    SONARE_C_TRY
+    eq->processor.magnitude_response_db(parse_placement(placement), frequencies_hz, count, out_db);
     return SONARE_OK;
     SONARE_C_CATCH
   }

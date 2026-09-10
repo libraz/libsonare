@@ -315,6 +315,8 @@ inline eq::EqBandType eq_band_type(int value) {
       return eq::EqBandType::TiltShelf;
     case 8:
       return eq::EqBandType::FlatTilt;
+    case 9:
+      return eq::EqBandType::AllPass;
     default:
       return eq::EqBandType::Peak;
   }

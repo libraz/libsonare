@@ -124,7 +124,7 @@ bool ParametricEq::set_parameter(unsigned int param_id, float value) {
     return false;
   }
   EqBand band = bands_[band_index];
-  // Tilt band types have no coefficient design here (make_coefficients throws
+  // Tilt band types have no coefficient design here (design_eq_biquad throws
   // for them). set_parameter is the RT-safe automation path, so skip rather than
   // throw on the audio thread; the throwing path stays reserved for the control-
   // thread set_band(). A tilt type can never be validly installed in the first
@@ -179,7 +179,8 @@ const EqBand& ParametricEq::band(size_t index) const {
   return bands_[index];
 }
 
-ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, double sample_rate) {
+BiquadCoefficients design_eq_biquad(const EqBand& band, double sample_rate) {
+  using Coefficients = BiquadCoefficients;
   if (!band.enabled) {
     return {};
   }
@@ -219,6 +220,12 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
         return from_common(sonare::rt::vicanek_bandpass(w0f, qf));
       case EqBandType::Notch:
         return from_common(sonare::rt::vicanek_notch(w0f, qf));
+      case EqBandType::AllPass:
+        // No matched-Z all-pass exists, and none is wanted: the bilinear design
+        // is already exactly unit-magnitude, which is the whole property. Falls
+        // through to the RBJ section below rather than throwing, so selecting
+        // NaturalPhase does not take the band type away.
+        break;
       case EqBandType::LowShelf:
         // Vicanek matched-Z shelves have a fixed slope and no Q/S parameter, so
         // band.q is intentionally not passed here (it is honored only by the RBJ
@@ -254,6 +261,9 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
     case EqBandType::Notch:
       return from_common(sonare::rt::rbj_notch(w0f, qf));
 
+    case EqBandType::AllPass:
+      return from_common(sonare::rt::rbj_allpass(w0f, qf));
+
     case EqBandType::LowShelf:
       return from_common(sonare::rt::rbj_low_shelf(w0f, qf, band.gain_db));
 
@@ -270,7 +280,7 @@ ParametricEq::Coefficients ParametricEq::make_coefficients(const EqBand& band, d
 
 void ParametricEq::update_coefficients(size_t index) {
   validate_band_index(index);
-  coefficients_[index] = make_coefficients(bands_[index], sample_rate_);
+  coefficients_[index] = design_eq_biquad(bands_[index], sample_rate_);
 }
 
 void ParametricEq::validate_band_index(size_t index) {

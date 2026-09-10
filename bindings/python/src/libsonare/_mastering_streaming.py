@@ -275,6 +275,14 @@ class StreamingEqualizer:
         "linear_phase": 3,
     }
 
+    _PLACEMENTS = {
+        "stereo": 0,
+        "left": 1,
+        "right": 2,
+        "mid": 3,
+        "side": 4,
+    }
+
     def __init__(self, sample_rate: int = 48000, max_block_size: int = 512) -> None:
         lib = _get_lib()
         if not hasattr(lib, "sonare_eq_create"):
@@ -456,6 +464,47 @@ class StreamingEqualizer:
             last_auto_gain_db=float(out.last_auto_gain_db),
             seq=int(out.seq),
         )
+
+    def magnitude_response(
+        self,
+        frequencies_hz: Sequence[float] | list[float],
+        *,
+        placement: str = "stereo",
+    ) -> list[float]:
+        """Return the composite magnitude of the bands, in dB, at each frequency.
+
+        The curve to draw over an analyzer. Built from the same coefficient
+        design the audio path uses, so it states what the equalizer does rather
+        than what its settings look like, and it carries the output gain, the
+        gain scale, and whatever each dynamic band is applying at the moment of
+        the call. Disabled, bypassed and -- when anything is soloed -- unsoloed
+        bands drop out. Linear-phase bands are included: the phase mode changes
+        the phase, not the magnitude.
+
+        ``placement`` names the signal path the curve is for: ``"stereo"``,
+        ``"left"``, ``"right"``, ``"mid"`` or ``"side"``. A band placed on
+        stereo is on every path; one placed elsewhere appears only on its own.
+        Each frequency is clamped to [0 Hz, Nyquist].
+        """
+        self._ensure_open()
+        if not hasattr(self._lib, "sonare_eq_magnitude_response"):
+            raise RuntimeError("libsonare was built without EQ magnitude response support")
+        key = placement.lower() if isinstance(placement, str) else ""
+        ordinal = self._PLACEMENTS.get(key)
+        if ordinal is None:
+            raise SonareValueError(f"unknown EQ band placement: {placement}")
+        c_frequencies, count = _to_c_float_array(frequencies_hz)
+        out = (ctypes.c_float * count)()
+        _check(
+            self._lib.sonare_eq_magnitude_response(
+                self._handle,
+                ctypes.c_int(ordinal),
+                c_frequencies,
+                ctypes.c_size_t(count),
+                out,
+            )
+        )
+        return [float(out[i]) for i in range(count)]
 
     @property
     def latency_samples(self) -> int:

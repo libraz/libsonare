@@ -85,6 +85,7 @@ sonare::rt::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_ra
         return sonare::rt::vicanek_bandpass(omega, q);
       case EqBandType::Notch:
         return sonare::rt::vicanek_notch(omega, q);
+      case EqBandType::AllPass:
       case EqBandType::TiltShelf:
       case EqBandType::FlatTilt:
         // Vicanek matched-Z designs have no closed-form for tilt/flat-tilt;
@@ -114,6 +115,7 @@ sonare::rt::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_ra
       return sonare::rt::rbj_bandpass(omega, q);
     case EqBandType::Notch:
       return sonare::rt::rbj_notch(omega, q);
+    case EqBandType::AllPass:
     case EqBandType::TiltShelf:
     case EqBandType::FlatTilt:
       throw SonareException(ErrorCode::InvalidParameter, "unsupported EQ band type");

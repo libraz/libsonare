@@ -19,6 +19,26 @@ namespace sonare::mastering::eq {
 ///        (configure_parametric).
 std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count);
 
+/// @brief One biquad section, normalized so a0 == 1.
+struct BiquadCoefficients {
+  float b0 = 1.0f;
+  float b1 = 0.0f;
+  float b2 = 0.0f;
+  float a1 = 0.0f;
+  float a2 = 0.0f;
+};
+
+/// @brief Designs the section a single band is applied through.
+/// @details The one place a band becomes coefficients, so anything that has to
+/// agree with what is audible — the response curve a caller draws, most of all —
+/// asks here rather than reimplementing the design. A disabled band returns the
+/// identity. Composite band types (TiltShelf, FlatTilt) are not single sections
+/// and throw here; they reach the audio path already expanded into shelves, and
+/// anything asking for coefficients has to expand them the same way first.
+/// @throws SonareException on a non-positive sample rate, a frequency outside
+///         (0 Hz, Nyquist), or a band type with no single-section design.
+BiquadCoefficients design_eq_biquad(const EqBand& band, double sample_rate);
+
 class ParametricEq : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = 24;
@@ -50,20 +70,13 @@ class ParametricEq : public rt::ProcessorBase {
   double sample_rate() const { return sample_rate_; }
 
  private:
-  struct Coefficients {
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-  };
+  using Coefficients = BiquadCoefficients;
 
   struct State {
     float z1 = 0.0f;
     float z2 = 0.0f;
   };
 
-  static Coefficients make_coefficients(const EqBand& band, double sample_rate);
   void update_coefficients(size_t index);
   static void validate_band_index(size_t index);
   void ensure_prepared() const;

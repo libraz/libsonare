@@ -2784,6 +2784,7 @@ export interface WasmStreamingEqualizer {
     left: Float32Array,
     right: Float32Array,
   ) => { left: Float32Array; right: Float32Array };
+  magnitudeResponse: (placement: number, frequenciesHz: Float32Array) => Float32Array;
   spectrum: () => WasmEqSpectrumSnapshot;
   match: (source: Float32Array, reference: Float32Array, options: Record<string, unknown>) => void;
   delete: () => void;

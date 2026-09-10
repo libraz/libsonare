@@ -4,6 +4,7 @@ import type {
   EqBand,
   EqMatchOptions,
   EqSpectrumSnapshot,
+  EqStereoPlacement,
   StreamingEqualizerConfig,
   StreamingMasteringChainConfig,
   StreamingRetuneConfig,
@@ -20,6 +21,14 @@ type EqPhaseMode =
   | 'linear-phase'
   | 'linear_phase'
   | number;
+
+const EQ_PLACEMENTS: Record<string, number> = {
+  stereo: 0,
+  left: 1,
+  right: 2,
+  mid: 3,
+  side: 4,
+};
 
 const EQ_PHASE_MODES: Record<string, number> = {
   zero: 1,
@@ -296,6 +305,39 @@ export class StreamingEqualizer {
       throw new Error('Stereo channel lengths must match.');
     }
     return this.eq.processStereo(left, right);
+  }
+
+  /**
+   * The composite magnitude of the bands, in dB, at each requested frequency —
+   * the curve to draw over {@link spectrum}.
+   *
+   * Built from the same coefficient design, tilt expansion and cut-slope
+   * cascade the audio path uses, so it states what the equalizer does rather
+   * than what its settings look like, and it carries the output gain, the gain
+   * scale and whatever each dynamic band is applying at the moment of the call.
+   * Disabled, bypassed and — when anything is soloed — unsoloed bands drop out,
+   * and a soloed band is drawn as the band pass it is heard as.
+   *
+   * `placement` selects which signal path the curve is for. A band placed on
+   * `'Stereo'` is on every path; one placed elsewhere appears only on its own,
+   * a mid band having no per-channel magnitude to fold into a left or right
+   * curve. Frequencies are clamped to [0 Hz, Nyquist].
+   *
+   * @example
+   * ```ts
+   * const freqs = new Float32Array([100, 1000, 10000]);
+   * const db = eq.magnitudeResponse(freqs);
+   * ```
+   */
+  magnitudeResponse(
+    frequenciesHz: Float32Array,
+    placement: EqStereoPlacement = 'Stereo',
+  ): Float32Array {
+    const value = EQ_PLACEMENTS[placement.toLowerCase()];
+    if (value === undefined) {
+      throw new Error(`unknown EQ band placement: ${placement}`);
+    }
+    return this.eq.magnitudeResponse(value, frequenciesHz);
   }
 
   /**

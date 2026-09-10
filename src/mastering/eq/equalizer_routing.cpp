@@ -99,7 +99,123 @@ void append_tilt_bands(const EqBand& band, Append&& append) {
   append(hi_outer);
 }
 
+/// Whether a band placed on @p band_placement is heard on the @p curve path.
+/// A Stereo band is on all of them: it runs on both channels ahead of the
+/// per-channel and mid/side stages, and applied identically to left and right it
+/// commutes with the mid/side matrix.
+bool placement_contributes(StereoPlacement band_placement, StereoPlacement curve) noexcept {
+  return band_placement == StereoPlacement::Stereo || band_placement == curve;
+}
+
+/// |H(e^jw)| of one section, in dB.
+float section_magnitude_db(const BiquadCoefficients& c, double w) noexcept {
+  const double cos1 = std::cos(w);
+  const double sin1 = std::sin(w);
+  const double cos2 = std::cos(2.0 * w);
+  const double sin2 = std::sin(2.0 * w);
+  const double num_re = static_cast<double>(c.b0) + c.b1 * cos1 + c.b2 * cos2;
+  const double num_im = -(static_cast<double>(c.b1) * sin1 + c.b2 * sin2);
+  const double den_re = 1.0 + static_cast<double>(c.a1) * cos1 + c.a2 * cos2;
+  const double den_im = -(static_cast<double>(c.a1) * sin1 + c.a2 * sin2);
+  const double num = std::sqrt(num_re * num_re + num_im * num_im);
+  const double den = std::sqrt(den_re * den_re + den_im * den_im);
+  // Both guards are the log guard, not a tolerance: a notch is genuinely zero at
+  // its centre and an undamped pole genuinely divides by zero, and each has to
+  // land on the floor rather than on an infinity.
+  const double floor = static_cast<double>(sonare::constants::kEpsilon);
+  return static_cast<float>(20.0 * std::log10(std::max(num, floor) / std::max(den, floor)));
+}
+
 }  // namespace
+
+void EqualizerProcessor::magnitude_response_impl(const EqBand* bands, size_t band_count,
+                                                 double sample_rate, PhaseMode global_phase,
+                                                 float gain_scale, const float* dynamic_gain_db,
+                                                 StereoPlacement placement,
+                                                 const float* frequencies_hz,
+                                                 size_t frequency_count, float* out_db) {
+  if (!(sample_rate > 0.0)) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  }
+  if ((bands == nullptr && band_count > 0) ||
+      ((frequencies_hz == nullptr || out_db == nullptr) && frequency_count > 0)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EQ magnitude response given a null array with a non-zero count");
+  }
+  for (size_t f = 0; f < frequency_count; ++f) {
+    out_db[f] = 0.0f;
+  }
+  if (frequency_count == 0) {
+    return;
+  }
+
+  const double nyquist = sample_rate * 0.5;
+  bool any_soloed = false;
+  for (size_t i = 0; i < band_count; ++i) {
+    if (bands[i].enabled && bands[i].soloed && !bands[i].bypassed) {
+      any_soloed = true;
+      break;
+    }
+  }
+
+  // Each expanded section is evaluated over the whole frequency list as it is
+  // produced, so no list of sections is built and the cut cascades — up to
+  // sixteen sections for one 96 dB/oct band — cost nothing to hold.
+  const auto accumulate = [&](const EqBand& routed) {
+    if (!routed.enabled || !placement_contributes(routed.placement, placement)) {
+      return;
+    }
+    const BiquadCoefficients c = design_eq_biquad(routed, sample_rate);
+    for (size_t f = 0; f < frequency_count; ++f) {
+      const double hz = std::clamp(static_cast<double>(frequencies_hz[f]), 0.0, nyquist);
+      out_db[f] += section_magnitude_db(c, sonare::constants::kTwoPiD * hz / sample_rate);
+    }
+  };
+
+  for (size_t i = 0; i < band_count; ++i) {
+    EqBand band = backend_band(bands[i], global_phase, gain_scale);
+    if (band.bypassed || (any_soloed && !band.soloed)) {
+      band.enabled = false;
+    }
+    if (band.enabled && band.dyn.enabled && dynamic_gain_db != nullptr) {
+      // Already the total the band is applying, gain scale included, so it
+      // replaces the scaled static gain rather than adding to it.
+      band.gain_db = dynamic_gain_db[i];
+    }
+    if (any_soloed && band.enabled && band.soloed) {
+      band.type = EqBandType::BandPass;
+      band.gain_db = 0.0f;
+      accumulate(band);
+      continue;
+    }
+    if (band.enabled && (band.type == EqBandType::TiltShelf || band.type == EqBandType::FlatTilt)) {
+      append_tilt_bands(band, accumulate);
+    } else {
+      append_iir_cut_cascade(band, accumulate);
+    }
+  }
+}
+
+void EqualizerProcessor::magnitude_response_db(const EqBand* bands, size_t band_count,
+                                               double sample_rate, PhaseMode global_phase,
+                                               StereoPlacement placement,
+                                               const float* frequencies_hz, size_t frequency_count,
+                                               float* out_db) {
+  magnitude_response_impl(bands, band_count, sample_rate, global_phase, 1.0f, nullptr, placement,
+                          frequencies_hz, frequency_count, out_db);
+}
+
+void EqualizerProcessor::magnitude_response_db(StereoPlacement placement,
+                                               const float* frequencies_hz, size_t frequency_count,
+                                               float* out_db) const {
+  magnitude_response_impl(bands_.data(), kMaxBands, sample_rate_, phase_mode_, gain_scale_,
+                          last_applied_gain_db_.data(), placement, frequencies_hz, frequency_count,
+                          out_db);
+  // The output stage is a broadband gain, so it moves the whole curve.
+  for (size_t f = 0; f < frequency_count; ++f) {
+    out_db[f] += output_gain_db_;
+  }
+}
 
 void EqualizerProcessor::update_iir_bands_preserving_state(int num_samples) {
   has_mid_side_bands_ = false;

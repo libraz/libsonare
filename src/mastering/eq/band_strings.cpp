@@ -18,6 +18,7 @@ std::optional<EqBandType> band_type_from_string(std::string_view value) {
   if (value == "Notch" || value == "notch") return EqBandType::Notch;
   if (value == "TiltShelf" || value == "tiltShelf") return EqBandType::TiltShelf;
   if (value == "FlatTilt" || value == "flatTilt") return EqBandType::FlatTilt;
+  if (value == "AllPass" || value == "allPass") return EqBandType::AllPass;
   return std::nullopt;
 }
 
@@ -52,6 +53,23 @@ std::optional<PhaseMode> phase_mode_from_int(int mode) {
       return PhaseMode::NaturalPhase;
     case 3:
       return PhaseMode::LinearPhase;
+    default:
+      return std::nullopt;
+  }
+}
+
+std::optional<StereoPlacement> placement_from_int(int placement) {
+  switch (placement) {
+    case 0:
+      return StereoPlacement::Stereo;
+    case 1:
+      return StereoPlacement::Left;
+    case 2:
+      return StereoPlacement::Right;
+    case 3:
+      return StereoPlacement::Mid;
+    case 4:
+      return StereoPlacement::Side;
     default:
       return std::nullopt;
   }

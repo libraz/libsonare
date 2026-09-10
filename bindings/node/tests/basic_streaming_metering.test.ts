@@ -243,6 +243,42 @@ describe('StreamingEqualizer', () => {
     expect(snapshot.bandGainDb[0]).toBeLessThan(3.5);
   });
 
+  it('draws the magnitude curve the bands actually apply', () => {
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 6, q: 1.5, enabled: true });
+    const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
+    expect(db.length).toBe(3);
+    expect(db[1]).toBeGreaterThan(5.5);
+    expect(db[1]).toBeLessThan(6.5);
+    expect(Math.abs(db[0])).toBeLessThan(1);
+    expect(Math.abs(db[2])).toBeLessThan(1);
+  });
+
+  it('keeps a mid band off the left curve and answers an unknown placement', () => {
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    eq.setBand(0, {
+      type: 'Peak',
+      frequencyHz: 1000,
+      gainDb: 9,
+      q: 1.5,
+      enabled: true,
+      placement: 'Mid',
+    });
+    const freqs = new Float32Array([1000]);
+    expect(eq.magnitudeResponse(freqs, 'Mid')[0]).toBeGreaterThan(6);
+    expect(Math.abs(eq.magnitudeResponse(freqs, 'Left')[0])).toBeLessThan(0.5);
+    expect(() => eq.magnitudeResponse(freqs, 'Bogus' as unknown as 'Mid')).toThrow();
+  });
+
+  it('reads an all-pass band as flat while still changing the signal', () => {
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    eq.setBand(0, { type: 'AllPass', frequencyHz: 1000, q: 0.7, enabled: true });
+    const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
+    for (const value of db) {
+      expect(Math.abs(value)).toBeLessThan(0.05);
+    }
+  });
+
   it('switches phase mode and reports linear-phase latency', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });

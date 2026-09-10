@@ -338,6 +338,9 @@ export type EqPhaseMode = 'zero' | 'natural' | 'linear';
  * Only `type`/`frequencyHz`/`gainDb`/`enabled` are commonly needed; the
  * remaining fields fall back to processor defaults.
  */
+/** Which signal path an EQ band sits on. */
+export type EqStereoPlacement = 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+
 export interface EqBandInput {
   type?:
     | 'Peak'
@@ -348,7 +351,8 @@ export interface EqBandInput {
     | 'BandPass'
     | 'Notch'
     | 'TiltShelf'
-    | 'FlatTilt';
+    | 'FlatTilt'
+    | 'AllPass';
   frequencyHz?: number;
   gainDb?: number;
   /**
@@ -362,7 +366,7 @@ export interface EqBandInput {
   enabled?: boolean;
   coeffMode?: 'Rbj' | 'Vicanek';
   slopeDbOct?: number;
-  placement?: 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+  placement?: EqStereoPlacement;
   /**
    * `'NaturalPhase'` forces `coeffMode: 'Vicanek'` for this band, which
    * ignores `q` for LowShelf/HighShelf (see `q`'s doc).

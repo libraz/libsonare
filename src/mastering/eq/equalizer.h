@@ -80,7 +80,46 @@ class EqualizerProcessor : public rt::ProcessorBase {
   float output_pan() const noexcept { return output_pan_; }
   EqualizerSpectrumSnapshot spectrum_snapshot() const noexcept;
 
+  /// @brief Composite magnitude of a band set at each requested frequency, in dB.
+  /// @details The curve a caller draws. Built from the same normalization, the
+  /// same tilt expansion, the same cut-slope cascade and the same coefficient
+  /// design the audio path uses, so it says what the equalizer does rather than
+  /// what its settings look like. Disabled, bypassed and — when anything is
+  /// soloed — unsoloed bands drop out, and a soloed band is drawn as the band
+  /// pass it is heard as. Linear-phase bands are included: the phase mode
+  /// changes the phase and not the magnitude.
+  ///
+  /// @p placement selects which signal path the curve is for. A `Stereo` band is
+  /// on every path, since the stereo backend runs on both channels ahead of the
+  /// per-channel and mid/side ones — and being identical on left and right, it
+  /// commutes with the mid/side matrix, so it is exact on those two curves as
+  /// well. Bands placed on a path other than the requested one are left out; a
+  /// mid band has no per-channel magnitude to fold into a left or right curve.
+  ///
+  /// Frequencies are clamped to [0 Hz, Nyquist]. @p out_db must have room for
+  /// @p frequency_count entries.
+  /// @throws SonareException on a non-positive sample rate, a null array with a
+  ///         non-zero count, or a band whose own frequency is outside
+  ///         (0 Hz, Nyquist) — the same bound set_band() enforces.
+  static void magnitude_response_db(const EqBand* bands, size_t band_count, double sample_rate,
+                                    PhaseMode global_phase, StereoPlacement placement,
+                                    const float* frequencies_hz, size_t frequency_count,
+                                    float* out_db);
+
+  /// @brief The same curve for the bands this processor is holding.
+  /// @details Adds what only the live processor knows: its phase mode, its gain
+  /// scale, and the gain each dynamic band is currently applying — so the curve
+  /// moves with the audio the way the display of one does. Static gains alone
+  /// come out of the overload above.
+  void magnitude_response_db(StereoPlacement placement, const float* frequencies_hz,
+                             size_t frequency_count, float* out_db) const;
+
  private:
+  static void magnitude_response_impl(const EqBand* bands, size_t band_count, double sample_rate,
+                                      PhaseMode global_phase, float gain_scale,
+                                      const float* dynamic_gain_db, StereoPlacement placement,
+                                      const float* frequencies_hz, size_t frequency_count,
+                                      float* out_db);
   static void validate_process_args(float* const* channels, int num_channels, int num_samples);
   static void validate_band_index(size_t index);
   static void validate_supported_band(const EqBand& band, PhaseMode global_phase);

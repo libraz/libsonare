@@ -59,6 +59,13 @@ void EqualizerProcessor::validate_supported_band(const EqBand& band, PhaseMode g
       throw SonareException(ErrorCode::InvalidParameter,
                             "EqualizerProcessor LinearPhase dynamic bands are not realtime");
     }
+    // An all-pass is unit magnitude and exists for its phase, so a linear-phase
+    // one is a wire. Rejected rather than run as a no-op, since a caller that
+    // reached for the band type wanted something the mode cannot give.
+    if (band.type == EqBandType::AllPass) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "EqualizerProcessor AllPass bands have no LinearPhase form");
+    }
   }
   if (brickwall_cut && band.dyn.enabled) {
     throw SonareException(ErrorCode::InvalidParameter,

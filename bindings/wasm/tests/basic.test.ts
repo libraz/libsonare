@@ -2332,6 +2332,61 @@ describe('Sonare WASM Module', () => {
       }
     });
 
+    it('should draw the magnitude curve the bands actually apply', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      try {
+        eq.setBand(0, {
+          type: 'Peak',
+          frequencyHz: 1000,
+          gainDb: 6,
+          q: 1.5,
+          enabled: true,
+        });
+        const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
+        expect(db).toBeInstanceOf(Float32Array);
+        expect(db.length).toBe(3);
+        expect(db[1]).toBeGreaterThan(5.5);
+        expect(db[1]).toBeLessThan(6.5);
+        expect(Math.abs(db[0])).toBeLessThan(1);
+        expect(Math.abs(db[2])).toBeLessThan(1);
+      } finally {
+        eq.delete();
+      }
+    });
+
+    it('should keep a mid band off the left curve', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      try {
+        eq.setBand(0, {
+          type: 'Peak',
+          frequencyHz: 1000,
+          gainDb: 9,
+          q: 1.5,
+          enabled: true,
+          placement: 'Mid',
+        });
+        const freqs = new Float32Array([1000]);
+        expect(eq.magnitudeResponse(freqs, 'Mid')[0]).toBeGreaterThan(6);
+        expect(Math.abs(eq.magnitudeResponse(freqs, 'Left')[0])).toBeLessThan(0.5);
+        expect(() => eq.magnitudeResponse(freqs, 'Bogus' as unknown as 'Mid')).toThrow();
+      } finally {
+        eq.delete();
+      }
+    });
+
+    it('should read an all-pass band as flat', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      try {
+        eq.setBand(0, { type: 'AllPass', frequencyHz: 1000, q: 0.7, enabled: true });
+        const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
+        for (const value of db) {
+          expect(Math.abs(value)).toBeLessThan(0.05);
+        }
+      } finally {
+        eq.delete();
+      }
+    });
+
     it('should accept string phase modes for StreamingEqualizer', () => {
       const linearEq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       const aliasEq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });

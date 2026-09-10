@@ -91,6 +91,12 @@ sonare::mastering::eq::PhaseMode ParsePhaseModeInt(int mode) {
   return *parsed;
 }
 
+sonare::mastering::eq::StereoPlacement ParsePlacementInt(int placement) {
+  const auto parsed = sonare::mastering::eq::placement_from_int(placement);
+  if (!parsed) throw std::runtime_error("unknown EQ band placement");
+  return *parsed;
+}
+
 sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   sonare::mastering::eq::EqBand band;
   band.type = ParseBandType(node_string_option(object, "type", "Peak"));
@@ -377,6 +383,7 @@ Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamingEqualizerWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&StreamingEqualizerWrap::ProcessMono>("processMono"),
           InstanceMethod<&StreamingEqualizerWrap::ProcessStereo>("processStereo"),
+          InstanceMethod<&StreamingEqualizerWrap::MagnitudeResponse>("magnitudeResponse"),
           InstanceMethod<&StreamingEqualizerWrap::Spectrum>("spectrum"),
           InstanceMethod<&StreamingEqualizerWrap::Match>("match"),
           InstanceMethod<&StreamingEqualizerWrap::Destroy>("destroy"),
@@ -691,6 +698,26 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", left_out);
   out.Set("right", right_out);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::MagnitudeResponse(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsTypedArray()) {
+    Napi::TypeError::New(env, "Expected (placement, frequenciesHz)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  Napi::Float32Array frequencies = info[1].As<Napi::Float32Array>();
+  const size_t count = frequencies.ElementLength();
+  Napi::Float32Array out = Napi::Float32Array::New(env, count);
+  eq_->magnitude_response_db(ParsePlacementInt(info[0].As<Napi::Number>().Int32Value()),
+                             frequencies.Data(), count, out.Data());
   return out;
   SONARE_NODE_CATCH(env)
 }

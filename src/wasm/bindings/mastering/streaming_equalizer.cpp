@@ -61,6 +61,14 @@ mastering::eq::PhaseMode eqPhaseFromInt(int mode) {
   return *parsed;
 }
 
+mastering::eq::StereoPlacement eqPlacementFromInt(int placement) {
+  const auto parsed = mastering::eq::placement_from_int(placement);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ band placement");
+  }
+  return *parsed;
+}
+
 mastering::eq::EqBand eqBandFromVal(val band) {
   mastering::eq::EqBand result;
   result.type = eqBandTypeFromString(stringProperty(band, "type", "Peak"));
@@ -210,6 +218,17 @@ class EqualizerWrapper {
     return out;
   }
 
+  // The curve to draw over the analyzer `spectrum()` returns. Takes the
+  // placement as the same ordinal the C ABI does rather than a string, so the
+  // wrapper stays a marshaller and the naming lives in the TS facade.
+  val magnitudeResponse(int placement, val frequencies_hz) const {
+    std::vector<float> frequencies = float32ArrayToVector(frequencies_hz);
+    std::vector<float> out(frequencies.size(), 0.0f);
+    processor_.magnitude_response_db(eqPlacementFromInt(placement), frequencies.data(),
+                                     frequencies.size(), out.data());
+    return vectorToFloat32Array(out);
+  }
+
   val spectrum() const {
     const mastering::eq::EqualizerSpectrumSnapshot snapshot = processor_.spectrum_snapshot();
 
@@ -308,6 +327,7 @@ void registerStreamingEqualizerBindings() {
       .function("latencySamples", &EqualizerWrapper::latencySamples)
       .function("processMono", &EqualizerWrapper::processMono)
       .function("processStereo", &EqualizerWrapper::processStereo)
+      .function("magnitudeResponse", &EqualizerWrapper::magnitudeResponse)
       .function("spectrum", &EqualizerWrapper::spectrum)
       .function("match", &EqualizerWrapper::match);
   function("createEqualizer", &createEqualizer, allow_raw_pointers());
