@@ -285,6 +285,106 @@ def test_synth_bounce_gm_programs_4_and_40_are_finite_audible_and_distinct() -> 
     assert float(np.max(np.abs(gm4 - gm40))) > 1.0e-6
 
 
+def _build_two_destination_gm_project(program: int = 40) -> Project:
+    """Two MIDI tracks on two destinations, each sending its own GM program."""
+    project = Project()
+    project.set_sample_rate(48000.0)
+    for destination, note in ((0, 60), (1, 72)):
+        track, clip = project.add_midi_clip(0.0, 1.0)
+        project.set_track_midi_destination(track, destination)
+        project.set_midi_events(
+            clip,
+            [
+                Project.midi_program(0.0, 0, 0, program),
+                Project.midi_note_on(0.0, 0, 0, note, 100),
+                Project.midi_note_off(0.5, 0, 0, note, 0),
+            ],
+        )
+    return project
+
+
+def _render_two_destinations(
+    project: Project,
+    *,
+    auto_select_gm: bool = False,
+    gm: tuple[bool | None, bool | None] = (None, None),
+) -> np.ndarray:
+    audio = project.bounce_with_synth_instrument(
+        instruments=[
+            (0, SynthPatch(preset="sine", use_gm_programs=gm[0])),
+            (1, SynthPatch(preset="sine", use_gm_programs=gm[1])),
+        ],
+        auto_select_gm=auto_select_gm,
+        total_frames=12000,
+        block_size=128,
+        num_channels=1,
+        sample_rate=48000,
+    )
+    assert np.isfinite(audio).all()
+    assert float(np.max(np.abs(audio))) > 0.0
+    return audio.copy()
+
+
+def test_each_binding_states_its_own_gm_follow() -> None:
+    """Two destinations, and only one of them follows its GM program changes.
+
+    ``use_gm_programs`` is a field of the C binding struct, so this is the
+    capability a single per-call argument could not express: a mixed render must
+    be neither of the two uniform ones.
+    """
+    project = _build_two_destination_gm_project()
+    try:
+        both = _render_two_destinations(project, gm=(True, True))
+        neither = _render_two_destinations(project, gm=(False, False))
+        first_only = _render_two_destinations(project, gm=(True, False))
+        second_only = _render_two_destinations(project, gm=(False, True))
+        for mixed in (first_only, second_only):
+            assert not np.array_equal(mixed, both)
+            assert not np.array_equal(mixed, neither)
+        # Swapping which destination follows changes the render, so the two
+        # values cannot be collapsing into one shared flag.
+        assert not np.array_equal(first_only, second_only)
+    finally:
+        project.close()
+
+
+def test_auto_select_gm_reaches_every_binding_that_states_nothing() -> None:
+    """The released per-call argument still decides for an unstated patch."""
+    project = _build_two_destination_gm_project()
+    try:
+        assert np.array_equal(
+            _render_two_destinations(project, auto_select_gm=True),
+            _render_two_destinations(project, gm=(True, True)),
+        )
+        assert np.array_equal(
+            _render_two_destinations(project, auto_select_gm=False),
+            _render_two_destinations(project, gm=(False, False)),
+        )
+    finally:
+        project.close()
+
+
+def test_a_stated_patch_field_wins_over_the_per_call_argument() -> None:
+    project = _build_two_destination_gm_project()
+    try:
+        assert np.array_equal(
+            _render_two_destinations(project, auto_select_gm=True, gm=(False, False)),
+            _render_two_destinations(project, gm=(False, False)),
+        )
+        assert np.array_equal(
+            _render_two_destinations(project, auto_select_gm=False, gm=(True, True)),
+            _render_two_destinations(project, gm=(True, True)),
+        )
+        # The argument is not simply inert: overriding it changes the render it
+        # would otherwise have produced.
+        assert not np.array_equal(
+            _render_two_destinations(project, auto_select_gm=True, gm=(False, False)),
+            _render_two_destinations(project, auto_select_gm=True),
+        )
+    finally:
+        project.close()
+
+
 def test_drum_kit_preset_plays_the_gm_map() -> None:
     # Note 38 = acoustic snare in the GM drum map.
     project = _build_midi_only_project(note=38)

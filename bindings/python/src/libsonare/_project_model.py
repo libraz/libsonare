@@ -627,6 +627,11 @@ class SynthPatch:
     ``sampleBank`` on the same object for the same reason. A sample patch bound
     without a bank renders silence rather than failing, the same way one naming
     a keymap set the bank lacks does.
+
+    ``use_gm_programs`` is a BINDING option too (Node and WASM spell it
+    ``useGmPrograms``): it makes this destination resolve each MIDI channel from
+    its GM bank/program messages. ``None`` means "not stated", falling back to
+    :meth:`Project.bounce_with_synth_instrument`'s ``auto_select_gm``.
     """
 
     preset: str = ""
@@ -672,6 +677,12 @@ class SynthPatch:
     # carry it and _from_c() never fills it. It lives here because the C ABI
     # gives every binding its own bank, which a per-call argument cannot.
     sample_bank: SampleBank | None = None
+    # The same kind of BINDING option, spelled `useGmPrograms` by Node and
+    # WASM: it travels on SonareSynthInstrumentBinding, so _to_c() does not
+    # carry it and _from_c() never fills it. None means "not stated", which is
+    # what leaves Project.bounce_with_synth_instrument's per-call
+    # `auto_select_gm` reachable as the fallback.
+    use_gm_programs: bool | None = None
 
     def _to_c(self) -> SonareSynthPatch:
         if not isinstance(self.preset, str):

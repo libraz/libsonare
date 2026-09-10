@@ -223,7 +223,9 @@ class _ProjectRenderMixin:
             auto_select_gm: Resolve each MIDI channel from its GM bank/program
                 messages and use the GM drum-kit map on channel 10. This is
                 useful for general MIDI files; an explicit preset remains the
-                fixed patch fallback.
+                fixed patch fallback. It applies to every binding that does not
+                state :attr:`SynthPatch.use_gm_programs`, which wins where it is
+                set and is what lets two destinations differ.
             total_frames: Render length in frames; <= 0 auto-derives the length
                 from the arrangement (musical end + the patch's release tail).
             block_size / num_channels / sample_rate / instrument_latency_samples:
@@ -250,8 +252,10 @@ class _ProjectRenderMixin:
         for i, (dst, patch) in enumerate(bindings):
             c_bindings[i].destination_id = dst
             c_bindings[i].patch = patch._to_c()
-            c_bindings[i].use_gm_programs = bool(auto_select_gm)
-            # Per binding, because the C struct carries the bank per binding.
+            # Per binding, because the C struct carries both per binding; an
+            # unstated patch field falls back to the per-call argument.
+            follow_gm = patch.use_gm_programs
+            c_bindings[i].use_gm_programs = bool(auto_select_gm if follow_gm is None else follow_gm)
             bank = patch.sample_bank
             c_bindings[i].sample_bank = bank._require_handle() if bank is not None else None
         options = SonareProjectBounceOptions(
