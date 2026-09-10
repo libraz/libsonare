@@ -65,4 +65,35 @@ const SampleZone* SampleBank::find(int32_t set, uint8_t key, uint8_t velocity) c
   return nullptr;
 }
 
+SampleZoneMix SampleBank::find_mix(int32_t set, uint8_t key, uint8_t velocity) const noexcept {
+  SampleZoneMix out;
+  if (set < 0 || static_cast<size_t>(set) >= sets_.size()) return out;
+  const SampleZone* first = nullptr;
+  const SampleZone* second = nullptr;
+  for (const SampleZone& z : sets_[static_cast<size_t>(set)]) {
+    if (key < z.key_lo || key > z.key_hi || velocity < z.vel_lo || velocity > z.vel_hi) continue;
+    if (first == nullptr) {
+      first = &z;
+    } else {
+      second = &z;
+      break;
+    }
+  }
+  out.low = first;
+  if (first == nullptr || second == nullptr) return out;
+
+  // The zone with the higher floor is the one velocity rises INTO.
+  const bool first_is_low = first->vel_lo <= second->vel_lo;
+  out.low = first_is_low ? first : second;
+  out.high = first_is_low ? second : first;
+  const int lo = std::max(out.low->vel_lo, out.high->vel_lo);
+  const int hi = std::min(out.low->vel_hi, out.high->vel_hi);
+  // Linear rather than equal-power: velocity layers of one instrument are
+  // correlated enough that an equal-power law bulges through the middle.
+  // A one-value overlap has no interval to travel, so it sits at the midpoint.
+  out.high_weight =
+      hi > lo ? static_cast<float>(velocity - lo) / static_cast<float>(hi - lo) : 0.5f;
+  return out;
+}
+
 }  // namespace sonare::midi::synth

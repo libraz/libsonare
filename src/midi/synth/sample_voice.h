@@ -46,22 +46,35 @@ class SampleVoiceCore {
   bool start(const SamplePatchParams& p, double sample_rate, uint8_t note,
              uint8_t velocity) noexcept;
 
-  /// True once the region ran out; a looping zone never reports it while held.
+  /// True once every layer ran out; a looping zone never reports it while held.
   bool finished() const noexcept { return finished_; }
-  /// Zone gain folded with the patch level.
-  float gain() const noexcept { return gain_; }
-  /// Zone pan in SF2 units, for the voice's pan sum.
+  /// Zone pan in SF2 units, for the voice's pan sum. Crossfaded with the zones.
   float pan_units() const noexcept { return pan_units_; }
+  /// Layers sounding: 1 for a plain zone, 2 across a velocity crossfade.
+  int layer_count() const noexcept { return layer_count_; }
 
   /// Advances one sample. @p pitch_ratio is the voice's accumulated pitch
   /// modulation (1.0 = the note as resolved at start).
   float render(float pitch_ratio, bool key_down) noexcept;
 
  private:
+  /// One zone being read. Two of them straddle a velocity crossfade, each with
+  /// its own tuning, so a layer recorded at a different root still plays in
+  /// tune against the one it is blended with.
+  struct Layer {
+    SampleReader reader;
+    double increment = 1.0;
+    float gain = 0.0f;
+    bool finished = true;
+  };
+
+  /// Places @p zone into @p layer at @p weight; false when the zone is unusable.
+  bool start_layer(Layer& layer, const SampleZone& zone, const SamplePatchParams& p,
+                   double sample_rate, uint8_t note, float weight) noexcept;
+
   const SampleBank* bank_ = nullptr;
-  SampleReader reader_;
-  double increment_ = 1.0;
-  float gain_ = 1.0f;
+  Layer layers_[2];
+  int layer_count_ = 0;
   float pan_units_ = 0.0f;
   bool finished_ = true;
 };

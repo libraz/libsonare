@@ -533,3 +533,123 @@ TEST_CASE("The voice filter colours a host sample", "[midi][sample]") {
   CHECK(open > 0.05f);
   CHECK(closed < open * 0.5f);
 }
+
+namespace {
+
+/// Two velocity zones over one key, each a DC level, so a rendered sample reads
+/// the crossfade weight directly. Zone A (level +1) covers 1..80 and zone B
+/// (level -1) covers 40..127, overlapping across 40..80.
+SampleBank crossfade_bank(size_t a_frames = 1000, size_t b_frames = 1000) {
+  SampleBank bank;
+  SampleDesc desc;
+  desc.root_key = 60;
+
+  const std::vector<float> a(a_frames, 1.0f);
+  uint32_t a_index = 0;
+  REQUIRE(bank.add_sample(a.data(), a.size(), desc, &a_index));
+  SampleZoneDesc za;
+  za.sample_index = a_index;
+  za.vel_lo = 1;
+  za.vel_hi = 80;
+  REQUIRE(bank.add_zone(0, za));
+
+  const std::vector<float> b(b_frames, -1.0f);
+  uint32_t b_index = 0;
+  REQUIRE(bank.add_sample(b.data(), b.size(), desc, &b_index));
+  SampleZoneDesc zb;
+  zb.sample_index = b_index;
+  zb.vel_lo = 40;
+  zb.vel_hi = 127;
+  REQUIRE(bank.add_zone(0, zb));
+  return bank;
+}
+
+}  // namespace
+
+TEST_CASE("A single covering zone resolves without a crossfade partner", "[midi][sample]") {
+  const SampleBank bank = one_shot_bank(100);
+  const auto mix = bank.find_mix(0, 60, 100);
+  REQUIRE(mix.low != nullptr);
+  CHECK(mix.high == nullptr);
+  CHECK(mix.high_weight == 0.0f);
+  // A set that does not exist stays empty rather than resolving to anything.
+  CHECK(bank.find_mix(1, 60, 100).low == nullptr);
+  CHECK(bank.find_mix(-1, 60, 100).low == nullptr);
+}
+
+TEST_CASE("Overlapping velocity zones resolve to a weighted pair", "[midi][sample]") {
+  const SampleBank bank = crossfade_bank();
+
+  // Below the overlap only the lower zone covers the note.
+  const auto under = bank.find_mix(0, 60, 20);
+  REQUIRE(under.low != nullptr);
+  CHECK(under.high == nullptr);
+
+  // Across the overlap the upper zone fades in linearly.
+  const auto at_floor = bank.find_mix(0, 60, 40);
+  REQUIRE(at_floor.high != nullptr);
+  CHECK(at_floor.high_weight == Catch::Approx(0.0f));
+  CHECK(bank.find_mix(0, 60, 60).high_weight == Catch::Approx(0.5f));
+  CHECK(bank.find_mix(0, 60, 80).high_weight == Catch::Approx(1.0f));
+
+  // Above the overlap only the upper zone covers the note.
+  const auto over = bank.find_mix(0, 60, 120);
+  REQUIRE(over.low != nullptr);
+  CHECK(over.high == nullptr);
+}
+
+TEST_CASE("A velocity crossfade blends both zones into one voice", "[midi][sample]") {
+  const SampleBank bank = crossfade_bank();
+  SamplePatchParams p;
+
+  auto level_at = [&](uint8_t velocity) {
+    SampleVoiceCore core;
+    core.attach(&bank);
+    REQUIRE(core.start(p, kOutRate, 60, velocity));
+    return pull(core, 8).back();
+  };
+
+  // +1 and -1 cancel exactly at the midpoint, which no hard switch can produce.
+  CHECK(level_at(40) == Catch::Approx(1.0f));
+  CHECK(level_at(50) == Catch::Approx(0.5f));
+  CHECK(level_at(60) == Catch::Approx(0.0f).margin(1.0e-6));
+  CHECK(level_at(70) == Catch::Approx(-0.5f));
+  CHECK(level_at(80) == Catch::Approx(-1.0f));
+}
+
+TEST_CASE("An end of the crossfade travel plays one layer, not two", "[midi][sample]") {
+  const SampleBank bank = crossfade_bank();
+  SamplePatchParams p;
+
+  auto layers_at = [&](uint8_t velocity) {
+    SampleVoiceCore core;
+    core.attach(&bank);
+    REQUIRE(core.start(p, kOutRate, 60, velocity));
+    return core.layer_count();
+  };
+  // A layer at a weight of zero would still step its region and end the voice
+  // when it ran out, so the ends of the travel take one layer.
+  CHECK(layers_at(40) == 1);
+  CHECK(layers_at(60) == 2);
+  CHECK(layers_at(80) == 1);
+  CHECK(layers_at(20) == 1);
+}
+
+TEST_CASE("A crossfade lives until its longer region ends", "[midi][sample]") {
+  // 100 frames against 400: cutting the voice at the shorter one would drop
+  // three quarters of the layer still sounding.
+  const SampleBank bank = crossfade_bank(100, 400);
+  SamplePatchParams p;
+  SampleVoiceCore core;
+  core.attach(&bank);
+  REQUIRE(core.start(p, kOutRate, 60, 60));
+  REQUIRE(core.layer_count() == 2);
+
+  const std::vector<float> early = pull(core, 200);
+  CHECK_FALSE(core.finished());
+  // Past the short layer only the long one is left, at its own half weight.
+  CHECK(early.back() == Catch::Approx(-0.5f));
+
+  pull(core, 300);
+  CHECK(core.finished());
+}

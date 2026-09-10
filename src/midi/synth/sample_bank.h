@@ -64,6 +64,22 @@ struct SampleZone {
   double source_rate = 0.0;
 };
 
+/// Two zones covering one note, with the share the upper one takes.
+///
+/// Overlapping velocity ranges are a crossfade rather than a conflict: a
+/// sampled instrument's velocity layers are separate recordings, and switching
+/// between them at a single velocity is audible as a step in timbre wherever a
+/// held phrase crosses it. Zones that do not overlap resolve to @c low alone
+/// and behave exactly as a hard switch.
+struct SampleZoneMix {
+  /// Fades out as velocity rises; null when nothing covers the note.
+  const SampleZone* low = nullptr;
+  /// Fades in as velocity rises; null when only one zone covers the note.
+  const SampleZone* high = nullptr;
+  /// @c high 's share in [0,1]; @c low takes the rest.
+  float high_weight = 0.0f;
+};
+
 /// Samples plus keymaps, owned by the host and handed to NativeSynth.
 class SampleBank {
  public:
@@ -86,6 +102,12 @@ class SampleBank {
   /// AUDIO thread: the first zone of @p set covering (@p key, @p velocity), or
   /// nullptr when the set does not exist or nothing covers the note.
   const SampleZone* find(int32_t set, uint8_t key, uint8_t velocity) const noexcept;
+
+  /// AUDIO thread: the first two zones of @p set covering (@p key,
+  /// @p velocity), ordered and weighted for a velocity crossfade. Only the
+  /// first two are considered, so a third overlapping zone is ignored rather
+  /// than blended.
+  SampleZoneMix find_mix(int32_t set, uint8_t key, uint8_t velocity) const noexcept;
 
  private:
   /// Pool region and header of one added sample.
