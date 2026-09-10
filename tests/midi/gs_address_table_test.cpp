@@ -420,6 +420,17 @@ TEST_CASE("GS address table: every row decodes", "[midi][gs][address]") {
   check_row(0x41072A, 0x00, GsParam::kDrumRxNoteOff, 0x2A, 0);
   check_row(0x41082A, 0x00, GsParam::kDrumRxNoteOn, 0x2A, 0);
   check_row(0x410926, 0x40, GsParam::kDrumDelaySend, 0x26, 0);
+  // The six parameter nibbles past DELAY SEND LEVEL, which neither map defines.
+  // The variable nibble is the drum map, so each is asked on a different one to
+  // show the range moving with it rather than standing for map 0 alone. The map
+  // runs to 7 and not to F: the mid byte is seven bits, so a map nibble above 7
+  // names no address at all.
+  check_row(0x410A00, 0x00, GsParam::kUndefined);
+  check_row(0x411B40, 0x7F, GsParam::kUndefined);
+  check_row(0x412C7F, 0x01, GsParam::kUndefined);
+  check_row(0x413D00, 0x40, GsParam::kUndefined);
+  check_row(0x417E26, 0x00, GsParam::kUndefined);
+  check_row(0x410F7F, 0x00, GsParam::kUndefined);
 
   // The opposite group (50 ** ** / 51 ** **): one row over the whole block, so
   // the mid byte comes back as the part and the low byte as the index, and an
@@ -1362,13 +1373,12 @@ TEST_CASE("GS decode: the unknown counter separates a gap from a claimed address
   REQUIRE(gs_lookup_range(0x400400) == nullptr);
   CHECK(unknowns(0x400400) == 1);
   // A second one from another family, so the counter is not being shown to work
-  // in a single block. 41 mA rr is a drum-setup parameter nibble the manual does
-  // not define — the block ends at m9. Both carry the lookup guards above,
-  // because an address that quietly acquires a row would keep the case passing
-  // for the wrong reason.
-  REQUIRE(gs_lookup_address(0x410A00) == nullptr);
-  REQUIRE(gs_lookup_range(0x410A00) == nullptr);
-  CHECK(unknowns(0x410A00) == 1);
+  // in a single block. 00 02 xx is past the system block, which both maps end at
+  // 00 01 3F. Both carry the lookup guards above, because an address that
+  // quietly acquires a row would keep the case passing for the wrong reason.
+  REQUIRE(gs_lookup_address(0x000200) == nullptr);
+  REQUIRE(gs_lookup_range(0x000200) == nullptr);
+  CHECK(unknowns(0x000200) == 1);
 
   // The combined entry point refuses what the frame layer refuses.
   uint32_t unknown = 0;

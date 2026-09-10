@@ -303,7 +303,7 @@
     "addresses_the_table_claims": 171798,
     "addresses_the_unit_answered": 15688,
     "addresses_a_read_reached": 15690,
-    "addresses_with_no_row": 256,
+    "addresses_with_no_row": 0,
     "rows_no_read_reached": 13,
     "rows_whose_default_disagrees": 0,
     "rows_one_default_byte_cannot_express": 0,
@@ -323,32 +323,7 @@
     "sample_reached": [],
     "what_it_means": "The extra insertion-effect units live at 40 3u xx because the hardware has nothing there, which is what makes them unreachable from a spec-compliant file. Any address answered here is a collision and the extension is not safe without a flag."
   },
-  "addresses_with_no_row": [
-    {
-      "block": "41 0F",
-      "addresses": 128,
-      "sample": [
-        "41 0F 00",
-        "41 0F 01",
-        "41 0F 02",
-        "41 0F 03",
-        "41 0F 04",
-        "41 0F 05"
-      ]
-    },
-    {
-      "block": "41 1F",
-      "addresses": 128,
-      "sample": [
-        "41 1F 00",
-        "41 1F 01",
-        "41 1F 02",
-        "41 1F 03",
-        "41 1F 04",
-        "41 1F 05"
-      ]
-    }
-  ],
+  "addresses_with_no_row": [],
   "rows_no_read_reached": [
     {
       "param": "kSystemModeSet",

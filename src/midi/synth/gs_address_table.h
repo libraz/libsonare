@@ -758,7 +758,7 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
 }};
 
 /// The undefined regions covered so far.
-inline constexpr std::array<GsAddressRange, 22> kGsUndefinedRanges = {{
+inline constexpr std::array<GsAddressRange, 28> kGsUndefinedRanges = {{
     {0x400110, 0x40012F, 0,
      "no row between PATCH NAME and REVERB MACRO; the SC-55/SC-88 PARTIAL RESERVE the SC-8850 "
      "dropped arrives here"},
@@ -800,6 +800,32 @@ inline constexpr std::array<GsAddressRange, 22> kGsUndefinedRanges = {{
     // Tone map / EQ / EFX block. Real files write into the first of these.
     {0x404002, 0x40401F, 0x000F00, "no row between TONE MAP-0 NUMBER and the part EQ switch"},
     {0x404023, 0x40407F, 0x000F00, "no row past the part EFX assign"},
+    // The drum setup block past DELAY SEND LEVEL. Neither map gives 41 mn rr a
+    // parameter nibble above 9, so a long write from the block runs through
+    // these. The variable nibble is the drum map rather than a part, and one
+    // range covers one mid byte, so the six nibbles take six rows.
+    //
+    // A measured unit answers every note of nF on each map it has, holding 00.
+    // That says it has storage there; it does not say what for, and the manual
+    // is what these rows follow.
+    {0x410A00, 0x410A7F, 0x00F000,
+     "no row past DELAY SEND LEVEL; a run from the drum setup block "
+     "crosses it"},
+    {0x410B00, 0x410B7F, 0x00F000,
+     "no row past DELAY SEND LEVEL; a run from the drum setup block "
+     "crosses it"},
+    {0x410C00, 0x410C7F, 0x00F000,
+     "no row past DELAY SEND LEVEL; a run from the drum setup block "
+     "crosses it"},
+    {0x410D00, 0x410D7F, 0x00F000,
+     "no row past DELAY SEND LEVEL; a run from the drum setup block "
+     "crosses it"},
+    {0x410E00, 0x410E7F, 0x00F000,
+     "no row past DELAY SEND LEVEL; a run from the drum setup block "
+     "crosses it"},
+    {0x410F00, 0x410F7F, 0x00F000,
+     "no row at the drum setup block's last parameter nibble, which neither map defines and a "
+     "measured unit answers at every note holding 00"},
 }};
 
 // --- Frame layer ---
@@ -982,25 +1008,34 @@ constexpr bool gs_table_is_consistent() noexcept {
   return true;
 }
 
-/// Concrete regions a range row stands for: one per part block when its mask
-/// carries the part nibble, otherwise the row itself.
+/// Concrete regions a range row stands for: one per block when its mask carries
+/// a variable nibble, otherwise the row itself.
 constexpr uint32_t gs_range_block_count(const GsAddressRange& r) noexcept {
-  return (r.mask & 0x000F00u) != 0 ? 16u : 1u;
+  return (r.mask & 0x00FF00u) != 0 ? 16u : 1u;
+}
+
+/// How far to step that nibble. A part or EFX unit sits in the mid byte's low
+/// nibble and a drum map in its high one, so a walk over a range's blocks needs
+/// the shift as well as the count. The consistency check below refuses a mask
+/// carrying both, which is what lets one shift answer.
+constexpr uint32_t gs_range_block_shift(const GsAddressRange& r) noexcept {
+  return (r.mask & 0x000F00u) != 0 ? 8u : 12u;
 }
 
 /// Whether two ranges share an address.
 ///
 /// Both are confined to one mid byte by the caller's own check, so they can only
-/// meet where their mid bytes coincide: the high nibble has to match outright,
-/// and the low nibble has to match unless one of them is free to move over it.
-/// Written this way rather than by expanding each mask into its sixteen blocks
-/// and comparing all 256 pairs — that is the obvious form and it costs the
-/// constexpr step budget, which this header has already had to be restructured
-/// for once and which a growing table spends faster than anything else here.
+/// meet where their mid bytes coincide: the high byte has to match outright, and
+/// each mid-byte nibble has to match unless one of the two is free to move over
+/// it. Written this way rather than by expanding each mask into its sixteen
+/// blocks and comparing all 256 pairs — that is the obvious form and it costs
+/// the constexpr step budget, which this header has already had to be
+/// restructured for once and which a growing table spends faster than anything
+/// else here.
 constexpr bool gs_ranges_meet(const GsAddressRange& a, const GsAddressRange& b) noexcept {
-  if ((a.lo_addr & 0xFFF000u) != (b.lo_addr & 0xFFF000u)) return false;
-  const bool either_moves = (a.mask & 0x000F00u) != 0 || (b.mask & 0x000F00u) != 0;
-  if (!either_moves && (a.lo_addr & 0x000F00u) != (b.lo_addr & 0x000F00u)) return false;
+  if ((a.lo_addr & 0xFF0000u) != (b.lo_addr & 0xFF0000u)) return false;
+  const uint32_t free_nibbles = (a.mask | b.mask) & 0x00FF00u;
+  if (((a.lo_addr ^ b.lo_addr) & 0x00FF00u & ~free_nibbles) != 0) return false;
   return (a.lo_addr & 0xFFu) <= (b.hi_addr & 0xFFu) && (b.lo_addr & 0xFFu) <= (a.hi_addr & 0xFFu);
 }
 
@@ -1014,11 +1049,16 @@ constexpr bool gs_ranges_are_consistent() noexcept {
     // above 7F, which are not GS addresses, and it is what lets the walk below
     // decide a row on the block base alone. Split such a range instead.
     if ((r.lo_addr & 0xFFFF00u) != (r.hi_addr & 0xFFFF00u)) return false;
+    // One variable nibble per range. Both would need two shifts in the walk
+    // below, and a mask that moved over the whole mid byte would stand for the
+    // block it names as well as every other, which no region here means.
+    if ((r.mask & 0x000F00u) != 0 && (r.mask & 0x00F000u) != 0) return false;
     // Neither comparison below clears a masked base to compare it with an
-    // unmasked one: the variable nibble is the LOW nibble of the mid byte, so
-    // clearing it destroys which block the address was in and a comparison
-    // across two different masks silently means something else.
+    // unmasked one: clearing the variable nibble destroys which block the
+    // address was in, and a comparison across two different masks silently
+    // means something else.
     const uint32_t blocks = gs_range_block_count(r);
+    const uint32_t shift = gs_range_block_shift(r);
     for (size_t j = 0; j < i; ++j) {
       if (gs_ranges_meet(r, kGsUndefinedRanges[j])) return false;
     }
@@ -1034,7 +1074,7 @@ constexpr bool gs_ranges_are_consistent() noexcept {
     for (const GsAddressEntry& e : kGsAddressTable) {
       if ((r.lo_addr & 0xFF0000u) != (e.addr & 0xFF0000u)) continue;
       for (uint32_t block = 0; block < blocks; ++block) {
-        const uint32_t base = r.lo_addr | (block << 8);
+        const uint32_t base = r.lo_addr | (block << shift);
         if ((base & ~e.mask & 0xFFFF00u) != (e.addr & 0xFFFF00u)) continue;
         if (gs_row_low_begin(e) <= (r.hi_addr & 0xFFu) &&
             (r.lo_addr & 0xFFu) <= gs_row_low_end(e)) {
