@@ -19,6 +19,7 @@ SURFACES = {
 }
 EXCLUDED = {
     "_chain_config.ts",
+    "_feature_options.ts",
     "_fft_options.ts",
     "errors.ts",
     "native.ts",
