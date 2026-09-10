@@ -758,3 +758,93 @@ TEST_CASE("the kit swings less with velocity than the sampler curve alone would"
   // A kit that stopped responding to velocity would also pass the bound above.
   REQUIRE(kit > 4.0f);
 }
+
+namespace {
+
+/// A noise-only kit piece with a flat amplitude envelope, so what the windows
+/// below measure is the noise layer's own envelope and nothing else.
+NativeSynthPatch clap_patch(int bursts) {
+  NativeSynthPatch p{};
+  p.mode = SynthEngineMode::kPercussion;
+  p.gain = 1.0f;
+  p.cutoff_hz = 20000.0f;
+  p.amp_env.attack_ms = 0.1f;
+  p.amp_env.decay_ms = 1.0f;
+  p.amp_env.sustain = 1.0f;
+  p.percussion.num_modes = 0;
+  p.percussion.noise_gain = 1.0f;
+  p.percussion.noise_decay_ms = 90.0f;
+  p.percussion.noise_cutoff_hz = 1300.0f;
+  p.percussion.noise_q = 1.2f;
+  p.percussion.noise_output = SynthFilterOutput::kBandpass;
+  p.percussion.noise_burst_count = bursts;
+  p.percussion.noise_burst_interval_ms = 10.0f;
+  p.percussion.noise_burst_decay_ms = 4.0f;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("the noise burst train re-attacks where one envelope only falls",
+          "[midi][synth][percussion]") {
+  // What identifies a hand clap is that the source is gated open again, so the
+  // claim is about the envelope: a single exponential can be given any decay and
+  // still only fall. Measured as a RATIO against the same patch with the train
+  // switched off, which draws the identical noise sequence — so what the windows
+  // compare is the two envelopes and not two samples of a random process. A raw
+  // window here holds barely one independent sample of a 1 kHz-wide band and its
+  // level is very nearly noise itself.
+  const int n = 4800;  // 100 ms
+  const std::vector<float> one = render_patch(clap_patch(0), 50, 100, n);
+  const std::vector<float> train = render_patch(clap_patch(3), 50, 100, n);
+  REQUIRE(window_rms(one, 240, 336) > 1.0e-4);  // there is a burst to compare against
+
+  // The train changes nothing at all until its first retrigger, and that lands
+  // one interval after the strike — 480 samples at 10 ms and 48 kHz.
+  size_t first_change = train.size();
+  for (size_t i = 0; i < train.size(); ++i) {
+    if (train[i] != one[i]) {
+      first_change = i;
+      break;
+    }
+  }
+  REQUIRE(first_change >= 478);
+  REQUIRE(first_change <= 481);
+  // Across it the gate is back at the level the strike opened it to, over a tail
+  // that has fallen to exp(-10/90) — a little over twice the level.
+  const double at_burst = window_rms(train, 480, 576) / window_rms(one, 480, 576);
+  REQUIRE(at_burst > 1.7);
+}
+
+TEST_CASE("a burst count of zero ignores the rest of the train", "[midi][synth][percussion]") {
+  // The disabled state has to be the voicing that predates the field, or a kit
+  // calibrated before it cannot be trusted afterwards. Bit-for-bit, because the
+  // two other fields are read in start() whether or not the count uses them.
+  NativeSynthPatch off = clap_patch(0);
+  NativeSynthPatch off_configured = clap_patch(0);
+  off_configured.percussion.noise_burst_interval_ms = 30.0f;
+  off_configured.percussion.noise_burst_decay_ms = 40.0f;
+
+  const std::vector<float> a = render_patch(off, 50, 100, 4096);
+  const std::vector<float> b = render_patch(off_configured, 50, 100, 4096);
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+  }
+}
+
+TEST_CASE("each burst in the train decays on its own, shorter than the tail",
+          "[midi][synth][percussion]") {
+  // The two envelopes mean different things: the burst is the slap and
+  // noise_decay_ms is what runs on underneath it. A burst that inherited the
+  // tail's decay would still be sounding when the next one lands, and the train
+  // would fuse into one long swell instead of reading as separate claps.
+  const int n = 4800;
+  const std::vector<float> one = render_patch(clap_patch(0), 50, 100, n);
+  const std::vector<float> train = render_patch(clap_patch(3), 50, 100, n);
+  // Same ratio-to-baseline as above, so the numbers are envelope and not noise.
+  const double at_burst = window_rms(train, 480, 576) / window_rms(one, 480, 576);
+  const double before_next = window_rms(train, 864, 960) / window_rms(one, 864, 960);
+  REQUIRE(at_burst > 1.7);      // 10..12 ms: the gate has just reopened
+  REQUIRE(before_next < 1.35);  // 18..20 ms: four decay times later, nearly gone
+}

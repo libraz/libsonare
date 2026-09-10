@@ -102,6 +102,18 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   noise_filter_.set(params.noise_cutoff_hz, std::max(0.5f, params.noise_q));
   noise_filter_.reset();
 
+  // Burst train. The retriggers reopen the gate to the level the strike itself
+  // opened it to, velocity scaling included, so a soft clap stays a soft clap.
+  noise_peak_ = noise_level_;
+  burst_level_ = 0.0f;
+  burst_remaining_ = noise_peak_ > 0.0f ? std::max(0, params.noise_burst_count) : 0;
+  burst_period_ = std::max(
+      1,
+      static_cast<int>(std::lround(std::max(0.1f, params.noise_burst_interval_ms) * 0.001f * sr)));
+  burst_countdown_ = burst_period_;
+  burst_coeff_ = std::exp(
+      -1.0f / (std::max(1.0f, params.noise_burst_decay_ms) * 0.001f * static_cast<float>(sr)));
+
   // Radiated upper bound over every noise stream. Butterworth Q, because this
   // is a ceiling and a resonant one would put back a peak of its own.
   noise_air_hz_ = params.noise_air_hz > 0.0f
@@ -289,9 +301,18 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     }
   }
 
-  if (noise_level_ > 1.0e-5f) {
-    const float burst = noise_.bipolar_at(kNoiseIndexBase + noise_index_++) * noise_level_;
+  // Counted outside the level gate: the train has to keep its schedule across
+  // the silence between a short burst and the next retrigger.
+  if (burst_remaining_ > 0 && --burst_countdown_ <= 0) {
+    burst_level_ = noise_peak_;
+    burst_countdown_ = burst_period_;
+    --burst_remaining_;
+  }
+  const float noise_env = noise_level_ + burst_level_;
+  if (noise_env > 1.0e-5f) {
+    const float burst = noise_.bipolar_at(kNoiseIndexBase + noise_index_++) * noise_env;
     noise_level_ *= noise_coeff_;
+    burst_level_ *= burst_coeff_;
     const TptSvf::Outputs out = noise_filter_.process(burst);
     float voiced = 0.0f;
     switch (noise_output_) {
@@ -374,6 +395,9 @@ void PercussionVoiceCore::kill() noexcept {
   }
   num_modes_ = 0;
   noise_level_ = 0.0f;
+  noise_peak_ = 0.0f;
+  burst_level_ = 0.0f;
+  burst_remaining_ = 0;
   excite_ = false;
   noise_air_hz_ = 0.0f;
   noise_air_.reset();

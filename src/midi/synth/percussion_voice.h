@@ -108,6 +108,21 @@ struct PercussionPatchParams {
   float noise_q = 1.0f;
   SynthFilterOutput noise_output = SynthFilterOutput::kBandpass;
 
+  // --- burst train (hand clap) ---
+  /// Retriggers of the noise VCA after the strike (0 = off, bit-identical).
+  /// A clap is one noise source whose gate is reopened several times over the
+  /// first tens of milliseconds, and the smear that makes is not reachable from
+  /// a single exponential at any decay: what identifies it is that the source
+  /// re-attacks, not how it falls.
+  int noise_burst_count = 0;
+  /// Spacing between those retriggers (ms). Below roughly 5 ms the train fuses
+  /// into one longer burst; above roughly 30 ms it reads as separate hits.
+  float noise_burst_interval_ms = 10.0f;
+  /// Decay of ONE retriggered burst (ms), short against `noise_decay_ms`.
+  /// The two run at once and mean different things — this is the slap, and
+  /// `noise_decay_ms` is the tail that carries on underneath the train.
+  float noise_burst_decay_ms = 6.0f;
+
   // --- radiated upper bound ---
   /// Upper bound (Hz) on every noise stream the struck head or plate radiates
   /// — the burst, the wire rattle and the shimmer wash. 0 = unbounded, the
@@ -324,6 +339,17 @@ class PercussionVoiceCore {
   float noise_coeff_ = 0.0f;
   TptSvf noise_filter_;
   SynthFilterOutput noise_output_ = SynthFilterOutput::kBandpass;
+
+  // Burst train: a second envelope over the SAME noise source and the same
+  // band, summed with the tail before the filter — one source and one filter,
+  // as the circuit has. Retriggering the tail envelope instead would restart
+  // the tail as well and lose what runs on under the train.
+  float noise_peak_ = 0.0f;
+  float burst_level_ = 0.0f;
+  float burst_coeff_ = 0.0f;
+  int burst_remaining_ = 0;
+  int burst_period_ = 0;
+  int burst_countdown_ = 0;
 
   // Radiated upper bound (noise_air_hz). One low-pass per stream rather than
   // one over their sum: the filter is linear, so the two are the same signal,

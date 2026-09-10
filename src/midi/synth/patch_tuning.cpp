@@ -458,6 +458,9 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   // own type defines. `exclusive_class` is the GM mute group — 0 is "none",
   // and it is here so a choke relationship can be tested without a rebuild.
   I_TYPED(percussion.exclusive_class, 0, 255);
+  // Upper bound is a working range rather than a limit the code enforces: past
+  // a handful the train stops reading as one gesture.
+  I_TYPED(percussion.noise_burst_count, 0, 8);
   I_TYPED(percussion.noise_output, static_cast<int>(SynthFilterOutput::kLowpass),
           static_cast<int>(SynthFilterOutput::kHighpass));
   for (int i = 0; i < kMaxPercussionModes; ++i) {
@@ -479,6 +482,8 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.noise_decay_ms);
   F(percussion.noise_cutoff_hz);
   F(percussion.noise_q);
+  F(percussion.noise_burst_interval_ms);
+  F(percussion.noise_burst_decay_ms);
   F(percussion.shell_mix);
   for (int i = 0; i < kMaxShellModes; ++i) {
     const std::string index = std::to_string(i);
