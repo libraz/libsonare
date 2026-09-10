@@ -665,6 +665,8 @@ endif()
 
 if(BUILD_PITCH_EDITOR)
   add_library(sonare_pitch_editor STATIC
+    editing/note_model/note_extractor.cpp
+    editing/note_model/note_renderer.cpp
     editing/pitch_editor/f0_provider.cpp
     editing/pitch_editor/note_editor.cpp
     editing/pitch_editor/note_segmenter.cpp
