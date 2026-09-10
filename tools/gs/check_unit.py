@@ -33,14 +33,26 @@ import json
 import sys
 from pathlib import Path
 
-# The four records this reads, of the couple of hundred the archive holds. Each
-# is one run's output, filed under the directory naming the stage that wrote it,
-# and named here once so a move shows up as four edits rather than eight.
+# What this reads, of the couple of hundred records the archive holds.
+#
+# Two of the three measurements are named by their **stage** rather than by a
+# file, because a stage is free to be more than one run and this one is: an
+# archive takes a capture two ways where neither way reaches what the other
+# does. This unit's power-on state is read once region by region and once an
+# offset at a time, and the second is the only one that reaches a live address
+# sitting past a silent gap -- which is where PART OUTPUT ASSIGN turned out to
+# be. Naming one file here reads whichever half the name landed on and reports
+# the other half's addresses as absent from the machine, silently.
 META = "meta.json"
-POWER_ON = "power-on/whole-map.json"
+POWER_ON_STAGE = "power-on"
+WRITE_PROBE_STAGE = "write-probe"
 BOUNDARY = "boundary/whole-map.json"
-WRITE_PROBE = "write-probe/whole-map.json"
-RECORDS_READ = (META, POWER_ON, BOUNDARY, WRITE_PROBE)
+
+# A write-probe record carrying this key put the machine into a state before
+# writing, so its accepted values are that state's rather than the power-on
+# machine's and they do not belong in one flat map. The archive declares the
+# preparation in the record; nothing here needs to know which records those are.
+PREPARED = "prepared"
 
 # The finding naming the blocks that are a window onto another store rather than
 # storage of their own. Read by the kind the finding gives itself, so a unit
@@ -74,6 +86,19 @@ DEFAULT_IS_NOT_THE_MACHINES = {
     "kUserDrumSourceMap": "ACCEPT; every kit is reachable from the program alone",
     "kUserDrumSourceNote": "a user set the file builds; unwritten selects nothing",
     "kPatchName": "ACCEPT; a name, and the unit powers on holding its own",
+}
+
+# Rows whose range is deliberately wider than the machine's, with the decision
+# that made it so. Only the widening is excused: a row here that turns out to be
+# too *narrow* for the machine is still reported, since nothing about an
+# extension licenses a value the hardware takes and libsonare does not.
+#
+# Declared for the reason above, and stale-checked for it too: an entry that
+# suppresses nothing has outlived the divergence it excuses.
+RANGE_WIDENED_DELIBERATELY = {
+    "kPartEfxAssign": "02-10 select the extra insertion units libsonare adds; the hardware has "
+    "one unit and refuses them, which is the property that makes the extension "
+    "unreachable from a spec-compliant file (docs/gs.md)",
 }
 
 # The write probe's own verdict on each byte it wrote, which is what says whether
@@ -187,15 +212,62 @@ def elsewhere(unit: Path, name: str) -> str:
     return f". The index lists under {stage!r}: {', '.join(files)}"
 
 
-def window_blocks(power_on: dict, where: str) -> frozenset:
-    """The high bytes the record says are a window, from the finding that names itself."""
-    for finding in power_on.get("findings", []):
-        if finding.get("kind") == WINDOW_FINDING:
-            return frozenset(int(b, 16) for b in finding["blocks"])
+def stage_records(unit: Path, stage: str) -> list[str]:
+    """Every record the archive's own index files under @p stage, in its order.
+
+    The index is the only thing that knows what a stage holds now, so a stage
+    that grows a second capture is read whole without this being told.
+    """
+    index = unit / "index.json"
+    if not index.is_file():
+        sys.exit(f"{index} is not in the archive; this comparison needs it to read a stage whole")
+    files = [e["file"] for e in json.loads(index.read_text()).get("stages", {}).get(stage, [])]
+    if not files:
+        sys.exit(f"{index} lists no stage {stage!r}, so there is nothing to compare against")
+    return files
+
+
+def agreed_values(unit: Path, files: list[str]) -> tuple[dict, dict, list]:
+    """Every address a stage's records answered, and the value where they agree.
+
+    Two captures of one power-on state need not agree, and this unit's do not at
+    256 addresses: a region read and a single-byte read reach different bytes of
+    a block, so where both answered they are two measurements rather than one
+    repeated. Resolving that here by taking whichever record was read first
+    would decide something -- a default comparison against the losing value
+    manufactures a finding or hides one. So a disagreement is reported, and the
+    address carries no value into the comparison while keeping its place among
+    the addresses a read answered, which is not what is in doubt.
+    """
+    answered: dict[str, str] = {}
+    disputed: dict[str, dict[str, str]] = {}
+    for name in files:
+        for address, value in load(unit, name).get("values", {}).items():
+            held = answered.setdefault(address, value)
+            if held != value:
+                disputed.setdefault(address, {}).update({name: value})
+    reports = [
+        {"address": address, "readings": sorted(set([answered[address], *by_record.values()]))}
+        for address, by_record in sorted(disputed.items())
+    ]
+    values = {a: v for a, v in answered.items() if a not in disputed}
+    return answered, values, reports
+
+
+def window_blocks(unit: Path, files: list[str]) -> frozenset:
+    """The high bytes a stage's records call a window, from the finding naming itself.
+
+    Searched across the stage rather than read from one file: which of a stage's
+    records carries a finding is the archive's filing, not this tool's business.
+    """
+    for name in files:
+        for finding in load(unit, name).get("findings", []):
+            if finding.get("kind") == WINDOW_FINDING:
+                return frozenset(int(b, 16) for b in finding["blocks"])
     sys.exit(
-        f"{where} carries no {WINDOW_FINDING!r} finding. Every address in a window "
-        "mirrors another store, so counting them as answered would invent thousands "
-        "of gaps. Refusing to guess."
+        f"No record of {unit} carries a {WINDOW_FINDING!r} finding. Every address in "
+        "a window mirrors another store, so counting them as answered would invent "
+        "thousands of gaps. Refusing to guess."
     )
 
 
@@ -227,15 +299,16 @@ def main() -> int:
     unit = Path(args.unit)
     table = json.loads(Path(args.table).read_text())
     meta = load(unit, META)
-    power_on = load(unit, POWER_ON)
+    power_on_files = stage_records(unit, POWER_ON_STAGE)
+    write_probe_files = stage_records(unit, WRITE_PROBE_STAGE)
     boundary = load(unit, BOUNDARY)
-    write_probe = load(unit, WRITE_PROBE)
 
-    windows = window_blocks(power_on, f"{unit}/{POWER_ON}")
+    windows = window_blocks(unit, power_on_files)
+    power_on_answered, power_on_agreed, power_on_disputes = agreed_values(unit, power_on_files)
 
     # What the unit answered with a value, less the windows, which are not
     # storage of their own. This is the hard set: each of these returned a byte.
-    answered = {parsed(a) for a in power_on["values"] if (parsed(a) >> 16) not in windows}
+    answered = {parsed(a) for a in power_on_answered if (parsed(a) >> 16) not in windows}
 
     # How far a read actually got, which is further than the map says and further
     # than `answered`. The power-on sweep reads each region to its mapped end,
@@ -261,11 +334,19 @@ def main() -> int:
             claimed.setdefault(addr, i)
     undefined = {a for entry in table["undefined_ranges"] for a in range_addresses(entry)}
 
-    # What the unit accepted, per address, from the write probe.
+    # What the unit accepted, per address, over every write-probe record that
+    # wrote to the power-on machine. The probes that ask an address the whole-map
+    # run never reached are the reason this is a stage rather than a file; the
+    # ones taken under a prepared state are left out, their accepted values
+    # belonging to that state.
     accepted: dict[int, dict] = {}
-    for region in write_probe["regions"]:
-        for byte in region.get("bytes", []):
-            accepted[parsed(byte["address"])] = byte
+    for name in write_probe_files:
+        record = load(unit, name)
+        if PREPARED in record:
+            continue
+        for region in record.get("regions", []):
+            for byte in region.get("bytes", []):
+                accepted.setdefault(parsed(byte["address"]), byte)
 
     findings: dict[str, list] = {
         "addresses_with_no_row": [],
@@ -276,6 +357,8 @@ def main() -> int:
         "ranges_the_probe_could_not_decide": [],
         "blanket_rows_not_compared": [],
         "stale_default_exclusions": [],
+        "stale_range_exclusions": [],
+        "power_on_reads_disagree": power_on_disputes,
     }
 
     # A row that stands for a whole high-byte block rather than for a parameter.
@@ -352,8 +435,10 @@ def main() -> int:
     #    right for all of them, and that is a statement about the row's shape
     #    rather than about its value. Reported apart, because both halves are
     #    findings and only one is a value to correct.
-    power_on_values = {parsed(a): int(v, 16) for a, v in power_on["values"].items()}
+    power_on_values = {parsed(a): int(v, 16) for a, v in power_on_agreed.items()}
+    disputed_addresses = {parsed(d["address"]) for d in power_on_disputes}
     excused: set[str] = set()
+    defaults_undecided: set[str] = set()
     for row in table["rows"]:
         if row["param"] in blanket:
             continue
@@ -361,6 +446,9 @@ def main() -> int:
         held: list[tuple[int, int]] = []
         for bits in submasks(row["mask"]):
             addr = row["addr"] | bits
+            if addr in disputed_addresses:
+                defaults_undecided.add(row["param"])
+                continue
             value = power_on_values.get(addr)
             if value is not None:
                 held.append((addr, value))
@@ -397,9 +485,15 @@ def main() -> int:
 
     # An exclusion that suppressed nothing is reported rather than left in place:
     # it keeps asserting a reviewed decision about a row that no longer needs one.
+    #
+    # Stale means the row was compared and agreed, never that it was not compared.
+    # A row every one of whose instances landed among the readings two captures
+    # disagree about produced no verdict for the exclusion to suppress, and calling
+    # that stale would retire a reviewed decision on the strength of a measurement
+    # that was withheld -- the same shape as scoring an empty set as perfect.
     findings["stale_default_exclusions"] = [
         {"param": p, "reason": DEFAULT_IS_NOT_THE_MACHINES[p]}
-        for p in sorted(set(DEFAULT_IS_NOT_THE_MACHINES) - excused)
+        for p in sorted(set(DEFAULT_IS_NOT_THE_MACHINES) - excused - defaults_undecided)
     ]
 
     # 4. Accepted ranges against what the unit took. A probed value the unit
@@ -413,6 +507,7 @@ def main() -> int:
     #    clamp and a refusal are indistinguishable there, so its accepted set is
     #    the one value the byte already held and comparing a range to it would
     #    manufacture a disagreement the size of the row.
+    widening_excused: set[str] = set()
     for row in table["rows"]:
         if row["param"] in blanket:
             continue
@@ -447,6 +542,9 @@ def main() -> int:
                     "why": RANGE_UNDECIDED,
                 }
             )
+        if too_wide and row["param"] in RANGE_WIDENED_DELIBERATELY:
+            widening_excused.add(row["param"])
+            too_wide = []
         if too_narrow or too_wide:
             findings["range_disagreements"].append(
                 {
@@ -459,6 +557,11 @@ def main() -> int:
                     "sample_too_wide": too_wide[: args.samples],
                 }
             )
+
+    findings["stale_range_exclusions"] = [
+        {"param": p, "reason": RANGE_WIDENED_DELIBERATELY[p]}
+        for p in sorted(set(RANGE_WIDENED_DELIBERATELY) - widening_excused)
+    ]
 
     # The extension's safety property, checked rather than asserted. Taken
     # against everything a read reached rather than against what answered, since
@@ -483,13 +586,17 @@ def main() -> int:
             "model": meta.get("model"),
             "identity_reply": meta.get("identity_reply"),
         },
-        "derived_from": provenance(unit, RECORDS_READ),
+        "derived_from": provenance(unit, (META, BOUNDARY, *power_on_files, *write_probe_files)),
         "what_the_comparison_cannot_see": [
-            "The four records are not shown to be one state of the machine. None of them "
-            "holds the moment it was taken, so the only ordering available is the day "
-            "each was published, under derived_from, and that bounds them from above "
+            "The records are not shown to be one state of the machine. Several do not "
+            "hold the moment they were taken, so the ordering available for those is the "
+            "day each was published, under derived_from, and that bounds them from above "
             "rather than placing them. A setting changed between two runs would read "
             "here as a property of the unit.",
+            "Where two captures of the power-on state disagree, neither is preferred: the "
+            "address is carried under power_on_reads_disagree and no default verdict is "
+            "taken from it. It still counts among the addresses a read answered, which is "
+            "not what the two disagree about.",
             "No row is shown to be absent from the machine. A read that answers nothing "
             "leaves the address unproven, because a block read starting earlier reaches "
             "addresses a single-byte read does not -- which is the boundary probe's own "
@@ -528,6 +635,9 @@ def main() -> int:
             "blanket_rows_not_compared": len(findings["blanket_rows_not_compared"]),
             "defaults_excused_by_a_decision": len(excused),
             "stale_default_exclusions": len(findings["stale_default_exclusions"]),
+            "ranges_widened_by_a_decision": len(widening_excused),
+            "stale_range_exclusions": len(findings["stale_range_exclusions"]),
+            "power_on_reads_disagree": len(findings["power_on_reads_disagree"]),
             "extension_addresses_reached": len(collisions),
         },
         "extension_at_40_3u_xx": extension,
