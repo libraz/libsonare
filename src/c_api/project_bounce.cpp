@@ -1421,7 +1421,8 @@ const char* sonare_synth_enum_names(int kind) {
   static const std::string kModSources =
       "none\namp-env\nfilter-env\nlfo1\nlfo2\nvelocity\nkey-track\nmod-wheel\nrandom";
   static const std::string kModDestinations =
-      "none\npitch-cents\ncutoff-cents\namp-gain\npan-units";
+      "none\npitch-cents\ncutoff-cents\namp-gain\npan-units\nresonance-q\n"
+      "vibrato-depth-cents\nfilter-env-depth\nlfo1-rate-scale";
 
   switch (kind) {
     case SONARE_SYNTH_ENUM_ENGINE_MODE:

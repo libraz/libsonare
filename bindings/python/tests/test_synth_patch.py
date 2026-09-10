@@ -55,7 +55,17 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "mod-wheel",
         "random",
     ),
-    "mod_destinations": ("none", "pitch-cents", "cutoff-cents", "amp-gain", "pan-units"),
+    "mod_destinations": (
+        "none",
+        "pitch-cents",
+        "cutoff-cents",
+        "amp-gain",
+        "pan-units",
+        "resonance-q",
+        "vibrato-depth-cents",
+        "filter-env-depth",
+        "lfo1-rate-scale",
+    ),
 }
 
 

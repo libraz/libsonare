@@ -39,6 +39,20 @@ enum class ModDestination : int {
   kAmpGain = 3,
   /// Stereo pan offset; depth in SF2 pan units (-500..500) at full source.
   kPanUnits = 4,
+  /// Filter resonance offset; depth in Q units at full source.
+  kResonanceQ = 5,
+  /// LFO1 -> pitch depth offset; depth in cents at full source. Reaches the
+  /// depth the vibrato is spent at, not the pitch, so a source at zero leaves
+  /// the patch's own vibrato standing.
+  kVibratoDepthCents = 6,
+  /// Scales the filter envelope's contribution to cutoff; the multiplier
+  /// accumulates 1 + depth * source. Modulating how far the envelope sweeps
+  /// rather than where it sweeps from.
+  kFilterEnvDepth = 7,
+  /// Multiplies LFO1's frequency; the multiplier accumulates 1 + depth *
+  /// source. Applied one sample late, LFO1 being a source as well, which is
+  /// what keeps the routing acyclic.
+  kLfo1RateScale = 8,
 };
 
 struct ModRoute {
@@ -83,6 +97,10 @@ struct ModOffsets {
   float cutoff_cents = 0.0f;
   float amp_gain = 1.0f;  // multiplicative, clamped to [0, 4]
   float pan_units = 0.0f;
+  float resonance_q = 0.0f;
+  float vibrato_depth_cents = 0.0f;
+  float filter_env_depth = 1.0f;  // multiplicative, clamped to [0, 4]
+  float lfo1_rate_scale = 1.0f;   // multiplicative, clamped to [1/16, 16]
 };
 
 /// Evaluates every active route. Allocation-free.

@@ -507,6 +507,10 @@ export const SYNTH_MOD_DESTINATIONS = [
   'cutoff-cents',
   'amp-gain',
   'pan-units',
+  'resonance-q',
+  'vibrato-depth-cents',
+  'filter-env-depth',
+  'lfo1-rate-scale',
 ] as const;
 
 export interface SynthEnumTables {

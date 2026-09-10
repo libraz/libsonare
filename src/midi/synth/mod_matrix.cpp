@@ -55,10 +55,27 @@ ModOffsets evaluate_mod_matrix(const ModMatrix& matrix, const ModSourceValues& v
       case ModDestination::kPanUnits:
         out.pan_units += amount;
         break;
+      case ModDestination::kResonanceQ:
+        out.resonance_q += amount;
+        break;
+      case ModDestination::kVibratoDepthCents:
+        out.vibrato_depth_cents += amount;
+        break;
+      case ModDestination::kFilterEnvDepth:
+        out.filter_env_depth *= 1.0f + amount;
+        break;
+      case ModDestination::kLfo1RateScale:
+        out.lfo1_rate_scale *= 1.0f + amount;
+        break;
     }
   }
   out.amp_gain = std::clamp(out.amp_gain, 0.0f, 4.0f);
   out.pan_units = std::clamp(out.pan_units, -500.0f, 500.0f);
+  out.filter_env_depth = std::clamp(out.filter_env_depth, 0.0f, 4.0f);
+  // Four octaves either way. The floor is not zero: a rate of zero freezes the
+  // LFO at whatever phase it stopped on, which reads as a stuck detune rather
+  // than as no vibrato.
+  out.lfo1_rate_scale = std::clamp(out.lfo1_rate_scale, 0.0625f, 16.0f);
   return out;
 }
 

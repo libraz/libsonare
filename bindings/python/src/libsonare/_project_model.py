@@ -584,7 +584,12 @@ class SynthModRouting:
     ``source`` / ``destination`` accept the ordinal or a name (sources:
     ``"amp-env"`` / ``"filter-env"`` / ``"lfo1"`` / ``"lfo2"`` / ``"velocity"``
     / ``"key-track"`` / ``"mod-wheel"`` / ``"random"``; destinations:
-    ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"``).
+    ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"`` /
+    ``"resonance-q"`` / ``"vibrato-depth-cents"`` / ``"filter-env-depth"`` /
+    ``"lfo1-rate-scale"``). The last four modulate how a stage responds rather
+    than what it emits: ``"filter-env-depth"`` scales how far the filter
+    envelope sweeps, and ``"lfo1-rate-scale"`` retunes LFO1 -- one sample late,
+    since LFO1 is also a source.
     ``depth`` is in destination units at full source deflection.
     """
 

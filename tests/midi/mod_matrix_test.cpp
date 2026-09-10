@@ -190,6 +190,157 @@ TEST_CASE("mod wheel -> cutoff routing brightens with CC1", "[midi][synth]") {
   REQUIRE(level_with_wheel(127) > 1.5f * level_with_wheel(0));
 }
 
+TEST_CASE("the response destinations accumulate multiplicatively and clamp", "[midi][synth]") {
+  ModMatrix matrix;
+  matrix.routes[0] = {ModSource::kModWheel, ModDestination::kResonanceQ, 8.0f};
+  matrix.routes[1] = {ModSource::kVelocity, ModDestination::kVibratoDepthCents, 300.0f};
+  matrix.routes[2] = {ModSource::kAmpEnv, ModDestination::kFilterEnvDepth, -0.5f};
+  matrix.routes[3] = {ModSource::kLfo2, ModDestination::kLfo1RateScale, 1.0f};
+
+  ModSourceValues values;
+  values.mod_wheel = 0.5f;
+  values.velocity = 1.0f;
+  values.amp_env = 1.0f;
+  values.lfo2 = 1.0f;
+
+  const ModOffsets out = evaluate_mod_matrix(matrix, values);
+  CHECK(out.resonance_q == 4.0f);
+  CHECK(out.vibrato_depth_cents == 300.0f);
+  CHECK(out.filter_env_depth == 0.5f);
+  CHECK(out.lfo1_rate_scale == 2.0f);
+
+  // An unrouted matrix leaves each destination at the value that makes it a
+  // no-op, which is what keeps a patch that never asked for one bit-identical.
+  const ModOffsets idle = evaluate_mod_matrix(ModMatrix{}, values);
+  CHECK(idle.resonance_q == 0.0f);
+  CHECK(idle.vibrato_depth_cents == 0.0f);
+  CHECK(idle.filter_env_depth == 1.0f);
+  CHECK(idle.lfo1_rate_scale == 1.0f);
+}
+
+TEST_CASE("the LFO rate scale floor keeps the LFO moving", "[midi][synth]") {
+  // A scale of zero would freeze the LFO wherever its phase stopped, which is a
+  // stuck detune rather than an absence of vibrato.
+  ModMatrix matrix;
+  matrix.routes[0] = {ModSource::kModWheel, ModDestination::kLfo1RateScale, -4.0f};
+  ModSourceValues values;
+  values.mod_wheel = 1.0f;
+  CHECK(evaluate_mod_matrix(matrix, values).lfo1_rate_scale == 0.0625f);
+
+  matrix.routes[0] = {ModSource::kModWheel, ModDestination::kLfo1RateScale, 100.0f};
+  CHECK(evaluate_mod_matrix(matrix, values).lfo1_rate_scale == 16.0f);
+}
+
+TEST_CASE("mod wheel -> resonance sharpens the filter peak", "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  cfg.patch.waveform = VaWaveform::kSaw;
+  cfg.patch.cutoff_hz = 800.0f;
+  cfg.patch.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kResonanceQ, 10.0f};
+
+  auto level_with_wheel = [&cfg](uint8_t wheel) {
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 1, wheel)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 110)));
+    const StereoRender out = render(synth, 9600);
+    return rms(out.left, 4800, 9600);
+  };
+  // The resonant peak sits over a saw partial, so it adds energy the flat
+  // response does not pass.
+  REQUIRE(level_with_wheel(127) > 1.2f * level_with_wheel(0));
+}
+
+TEST_CASE("mod wheel -> vibrato depth opens a vibrato the patch does not have", "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  // The patch itself asks for no vibrato; the wheel is the whole depth.
+  cfg.patch.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kVibratoDepthCents,
+                                    600.0f};
+
+  auto swing = [&cfg](uint8_t wheel) {
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 1, wheel)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 110)));
+    const StereoRender out = render(synth, 12000);
+    // LFO1 runs at 5 Hz: a triangle from phase 0 peaks at 2400 samples and
+    // troughs at 7200.
+    const double high = estimate_frequency(out.left, 1800, 3000);
+    const double low = estimate_frequency(out.left, 6600, 7800);
+    return low > 0.0 ? high / low : 0.0;
+  };
+  REQUIRE(swing(127) > 1.3);
+  // Wheel down is the unmodulated patch: both windows report the same note.
+  const double idle = swing(0);
+  REQUIRE(idle > 0.98);
+  REQUIRE(idle < 1.02);
+}
+
+TEST_CASE("mod wheel -> filter envelope depth scales the sweep, not its origin", "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  cfg.patch.waveform = VaWaveform::kSaw;
+  cfg.patch.cutoff_hz = 300.0f;
+  cfg.patch.env_to_cutoff_cents = 4800.0f;
+  cfg.patch.filter_env.attack_ms = 1.0f;
+  cfg.patch.filter_env.decay_ms = 400.0f;
+  cfg.patch.filter_env.sustain = 1.0f;
+  // A full wheel cancels the envelope's contribution entirely (1 + -1 * 1).
+  // The source is the wheel rather than velocity because velocity also sets the
+  // amplitude, which would move the same measurement for the wrong reason.
+  cfg.patch.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kFilterEnvDepth, -1.0f};
+
+  auto level_with_wheel = [&cfg](uint8_t wheel) {
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 1, wheel)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 110)));
+    const StereoRender out = render(synth, 9600);
+    return rms(out.left, 2400, 9600);
+  };
+  // The cutoff the envelope sweeps FROM is untouched: cancelling the depth
+  // leaves the note at its 300 Hz origin instead of four octaves above it.
+  REQUIRE(level_with_wheel(0) > 1.2f * level_with_wheel(127));
+}
+
+TEST_CASE("mod wheel -> LFO1 rate retunes the vibrato it is already driving", "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  cfg.patch.lfo_rate_hz = 5.0f;
+  cfg.patch.mod_matrix.routes[0] = {ModSource::kLfo1, ModDestination::kAmpGain, 0.9f};
+  cfg.patch.mod_matrix.routes[1] = {ModSource::kModWheel, ModDestination::kLfo1RateScale, 3.0f};
+
+  auto tremolo_cycles = [&cfg](uint8_t wheel) {
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 1, wheel)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 110)));
+    const StereoRender out = render(synth, 24000);  // 0.5 s
+    // Short-window RMS is the tremolo envelope; count its crossings of its own
+    // mean and halve to get cycles.
+    constexpr size_t kWindow = 240;
+    std::vector<float> env;
+    for (size_t i = 0; i + kWindow <= out.left.size(); i += kWindow) {
+      env.push_back(rms(out.left, i, i + kWindow));
+    }
+    double mean = 0.0;
+    for (float v : env) mean += v;
+    mean /= static_cast<double>(env.size());
+    int crossings = 0;
+    for (size_t i = 1; i < env.size(); ++i) {
+      if ((env[i - 1] < mean) != (env[i] < mean)) ++crossings;
+    }
+    return crossings / 2.0;
+  };
+  // 5 Hz over half a second is about 2.5 cycles; a scale of 4 makes it 10.
+  const double slow = tremolo_cycles(0);
+  const double fast = tremolo_cycles(127);
+  REQUIRE(slow > 1.5);
+  REQUIRE(slow < 4.0);
+  REQUIRE(fast > 2.5 * slow);
+}
+
 TEST_CASE("glide slides the pitch from the previous note", "[midi][synth]") {
   NativeSynthConfig cfg;
   cfg.patch = sine_patch();

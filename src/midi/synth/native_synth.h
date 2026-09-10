@@ -298,6 +298,10 @@ struct NativeSynthVoice : VoiceState {
   float velocity01 = 0.0f;
   float key_track_octaves = 0.0f;
   float random_value = 0.0f;
+  /// Previous sample's ModDestination::kLfo1RateScale, applied to LFO1 on the
+  /// next one. LFO1 feeds the matrix that sets this, so the delay is what keeps
+  /// the routing acyclic.
+  float matrix_lfo1_rate_scale = 1.0f;
   // Glide: pitch offset in cents decaying to zero through a one-pole.
   float glide_cents = 0.0f;
   float glide_coeff = 0.0f;

@@ -28,8 +28,9 @@ inline constexpr const char* kSynthBodyTypes[] = {"default",   "none",       "gu
 inline constexpr const char* kSynthModSources[] = {"none",      "amp-env",   "filter-env",
                                                    "lfo1",      "lfo2",      "velocity",
                                                    "key-track", "mod-wheel", "random"};
-inline constexpr const char* kSynthModDestinations[] = {"none", "pitch-cents", "cutoff-cents",
-                                                        "amp-gain", "pan-units"};
+inline constexpr const char* kSynthModDestinations[] = {
+    "none",        "pitch-cents",         "cutoff-cents",     "amp-gain",       "pan-units",
+    "resonance-q", "vibrato-depth-cents", "filter-env-depth", "lfo1-rate-scale"};
 
 static_assert(std::size(kSynthEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "Node SynthEngineMode table drifted from C");

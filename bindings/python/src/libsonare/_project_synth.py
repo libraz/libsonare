@@ -127,6 +127,10 @@ _SYNTH_MOD_DESTINATIONS = {
     "cutoff-cents": 2,
     "amp-gain": 3,
     "pan-units": 4,
+    "resonance-q": 5,
+    "vibrato-depth-cents": 6,
+    "filter-env-depth": 7,
+    "lfo1-rate-scale": 8,
 }
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),

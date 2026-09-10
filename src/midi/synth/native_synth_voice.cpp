@@ -258,6 +258,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
 
   // Mod-matrix source constants.
   has_matrix = !p.mod_matrix.empty();
+  // A reused slot must not inherit the previous note's LFO rate.
+  matrix_lfo1_rate_scale = 1.0f;
   velocity01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
   key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / 12.0f;
   random_value = seq.bipolar_at(103);
@@ -293,7 +295,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     return 0.0f;
   }
   const float fenv = filter_env.next();
-  const float lfo1_value = vibrato_lfo.next(mod.vib_rate_scale);
+  // The matrix's LFO1-rate destination is one sample old by construction; see
+  // ModDestination::kLfo1RateScale.
+  const float lfo1_value = vibrato_lfo.next(mod.vib_rate_scale * matrix_lfo1_rate_scale);
   const float drift = drift_lfo.next() * drift_depth_cents;
 
   // --- mod matrix ---
@@ -309,6 +313,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     values.mod_wheel = mod.mod_wheel01;
     values.random = random_value;
     offsets = evaluate_mod_matrix(patch->mod_matrix, values);
+    matrix_lfo1_rate_scale = offsets.lfo1_rate_scale;
   }
 
   // Refresh the cached stereo pan gains when the effective pan changed. A GS
@@ -338,7 +343,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   // whatever the patch asked for.
   float vib_depth = patch->lfo_to_pitch_cents;
   if (gs_vib_depth_cents != 0.0f) vib_depth = std::max(0.0f, vib_depth + gs_vib_depth_cents);
-  const float vib = lfo1_value * (vib_depth + mod.extra_vibrato_cents);
+  const float vib =
+      lfo1_value * (vib_depth + mod.extra_vibrato_cents + offsets.vibrato_depth_cents);
   const float mode_pitch_offset =
       patch->mode == SynthEngineMode::kSubtractive ? 0.0f : patch->pitch_offset_cents;
   const float pitch_cents = mode_pitch_offset + mod.pitch_cents + gs_scale_cents + vib + drift +
@@ -409,12 +415,13 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   if (drive_gain > 0.0f) sample = std::tanh(drive_gain * sample) * drive_makeup;
 
   // --- filter: cutoff = patch Fc * 2^((env + velocity + keytrack)/1200) ---
-  if (!filter_inaudible() || offsets.cutoff_cents != 0.0f) {
-    const float fc_cents = fenv * patch->env_to_cutoff_cents + static_cutoff_cents +
-                           offsets.cutoff_cents + mod.mod_cutoff_cents +
+  if (!filter_inaudible() || offsets.cutoff_cents != 0.0f || offsets.resonance_q != 0.0f) {
+    const float fc_cents = fenv * patch->env_to_cutoff_cents * offsets.filter_env_depth +
+                           static_cutoff_cents + offsets.cutoff_cents + mod.mod_cutoff_cents +
                            lfo1_value * mod.lfo_cutoff_cents;
     const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / 1200.0f));
     float q = patch->resonance_q;
+    if (offsets.resonance_q != 0.0f) q = std::max(0.5f, q + offsets.resonance_q);
     if (gs_resonance_gain != 1.0f) q = std::max(0.5f, q * gs_resonance_gain);
     filter.set(fc, q);
     sample = filter.process(sample, patch->filter_output);

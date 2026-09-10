@@ -396,14 +396,19 @@ typedef enum SONARE_ENUM_BASE {
 #define SONARE_SYNTH_BODY_TYPE_COUNT 7
 
 #define SONARE_SYNTH_MOD_SOURCE_COUNT 9
-#define SONARE_SYNTH_MOD_DESTINATION_COUNT 5
+#define SONARE_SYNTH_MOD_DESTINATION_COUNT 9
 
 /* One mod-matrix routing. Source/destination mirror the core ordinals
    directly; a slot with source or destination 0 (none) is disabled. */
 typedef struct {
   int source;      /* 0=none 1=ampEnv 2=filterEnv 3=lfo1 4=lfo2 5=velocity
                       6=keyTrack 7=modWheel 8=random */
-  int destination; /* 0=none 1=pitchCents 2=cutoffCents 3=ampGain 4=panUnits */
+  int destination; /* 0=none 1=pitchCents 2=cutoffCents 3=ampGain 4=panUnits
+                      5=resonanceQ 6=vibratoDepthCents 7=filterEnvDepth
+                      8=lfo1RateScale. The last four modulate how a stage
+                      responds rather than what it emits: 7 scales the filter
+                      envelope's sweep and 8 retunes LFO1 (one sample late,
+                      LFO1 being a source too). */
   float depth;     /* destination units at full source deflection */
 } SonareSynthModRouting;
 
