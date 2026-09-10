@@ -57,6 +57,7 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/amp_presets.h"
 #include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
@@ -993,13 +994,42 @@ inline saturation::MicModel mic_model(int value) {
   }
 }
 
+/// Applies the synthesized-cabinet keys to a constructed amp. Shared so the
+/// offline path and the insert factory cannot diverge on which of them a caller
+/// can reach: a supplied base64 capture stays on the JSON side-channel, which
+/// is the one thing a flat numeric list cannot carry, but a cabinet the model
+/// synthesizes needs nothing but numbers.
+inline void apply_amp_cab_ir(const ParamMap& params, saturation::AmpSim& amp) {
+  const bool generate = b(params, "cabIrGenerate", false);
+  const bool drivers = b(params, "cabIrDrivers", true);
+  if (!generate) return;
+  const saturation::AmpSimConfig& configured = amp.amp_config();
+  saturation::CabIrSpec spec;
+  spec.cab_model = configured.cab_model;
+  spec.mic_model = configured.mic_model;
+  spec.mic_axis = configured.mic_axis;
+  spec.mic_distance_cm = configured.mic_distance_cm;
+  spec.presence_db = configured.presence_db;
+  spec.multi_driver = drivers;
+  amp.load_generated_cab_ir(spec);
+}
+
 /// @param base Starting point every key rides on top of — a preset's config, or
 ///        a default-constructed one. An unset key keeps the base's value, which
 ///        is what lets `{"preset":"britStack","drive":0.5}` mean "that rig, but
 ///        turned down" rather than "that rig, with every other control reset".
 inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params,
                                                saturation::AmpSimConfig base = {}) {
-  saturation::AmpSimConfig config = base;
+  // The rig, numerically. `preset` names one as a string on the JSON
+  // side-channel, which the insert factory resolves into `base` before calling
+  // here — but that channel is C++-only, so the flat list every binding and the
+  // CLI speak had no way to choose an amplifier at all, only to turn the knobs
+  // of whichever one it was given. The index is `amp_preset_names()`'s order.
+  const int preset = i(params, "presetIndex", -1);
+  saturation::AmpSimConfig config =
+      preset >= 0 && preset < static_cast<int>(saturation::amp_preset_names().size())
+          ? saturation::amp_preset_config(static_cast<saturation::AmpPreset>(preset))
+          : base;
   config.drive = f(params, "drive", config.drive);
   config.bass_db = f(params, "bassDb", config.bass_db);
   config.mid_db = f(params, "midDb", config.mid_db);
@@ -1008,6 +1038,7 @@ inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params,
   config.cab = b(params, "cab", config.cab);
   config.cab_model = cab_model(i(params, "cabModel", static_cast<int>(config.cab_model)));
   config.amp_model = amp_model(i(params, "ampModel", static_cast<int>(config.amp_model)));
+  config.input_db = f(params, "inputDb", config.input_db);
   config.level_db = f(params, "levelDb", config.level_db);
   config.power = f(params, "power", config.power);
   config.sag = f(params, "sag", config.sag);

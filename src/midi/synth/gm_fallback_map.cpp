@@ -4,6 +4,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdio>
+#include <string>
+#include <vector>
 
 #include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/gs_layer.h"
@@ -68,18 +70,153 @@ SONARE_TUNABLE(kSendsSfxRev, 1.4f);
 SONARE_TUNABLE(kSendsSfxCho, 1.0f);
 
 /// The default rigs (see `gm_fallback_rig`), tunable for the same reason a send
-/// weight is: an electric guitar's reference is always heard through one. The
-/// numbers run high because a preset is voiced for a full-scale input and the
-/// bank's guitar arrives 12 dB under one; each trim peaks its program against
-/// the same voice's direct signal. Programs 29 and 30 share an amplifier at
-/// different gain: a brighter preset put 30's 5 kHz band 12.6 dB over its
-/// reference against the crunch rig's 3.6, and no drive moved it.
+/// weight is: an electric guitar's reference is always heard through one.
+///
+/// Three numbers per binding, and they are not interchangeable. The input trim
+/// is what reaches the amplifier: a voicing's drive curve is calibrated for a
+/// full-scale signal and the bank's guitar arrives well under one, so without
+/// it a driven binding reads a part of the curve that is still clean. The level
+/// trim sits after the amplifier and is loudness only — measured identical
+/// crest from 0 to 60 dB — so it peaks a program against its unrigged siblings
+/// and nothing else. Drive moves the triode's operating point AND the
+/// bright-cap shelf in front of it, so buying saturation with it also buys
+/// brightness, which is why the driven bindings buy theirs with the trim.
+///
+/// Measured on E3 at velocity 100, peak-to-RMS, against the same voice direct
+/// (23.8 dB): clean stays there, 29 lands 3.0 dB under it and 30 lands 8.1.
+/// The clean binding takes no trim because its amplifier is linear at drive
+/// 0.35 — every trim value renders the same crest, so a trim there would only
+/// duplicate the level.
+SONARE_TUNABLE(kRigCleanInputDb, 0.0f);
+SONARE_TUNABLE(kRigCrunchInputDb, 15.0f);
+SONARE_TUNABLE(kRigLeadInputDb, 9.0f);
+
+/// Each binding's front panel. All at rest, which leaves the named amplifier's
+/// own voicing: a preset is a voiced amp rather than a flat one, so a control
+/// that has not been turned must not send a value. Turning one in a preview is
+/// what these are for; a value that stays belongs to the same round of listening
+/// that set the input trim.
+SONARE_TUNABLE(kRigCleanBassDb, 0.0f);
+SONARE_TUNABLE(kRigCleanMidDb, 0.0f);
+SONARE_TUNABLE(kRigCleanTrebleDb, 0.0f);
+SONARE_TUNABLE(kRigCleanPresenceDb, 0.0f);
+SONARE_TUNABLE(kRigCrunchBassDb, 0.0f);
+SONARE_TUNABLE(kRigCrunchMidDb, 0.0f);
+SONARE_TUNABLE(kRigCrunchTrebleDb, 0.0f);
+SONARE_TUNABLE(kRigCrunchPresenceDb, 0.0f);
+SONARE_TUNABLE(kRigLeadBassDb, 0.0f);
+SONARE_TUNABLE(kRigLeadMidDb, 0.0f);
+SONARE_TUNABLE(kRigLeadTrebleDb, 0.0f);
+SONARE_TUNABLE(kRigLeadPresenceDb, 0.0f);
 SONARE_TUNABLE(kRigCleanDrive, 0.35f);
 SONARE_TUNABLE(kRigCleanLevelDb, 44.1f);
 SONARE_TUNABLE(kRigCrunchDrive, 0.55f);
-SONARE_TUNABLE(kRigCrunchLevelDb, 24.9f);
+SONARE_TUNABLE(kRigCrunchLevelDb, 16.67f);
 SONARE_TUNABLE(kRigLeadDrive, 0.95f);
-SONARE_TUNABLE(kRigLeadLevelDb, 21.2f);
+SONARE_TUNABLE(kRigLeadLevelDb, 19.76f);
+
+/// The amplifiers a binding can name, indexed by its preset selector. The order
+/// mirrors the mastering module's `amp_preset_names()`, which the synth
+/// deliberately does not link — it reaches an amplifier only through the
+/// injected insert factory — so `gm_rig_preset_name` exposes the list for a test
+/// to hold the two in step.
+constexpr const char* kRigPresets[] = {"cleanCombo", "chimeEdge",  "classicCrunch", "tweedGrind",
+                                       "britStack",  "modernLead", "rectifierChug", "coldBiasBuzz",
+                                       "bassDi",     "bassRig"};
+constexpr int kRigPresetCount = static_cast<int>(std::size(kRigPresets));
+
+/// Which of them each binding names. Tunable because choosing the amplifier is
+/// the same kind of decision as trimming it, and hearing a voice through
+/// another one is otherwise a rebuild: the preset is a construction-time string
+/// that no binding and no CLI can set.
+SONARE_TUNABLE(kRigCleanPreset, 0.0f);
+SONARE_TUNABLE(kRigCrunchPreset, 2.0f);
+SONARE_TUNABLE(kRigLeadPreset, 2.0f);
+
+const char* rig_preset(float selector) noexcept {
+  const int index = static_cast<int>(selector + 0.5f);
+  return kRigPresets[std::clamp(index, 0, kRigPresetCount - 1)];
+}
+
+/// The blocks a rig can carry either side of its amplifier. The vocabulary is
+/// the GS multi-effect's (`gs_efx_insert_chain` builds GTR Multi out of the same
+/// pieces), so a bank rig and a file's own rig are made of one set of parts.
+/// Index 0 is no stage.
+///
+/// `effects.reverb.room` is the room a cabinet is heard in — geometry-driven,
+/// synthesizing its response through the acoustic module rather than tuning a
+/// tank. It sits behind the amplifier rather than beside its microphones, so it
+/// carries the close mic's own colouration into the room where a third
+/// microphone would carry the cabinet's; that difference is what a true room
+/// mic would add, and it is not worth a second reverberator inside the amp.
+constexpr const char* kRigStages[] = {"",
+                                      "dynamics.compressor",
+                                      "dynamics.gate",
+                                      "effects.modulation.wah",
+                                      "effects.modulation.autoWah",
+                                      "eq.parametric",
+                                      "effects.modulation.chorus",
+                                      "effects.modulation.flanger",
+                                      "effects.modulation.phaser",
+                                      "effects.delay.stereo",
+                                      "effects.reverb.plate",
+                                      "effects.reverb.room"};
+constexpr int kRigStageCount = static_cast<int>(std::size(kRigStages));
+
+/// A pedal ahead of the amplifier and a rack stage behind it, per binding. Both
+/// ship empty: what a rig carries is a voicing decision, and the slots exist so
+/// one can be heard rather than to be filled.
+SONARE_TUNABLE(kRigCleanPre, 0.0f);
+SONARE_TUNABLE(kRigCleanPost, 0.0f);
+SONARE_TUNABLE(kRigCrunchPre, 0.0f);
+SONARE_TUNABLE(kRigCrunchPost, 0.0f);
+SONARE_TUNABLE(kRigLeadPre, 0.0f);
+SONARE_TUNABLE(kRigLeadPost, 0.0f);
+
+const char* rig_stage(float selector) noexcept {
+  const int index = static_cast<int>(selector + 0.5f);
+  return kRigStages[std::clamp(index, 0, kRigStageCount - 1)];
+}
+
+/// A binding's amplifier as insert-factory params. One place says how a rig's
+/// four numbers become an amp, so the chain builder and anything that reports a
+/// rig cannot spell it differently.
+std::string amp_params_json(const GmFallbackRig& rig) {
+  std::string json = std::string("{\"preset\":\"") + rig.preset +
+                     "\",\"inputDb\":" + std::to_string(rig.input_db) +
+                     ",\"drive\":" + std::to_string(rig.drive) +
+                     ",\"levelDb\":" + std::to_string(rig.level_db);
+  // A tone control at rest is left out entirely rather than sent as 0 dB: the
+  // amp builder reads an absent key as "keep the preset's own", and sending
+  // zero would flatten a stack the preset voiced on purpose.
+  const auto tone = [&json](const char* key, float value) {
+    if (value != 0.0f) json += std::string(",\"") + key + "\":" + std::to_string(value);
+  };
+  tone("bassDb", rig.bass_db);
+  tone("midDb", rig.mid_db);
+  tone("trebleDb", rig.treble_db);
+  tone("presenceDb", rig.presence_db);
+  return json + "}";
+}
+
+/// The two slot selectors a binding uses, so the chain builder reads one place.
+struct RigSlots {
+  float pre;
+  float post;
+};
+
+RigSlots rig_slots(uint8_t id) noexcept {
+  switch (id) {
+    case 1:
+      return {kRigCleanPre, kRigCleanPost};
+    case 2:
+      return {kRigCrunchPre, kRigCrunchPost};
+    case 3:
+      return {kRigLeadPre, kRigLeadPost};
+    default:
+      return {0.0f, 0.0f};
+  }
+}
 
 /// A GS variation tone the model floor voices with a patch of its own: the
 /// capital tone it hangs under, the bank number that selects it, and the patch.
@@ -645,14 +782,63 @@ GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept {
   }
 }
 
+const char* gm_rig_preset_name(uint8_t index) noexcept {
+  return index < kRigPresetCount ? kRigPresets[index] : nullptr;
+}
+
+const char* gm_rig_stage_name(uint8_t index) noexcept {
+  return index < kRigStageCount ? kRigStages[index] : nullptr;
+}
+
+std::vector<GsEfxStage> gm_rig_chain(uint8_t id) {
+  const GmFallbackRig rig = gm_rig_binding(id);
+  if (rig.id == 0) return {};
+  const RigSlots slots = rig_slots(id);
+  std::vector<GsEfxStage> chain;
+  const char* pedal = rig_stage(slots.pre);
+  if (pedal[0] != '\0') chain.push_back({pedal, "{}"});
+  chain.push_back({"saturation.ampSim", amp_params_json(rig)});
+  const char* rack = rig_stage(slots.post);
+  if (rack[0] != '\0') chain.push_back({rack, "{}"});
+  return chain;
+}
+
 GmFallbackRig gm_rig_binding(uint8_t id) noexcept {
+  GmFallbackRig rig;
   switch (id) {
     case 1:
-      return {1, "cleanCombo", kRigCleanDrive, kRigCleanLevelDb};
+      rig.id = 1;
+      rig.preset = rig_preset(kRigCleanPreset);
+      rig.input_db = kRigCleanInputDb;
+      rig.drive = kRigCleanDrive;
+      rig.bass_db = kRigCleanBassDb;
+      rig.mid_db = kRigCleanMidDb;
+      rig.treble_db = kRigCleanTrebleDb;
+      rig.presence_db = kRigCleanPresenceDb;
+      rig.level_db = kRigCleanLevelDb;
+      return rig;
     case 2:
-      return {2, "classicCrunch", kRigCrunchDrive, kRigCrunchLevelDb};
+      rig.id = 2;
+      rig.preset = rig_preset(kRigCrunchPreset);
+      rig.input_db = kRigCrunchInputDb;
+      rig.drive = kRigCrunchDrive;
+      rig.bass_db = kRigCrunchBassDb;
+      rig.mid_db = kRigCrunchMidDb;
+      rig.treble_db = kRigCrunchTrebleDb;
+      rig.presence_db = kRigCrunchPresenceDb;
+      rig.level_db = kRigCrunchLevelDb;
+      return rig;
     case 3:
-      return {3, "classicCrunch", kRigLeadDrive, kRigLeadLevelDb};
+      rig.id = 3;
+      rig.preset = rig_preset(kRigLeadPreset);
+      rig.input_db = kRigLeadInputDb;
+      rig.drive = kRigLeadDrive;
+      rig.bass_db = kRigLeadBassDb;
+      rig.mid_db = kRigLeadMidDb;
+      rig.treble_db = kRigLeadTrebleDb;
+      rig.presence_db = kRigLeadPresenceDb;
+      rig.level_db = kRigLeadLevelDb;
+      return rig;
     default:
       return {};
   }

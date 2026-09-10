@@ -415,20 +415,7 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
     // controls to keep in step; `cabIrDrivers` is the one thing the analytic
     // chain has no equivalent for — whether the cabinet's other drivers are
     // summed, which is the whole difference between an IR and an EQ curve.
-    const bool generate_ir = detail::b(params, "cabIrGenerate", false);
-    const bool ir_drivers = detail::b(params, "cabIrDrivers", true);
-    if (generate_ir) {
-      auto* sim = static_cast<saturation::AmpSim*>(amp.get());
-      const saturation::AmpSimConfig& configured = sim->amp_config();
-      saturation::CabIrSpec spec;
-      spec.cab_model = configured.cab_model;
-      spec.mic_model = configured.mic_model;
-      spec.mic_axis = configured.mic_axis;
-      spec.mic_distance_cm = configured.mic_distance_cm;
-      spec.presence_db = configured.presence_db;
-      spec.multi_driver = ir_drivers;
-      sim->load_generated_cab_ir(spec);
-    }
+    detail::apply_amp_cab_ir(params, *static_cast<saturation::AmpSim*>(amp.get()));
     if (json_params != nullptr) {
       const std::vector<float> ir = parse_ir_f32_base64_json(*json_params, "cabIrF32Base64");
       if (!ir.empty()) {

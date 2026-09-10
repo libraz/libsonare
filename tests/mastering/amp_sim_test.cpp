@@ -752,7 +752,8 @@ TEST_CASE("amp-sim exposes the mic and cone controls for automation",
   REQUIRE(amp.set_parameter(11, 0.4f));  // micBAxis
   REQUIRE(amp.set_parameter(12, 0.5f));  // micBlend
   REQUIRE(amp.set_parameter(13, 0.6f));  // cone
-  REQUIRE_FALSE(amp.set_parameter(16, 0.5f));
+  REQUIRE(amp.set_parameter(16, 0.5f));  // inputDb
+  REQUIRE_FALSE(amp.set_parameter(17, 0.5f));
   REQUIRE(amp.amp_config().mic_axis == 0.8f);
   REQUIRE(amp.amp_config().mic_blend == 0.5f);
   REQUIRE(amp.amp_config().cone == 0.6f);
@@ -1398,7 +1399,8 @@ TEST_CASE("amp-sim exposes the crossover and blocking controls for automation",
   amp.prepare(kRate, 256);
   CHECK(amp.set_parameter(14, 0.5f));
   CHECK(amp.set_parameter(15, 0.5f));
-  CHECK_FALSE(amp.set_parameter(16, 0.5f));
+  CHECK(amp.set_parameter(16, 0.5f));
+  CHECK_FALSE(amp.set_parameter(17, 0.5f));
 
   const auto descriptors = amp.parameter_descriptors();
   const auto has = [&](const char* key) {
@@ -2182,4 +2184,81 @@ TEST_CASE("a gated amp stage automated at zero renders as if it were not there",
       CHECK(identical);
     }
   }
+}
+
+TEST_CASE("the amp's input trim saturates where its output trim only scales",
+          "[mastering][saturation][amp]") {
+  // A preset's drive curve is calibrated for a full-scale signal, so a quieter
+  // source sits at a different point on it. `levelDb` cannot put it back: it is
+  // after the amplifier, so it moves loudness and nothing else. That was how a
+  // bank rig came to bind an amplifier the guitar never reached.
+  const std::vector<float> quiet = sine(220.0, 0.05f, 32768);
+  AmpSimConfig config;
+  config.drive = 0.55f;
+
+  AmpSim plain(config);
+  const std::vector<float> direct = process_mono(plain, quiet);
+
+  AmpSimConfig louder = config;
+  louder.level_db = 24.0f;
+  AmpSim trimmed(louder);
+  const std::vector<float> after_output = process_mono(trimmed, quiet);
+
+  AmpSimConfig hotter = config;
+  hotter.input_db = 24.0f;
+  AmpSim driven(hotter);
+  const std::vector<float> after_input = process_mono(driven, quiet);
+
+  // The output trim is level only: the distortion it leaves is the same one.
+  REQUIRE(thd(after_output, 220.0) == Catch::Approx(thd(direct, 220.0)).epsilon(0.02));
+  // The input trim reaches the tube, so the same 24 dB does what the knob is for.
+  REQUIRE(thd(after_input, 220.0) > 1.5 * thd(direct, 220.0));
+
+  // And at 0 dB it is not in the path at all.
+  AmpSimConfig unity = config;
+  unity.input_db = 0.0f;
+  AmpSim identity(unity);
+  REQUIRE(process_mono(identity, quiet) == direct);
+}
+
+TEST_CASE("a numeric preset index picks the same rig the name does",
+          "[mastering][saturation][amp]") {
+  // The string spelling reaches the builder through a JSON side-channel that
+  // exists only in C++, so a caller on any binding or the CLI could turn an
+  // amplifier's knobs and never choose which amplifier. The index is the same
+  // choice in the flat list all of them speak, and the two have to agree or the
+  // reachable half of the surface is a different product from the other half.
+  const std::vector<std::string> names = sonare::mastering::saturation::amp_preset_names();
+  const std::vector<float> input = sine(220.0, 0.3f, 8192);
+  for (size_t i = 0; i < names.size(); ++i) {
+    INFO(names[i]);
+    auto by_name = make_insert("saturation.ampSim", R"({"preset":")" + names[i] + R"("})");
+    auto by_index =
+        make_insert("saturation.ampSim", R"({"presetIndex":)" + std::to_string(i) + "}");
+    REQUIRE(by_name != nullptr);
+    REQUIRE(by_index != nullptr);
+    REQUIRE(process_mono(*by_index, input) == process_mono(*by_name, input));
+  }
+  // Out of range keeps the base rather than clamping onto a neighbour: a preset
+  // a build does not have is a caller's mistake, not a request for preset 9.
+  auto bad =
+      make_insert("saturation.ampSim", R"({"presetIndex":)" + std::to_string(names.size()) + "}");
+  auto none = make_insert("saturation.ampSim", "{}");
+  REQUIRE(bad != nullptr);
+  REQUIRE(process_mono(*bad, input) == process_mono(*none, input));
+}
+
+TEST_CASE("the synthesized cabinet reaches the offline path too", "[mastering][saturation][amp]") {
+  // `cabIrGenerate` was implemented in the insert factory alone, so the same
+  // key a streaming caller could use did nothing at all through the one-shot
+  // entry every binding's `mastering_process` goes to.
+  const std::vector<float> input = sine(220.0, 0.3f, 8192);
+  const std::vector<sonare::mastering::api::Param> plain{{"drive", 0.7}};
+  const std::vector<sonare::mastering::api::Param> generated{{"drive", 0.7},
+                                                             {"cabIrGenerate", 1.0}};
+  const auto flat = apply_named_processor("saturation.ampSim", input.data(), input.size(),
+                                          static_cast<int>(kRate), plain);
+  const auto with_ir = apply_named_processor("saturation.ampSim", input.data(), input.size(),
+                                             static_cast<int>(kRate), generated);
+  REQUIRE(flat.samples != with_ir.samples);
 }

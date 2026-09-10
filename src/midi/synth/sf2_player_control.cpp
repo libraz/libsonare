@@ -601,12 +601,14 @@ std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
     // ahead of the file's EFX rather than instead of it — a part may carry both
     // and they are in series (docs/gs.md), so a guitar with an amplifier still
     // gets the file's chorus.
-    if (insert.type == Sf2InsertType::kProcessor && config_.insert_factory &&
-        !insert.insert_name.empty()) {
-      auto proc = config_.insert_factory(insert.insert_name, insert.insert_params_json);
-      if (proc != nullptr) {
-        proc->prepare(sample_rate_, kChunkFrames);
-        chain.push_back(std::move(proc));
+    if (insert.type == Sf2InsertType::kProcessor && config_.insert_factory) {
+      for (const Sf2InsertStage& stage : insert.stages) {
+        if (stage.processor.empty()) continue;
+        auto proc = config_.insert_factory(stage.processor, stage.params_json);
+        if (proc != nullptr) {
+          proc->prepare(sample_rate_, kChunkFrames);
+          chain.push_back(std::move(proc));
+        }
       }
     }
     // The unit the file routed this part through, if any. The part merges into
@@ -627,12 +629,12 @@ std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
     // insert outranks the default whether or not the factory could build it, so
     // the slot is what the test reads rather than the chain being empty.
     if (chain.empty() && !static_insert && !routed && config_.insert_factory) {
-      const GmFallbackRig rig = gm_rig_binding(part_rig(part));
-      if (rig.id != 0) {
-        std::string params = std::string("{\"preset\":\"") + rig.preset +
-                             "\",\"drive\":" + std::to_string(rig.drive) +
-                             ",\"levelDb\":" + std::to_string(rig.level_db) + "}";
-        auto proc = config_.insert_factory("saturation.ampSim", params);
+      // The rig is a chain, the same way a file's own GTR Multi is: a pedal
+      // ahead of the amplifier and a rack stage behind it are stages beside it
+      // rather than a different mechanism. A stage the factory declines to make
+      // is skipped, so a partial rig still runs.
+      for (const GsEfxStage& stage : gm_rig_chain(part_rig(part))) {
+        auto proc = config_.insert_factory(stage.name, stage.params_json);
         if (proc != nullptr) {
           proc->prepare(sample_rate_, kChunkFrames);
           chain.push_back(std::move(proc));

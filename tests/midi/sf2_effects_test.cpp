@@ -377,8 +377,7 @@ TEST_CASE("per-part processor insert runs an injected factory-built effect", "[m
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
   cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
-  cfg.part_inserts[0].insert_name = "saturation.tube";
-  cfg.part_inserts[0].insert_params_json = R"({"driveDb":30})";
+  cfg.part_inserts[0].stages = {{"saturation.tube", R"({"driveDb":30})"}};
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
@@ -419,8 +418,7 @@ TEST_CASE("a part carries its own insert and the file's EFX in series", "[midi][
     cfg.insert_factory = factory;
     if (insert) {
       cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
-      cfg.part_inserts[0].insert_name = "saturation.tube";
-      cfg.part_inserts[0].insert_params_json = R"({"driveDb":30})";
+      cfg.part_inserts[0].stages = {{"saturation.tube", R"({"driveDb":30})"}};
     }
     Sf2Player player = make_player(cfg);
     if (efx) {
@@ -575,7 +573,7 @@ TEST_CASE("a non-finite insert sample never reaches the mix-bus state", "[midi][
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
   cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
-  cfg.part_inserts[0].insert_name = "test.nan";
+  cfg.part_inserts[0].stages = {{"test.nan", "{}"}};
   cfg.insert_factory = [](std::string_view, std::string_view) {
     return std::unique_ptr<sonare::rt::ProcessorBase>(new NanInsert());
   };

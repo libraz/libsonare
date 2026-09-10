@@ -11703,6 +11703,16 @@
           "rtSafe": true,
           "type": "number",
           "unit": null
+        },
+        {
+          "default": 0,
+          "id": 16,
+          "max": null,
+          "min": null,
+          "name": "inputDb",
+          "rtSafe": true,
+          "type": "number",
+          "unit": "dB"
         }
       ],
       "realtimeCost": "high",

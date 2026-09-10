@@ -387,6 +387,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     run_processor(p, channels, sample_rate, latency_samples);
   } else if (name == "saturation.ampSim") {
     saturation::AmpSim p(detail::amp_sim_config(params));
+    detail::apply_amp_cab_ir(params, p);
     run_processor(p, channels, sample_rate, latency_samples);
   } else if (name == "spectral.airBand") {
     spectral::AirBand p(detail::air_band_config(params));

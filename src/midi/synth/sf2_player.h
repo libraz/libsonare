@@ -94,17 +94,29 @@ struct Sf2RealizedEfx {
 enum class Sf2InsertType : int {
   kNone = 0,
   kDrive = 1,      ///< Built-in gain-compensated tanh drive (`amount`).
-  kProcessor = 2,  ///< An injected ProcessorBase built from `insert_name`.
+  kProcessor = 2,  ///< An injected ProcessorBase chain built from `stages`.
+};
+
+/// One stage of a host-supplied insert chain. The field names are the mixing
+/// scene's own (`processor` / `params`), so a host that can describe a channel
+/// strip describes a guitar rig with the same words and needs no second format;
+/// the synth takes the decoded list rather than the JSON, which is what keeps it
+/// from linking the mixing module to read one.
+struct Sf2InsertStage {
+  /// Insert-factory processor name (e.g. "saturation.ampSim").
+  std::string processor;
+  /// JSON param object for the processor ("" / "{}" = defaults).
+  std::string params_json;
 };
 
 struct Sf2PartInsert {
   Sf2InsertType type = Sf2InsertType::kNone;
   /// kDrive: drive amount in [0, 1] (0 = clean, 1 = heavy saturation).
   float amount = 0.0f;
-  /// kProcessor: insert-factory processor name (e.g. "saturation.ampSim").
-  std::string insert_name;
-  /// kProcessor: JSON param object for the processor ("" / "{}" = defaults).
-  std::string insert_params_json;
+  /// kProcessor: the chain, in signal order. One stage is the common case and
+  /// stays a one-element list; a whole rig — pedal, amplifier, rack — is the
+  /// same list longer, which is what a bank rig already is.
+  std::vector<Sf2InsertStage> stages;
 };
 
 /// GS-style preset lookup on a parsed SoundFont: exact (bank, program) first,

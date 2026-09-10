@@ -17,11 +17,13 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/saturation/amp_presets.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "mixing/api/scene.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -29,6 +31,7 @@ namespace {
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::gm_fallback_rig;
 using sonare::midi::synth::gm_rig_binding;
+using sonare::midi::synth::gm_rig_preset_name;
 using sonare::midi::synth::GmFallbackRig;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2InsertType;
@@ -149,6 +152,24 @@ TEST_CASE("the bank binds a rig to the electric guitars and to nothing else", "[
 
 #if defined(SONARE_WITH_MASTERING)
 
+TEST_CASE("every amplifier a binding can name is one the mastering module has",
+          "[midi][sf2][rig]") {
+  // The synth reaches an amplifier only through the injected insert factory, so
+  // it names one by string and its selector indexes a list of its own. Nothing
+  // in a build holds that list against the real one — a name that drifts is not
+  // a compile error, it is an insert the factory declines to make and a voice
+  // that silently comes out direct.
+  const std::vector<std::string> known = sonare::mastering::saturation::amp_preset_names();
+  std::vector<std::string> named;
+  for (uint8_t i = 0; const char* name = gm_rig_preset_name(i); ++i) named.emplace_back(name);
+  REQUIRE(named == known);
+  // And each binding's default still names the amplifier the bank was voiced
+  // through, which is what makes the selector free in a shipped build.
+  REQUIRE(std::string(gm_rig_binding(1).preset) == "cleanCombo");
+  REQUIRE(std::string(gm_rig_binding(2).preset) == "classicCrunch");
+  REQUIRE(std::string(gm_rig_binding(3).preset) == "classicCrunch");
+}
+
 TEST_CASE("a file that selects program 30 and asks for nothing comes out amplified",
           "[midi][sf2][rig]") {
   Sf2PlayerConfig off = with_factory();
@@ -236,8 +257,7 @@ TEST_CASE("the bank rig is removable, and absent everywhere it was not bound", "
   SECTION("a part the host gave an insert of its own keeps it") {
     Sf2PlayerConfig configured = with_factory();
     configured.part_inserts[0].type = Sf2InsertType::kProcessor;
-    configured.part_inserts[0].insert_name = "saturation.ampSim";
-    configured.part_inserts[0].insert_params_json = R"({"preset":"cleanCombo"})";
+    configured.part_inserts[0].stages = {{"saturation.ampSim", R"({"preset":"cleanCombo"})"}};
     Sf2PlayerConfig same = configured;
     same.bank_rig_binding = false;
     REQUIRE(render_program(configured, 30) == render_program(same, 30));
@@ -268,6 +288,89 @@ TEST_CASE("a program change within one rig does not rebuild the amplifier", "[mi
   settle();
   player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
   REQUIRE(player.gs_efx_dirty());  // back to an instrument that binds nothing
+}
+
+TEST_CASE("a bank rig is a chain, and every block it can carry is a real insert",
+          "[midi][sf2][rig]") {
+  using sonare::midi::synth::gm_rig_chain;
+  using sonare::midi::synth::gm_rig_stage_name;
+  // The vocabulary is the GS multi-effect's, and the synth names a block by
+  // string for the same reason it names an amplifier by one — it never links
+  // the module that makes them. A name that drifts is not a compile error; it
+  // is a stage the factory declines to build and a rig quietly one block short.
+  const std::vector<std::string> inserts = sonare::mastering::api::insert_factory_names();
+  for (uint8_t i = 1; const char* stage = gm_rig_stage_name(i); ++i) {
+    INFO(stage);
+    REQUIRE(std::find(inserts.begin(), inserts.end(), std::string(stage)) != inserts.end());
+  }
+  REQUIRE(std::string(gm_rig_stage_name(0)).empty());  // index 0 is no stage
+
+  // Every bound rig realises, and ships as the amplifier alone: the pedal and
+  // rack slots are empty until an ear puts something in one.
+  for (const uint8_t bound : {26, 27, 28, 29, 30, 31}) {
+    const uint8_t id = gm_fallback_rig(0, bound).id;
+    INFO("program " << int(bound));
+    const std::vector<sonare::midi::synth::GsEfxStage> chain = gm_rig_chain(id);
+    REQUIRE(chain.size() == 1);
+    REQUIRE(chain.front().name == "saturation.ampSim");
+    // The stage carries the binding's own numbers rather than a second spelling
+    // of them, which is what a caller reading a rig has to be able to rely on.
+    REQUIRE(chain.front().params_json.find(gm_fallback_rig(0, bound).preset) != std::string::npos);
+    REQUIRE(sonare::mastering::api::make_insert(chain.front().name, chain.front().params_json) !=
+            nullptr);
+  }
+  REQUIRE(gm_rig_chain(0).empty());
+  REQUIRE(gm_rig_chain(200).empty());
+}
+
+TEST_CASE("a host describes a rig in the mixing scene's own words", "[midi][sf2][rig]") {
+  // The rig format is not a new one. A scene already says what a chain of
+  // inserts is — `{"processor": ..., "params": ...}` in signal order — so a host
+  // that can save a channel strip can save a guitar rig, and the synth takes the
+  // decoded list rather than the JSON, which is what keeps it from linking the
+  // mixing module to read one.
+  const std::string scene_json = R"({"version":1,"strips":[{"id":"gtr","inserts":[
+      {"processor":"dynamics.gate","params":"{}","slot":"pre"},
+      {"processor":"saturation.ampSim","params":"{\"preset\":\"britStack\",\"drive\":0.8}","slot":"pre"},
+      {"processor":"effects.delay.stereo","params":"{}","slot":"pre"}]}]})";
+  const sonare::mixing::api::Scene scene = sonare::mixing::api::scene_from_json(scene_json);
+  REQUIRE(scene.strips.size() == 1);
+  REQUIRE(scene.strips.front().inserts.size() == 3);
+
+  Sf2PlayerConfig cfg = with_factory();
+  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
+  for (const sonare::mixing::api::Insert& insert : scene.strips.front().inserts) {
+    cfg.part_inserts[0].stages.push_back({insert.processor_name, insert.params_json});
+  }
+  // Three stages in, three stages out, and audibly not the bank's own rig: the
+  // host's chain replaces the default the same way one stage always did.
+  const std::vector<float> host_rig = render_program(cfg, 30);
+  const std::vector<float> bank_rig = render_program(with_factory(), 30);
+  REQUIRE(host_rig != bank_rig);
+  REQUIRE(crest_db(host_rig) > 0.0);
+}
+
+TEST_CASE("a rig's tone controls are absent until one is turned", "[midi][sf2][rig]") {
+  using sonare::midi::synth::gm_rig_chain;
+  // The amp builder reads an absent key as "keep the preset's own voicing", so a
+  // control at rest has to be left out of the params rather than sent as 0 dB.
+  // Sending zero would flatten a stack every preset voices on purpose, and it
+  // would do it silently -- the render would simply be a different amplifier.
+  for (const uint8_t bound : {26, 27, 28, 29, 30, 31}) {
+    INFO("program " << int(bound));
+    const std::string params = gm_rig_chain(gm_fallback_rig(0, bound).id).front().params_json;
+    for (const char* control : {"bassDb", "midDb", "trebleDb", "presenceDb"}) {
+      INFO(control);
+      REQUIRE(params.find(control) == std::string::npos);
+    }
+    // What a rig always says: which amplifier, how hard it is driven, and the
+    // two trims either side of it.
+    for (const char* always : {"preset", "inputDb", "drive", "levelDb"}) {
+      INFO(always);
+      REQUIRE(params.find(always) != std::string::npos);
+    }
+    REQUIRE(sonare::mastering::api::make_insert("saturation.ampSim", params) != nullptr);
+  }
 }
 
 #endif  // SONARE_WITH_MASTERING

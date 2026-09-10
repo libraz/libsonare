@@ -20,6 +20,7 @@
 /// controls, so CC 0 stays dry, which is the test that separates the two.
 
 #include <cstdint>
+#include <vector>
 
 #include "midi/program_map.h"
 #include "midi/synth/gs_layer.h"
@@ -132,7 +133,24 @@ struct GmFallbackRig {
   /// running instead of rebuilding an identical one. 0 is no rig.
   uint8_t id = 0;
   const char* preset = "";
+  /// Input trim into the amplifier (dB). A preset's drive curve is calibrated
+  /// for a full-scale signal and the bank's guitar arrives well under one, so
+  /// without this the drive knob reads a different curve than the one it was
+  /// voiced against. Not interchangeable with `drive`: that moves the bright-cap
+  /// shelf as well, so buying saturation with it also buys brightness.
+  float input_db = 0.0f;
   float drive = 0.5f;
+  /// The amplifier's tone stack, in dB, as its front panel would set it. Zero
+  /// means the named preset's own voicing rather than a flat stack: a rig picks
+  /// an amplifier that is already voiced, and a control at rest has to leave it
+  /// where it was. Any other value sets that control absolutely, which is why
+  /// asking for exactly flat on an amp voiced away from flat is the one thing
+  /// this cannot express.
+  float bass_db = 0.0f;
+  float mid_db = 0.0f;
+  float treble_db = 0.0f;
+  float presence_db = 0.0f;
+  /// Output trim (dB), after the amplifier -- loudness only.
   float level_db = 0.0f;
 };
 
@@ -150,6 +168,28 @@ GmFallbackRig gm_fallback_rig(uint16_t bank, uint8_t program) noexcept;
 /// thread boundary, and the builder resolves it back here. Ids come from
 /// gm_fallback_rig; an unknown one is no rig.
 GmFallbackRig gm_rig_binding(uint8_t id) noexcept;
+
+/// The amplifier a binding's preset selector names at `index`, or nullptr past
+/// the end. The synth reaches an amplifier only through the injected insert
+/// factory, so it names one by string and cannot ask the mastering module what
+/// exists; this is what lets a test hold the two lists in step.
+const char* gm_rig_preset_name(uint8_t index) noexcept;
+
+/// The stage a rig's pedal or rack selector names at `index`, or nullptr past
+/// the end. Index 0 is no stage, which is what every binding ships with — the
+/// vocabulary is the GS multi-effect blocks (`gs_efx_insert_chain`), so a bank
+/// rig and a file's own GTR Multi are built from the same pieces.
+const char* gm_rig_stage_name(uint8_t index) noexcept;
+
+/// The ordered stages the bank's default rig for @p id realises, in signal-flow
+/// order: an optional pedal, the amplifier, an optional rack stage. Same shape a
+/// GS multi-effect realises, so a bank rig is a chain rather than a single
+/// insert. An unbound id yields an empty chain.
+///
+/// What a binding carries is voicing rather than structure, so the pedal and
+/// rack slots ship empty and are moved by the ear, not filled here to justify
+/// the shape.
+std::vector<GsEfxStage> gm_rig_chain(uint8_t id);
 
 /// Longest amp-envelope release across all fallback patches (ms) — players
 /// fold this into their tail accounting when the fallback is enabled.

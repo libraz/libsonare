@@ -118,6 +118,13 @@ struct AmpSimConfig {
   /// Preamp/tone modelling. Defaults to `kVoiced`, the original chain, so an
   /// unset field is bit-identical.
   AmpTopology topology = AmpTopology::kVoiced;
+  /// Input trim (dB) ahead of the preamp. Each voicing is calibrated for a
+  /// full-scale signal, so a source that arrives quieter reaches a different
+  /// point on the same drive curve; this is where that difference is undone.
+  /// Distinct from `drive`, which moves the triode's operating point AND the
+  /// bright-cap shelf in front of it — turning drive up to make a quiet source
+  /// saturate also brightens it, and a trim does not.
+  float input_db = 0.0f;
   /// Drive amount in [0, 1] (0 = clean preamp, 1 = saturated lead).
   float drive = 0.5f;
   /// Tone stack gains (dB).
@@ -410,6 +417,7 @@ class AmpSim : public rt::ProcessorBase {
   //  13 = cone (clamped to [0, 1])
   //  14 = crossover (clamped to [0, 1])
   //  15 = bias_shift (clamped to [0, 1])
+  //  16 = input_db
   // `cab`/`cab_model`/`amp_model`/`mic_model`/`mic_b_model`/`mic_b_invert`/
   // `power_tube` are discrete switches, so they are not exposed. Neither are
   // the two mic distances (they set delay-line taps, which cannot move
@@ -419,7 +427,7 @@ class AmpSim : public rt::ProcessorBase {
   bool set_parameter(unsigned int param_id, float value) override;
   // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb,
   // 5=levelDb, 6=power, 7=sag, 8=transformer, 9=nfb, 10=micAxis, 11=micBAxis,
-  // 12=micBlend, 13=cone, 14=crossover, 15=biasShift.
+  // 12=micBlend, 13=cone, 14=crossover, 15=biasShift, 16=inputDb.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
@@ -593,6 +601,7 @@ class AmpSim : public rt::ProcessorBase {
   rt::BiquadCoeffs pre_c_, bass_c_, mid_c_, treble_c_;
   CabDesign cab_a_c_, cab_b_c_;   // cabinet + mic, one per mic
   rt::BiquadCoeffs nfb_shape_c_;  // NFB feedback-path mid-band filter
+  float input_gain_ = 1.0f;
   float level_gain_ = 1.0f;
   /// Output-tube drive scale (PowerTube). 1.0 for k6L6, so the default power
   /// stage is untouched.

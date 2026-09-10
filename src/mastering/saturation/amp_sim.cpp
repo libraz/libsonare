@@ -284,16 +284,16 @@ float power_stage(float x, float power, float crossover, float drive_scale,
 }  // namespace
 
 void AmpSim::validate_config(const AmpSimConfig& config) {
-  if (!std::isfinite(config.drive) || !std::isfinite(config.bass_db) ||
-      !std::isfinite(config.mid_db) || !std::isfinite(config.treble_db) ||
-      !std::isfinite(config.presence_db) || !std::isfinite(config.level_db) ||
-      !std::isfinite(config.power) || !std::isfinite(config.sag) ||
-      !std::isfinite(config.transformer) || !std::isfinite(config.nfb) ||
-      !std::isfinite(config.mic_axis) || !std::isfinite(config.mic_b_axis) ||
-      !std::isfinite(config.mic_blend) || !std::isfinite(config.mic_distance_cm) ||
-      !std::isfinite(config.mic_b_distance_cm) || !std::isfinite(config.cone) ||
-      !std::isfinite(config.doppler) || !std::isfinite(config.crossover) ||
-      !std::isfinite(config.bias_shift)) {
+  if (!std::isfinite(config.input_db) || !std::isfinite(config.drive) ||
+      !std::isfinite(config.bass_db) || !std::isfinite(config.mid_db) ||
+      !std::isfinite(config.treble_db) || !std::isfinite(config.presence_db) ||
+      !std::isfinite(config.level_db) || !std::isfinite(config.power) ||
+      !std::isfinite(config.sag) || !std::isfinite(config.transformer) ||
+      !std::isfinite(config.nfb) || !std::isfinite(config.mic_axis) ||
+      !std::isfinite(config.mic_b_axis) || !std::isfinite(config.mic_blend) ||
+      !std::isfinite(config.mic_distance_cm) || !std::isfinite(config.mic_b_distance_cm) ||
+      !std::isfinite(config.cone) || !std::isfinite(config.doppler) ||
+      !std::isfinite(config.crossover) || !std::isfinite(config.bias_shift)) {
     throw SonareException(ErrorCode::InvalidParameter, "amp-sim params must be finite");
   }
 }
@@ -551,6 +551,7 @@ void AmpSim::design_chain() {
       }
     }
   }
+  input_gain_ = sonare::db_to_linear(config_.input_db);
   level_gain_ = sonare::db_to_linear(config_.level_db);
   power_drive_scale_ = power_tube_scale(config_.power_tube);
 
@@ -687,6 +688,15 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
+    }
+  }
+
+  // The input trim, ahead of everything: a voicing is calibrated for a
+  // full-scale signal and this is what puts a quieter source back on it.
+  // Skipped at unity so the default path stays bit-identical.
+  if (input_gain_ != 1.0f) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      for (int i = 0; i < num_samples; ++i) channels[ch][i] *= input_gain_;
     }
   }
 
@@ -996,6 +1006,9 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
     case 15:
       config_.bias_shift = std::clamp(value, 0.0f, 1.0f);
       break;
+    case 16:
+      config_.input_db = value;
+      break;
     default:
       return false;
   }
@@ -1019,7 +1032,8 @@ std::vector<rt::ParamDescriptor> AmpSim::parameter_descriptors() const {
   return {{"drive", 0},       {"bassDb", 1},  {"midDb", 2},      {"trebleDb", 3},
           {"presenceDb", 4},  {"levelDb", 5}, {"power", 6},      {"sag", 7},
           {"transformer", 8}, {"nfb", 9},     {"micAxis", 10},   {"micBAxis", 11},
-          {"micBlend", 12},   {"cone", 13},   {"crossover", 14}, {"biasShift", 15}};
+          {"micBlend", 12},   {"cone", 13},   {"crossover", 14}, {"biasShift", 15},
+          {"inputDb", 16}};
 }
 
 }  // namespace sonare::mastering::saturation
