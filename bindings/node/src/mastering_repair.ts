@@ -277,6 +277,11 @@ export function masteringRepairDereverbClassical(
  * const config = masteringRepairDereverbConfigForRoom(estimate);
  * const clean = masteringRepairDereverbClassical(samples, sampleRate, config);
  * ```
+ *
+ * When NEITHER mid band converged, `t60Sec` falls back to the average of whatever
+ * bands did, so a low-band-only estimate configures something rather than nothing --
+ * that value is no longer a mid-frequency figure. Only `volume`, `rt60Bands` and the
+ * band count are read; the rest of the estimate is ignored.
  */
 export function masteringRepairDereverbConfigForRoom(
   request: MasteringRepairDereverbConfigForRoomRequest,

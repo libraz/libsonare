@@ -846,6 +846,18 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
 ///   than measurement, so @c attenuation, @c threshold, @c over_subtraction
 ///   and @c spectral_floor are left as the caller set them.
 ///
+///   Only three fields of @p estimate are read: @c volume, @c rt60_bands and
+///   @c band_count. @c confidence, @c drr_db, @c absorption_bands and the
+///   three dimensions are ignored, so a caller assembling an estimate by hand
+///   rather than passing one @ref sonare_estimate_room produced may leave them
+///   zero.
+///
+///   When NEITHER mid band is usable, @c t60_sec falls back to the average of
+///   whatever bands did converge, so a low-band-only estimate configures
+///   something rather than nothing. That is no longer a mid-frequency figure,
+///   and a caller that needs one should check @c band_count and the finiteness
+///   of bands 2 and 3 itself -- band @c b is centred at 125 * 2^b Hz.
+///
 ///   @p config is read AND written, and every field of it is taken literally:
 ///   unlike the @c config argument of the dereverb call itself, which stands in
 ///   for the library defaults when it is NULL, a struct passed HERE has no
@@ -857,7 +869,8 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
 ///   estimate still configures the half it measured -- and an estimate whose
 ///   @c confidence is low is still applied, because whether to trust it is the
 ///   caller's call and this reports no opinion on it.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL @p estimate or @p config.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL @p estimate or @p config,
+///         or SONARE_ERROR_OUT_OF_MEMORY if the band copy it takes fails.
 SonareError sonare_mastering_repair_dereverb_config_for_room(const SonareRoomEstimate* estimate,
                                                              SonareDereverbClassicalConfig* config);
 

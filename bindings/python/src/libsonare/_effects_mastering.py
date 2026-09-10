@@ -552,6 +552,12 @@ def mastering_repair_dereverb_config_for_room(
       past which the response is a diffuse tail rather than separable early
       reflections.
 
+    When NEITHER mid band converged, ``t60_sec`` falls back to the average of
+    whatever bands did, so a low-band-only estimate configures something rather
+    than nothing -- that value is no longer a mid-frequency figure. Only
+    ``volume``, ``rt60_bands`` and the band count are read; the rest of the
+    estimate is ignored.
+
     How *much* to remove is taste rather than measurement, so ``attenuation``,
     ``threshold``, ``over_subtraction`` and ``spectral_floor`` are never
     written; they come back as the float32 image of what was passed in, which
