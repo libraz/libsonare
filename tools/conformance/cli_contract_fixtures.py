@@ -1,0 +1,71 @@
+"""Fixture materialization and argv placeholder resolution for a contract run."""
+
+from __future__ import annotations
+
+import json
+import math
+import struct
+import wave
+from pathlib import Path
+from typing import Any
+
+
+def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
+    sample_rate = int(fixture["sample_rate"])
+    frames = int(fixture["frames"])
+    frequency = float(fixture["frequency_hz"])
+    amplitude = float(fixture["amplitude"])
+    samples = bytearray()
+    for index in range(frames):
+        sample = int(
+            round(
+                max(
+                    -1.0,
+                    min(
+                        1.0,
+                        amplitude
+                        * math.sin(2.0 * math.pi * frequency * index / sample_rate),
+                    ),
+                )
+                * 32767.0
+            )
+        )
+        samples.extend(struct.pack("<h", sample))
+    with wave.open(str(path), "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(sample_rate)
+        output.writeframes(bytes(samples))
+
+
+def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]:
+    fixtures = manifest["fixtures"]
+    paths: dict[str, str] = {}
+    audio_path = directory / "contract.wav"
+    _write_wav(audio_path, fixtures["audio"])
+    paths["audio"] = str(audio_path)
+    for name, text in fixtures["projects"].items():
+        project_path = directory / f"project_{name}.json"
+        project_path.write_text(text, encoding="utf-8")
+        paths[f"project_{name}"] = str(project_path)
+    for name, value in fixtures["presets"].items():
+        preset_path = directory / f"preset_{name}.json"
+        preset_path.write_text(
+            json.dumps(value, separators=(",", ":")), encoding="utf-8"
+        )
+        paths[f"preset_{name}"] = str(preset_path)
+    paths["project_warning_output"] = str(directory / "canonical_project.json")
+    paths["mastering_report"] = str(directory / "mastering-report.json")
+    paths["preset_missing"] = str(directory / "preset-does-not-exist.json")
+    paths["output"] = str(directory / "rejected-output.wav")
+    paths["rir_output"] = str(directory / "rir-output.wav")
+    return paths
+
+
+def _resolve_argv(argv: list[str], paths: dict[str, str]) -> list[str]:
+    return [
+        paths.get(token[1:-1], token)
+        if token.startswith("{") and token.endswith("}")
+        else token
+        for token in argv
+    ]
