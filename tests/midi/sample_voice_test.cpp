@@ -653,3 +653,70 @@ TEST_CASE("A crossfade lives until its longer region ends", "[midi][sample]") {
   pull(core, 300);
   CHECK(core.finished());
 }
+
+TEST_CASE("a sampled kit piece takes part in its mute group", "[midi][sample]") {
+  // A drum machine voices its hi-hats from PCM and its kick from a model, and
+  // the open hat still has to be cut by the closed one. The choke compared the
+  // engine as well as the group, which no sampled piece could ever satisfy.
+  const std::vector<float> data = sine(440.0, kOutRate, 4800);
+  SampleBank bank;
+  SampleDesc desc;
+  desc.root_key = 60;
+  desc.source_rate = kOutRate;
+  desc.loop_mode = 1;  // sustains, so a voice that was not choked never ends
+  desc.loop_start = 0;
+  desc.loop_end = static_cast<uint32_t>(data.size());
+  uint32_t index = 0;
+  REQUIRE(bank.add_sample(data.data(), data.size(), desc, &index));
+  SampleZoneDesc zone;
+  zone.sample_index = index;
+  REQUIRE(bank.add_zone(0, zone));
+
+  NativeSynthConfig config;
+  config.patch.mode = SynthEngineMode::kSample;
+  config.patch.sample.set_index = 0;
+  config.patch.amp_env.attack_ms = 0.5f;
+  config.patch.amp_env.sustain = 1.0f;
+  config.patch.amp_env.release_ms = 2.0f;
+  config.patch.percussion.exclusive_class = 1;
+
+  NativeSynth synth(config);
+  synth.set_sample_bank(&bank);
+  synth.prepare(kOutRate, 512);
+
+  std::vector<float> left(512, 0.0f);
+  std::vector<float> right(512, 0.0f);
+  float* chans[2] = {left.data(), right.data()};
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  synth.process(chans, 2, 512);
+  REQUIRE(synth.active_voice_count() == 1);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 62, 100)));
+  synth.process(chans, 2, 512);  // past the 2 ms release the choke starts
+  CHECK(synth.active_voice_count() == 1);
+}
+
+TEST_CASE("a sampled voice outside any mute group is left alone", "[midi][sample]") {
+  // exclusive_class 0 means "no group", and dropping the engine comparison must
+  // not turn that into "every voice on the channel".
+  SampleBank bank = one_shot_bank(48000);
+  NativeSynthConfig config;
+  config.patch.mode = SynthEngineMode::kSample;
+  config.patch.sample.set_index = 0;
+  config.patch.amp_env.attack_ms = 0.5f;
+  config.patch.amp_env.sustain = 1.0f;
+
+  NativeSynth synth(config);
+  synth.set_sample_bank(&bank);
+  synth.prepare(kOutRate, 512);
+
+  std::vector<float> left(512, 0.0f);
+  std::vector<float> right(512, 0.0f);
+  float* chans[2] = {left.data(), right.data()};
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 62, 100)));
+  synth.process(chans, 2, 512);
+  CHECK(synth.active_voice_count() == 2);
+}

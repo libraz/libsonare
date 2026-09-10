@@ -259,11 +259,14 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // GM kit exclusive/mute groups: a new hi-hat / triangle / whistle / surdo
   // strike chokes the ringing voice in its group before the new one allocates.
   // Keyed on the RESOLVED patch's group, so it works in GM mode too.
-  if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.exclusive_class != 0) {
+  // Both sides are mode-independent: a kit piece voiced from the sample engine
+  // carries its group in the same field, and a hi-hat that cannot choke is a
+  // hi-hat with no pedal. A melodic patch leaves the field at 0 and never
+  // reaches here.
+  if (patch->percussion.exclusive_class != 0) {
     const uint8_t excl = patch->percussion.exclusive_class;
     for (NativeSynthVoice& v : pool_) {
-      if (v.active && v.channel == ch && v.patch != nullptr &&
-          v.patch->mode == SynthEngineMode::kPercussion && v.exclusive_class == excl) {
+      if (v.active && v.channel == ch && v.patch != nullptr && v.exclusive_class == excl) {
         v.choke();
       }
     }

@@ -337,11 +337,13 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // GM kit exclusive/mute groups (hi-hats etc.): choke the ringing group voice
   // on this channel before allocating the new strike. Compared against the
   // group each voice was STARTED in, which an ASSIGN GROUP write moves away
-  // from the kit piece's own.
+  // from the kit piece's own. The engine a voice sounds through is not part of
+  // the comparison: a sampled hi-hat belongs to the same group as a modelled
+  // one and has to choke it.
   if (exclusive_class != 0) {
     for (NativeSynthVoice& v : fallback_pool_) {
       if (v.active && v.channel == (channel & 0x0Fu) && v.patch != nullptr &&
-          v.patch->mode == SynthEngineMode::kPercussion && v.exclusive_class == exclusive_class) {
+          v.exclusive_class == exclusive_class) {
         v.choke();
       }
     }
