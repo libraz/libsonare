@@ -16,6 +16,7 @@ from .types import (
     ChromaResult,
     ClippingReport,
     CqtResult,
+    DereverbClassicalConfig,
     DynamicRangeReport,
     DynamicsResult,
     EqSpectrumSnapshot,
@@ -1567,6 +1568,22 @@ def mastering_repair_dereverb_classical(
     wpe_taps: int = 3,
     wpe_strength: float = 0.7,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_dereverb_config_for_room(
+    estimate: RoomEstimate,
+    *,
+    threshold: float = 0.05,
+    attenuation: float = 0.5,
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    t60_sec: float = 0.4,
+    late_delay_ms: float = 50.0,
+    over_subtraction: float = 1.0,
+    spectral_floor: float = 0.08,
+    wpe_enabled: bool = False,
+    wpe_iterations: int = 2,
+    wpe_taps: int = 3,
+    wpe_strength: float = 0.7,
+) -> DereverbClassicalConfig: ...
 def mastering_repair_trim_silence(
     samples: FloatSamples,
     sample_rate: int = 22050,

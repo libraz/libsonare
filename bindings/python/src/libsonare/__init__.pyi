@@ -306,6 +306,9 @@ from .analyzer import (
     mastering_repair_dereverb_classical as mastering_repair_dereverb_classical,
 )
 from .analyzer import (
+    mastering_repair_dereverb_config_for_room as mastering_repair_dereverb_config_for_room,
+)
+from .analyzer import (
     mastering_repair_trim_silence as mastering_repair_trim_silence,
 )
 from .analyzer import (
@@ -670,6 +673,7 @@ from .types import ClippingReport as ClippingReport
 from .types import (
     CqtResult as CqtResult,
 )
+from .types import DereverbClassicalConfig as DereverbClassicalConfig
 from .types import DynamicRangeReport as DynamicRangeReport
 from .types import (
     DynamicsResult as DynamicsResult,

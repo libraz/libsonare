@@ -1,4 +1,5 @@
 import { getSonareModule } from './module_state';
+import type { RoomEstimateResult } from './public_types_acoustic';
 
 function requireModule() {
   return getSonareModule();
@@ -153,6 +154,12 @@ export interface MasteringRepairDereverbClassicalRequest extends DereverbClassic
   sampleRate: number;
 }
 
+/** Request form of `masteringRepairDereverbConfigForRoom`. */
+export interface MasteringRepairDereverbConfigForRoomRequest extends DereverbClassicalOptions {
+  /** The measured room, from `estimateRoom`. Only `volume` and `rt60Bands` are read. */
+  estimate: RoomEstimateResult;
+}
+
 /** Trimming modes accepted by `masteringRepairTrimSilence`. */
 export type TrimSilenceMode = 'peak' | 'lufsGated';
 
@@ -259,6 +266,61 @@ export function masteringRepairDereverbClassical(
     request.sampleRate,
     request,
   );
+}
+
+/**
+ * Point a dereverb config at a measured room.
+ *
+ * The pair to {@link estimateRoom}, which measures a recording blind. Returns a complete
+ * config for {@link masteringRepairDereverbClassical}, so the caller does not have to know
+ * which reverberation-time band to use or how the late delay relates to room size.
+ *
+ * What the room decides is *where* the tail is. Exactly two fields come back changed from
+ * what was passed in:
+ *
+ * - `t60Sec` — the mid-frequency reverberation time, the average of the 500 Hz and 1 kHz
+ *   octaves an ISO 3382 room is quoted by.
+ * - `lateDelayMs` — Polack's mixing time, sqrt(volume) in milliseconds, past which the
+ *   response is a diffuse tail rather than separable early reflections.
+ *
+ * How *much* to remove is taste rather than measurement, so `attenuation`, `threshold`,
+ * `overSubtraction` and `spectralFloor` are never written. A measurement that did not
+ * converge leaves its own field alone, so a partial estimate still configures the half it
+ * measured; a low-`confidence` estimate is still applied, because whether to trust it is
+ * the caller's call.
+ *
+ * Every field of `config` that is omitted falls back to the library's own dereverb default,
+ * matching {@link masteringRepairDereverbClassical}, so calling this with only an estimate
+ * returns a config that is ready to run. The C ABI underneath reads and writes the whole
+ * config and takes every field literally — it has no "zero means default" rule — which is
+ * why an omitted field resolves to its default here rather than to zero.
+ *
+ * @param estimate - The measured room, from {@link estimateRoom}. Only `volume` and
+ *   `rt60Bands` are read. The request form carries it as `estimate` alongside the config
+ *   fields.
+ * @param config - The config to point at the room; omitted fields take the library default.
+ * @returns A complete dereverb config.
+ *
+ * @example
+ * ```ts
+ * const estimate = estimateRoom(samples, sampleRate);
+ * const config = masteringRepairDereverbConfigForRoom(estimate);
+ * const clean = masteringRepairDereverbClassical(samples, sampleRate, config);
+ * ```
+ */
+export function masteringRepairDereverbConfigForRoom(
+  request: MasteringRepairDereverbConfigForRoomRequest,
+): Required<DereverbClassicalOptions>;
+export function masteringRepairDereverbConfigForRoom(
+  estimate: RoomEstimateResult,
+  config?: DereverbClassicalOptions,
+): Required<DereverbClassicalOptions>;
+export function masteringRepairDereverbConfigForRoom(
+  estimate: RoomEstimateResult | MasteringRepairDereverbConfigForRoomRequest,
+  config: DereverbClassicalOptions = {},
+): Required<DereverbClassicalOptions> {
+  const request = 'estimate' in estimate ? estimate : { estimate, ...config };
+  return requireModule().masteringRepairDereverbConfigForRoom(request.estimate, request);
 }
 
 /** Offline silence trimmer (peak threshold or LUFS-gated). */

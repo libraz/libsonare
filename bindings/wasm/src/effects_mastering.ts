@@ -102,6 +102,7 @@ export type {
   MasteringRepairDehumRequest,
   MasteringRepairDenoiseClassicalRequest,
   MasteringRepairDereverbClassicalRequest,
+  MasteringRepairDereverbConfigForRoomRequest,
   MasteringRepairTrimSilenceRequest,
   TrimSilenceMode,
   TrimSilenceOptions,
@@ -113,6 +114,7 @@ export {
   masteringRepairDehum,
   masteringRepairDenoiseClassical,
   masteringRepairDereverbClassical,
+  masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
 } from './mastering_repair';
 export type { MixStereoRequest } from './mixing_oneshot';

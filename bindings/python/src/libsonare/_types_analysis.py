@@ -824,6 +824,34 @@ class RoomEstimate:
         return self.rt60_bands
 
 
+class DereverbClassicalConfig(TypedDict):
+    """A complete classical-dereverberator configuration.
+
+    The keys are exactly the keyword arguments of
+    :func:`libsonare.mastering_repair_dereverb_classical`, so a value of this
+    type is splatted straight into it::
+
+        config = mastering_repair_dereverb_config_for_room(estimate)
+        clean = mastering_repair_dereverb_classical(samples, sr, **config)
+
+    Every key is required: this type describes a config that is ready to run,
+    never a partial override set.
+    """
+
+    threshold: float
+    attenuation: float
+    n_fft: int
+    hop_length: int
+    t60_sec: float
+    late_delay_ms: float
+    over_subtraction: float
+    spectral_floor: float
+    wpe_enabled: bool
+    wpe_iterations: int
+    wpe_taps: int
+    wpe_strength: float
+
+
 @dataclass(frozen=True, slots=True)
 class LufsResult:
     """ITU-R BS.1770 / EBU R128 loudness metrics.

@@ -221,6 +221,7 @@ if(BUILD_MASTERING)
     mastering/param_wiring_test.cpp
     mastering/config_zero_init_test.cpp
     mastering/repair_test.cpp
+    mastering/dereverb_room_test.cpp
     mastering/saturation_test.cpp
     mastering/set_parameter_test.cpp
     mastering/tape_oversample_test.cpp

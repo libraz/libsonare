@@ -2,7 +2,9 @@
 
 #include <cstring>
 #include <memory>
+#include <vector>
 
+#include "analysis/acoustic_analyzer.h"
 #include "core/audio.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
@@ -272,4 +274,24 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
         sonare::mastering::repair::trim_silence(audio, to_cpp_trim_silence_config(config));
     return copy_audio_result(result, out, out_length);
   });
+}
+
+SonareError sonare_mastering_repair_dereverb_config_for_room(
+    const SonareRoomEstimate* estimate, SonareDereverbClassicalConfig* config) {
+  SONARE_C_API_ENTRY;
+  if (!estimate || !config) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  std::vector<float> bands;
+  if (estimate->rt60_bands != nullptr && estimate->band_count > 0) {
+    bands.assign(estimate->rt60_bands, estimate->rt60_bands + estimate->band_count);
+  }
+  // Round-trips through the C++ config so the mapping lives in one place; only
+  // the two fields a measurement determines are written back.
+  sonare::mastering::repair::DereverbClassicalConfig cpp = to_cpp_dereverb_config(config);
+  sonare::mastering::repair::apply_room_measurement(cpp, sonare::mid_frequency_rt60(bands),
+                                                    estimate->volume);
+  config->t60_sec = cpp.t60_sec;
+  config->late_delay_ms = cpp.late_delay_ms;
+  return SONARE_OK;
+  SONARE_C_CATCH
 }

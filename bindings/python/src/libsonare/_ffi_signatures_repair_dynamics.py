@@ -52,6 +52,16 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_size_t),
             ]
 
+    # Config-shaping companion to the dereverb processor: it takes a room
+    # estimate and an existing config rather than audio, so it is registered
+    # outside the repair loop above.
+    if hasattr(lib, "sonare_mastering_repair_dereverb_config_for_room"):
+        lib.sonare_mastering_repair_dereverb_config_for_room.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_dereverb_config_for_room.argtypes = [
+            ctypes.POINTER(SonareRoomEstimate),
+            ctypes.POINTER(SonareDereverbClassicalConfig),
+        ]
+
     # --- Mastering: offline dynamics processors ---
     # The dynamics signature appends `int* out_latency_samples` to the repair
     # shape, so we register it separately from the repair loop above.

@@ -4,12 +4,14 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { RoomEstimateResult } from '../src/index';
 import {
   init,
   masteringRepairDeclip,
   masteringRepairDecrackle,
   masteringRepairDehum,
   masteringRepairDereverbClassical,
+  masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
 } from '../src/index';
 
@@ -150,6 +152,129 @@ describe('masteringRepairDereverbClassical (WASM)', () => {
 
   it('rejects non-power-of-two nFft', () => {
     expect(() => masteringRepairDereverbClassical(samples, SR, { nFft: 1500 })).toThrow();
+  });
+});
+
+describe('masteringRepairDereverbConfigForRoom (WASM)', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  // Bands 125/250/500/1k/2k/4k: only the middle pair counts, so the outliers on
+  // either side are far from the answer on purpose.
+  const MID_BANDS = [9, 9, 1, 2, 9, 9];
+
+  function roomEstimate(volume: number, rt60Bands: number[] = MID_BANDS): RoomEstimateResult {
+    return {
+      volume,
+      length: 0,
+      width: 0,
+      height: 0,
+      drrDb: 0,
+      confidence: 0,
+      absorptionBands: new Float32Array(0),
+      rt60Bands: new Float32Array(rt60Bands),
+    };
+  }
+
+  it('sets the two fields a measurement determines', () => {
+    const config = masteringRepairDereverbConfigForRoom(roomEstimate(2500));
+    expect(config.t60Sec).toBeCloseTo(1.5, 5);
+    expect(config.lateDelayMs).toBeCloseTo(50, 5); // sqrt(2500)
+  });
+
+  it('leaves the taste fields as they went in', () => {
+    const config = masteringRepairDereverbConfigForRoom(roomEstimate(2500), {
+      attenuation: 0.9,
+      threshold: 0.02,
+      overSubtraction: 1.4,
+      spectralFloor: 0.05,
+      nFft: 2048,
+      hopLength: 512,
+    });
+    expect(config.attenuation).toBeCloseTo(0.9, 5);
+    expect(config.threshold).toBeCloseTo(0.02, 5);
+    expect(config.overSubtraction).toBeCloseTo(1.4, 5);
+    expect(config.spectralFloor).toBeCloseTo(0.05, 5);
+    expect(config.nFft).toBe(2048);
+    expect(config.hopLength).toBe(512);
+  });
+
+  it('follows the volume for the mixing time', () => {
+    expect(masteringRepairDereverbConfigForRoom(roomEstimate(100)).lateDelayMs).toBeCloseTo(10, 5);
+    expect(masteringRepairDereverbConfigForRoom(roomEstimate(20000)).lateDelayMs).toBeCloseTo(
+      141.42,
+      1,
+    );
+  });
+
+  it('configures only the time when the volume is unusable', () => {
+    const config = masteringRepairDereverbConfigForRoom(roomEstimate(0), { lateDelayMs: 33 });
+    expect(config.t60Sec).toBeCloseTo(1.5, 5);
+    expect(config.lateDelayMs).toBeCloseTo(33, 5);
+  });
+
+  it('configures only the delay when no band converged', () => {
+    const config = masteringRepairDereverbConfigForRoom(roomEstimate(900, []), { t60Sec: 0.7 });
+    expect(config.t60Sec).toBeCloseTo(0.7, 5);
+    expect(config.lateDelayMs).toBeCloseTo(30, 5);
+  });
+
+  it('skips a band that did not converge rather than averaging it in', () => {
+    const config = masteringRepairDereverbConfigForRoom(
+      roomEstimate(400, [0, 0, Number.NaN, 2, 0, 0]),
+    );
+    expect(config.t60Sec).toBeCloseTo(2, 5);
+  });
+
+  it('rejects a missing estimate', () => {
+    expect(() =>
+      // @ts-expect-error deliberately passing the null the C ABI rejects
+      masteringRepairDereverbConfigForRoom(null),
+    ).toThrow();
+    expect(() =>
+      // @ts-expect-error deliberately passing no estimate at all
+      masteringRepairDereverbConfigForRoom(undefined),
+    ).toThrow();
+  });
+
+  it('resolves an omitted field to the library default, never to zero', () => {
+    // The C ABI takes every config field literally -- it has no zero-is-default
+    // rule -- so an estimate alone must still yield a config that is ready to run.
+    const config = masteringRepairDereverbConfigForRoom(roomEstimate(2500));
+    expect(config.threshold).toBeCloseTo(0.05, 5);
+    expect(config.attenuation).toBeCloseTo(0.5, 5);
+    expect(config.nFft).toBe(1024);
+    expect(config.hopLength).toBe(256);
+    expect(config.overSubtraction).toBeCloseTo(1, 5);
+    expect(config.spectralFloor).toBeCloseTo(0.08, 5);
+    expect(config.wpeEnabled).toBe(false);
+    expect(config.wpeIterations).toBe(2);
+    expect(config.wpeTaps).toBe(3);
+    expect(config.wpeStrength).toBeCloseTo(0.7, 5);
+  });
+
+  it('takes an explicit zero literally', () => {
+    const config = masteringRepairDereverbConfigForRoom(roomEstimate(2500), {
+      attenuation: 0,
+      spectralFloor: 0,
+    });
+    expect(config.attenuation).toBe(0);
+    expect(config.spectralFloor).toBe(0);
+  });
+
+  it('agrees between the request and positional forms', () => {
+    const estimate = roomEstimate(2500);
+    const positional = masteringRepairDereverbConfigForRoom(estimate, { attenuation: 0.9 });
+    const request = masteringRepairDereverbConfigForRoom({ estimate, attenuation: 0.9 });
+    expect(request).toEqual(positional);
+  });
+
+  it('produces a config the dereverberator accepts', () => {
+    const samples = sine(440, 0.3, 0.5);
+    const config = masteringRepairDereverbConfigForRoom(roomEstimate(2500));
+    const out = masteringRepairDereverbClassical(samples, SR, config);
+    expect(out.length).toBe(samples.length);
   });
 });
 

@@ -7,7 +7,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace sonare_node {
 
@@ -165,6 +167,36 @@ inline double DoubleProperty(const Napi::Object& obj, const char* key, double fa
 inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback) {
   Napi::Value value = obj.Get(key);
   return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Boolean>().Value();
+}
+
+/// @brief Read a float-array property off a record object (a Float32Array, or a
+///        plain number array whose non-numeric entries read as NaN).
+/// @details undefined/null is an empty vector rather than an error, so an
+///   optional per-band array reads the same whether it was omitted or reported
+///   absent. Any other non-array value throws.
+inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char* key) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return {};
+  if (value.IsTypedArray()) {
+    auto typed = value.As<Napi::TypedArray>();
+    if (typed.TypedArrayType() != napi_float32_array) {
+      throw std::runtime_error(std::string(key) + " must be a Float32Array or a number array");
+    }
+    auto floats = value.As<Napi::Float32Array>();
+    return std::vector<float>(floats.Data(), floats.Data() + floats.ElementLength());
+  }
+  if (!value.IsArray()) {
+    throw std::runtime_error(std::string(key) + " must be a Float32Array or a number array");
+  }
+  auto array = value.As<Napi::Array>();
+  std::vector<float> values;
+  values.reserve(array.Length());
+  for (uint32_t i = 0; i < array.Length(); ++i) {
+    Napi::Value item = array.Get(i);
+    values.push_back(item.IsNumber() ? item.As<Napi::Number>().FloatValue()
+                                     : std::numeric_limits<float>::quiet_NaN());
+  }
+  return values;
 }
 
 // Third family, for struct fields that have no meaningful default:

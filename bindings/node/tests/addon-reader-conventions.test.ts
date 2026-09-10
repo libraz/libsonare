@@ -36,6 +36,7 @@ import {
   masteringRepairDehum,
   masteringRepairDenoiseClassical,
   masteringRepairDereverbClassical,
+  masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
   mixStereo,
   noteSegments,
@@ -105,6 +106,9 @@ const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
  * point accepts an options bag.
  */
 const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
+  // Reads a per-band array off a RESULT record (a room estimate), not off an
+  // options bag, so a call to it says nothing about its caller's options.
+  'FloatArrayProperty',
   'RequiredIntProperty',
   'RequiredUint32Property',
   'RequiredFloatProperty',
@@ -283,6 +287,26 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'masteringRepairDereverbClassical',
     invoke: (o) => Array.from(masteringRepairDereverbClassical(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    // `volume` is derived from the estimate record rather than the options bag,
+    // so it arrives here as a key the request form carries harmlessly; the
+    // estimate itself is spread last so it survives the all-undefined bag.
+    jsName: 'masteringRepairDereverbConfigForRoom',
+    invoke: (o) =>
+      masteringRepairDereverbConfigForRoom({
+        ...o,
+        estimate: {
+          volume: 2500,
+          length: 0,
+          width: 0,
+          height: 0,
+          drrDb: 0,
+          confidence: 0,
+          absorptionBands: new Float32Array(0),
+          rt60Bands: new Float32Array([9, 9, 1, 2, 9, 9]),
+        },
+      }),
   },
   {
     jsName: 'masteringDynamicsCompressor',

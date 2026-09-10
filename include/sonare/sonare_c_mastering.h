@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "sonare_c_acoustic.h"
 #include "sonare_c_types.h"
 
 #ifdef __cplusplus
@@ -833,6 +834,32 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        int sample_rate,
                                                        const SonareDereverbClassicalConfig* config,
                                                        float** out, size_t* out_length);
+
+/// @brief Points a dereverb config at a measured room: sets the two fields a
+///        room estimate determines and leaves the rest of @p config alone.
+/// @details The pair to @ref sonare_estimate_room, which measures a recording
+///   blind. What the room decides is WHERE the tail is -- @c t60_sec from the
+///   mid-frequency reverberation time (the 500 Hz and 1 kHz octave average an
+///   ISO 3382 room is quoted by) and @c late_delay_ms from Polack's mixing
+///   time, sqrt(V) in milliseconds, past which the response is a diffuse tail
+///   rather than separable reflections. How MUCH to remove is taste rather
+///   than measurement, so @c attenuation, @c threshold, @c over_subtraction
+///   and @c spectral_floor are left as the caller set them.
+///
+///   @p config is read AND written, and every field of it is taken literally:
+///   unlike the @c config argument of the dereverb call itself, which stands in
+///   for the library defaults when it is NULL, a struct passed HERE has no
+///   zero-is-default rule, so zero-initializing it and calling this leaves the
+///   taste fields at zero rather than at their defaults. Fill in what the
+///   render needs first, then call this to point it at the room.
+///
+///   A field whose measurement did not converge is left alone, so a partial
+///   estimate still configures the half it measured -- and an estimate whose
+///   @c confidence is low is still applied, because whether to trust it is the
+///   caller's call and this reports no opinion on it.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL @p estimate or @p config.
+SonareError sonare_mastering_repair_dereverb_config_for_room(const SonareRoomEstimate* estimate,
+                                                             SonareDereverbClassicalConfig* config);
 
 // Trimming modes for sonare_mastering_repair_trim_silence.
 #define SONARE_TRIM_SILENCE_MODE_PEAK 0

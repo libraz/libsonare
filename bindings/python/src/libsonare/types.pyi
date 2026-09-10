@@ -601,6 +601,20 @@ class RoomEstimate:
     @property
     def rt60Bands(self) -> list[float]: ...
 
+class DereverbClassicalConfig(TypedDict):
+    threshold: float
+    attenuation: float
+    n_fft: int
+    hop_length: int
+    t60_sec: float
+    late_delay_ms: float
+    over_subtraction: float
+    spectral_floor: float
+    wpe_enabled: bool
+    wpe_iterations: int
+    wpe_taps: int
+    wpe_strength: float
+
 class LufsResult:
     integrated_lufs: float
     momentary_lufs: float

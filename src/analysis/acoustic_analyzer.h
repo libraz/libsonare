@@ -73,4 +73,16 @@ AcousticParameters detect_acoustic(const Audio& audio,
 AcousticParameters analyze_impulse_response(const Audio& ir,
                                             const AcousticConfig& config = AcousticConfig());
 
+/// @brief Centre frequency of octave band @p band in the layout every acoustic
+///        result uses: band 0 is 125 Hz and each one after it is an octave up.
+float octave_band_center_hz(int band) noexcept;
+
+/// @brief The single reverberation time a room is quoted by: the average of the
+///        500 Hz and 1 kHz octaves (ISO 3382's mid-frequency T).
+/// @details Bands that did not converge are NaN rather than absent, so those are
+///          skipped. When neither mid band is usable the average falls back to
+///          whatever bands are, which keeps a narrow-band estimate usable
+///          instead of discarding it; with nothing finite at all it returns 0.
+float mid_frequency_rt60(const std::vector<float>& rt60_bands) noexcept;
+
 }  // namespace sonare

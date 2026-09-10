@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/acoustic_analyzer.h"
 #include "core/audio.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
@@ -41,6 +42,24 @@
 using namespace sonare_node;
 
 namespace {
+
+/// @brief Read a dereverb options bag over @p config, leaving absent keys alone.
+sonare::mastering::repair::DereverbClassicalConfig read_dereverb_config(
+    const Napi::Object& options, sonare::mastering::repair::DereverbClassicalConfig config) {
+  config.threshold = node_float_option(options, "threshold", config.threshold);
+  config.attenuation = node_float_option(options, "attenuation", config.attenuation);
+  config.n_fft = node_int_option(options, "nFft", config.n_fft);
+  config.hop_length = node_int_option(options, "hopLength", config.hop_length);
+  config.t60_sec = node_float_option(options, "t60Sec", config.t60_sec);
+  config.late_delay_ms = node_float_option(options, "lateDelayMs", config.late_delay_ms);
+  config.over_subtraction = node_float_option(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = node_float_option(options, "spectralFloor", config.spectral_floor);
+  config.wpe_enabled = node_bool_option(options, "wpeEnabled", config.wpe_enabled);
+  config.wpe_iterations = node_int_option(options, "wpeIterations", config.wpe_iterations);
+  config.wpe_taps = node_int_option(options, "wpeTaps", config.wpe_taps);
+  config.wpe_strength = node_float_option(options, "wpeStrength", config.wpe_strength);
+  return config;
+}
 
 sonare::mastering::repair::DenoiseMode parse_denoise_mode(
     const Napi::Object& options, sonare::mastering::repair::DenoiseMode fallback) {
@@ -470,20 +489,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DereverbClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
-    Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = node_float_option(options, "threshold", config.threshold);
-    config.attenuation = node_float_option(options, "attenuation", config.attenuation);
-    config.n_fft = node_int_option(options, "nFft", config.n_fft);
-    config.hop_length = node_int_option(options, "hopLength", config.hop_length);
-    config.t60_sec = node_float_option(options, "t60Sec", config.t60_sec);
-    config.late_delay_ms = node_float_option(options, "lateDelayMs", config.late_delay_ms);
-    config.over_subtraction =
-        node_float_option(options, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = node_float_option(options, "spectralFloor", config.spectral_floor);
-    config.wpe_enabled = node_bool_option(options, "wpeEnabled", config.wpe_enabled);
-    config.wpe_iterations = node_int_option(options, "wpeIterations", config.wpe_iterations);
-    config.wpe_taps = node_int_option(options, "wpeTaps", config.wpe_taps);
-    config.wpe_strength = node_float_option(options, "wpeStrength", config.wpe_strength);
+    config = read_dereverb_config(info[2].As<Napi::Object>(), config);
   }
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
     Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
@@ -497,6 +503,44 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
   sonare::Audio result = sonare::mastering::repair::dereverb_classical(audio, config);
   std::vector<float> out(result.data(), result.data() + result.size());
   return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDereverbConfigForRoom(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "Expected (roomEstimate, config?)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  Napi::Object estimate = info[0].As<Napi::Object>();
+  // Read AND written: the caller's config is the base, and only the two fields
+  // the measurement determines come back changed.
+  sonare::mastering::repair::DereverbClassicalConfig config;
+  if (info.Length() >= 2 && info[1].IsObject()) {
+    config = read_dereverb_config(info[1].As<Napi::Object>(), config);
+  }
+  // Record fields, not options: an absent band array is "did not converge"
+  // rather than a zero reverberation time.
+  const std::vector<float> rt60_bands = FloatArrayProperty(estimate, "rt60Bands");
+  sonare::mastering::repair::apply_room_measurement(config, sonare::mid_frequency_rt60(rt60_bands),
+                                                    FloatProperty(estimate, "volume", 0.0f));
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("threshold", Napi::Number::New(env, config.threshold));
+  out.Set("attenuation", Napi::Number::New(env, config.attenuation));
+  out.Set("nFft", Napi::Number::New(env, config.n_fft));
+  out.Set("hopLength", Napi::Number::New(env, config.hop_length));
+  out.Set("t60Sec", Napi::Number::New(env, config.t60_sec));
+  out.Set("lateDelayMs", Napi::Number::New(env, config.late_delay_ms));
+  out.Set("overSubtraction", Napi::Number::New(env, config.over_subtraction));
+  out.Set("spectralFloor", Napi::Number::New(env, config.spectral_floor));
+  out.Set("wpeEnabled", Napi::Boolean::New(env, config.wpe_enabled));
+  out.Set("wpeIterations", Napi::Number::New(env, config.wpe_iterations));
+  out.Set("wpeTaps", Napi::Number::New(env, config.wpe_taps));
+  out.Set("wpeStrength", Napi::Number::New(env, config.wpe_strength));
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

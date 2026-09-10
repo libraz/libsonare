@@ -31,6 +31,7 @@ from ._ffi import (
     SonareDenoiseClassicalConfig,
     SonareDereverbClassicalConfig,
     SonareGateConfig,
+    SonareRoomEstimate,
     SonareTransientShaperConfig,
     SonareTrimSilenceConfig,
 )
@@ -51,6 +52,7 @@ from ._runtime import (
     _validate_samples,
     _validate_scalar,
 )
+from .types import DereverbClassicalConfig, RoomEstimate
 
 _DEFAULT_EFFECT_FRAME_LENGTH = 2048
 _DEFAULT_EFFECT_HOP_LENGTH = 512
@@ -510,6 +512,116 @@ def mastering_repair_dereverb_classical(
     )
     return _run_repair(
         _get_lib().sonare_mastering_repair_dereverb_classical, samples, sample_rate, config
+    )
+
+
+def mastering_repair_dereverb_config_for_room(
+    estimate: RoomEstimate,
+    *,
+    threshold: float = 0.05,
+    attenuation: float = 0.5,
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    t60_sec: float = 0.4,
+    late_delay_ms: float = 50.0,
+    over_subtraction: float = 1.0,
+    spectral_floor: float = 0.08,
+    wpe_enabled: bool = False,
+    wpe_iterations: int = 2,
+    wpe_taps: int = 3,
+    wpe_strength: float = 0.7,
+) -> DereverbClassicalConfig:
+    """Point a dereverb config at a measured room.
+
+    The pair to :func:`libsonare.estimate_room`, which measures a recording
+    blind. Returns a complete config for
+    :func:`mastering_repair_dereverb_classical`, so the caller does not have to
+    know which reverberation-time band to use or how the late delay relates to
+    room size::
+
+        estimate = libsonare.estimate_room(samples, sr)
+        config = libsonare.mastering_repair_dereverb_config_for_room(estimate)
+        clean = libsonare.mastering_repair_dereverb_classical(samples, sr, **config)
+
+    What the room decides is *where* the tail is. Exactly two keys come back
+    changed from what was passed in:
+
+    * ``t60_sec`` -- the mid-frequency reverberation time, the average of the
+      500 Hz and 1 kHz octaves an ISO 3382 room is quoted by.
+    * ``late_delay_ms`` -- Polack's mixing time, sqrt(volume) in milliseconds,
+      past which the response is a diffuse tail rather than separable early
+      reflections.
+
+    How *much* to remove is taste rather than measurement, so ``attenuation``,
+    ``threshold``, ``over_subtraction`` and ``spectral_floor`` are never
+    written; they come back as the float32 image of what was passed in, which
+    is the value the dereverb call would have used anyway. A measurement that
+    did not converge leaves its own key
+    alone, so a partial estimate still configures the half it measured; a
+    low-``confidence`` estimate is still applied, because whether to trust it is
+    the caller's call.
+
+    Args:
+        estimate: The measured room, from :func:`libsonare.estimate_room`. Only
+            ``volume`` and ``rt60_bands`` are read.
+        threshold, attenuation, n_fft, hop_length, t60_sec, late_delay_ms,
+            over_subtraction, spectral_floor, wpe_enabled, wpe_iterations,
+            wpe_taps, wpe_strength: The config to point at the room. Every one
+            defaults to the library's own dereverb default, matching
+            :func:`mastering_repair_dereverb_classical`, so calling this with
+            only ``estimate`` returns a config that is ready to run. The C ABI
+            underneath reads and writes the whole config and takes every field
+            literally -- it has no "zero means default" rule -- which is why
+            these defaults are spelled out here instead of left at zero.
+
+    Returns:
+        A complete :class:`~libsonare.types.DereverbClassicalConfig` to splat
+        into :func:`mastering_repair_dereverb_classical`.
+    """
+    lib = _get_lib()
+    symbol = "sonare_mastering_repair_dereverb_config_for_room"
+    if not hasattr(lib, symbol):
+        raise _unsupported_effect_symbol(symbol)
+    if estimate is None:
+        raise SonareValueError(
+            "mastering_repair_dereverb_config_for_room: estimate must not be None"
+        )
+    bands, band_count = _to_c_float_array(estimate.rt60_bands)
+    c_estimate = SonareRoomEstimate(
+        volume=float(estimate.volume),
+        rt60_bands=ctypes.cast(bands, ctypes.POINTER(ctypes.c_float)),
+        band_count=band_count,
+    )
+    config = SonareDereverbClassicalConfig(  # noqa: F405
+        threshold=float(threshold),
+        attenuation=float(attenuation),
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        t60_sec=float(t60_sec),
+        late_delay_ms=float(late_delay_ms),
+        over_subtraction=float(over_subtraction),
+        spectral_floor=float(spectral_floor),
+        wpe_enabled=1 if wpe_enabled else 0,
+        wpe_iterations=int(wpe_iterations),
+        wpe_taps=int(wpe_taps),
+        wpe_strength=float(wpe_strength),
+    )
+    _check(
+        getattr(lib, symbol)(ctypes.byref(c_estimate), ctypes.byref(config)),
+    )
+    return DereverbClassicalConfig(
+        threshold=float(config.threshold),
+        attenuation=float(config.attenuation),
+        n_fft=int(config.n_fft),
+        hop_length=int(config.hop_length),
+        t60_sec=float(config.t60_sec),
+        late_delay_ms=float(config.late_delay_ms),
+        over_subtraction=float(config.over_subtraction),
+        spectral_floor=float(config.spectral_floor),
+        wpe_enabled=bool(config.wpe_enabled),
+        wpe_iterations=int(config.wpe_iterations),
+        wpe_taps=int(config.wpe_taps),
+        wpe_strength=float(config.wpe_strength),
     )
 
 

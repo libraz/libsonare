@@ -79,6 +79,9 @@ from ._types_analysis import (
     ClippingReport as ClippingReport,
 )
 from ._types_analysis import (
+    DereverbClassicalConfig as DereverbClassicalConfig,
+)
+from ._types_analysis import (
     DynamicRangeReport as DynamicRangeReport,
 )
 from ._types_analysis import (

@@ -22,9 +22,34 @@ namespace {
 // exceeds Nyquist fall out as NaN inside filter_octave_band, which is reported
 // rather than dropped. This keeps analyzer and synth band axes aligned so an
 // estimate->synthesize round-trip does not lose high bands.
-float octave_band_center_hz(int band) { return 125.0f * std::pow(2.0f, static_cast<float>(band)); }
-
 }  // namespace
+
+float octave_band_center_hz(int band) noexcept {
+  return 125.0f * std::pow(2.0f, static_cast<float>(band));
+}
+
+float mid_frequency_rt60(const std::vector<float>& rt60_bands) noexcept {
+  // Bands 2 and 3 are the 500 Hz and 1 kHz octaves under the layout above.
+  double sum = 0.0;
+  int count = 0;
+  for (int band = 2; band <= 3; ++band) {
+    const size_t i = static_cast<size_t>(band);
+    if (i >= rt60_bands.size()) break;
+    if (!std::isfinite(rt60_bands[i]) || rt60_bands[i] <= 0.0f) continue;
+    sum += static_cast<double>(rt60_bands[i]);
+    ++count;
+  }
+  if (count == 0) {
+    // A narrow-band estimate is worth less than a mid-band one but more than
+    // nothing, so fall back to every band that did converge.
+    for (float value : rt60_bands) {
+      if (!std::isfinite(value) || value <= 0.0f) continue;
+      sum += static_cast<double>(value);
+      ++count;
+    }
+  }
+  return count > 0 ? static_cast<float>(sum / count) : 0.0f;
+}
 
 AcousticAnalyzer::AcousticAnalyzer(const Audio& audio, const AcousticConfig& config)
     : AcousticAnalyzer(

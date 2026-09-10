@@ -1,5 +1,6 @@
 #include "mastering/repair/dereverb_classical.h"
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <utility>
@@ -181,6 +182,18 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
       dereverbed.data(), bins, frames, spec.n_fft(), spec.hop_length(), spec.sample_rate(),
       spec.window(), spec.center(), spec.win_length());
   return clean.to_audio(static_cast<int>(audio.size()));
+}
+
+void apply_room_measurement(DereverbClassicalConfig& config, float rt60_mid_sec,
+                            float volume_m3) noexcept {
+  if (std::isfinite(rt60_mid_sec) && rt60_mid_sec > 0.0f) config.t60_sec = rt60_mid_sec;
+  if (std::isfinite(volume_m3) && volume_m3 > 0.0f) {
+    // Polack: the response stops being separable reflections and becomes a
+    // diffuse tail at roughly sqrt(V) milliseconds. Bounded below by one STFT
+    // hop's worth of room -- under a few metres cubed there is no late field to
+    // separate -- and above at a second, past which no room mixes later.
+    config.late_delay_ms = std::clamp(std::sqrt(volume_m3), 1.0f, 1000.0f);
+  }
 }
 
 }  // namespace sonare::mastering::repair

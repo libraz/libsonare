@@ -43,6 +43,24 @@ bool repairBoolOption(const val& options, const char* key, bool fallback) {
              : fallback;
 }
 
+// Read a dereverb options bag over `config`, leaving absent keys alone.
+mastering::repair::DereverbClassicalConfig readDereverbConfig(
+    const val& options, mastering::repair::DereverbClassicalConfig config) {
+  config.threshold = repairFloatOption(options, "threshold", config.threshold);
+  config.attenuation = repairFloatOption(options, "attenuation", config.attenuation);
+  config.n_fft = repairIntOption(options, "nFft", config.n_fft);
+  config.hop_length = repairIntOption(options, "hopLength", config.hop_length);
+  config.t60_sec = repairFloatOption(options, "t60Sec", config.t60_sec);
+  config.late_delay_ms = repairFloatOption(options, "lateDelayMs", config.late_delay_ms);
+  config.over_subtraction = repairFloatOption(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = repairFloatOption(options, "spectralFloor", config.spectral_floor);
+  config.wpe_enabled = repairBoolOption(options, "wpeEnabled", config.wpe_enabled);
+  config.wpe_iterations = repairIntOption(options, "wpeIterations", config.wpe_iterations);
+  config.wpe_taps = repairIntOption(options, "wpeTaps", config.wpe_taps);
+  config.wpe_strength = repairFloatOption(options, "wpeStrength", config.wpe_strength);
+  return config;
+}
+
 }  // namespace
 
 val js_mastering_repair_declick(val samples, int sample_rate, val options) {
@@ -229,18 +247,7 @@ val js_mastering_repair_dereverb_classical(val samples, int sample_rate, val opt
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DereverbClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    cfg.attenuation = repairFloatOption(options, "attenuation", cfg.attenuation);
-    cfg.n_fft = repairIntOption(options, "nFft", cfg.n_fft);
-    cfg.hop_length = repairIntOption(options, "hopLength", cfg.hop_length);
-    cfg.t60_sec = repairFloatOption(options, "t60Sec", cfg.t60_sec);
-    cfg.late_delay_ms = repairFloatOption(options, "lateDelayMs", cfg.late_delay_ms);
-    cfg.over_subtraction = repairFloatOption(options, "overSubtraction", cfg.over_subtraction);
-    cfg.spectral_floor = repairFloatOption(options, "spectralFloor", cfg.spectral_floor);
-    cfg.wpe_enabled = repairBoolOption(options, "wpeEnabled", cfg.wpe_enabled);
-    cfg.wpe_iterations = repairIntOption(options, "wpeIterations", cfg.wpe_iterations);
-    cfg.wpe_taps = repairIntOption(options, "wpeTaps", cfg.wpe_taps);
-    cfg.wpe_strength = repairFloatOption(options, "wpeStrength", cfg.wpe_strength);
+    cfg = readDereverbConfig(options, cfg);
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
     throw sonare::SonareException(
@@ -255,6 +262,44 @@ val js_mastering_repair_dereverb_classical(val samples, int sample_rate, val opt
   Audio result = mastering::repair::dereverb_classical(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out);
+}
+
+val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
+  if (estimate.isUndefined() || estimate.isNull()) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDereverbConfigForRoom: a room estimate is required");
+  }
+  // Read AND written: the caller's config is the base, and only the two fields
+  // the measurement determines come back changed.
+  mastering::repair::DereverbClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDereverbConfig(options, cfg);
+  }
+  std::vector<float> rt60_bands;
+  if (hasProperty(estimate, "rt60Bands")) {
+    val bands = estimate["rt60Bands"];
+    // Absent bands are an empty set, which the measurement treats as "did not
+    // converge" rather than as a zero reverberation time.
+    if (!bands.isUndefined() && !bands.isNull()) rt60_bands = float32ArrayToVector(bands);
+  }
+  mastering::repair::apply_room_measurement(cfg, mid_frequency_rt60(rt60_bands),
+                                            floatProperty(estimate, "volume", 0.0f));
+
+  val out = val::object();
+  out.set("threshold", cfg.threshold);
+  out.set("attenuation", cfg.attenuation);
+  out.set("nFft", cfg.n_fft);
+  out.set("hopLength", cfg.hop_length);
+  out.set("t60Sec", cfg.t60_sec);
+  out.set("lateDelayMs", cfg.late_delay_ms);
+  out.set("overSubtraction", cfg.over_subtraction);
+  out.set("spectralFloor", cfg.spectral_floor);
+  out.set("wpeEnabled", cfg.wpe_enabled);
+  out.set("wpeIterations", cfg.wpe_iterations);
+  out.set("wpeTaps", cfg.wpe_taps);
+  out.set("wpeStrength", cfg.wpe_strength);
+  return out;
 }
 
 val js_mastering_repair_trim_silence(val samples, int sample_rate, val options) {
@@ -294,6 +339,7 @@ void registerRepairBindings() {
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);
   function("masteringRepairDehum", &js_mastering_repair_dehum);
   function("masteringRepairDereverbClassical", &js_mastering_repair_dereverb_classical);
+  function("masteringRepairDereverbConfigForRoom", &js_mastering_repair_dereverb_config_for_room);
   function("masteringRepairTrimSilence", &js_mastering_repair_trim_silence);
 }
 

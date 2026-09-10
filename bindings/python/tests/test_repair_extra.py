@@ -122,6 +122,109 @@ class TestMasteringRepairDereverbClassical:
             libsonare.mastering_repair_dereverb_classical(samples, SR, n_fft=1024, hop_length=2048)
 
 
+class TestMasteringRepairDereverbConfigForRoom:
+    # Bands 125/250/500/1k/2k/4k: only the middle pair counts, so the outliers
+    # on either side are far from the answer on purpose.
+    MID_BANDS = [9.0, 9.0, 1.0, 2.0, 9.0, 9.0]
+
+    def _estimate(
+        self, volume: float, rt60_bands: list[float] | None = None
+    ) -> libsonare.RoomEstimate:
+        return libsonare.RoomEstimate(
+            volume=volume,
+            length=0.0,
+            width=0.0,
+            height=0.0,
+            drr_db=0.0,
+            confidence=0.0,
+            absorption_bands=[],
+            rt60_bands=self.MID_BANDS if rt60_bands is None else rt60_bands,
+        )
+
+    def test_sets_the_two_fields_a_measurement_determines(self) -> None:
+        config = libsonare.mastering_repair_dereverb_config_for_room(self._estimate(2500.0))
+        assert config["t60_sec"] == pytest.approx(1.5)
+        assert config["late_delay_ms"] == pytest.approx(50.0)  # sqrt(2500)
+
+    def test_taste_fields_come_back_as_they_went_in(self) -> None:
+        config = libsonare.mastering_repair_dereverb_config_for_room(
+            self._estimate(2500.0),
+            attenuation=0.9,
+            threshold=0.02,
+            over_subtraction=1.4,
+            spectral_floor=0.05,
+            n_fft=2048,
+            hop_length=512,
+        )
+        assert config["attenuation"] == pytest.approx(0.9)
+        assert config["threshold"] == pytest.approx(0.02)
+        assert config["over_subtraction"] == pytest.approx(1.4)
+        assert config["spectral_floor"] == pytest.approx(0.05)
+        assert config["n_fft"] == 2048
+        assert config["hop_length"] == 512
+
+    def test_mixing_time_follows_the_volume(self) -> None:
+        small = libsonare.mastering_repair_dereverb_config_for_room(self._estimate(100.0))
+        large = libsonare.mastering_repair_dereverb_config_for_room(self._estimate(20000.0))
+        assert small["late_delay_ms"] == pytest.approx(10.0)
+        assert large["late_delay_ms"] == pytest.approx(141.42, rel=1e-3)
+
+    def test_an_estimate_with_no_volume_configures_only_the_time(self) -> None:
+        config = libsonare.mastering_repair_dereverb_config_for_room(
+            self._estimate(0.0), late_delay_ms=33.0
+        )
+        assert config["t60_sec"] == pytest.approx(1.5)
+        assert config["late_delay_ms"] == pytest.approx(33.0)
+
+    def test_an_estimate_with_no_bands_configures_only_the_delay(self) -> None:
+        config = libsonare.mastering_repair_dereverb_config_for_room(
+            self._estimate(900.0, rt60_bands=[]), t60_sec=0.7
+        )
+        assert config["t60_sec"] == pytest.approx(0.7)
+        assert config["late_delay_ms"] == pytest.approx(30.0)
+
+    def test_a_band_that_did_not_converge_is_skipped_not_averaged_in(self) -> None:
+        nan = float("nan")
+        config = libsonare.mastering_repair_dereverb_config_for_room(
+            self._estimate(400.0, rt60_bands=[0.0, 0.0, nan, 2.0, 0.0, 0.0])
+        )
+        assert config["t60_sec"] == pytest.approx(2.0)
+
+    def test_none_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="estimate"):
+            libsonare.mastering_repair_dereverb_config_for_room(None)  # type: ignore[arg-type]
+
+    def test_omitted_fields_are_the_library_defaults_not_zeros(self) -> None:
+        # The C ABI takes every config field literally -- there is no
+        # zero-is-default rule -- so the keyword defaults here are the library's
+        # own, and an estimate alone yields a config that is ready to run.
+        config = libsonare.mastering_repair_dereverb_config_for_room(self._estimate(2500.0))
+        assert config["threshold"] == pytest.approx(0.05)
+        assert config["attenuation"] == pytest.approx(0.5)
+        assert config["n_fft"] == 1024
+        assert config["hop_length"] == 256
+        assert config["over_subtraction"] == pytest.approx(1.0)
+        assert config["spectral_floor"] == pytest.approx(0.08)
+        assert config["wpe_enabled"] is False
+        assert config["wpe_iterations"] == 2
+        assert config["wpe_taps"] == 3
+        assert config["wpe_strength"] == pytest.approx(0.7)
+
+    def test_an_explicit_zero_is_taken_literally(self) -> None:
+        config = libsonare.mastering_repair_dereverb_config_for_room(
+            self._estimate(2500.0), attenuation=0.0, spectral_floor=0.0
+        )
+        assert config["attenuation"] == 0.0
+        assert config["spectral_floor"] == 0.0
+
+    def test_the_result_runs_the_dereverberator(self) -> None:
+        samples = sine(440.0, 0.3, amp=0.5)
+        config = libsonare.mastering_repair_dereverb_config_for_room(self._estimate(2500.0))
+        out = libsonare.mastering_repair_dereverb_classical(samples, SR, **config)
+        assert out.shape == samples.shape
+        assert np.isfinite(out).all()
+
+
 class TestMasteringRepairTrimSilence:
     def _sample(self) -> NDArray[np.float32]:
         pad = np.zeros(1200, dtype=np.float32)

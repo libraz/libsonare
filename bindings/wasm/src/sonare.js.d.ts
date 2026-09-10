@@ -348,6 +348,22 @@ export interface WasmRoomEstimateResult {
   rt60Bands: Float32Array;
 }
 
+/** Every field of a dereverb config, as `masteringRepairDereverbConfigForRoom` returns it. */
+export interface WasmDereverbClassicalConfig {
+  threshold: number;
+  attenuation: number;
+  nFft: number;
+  hopLength: number;
+  t60Sec: number;
+  lateDelayMs: number;
+  overSubtraction: number;
+  spectralFloor: number;
+  wpeEnabled: boolean;
+  wpeIterations: number;
+  wpeTaps: number;
+  wpeStrength: number;
+}
+
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
@@ -1935,6 +1951,10 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairDereverbConfigForRoom: (
+    estimate: WasmRoomEstimateResult,
+    options: object,
+  ) => WasmDereverbClassicalConfig;
   masteringRepairTrimSilence: (
     samples: Float32Array,
     sampleRate: number,

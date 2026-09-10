@@ -333,6 +333,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringRepairDereverbClassical",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDereverbClassical,
                                   "masteringRepairDereverbClassical"));
+  exports.Set("masteringRepairDereverbConfigForRoom",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDereverbConfigForRoom,
+                                  "masteringRepairDereverbConfigForRoom"));
   exports.Set("masteringRepairTrimSilence",
               Napi::Function::New(env, &SonareWrap::MasteringRepairTrimSilence,
                                   "masteringRepairTrimSilence"));

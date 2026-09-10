@@ -169,6 +169,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringRepairDecrackle(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDehum(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDereverbClassical(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairDereverbConfigForRoom(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairTrimSilence(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
   static Napi::Value SpectralEdit(const Napi::CallbackInfo& info);
