@@ -1751,8 +1751,8 @@
       "patch": "celesta",
       "engine": "modal",
       "capture": "celesta",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1762,26 +1762,25 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 6,
+          "gated": 10,
           "excused": [
             "balance",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "unjudgeable": [
+            "aftersound",
             "attack",
             "body",
             "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
             "register",
             "tnr",
             "vel_range"
@@ -1790,7 +1789,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p009-glockenspiel",
@@ -1803,8 +1802,8 @@
       "patch": "glockenspiel",
       "engine": "modal",
       "capture": "glockenspiel",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1814,26 +1813,25 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 6,
+          "gated": 9,
           "excused": [
             "balance",
+            "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "unjudgeable": [
+            "aftersound",
             "attack",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "tnr",
             "vel_range"
@@ -1842,7 +1840,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p010-music-box",
@@ -1855,8 +1853,8 @@
       "patch": "music_box",
       "engine": "modal",
       "capture": "music_box",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1866,26 +1864,25 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 7,
+          "gated": 10,
           "excused": [
+            "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "tnr",
             "vel_range"
@@ -1894,7 +1891,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p011-vibraphone",
@@ -1907,8 +1904,8 @@
       "patch": "vibraphone",
       "engine": "modal",
       "capture": "vibraphone",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -1920,12 +1917,11 @@
           "canonical": 12,
           "gated": 10,
           "excused": [
+            "damper",
             "stereo"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -1946,7 +1942,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p011b001-vibraphone",
@@ -2059,8 +2055,8 @@
       "patch": "marimba",
       "engine": "modal",
       "capture": "marimba",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "ring-2.3x"
       ],
@@ -2072,26 +2068,25 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 10,
+          "gated": 8,
           "excused": [
+            "aftersound",
+            "damper",
+            "doubling",
             "stereo"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "unjudgeable": [
-            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
             "decay",
-            "doubling",
             "register",
             "tnr",
             "vel_range"
@@ -2100,7 +2095,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "judge the recorded candidate(s) — ring-2.3x — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p012b001-marimba",
@@ -2213,8 +2208,8 @@
       "patch": "xylophone",
       "engine": "modal",
       "capture": "xylophone",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "ring-3.4x"
       ],
@@ -2226,17 +2221,15 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 7,
+          "gated": 8,
           "excused": [
+            "aftersound",
+            "damper",
+            "doubling",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -2246,6 +2239,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "decay",
             "register",
             "tnr",
             "vel_range"
@@ -2254,7 +2248,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "judge the recorded candidate(s) — ring-3.4x — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p014-tubular-bells",

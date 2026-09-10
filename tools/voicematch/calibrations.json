@@ -158,7 +158,7 @@
       {
         "name": "ring-2.3x",
         "overrides": "marimba.modal.decay_s=1.02,marimba.modal.decay_stretch=0.78",
-        "note": "the ring the reference asks for, and the reason it is a candidate rather than a fit. It matches the reference note for note over the first 0.25 s across the whole grid, where the shipped value is 9 to 23 dB down too early - but the SAME two numbers come out of the xylophone, whose reference decays identically to this one to within a decibel at the same note. One library gave both slots one envelope, so it can say the model rings too short and cannot say by how much without erasing what separates a marimba from a xylophone"
+        "note": "a longer ring than the one now shipped, fitted to the first 0.25 s rather than to the 60 dB span the table was set from. The two references are not one envelope over two slots, which is what held this back: at the one note their grids share they agree on ring (0.66 against 0.68 s) and on centroid (443 against 440 Hz) and part company everywhere else - h2-h5 sit 25 to 60 dB apart and the attack is 20 ms against 5 - so a rosewood bar of either kind rings about the same at the same pitch and what separates the two instruments is spectrum and strike, both of which each patch voices on its own. One shared note is thin evidence for a library's provenance, so this is a candidate still and the ear still decides."
       }
     ]
   },
@@ -167,7 +167,7 @@
       {
         "name": "ring-3.4x",
         "overrides": "xylophone.modal.decay_s=1.02,xylophone.modal.decay_stretch=0.87",
-        "note": "the same measurement on the xylophone, matching the reference note for note over the first 0.25 s where the shipped value is 31 to 47 dB down too early. Adopting it and the marimba's together would give the two instruments the same ring, which is most of what tells them apart - hear them before either lands"
+        "note": "the same alternative on the xylophone: fitted to the first 0.25 s, where the shipped value comes off the 60 dB span. The two references are not one envelope over two slots, which is what held this back: at the one note their grids share they agree on ring (0.66 against 0.68 s) and on centroid (443 against 440 Hz) and part company everywhere else - h2-h5 sit 25 to 60 dB apart and the attack is 20 ms against 5 - so a rosewood bar of either kind rings about the same at the same pitch and what separates the two instruments is spectrum and strike, both of which each patch voices on its own. One shared note is thin evidence for a library's provenance, so this is a candidate still and the ear still decides."
       }
     ]
   },

@@ -3,13 +3,19 @@
   "timbre": "gm014",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:39:00+00:00",
-  "recorded_utc": "2026-09-09T16:50:36+00:00",
+  "recorded_utc": "2026-09-10T01:03:45+00:00",
   "reference_spread": {},
   "bounds": {
+    "decay": {
+      "median": 11.062,
+      "abs_median": 11.062,
+      "p90": 18.008,
+      "rows": 35
+    },
     "tnr": {
-      "median": 23.437,
-      "abs_median": 23.437,
-      "p90": 27.332,
+      "median": 4.362,
+      "abs_median": 4.362,
+      "p90": 6.912,
       "rows": 35
     },
     "attack": {
@@ -19,16 +25,16 @@
       "rows": 35
     },
     "body": {
-      "median": 22.713,
-      "abs_median": 22.713,
-      "p90": 38.775,
+      "median": 42.775,
+      "abs_median": 42.775,
+      "p90": 55.595,
       "rows": 35
     },
     "balance": {
-      "median": 2.304,
-      "abs_median": 3.854,
-      "p90": 7.849,
-      "rows": 17
+      "median": 15.95,
+      "abs_median": 15.95,
+      "p90": 29.309,
+      "rows": 35
     },
     "centroid_pct": {
       "median": 1.0,
@@ -37,9 +43,9 @@
       "rows": 35
     },
     "vel_range": {
-      "median": 3.625,
-      "abs_median": 3.625,
-      "p90": 4.078,
+      "median": 3.675,
+      "abs_median": 3.675,
+      "p90": 4.13,
       "rows": 7
     },
     "register": {

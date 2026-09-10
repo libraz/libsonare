@@ -121,8 +121,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   gl.modal.modes[1] = {2.756f, 0.7f, 0.6f};
   gl.modal.modes[2] = {5.404f, 0.45f, 0.4f};
   gl.modal.modes[3] = {8.933f, 0.25f, 0.3f};
-  gl.modal.decay_s = 3.5f;
-  gl.modal.decay_stretch = 0.3f;
+  // decay_s is the T60 at A4 and decay_stretch its octave slope, both read off
+  // each reference's own 60 dB span. Every bar here rang short of its reference,
+  // and a disagreeing span censors the comparison that would have said so.
+  gl.modal.decay_s = 6.94f;
+  gl.modal.decay_stretch = 0.27f;
   gl.modal.strike_brightness = 0.85f;
   gl.amp_env.release_ms = 600.0f;
 
@@ -146,8 +149,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   mr.modal.modes[0] = {1.0f, 1.0f, 1.0f};
   mr.modal.modes[1] = {4.0f, 0.6f, 0.35f};
   mr.modal.modes[2] = {10.0f, 0.35f, 0.2f};
-  mr.modal.decay_s = 0.45f;
-  mr.modal.decay_stretch = 0.6f;
+  mr.modal.decay_s = 0.66f;
+  mr.modal.decay_stretch = 0.65f;
   mr.modal.strike_brightness = 0.7f;
   mr.amp_env.release_ms = 250.0f;
   mr.body = BodyType::kWoodTube;
@@ -159,8 +162,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   xy.modal.modes[0] = {1.0f, 1.0f, 1.0f};
   xy.modal.modes[1] = {3.0f, 0.65f, 0.4f};
   xy.modal.modes[2] = {6.0f, 0.4f, 0.25f};
-  xy.modal.decay_s = 0.3f;
-  xy.modal.decay_stretch = 0.5f;
+  xy.modal.decay_s = 0.69f;
+  xy.modal.decay_stretch = 0.67f;
   xy.modal.strike_brightness = 0.9f;
   xy.amp_env.release_ms = 200.0f;
   xy.body = BodyType::kWoodTube;
@@ -176,8 +179,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ce.modal.modes[1] = {2.756f, 0.55f, 0.6f};
   ce.modal.modes[2] = {5.404f, 0.28f, 0.4f};
   ce.modal.modes[3] = {8.933f, 0.14f, 0.3f};
-  ce.modal.decay_s = 1.5f;
-  ce.modal.decay_stretch = 0.35f;
+  // The reference is still over its own noise floor at the top of the window on
+  // the lower half of the compass, so this pair is regressed on the notes that
+  // fall inside it and the ring is a lower bound rather than a measured length.
+  ce.modal.decay_s = 7.0f;
+  ce.modal.decay_stretch = 0.53f;
   ce.modal.strike_brightness = 0.6f;
   ce.amp_env.release_ms = 500.0f;
   ce.body = BodyType::kWoodTube;
@@ -197,8 +203,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   mb.modal.modes[2] = {6.267f, 0.45f, 0.7f};
   mb.modal.modes[3] = {6.29f, 0.38f, 0.7f};  // second twin
   mb.modal.modes[4] = {17.5f, 0.16f, 0.45f};
-  mb.modal.decay_s = 1.5f;
-  mb.modal.decay_stretch = 0.3f;
+  mb.modal.decay_s = 7.0f;
+  mb.modal.decay_stretch = 0.26f;
   mb.modal.strike_brightness = 0.8f;
   mb.amp_env.release_ms = 700.0f;
   mb.gain = 0.55f;

@@ -44,6 +44,9 @@
   "_dimensions": "The slot is a struck wooden bar. `decay` and its two stages are what a struck voice lives on, since everything after the strike is a fall, and they are read off a gate long enough to contain one. `stretch` is not among the dimensions a modal voice is judged on at all - a bar has no series equal temperament predicts - so it is the class that drops it rather than this file.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a modal voice is every melodic dimension except `stretch`, so anything not gated here has to be argued here.",
   "dimensions_na": {
+    "aftersound": "the note is over in 0.53 s and the knee leaves a tail of 0.11-0.30 s, over which the fitted rate is 104-262 dB/s against a whole-note average of 125 dB/s - on every one of the 35 rows the tail falls faster than the note it is the tail of, which no sum of decaying exponentials does, so what the fit lands on is the approach to the floor rather than a second stage",
+    "damper": "the note is more than 45 dB below its own peak by the time the key comes up, on 35 of 35 rows, so the profiler declines to read a release from any of them: there is nothing left for a damper to stop and what a rate fitted there would describe is the floor rather than how the instrument is silenced",
+    "doubling": "the note is over in 0.53 s and the knee leaves a tail of 0.11-0.30 s, over which the fitted rate is 104-262 dB/s against a whole-note average of 125 dB/s - on every one of the 35 rows the tail falls faster than the note it is the tail of, which no sum of decaying exponentials does, so what the fit lands on is the approach to the floor rather than a second stage",
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
   },
   "dimensions": [
