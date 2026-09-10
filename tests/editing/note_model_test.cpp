@@ -71,7 +71,6 @@ NoteObject make_note(int64_t onset_sample, int64_t offset_sample, float frequenc
   note.amplitude.values.assign(frames, 0.25f);
   note.amplitude.frame_rate_hz = kFrameRateHz;
   note.amplitude.frame_offset = note.frame_start;
-  note.voiced_ratio = 1.0f;
   note.f0_stability = 1.0f;
   return note;
 }
@@ -281,14 +280,22 @@ TEST_CASE("extract_notes measures the note's median pitch and RMS level", "[note
   REQUIRE_THAT(low[0].median_cents, WithinAbs(-1200.0f, 5.0f));
 }
 
-TEST_CASE("extract_notes reports a fully voiced span as voiced_ratio 1", "[note_model]") {
+TEST_CASE("extract_notes cuts a note at an unvoiced gap rather than spanning it", "[note_model]") {
+  // Why a note carries no voiced fraction: an unvoiced frame ends the run, so
+  // every span the segmenter emits is fully voiced and the figure would be 1
+  // for every note it can produce.
   const sonare::Audio audio = tone(440.0f, 0.5f, 6400);
-  const std::vector<NoteObject> notes = extract_notes(audio, voiced_track(440.0f, 40));
+  F0Track gapped = voiced_track(440.0f, 40);
+  for (size_t i = 15; i < 20; ++i) {
+    gapped.voiced[i] = false;
+  }
 
-  REQUIRE(notes.size() == 1);
-  REQUIRE(notes[0].voiced_ratio >= 0.0f);
-  REQUIRE(notes[0].voiced_ratio <= 1.0f);
-  REQUIRE_THAT(notes[0].voiced_ratio, WithinAbs(1.0f, 0.001f));
+  const std::vector<NoteObject> notes = extract_notes(audio, gapped);
+  REQUIRE(notes.size() == 2);
+  REQUIRE(notes[0].frame_start == 0);
+  REQUIRE(notes[0].frame_end == 15);
+  REQUIRE(notes[1].frame_start == 20);
+  REQUIRE(notes[1].frame_end == 40);
 }
 
 TEST_CASE("extract_notes scores a steady pitch as more stable than a vibrato", "[note_model]") {
@@ -336,7 +343,6 @@ TEST_CASE("extract_notes derives voicing from voiced_prob when the track has no 
   REQUIRE(notes.size() == 1);
   REQUIRE(notes[0].onset_sample == 0);
   REQUIRE(notes[0].offset_sample == 6400);
-  REQUIRE_THAT(notes[0].voiced_ratio, WithinAbs(1.0f, 0.001f));
 
   // The same probabilities under a threshold above them leave nothing voiced.
   config.voiced_threshold = 0.95f;

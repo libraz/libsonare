@@ -137,22 +137,16 @@ std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0
       note.amplitude.values[static_cast<size_t>(frame - frame_start)] = rms_over(audio, begin, end);
     }
 
-    int voiced_frames = 0;
     std::vector<float> voiced_cents;
     voiced_cents.reserve(static_cast<size_t>(frame_end - frame_start));
     for (int frame = frame_start; frame < frame_end; ++frame) {
       if (!resolved.voiced[static_cast<size_t>(frame)]) continue;
-      ++voiced_frames;
       if (usable_pitch(resolved, frame)) {
         voiced_cents.push_back(
             hz_to_cents(resolved.f0_hz[static_cast<size_t>(frame)], config.segmenter.reference_hz));
       }
     }
 
-    const int span_frames = frame_end - frame_start;
-    note.voiced_ratio = span_frames > 0
-                            ? static_cast<float>(voiced_frames) / static_cast<float>(span_frames)
-                            : 0.0f;
     if (voiced_cents.empty() || !(threshold_cents > 0.0f)) {
       note.f0_stability = 0.0f;
     } else {

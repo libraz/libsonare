@@ -63,10 +63,12 @@ struct NoteObject {
   /// Per-frame RMS over the same frames as @ref f0_hz, linear.
   NoteCurve amplitude;
 
-  /// Fraction of the span's frames the F0 track marked voiced, in [0, 1].
-  float voiced_ratio = 0.0f;
   /// Pitch steadiness in [0, 1], from the median absolute deviation of the
   /// span's cents against the segmentation threshold. 1 is perfectly steady.
+  ///
+  /// The only quality figure a note carries. A voiced fraction would be one
+  /// too, but the segmenter emits maximal voiced runs, so it is 1 for every
+  /// note it can produce and measures nothing.
   float f0_stability = 0.0f;
 
   NoteEdit edit{};
