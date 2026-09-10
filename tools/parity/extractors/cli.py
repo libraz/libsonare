@@ -145,8 +145,12 @@ def _extract_python_cli(root: Path, ex: Extraction) -> None:
 
 
 # Directory holding the native CLI translation units. Walked rather than named,
-# so a registry that moves to a new file in here keeps being read.
-_NATIVE_CLI_DIR = "tools"
+# so a registry that moves to a new file in here keeps being read. Walked
+# recursively, so a registry that moves into a subdirectory keeps being read too
+# — a flat glob over the old location found zero registrations the moment the
+# CLI grew one, and the guard below is what turned that into a stopped run
+# instead of a report claiming every command was missing.
+_NATIVE_CLI_DIR = "tools/cli"
 
 # A registration in the native CLI's command registry:
 # ``add_command(commands, "chroma", true, {...})``. Keyed on the call and its
@@ -180,7 +184,7 @@ def _extract_cpp_cli(root: Path, ex: Extraction) -> None:
         raise CliScopeError(f"native CLI directory '{_NATIVE_CLI_DIR}' is missing")
 
     commands: dict[str, tuple[str, str, int]] = {}
-    for path in sorted(cpp_dir.glob("*.cpp")):
+    for path in sorted(cpp_dir.rglob("*.cpp")):
         text = path.read_text(encoding="utf-8")
         rel = str(path.relative_to(root))
         for m in _ADD_COMMAND_RE.finditer(text):
