@@ -12,6 +12,22 @@ This directory holds the tooling for asking that question, and for turning the a
 | `tests/fixtures/run_optional_fixture_report.py` | runs the fixture tests and writes one observation per fixture per metric |
 | `tools/eval/summarize_accuracy.py` | rolls those observations into per-dataset aggregates and a markdown table |
 
+## The one measurement that needs no corpus
+
+Multiple-F0 accuracy is measured against material this repo renders, so it is reproducible from a clean checkout. The chords are played through the GM fallback bank and the ground truth is the note list rather than an annotation — nothing is transcribed, so nothing can be transcribed wrong.
+
+```sh
+./build/bin/sonare_tests "[polyphony_eval]" | python3 tools/eval/summarize_polyphony.py --require 11
+```
+
+The figures are the frame-level precision, recall and F-measure at a 50-cent tolerance, plus the polyphony error — the mean absolute difference between the number of F0s reported and the number sounding. Matching is greedy nearest within the tolerance, one estimate per true F0, so two estimates on one note score a hit and a false alarm rather than two hits.
+
+**The corpus is the subject, not the backdrop.** Sustained mid-register chords score a flat 1.000 whatever the program is, and a first version made of nothing else reported a perfect model — it was measuring its own difficulty. The items that separate one model from another are a voice count the polyphony cap cannot satisfy, intervals inside the separation rule, a register the default framing does not reach, and noise. The summarizer warns when every item lands within 0.05 of every other, because that is what the first run looked like.
+
+**Two of the figures are not accuracy claims and should not be read as ones.** A four-voice chord rooted at C2 scores zero, because the default framing does not reach that register at all; the item is carried to document the limit, and a figure above zero there is a change worth reading rather than a pass. And the semitone cluster scores 0.667 with a polyphony error of zero — the third voice is not missing, the model reports three F0s and one of them stands where no note is.
+
+**Noise at a quarter of the peak *raises* the low-register score** (F 0.734 to 0.855, polyphony error 1.68 to 1.02). The estimate is not what improves: at the edge of what the framing resolves, ridges break when their salience dips under a share of their own running peak, and a noise floor holds them above it. So the figure is reading the ridge-break rule's fragility rather than the estimator's accuracy, and a change that moves those two items together is probably a tracking change rather than an estimation one.
+
 ## Corpora that can be measured against
 
 Each is obtained separately, under its own terms. The annotations are what matters; several of these distribute annotations openly while the audio has to be sourced by the user.
