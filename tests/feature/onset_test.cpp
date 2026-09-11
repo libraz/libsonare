@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "core/spectrum.h"
+#include "feature/mel_spectrogram.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -363,4 +365,120 @@ TEST_CASE("spectral_flux transient vs steady", "[onset]") {
 
   // Transient signal should have higher variance in spectral flux
   REQUIRE(transient_var > steady_var);
+}
+
+namespace {
+
+/// @brief spectral_flux() with the frame-major traversal it had before.
+/// @details The inner loop over bins strides `magnitude` twice per frame. The library now
+///          walks bins outside and accumulates per frame, which keeps each frame's bins in
+///          ascending order -- what this oracle pins by exact comparison.
+std::vector<float> oracle_spectral_flux(const std::vector<float>& magnitude, int n_bins,
+                                        int n_frames, int lag) {
+  std::vector<float> flux(static_cast<size_t>(n_frames), 0.0f);
+  if (n_frames > lag) {
+    const int diff_frames = n_frames - lag;
+    for (int f = 0; f < diff_frames; ++f) {
+      float sum = 0.0f;
+      for (int b = 0; b < n_bins; ++b) {
+        const float d = magnitude[static_cast<size_t>(b * n_frames + (f + lag))] -
+                        magnitude[static_cast<size_t>(b * n_frames + f)];
+        sum += std::abs(d);
+      }
+      flux[static_cast<size_t>(f + lag)] = sum;
+    }
+  }
+  return flux;
+}
+
+}  // namespace
+
+TEST_CASE("spectral_flux matches a frame-major oracle", "[onset]") {
+  const Audio audio = create_transient_audio(22050, 1.0f, 6);
+  StftConfig cfg;
+  cfg.n_fft = 512;
+  cfg.hop_length = 128;
+  const Spectrogram spec = Spectrogram::compute(audio, cfg);
+  const int n_bins = spec.n_bins();
+  const int n_frames = spec.n_frames();
+  REQUIRE(n_bins > 0);
+  REQUIRE(n_frames > 2);
+
+  // lag 1 is the default; a larger lag shifts both reads within the row, which is where a
+  // row-pointer hoist can go wrong without changing the shape of the result.
+  for (int lag : {1, 3, 7}) {
+    CAPTURE(lag);
+    const std::vector<float> got = spectral_flux(spec, lag);
+    const std::vector<float> want = oracle_spectral_flux(spec.magnitude(), n_bins, n_frames, lag);
+    REQUIRE(got.size() == want.size());
+    for (size_t i = 0; i < got.size(); ++i) {
+      CAPTURE(i, got[i], want[i]);
+      REQUIRE(std::isfinite(got[i]));
+      REQUIRE(got[i] == want[i]);
+    }
+  }
+}
+
+TEST_CASE("spectral_flux leaves every frame zero when the lag covers the signal", "[onset]") {
+  // n_frames <= lag skips the accumulator entirely; the result must still be the documented
+  // all-zero vector of the right length rather than an uninitialised scratch buffer.
+  const Audio audio = create_steady_audio(440.0f, 22050, 0.05f);
+  StftConfig cfg;
+  cfg.n_fft = 512;
+  cfg.hop_length = 128;
+  const Spectrogram spec = Spectrogram::compute(audio, cfg);
+  const std::vector<float> flux = spectral_flux(spec, spec.n_frames() + 1);
+  REQUIRE(flux.size() == static_cast<size_t>(spec.n_frames()));
+  for (float v : flux) REQUIRE(v == 0.0f);
+}
+
+TEST_CASE("splitting the Audio overload at the Mel spectrogram changes nothing", "[onset][reuse]") {
+  // A caller that already holds an STFT of the same geometry can build the Mel spectrogram from
+  // it and apply the alignment step itself instead of paying for a second STFT. That path has to
+  // produce the identical envelope. The geometry has one owner because the Audio overload takes
+  // its framing from onset_config.center rather than from the Mel config, so a shared
+  // spectrogram has to carry that same centering.
+  const Audio audio = create_transient_audio();
+
+  MelConfig mel_config;
+  mel_config.n_fft = 512;
+  mel_config.hop_length = 128;
+  OnsetConfig onset_config;
+  onset_config.detrend = true;
+
+  for (bool center : {true, false}) {
+    CAPTURE(center);
+    onset_config.center = center;
+
+    StftConfig stft_config;
+    stft_config.n_fft = mel_config.n_fft;
+    stft_config.hop_length = mel_config.hop_length;
+    stft_config.center = onset_config.center;
+    const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+    const MelSpectrogram mel = MelSpectrogram::from_spectrogram(spec, audio.sample_rate(),
+                                                                mel_config.to_mel_filter_config());
+    const std::vector<float> split =
+        center_onset_strength(compute_onset_strength(mel, onset_config), stft_config.n_fft,
+                              stft_config.hop_length, onset_config.center);
+
+    const std::vector<float> whole = compute_onset_strength(audio, mel_config, onset_config);
+    REQUIRE(split.size() == whole.size());
+    REQUIRE_FALSE(whole.empty());
+    for (size_t i = 0; i < whole.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(split[i] == whole[i]);
+    }
+
+    // The centering is not interchangeable: a spectrogram framed the other way produces a
+    // different envelope, which is what makes sharing one config load-bearing rather than tidy.
+    StftConfig mismatched_config = stft_config;
+    mismatched_config.center = !onset_config.center;
+    const Spectrogram mismatched_spec = Spectrogram::compute(audio, mismatched_config);
+    const MelSpectrogram mismatched_mel = MelSpectrogram::from_spectrogram(
+        mismatched_spec, audio.sample_rate(), mel_config.to_mel_filter_config());
+    const std::vector<float> mismatched =
+        center_onset_strength(compute_onset_strength(mismatched_mel, onset_config),
+                              stft_config.n_fft, stft_config.hop_length, onset_config.center);
+    REQUIRE(mismatched != whole);
+  }
 }

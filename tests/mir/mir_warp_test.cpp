@@ -361,3 +361,82 @@ TEST_CASE("TSM uses WSOLA to stretch percussive click spacing", "[mir]") {
   REQUIRE(median_gap > input_period + input_period / 2);
   REQUIRE(median_gap == Catch::Approx(static_cast<double>(expected_period)).margin(input_period));
 }
+
+TEST_CASE("the banded chroma cost is unchanged by hoisting the column norms", "[mir]") {
+  // The banded DP derives each column's norm once instead of once per cell, and
+  // the two forms have to agree to the last bit: inside the DP a single rounding
+  // step is enough to hand a tie to the other predecessor and move the path.
+  // Both forms live here because the banded DP has internal linkage and the only
+  // route into it is a multi-second alignment, so this pins the arithmetic
+  // rather than the call site.
+  const int n_chroma = 12;
+  const int ref_frames = 23;
+  const int tgt_frames = 29;
+
+  auto chroma_like = [](int rows, int frames, uint32_t seed) {
+    std::vector<float> m(static_cast<size_t>(rows) * frames);
+    uint32_t state = seed;
+    for (float& v : m) {
+      state = state * 1664525u + 1013904223u;
+      v = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    }
+    return m;
+  };
+  std::vector<float> ref = chroma_like(n_chroma, ref_frames, 0x7f4a2c19u);
+  std::vector<float> tgt = chroma_like(n_chroma, tgt_frames, 0x13c9a5e7u);
+  // One silent frame per side, so the zero-denominator branch is reached.
+  for (int c = 0; c < n_chroma; ++c) {
+    ref[static_cast<size_t>(c) * ref_frames + 4] = 0.0f;
+    tgt[static_cast<size_t>(c) * tgt_frames + 17] = 0.0f;
+  }
+
+  // The pre-hoist form: all three reductions in one pass over the chroma bins.
+  auto fused = [&](int i, int j) -> float {
+    double dot = 0.0, na = 0.0, nb = 0.0;
+    for (int c = 0; c < n_chroma; ++c) {
+      const double a = ref[static_cast<size_t>(c) * ref_frames + i];
+      const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
+      dot += a * b;
+      na += a * a;
+      nb += b * b;
+    }
+    const double denom = std::sqrt(na) * std::sqrt(nb);
+    if (denom <= 0.0) return 1.0f;
+    return static_cast<float>(1.0 - dot / denom);
+  };
+
+  auto column_norms = [&](const std::vector<float>& m, int frames) {
+    std::vector<double> norms(static_cast<size_t>(frames));
+    for (int i = 0; i < frames; ++i) {
+      double n = 0.0;
+      for (int c = 0; c < n_chroma; ++c) {
+        const double v = m[static_cast<size_t>(c) * frames + i];
+        n += v * v;
+      }
+      norms[static_cast<size_t>(i)] = std::sqrt(n);
+    }
+    return norms;
+  };
+  const std::vector<double> ref_norms = column_norms(ref, ref_frames);
+  const std::vector<double> tgt_norms = column_norms(tgt, tgt_frames);
+
+  auto hoisted = [&](int i, int j) -> float {
+    const double denom = ref_norms[static_cast<size_t>(i)] * tgt_norms[static_cast<size_t>(j)];
+    if (denom <= 0.0) return 1.0f;
+    double dot = 0.0;
+    for (int c = 0; c < n_chroma; ++c) {
+      const double a = ref[static_cast<size_t>(c) * ref_frames + i];
+      const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
+      dot += a * b;
+    }
+    return static_cast<float>(1.0 - dot / denom);
+  };
+
+  for (int i = 0; i < ref_frames; ++i) {
+    for (int j = 0; j < tgt_frames; ++j) {
+      CAPTURE(i);
+      CAPTURE(j);
+      REQUIRE(hoisted(i, j) == fused(i, j));
+    }
+  }
+}

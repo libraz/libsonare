@@ -8,7 +8,10 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "util/constants.h"
@@ -806,4 +809,313 @@ TEST_CASE("hpss accepts an even n_fft that is not a power of two", "[hpss]") {
     REQUIRE(std::isfinite(result.harmonic.data()[i]));
     REQUIRE(std::isfinite(result.percussive.data()[i]));
   }
+}
+
+namespace {
+
+/// @brief Median of a window, sanitizing non-finite entries the way the filters do.
+float oracle_window_median(std::vector<float> values) {
+  if (values.empty()) return 0.0f;
+  for (float& v : values) {
+    if (!std::isfinite(v)) v = 0.0f;
+  }
+  std::sort(values.begin(), values.end());
+  const size_t n = values.size();
+  if (n % 2 == 0) return (values[n / 2 - 1] + values[n / 2]) / 2.0f;
+  return values[n / 2];
+}
+
+/// @brief Vertical median filter, recomputed from the definition for each bin.
+/// @details Independent of the production shape in both directions: it walks the
+///          strided column the staged form no longer does, and it collects each
+///          window from scratch rather than sliding one. Both the sliding window
+///          and the partial-window path reduce to the median of the bins in
+///          [k - half, k + half] clipped to the grid, so the two must agree
+///          exactly and a staging or indexing slip cannot hide behind a
+///          tolerance.
+std::vector<float> oracle_median_filter_vertical(const float* magnitude, int n_bins, int n_frames,
+                                                 int kernel_size) {
+  const int half = kernel_size / 2;
+  std::vector<float> out(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
+  for (int t = 0; t < n_frames; ++t) {
+    for (int k = 0; k < n_bins; ++k) {
+      const int start = std::max(0, k - half);
+      const int end = std::min(k + half + 1, n_bins);
+      std::vector<float> window;
+      for (int kk = start; kk < end; ++kk) {
+        window.push_back(magnitude[kk * n_frames + t]);
+      }
+      out[static_cast<size_t>(k) * n_frames + t] = oracle_window_median(std::move(window));
+    }
+  }
+  return out;
+}
+
+std::vector<float> median_filter_fixture(int n_bins, int n_frames, uint32_t seed) {
+  std::vector<float> m(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
+  uint32_t state = seed;
+  for (float& v : m) {
+    state = state * 1664525u + 1013904223u;
+    // Quarter steps keep every median -- including the even-count average of two
+    // neighbours -- exactly representable.
+    v = static_cast<float>((state >> 16) % 41u) * 0.25f;
+  }
+  return m;
+}
+
+}  // namespace
+
+TEST_CASE("median_filter_vertical matches a per-bin definition oracle", "[hpss]") {
+  // The three geometries the function branches on: a full sliding window, a grid
+  // too short for one (so only the partial-window paths run), and a grid shorter
+  // than the half-kernel (so the trailing path is empty and the leading one
+  // covers every bin). Getting the staged column's coverage wrong shows up in
+  // exactly these corners.
+  struct Case {
+    int n_bins;
+    int n_frames;
+    int kernel_size;
+  };
+  const Case cases[] = {
+      {11, 7, 7},   // n_bins > 2 * half
+      {5, 6, 7},    // half < n_bins <= 2 * half
+      {2, 5, 7},    // n_bins <= half
+      {9, 4, 1},    // degenerate kernel: every bin is its own median
+      {33, 3, 31},  // kernel at the width the HPSS default uses
+  };
+
+  for (const Case& c : cases) {
+    CAPTURE(c.n_bins, c.n_frames, c.kernel_size);
+    const std::vector<float> input = median_filter_fixture(c.n_bins, c.n_frames, 0x3d19b7c5u);
+    const std::vector<float> got =
+        median_filter_vertical(input.data(), c.n_bins, c.n_frames, c.kernel_size);
+    const std::vector<float> want =
+        oracle_median_filter_vertical(input.data(), c.n_bins, c.n_frames, c.kernel_size);
+    REQUIRE(got.size() == want.size());
+    for (size_t i = 0; i < want.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(got[i] == want[i]);
+    }
+  }
+}
+
+TEST_CASE("median_filter_vertical matches the oracle with non-finite input", "[hpss][nan]") {
+  // The staging buffer carries NaN and Inf through untouched, so the sanitizing
+  // still has to happen where it did -- inside the window, not on the way in.
+  const int n_bins = 11;
+  const int n_frames = 6;
+  std::vector<float> input = median_filter_fixture(n_bins, n_frames, 0x60c4a91fu);
+  input[2 * n_frames + 3] = std::numeric_limits<float>::quiet_NaN();
+  input[5 * n_frames + 1] = std::numeric_limits<float>::infinity();
+  input[9 * n_frames + 4] = -std::numeric_limits<float>::infinity();
+
+  const std::vector<float> got = median_filter_vertical(input.data(), n_bins, n_frames, 5);
+  const std::vector<float> want = oracle_median_filter_vertical(input.data(), n_bins, n_frames, 5);
+  REQUIRE(got.size() == want.size());
+  for (size_t i = 0; i < want.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(got[i] == want[i]);
+  }
+}
+
+TEST_CASE("percussive() matches hpss() sample for sample", "[hpss]") {
+  // render_percussive_events stopped routing through the audio-level hpss, which
+  // ran two inverse transforms and discarded the harmonic one. Bit-identical, not
+  // close: both paths take the same mask from fill_hpss_masks and apply it to the
+  // same complex spectrum, so any difference is a defect rather than a tolerance
+  // question. Both mask modes are covered because they reach that mask by
+  // different expressions -- the hard mask forms the harmonic one and inverts it.
+  Audio audio = create_percussive_audio();
+
+  for (const bool soft : {true, false}) {
+    CAPTURE(soft);
+    HpssConfig config;
+    config.use_soft_mask = soft;
+
+    const Audio shortcut = percussive(audio, config);
+    const Audio full = hpss(audio, config).percussive;
+
+    REQUIRE(shortcut.size() == full.size());
+    REQUIRE(shortcut.sample_rate() == full.sample_rate());
+    REQUIRE(shortcut.channels() == full.channels());
+    // Positive control: an all-zero component would satisfy the comparison below
+    // without either path having computed anything.
+    double energy = 0.0;
+    for (size_t i = 0; i < shortcut.size(); ++i) {
+      energy += static_cast<double>(shortcut[i]) * static_cast<double>(shortcut[i]);
+    }
+    REQUIRE(energy > 0.0);
+
+    for (size_t i = 0; i < shortcut.size(); ++i) {
+      REQUIRE(shortcut[i] == full[i]);
+    }
+  }
+}
+
+namespace {
+
+/// @brief True when a refusal names the kernel ceiling rather than some other
+///        InvalidParameter precondition.
+/// @details Both median filters guard the kernel twice with the same error code:
+///          once for odd-and-positive, which carries the generic message for that
+///          code, and once for the ceiling, which carries a message built from
+///          @ref kMaxHpssKernelSize. Checking for the ceiling's value is what
+///          separates the two, so a test cannot pass by tripping the wrong one.
+bool names_kernel_ceiling(const SonareException& error) {
+  return std::string(error.what()).find(std::to_string(kMaxHpssKernelSize)) != std::string::npos;
+}
+
+}  // namespace
+
+TEST_CASE("the median filters refuse a kernel above the ceiling", "[hpss]") {
+  // The guard exists because an oversized kernel reached the per-worker
+  // allocations: on a bounded heap that surfaced as an allocation failure, and on
+  // an overcommitting host it succeeded and ran for twenty seconds. A bare "it
+  // throws" would accept the first of those, and wall time is not an assertion,
+  // so the property is the error code plus the ceiling in the message.
+  const int n_bins = 4;
+  const int n_frames = 4;
+  const std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames, 1.0f);
+
+  // INT_MAX - 1 is even and dies on the odd-and-positive precondition, and a
+  // value past 2^32 wraps on its way through the int parameter into something
+  // that precondition also rejects, so neither of those reaches this guard. Both
+  // values below are odd and above the ceiling; INT_MAX is the specific hole.
+  const int oversized[] = {kMaxHpssKernelSize + 1, std::numeric_limits<int>::max()};
+
+  for (int kernel_size : oversized) {
+    CAPTURE(kernel_size);
+    // Each filter carries its own copy of the guard, so one direction says
+    // nothing about the other.
+    for (const bool vertical : {false, true}) {
+      CAPTURE(vertical);
+      try {
+        const std::vector<float> out =
+            vertical ? median_filter_vertical(magnitude.data(), n_bins, n_frames, kernel_size)
+                     : median_filter_horizontal(magnitude.data(), n_bins, n_frames, kernel_size);
+        static_cast<void>(out);
+        FAIL("Expected the median filter to refuse a kernel above kMaxHpssKernelSize");
+      } catch (const SonareException& error) {
+        REQUIRE(error.code() == ErrorCode::InvalidParameter);
+        REQUIRE(names_kernel_ceiling(error));
+      }
+    }
+  }
+}
+
+TEST_CASE("the median filters accept the largest legal kernel", "[hpss]") {
+  // Without this a guard that refused every kernel would satisfy the case above.
+  // kMaxHpssKernelSize is 1 << 19 and therefore even, so it is not itself a legal
+  // kernel size -- the largest a caller can pass is the odd value one below it,
+  // and that is what the ceiling has to let through. The outputs are asserted
+  // rather than just the absence of a throw, so the filter has to have run.
+  const int n_bins = 2;
+  const int n_frames = 2;
+  const std::vector<float> magnitude{1.0f, 2.0f, 3.0f, 4.0f};
+  const int largest_legal = kMaxHpssKernelSize - 1;
+  REQUIRE(largest_legal % 2 == 1);
+
+  // A window this wide spans the whole grid, so every cell is the median of its
+  // entire row or column -- the average of the two, exactly representable here.
+  const std::vector<float> horizontal =
+      median_filter_horizontal(magnitude.data(), n_bins, n_frames, largest_legal);
+  const std::vector<float> horizontal_expected{1.5f, 1.5f, 3.5f, 3.5f};
+  REQUIRE(horizontal.size() == horizontal_expected.size());
+  for (size_t i = 0; i < horizontal_expected.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(horizontal[i] == horizontal_expected[i]);
+  }
+
+  const std::vector<float> vertical =
+      median_filter_vertical(magnitude.data(), n_bins, n_frames, largest_legal);
+  const std::vector<float> vertical_expected{2.0f, 3.0f, 2.0f, 3.0f};
+  REQUIRE(vertical.size() == vertical_expected.size());
+  for (size_t i = 0; i < vertical_expected.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(vertical[i] == vertical_expected[i]);
+  }
+
+  // An ordinary kernel still works, so neither case above passes because the
+  // filters reject everything.
+  REQUIRE_NOTHROW(median_filter_horizontal(magnitude.data(), n_bins, n_frames, 3));
+  REQUIRE_NOTHROW(median_filter_vertical(magnitude.data(), n_bins, n_frames, 3));
+}
+
+TEST_CASE("the kernel ceiling is checked before anything is allocated", "[hpss]") {
+  // The point of the guard is to refuse before the allocations, so the ordering
+  // is the property, not just the refusal. This grid's element count cannot be
+  // allocated at all: if the ceiling check moved below the output buffer, the
+  // refusal would come from the size check instead -- same error code, but with
+  // no ceiling in its message. Neither filter reads a sample before refusing, so
+  // a one-element buffer is safe to pass.
+  const std::vector<float> tiny{0.0f};
+  const int huge = 100000;
+
+  for (const bool vertical : {false, true}) {
+    CAPTURE(vertical);
+    try {
+      const std::vector<float> out =
+          vertical ? median_filter_vertical(tiny.data(), huge, huge, kMaxHpssKernelSize + 1)
+                   : median_filter_horizontal(tiny.data(), huge, huge, kMaxHpssKernelSize + 1);
+      static_cast<void>(out);
+      FAIL("Expected the median filter to refuse the kernel before sizing the output");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+      REQUIRE(names_kernel_ceiling(error));
+    }
+
+    // Positive control: the same grid with a legal kernel is refused by the size
+    // check, and that refusal does not name the ceiling. Without this the
+    // assertion above could not tell the two guards apart.
+    try {
+      const std::vector<float> out = vertical
+                                         ? median_filter_vertical(tiny.data(), huge, huge, 3)
+                                         : median_filter_horizontal(tiny.data(), huge, huge, 3);
+      static_cast<void>(out);
+      FAIL("Expected the median filter to refuse an unallocatable grid");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+      REQUIRE_FALSE(names_kernel_ceiling(error));
+    }
+  }
+}
+
+TEST_CASE("hpss refuses an oversized kernel through its public entry point", "[hpss]") {
+  // Nothing clamps these on the way in: the C ABI, the Node addon and the WASM
+  // binding all assign the caller's value straight into HpssConfig, so the
+  // ceiling is reachable from every surface rather than only by calling the
+  // filters directly. The message is checked for the filter's name because it is
+  // the only observable that says which field reached which guard -- swapping
+  // that wiring would leave both filters running and nothing else would notice.
+  Audio audio = create_harmonic_audio(440.0f, 22050, 0.05f);
+  StftConfig stft_config;
+  stft_config.n_fft = 256;
+  stft_config.hop_length = 64;
+
+  for (const bool percussive_side : {false, true}) {
+    CAPTURE(percussive_side);
+    HpssConfig config;
+    if (percussive_side) {
+      config.kernel_size_percussive = kMaxHpssKernelSize + 1;
+    } else {
+      config.kernel_size_harmonic = kMaxHpssKernelSize + 1;
+    }
+
+    try {
+      static_cast<void>(hpss(audio, config, stft_config));
+      FAIL("Expected hpss to refuse a kernel above kMaxHpssKernelSize");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+      REQUIRE(names_kernel_ceiling(error));
+      const std::string message(error.what());
+      const std::string expected_filter =
+          percussive_side ? "median_filter_vertical" : "median_filter_horizontal";
+      CAPTURE(message);
+      REQUIRE(message.find(expected_filter) != std::string::npos);
+    }
+  }
+
+  // The default configuration still separates, so the case above is not passing
+  // because this entry point rejects every configuration.
+  REQUIRE_NOTHROW(hpss(audio, HpssConfig(), stft_config));
 }

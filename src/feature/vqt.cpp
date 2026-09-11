@@ -447,13 +447,20 @@ Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const Vqt
       detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
 
   std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
-  for (int b = 0; b < n_freq; ++b) {
-    for (int t = 0; t < n_frames; ++t) {
-      float acc = 0.0f;
-      for (int k = 0; k < n_bins; ++k) {
-        acc += projection[k * n_freq + b] * magnitude[k * n_frames + t];
+  // Same traversal as griffinlim_cqt's inverse projection, which this duplicates with the
+  // VQT bandwidth vector: the VQT bin outermost gives a contiguous run of `projection` and
+  // one magnitude row reused across every STFT bin. Each output cell still sums k in
+  // ascending order from the zero it was constructed with, so the seed Griffin-Lim iterates
+  // on is unchanged bit for bit.
+  for (int k = 0; k < n_bins; ++k) {
+    const float* prow = projection.data() + static_cast<size_t>(k) * n_freq;
+    const float* mrow = magnitude + static_cast<size_t>(k) * n_frames;
+    for (int b = 0; b < n_freq; ++b) {
+      const float p = prow[b];
+      float* orow = stft_mag.data() + static_cast<size_t>(b) * n_frames;
+      for (int t = 0; t < n_frames; ++t) {
+        orow[t] += p * mrow[t];
       }
-      stft_mag[b * n_frames + t] = acc;
     }
   }
 

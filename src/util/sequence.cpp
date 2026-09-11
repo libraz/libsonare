@@ -37,12 +37,25 @@ float column_norm(const float* X, int rows, int cols, int i) {
   return std::sqrt(s);
 }
 
+/// @brief Every column norm of a [rows x cols] row-major matrix, in one pass.
+/// @details A cosine cost needs both operands' norms, but each depends on one
+///          index only, so deriving them inside the O(X_cols * Y_cols) pair loop
+///          re-runs the same X_cols + Y_cols reductions once per pair. Hoisting
+///          is exact rather than an approximation: the values come from the same
+///          column_norm() over the same data, so every pairwise result is
+///          bit-identical. feature/segment.cpp hoists the same way.
+std::vector<float> column_norms(const float* X, int rows, int cols) {
+  std::vector<float> norms(static_cast<size_t>(cols));
+  for (int j = 0; j < cols; ++j) {
+    norms[static_cast<size_t>(j)] = column_norm(X, rows, cols, j);
+  }
+  return norms;
+}
+
 float pairwise_cost(const float* X, int rows, int X_cols, int i, const float* Y, int Y_cols, int j,
-                    DtwMetric metric) {
+                    DtwMetric metric, float nx, float ny) {
   switch (metric) {
     case DtwMetric::Cosine: {
-      float nx = column_norm(X, rows, X_cols, i);
-      float ny = column_norm(Y, rows, Y_cols, j);
       if (nx == 0.0f || ny == 0.0f) return 1.0f;
       return 1.0f - column_dot(X, rows, X_cols, i, Y, Y_cols, j) / (nx * ny);
     }
@@ -82,10 +95,11 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   if (X_rows != Y_rows)
     throw SonareException(ErrorCode::InvalidParameter, "dtw: feature dims must match");
   if (X_cols <= 0 || Y_cols <= 0) return {};
-  // The cost/accumulation matrices are indexed with the int expression
-  // `i * Y_cols + j`; reject a cell count that would overflow int (UB) before
-  // any allocation. The largest index is X_cols * Y_cols - 1, so guard that
-  // product. (~46k x 46k cells is already far beyond any musical alignment.)
+  // The accumulation and backpointer matrices are indexed with the int
+  // expression `i * Y_cols + j`; reject a cell count that would overflow int
+  // (UB) before any allocation. The largest index is X_cols * Y_cols - 1, so
+  // guard that product. (~46k x 46k cells is already far beyond any musical
+  // alignment.)
   if (static_cast<int64_t>(X_cols) * static_cast<int64_t>(Y_cols) >
       static_cast<int64_t>(std::numeric_limits<int>::max())) {
     throw SonareException(ErrorCode::InvalidParameter, "dtw: cost matrix too large");
@@ -114,22 +128,27 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
                                  std::numeric_limits<float>::infinity());
   auto& D = result.accumulated_cost;
 
-  // Local-cost cache: re-using the metric for each (i, j) lookup is the hot
-  // path of the recursion, so we materialise it once.
+  // Each local cost is consumed by the single cell that owns it, so it is
+  // derived in place instead of materialised into an [X_cols x Y_cols] cache.
+  // Only the cosine norms are worth hoisting, and they are one value per column.
   const DtwMetric resolved_metric = parse_dtw_metric(metric);
-  std::vector<float> C(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
-  for (int i = 0; i < X_cols; ++i) {
-    for (int j = 0; j < Y_cols; ++j) {
-      C[i * Y_cols + j] = pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, j, resolved_metric);
-    }
+  std::vector<float> X_norms(static_cast<size_t>(X_cols), 0.0f);
+  std::vector<float> Y_norms(static_cast<size_t>(Y_cols), 0.0f);
+  if (resolved_metric == DtwMetric::Cosine) {
+    X_norms = column_norms(X, X_rows, X_cols);
+    Y_norms = column_norms(Y, Y_rows, Y_cols);
   }
+  auto local_cost = [&](int i, int j) {
+    return pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, j, resolved_metric,
+                         X_norms[static_cast<size_t>(i)], Y_norms[static_cast<size_t>(j)]);
+  };
 
   // Initialise. `subseq` lets the path start at any column of Y by zeroing the
   // first-row prior; otherwise the path must start at (0, 0).
   for (int j = 0; j < Y_cols; ++j) {
     D[0 * Y_cols + j] = subseq
-                            ? C[0 * Y_cols + j]
-                            : (j == 0 ? C[0 * Y_cols + 0] : std::numeric_limits<float>::infinity());
+                            ? local_cost(0, j)
+                            : (j == 0 ? local_cost(0, 0) : std::numeric_limits<float>::infinity());
   }
   for (int i = 1; i < X_cols; ++i) {
     D[i * Y_cols + 0] = std::numeric_limits<float>::infinity();
@@ -141,6 +160,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
     for (int j = 0; j < Y_cols; ++j) {
       if (i == 0 && j == 0) continue;
       if (i == 0 && subseq) continue;
+      const float local = local_cost(i, j);
       float best = std::numeric_limits<float>::infinity();
       int best_step = -1;
       for (size_t s = 0; s < steps.size(); ++s) {
@@ -149,7 +169,7 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
         if (pi < 0 || pj < 0) continue;
         const float prev = D[pi * Y_cols + pj];
         if (!std::isfinite(prev)) continue;
-        const float candidate = prev + weights[s] * C[i * Y_cols + j];
+        const float candidate = prev + weights[s] * local;
         if (candidate < best) {
           best = candidate;
           best_step = static_cast<int>(s);
@@ -238,54 +258,72 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
     throw SonareException(ErrorCode::InvalidParameter, "viterbi: null input");
   }
   if (n_states <= 0 || n_steps <= 0) return {};
-  // The trellis is indexed with the int expressions `s * n_steps + t` and the
-  // transition matrix with `p * n_states + s`; reject sizes whose element counts
-  // would overflow int (UB) before iterating, matching dtw/rqa above.
+  // The emissions are indexed with the int expression `s * n_steps + t`, the
+  // backpointers with `t * n_states + s`, and the transition matrix with
+  // `p * n_states + s`; reject sizes whose element counts would overflow int
+  // (UB) before iterating, matching dtw/rqa above.
   const int64_t int_max = static_cast<int64_t>(std::numeric_limits<int>::max());
   if (static_cast<int64_t>(n_states) * static_cast<int64_t>(n_steps) > int_max ||
       static_cast<int64_t>(n_states) * static_cast<int64_t>(n_states) > int_max) {
     throw SonareException(ErrorCode::InvalidParameter, "viterbi: trellis too large");
   }
   const float minus_inf = -std::numeric_limits<float>::infinity();
-  std::vector<float> trellis(static_cast<size_t>(n_states) * n_steps, minus_inf);
+  // The update reads step t-1's scores and nothing older, and the backtrack pass reads
+  // backpointers rather than scores, so only two score rows are ever live. Backpointers stay
+  // flat, step-major [n_steps x n_states], so the forward sweep over states writes contiguously
+  // and the backtrack pass reads one element per step.
+  std::vector<float> prev_scores(static_cast<size_t>(n_states), minus_inf);
+  std::vector<float> curr_scores(static_cast<size_t>(n_states), minus_inf);
   std::vector<int> backtrack(static_cast<size_t>(n_states) * n_steps, 0);
 
   // Initial step.
   for (int s = 0; s < n_states; ++s) {
     float init =
         p_init ? std::log(std::max(p_init[s], 1e-30f)) : -std::log(static_cast<float>(n_states));
-    trellis[s * n_steps + 0] = init + log_prob[s * n_steps + 0];
+    prev_scores[static_cast<size_t>(s)] = init + log_prob[s * n_steps + 0];
   }
-  // Recursion.
+  // Recursion. Predecessor-major with per-state accumulators: `transition` is row-major
+  // [n_states x n_states], so a predecessor's outgoing row is contiguous. Each state still sees
+  // its candidates in predecessor order 0..n_states-1, so the strict `>` keeps the same
+  // first-wins predecessor on a tie and every score is unchanged bit for bit.
+  std::vector<float> best(static_cast<size_t>(n_states), minus_inf);
+  std::vector<int> best_prev(static_cast<size_t>(n_states), 0);
   for (int t = 1; t < n_steps; ++t) {
-    for (int s = 0; s < n_states; ++s) {
-      float best = minus_inf;
-      int best_prev = 0;
-      for (int p = 0; p < n_states; ++p) {
-        float prob = std::max(transition[p * n_states + s], 1e-30f);
-        float score = trellis[p * n_steps + (t - 1)] + std::log(prob);
-        if (score > best) {
-          best = score;
-          best_prev = p;
+    std::fill(best.begin(), best.end(), minus_inf);
+    std::fill(best_prev.begin(), best_prev.end(), 0);
+    for (int p = 0; p < n_states; ++p) {
+      const float previous = prev_scores[static_cast<size_t>(p)];
+      const float* row = transition + static_cast<size_t>(p) * n_states;
+      for (int s = 0; s < n_states; ++s) {
+        float prob = std::max(row[s], 1e-30f);
+        float score = previous + std::log(prob);
+        if (score > best[static_cast<size_t>(s)]) {
+          best[static_cast<size_t>(s)] = score;
+          best_prev[static_cast<size_t>(s)] = p;
         }
       }
-      trellis[s * n_steps + t] = best + log_prob[s * n_steps + t];
-      backtrack[s * n_steps + t] = best_prev;
     }
+    for (int s = 0; s < n_states; ++s) {
+      curr_scores[static_cast<size_t>(s)] =
+          best[static_cast<size_t>(s)] + log_prob[s * n_steps + t];
+      backtrack[t * n_states + s] = best_prev[static_cast<size_t>(s)];
+    }
+    prev_scores.swap(curr_scores);
   }
-  // Backtrack.
+  // Backtrack. After the last swap prev_scores holds step n_steps-1; for n_steps == 1 it holds
+  // step 0.
   std::vector<int> path(n_steps, 0);
   int best_last = 0;
-  float best_score = trellis[0 * n_steps + (n_steps - 1)];
+  float best_score = prev_scores[0];
   for (int s = 1; s < n_states; ++s) {
-    if (trellis[s * n_steps + (n_steps - 1)] > best_score) {
-      best_score = trellis[s * n_steps + (n_steps - 1)];
+    if (prev_scores[static_cast<size_t>(s)] > best_score) {
+      best_score = prev_scores[static_cast<size_t>(s)];
       best_last = s;
     }
   }
   path[n_steps - 1] = best_last;
   for (int t = n_steps - 1; t > 0; --t) {
-    path[t - 1] = backtrack[path[t] * n_steps + t];
+    path[t - 1] = backtrack[t * n_states + path[t]];
   }
   return path;
 }

@@ -3,13 +3,16 @@
 
 #include "feature/pitch.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <random>
 #include <utility>
 #include <vector>
 
+#include "core/spectrum.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -68,6 +71,108 @@ std::vector<float> naive_yin_difference(const std::vector<float>& frame, int max
         static_cast<float>(std::max(0.0, 2.0 * (acf_zero - acf) - prefix_square));
   }
   return diff;
+}
+
+/// @brief piptrack's parabolic interpolation, copied from the implementation.
+float oracle_parabolic_interp(float ym1, float y0, float yp1) {
+  float denom = ym1 - 2.0f * y0 + yp1;
+  if (std::abs(denom) < sonare::constants::kEpsilon) {
+    return 0.0f;
+  }
+  return 0.5f * (ym1 - yp1) / denom;
+}
+
+/// @brief piptrack's peak scan as a frame-major column walk.
+/// @details The traversal the implementation used before it was rewritten bin-major: one
+///          column pass for the per-frame maximum and a second for the local-peak scan,
+///          both striding by n_frames. Kept as an independent reference so a change of
+///          traversal has to reproduce the old result exactly.
+PiptrackResult oracle_piptrack(const Audio& audio, int n_fft, int hop_length, float fmin,
+                               float fmax, float threshold) {
+  StftConfig cfg;
+  cfg.n_fft = n_fft;
+  cfg.hop_length = hop_length;
+  cfg.win_length = n_fft;
+  cfg.center = true;
+  const Spectrogram spec = Spectrogram::compute(audio, cfg);
+
+  const std::vector<float>& mag = spec.magnitude();
+  const int n_bins = spec.n_bins();
+  const int n_frames = spec.n_frames();
+  const int sr = audio.sample_rate();
+
+  std::vector<float> bin_freq(static_cast<size_t>(n_bins));
+  for (int k = 0; k < n_bins; ++k) {
+    bin_freq[static_cast<size_t>(k)] =
+        static_cast<float>(k) * static_cast<float>(sr) / static_cast<float>(n_fft);
+  }
+
+  PiptrackResult out;
+  out.n_bins = n_bins;
+  out.n_frames = n_frames;
+  out.pitches.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+  out.magnitudes.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+
+  for (int t = 0; t < n_frames; ++t) {
+    float maxm = 0.0f;
+    for (int k = 0; k < n_bins; ++k) maxm = std::max(maxm, mag[k * n_frames + t]);
+    const float gate = threshold * maxm;
+
+    for (int k = 1; k < n_bins; ++k) {
+      if (bin_freq[k] < fmin || bin_freq[k] > fmax) continue;
+      const bool at_top_edge = (k == n_bins - 1);
+      float a = mag[(k - 1) * n_frames + t];
+      float b = mag[k * n_frames + t];
+      float c = at_top_edge ? b : mag[(k + 1) * n_frames + t];
+      if (b <= a || b < c || b < gate) continue;
+      float shift = at_top_edge ? 0.0f : oracle_parabolic_interp(a, b, c);
+      float freq =
+          (static_cast<float>(k) + shift) * static_cast<float>(sr) / static_cast<float>(n_fft);
+      out.pitches[k * n_frames + t] = freq;
+      float peak_mag = b;
+      if (!at_top_edge) {
+        float denom = a - 2.0f * b + c;
+        if (std::abs(denom) > sonare::constants::kEpsilon) {
+          peak_mag = b - 0.25f * (a - c) * shift;
+        }
+      }
+      out.magnitudes[k * n_frames + t] = peak_mag;
+    }
+  }
+  return out;
+}
+
+/// @brief A signal whose spectrum reaches every branch of the piptrack peak scan.
+/// @details Four regions: a harmonic stack (many in-band local maxima), exact silence longer
+///          than one frame (every bin of those frames is equal, so the scan's comparisons are
+///          decided by equality), a two-tone region, and a Nyquist alternation (a peak in the
+///          topmost bin, where the fabricated right neighbour equals the centre exactly).
+Audio piptrack_traversal_fixture(int sr, size_t n_samples) {
+  std::vector<float> samples(n_samples, 0.0f);
+  const size_t silence_begin = n_samples / 4;
+  const size_t silence_end = silence_begin + n_samples / 8;
+  const size_t nyquist_begin = n_samples * 5 / 8;
+  uint32_t state = 2463534242u;
+  for (size_t i = 0; i < n_samples; ++i) {
+    if (i >= silence_begin && i < silence_end) continue;
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    if (i < silence_begin) {
+      samples[i] = 0.6f * std::sin(sonare::constants::kTwoPi * 250.0f * t) +
+                   0.3f * std::sin(sonare::constants::kTwoPi * 750.0f * t) +
+                   0.15f * std::sin(sonare::constants::kTwoPi * 1750.0f * t);
+    } else if (i < nyquist_begin) {
+      samples[i] = 0.4f * std::sin(sonare::constants::kTwoPi * 440.0f * t) +
+                   0.4f * std::sin(sonare::constants::kTwoPi * 1180.0f * t);
+    } else {
+      samples[i] = (i % 2 == 0) ? 0.5f : -0.5f;
+    }
+    // A deterministic noise floor so the spectrum carries local maxima between the partials
+    // rather than a handful of clean peaks.
+    state = state * 1664525u + 1013904223u;
+    const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    samples[i] += 0.01f * (unit - 0.5f);
+  }
+  return Audio::from_vector(std::move(samples), sr);
 }
 
 }  // namespace
@@ -556,6 +661,48 @@ TEST_CASE("yin_track with fill_na", "[pitch]") {
   }
 }
 
+TEST_CASE("yin_track matches a per-frame oracle with fresh scratch", "[pitch][yin]") {
+  // yin_track carries one difference and one cmndf buffer across frames, while
+  // yin_with_confidence allocates both per call. With center off, frame i is exactly
+  // data + i * hop_length, so the two have to agree bit for bit: a buffer that leaked any
+  // part of the previous frame would move the answer on the frames either side of a
+  // transition, which is where this signal puts them.
+  const int sr = 22050;
+  const size_t n_samples = 11025;
+  std::vector<float> samples(n_samples, 0.0f);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    if (i < n_samples / 3) {
+      samples[i] = 0.5f * std::sin(sonare::constants::kTwoPi * 220.0f * t);
+    } else if (i >= 2 * n_samples / 3) {
+      samples[i] = 0.5f * std::sin(sonare::constants::kTwoPi * 660.0f * t);
+    }
+    // The middle third stays silent, so consecutive frames have nothing in common.
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  PitchConfig config;
+  config.center = false;
+  config.frame_length = 1024;
+  config.hop_length = 256;
+  config.fmin = 80.0f;
+  config.fmax = 1000.0f;
+  config.threshold = 0.2f;
+
+  const PitchResult result = yin_track(audio, config);
+  REQUIRE(result.n_frames() > 8);
+
+  const float* data = audio.data();
+  for (int i = 0; i < result.n_frames(); ++i) {
+    float confidence = 0.0f;
+    const float freq = yin_with_confidence(data + i * config.hop_length, config.frame_length, sr,
+                                           config.fmin, config.fmax, config.threshold, &confidence);
+    CAPTURE(i);
+    REQUIRE(result.f0[i] == freq);
+    REQUIRE(result.voiced_prob[i] == confidence);
+  }
+}
+
 TEST_CASE("piptrack can report a peak in the topmost FFT bin", "[pitch][piptrack][edge]") {
   // librosa.util.localmax pads the spectrum with its edge value, so the topmost
   // bin is a local maximum whenever it exceeds its predecessor. Restricting the
@@ -612,6 +759,86 @@ TEST_CASE("piptrack never reports a peak in bin 0", "[pitch][piptrack][edge]") {
   for (int t = 0; t < result.n_frames; ++t) {
     CAPTURE(t);
     REQUIRE(result.pitches[0 * result.n_frames + t] == 0.0f);
+  }
+}
+
+TEST_CASE("piptrack matches a frame-major oracle bin for bin", "[pitch][piptrack]") {
+  // The magnitude grid is [n_bins x n_frames], so the peak scan can walk it by column (a
+  // frame at a time) or by row (a bin at a time). Both orders must produce the same grid
+  // exactly, including where a comparison is settled by equality rather than by a margin.
+  const int sr = 8000;
+  const int n_fft = 64;
+  const int hop_length = 16;
+  const Audio audio = piptrack_traversal_fixture(sr, 4000);
+  const float nyquist = 0.5f * static_cast<float>(sr);
+
+  // What the sweep below relies on: the fixture really does produce frames whose bins are
+  // exactly equal, so the equality branches are reached rather than assumed.
+  {
+    StftConfig cfg;
+    cfg.n_fft = n_fft;
+    cfg.hop_length = hop_length;
+    cfg.win_length = n_fft;
+    cfg.center = true;
+    const Spectrogram spec = Spectrogram::compute(audio, cfg);
+    const std::vector<float>& mag = spec.magnitude();
+    int silent_frames = 0;
+    int tied_adjacent_bins = 0;
+    for (int t = 0; t < spec.n_frames(); ++t) {
+      bool silent = true;
+      for (int k = 0; k < spec.n_bins(); ++k) {
+        const float value = mag[k * spec.n_frames() + t];
+        if (value != 0.0f) silent = false;
+        if (k > 0 && value == mag[(k - 1) * spec.n_frames() + t]) ++tied_adjacent_bins;
+      }
+      if (silent) ++silent_frames;
+    }
+    CAPTURE(silent_frames, tied_adjacent_bins);
+    REQUIRE(silent_frames > 0);
+    REQUIRE(tied_adjacent_bins > 0);
+  }
+
+  struct Params {
+    float fmin;
+    float fmax;
+    float threshold;
+  };
+  // threshold == 1 puts the gate exactly on the frame maximum, so the winning bin clears it
+  // by equality; threshold == 0 admits every local maximum in the band.
+  const std::vector<Params> sweep = {
+      {1.0f, nyquist, 0.1f}, {1.0f, nyquist, 1.0f}, {1.0f, nyquist, 0.0f}, {250.0f, 2000.0f, 0.5f}};
+
+  for (const Params& params : sweep) {
+    CAPTURE(params.fmin, params.fmax, params.threshold);
+    const PiptrackResult got =
+        piptrack(audio, n_fft, hop_length, params.fmin, params.fmax, params.threshold);
+    const PiptrackResult want =
+        oracle_piptrack(audio, n_fft, hop_length, params.fmin, params.fmax, params.threshold);
+
+    REQUIRE(got.n_bins == want.n_bins);
+    REQUIRE(got.n_frames == want.n_frames);
+    REQUIRE(got.pitches.size() == want.pitches.size());
+    REQUIRE(got.magnitudes.size() == want.magnitudes.size());
+
+    size_t mismatch = want.pitches.size();
+    int reported_peaks = 0;
+    for (size_t i = 0; i < want.pitches.size(); ++i) {
+      if (want.pitches[i] != 0.0f) ++reported_peaks;
+      if (mismatch == want.pitches.size() &&
+          (got.pitches[i] != want.pitches[i] || got.magnitudes[i] != want.magnitudes[i])) {
+        mismatch = i;
+      }
+    }
+    if (mismatch != want.pitches.size()) {
+      const int bin = static_cast<int>(mismatch) / want.n_frames;
+      const int frame = static_cast<int>(mismatch) % want.n_frames;
+      CAPTURE(bin, frame);
+      REQUIRE(got.pitches[mismatch] == want.pitches[mismatch]);
+      REQUIRE(got.magnitudes[mismatch] == want.magnitudes[mismatch]);
+    }
+    // A parameter set that reports nothing would compare two empty grids.
+    CAPTURE(reported_peaks);
+    REQUIRE(reported_peaks > 0);
   }
 }
 

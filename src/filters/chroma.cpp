@@ -129,12 +129,14 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
   // leaves the bank anchored at A. Only rotate when base_c is set.
   const int roll = config.base_c ? 3 * (n_chroma / 12) : 0;
 
+  // One column of scratch, reused across bins: the bump loop below writes all
+  // n_chroma entries before any of them is read.
+  std::vector<double> col(n_chroma);
   for (int k = 0; k < n_bins; ++k) {
     const double fb = frqbins[k];
     const double binwidth = std::max(frqbins[k + 1] - frqbins[k], 1.0);
 
     // Gaussian bumps over the chroma circle (2*D narrows them like librosa).
-    std::vector<double> col(n_chroma);
     for (int c = 0; c < n_chroma; ++c) {
       double d = fb - c;
       d = std::fmod(d + n_chroma2 + 10.0 * n_chroma, static_cast<double>(n_chroma)) - n_chroma2;

@@ -228,8 +228,9 @@ namespace {
 /// the FFT plan and working buffers come from @p ctx (reused across frames by
 /// yin_track) instead of being allocated per call. @p diff and @p cmndf are
 /// caller-owned scratch reused across frames.
-float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff, const float* frame,
-                              int frame_length, int sr, float fmin, float fmax, float threshold,
+float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff,
+                              std::vector<float>& cmndf, const float* frame, int frame_length,
+                              int sr, float fmin, float fmax, float threshold,
                               float* out_confidence, bool* out_voiced = nullptr) {
   // Convert frequency to period (in samples)
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / fmax));
@@ -245,7 +246,9 @@ float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff, con
 
   // Compute YIN
   ctx.compute(frame, frame_length, max_period + 1, diff);
-  std::vector<float> cmndf = yin_cmndf(diff);
+  // yin_cmndf_into resizes and overwrites every element, so the reused buffer carries
+  // nothing across frames.
+  yin_cmndf_into(diff, cmndf);
 
   bool below_threshold = false;
   float period = yin_find_pitch(cmndf, threshold, min_period, max_period, &below_threshold);
@@ -287,7 +290,8 @@ float yin_with_confidence(const float* frame, int frame_length, int sr, float fm
                           float threshold, float* out_confidence) {
   YinDiffContext ctx;
   std::vector<float> diff;
-  return yin_with_confidence_ctx(ctx, diff, frame, frame_length, sr, fmin, fmax, threshold,
+  std::vector<float> cmndf;
+  return yin_with_confidence_ctx(ctx, diff, cmndf, frame, frame_length, sr, fmin, fmax, threshold,
                                  out_confidence);
 }
 
@@ -337,15 +341,16 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   // frame: all derived sizes are constant for a fixed frame_length/fmin/fmax/sr.
   YinDiffContext yin_ctx;
   std::vector<float> yin_diff;
+  std::vector<float> yin_cmndf_scratch;
 
   for (int i = 0; i < n_frames; ++i) {
     int start = i * config.hop_length;
     float confidence = 0.0f;
 
     bool voiced = false;
-    float freq =
-        yin_with_confidence_ctx(yin_ctx, yin_diff, data + start, config.frame_length, sr,
-                                config.fmin, config.fmax, config.threshold, &confidence, &voiced);
+    float freq = yin_with_confidence_ctx(yin_ctx, yin_diff, yin_cmndf_scratch, data + start,
+                                         config.frame_length, sr, config.fmin, config.fmax,
+                                         config.threshold, &confidence, &voiced);
 
     result.f0[i] = freq;
     result.voiced_prob[i] = confidence;
@@ -699,33 +704,54 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
   out.pitches.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
   out.magnitudes.assign(static_cast<size_t>(n_bins) * n_frames, 0.0f);
 
+  // `mag` is row-major [n_bins x n_frames], so a bin is one contiguous row while a frame is a
+  // stride-n_frames column. Both passes below walk it bin-major. Every frame's maximum still
+  // folds bins in increasing k, exactly as the column walk did, so the fold is unchanged.
+  const float* mag_data = mag.data();
+  const auto row_of = [mag_data, n_frames](int k) {
+    return mag_data + static_cast<size_t>(k) * static_cast<size_t>(n_frames);
+  };
+  std::vector<float> frame_max(static_cast<size_t>(n_frames), 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    const float* row = row_of(k);
+    for (int t = 0; t < n_frames; ++t) {
+      frame_max[static_cast<size_t>(t)] = std::max(frame_max[static_cast<size_t>(t)], row[t]);
+    }
+  }
+  std::vector<float> gate(static_cast<size_t>(n_frames), 0.0f);
   for (int t = 0; t < n_frames; ++t) {
-    float maxm = 0.0f;
-    for (int k = 0; k < n_bins; ++k) maxm = std::max(maxm, mag[k * n_frames + t]);
-    float gate = threshold * maxm;
+    gate[static_cast<size_t>(t)] = threshold * frame_max[static_cast<size_t>(t)];
+  }
 
-    // librosa.util.localmax pads the spectrum with its edge value, so the
-    // topmost bin is a local maximum whenever it exceeds its predecessor: the
-    // "greater than or equal to the right neighbour" half of the test compares
-    // it against itself. Bin 0 can never satisfy the "strictly greater than the
-    // left neighbour" half under the same padding, which is why only the top
-    // edge is admitted here.
-    for (int k = 1; k < n_bins; ++k) {
-      if (bin_freq[k] < fmin || bin_freq[k] > fmax) continue;
-      const bool at_top_edge = (k == n_bins - 1);
-      float a = mag[(k - 1) * n_frames + t];
-      float b = mag[k * n_frames + t];
-      float c = at_top_edge ? b : mag[(k + 1) * n_frames + t];
+  // A second pass, because the gate needs the whole column's maximum. Each output cell reads
+  // only its own frame's k-1, k and k+1 magnitudes, so the visiting order cannot change it.
+  // librosa.util.localmax pads the spectrum with its edge value, so the
+  // topmost bin is a local maximum whenever it exceeds its predecessor: the
+  // "greater than or equal to the right neighbour" half of the test compares
+  // it against itself. Bin 0 can never satisfy the "strictly greater than the
+  // left neighbour" half under the same padding, which is why only the top
+  // edge is admitted here.
+  for (int k = 1; k < n_bins; ++k) {
+    if (bin_freq[k] < fmin || bin_freq[k] > fmax) continue;
+    const bool at_top_edge = (k == n_bins - 1);
+    const float* row_below = row_of(k - 1);
+    const float* row = row_of(k);
+    const float* row_above = at_top_edge ? row : row_of(k + 1);
+    const size_t row_offset = static_cast<size_t>(k) * static_cast<size_t>(n_frames);
+    for (int t = 0; t < n_frames; ++t) {
+      float a = row_below[t];
+      float b = row[t];
+      float c = row_above[t];
       // librosa.util.localmax uses a strict rising edge and an inclusive falling
       // edge, selecting the first bin of a flat-topped spectral peak.
-      if (b <= a || b < c || b < gate) continue;
+      if (b <= a || b < c || b < gate[static_cast<size_t>(t)]) continue;
       // The parabolic shift and skew arrays are zero-padded at both spectrum
       // edges, so an edge peak is reported at its bin centre with the raw bin
       // magnitude rather than extrapolated from the fabricated neighbour.
       float shift = at_top_edge ? 0.0f : parabolic_interp(a, b, c);
       float freq =
           (static_cast<float>(k) + shift) * static_cast<float>(sr) / static_cast<float>(n_fft);
-      out.pitches[k * n_frames + t] = freq;
+      out.pitches[row_offset + static_cast<size_t>(t)] = freq;
       // Quadratic max value at vertex.
       float peak_mag = b;
       if (!at_top_edge) {
@@ -734,7 +760,7 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
           peak_mag = b - 0.25f * (a - c) * shift;
         }
       }
-      out.magnitudes[k * n_frames + t] = peak_mag;
+      out.magnitudes[row_offset + static_cast<size_t>(t)] = peak_mag;
     }
   }
   return out;

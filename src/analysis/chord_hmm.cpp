@@ -195,8 +195,12 @@ std::vector<int> viterbi_chord_sequence(const std::vector<ChordHmmObservation>& 
     beams.push_back(std::move(candidates));
   }
 
-  std::vector<std::vector<float>> scores(beams.size());
   std::vector<std::vector<int>> backtrack(beams.size());
+
+  // The update reads step t-1's scores and nothing older, and the backtrack pass reads
+  // backpointers rather than scores, so only two score rows are ever live.
+  std::vector<float> prev_scores;
+  std::vector<float> curr_scores;
 
   // The emission term is a template-correlation score scaled by emission_weight
   // (not a true log-probability); emission_weight is tuned to balance these
@@ -206,14 +210,14 @@ std::vector<int> viterbi_chord_sequence(const std::vector<ChordHmmObservation>& 
   // different front-end (e.g. NNLS vs STFT) shifts those magnitudes, emission_weight
   // must be re-tuned. This is an intentional, deterministic heuristic, not a true
   // MAP decode.
-  scores[0].resize(beams[0].size());
+  prev_scores.resize(beams[0].size());
   backtrack[0].assign(beams[0].size(), -1);
   for (size_t j = 0; j < beams[0].size(); ++j) {
-    scores[0][j] = beams[0][j].second * config.emission_weight;
+    prev_scores[j] = beams[0][j].second * config.emission_weight;
   }
 
   for (size_t t = 1; t < beams.size(); ++t) {
-    scores[t].assign(beams[t].size(), -std::numeric_limits<float>::infinity());
+    curr_scores.assign(beams[t].size(), -std::numeric_limits<float>::infinity());
     backtrack[t].assign(beams[t].size(), -1);
 
     for (size_t curr = 0; curr < beams[t].size(); ++curr) {
@@ -222,19 +226,21 @@ std::vector<int> viterbi_chord_sequence(const std::vector<ChordHmmObservation>& 
 
       for (size_t prev = 0; prev < beams[t - 1].size(); ++prev) {
         const int prev_idx = beams[t - 1][prev].first;
-        const float score = scores[t - 1][prev] +
-                            transition_score(prev_idx, curr_idx, templates, config) + emission;
-        if (score > scores[t][curr]) {
-          scores[t][curr] = score;
+        const float score =
+            prev_scores[prev] + transition_score(prev_idx, curr_idx, templates, config) + emission;
+        if (score > curr_scores[curr]) {
+          curr_scores[curr] = score;
           backtrack[t][curr] = static_cast<int>(prev);
         }
       }
     }
+    prev_scores.swap(curr_scores);
   }
 
+  // After the last swap prev_scores holds the final step; for one observation it holds step 0.
   size_t best = 0;
-  for (size_t j = 1; j < scores.back().size(); ++j) {
-    if (scores.back()[j] > scores.back()[best]) {
+  for (size_t j = 1; j < prev_scores.size(); ++j) {
+    if (prev_scores[j] > prev_scores[best]) {
       best = j;
     }
   }

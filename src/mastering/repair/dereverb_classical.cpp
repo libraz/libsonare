@@ -17,8 +17,12 @@ constexpr double kRegularization = static_cast<double>(sonare::constants::kSpect
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
+/// @brief Solves matrix * x = rhs by Gauss-Jordan elimination with partial pivoting.
+/// @details Both arguments are working storage and are left in an arbitrary state; the caller
+///          refills them before the next use.
 std::vector<std::complex<float>> solve_linear_system(
-    std::vector<std::vector<std::complex<double>>> matrix, std::vector<std::complex<double>> rhs) {
+    std::vector<std::vector<std::complex<double>>>& matrix,
+    std::vector<std::complex<double>>& rhs) {
   const size_t n = rhs.size();
   for (size_t col = 0; col < n; ++col) {
     size_t pivot = col;
@@ -129,12 +133,16 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
     std::vector<std::complex<float>> next = dereverbed;
     const int taps = std::max(1, config.wpe_taps);
     const int first_predictable = delay_frames + taps - 1;
+    // Allocated once for the whole stage; the solver consumes both, so every bin re-assigns
+    // each row and the cross vector back to taps zeros rather than reallocating them.
+    std::vector<std::vector<std::complex<double>>> covariance(
+        static_cast<size_t>(taps),
+        std::vector<std::complex<double>>(static_cast<size_t>(taps), {0.0, 0.0}));
+    std::vector<std::complex<double>> cross(static_cast<size_t>(taps), {0.0, 0.0});
     for (int iteration = 0; iteration < config.wpe_iterations; ++iteration) {
       for (int b = 0; b < bins; ++b) {
-        std::vector<std::vector<std::complex<double>>> covariance(
-            static_cast<size_t>(taps),
-            std::vector<std::complex<double>>(static_cast<size_t>(taps), {0.0, 0.0}));
-        std::vector<std::complex<double>> cross(static_cast<size_t>(taps), {0.0, 0.0});
+        for (auto& row : covariance) row.assign(static_cast<size_t>(taps), {0.0, 0.0});
+        cross.assign(static_cast<size_t>(taps), {0.0, 0.0});
         for (int t = first_predictable; t < frames; ++t) {
           const auto current =
               static_cast<std::complex<double>>(dereverbed[static_cast<size_t>(b * frames + t)]);
@@ -153,7 +161,7 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
           covariance[static_cast<size_t>(i)][static_cast<size_t>(i)] +=
               std::complex<double>{kRegularization, 0.0};
         }
-        auto predictors = solve_linear_system(std::move(covariance), std::move(cross));
+        auto predictors = solve_linear_system(covariance, cross);
         double predictor_norm = 0.0;
         for (const auto& predictor : predictors) predictor_norm += std::abs(predictor);
         if (predictor_norm > 0.98) {

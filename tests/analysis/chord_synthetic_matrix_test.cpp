@@ -1,9 +1,12 @@
 /// @file chord_synthetic_matrix_test.cpp
 /// @brief Synthetic matrix tests for chord detection.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "analysis/chord_analyzer.h"
@@ -507,4 +510,158 @@ TEST_CASE("The bass cue is inert when the low register only mirrors the chroma",
   REQUIRE(with_leakage.count() == without_bass.count());
   REQUIRE(with_leakage.chords().front().root == without_bass.chords().front().root);
   REQUIRE(with_leakage.chords().front().quality == without_bass.chords().front().quality);
+}
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// Oracle: the beam decode's pre-reduction shape, one score row per step kept
+// live for the whole sequence. The transition term is not an independent
+// reimplementation -- with no key context only the self / related / remote
+// classes are reachable, and that scoring is not what these guard.
+// ---------------------------------------------------------------------------
+
+float oracle_transition(int from_idx, int to_idx, const std::vector<ChordTemplate>& templates,
+                        const ChordHmmConfig& config) {
+  if (from_idx == to_idx) return config.self_transition_logp;
+  const ChordTemplate& from = templates[static_cast<size_t>(from_idx)];
+  const ChordTemplate& to = templates[static_cast<size_t>(to_idx)];
+  const int motion = (static_cast<int>(to.root) - static_cast<int>(from.root) + 12) % 12;
+  const bool related = from.root == to.root || motion == 5 || motion == 7;
+  return related ? config.related_transition_logp : config.remote_transition_logp;
+}
+
+std::vector<int> oracle_chord_viterbi(const std::vector<ChordHmmObservation>& observations,
+                                      const std::vector<ChordTemplate>& templates,
+                                      const ChordHmmConfig& config) {
+  std::vector<std::vector<std::pair<int, float>>> beams;
+  for (const auto& observation : observations) {
+    std::vector<std::pair<int, float>> candidates = observation.candidates;
+    std::sort(candidates.begin(), candidates.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+    if (config.beam_width > 0 && static_cast<int>(candidates.size()) > config.beam_width) {
+      candidates.resize(static_cast<size_t>(config.beam_width));
+    }
+    beams.push_back(std::move(candidates));
+  }
+
+  std::vector<std::vector<float>> scores(beams.size());
+  std::vector<std::vector<int>> backtrack(beams.size());
+  scores[0].resize(beams[0].size());
+  backtrack[0].assign(beams[0].size(), -1);
+  for (size_t j = 0; j < beams[0].size(); ++j) {
+    scores[0][j] = beams[0][j].second * config.emission_weight;
+  }
+
+  for (size_t t = 1; t < beams.size(); ++t) {
+    scores[t].assign(beams[t].size(), -std::numeric_limits<float>::infinity());
+    backtrack[t].assign(beams[t].size(), -1);
+    for (size_t curr = 0; curr < beams[t].size(); ++curr) {
+      const int curr_idx = beams[t][curr].first;
+      const float emission = beams[t][curr].second * config.emission_weight;
+      for (size_t prev = 0; prev < beams[t - 1].size(); ++prev) {
+        const float score =
+            scores[t - 1][prev] +
+            oracle_transition(beams[t - 1][prev].first, curr_idx, templates, config) + emission;
+        if (score > scores[t][curr]) {
+          scores[t][curr] = score;
+          backtrack[t][curr] = static_cast<int>(prev);
+        }
+      }
+    }
+  }
+
+  size_t best = 0;
+  for (size_t j = 1; j < scores.back().size(); ++j) {
+    if (scores.back()[j] > scores.back()[best]) {
+      best = j;
+    }
+  }
+
+  std::vector<int> sequence(beams.size(), 0);
+  int cursor = static_cast<int>(best);
+  for (int t = static_cast<int>(beams.size()) - 1; t >= 0; --t) {
+    cursor = std::clamp(cursor, 0, static_cast<int>(beams[static_cast<size_t>(t)].size()) - 1);
+    sequence[static_cast<size_t>(t)] =
+        beams[static_cast<size_t>(t)][static_cast<size_t>(cursor)].first;
+    cursor = backtrack[static_cast<size_t>(t)][static_cast<size_t>(cursor)];
+    if (cursor < 0 && t > 0) {
+      cursor = 0;
+    }
+  }
+  return sequence;
+}
+
+}  // namespace
+
+TEST_CASE("Chord HMM matches a whole-score-matrix oracle", "[chord_analyzer][hmm]") {
+  const auto chord_templates = generate_triad_templates();
+  const int c_major = template_index(chord_templates, PitchClass::C, ChordQuality::Major);
+  const int c_minor = template_index(chord_templates, PitchClass::C, ChordQuality::Minor);
+  const int d_major = template_index(chord_templates, PitchClass::D, ChordQuality::Major);
+  REQUIRE(c_major >= 0);
+  REQUIRE(c_minor >= 0);
+  REQUIRE(d_major >= 0);
+
+  // Three templates spanning all three transition classes a key-free decode can
+  // produce: staying put, the same root re-coloured (related), and a whole-tone
+  // root move (remote). The per-step scores are distinct, so the beam ordering
+  // does not depend on how an unstable sort breaks a draw.
+  const std::array<std::array<float, 3>, 7> emissions{{
+      {{0.91f, 0.44f, 0.37f}},
+      {{0.68f, 0.72f, 0.30f}},
+      {{0.51f, 0.83f, 0.62f}},
+      {{0.39f, 0.57f, 0.88f}},
+      {{0.74f, 0.35f, 0.66f}},
+      {{0.29f, 0.90f, 0.48f}},
+      {{0.86f, 0.41f, 0.55f}},
+  }};
+  std::vector<ChordHmmObservation> observations(emissions.size());
+  for (size_t t = 0; t < emissions.size(); ++t) {
+    observations[t].candidates = {
+        {c_major, emissions[t][0]}, {c_minor, emissions[t][1]}, {d_major, emissions[t][2]}};
+  }
+
+  for (float emission_weight : {1.0f, 6.0f, 20.0f}) {
+    CAPTURE(emission_weight);
+    ChordHmmConfig config;
+    config.emission_weight = emission_weight;
+    const std::vector<int> got = viterbi_chord_sequence(observations, chord_templates, config);
+    const std::vector<int> want = oracle_chord_viterbi(observations, chord_templates, config);
+    REQUIRE(got.size() == want.size());
+    for (size_t t = 0; t < want.size(); ++t) {
+      CAPTURE(t);
+      REQUIRE(got[t] == want[t]);
+    }
+  }
+}
+
+TEST_CASE("Chord HMM keeps the first predecessor of an exactly tied score",
+          "[chord_analyzer][hmm]") {
+  // The transition scores are set one apart and the emissions are binary
+  // fractions, so both routes into the step-1 C minor candidate land on exactly
+  // 0.75 before its emission: 2.0 - 1.25 from C major (same root, related) and
+  // 1.0 - 0.25 from C minor (staying put). Only a strict improvement displaces
+  // the incumbent, so the backpointer has to name the first candidate, and the
+  // sequence reports C major at step 0. Last-wins ties would report C minor
+  // there instead, with both sequences the same length.
+  const auto chord_templates = generate_triad_templates();
+  const int c_major = template_index(chord_templates, PitchClass::C, ChordQuality::Major);
+  const int c_minor = template_index(chord_templates, PitchClass::C, ChordQuality::Minor);
+  REQUIRE(c_major >= 0);
+  REQUIRE(c_minor >= 0);
+
+  ChordHmmConfig config;
+  config.emission_weight = 4.0f;
+  config.self_transition_logp = -0.25f;
+  config.related_transition_logp = -1.25f;
+
+  std::vector<ChordHmmObservation> observations(2);
+  observations[0].candidates = {{c_major, 0.5f}, {c_minor, 0.25f}};
+  observations[1].candidates = {{c_minor, 0.75f}, {c_major, 0.25f}};
+
+  const std::vector<int> sequence = viterbi_chord_sequence(observations, chord_templates, config);
+  REQUIRE(sequence.size() == 2);
+  REQUIRE(sequence[0] == c_major);
+  REQUIRE(sequence[1] == c_minor);
 }

@@ -273,6 +273,10 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
   // Breadth-first reflection across faces, validating each candidate's full path.
   std::vector<PendingImage> frontier;
   frontier.push_back({source, 0, std::vector<float>(bands, 1.0f), {}});
+  // Scratch for one candidate's partial-image chain. The expansion visits
+  // faces^order candidates and every entry is written before it is read, so the
+  // buffer is reused rather than allocated per candidate.
+  std::vector<Vec3> partial;
 
   for (int order = 1; order <= max_order; ++order) {
     std::vector<PendingImage> next;
@@ -302,7 +306,7 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
         for (size_t b = 0; b < bands; ++b) cand.reflection[b] = parent.reflection[b] * fb[b];
 
         // Reconstruct the partial-image chain for validation.
-        std::vector<Vec3> partial(cand.chain.size() + 1);
+        partial.resize(cand.chain.size() + 1);
         partial[0] = source;
         for (size_t k = 0; k < cand.chain.size(); ++k) {
           const Triangle& t2 = room.faces[static_cast<size_t>(cand.chain[k])];

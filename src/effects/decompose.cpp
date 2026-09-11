@@ -158,6 +158,10 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
   std::vector<float> num_feat(static_cast<size_t>(n_features) * n_frames, 0.0f);  // X * WH^(b-2)
   std::vector<float> den_feat(static_cast<size_t>(n_features) * n_frames, 0.0f);  // WH^(b-1)
 
+  // Per-frame accumulators for the H update, held across iterations rather than per component.
+  std::vector<float> h_num(static_cast<size_t>(n_frames), 0.0f);
+  std::vector<float> h_den(static_cast<size_t>(n_frames), 0.0f);
+
   for (int it = 0; it < n_iter; ++it) {
     multiply_WH(out.W, out.H, n_features, n_components, n_frames, WH);
 
@@ -171,16 +175,24 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
     }
 
     // H <- H * (W^T num_feat) / (W^T den_feat)
+    // Feature-major with per-frame accumulators: num_feat/den_feat are row-major
+    // [n_features x n_frames], so a feature is one contiguous row. Each (c, t) accumulator
+    // still takes its terms in feature order, so H is unchanged bit for bit -- which the
+    // multiplicative updates need, since a last-bit difference here compounds over n_iter.
     for (int c = 0; c < n_components; ++c) {
-      for (int t = 0; t < n_frames; ++t) {
-        float num = 0.0f;
-        float den = 0.0f;
-        for (int f = 0; f < n_features; ++f) {
-          const float w = out.W[f * n_components + c];
-          num += w * num_feat[f * n_frames + t];
-          den += w * den_feat[f * n_frames + t];
+      std::fill(h_num.begin(), h_num.end(), 0.0f);
+      std::fill(h_den.begin(), h_den.end(), 0.0f);
+      for (int f = 0; f < n_features; ++f) {
+        const float w = out.W[f * n_components + c];
+        const float* num_row = num_feat.data() + static_cast<size_t>(f) * n_frames;
+        const float* den_row = den_feat.data() + static_cast<size_t>(f) * n_frames;
+        for (int t = 0; t < n_frames; ++t) {
+          h_num[t] += w * num_row[t];
+          h_den[t] += w * den_row[t];
         }
-        out.H[c * n_frames + t] *= num / (den + kEps);
+      }
+      for (int t = 0; t < n_frames; ++t) {
+        out.H[c * n_frames + t] *= h_num[t] / (h_den[t] + kEps);
       }
     }
 
@@ -234,16 +246,17 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   }
   if (k <= 0) k = std::min(5, n_frames);
 
-  // Pre-compute column norms for cosine similarity.
+  // Pre-compute column norms for cosine similarity. Feature-major with per-frame
+  // accumulators: S is row-major [n_features x n_frames], so a feature is one contiguous
+  // row and each frame still sums features in order, leaving the norm bit for bit the same.
   std::vector<float> norms(n_frames, 0.0f);
-  for (int t = 0; t < n_frames; ++t) {
-    float s = 0.0f;
-    for (int f = 0; f < n_features; ++f) {
-      const float v = S[f * n_frames + t];
-      s += v * v;
+  for (int f = 0; f < n_features; ++f) {
+    const float* row = S + static_cast<size_t>(f) * n_frames;
+    for (int t = 0; t < n_frames; ++t) {
+      norms[t] += row[t] * row[t];
     }
-    norms[t] = std::sqrt(s);
   }
+  for (int t = 0; t < n_frames; ++t) norms[t] = std::sqrt(norms[t]);
 
   // Replicate librosa.segment.recurrence_matrix in mode="connectivity":
   //   1. For each row i, get the top (k + 2*width) cosine neighbours,
@@ -260,16 +273,26 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   std::vector<std::vector<int>> selectors_for(n_frames);
   std::vector<std::pair<float, int>> sims;
   sims.reserve(static_cast<size_t>(n_frames));
+  std::vector<float> dots(static_cast<size_t>(n_frames), 0.0f);
   const int n_neighbors = std::min(n_frames - 1, k + 2 * width);
   for (int i = 0; i < n_frames; ++i) {
     sims.clear();
+    // One feature-major pass builds the whole row of dot products instead of walking two
+    // strided columns per pair. Each dots[j] still accumulates over features in order, so the
+    // similarities -- and the neighbour ranking they drive -- are unchanged bit for bit.
+    // dots[i] is computed and never read; self is excluded below as before.
+    std::fill(dots.begin(), dots.end(), 0.0f);
+    for (int f = 0; f < n_features; ++f) {
+      const float* row = S + static_cast<size_t>(f) * n_frames;
+      const float si = row[i];
+      for (int j = 0; j < n_frames; ++j) {
+        dots[j] += si * row[j];
+      }
+    }
+    const float norm_i = norms[i];
     for (int j = 0; j < n_frames; ++j) {
       if (j == i) continue;  // sklearn excludes self automatically
-      float dot = 0.0f;
-      for (int f = 0; f < n_features; ++f) {
-        dot += S[f * n_frames + i] * S[f * n_frames + j];
-      }
-      const float sim = (norms[i] > 0.0f && norms[j] > 0.0f) ? dot / (norms[i] * norms[j]) : 0.0f;
+      const float sim = (norm_i > 0.0f && norms[j] > 0.0f) ? dots[j] / (norm_i * norms[j]) : 0.0f;
       sims.push_back({sim, j});
     }
     if (sims.empty()) continue;
@@ -299,16 +322,26 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   }
 
   std::vector<float> out(static_cast<size_t>(n_features) * n_frames, 0.0f);
+  // Reused across frames and features; the gather below overwrites every element.
+  std::vector<float> vals;
+  // Left frame-major: this step reads scattered columns, which stride whatever the loop
+  // order is, and the only shape that would remove the stride is a full
+  // [n_features x n_frames] transpose -- the temporary spectral_flatness refuses for memory.
   for (int t = 0; t < n_frames; ++t) {
     const auto& selectors = selectors_for[t];
     if (selectors.empty()) {
-      for (int f = 0; f < n_features; ++f) out[f * n_frames + t] = S[f * n_frames + t];
+      for (int f = 0; f < n_features; ++f) {
+        const size_t base = static_cast<size_t>(f) * n_frames;
+        out[base + t] = S[base + t];
+      }
       continue;
     }
     if (aggregate == "median") {
       for (int f = 0; f < n_features; ++f) {
-        std::vector<float> vals(selectors.size());
-        for (size_t q = 0; q < selectors.size(); ++q) vals[q] = S[f * n_frames + selectors[q]];
+        const size_t base = static_cast<size_t>(f) * n_frames;
+        const float* row = S + base;
+        vals.resize(selectors.size());
+        for (size_t q = 0; q < selectors.size(); ++q) vals[q] = row[selectors[q]];
         const auto mid = vals.begin() + vals.size() / 2;
         std::nth_element(vals.begin(), mid, vals.end());
         float median = *mid;
@@ -319,26 +352,32 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
           const float lower = *std::max_element(vals.begin(), mid);
           median = 0.5f * (lower + median);
         }
-        out[f * n_frames + t] = median;
+        out[base + t] = median;
       }
     } else if (aggregate == "min") {
       for (int f = 0; f < n_features; ++f) {
+        const size_t base = static_cast<size_t>(f) * n_frames;
+        const float* row = S + base;
         float m = std::numeric_limits<float>::infinity();
-        for (int i : selectors) m = std::min(m, S[f * n_frames + i]);
-        out[f * n_frames + t] = m;
+        for (int i : selectors) m = std::min(m, row[i]);
+        out[base + t] = m;
       }
     } else if (aggregate == "max") {
       for (int f = 0; f < n_features; ++f) {
+        const size_t base = static_cast<size_t>(f) * n_frames;
+        const float* row = S + base;
         float m = -std::numeric_limits<float>::infinity();
-        for (int i : selectors) m = std::max(m, S[f * n_frames + i]);
-        out[f * n_frames + t] = m;
+        for (int i : selectors) m = std::max(m, row[i]);
+        out[base + t] = m;
       }
     } else {  // "mean"
       const float inv_count = 1.0f / static_cast<float>(selectors.size());
       for (int f = 0; f < n_features; ++f) {
+        const size_t base = static_cast<size_t>(f) * n_frames;
+        const float* row = S + base;
         float s = 0.0f;
-        for (int i : selectors) s += S[f * n_frames + i];
-        out[f * n_frames + t] = s * inv_count;
+        for (int i : selectors) s += row[i];
+        out[base + t] = s * inv_count;
       }
     }
   }

@@ -8,9 +8,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 #include <vector>
 
+#include "core/spectrum.h"
+#include "feature/spectral_projection.h"
+#include "filters/wavelet.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 
@@ -794,4 +798,186 @@ TEST_CASE("cqt_to_chroma scales non-C fmin pitch classes for 24 bins", "[cqt][ch
   }
   const auto peak = std::max_element(energy.begin(), energy.end());
   REQUIRE(std::distance(energy.begin(), peak) == 18);  // A
+}
+
+namespace {
+
+/// @brief pseudo_cqt()'s projection with the frame-major traversal it had before.
+/// @details Every quantity feeding the loop is produced by the same helper the library calls,
+///          so the two differ only in the order the projection is walked: the library now
+///          carries a per-frame accumulator across the STFT bin loop, while this recomputes
+///          one accumulator per (bin, frame) with the innermost loop striding `mag`.
+std::vector<float> oracle_pseudo_cqt(const Audio& audio, const CqtConfig& config) {
+  const int sr = audio.sample_rate();
+  std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+  const int n_fft = detail::choose_pseudo_cqt_nfft(config, sr);
+  const int n_freq = n_fft / 2 + 1;
+
+  StftConfig stft_cfg;
+  stft_cfg.n_fft = n_fft;
+  stft_cfg.hop_length = config.hop_length;
+  stft_cfg.window = config.window;
+  stft_cfg.center = true;
+  const Spectrogram spec = Spectrogram::compute(audio, stft_cfg);
+  const std::vector<float>& mag = spec.magnitude();
+  const int n_frames = spec.n_frames();
+
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+  const float semitone_ratio =
+      std::pow(2.0f, 1.0f / static_cast<float>(std::max(config.bins_per_octave, 1)));
+  std::vector<float> bandwidths(freqs.size(), 0.0f);
+  for (size_t k = 0; k < freqs.size(); ++k) {
+    bandwidths[k] = freqs[k] * (semitone_ratio - 1.0f);
+  }
+  const std::vector<float> P = detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
+  const std::vector<float> lengths = wavelet_lengths(freqs, sr, config.filter_scale);
+
+  std::vector<std::complex<float>> data(static_cast<size_t>(config.n_bins) * n_frames,
+                                        std::complex<float>(0.0f, 0.0f));
+  for (int k = 0; k < config.n_bins; ++k) {
+    const float scale = lengths[static_cast<size_t>(k)] > 0.0f
+                            ? 1.0f / std::sqrt(lengths[static_cast<size_t>(k)])
+                            : 1.0f;
+    for (int t = 0; t < n_frames; ++t) {
+      float acc = 0.0f;
+      for (int b = 0; b < n_freq; ++b) {
+        acc += P[k * n_freq + b] * mag[b * n_frames + t];
+      }
+      data[k * n_frames + t] = std::complex<float>(acc * scale, 0.0f);
+    }
+  }
+
+  // Derive the magnitude the way CqtResult::magnitude() does rather than assuming
+  // abs(complex(x, 0)) reproduces x, which would make the comparison depend on hypot.
+  std::vector<float> out;
+  const std::vector<float> no_power;
+  detail::fill_magnitude_cache(data, no_power, out);
+  return out;
+}
+
+/// @brief griffinlim_cqt()'s inverse projection with the STFT-bin-major traversal it had.
+/// @details The innermost k strode both P and `magnitude`. The library now runs the CQT bin
+///          outermost and accumulates into the output, which keeps each cell's terms in
+///          ascending k. Griffin-Lim is deterministic (fixed seed) and iterative, so any
+///          movement in the seed it receives reaches the returned samples.
+Audio oracle_griffinlim_cqt(const float* magnitude, int n_bins, int n_frames,
+                            const CqtConfig& config, int sr, int n_iter) {
+  std::vector<float> freqs = cqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
+  const int n_fft = detail::choose_pseudo_cqt_nfft(config, sr);
+  const int n_freq = n_fft / 2 + 1;
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+  const float semitone_ratio =
+      std::pow(2.0f, 1.0f / static_cast<float>(std::max(config.bins_per_octave, 1)));
+  std::vector<float> bandwidths(freqs.size(), 0.0f);
+  for (size_t k = 0; k < freqs.size(); ++k) {
+    bandwidths[k] = freqs[k] * (semitone_ratio - 1.0f);
+  }
+  const std::vector<float> P = detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
+
+  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
+  for (int b = 0; b < n_freq; ++b) {
+    for (int t = 0; t < n_frames; ++t) {
+      float acc = 0.0f;
+      for (int k = 0; k < n_bins; ++k) {
+        acc += P[k * n_freq + b] * magnitude[k * n_frames + t];
+      }
+      stft_mag[b * n_frames + t] = acc;
+    }
+  }
+
+  GriffinLimConfig gcfg;
+  gcfg.n_iter = n_iter;
+  return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, config.hop_length, sr, gcfg);
+}
+
+void require_bit_equal_audio(const Audio& got, const Audio& want) {
+  REQUIRE(got.size() == want.size());
+  for (size_t i = 0; i < got.size(); ++i) {
+    CAPTURE(i, got.data()[i], want.data()[i]);
+    REQUIRE(std::isfinite(got.data()[i]));
+    REQUIRE(got.data()[i] == want.data()[i]);
+  }
+}
+
+/// @brief Deterministic strictly-positive CQT magnitude, row-major [n_bins x n_frames].
+std::vector<float> cqt_magnitude_fixture(int n_bins, int n_frames, uint32_t seed) {
+  std::vector<float> magnitude(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), 0.0f);
+  uint32_t state = seed;
+  for (size_t i = 0; i < magnitude.size(); ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    magnitude[i] = 0.01f + unit;
+  }
+  return magnitude;
+}
+
+}  // namespace
+
+TEST_CASE("pseudo_cqt matches a frame-major projection oracle", "[cqt]") {
+  const Audio audio = generate_chord({220.0f, 330.0f, 440.0f}, 0.25f, 22050);
+  CqtConfig config;
+  config.hop_length = 256;
+  config.n_bins = 24;
+  config.bins_per_octave = 12;
+  config.fmin = 110.0f;
+
+  const CqtResult result = pseudo_cqt(audio, config);
+  const std::vector<float> want = oracle_pseudo_cqt(audio, config);
+  const std::vector<float> got = result.magnitude();
+  REQUIRE(got.size() == want.size());
+  for (size_t i = 0; i < got.size(); ++i) {
+    CAPTURE(i, got[i], want[i]);
+    REQUIRE(std::isfinite(got[i]));
+    REQUIRE(got[i] == want[i]);
+  }
+}
+
+TEST_CASE("griffinlim_cqt matches an STFT-bin-major projection oracle", "[cqt]") {
+  const int n_bins = 24;
+  const int n_frames = 19;
+  const int sr = 22050;
+  const std::vector<float> magnitude = cqt_magnitude_fixture(n_bins, n_frames, 0x5eedu);
+
+  CqtConfig config;
+  config.hop_length = 256;
+  config.n_bins = n_bins;
+  config.bins_per_octave = 12;
+  config.fmin = 110.0f;
+
+  // n_iter 0 makes the path linear in the projected magnitude -- one inverse STFT of the
+  // seeded phase -- so a last-bit move in the projection reaches the samples directly rather
+  // than only through the iteration's amplification. A positive count then covers the real
+  // path, where the same move compounds.
+  for (int n_iter : {0, 4}) {
+    CAPTURE(n_iter);
+    require_bit_equal_audio(
+        griffinlim_cqt(magnitude.data(), n_bins, n_frames, config, sr, n_iter),
+        oracle_griffinlim_cqt(magnitude.data(), n_bins, n_frames, config, sr, n_iter));
+  }
+}
+
+TEST_CASE("griffinlim_cqt matches the oracle on a single-frame and single-bin input", "[cqt]") {
+  const int sr = 22050;
+  CqtConfig config;
+  config.hop_length = 256;
+  config.bins_per_octave = 12;
+  config.fmin = 110.0f;
+
+  SECTION("one frame") {
+    const int n_bins = 24;
+    config.n_bins = n_bins;
+    const std::vector<float> magnitude = cqt_magnitude_fixture(n_bins, 1, 0xc0ffeeu);
+    require_bit_equal_audio(griffinlim_cqt(magnitude.data(), n_bins, 1, config, sr, 0),
+                            oracle_griffinlim_cqt(magnitude.data(), n_bins, 1, config, sr, 0));
+  }
+
+  SECTION("one CQT bin") {
+    // A single term per output cell: the accumulation has no order left, so this isolates
+    // the row pointers from the summation the case above also covers.
+    const int n_frames = 19;
+    config.n_bins = 1;
+    const std::vector<float> magnitude = cqt_magnitude_fixture(1, n_frames, 0xb0bau);
+    require_bit_equal_audio(griffinlim_cqt(magnitude.data(), 1, n_frames, config, sr, 0),
+                            oracle_griffinlim_cqt(magnitude.data(), 1, n_frames, config, sr, 0));
+  }
 }

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 #include "core/spectrum.h"
 #include "effects/hpss.h"
@@ -122,7 +123,9 @@ std::vector<std::pair<int, int>> full_dtw_path(const std::vector<float>& ref, in
   // util/sequence dtw expects features [rows x cols] with rows = feature dim.
   // X is reference, Y is target -> path pairs are (X-index, Y-index) = (ref, tgt).
   DtwResult r = dtw(ref.data(), n_chroma, ref_frames, tgt.data(), n_chroma, tgt_frames, "cosine");
-  return r.path;  // already (X, Y) ordered start->end.
+  // Moved out rather than copied: `r` also holds the [ref_frames x tgt_frames]
+  // accumulated-cost matrix, which nothing on this route reads.
+  return std::move(r.path);  // already (X, Y) ordered start->end.
 }
 
 // Banded DTW: only cells within +/- band_radius of the projected path's target
@@ -162,17 +165,34 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
   lo[0] = 0;
   hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
 
+  // Each operand's norm depends on one index only, so deriving it inside the
+  // (i, j) loop below redoes the same ref_frames + tgt_frames reductions once
+  // per cell. Each norm is still summed over c in the same order, so the
+  // denominator is the same double, bit for bit.
+  auto column_norms = [&](const std::vector<float>& m, int frames) {
+    std::vector<double> norms(static_cast<size_t>(frames));
+    for (int i = 0; i < frames; ++i) {
+      double n = 0.0;
+      for (int c = 0; c < n_chroma; ++c) {
+        const double v = m[static_cast<size_t>(c) * frames + i];
+        n += v * v;
+      }
+      norms[static_cast<size_t>(i)] = std::sqrt(n);
+    }
+    return norms;
+  };
+  const std::vector<double> ref_norms = column_norms(ref, ref_frames);
+  const std::vector<double> tgt_norms = column_norms(tgt, tgt_frames);
+
   auto cos_dist = [&](int i, int j) -> float {
-    double dot = 0.0, na = 0.0, nb = 0.0;
+    const double denom = ref_norms[static_cast<size_t>(i)] * tgt_norms[static_cast<size_t>(j)];
+    if (denom <= 0.0) return 1.0f;
+    double dot = 0.0;
     for (int c = 0; c < n_chroma; ++c) {
       const double a = ref[static_cast<size_t>(c) * ref_frames + i];
       const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
       dot += a * b;
-      na += a * a;
-      nb += b * b;
     }
-    const double denom = std::sqrt(na) * std::sqrt(nb);
-    if (denom <= 0.0) return 1.0f;
     return static_cast<float>(1.0 - dot / denom);
   };
 

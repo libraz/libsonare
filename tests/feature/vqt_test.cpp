@@ -8,9 +8,12 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
+#include "core/spectrum.h"
+#include "feature/spectral_projection.h"
 #include "filters/wavelet.h"
 #include "util/constants.h"
 
@@ -1038,4 +1041,108 @@ TEST_CASE("ivqt respects requested output length", "[vqt][inverse]") {
 
   REQUIRE(reconstructed.size() == 4096);
   REQUIRE(reconstructed.sample_rate() == audio.sample_rate());
+}
+
+namespace {
+
+/// @brief griffinlim_vqt()'s inverse projection with the STFT-bin-major traversal it had.
+/// @details The same loop shape as griffinlim_cqt's, which vqt.cpp duplicates with the VQT
+///          bandwidth vector. gamma is supplied explicitly and positively by the caller, so
+///          this needs no copy of the automatic-gamma rule and does not take the gamma==0
+///          delegation into the CQT path.
+Audio oracle_griffinlim_vqt(const float* magnitude, int n_bins, int n_frames,
+                            const VqtConfig& config, int sr, int n_iter) {
+  const std::vector<float> freqs = vqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
+  const CqtConfig cqt_config = config.to_cqt_config();
+  const int n_fft = detail::choose_pseudo_cqt_nfft(cqt_config, sr);
+  const int n_freq = n_fft / 2 + 1;
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+  const std::vector<float> bandwidths = vqt_bandwidths(freqs, config.bins_per_octave, config.gamma);
+  const std::vector<float> projection =
+      detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
+
+  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
+  for (int b = 0; b < n_freq; ++b) {
+    for (int t = 0; t < n_frames; ++t) {
+      float acc = 0.0f;
+      for (int k = 0; k < n_bins; ++k) {
+        acc += projection[k * n_freq + b] * magnitude[k * n_frames + t];
+      }
+      stft_mag[b * n_frames + t] = acc;
+    }
+  }
+
+  GriffinLimConfig gcfg;
+  gcfg.n_iter = n_iter;
+  return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, config.hop_length, sr, gcfg);
+}
+
+void require_bit_equal_audio(const Audio& got, const Audio& want) {
+  REQUIRE(got.size() == want.size());
+  for (size_t i = 0; i < got.size(); ++i) {
+    CAPTURE(i, got.data()[i], want.data()[i]);
+    REQUIRE(std::isfinite(got.data()[i]));
+    REQUIRE(got.data()[i] == want.data()[i]);
+  }
+}
+
+std::vector<float> vqt_magnitude_fixture(int n_bins, int n_frames, uint32_t seed) {
+  std::vector<float> magnitude(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), 0.0f);
+  uint32_t state = seed;
+  for (size_t i = 0; i < magnitude.size(); ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    magnitude[i] = 0.01f + unit;
+  }
+  return magnitude;
+}
+
+}  // namespace
+
+TEST_CASE("griffinlim_vqt matches an STFT-bin-major projection oracle", "[vqt]") {
+  const int n_bins = 24;
+  const int n_frames = 19;
+  const int sr = 22050;
+  const std::vector<float> magnitude = vqt_magnitude_fixture(n_bins, n_frames, 0x5eedu);
+
+  VqtConfig config;
+  config.hop_length = 256;
+  config.n_bins = n_bins;
+  config.bins_per_octave = 12;
+  config.fmin = 110.0f;
+  // Positive and explicit: gamma == 0 delegates to griffinlim_cqt and would leave this
+  // function's own projection loop untouched.
+  config.gamma = 12.0f;
+
+  for (int n_iter : {0, 4}) {
+    CAPTURE(n_iter);
+    require_bit_equal_audio(
+        griffinlim_vqt(magnitude.data(), n_bins, n_frames, config, sr, n_iter),
+        oracle_griffinlim_vqt(magnitude.data(), n_bins, n_frames, config, sr, n_iter));
+  }
+}
+
+TEST_CASE("griffinlim_vqt matches the oracle on a single-frame and single-bin input", "[vqt]") {
+  const int sr = 22050;
+  VqtConfig config;
+  config.hop_length = 256;
+  config.bins_per_octave = 12;
+  config.fmin = 110.0f;
+  config.gamma = 12.0f;
+
+  SECTION("one frame") {
+    const int n_bins = 24;
+    config.n_bins = n_bins;
+    const std::vector<float> magnitude = vqt_magnitude_fixture(n_bins, 1, 0xc0ffeeu);
+    require_bit_equal_audio(griffinlim_vqt(magnitude.data(), n_bins, 1, config, sr, 0),
+                            oracle_griffinlim_vqt(magnitude.data(), n_bins, 1, config, sr, 0));
+  }
+
+  SECTION("one VQT bin") {
+    const int n_frames = 19;
+    config.n_bins = 1;
+    const std::vector<float> magnitude = vqt_magnitude_fixture(1, n_frames, 0xb0bau);
+    require_bit_equal_audio(griffinlim_vqt(magnitude.data(), 1, n_frames, config, sr, 0),
+                            oracle_griffinlim_vqt(magnitude.data(), 1, n_frames, config, sr, 0));
+  }
 }

@@ -85,20 +85,30 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
     for (int k = 0; k < n_bins; ++k) d[k] = config.zi[k];
   }
 
+  // Loop-invariant across every cell; `config` and `b` do not change below.
+  const float one_minus_b = 1.0f - b;
+  const bool logarithmic = config.power == 0.0f;
+  const float bias_term = logarithmic ? 0.0f : std::pow(config.bias, config.power);
+
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames);
-  for (int t = 0; t < n_frames; ++t) {
-    for (int k = 0; k < n_bins; ++k) {
-      float s = S[static_cast<size_t>(k) * n_frames + t];
+  // Bin-major: S and out are row-major [n_bins x n_frames], so both sides of a bin are one
+  // contiguous row. The recursion runs along t within a bin and bins are independent, so
+  // keeping t ascending per bin replays the identical operation sequence on each chain and
+  // collapses the delay state to a scalar.
+  for (int k = 0; k < n_bins; ++k) {
+    const float* row = S + static_cast<size_t>(k) * n_frames;
+    float* out_row = out.data() + static_cast<size_t>(k) * n_frames;
+    float state = d[static_cast<size_t>(k)];
+    for (int t = 0; t < n_frames; ++t) {
+      const float s = row[t];
       // Direct-Form II Transposed AR(1) step (matches scipy.signal.lfilter).
-      float y = b * s + d[k];
-      d[k] = (1.0f - b) * y;
-      float smooth = std::pow(y + config.eps, -config.gain);
+      const float y = b * s + state;
+      state = one_minus_b * y;
+      const float smooth = std::pow(y + config.eps, -config.gain);
       // librosa special-cases power==0 as logarithmic compression
       // (S_out = log1p(S * smooth)); the power law would yield 1 - 1 = 0.
-      float compressed = config.power == 0.0f ? std::log1p(s * smooth)
-                                              : std::pow(s * smooth + config.bias, config.power) -
-                                                    std::pow(config.bias, config.power);
-      out[static_cast<size_t>(k) * n_frames + t] = compressed;
+      out_row[t] = logarithmic ? std::log1p(s * smooth)
+                               : std::pow(s * smooth + config.bias, config.power) - bias_term;
     }
   }
   return out;

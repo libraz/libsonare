@@ -440,14 +440,38 @@ std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frame
 
   std::vector<float> out(static_cast<size_t>(order + 1) * static_cast<size_t>(n_frames), 0.0f);
   Eigen::VectorXd y(n_bins);
-  for (int t = 0; t < n_frames; ++t) {
+
+  // The solve needs a whole column, so this stages the gather bin-major in frame tiles as
+  // spectral_contrast above does, rather than exchanging loops. `magnitude` is row-major
+  // [n_bins x n_frames], so a per-frame gather touches one cache line per bin; a tile reads
+  // along each bin row contiguously and bounds the staging buffer to n_bins * kFrameTile
+  // floats. Staging moves data and computes nothing, so `y` holds the same values and the
+  // solve is unchanged bit for bit.
+  constexpr int kFrameTile = 256;
+  std::vector<float> tile(static_cast<size_t>(n_bins) * static_cast<size_t>(kFrameTile));
+
+  for (int tile_start = 0; tile_start < n_frames; tile_start += kFrameTile) {
+    const int tile_frames = std::min(kFrameTile, n_frames - tile_start);
+
     for (int k = 0; k < n_bins; ++k) {
-      y(k) = static_cast<double>(magnitude[k * n_frames + t]);
+      const float* row =
+          magnitude + static_cast<size_t>(k) * static_cast<size_t>(n_frames) + tile_start;
+      for (int t = 0; t < tile_frames; ++t) {
+        tile[static_cast<size_t>(t) * static_cast<size_t>(n_bins) + static_cast<size_t>(k)] =
+            row[t];
+      }
     }
-    Eigen::VectorXd c_scaled = svd.solve(y);
-    // Unscale: c[p] = c_scaled[p] / scale[p] so out is in the original units.
-    for (int p = 0; p <= order; ++p) {
-      out[p * n_frames + t] = static_cast<float>(c_scaled(p) / scale(p));
+
+    for (int t = 0; t < tile_frames; ++t) {
+      const float* column = tile.data() + static_cast<size_t>(t) * static_cast<size_t>(n_bins);
+      for (int k = 0; k < n_bins; ++k) {
+        y(k) = static_cast<double>(column[k]);
+      }
+      Eigen::VectorXd c_scaled = svd.solve(y);
+      // Unscale: c[p] = c_scaled[p] / scale[p] so out is in the original units.
+      for (int p = 0; p <= order; ++p) {
+        out[p * n_frames + tile_start + t] = static_cast<float>(c_scaled(p) / scale(p));
+      }
     }
   }
   return out;

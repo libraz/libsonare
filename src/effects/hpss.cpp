@@ -216,10 +216,11 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
                                           int kernel_size) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
-  // Bound before the per-thread allocations below, not after: each worker
-  // builds its own pair, so the cost is 8 bytes x kernel x thread count rather
-  // than a per-element constant. WASM's bounded heap reports the overflow as an
-  // allocation failure; an overcommitting host accepts it and maps for 20 s.
+  // Bound before the per-thread allocations below, not after: alongside its
+  // n_bins staging pair each worker builds a kernel-sized pair, so that term of
+  // the cost is 8 bytes x kernel x thread count rather than a per-element
+  // constant. WASM's bounded heap reports the overflow as an allocation failure;
+  // an overcommitting host accepts it and maps for 20 s.
   SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
                    "median_filter_vertical: kernel_size " + std::to_string(kernel_size) +
                        " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
@@ -230,17 +231,25 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
   auto process_cols = [&](int col_start, int col_end) {
     SlidingMedian sm(kernel_size);
     std::vector<float> window(kernel_size);
+    // The sliding window advances one bin at a time, so the loops cannot be
+    // exchanged; staging the column is what takes the filter off the n_frames
+    // stride. Two n_bins buffers per worker, and each magnitude element is read
+    // once here instead of once per window it enters.
+    std::vector<float> col(n_bins);
+    std::vector<float> out_col(n_bins);
 
     for (int t = col_start; t < col_end; ++t) {
+      for (int k = 0; k < n_bins; ++k) {
+        col[k] = magnitude[k * n_frames + t];
+      }
+
       /// Top boundary region (partial window) - use nth_element
       for (int k = 0; k < std::min(half, n_bins); ++k) {
         int start = 0;
         int end = std::min(k + half + 1, n_bins);
-        int count = 0;
-        for (int kk = start; kk < end; ++kk) {
-          window[count++] = magnitude[kk * n_frames + t];
-        }
-        result[k * n_frames + t] = compute_median(window.data(), count);
+        int count = end - start;
+        std::copy(col.begin() + start, col.begin() + end, window.data());
+        out_col[k] = compute_median(window.data(), count);
       }
 
       /// Middle region - use sliding window median
@@ -249,15 +258,15 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
 
         /// Initialize window with first kernel_size elements
         for (int i = 0; i < kernel_size; ++i) {
-          sm.insert(magnitude[i * n_frames + t]);
+          sm.insert(col[i]);
         }
-        result[half * n_frames + t] = sm.median();
+        out_col[half] = sm.median();
 
         /// Slide window
         for (int k = half + 1; k < n_bins - half; ++k) {
-          sm.erase(magnitude[(k - half - 1) * n_frames + t]);
-          sm.insert(magnitude[(k + half) * n_frames + t]);
-          result[k * n_frames + t] = sm.median();
+          sm.erase(col[k - half - 1]);
+          sm.insert(col[k + half]);
+          out_col[k] = sm.median();
         }
       }
 
@@ -265,11 +274,15 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
       for (int k = std::max(half, n_bins - half); k < n_bins; ++k) {
         int start = std::max(0, k - half);
         int end = n_bins;
-        int count = 0;
-        for (int kk = start; kk < end; ++kk) {
-          window[count++] = magnitude[kk * n_frames + t];
-        }
-        result[k * n_frames + t] = compute_median(window.data(), count);
+        int count = end - start;
+        std::copy(col.begin() + start, col.begin() + end, window.data());
+        out_col[k] = compute_median(window.data(), count);
+      }
+
+      // The three regions above cover every bin for any n_bins / kernel pair, so
+      // out_col never carries a value over from the previous column.
+      for (int k = 0; k < n_bins; ++k) {
+        result[k * n_frames + t] = out_col[k];
       }
     }
   };

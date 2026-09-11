@@ -833,3 +833,64 @@ TEST_CASE("spectral_contrast does not depend on where a frame lands in a tile", 
     }
   }
 }
+
+namespace {
+
+/// @brief Deterministic finite magnitude matrix, row-major [n_bins x n_frames].
+/// @details Unlike descriptor_fixture this plants no non-finite bin: the comparison below is
+///          exact equality, and NaN == NaN is false, so a seeded NaN would fail on both sides.
+std::vector<float> poly_fixture(int n_bins, int n_frames) {
+  std::vector<float> magnitude(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), 0.0f);
+  uint32_t state = 0xa5a5u;
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      state = state * 1664525u + 1013904223u;
+      const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+      // A falling spectral slope with noise on top, so the fitted coefficients are not
+      // degenerate and the high-degree column is actually exercised.
+      const float slope = 1.0f / (1.0f + 0.05f * static_cast<float>(k));
+      magnitude[static_cast<size_t>(k) * static_cast<size_t>(n_frames) + static_cast<size_t>(t)] =
+          slope * (0.2f + unit);
+    }
+  }
+  return magnitude;
+}
+
+}  // namespace
+
+TEST_CASE("poly_features does not depend on where a frame lands in a tile", "[spectral]") {
+  // The Vandermonde matrix, its column scaling and the SVD are built from n_bins, sr, n_fft
+  // and order alone, so a one-frame call fits the identical system to the identical column.
+  // It also stages a single tile starting at frame 0, which is the one traversal that cannot
+  // express a tile-offset error -- making it an oracle for the full call without duplicating
+  // the solve. Sizes straddle the 256-frame tile so a partial trailing tile is covered.
+  const int n_bins = 37;
+  const int sr = 22050;
+  const int n_fft = 72;
+  const int order = 2;
+
+  for (int n_frames : {1, 255, 256, 257, 600}) {
+    CAPTURE(n_frames);
+    const std::vector<float> magnitude = poly_fixture(n_bins, n_frames);
+    const std::vector<float> full =
+        poly_features(magnitude.data(), n_bins, n_frames, sr, n_fft, order);
+    REQUIRE(full.size() == static_cast<size_t>(order + 1) * static_cast<size_t>(n_frames));
+
+    std::vector<float> column(static_cast<size_t>(n_bins));
+    for (int t = 0; t < n_frames; ++t) {
+      for (int k = 0; k < n_bins; ++k) {
+        column[static_cast<size_t>(k)] =
+            magnitude[static_cast<size_t>(k) * static_cast<size_t>(n_frames) +
+                      static_cast<size_t>(t)];
+      }
+      const std::vector<float> single = poly_features(column.data(), n_bins, 1, sr, n_fft, order);
+      REQUIRE(single.size() == static_cast<size_t>(order + 1));
+      for (int p = 0; p <= order; ++p) {
+        CAPTURE(t, p);
+        REQUIRE(
+            full[static_cast<size_t>(p) * static_cast<size_t>(n_frames) + static_cast<size_t>(t)] ==
+            single[static_cast<size_t>(p)]);
+      }
+    }
+  }
+}

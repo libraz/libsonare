@@ -3,11 +3,20 @@
 
 #include "effects/decompose.h"
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <string>
+#include <utility>
 #include <vector>
+
+#include "util/constants.h"
 
 using namespace sonare;
 
@@ -171,4 +180,469 @@ TEST_CASE("nn_filter median averages the two central values for an even count",
   auto out = nn_filter(S.data(), /*n_features=*/1, /*n_frames=*/5, "median", /*k=*/2, /*width=*/1);
   REQUIRE(out.size() == 5);
   REQUIRE(out[2] == Catch::Approx(15.0f));
+}
+
+namespace {
+
+/// @brief Deterministic strictly-positive [n_features x n_frames] matrix, row-major.
+/// @details Strictly positive so the multiplicative updates never latch a factor to zero,
+///          and structured per frame so the cosine neighbours of a frame are a distinct set
+///          rather than a tie that any ordering satisfies.
+std::vector<float> traversal_fixture(int n_features, int n_frames, uint32_t seed) {
+  std::vector<float> S(static_cast<std::size_t>(n_features) * n_frames, 0.0f);
+  uint32_t state = seed;
+  for (int f = 0; f < n_features; ++f) {
+    for (int t = 0; t < n_frames; ++t) {
+      state = state * 1664525u + 1013904223u;
+      const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+      const float envelope = 0.25f + 0.75f * static_cast<float>((f + 2 * t) % 7) / 6.0f;
+      S[static_cast<std::size_t>(f) * n_frames + t] = 0.05f + unit * envelope;
+    }
+  }
+  return S;
+}
+
+void require_bit_equal(const std::vector<float>& got, const std::vector<float>& want) {
+  REQUIRE(got.size() == want.size());
+  for (std::size_t i = 0; i < got.size(); ++i) {
+    CAPTURE(i, got[i], want[i]);
+    REQUIRE(std::isfinite(got[i]));
+    REQUIRE(got[i] == want[i]);
+  }
+}
+
+/// @brief Distance in representable floats between two non-negative finite values.
+/// @details IEEE-754 orders non-negative floats monotonically as int32, so the bit patterns
+///          subtract directly. The caller checks finiteness and sign first.
+long long ulp_distance(float a, float b) {
+  std::int32_t ia = 0;
+  std::int32_t ib = 0;
+  std::memcpy(&ia, &a, sizeof(ia));
+  std::memcpy(&ib, &b, sizeof(ib));
+  return std::llabs(static_cast<long long>(ia) - static_cast<long long>(ib));
+}
+
+/// @brief How two results disagree: how many cells, and the largest distance among them.
+struct Disagreement {
+  std::size_t total = 0;
+  std::size_t count = 0;
+  long long worst_ulps = 0;
+  std::size_t worst_index = 0;
+};
+
+Disagreement disagreement_of(const std::vector<float>& got, const std::vector<float>& want) {
+  Disagreement d;
+  d.total = got.size();
+  for (std::size_t i = 0; i < got.size(); ++i) {
+    if (got[i] == want[i]) continue;
+    ++d.count;
+    const long long u = ulp_distance(got[i], want[i]);
+    if (u > d.worst_ulps) {
+      d.worst_ulps = u;
+      d.worst_index = i;
+    }
+  }
+  return d;
+}
+
+/// @brief Bounds how far two results may disagree in ulps, placing no bound on how many
+///        cells do.
+/// @details For an array where exactness is not available and which carries no ordering
+///          claim. Scans every cell rather than stopping at the first, so a failure reports
+///          the count alongside the bound that it broke.
+void require_ulp_bounded(const std::vector<float>& got, const std::vector<float>& want,
+                         long long max_ulps) {
+  REQUIRE(got.size() == want.size());
+  bool representable = true;
+  for (float v : got) representable = representable && std::isfinite(v) && v >= 0.0f;
+  for (float v : want) representable = representable && std::isfinite(v) && v >= 0.0f;
+  REQUIRE(representable);  // precondition for the ulp arithmetic below
+
+  const Disagreement d = disagreement_of(got, want);
+  const double worst_got = d.count > 0 ? static_cast<double>(got[d.worst_index]) : 0.0;
+  const double worst_want = d.count > 0 ? static_cast<double>(want[d.worst_index]) : 0.0;
+  CAPTURE(d.total, d.count, d.worst_ulps, max_ulps, d.worst_index, worst_got, worst_want);
+  REQUIRE(d.worst_ulps <= max_ulps);
+}
+
+/// @brief Relative Frobenius error of the factorisation, ||S - W H|| / ||S||.
+/// @details Accumulated in double so the comparison between iteration counts is not itself
+///          measuring float rounding.
+double reconstruction_error(const float* S, const DecomposeResult& r, int n_features, int n_frames,
+                            int n_components) {
+  double err = 0.0;
+  double ref = 0.0;
+  for (int f = 0; f < n_features; ++f) {
+    for (int t = 0; t < n_frames; ++t) {
+      double model = 0.0;
+      for (int c = 0; c < n_components; ++c) {
+        model += static_cast<double>(r.W[f * n_components + c]) *
+                 static_cast<double>(r.H[c * n_frames + t]);
+      }
+      const double target = static_cast<double>(S[f * n_frames + t]);
+      err += (target - model) * (target - model);
+      ref += target * target;
+    }
+  }
+  return ref > 0.0 ? std::sqrt(err / ref) : 0.0;
+}
+
+void require_finite_non_negative(const DecomposeResult& r) {
+  for (float v : r.W) {
+    CAPTURE(v);
+    REQUIRE(std::isfinite(v));
+    REQUIRE(v >= 0.0f);
+  }
+  for (float v : r.H) {
+    CAPTURE(v);
+    REQUIRE(std::isfinite(v));
+    REQUIRE(v >= 0.0f);
+  }
+}
+
+/// @brief decompose()'s MU loop with the H update in its original frame-major traversal.
+/// @details The inner loop over features strides num_feat and den_feat, which is the shape the
+///          library replaced with per-frame accumulators. Seeded from decompose(n_iter=0) so
+///          the oracle inherits the library's own initialisation -- including the NNDSVD
+///          singular vectors, which are not reproducible here. This is a reimplementation,
+///          not the library's code, so it is only compared at one update step; see the test
+///          case for why the iteration count is what decides that.
+DecomposeResult oracle_decompose(const float* S, int n_features, int n_frames, int n_components,
+                                 int n_iter, float beta, const std::string& init) {
+  constexpr float kEps = constants::kAmpEpsilon;
+  DecomposeResult out =
+      decompose(S, n_features, n_frames, n_components, /*n_iter=*/0, "mu", beta, init);
+
+  const float exp_num = beta - 2.0f;
+  const float exp_den = beta - 1.0f;
+  const std::size_t cells = static_cast<std::size_t>(n_features) * n_frames;
+  std::vector<float> WH(cells, 0.0f);
+  std::vector<float> num_feat(cells, 0.0f);
+  std::vector<float> den_feat(cells, 0.0f);
+
+  auto rebuild = [&]() {
+    for (int f = 0; f < n_features; ++f) {
+      for (int t = 0; t < n_frames; ++t) {
+        float s = 0.0f;
+        for (int c = 0; c < n_components; ++c) {
+          s += out.W[f * n_components + c] * out.H[c * n_frames + t];
+        }
+        WH[static_cast<std::size_t>(f) * n_frames + t] = s;
+      }
+    }
+    for (std::size_t i = 0; i < cells; ++i) {
+      const float wh = WH[i] + kEps;
+      const float pow_num = (exp_num == 0.0f) ? 1.0f : std::pow(wh, exp_num);
+      const float pow_den = (exp_den == 0.0f) ? 1.0f : std::pow(wh, exp_den);
+      num_feat[i] = S[i] * pow_num;
+      den_feat[i] = pow_den;
+    }
+  };
+
+  for (int it = 0; it < n_iter; ++it) {
+    rebuild();
+    for (int c = 0; c < n_components; ++c) {
+      for (int t = 0; t < n_frames; ++t) {
+        float num = 0.0f;
+        float den = 0.0f;
+        for (int f = 0; f < n_features; ++f) {
+          const float w = out.W[f * n_components + c];
+          num += w * num_feat[f * n_frames + t];
+          den += w * den_feat[f * n_frames + t];
+        }
+        out.H[c * n_frames + t] *= num / (den + kEps);
+      }
+    }
+    rebuild();
+    for (int f = 0; f < n_features; ++f) {
+      for (int c = 0; c < n_components; ++c) {
+        float num = 0.0f;
+        float den = 0.0f;
+        for (int t = 0; t < n_frames; ++t) {
+          const float h = out.H[c * n_frames + t];
+          num += num_feat[f * n_frames + t] * h;
+          den += den_feat[f * n_frames + t] * h;
+        }
+        out.W[f * n_components + c] *= num / (den + kEps);
+      }
+    }
+  }
+  return out;
+}
+
+/// @brief nn_filter() with the column norms and the cosine similarities in their original
+///        frame-major traversals, both of which stride a column of S.
+/// @details The similarities only reach the output through the neighbour ranking, so this also
+///          catches a reordering that moves a similarity by one bit across a ranking tie.
+std::vector<float> oracle_nn_filter(const float* S, int n_features, int n_frames,
+                                    const std::string& aggregate, int k, int width) {
+  if (k <= 0) k = std::min(5, n_frames);
+
+  std::vector<float> norms(n_frames, 0.0f);
+  for (int t = 0; t < n_frames; ++t) {
+    float s = 0.0f;
+    for (int f = 0; f < n_features; ++f) {
+      const float v = S[f * n_frames + t];
+      s += v * v;
+    }
+    norms[t] = std::sqrt(s);
+  }
+
+  std::vector<std::vector<int>> selectors_for(n_frames);
+  std::vector<std::pair<float, int>> sims;
+  const int n_neighbors = std::min(n_frames - 1, k + 2 * width);
+  for (int i = 0; i < n_frames; ++i) {
+    sims.clear();
+    for (int j = 0; j < n_frames; ++j) {
+      if (j == i) continue;
+      float dot = 0.0f;
+      for (int f = 0; f < n_features; ++f) {
+        dot += S[f * n_frames + i] * S[f * n_frames + j];
+      }
+      const float sim = (norms[i] > 0.0f && norms[j] > 0.0f) ? dot / (norms[i] * norms[j]) : 0.0f;
+      sims.push_back({sim, j});
+    }
+    if (sims.empty()) continue;
+    const int nn = std::min(n_neighbors, static_cast<int>(sims.size()));
+    std::partial_sort(sims.begin(), sims.begin() + nn, sims.end(),
+                      [](const auto& a, const auto& b) { return a.first > b.first; });
+    std::vector<int> kept;
+    for (int q = 0; q < nn; ++q) {
+      const int j = sims[q].second;
+      if (std::abs(i - j) < width) continue;
+      kept.push_back(j);
+    }
+    std::sort(kept.begin(), kept.end());
+    const int kk = std::min<int>(k, static_cast<int>(kept.size()));
+    for (int q = 0; q < kk; ++q) selectors_for[i].push_back(kept[q]);
+  }
+
+  std::vector<float> out(static_cast<std::size_t>(n_features) * n_frames, 0.0f);
+  for (int t = 0; t < n_frames; ++t) {
+    const std::vector<int>& selectors = selectors_for[t];
+    if (selectors.empty()) {
+      for (int f = 0; f < n_features; ++f) out[f * n_frames + t] = S[f * n_frames + t];
+      continue;
+    }
+    if (aggregate == "median") {
+      for (int f = 0; f < n_features; ++f) {
+        std::vector<float> vals(selectors.size());
+        for (std::size_t q = 0; q < selectors.size(); ++q) vals[q] = S[f * n_frames + selectors[q]];
+        const auto mid = vals.begin() + vals.size() / 2;
+        std::nth_element(vals.begin(), mid, vals.end());
+        float median = *mid;
+        if ((vals.size() % 2) == 0) {
+          const float lower = *std::max_element(vals.begin(), mid);
+          median = 0.5f * (lower + median);
+        }
+        out[f * n_frames + t] = median;
+      }
+    } else if (aggregate == "min") {
+      for (int f = 0; f < n_features; ++f) {
+        float m = std::numeric_limits<float>::infinity();
+        for (int i : selectors) m = std::min(m, S[f * n_frames + i]);
+        out[f * n_frames + t] = m;
+      }
+    } else if (aggregate == "max") {
+      for (int f = 0; f < n_features; ++f) {
+        float m = -std::numeric_limits<float>::infinity();
+        for (int i : selectors) m = std::max(m, S[f * n_frames + i]);
+        out[f * n_frames + t] = m;
+      }
+    } else {
+      const float inv_count = 1.0f / static_cast<float>(selectors.size());
+      for (int f = 0; f < n_features; ++f) {
+        float s = 0.0f;
+        for (int i : selectors) s += S[f * n_frames + i];
+        out[f * n_frames + t] = s * inv_count;
+      }
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("decompose matches a frame-major oracle on H at one update step", "[util][decompose]") {
+  // H is compared exactly and W is not, and that asymmetry is the point: the H update is the
+  // traversal this case guards, and H is what comes back bit-exact. Measured at one
+  // iteration over all four beta/init combinations: H differs in 0 of 87 cells, W in up to 9
+  // of 39 by up to 3 ulp. The oracle is a reimplementation in another translation unit and
+  // FMA contraction is decided per TU, so nothing makes W exact -- but W's own update was
+  // never part of this change, so it carries no claim that the noise could obscure.
+  //
+  // A red H is the signal, and widening is not the answer to one. Reversing the feature loop
+  // moves 48 of 87 H cells, so the exact comparison has the whole array as margin, and the
+  // bit-identity claim itself lives in a same-TU comparison -- surrounding code held fixed,
+  // only the traversal swapped -- which no cross-TU epsilon can stand in for.
+  //
+  // W's bound is deliberately ulp-only. No ulp bound separates codegen from a wrong order,
+  // since the reversal lands at 2 to 4 ulp against codegen's 1; only the cell count does,
+  // and W has no order claim here. kMaxUlpsW sits between the 3 ulp observed and the 1.7e6
+  // a wrong row stride produces, which is the gross corruption it does still catch.
+  //
+  // One iteration, because the agreement is data-dependent rather than structural: both
+  // shapes round alike on the seed and part on its image, so divergence starts at step 2.
+  constexpr long long kMaxUlpsW = 16;
+
+  const int n_features = 13;
+  const int n_frames = 29;
+  const int n_components = 3;
+  const std::vector<float> S = traversal_fixture(n_features, n_frames, 0x5eedu);
+
+  // beta 2 leaves both WH exponents at their identity shortcut; beta 1 (KL) takes the
+  // std::pow path on both, so the numerator the H update consumes is a different matrix.
+  for (float beta : {2.0f, 1.0f}) {
+    for (const std::string& init : {std::string("nndsvd"), std::string("random")}) {
+      CAPTURE(beta, init);
+      const DecomposeResult got =
+          decompose(S.data(), n_features, n_frames, n_components, 1, "mu", beta, init);
+      const DecomposeResult want =
+          oracle_decompose(S.data(), n_features, n_frames, n_components, 1, beta, init);
+      require_bit_equal(got.H, want.H);
+      require_ulp_bounded(got.W, want.W, kMaxUlpsW);
+    }
+  }
+}
+
+TEST_CASE("decompose matches the oracle on single-row and single-column inputs",
+          "[util][decompose]") {
+  // Extent coverage, not order coverage: at these shapes the feature loop is one iteration
+  // long or its accumulator holds one frame, so neither a reversed feature order nor a wrong
+  // row stride moves a single value (0 of 2 and 0 of 9 for both). What is left is that the
+  // index arithmetic still addresses the right cells where one extent collapses.
+  // W is ulp-bounded rather than exact for the reason given in the case above; it happens to
+  // be exact at these extents today, which is not something to depend on.
+  constexpr long long kMaxUlpsW = 16;
+
+  SECTION("one frame") {
+    const int n_features = 7;
+    const std::vector<float> S = traversal_fixture(n_features, 1, 0xc0ffeeu);
+    const DecomposeResult got =
+        decompose(S.data(), n_features, 1, /*n_components=*/2, 1, "mu", 2.0f, "random");
+    const DecomposeResult want =
+        oracle_decompose(S.data(), n_features, 1, /*n_components=*/2, 1, 2.0f, "random");
+    require_bit_equal(got.H, want.H);
+    require_ulp_bounded(got.W, want.W, kMaxUlpsW);
+  }
+
+  SECTION("one feature") {
+    const int n_frames = 9;
+    const std::vector<float> S = traversal_fixture(1, n_frames, 0xb0bau);
+    const DecomposeResult got =
+        decompose(S.data(), 1, n_frames, /*n_components=*/1, 1, "mu", 2.0f, "random");
+    const DecomposeResult want =
+        oracle_decompose(S.data(), 1, n_frames, /*n_components=*/1, 1, 2.0f, "random");
+    require_bit_equal(got.H, want.H);
+    require_ulp_bounded(got.W, want.W, kMaxUlpsW);
+  }
+}
+
+TEST_CASE("decompose stays finite and descends over the full iteration count",
+          "[util][decompose]") {
+  // What 200 iterations can carry is not a value comparison. The per-TU codegen spread grows
+  // with the iteration count and overtakes what a traversal error produces -- at 200 it is
+  // 1.11e-05 against 9.01e-06 -- so any tolerance wide enough to be reliably green admits the
+  // drift this file exists to exclude, and the crossover is near 50 rather than at the end.
+  // The two cases at the top of this file already cover shape and non-negativity at 50
+  // iterations on a 3x3; new here are depth, finiteness -- which `v >= 0` does not give,
+  // since +Inf passes it -- and the descent itself, which nothing else asserts.
+  const int n_features = 13;
+  const int n_frames = 29;
+  const int n_components = 3;
+  const std::vector<float> S = traversal_fixture(n_features, n_frames, 0x5eedu);
+
+  for (const std::string& init : {std::string("nndsvd"), std::string("random")}) {
+    CAPTURE(init);
+    // beta 2 is the Frobenius case, so the multiplicative updates descend exactly the error
+    // measured here. Checkpoints rather than a threshold: monotonicity is the property the
+    // updates guarantee, and it needs no fixture-dependent constant to state.
+    double previous = std::numeric_limits<double>::infinity();
+    for (int n_iter : {1, 10, 50, 200}) {
+      CAPTURE(n_iter);
+      const DecomposeResult r =
+          decompose(S.data(), n_features, n_frames, n_components, n_iter, "mu", 2.0f, init);
+      REQUIRE(r.W.size() == static_cast<std::size_t>(n_features) * n_components);
+      REQUIRE(r.H.size() == static_cast<std::size_t>(n_components) * n_frames);
+      require_finite_non_negative(r);
+
+      const double error = reconstruction_error(S.data(), r, n_features, n_frames, n_components);
+      CAPTURE(error, previous);
+      REQUIRE(error <= previous);
+      previous = error;
+    }
+    // Strictly below the first step, so the assertion above cannot be satisfied by standing
+    // still for 199 iterations.
+    const DecomposeResult one =
+        decompose(S.data(), n_features, n_frames, n_components, 1, "mu", 2.0f, init);
+    REQUIRE(previous < reconstruction_error(S.data(), one, n_features, n_frames, n_components));
+  }
+
+  // beta 1 minimises the KL divergence, not the error measured above, so only the invariants
+  // carry over to it.
+  require_finite_non_negative(
+      decompose(S.data(), n_features, n_frames, n_components, 200, "mu", 1.0f, "nndsvd"));
+}
+
+TEST_CASE("nn_filter matches a frame-major oracle for every aggregator", "[util][decompose]") {
+  // What this reaches: a wrong element, a dropped feature, and a scratch buffer carried
+  // between frames without being reset or resized. What it cannot reach: a reordered
+  // summation inside the norms or the dot products, because neither leaves the function --
+  // they are consumed by the neighbour ranking, and a last-bit move does not flip it. That
+  // order is held by construction instead (each accumulator still takes its terms in feature
+  // order), and a fixture tuned to sit on a ranking tie would only make the test flaky.
+  const int n_features = 11;
+  const int n_frames = 37;
+  const std::vector<float> S = traversal_fixture(n_features, n_frames, 0xdecafu);
+
+  for (const std::string& aggregate :
+       {std::string("mean"), std::string("median"), std::string("min"), std::string("max")}) {
+    for (int width : {0, 2}) {
+      CAPTURE(aggregate, width);
+      const std::vector<float> got =
+          nn_filter(S.data(), n_features, n_frames, aggregate, /*k=*/4, width);
+      const std::vector<float> want =
+          oracle_nn_filter(S.data(), n_features, n_frames, aggregate, /*k=*/4, width);
+      require_bit_equal(got, want);
+    }
+  }
+
+  // Few enough frames that the exclusion band leaves some of them fewer than k survivors, so
+  // the gathered count changes from frame to frame and crosses the median's odd/even split.
+  // A buffer reused across frames that only ever grows reads a stale tail here and nowhere
+  // in the case above, where every frame selects exactly k.
+  const std::vector<float> narrow = traversal_fixture(6, 6, 0xfeedu);
+  for (const std::string& aggregate :
+       {std::string("mean"), std::string("median"), std::string("min"), std::string("max")}) {
+    CAPTURE(aggregate);
+    require_bit_equal(nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2),
+                      oracle_nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2));
+  }
+}
+
+TEST_CASE("nn_filter matches the oracle on single-row and single-column inputs",
+          "[util][decompose]") {
+  SECTION("one frame") {
+    // No neighbour survives, so every output column is a copy -- the branch that reads S and
+    // writes out with the same stride.
+    const int n_features = 5;
+    const std::vector<float> S = traversal_fixture(n_features, 1, 0x1234u);
+    for (const std::string& aggregate : {std::string("mean"), std::string("median")}) {
+      CAPTURE(aggregate);
+      require_bit_equal(nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1),
+                        oracle_nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1));
+    }
+  }
+
+  SECTION("one feature") {
+    // Every column is a scalar, so the cosine similarities collapse to 1 and the neighbour set
+    // is decided entirely by the column-index tie-break.
+    const int n_frames = 13;
+    const std::vector<float> S = traversal_fixture(1, n_frames, 0x4321u);
+    for (const std::string& aggregate : {std::string("mean"), std::string("max")}) {
+      CAPTURE(aggregate);
+      require_bit_equal(nn_filter(S.data(), 1, n_frames, aggregate, /*k=*/3, /*width=*/2),
+                        oracle_nn_filter(S.data(), 1, n_frames, aggregate, /*k=*/3, /*width=*/2));
+    }
+  }
 }

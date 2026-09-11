@@ -195,12 +195,15 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
   }
   if (k > 0 && k < Y_cols) {
     std::vector<size_t> order(Y_cols);
+    std::vector<float> keep(Y_cols, 0.0f);
     for (int i = 0; i < X_cols; ++i) {
       std::iota(order.begin(), order.end(), size_t{0});
       std::partial_sort(order.begin(), order.begin() + k, order.end(), [&](size_t a, size_t b) {
         return out[i * Y_cols + a] > out[i * Y_cols + b];
       });
-      std::vector<float> keep(Y_cols, 0.0f);
+      // Every row starts from zeros: a position outside this row's top k must read 0, not
+      // whatever the previous row kept there.
+      std::fill(keep.begin(), keep.end(), 0.0f);
       for (int q = 0; q < k; ++q) keep[order[q]] = out[i * Y_cols + order[q]];
       for (int j = 0; j < Y_cols; ++j) out[i * Y_cols + j] = keep[j];
     }
@@ -256,11 +259,14 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
   }
   if (k > 0 && k < cols) {
     std::vector<size_t> order(cols);
+    std::vector<float> keep(cols, 0.0f);
     for (int i = 0; i < cols; ++i) {
       std::iota(order.begin(), order.end(), size_t{0});
       std::partial_sort(order.begin(), order.begin() + k, order.end(),
                         [&](size_t a, size_t b) { return out[i * cols + a] > out[i * cols + b]; });
-      std::vector<float> keep(cols, 0.0f);
+      // Every row starts from zeros: a position outside this row's top k must read 0, not
+      // whatever the previous row kept there.
+      std::fill(keep.begin(), keep.end(), 0.0f);
       for (int q = 0; q < k; ++q) keep[order[q]] = out[i * cols + order[q]];
       for (int j = 0; j < cols; ++j) out[i * cols + j] = keep[j];
     }

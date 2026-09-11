@@ -218,16 +218,19 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
 
   if (n_frames > lag) {
     int diff_frames = n_frames - lag;
-    // Sum of |mag[:, f+lag] - mag[:, f]| over bins (auto-vectorized, on par with Eigen).
-    // magnitude is row-major [n_bins x n_frames].
-    for (int f = 0; f < diff_frames; ++f) {
-      float sum = 0.0f;
-      for (int b = 0; b < n_bins; ++b) {
-        const float d = magnitude[b * n_frames + (f + lag)] - magnitude[b * n_frames + f];
-        sum += std::abs(d);
+    // Sum of |mag[:, f+lag] - mag[:, f]| over bins. magnitude is row-major
+    // [n_bins x n_frames], so the loop is bin-major with per-frame accumulators: both reads
+    // and the accumulator run along a contiguous row, where a frame-major inner loop over
+    // bins vectorizes just as well but takes a cache line per bin. Each frame still sums
+    // bins in ascending order, so the flux is unchanged bit for bit.
+    std::vector<float> sums(static_cast<size_t>(diff_frames), 0.0f);
+    for (int b = 0; b < n_bins; ++b) {
+      const float* row = magnitude.data() + static_cast<size_t>(b) * n_frames;
+      for (int f = 0; f < diff_frames; ++f) {
+        sums[f] += std::abs(row[f + lag] - row[f]);
       }
-      flux[f + lag] = sum;
     }
+    for (int f = 0; f < diff_frames; ++f) flux[f + lag] = sums[f];
   }
 
   return flux;

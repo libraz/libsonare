@@ -512,16 +512,26 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   // returns it).
   std::vector<std::complex<float>> data(static_cast<size_t>(config.n_bins) * n_frames,
                                         std::complex<float>(0.0f, 0.0f));
+  // Per-frame accumulators with the STFT bin loop outside the frame loop: `mag` is row-major
+  // [n_freq x n_frames], so each projection bin now walks every row once and contiguously
+  // instead of re-striding all n_freq rows for every frame. Each acc[t] still sums b in
+  // ascending order, so the projection is unchanged bit for bit.
+  std::vector<float> acc(static_cast<size_t>(n_frames), 0.0f);
   for (int k = 0; k < config.n_bins; ++k) {
     const float scale = lengths[static_cast<size_t>(k)] > 0.0f
                             ? 1.0f / std::sqrt(lengths[static_cast<size_t>(k)])
                             : 1.0f;
-    for (int t = 0; t < n_frames; ++t) {
-      float acc = 0.0f;
-      for (int b = 0; b < n_freq; ++b) {
-        acc += P[k * n_freq + b] * mag[b * n_frames + t];
+    std::fill(acc.begin(), acc.end(), 0.0f);
+    const float* prow = P.data() + static_cast<size_t>(k) * n_freq;
+    for (int b = 0; b < n_freq; ++b) {
+      const float p = prow[b];
+      const float* mrow = mag.data() + static_cast<size_t>(b) * n_frames;
+      for (int t = 0; t < n_frames; ++t) {
+        acc[t] += p * mrow[t];
       }
-      data[k * n_frames + t] = std::complex<float>(acc * scale, 0.0f);
+    }
+    for (int t = 0; t < n_frames; ++t) {
+      data[k * n_frames + t] = std::complex<float>(acc[t] * scale, 0.0f);
     }
   }
   return CqtResult(std::move(data), config.n_bins, n_frames, std::move(freqs), config.hop_length,
@@ -619,13 +629,20 @@ Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const Cqt
   std::vector<float> P = detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
 
   std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
-  for (int b = 0; b < n_freq; ++b) {
-    for (int t = 0; t < n_frames; ++t) {
-      float acc = 0.0f;
-      for (int k = 0; k < n_bins; ++k) {
-        acc += P[k * n_freq + b] * magnitude[k * n_frames + t];
+  // Accumulate P^T * magnitude with the CQT bin outermost. P is row-major [n_bins x n_freq]
+  // and `magnitude` row-major [n_bins x n_frames], so one CQT bin supplies a contiguous run
+  // of P and one magnitude row reused across every STFT bin, where the innermost k strided
+  // both. Each output cell still sums k in ascending order from the zero it was constructed
+  // with, so the seed Griffin-Lim iterates on is unchanged bit for bit.
+  for (int k = 0; k < n_bins; ++k) {
+    const float* prow = P.data() + static_cast<size_t>(k) * n_freq;
+    const float* mrow = magnitude + static_cast<size_t>(k) * n_frames;
+    for (int b = 0; b < n_freq; ++b) {
+      const float p = prow[b];
+      float* orow = stft_mag.data() + static_cast<size_t>(b) * n_frames;
+      for (int t = 0; t < n_frames; ++t) {
+        orow[t] += p * mrow[t];
       }
-      stft_mag[b * n_frames + t] = acc;
     }
   }
 

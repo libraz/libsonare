@@ -51,24 +51,40 @@ std::vector<double> estimate_quantile_noise_psd(const Spectrogram& spec, float q
   if (frames == 0) return noise;
 
   const auto& power = spec.power();
+  const auto row_of = [&power, frames](int b) {
+    return power.data() + static_cast<size_t>(b) * static_cast<size_t>(frames);
+  };
+
+  // `power` is row-major [bins x frames], so a bin is one contiguous row. Accumulating
+  // bin-major still feeds every frame's energy its bins in increasing b, as the column walk did.
   std::vector<std::pair<double, int>> frame_energies(static_cast<size_t>(frames));
   for (int t = 0; t < frames; ++t) {
-    double energy = 0.0;
-    for (int b = 0; b < bins; ++b) {
-      energy += power[b * frames + t];
+    frame_energies[static_cast<size_t>(t)] = {0.0, t};
+  }
+  for (int b = 0; b < bins; ++b) {
+    const float* row = row_of(b);
+    for (int t = 0; t < frames; ++t) {
+      frame_energies[static_cast<size_t>(t)].first += row[t];
     }
-    frame_energies[static_cast<size_t>(t)] = {energy, t};
   }
   std::sort(frame_energies.begin(), frame_energies.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
   const int noise_frames =
       std::max(1, static_cast<int>(std::round(static_cast<float>(frames) * quantile)));
+  std::vector<int> selected(static_cast<size_t>(noise_frames));
   for (int i = 0; i < noise_frames; ++i) {
-    const int t = frame_energies[static_cast<size_t>(i)].second;
-    for (int b = 0; b < bins; ++b) {
-      noise[static_cast<size_t>(b)] += power[b * frames + t];
+    selected[static_cast<size_t>(i)] = frame_energies[static_cast<size_t>(i)].second;
+  }
+  // The selected frames are scattered, so bin-major buys a working set of one row rather than a
+  // contiguous read. Each bin still sums the frames in the order they were selected.
+  for (int b = 0; b < bins; ++b) {
+    const float* row = row_of(b);
+    double accumulated = 0.0;
+    for (int i = 0; i < noise_frames; ++i) {
+      accumulated += row[selected[static_cast<size_t>(i)]];
     }
+    noise[static_cast<size_t>(b)] = accumulated;
   }
   const double scale = 1.0 / static_cast<double>(noise_frames);
   for (auto& v : noise) v *= scale;
@@ -97,18 +113,41 @@ std::vector<double> estimate_noise_psd_frames(const Spectrogram& spec,
     mode = common::NoiseTracker::Mode::Mcra;
   }
   common::NoiseTracker tracker(bins, spec.sample_rate(), mode, config.hop_length);
-  std::vector<float> frame_power(static_cast<size_t>(bins), 0.0f);
   const auto& power = spec.power();
 
-  for (int t = 0; t < frames; ++t) {
+  // The tracker is recursive in t, so this is a tiling rather than an exchange: a bounded block
+  // lets the read and the write-back run along bin rows while the tracker still sees whole
+  // columns in order.
+  constexpr int kFrameTile = 64;
+  std::vector<float> power_tile(static_cast<size_t>(bins) * kFrameTile, 0.0f);
+  std::vector<float> noise_tile(static_cast<size_t>(bins) * kFrameTile, 0.0f);
+
+  for (int tile_start = 0; tile_start < frames; tile_start += kFrameTile) {
+    const int tile_frames = std::min(kFrameTile, frames - tile_start);
+
     for (int b = 0; b < bins; ++b) {
-      frame_power[static_cast<size_t>(b)] =
-          static_cast<float>(std::max(power[b * frames + t], 0.0f));
+      const float* row = power.data() + static_cast<size_t>(b) * static_cast<size_t>(frames) +
+                         static_cast<size_t>(tile_start);
+      for (int t = 0; t < tile_frames; ++t) {
+        power_tile[static_cast<size_t>(t) * static_cast<size_t>(bins) + static_cast<size_t>(b)] =
+            std::max(row[t], 0.0f);
+      }
     }
-    tracker.update(frame_power.data());
-    const auto& tracked = tracker.noise_psd();
+
+    for (int t = 0; t < tile_frames; ++t) {
+      const size_t frame_offset = static_cast<size_t>(t) * static_cast<size_t>(bins);
+      tracker.update(power_tile.data() + frame_offset);
+      const float* tracked = tracker.noise_psd();
+      std::copy(tracked, tracked + bins, noise_tile.data() + frame_offset);
+    }
+
     for (int b = 0; b < bins; ++b) {
-      noise[static_cast<size_t>(b * frames + t)] = tracked[static_cast<size_t>(b)];
+      double* out = noise.data() + static_cast<size_t>(b) * static_cast<size_t>(frames) +
+                    static_cast<size_t>(tile_start);
+      for (int t = 0; t < tile_frames; ++t) {
+        out[t] =
+            noise_tile[static_cast<size_t>(t) * static_cast<size_t>(bins) + static_cast<size_t>(b)];
+      }
     }
   }
   return noise;

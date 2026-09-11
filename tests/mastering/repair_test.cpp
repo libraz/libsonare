@@ -2,10 +2,14 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <cstddef>
 #include <random>
+#include <utility>
 #include <vector>
 
+#include "core/spectrum.h"
+#include "mastering/common/noise_tracker.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
 #include "mastering/repair/decrackle.h"
@@ -630,6 +634,355 @@ TEST_CASE("DereverbClassical WPE mode further suppresses predictable late reverb
 
   REQUIRE(wpe.size() == input.size());
   REQUIRE(rms(wpe) < rms(spectral));
+}
+
+namespace {
+
+/// @brief denoise_classical's noise-PSD estimators as they walked the spectrogram before the
+///        traversal changed, followed by the Berouti gain stage.
+/// @details Only SpectralSubtraction is mirrored, because its gain stage is four expressions:
+///          the oracle stays a reference for the traversal rather than a second copy of the
+///          Ephraim-Malah estimators. The noise estimator is an independent config field, so
+///          all three noise-PSD paths are still reachable through it.
+Audio oracle_denoise_spectral_subtraction(const Audio& audio,
+                                          const DenoiseClassicalConfig& config) {
+  StftConfig stft_config;
+  stft_config.n_fft = config.n_fft;
+  stft_config.hop_length = config.hop_length;
+  stft_config.window = WindowType::Hann;
+  stft_config.center = true;
+  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  const int bins = spec.n_bins();
+  const int frames = spec.n_frames();
+  const auto& power = spec.power();
+  std::vector<double> noise_psd(static_cast<size_t>(bins * frames), 0.0);
+
+  if (config.noise_estimator == DenoiseNoiseEstimator::Quantile) {
+    std::vector<std::pair<double, int>> frame_energies(static_cast<size_t>(frames));
+    for (int t = 0; t < frames; ++t) {
+      double energy = 0.0;
+      for (int b = 0; b < bins; ++b) {
+        energy += power[b * frames + t];
+      }
+      frame_energies[static_cast<size_t>(t)] = {energy, t};
+    }
+    std::sort(frame_energies.begin(), frame_energies.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    const int noise_frames =
+        std::max(1, static_cast<int>(
+                        std::round(static_cast<float>(frames) * config.noise_estimation_quantile)));
+    std::vector<double> stationary(static_cast<size_t>(bins), 0.0);
+    for (int i = 0; i < noise_frames; ++i) {
+      const int t = frame_energies[static_cast<size_t>(i)].second;
+      for (int b = 0; b < bins; ++b) {
+        stationary[static_cast<size_t>(b)] += power[b * frames + t];
+      }
+    }
+    const double scale = 1.0 / static_cast<double>(noise_frames);
+    for (auto& value : stationary) value *= scale;
+    for (int b = 0; b < bins; ++b) {
+      for (int t = 0; t < frames; ++t) {
+        noise_psd[static_cast<size_t>(b * frames + t)] = stationary[static_cast<size_t>(b)];
+      }
+    }
+  } else {
+    auto mode = mastering::common::NoiseTracker::Mode::Imcra;
+    if (config.noise_estimator == DenoiseNoiseEstimator::Mcra) {
+      mode = mastering::common::NoiseTracker::Mode::Mcra;
+    }
+    mastering::common::NoiseTracker tracker(bins, spec.sample_rate(), mode, config.hop_length);
+    std::vector<float> frame_power(static_cast<size_t>(bins), 0.0f);
+    for (int t = 0; t < frames; ++t) {
+      for (int b = 0; b < bins; ++b) {
+        frame_power[static_cast<size_t>(b)] =
+            static_cast<float>(std::max(power[b * frames + t], 0.0f));
+      }
+      tracker.update(frame_power.data());
+      const float* tracked = tracker.noise_psd();
+      for (int b = 0; b < bins; ++b) {
+        noise_psd[static_cast<size_t>(b * frames + t)] = tracked[static_cast<size_t>(b)];
+      }
+    }
+  }
+
+  const auto* complex_data = spec.complex_data();
+  std::vector<std::complex<float>> denoised(static_cast<size_t>(bins * frames));
+  const double alpha = static_cast<double>(config.over_subtraction);
+  const double beta = static_cast<double>(config.spectral_floor);
+  for (int b = 0; b < bins; ++b) {
+    for (int t = 0; t < frames; ++t) {
+      const size_t idx = static_cast<size_t>(b * frames + t);
+      const std::complex<float>& bin = complex_data[idx];
+      const double mag = std::abs(bin);
+      const double bin_power = mag * mag;
+      const double noise_pow = std::max(noise_psd[idx], 1e-12);
+      const double floor_pow = beta * noise_pow;
+      const double clean_power = std::max(bin_power - alpha * noise_pow, floor_pow);
+      const double gain = mag > 1e-12 ? std::sqrt(clean_power) / mag : 0.0;
+      denoised[idx] = {static_cast<float>(bin.real() * gain),
+                       static_cast<float>(bin.imag() * gain)};
+    }
+  }
+
+  const Spectrogram clean = Spectrogram::from_complex(
+      denoised.data(), bins, frames, spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+      spec.window(), spec.center(), spec.win_length());
+  return clean.to_audio(static_cast<int>(audio.size()));
+}
+
+/// @brief dereverb_classical's linear solve, taking its working storage by value.
+std::vector<std::complex<float>> oracle_solve_linear_system(
+    std::vector<std::vector<std::complex<double>>> matrix, std::vector<std::complex<double>> rhs) {
+  const size_t n = rhs.size();
+  for (size_t col = 0; col < n; ++col) {
+    size_t pivot = col;
+    double best = std::abs(matrix[col][col]);
+    for (size_t row = col + 1; row < n; ++row) {
+      const double candidate = std::abs(matrix[row][col]);
+      if (candidate > best) {
+        best = candidate;
+        pivot = row;
+      }
+    }
+    if (best < 1.0e-18) {
+      rhs[col] = {0.0, 0.0};
+      continue;
+    }
+    if (pivot != col) {
+      std::swap(matrix[pivot], matrix[col]);
+      std::swap(rhs[pivot], rhs[col]);
+    }
+    const auto diagonal = matrix[col][col];
+    for (size_t k = col; k < n; ++k) matrix[col][k] /= diagonal;
+    rhs[col] /= diagonal;
+    for (size_t row = 0; row < n; ++row) {
+      if (row == col) continue;
+      const auto factor = matrix[row][col];
+      if (std::abs(factor) < 1.0e-18) continue;
+      for (size_t k = col; k < n; ++k) matrix[row][k] -= factor * matrix[col][k];
+      rhs[row] -= factor * rhs[col];
+    }
+  }
+
+  std::vector<std::complex<float>> solution(n);
+  for (size_t i = 0; i < n; ++i) solution[i] = static_cast<std::complex<float>>(rhs[i]);
+  return solution;
+}
+
+/// @brief dereverb_classical with the WPE covariance and cross buffers allocated inside the
+///        bin loop, as they were before they were hoisted out of it.
+/// @details The short-input padding branch is not mirrored; the caller keeps the input longer
+///          than n_fft.
+Audio oracle_dereverb(const Audio& audio, const DereverbClassicalConfig& config) {
+  constexpr double kRegularization = static_cast<double>(sonare::constants::kSpectrumEpsilon);
+
+  StftConfig stft_config;
+  stft_config.n_fft = config.n_fft;
+  stft_config.hop_length = config.hop_length;
+  stft_config.window = WindowType::Hann;
+  stft_config.center = true;
+  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  const int bins = spec.n_bins();
+  const int frames = spec.n_frames();
+  const auto* complex_data = spec.complex_data();
+  const auto& power = spec.power();
+  std::vector<std::complex<float>> dereverbed(static_cast<size_t>(bins * frames));
+
+  const int delay_frames =
+      std::max(1, static_cast<int>(std::round(config.late_delay_ms * 0.001f *
+                                              static_cast<float>(audio.sample_rate()) /
+                                              static_cast<float>(config.hop_length))));
+  const float delay_sec = static_cast<float>(delay_frames * config.hop_length) /
+                          static_cast<float>(audio.sample_rate());
+  const double decay = std::exp(-2.0 * static_cast<double>(delay_sec) * 6.0 * std::log(10.0) /
+                                static_cast<double>(config.t60_sec));
+
+  for (int b = 0; b < bins; ++b) {
+    for (int t = 0; t < frames; ++t) {
+      const size_t idx = static_cast<size_t>(b * frames + t);
+      const std::complex<float>& bin = complex_data[idx];
+      const double current_power = std::max(static_cast<double>(power[idx]), 1e-18);
+      const int late_frame = t - delay_frames;
+      const double late_psd =
+          late_frame >= 0
+              ? static_cast<double>(power[static_cast<size_t>(b * frames + late_frame)]) * decay
+              : 0.0;
+      const double clean_power =
+          std::max(current_power - static_cast<double>(config.over_subtraction) * late_psd,
+                   static_cast<double>(config.spectral_floor) * current_power);
+      const double gain = std::sqrt(clean_power / current_power);
+      dereverbed[idx] = {static_cast<float>(bin.real() * gain),
+                         static_cast<float>(bin.imag() * gain)};
+    }
+  }
+
+  if (config.wpe_enabled) {
+    std::vector<std::complex<float>> next = dereverbed;
+    const int taps = std::max(1, config.wpe_taps);
+    const int first_predictable = delay_frames + taps - 1;
+    for (int iteration = 0; iteration < config.wpe_iterations; ++iteration) {
+      for (int b = 0; b < bins; ++b) {
+        std::vector<std::vector<std::complex<double>>> covariance(
+            static_cast<size_t>(taps),
+            std::vector<std::complex<double>>(static_cast<size_t>(taps), {0.0, 0.0}));
+        std::vector<std::complex<double>> cross(static_cast<size_t>(taps), {0.0, 0.0});
+        for (int t = first_predictable; t < frames; ++t) {
+          const auto current =
+              static_cast<std::complex<double>>(dereverbed[static_cast<size_t>(b * frames + t)]);
+          for (int i = 0; i < taps; ++i) {
+            const auto xi = static_cast<std::complex<double>>(
+                dereverbed[static_cast<size_t>(b * frames + t - delay_frames - i)]);
+            cross[static_cast<size_t>(i)] += current * std::conj(xi);
+            for (int j = 0; j < taps; ++j) {
+              const auto xj = static_cast<std::complex<double>>(
+                  dereverbed[static_cast<size_t>(b * frames + t - delay_frames - j)]);
+              covariance[static_cast<size_t>(i)][static_cast<size_t>(j)] += xi * std::conj(xj);
+            }
+          }
+        }
+        for (int i = 0; i < taps; ++i) {
+          covariance[static_cast<size_t>(i)][static_cast<size_t>(i)] +=
+              std::complex<double>{kRegularization, 0.0};
+        }
+        auto predictors = oracle_solve_linear_system(std::move(covariance), std::move(cross));
+        double predictor_norm = 0.0;
+        for (const auto& predictor : predictors) predictor_norm += std::abs(predictor);
+        if (predictor_norm > 0.98) {
+          const float scale = static_cast<float>(0.98 / predictor_norm);
+          for (auto& predictor : predictors) predictor *= scale;
+        }
+        for (int t = 0; t < frames; ++t) {
+          const size_t idx = static_cast<size_t>(b * frames + t);
+          if (t < first_predictable) {
+            next[idx] = dereverbed[idx];
+            continue;
+          }
+          std::complex<float> predicted{0.0f, 0.0f};
+          for (int tap = 0; tap < taps; ++tap) {
+            predicted += predictors[static_cast<size_t>(tap)] *
+                         dereverbed[static_cast<size_t>(b * frames + t - delay_frames - tap)];
+          }
+          next[idx] = dereverbed[idx] - config.wpe_strength * predicted;
+        }
+      }
+      dereverbed.swap(next);
+    }
+  }
+
+  const Spectrogram clean = Spectrogram::from_complex(
+      dereverbed.data(), bins, frames, spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+      spec.window(), spec.center(), spec.win_length());
+  return clean.to_audio(static_cast<int>(audio.size()));
+}
+
+/// @brief Index of the first sample where two results differ, or size() when they agree.
+size_t first_differing_sample(const Audio& got, const Audio& want) {
+  for (size_t i = 0; i < got.size(); ++i) {
+    if (got[i] != want[i]) return i;
+  }
+  return got.size();
+}
+
+}  // namespace
+
+TEST_CASE("DenoiseClassical noise estimation does not depend on the traversal",
+          "[mastering][repair][denoise]") {
+  // Both estimators read a row-major [bins x frames] power spectrogram. Reading it bin-major,
+  // and staging the recursive tracker's columns in blocks rather than gathering one at a time,
+  // has to leave the denoised audio identical sample for sample -- the RMS-reduction cases
+  // above pass through a small numerical move without noticing it.
+  const int sr = 48000;
+  const Audio input = noisy_tone(sr, 12800, 1000.0f, 0.5f, 0.05f, 98765);
+
+  DenoiseClassicalConfig config{};
+  config.mode = DenoiseMode::SpectralSubtraction;
+  config.n_fft = 256;
+  config.hop_length = 64;
+
+  // What the block-staged tracker needs from this input: many blocks, and a last one that is
+  // partial whatever block size the staging picks.
+  {
+    StftConfig stft_config;
+    stft_config.n_fft = config.n_fft;
+    stft_config.hop_length = config.hop_length;
+    stft_config.window = WindowType::Hann;
+    stft_config.center = true;
+    const Spectrogram spec = Spectrogram::compute(input, stft_config);
+    CAPTURE(spec.n_frames());
+    REQUIRE(spec.n_frames() > 128);
+    REQUIRE(spec.n_frames() % 2 == 1);
+  }
+
+  const std::vector<DenoiseNoiseEstimator> estimators = {
+      DenoiseNoiseEstimator::Quantile, DenoiseNoiseEstimator::Mcra, DenoiseNoiseEstimator::Imcra};
+  for (DenoiseNoiseEstimator estimator : estimators) {
+    CAPTURE(static_cast<int>(estimator));
+    config.noise_estimator = estimator;
+
+    const Audio got = denoise_classical(input, config);
+    const Audio want = oracle_denoise_spectral_subtraction(input, config);
+    REQUIRE(got.size() == want.size());
+    REQUIRE(got.size() == input.size());
+
+    const size_t mismatch = first_differing_sample(got, want);
+    if (mismatch != got.size()) {
+      CAPTURE(mismatch);
+      REQUIRE(got[mismatch] == want[mismatch]);
+    }
+    // A silent oracle would compare two zero buffers and agree for the wrong reason.
+    REQUIRE(rms(want) > 0.0f);
+  }
+}
+
+TEST_CASE("DereverbClassical WPE does not depend on where its working buffers live",
+          "[mastering][repair][dereverb]") {
+  // The covariance rows and the cross vector are now allocated once for the whole WPE stage,
+  // so every bin has to refill both levels: a row still holding the previous bin's values
+  // solves a different system. WPE feeds its own output back into the next iteration, so a
+  // move does not stay in the last bit.
+  const int sr = 48000;
+  std::vector<float> samples(24000, 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float direct = 0.4f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 700.0 *
+                                                            static_cast<double>(i) / sr));
+    const float late = i >= 1200 ? 0.25f * samples[i - 1200] : 0.0f;
+    samples[i] = direct + late;
+  }
+  const Audio input = Audio::from_vector(std::move(samples), sr);
+
+  struct WpeParams {
+    int iterations;
+    int taps;
+  };
+  const std::vector<WpeParams> sweep = {{1, 2}, {2, 3}};
+
+  for (const WpeParams& params : sweep) {
+    CAPTURE(params.iterations, params.taps);
+    DereverbClassicalConfig config{};
+    config.n_fft = 256;
+    config.hop_length = 64;
+    config.t60_sec = 0.4f;
+    config.late_delay_ms = 20.0f;
+    config.wpe_enabled = true;
+    config.wpe_iterations = params.iterations;
+    config.wpe_taps = params.taps;
+    config.wpe_strength = 0.5f;
+
+    const Audio got = dereverb_classical(input, config);
+    const Audio want = oracle_dereverb(input, config);
+    REQUIRE(got.size() == want.size());
+    REQUIRE(got.size() == input.size());
+
+    const size_t mismatch = first_differing_sample(got, want);
+    if (mismatch != got.size()) {
+      CAPTURE(mismatch);
+      REQUIRE(got[mismatch] == want[mismatch]);
+    }
+    REQUIRE(rms(want) > 0.0f);
+  }
 }
 
 TEST_CASE("Repair helpers validate inputs", "[mastering][repair]") {

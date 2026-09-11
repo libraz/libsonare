@@ -99,8 +99,10 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
     return Audio::from_buffer(audio.data(), audio.size(), audio.sample_rate());
   }
 
-  const HpssAudioResult separated =
-      hpss(audio, config.separation.hpss, stft_for(config.separation));
+  // Only the percussive component is read below, so the separation reconstructs
+  // that one instead of running a second inverse transform and discarding it.
+  const Audio separated_percussive =
+      percussive(audio, config.separation.hpss, stft_for(config.separation));
   std::vector<float> output(audio.begin(), audio.end());
 
   for (const PercussiveEvent& event : events) {
@@ -113,7 +115,7 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
     std::vector<float> segment(static_cast<size_t>(length));
     for (int64_t k = 0; k < length; ++k) {
       const size_t index = static_cast<size_t>(event.onset_sample + k);
-      const float lifted = tail_gain(k, length, fade) * separated.percussive[index];
+      const float lifted = tail_gain(k, length, fade) * separated_percussive[index];
       segment[static_cast<size_t>(k)] = lifted;
       output[index] -= lifted;
     }

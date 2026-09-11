@@ -158,3 +158,43 @@ TEST_CASE("subsegment splits at the true plateau edges", "[util][segment][subseg
   CAPTURE(out.size());
   REQUIRE(out == expected);
 }
+
+TEST_CASE("top-k trimming zeroes every position outside a row's own top k",
+          "[util][segment][topk]") {
+  // Both trims write their kept values into one scratch row before copying it back. A
+  // position outside this row's top k must read 0 rather than whatever the previous row
+  // kept there, so the scratch has to start from zeros on every row -- which is what a
+  // per-row vector used to provide. The features are one-dimensional integers, so
+  // -euclidean similarity is exact and the expected matrix can be written out in full.
+  SECTION("cross_similarity") {
+    const std::vector<float> X{0.0f, 10.0f};
+    const std::vector<float> Y{1.0f, 2.0f, 10.0f, 11.0f};
+    const auto S = cross_similarity(X.data(), 1, 2, Y.data(), 1, 4, /*k=*/2, "euclidean");
+    REQUIRE(S.size() == 8);
+
+    // Row 0 keeps columns 0 and 1; row 1 keeps columns 2 and 3. Carrying row 0's scratch
+    // into row 1 would leave -1 and -2 in row 1's first two columns.
+    const std::vector<float> expected{-1.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(S[i] == expected[i]);
+    }
+  }
+
+  SECTION("recurrence_matrix") {
+    const std::vector<float> D{0.0f, 1.0f, 10.0f, 11.0f};
+    const auto R =
+        recurrence_matrix(D.data(), 1, 4, /*k=*/2, /*width=*/1, /*sym=*/false, "euclidean");
+    REQUIRE(R.size() == 16);
+
+    // Each row keeps its own column (zeroed by the diagonal band) and its nearest
+    // neighbour. Rows 2 and 3 are the ones a carried-over scratch would corrupt, in
+    // column 0, which rows 0 and 1 kept and they do not.
+    const std::vector<float> expected{0.0f, -1.0f, 0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,  0.0f,
+                                      0.0f, 0.0f,  0.0f, -1.0f, 0.0f,  0.0f, -1.0f, 0.0f};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(R[i] == expected[i]);
+    }
+  }
+}
