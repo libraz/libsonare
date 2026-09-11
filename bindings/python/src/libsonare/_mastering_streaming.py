@@ -70,6 +70,9 @@ class StreamingMasteringChain:
                 does not overdrive the loudness limiter harder than the offline
                 render. Ignored unless ``loudness_static_gain_db`` is given.
         """
+        # Set first so a rejected config or a missing build leaves a valid
+        # attribute for __del__/close() instead of raising AttributeError.
+        self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
         if not hasattr(lib, "sonare_streaming_mastering_chain_create"):
             raise RuntimeError("libsonare was built without streaming mastering chain support")
@@ -284,6 +287,9 @@ class StreamingEqualizer:
     }
 
     def __init__(self, sample_rate: int = 48000, max_block_size: int = 512) -> None:
+        # Set first so a failed create or a missing build leaves a valid
+        # attribute for __del__/close() instead of raising AttributeError.
+        self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
         if not hasattr(lib, "sonare_eq_create"):
             raise RuntimeError("libsonare was built without streaming equalizer support")
@@ -459,8 +465,12 @@ class StreamingEqualizer:
             pre_right=[float(out.pre_right[i]) for i in range(pre_count)],
             post_left=[float(out.post_left[i]) for i in range(post_count)],
             post_right=[float(out.post_right[i]) for i in range(post_count)],
-            band_gain_db=[float(out.band_gain_db[i]) for i in range(24)],
-            profile_db=[float(out.profile_db[i]) for i in range(16)],
+            # Sized from the ctypes fields themselves, the way the meter
+            # telemetry conversion reads its fixed arrays: a literal repeating
+            # SONARE_EQ_MAX_BANDS / SONARE_EQ_SPECTRUM_PROFILE_BANDS would keep
+            # returning the old length after the C arrays grew.
+            band_gain_db=[float(value) for value in out.band_gain_db],
+            profile_db=[float(value) for value in out.profile_db],
             last_auto_gain_db=float(out.last_auto_gain_db),
             seq=int(out.seq),
         )

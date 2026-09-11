@@ -175,3 +175,219 @@ def test_loaded_library_exports_every_guarded_symbol() -> None:
         "check. Do not silence this by skipping: the wheel would ship those calls "
         "as documented APIs that raise at runtime."
     )
+
+
+# ``load_library`` builds a fresh CDLL and runs the signature-configuration
+# passes with no caching of its own, so the binding caches it in exactly one
+# place. A module that grows a second ``_lib``/``_get_lib`` pair pays that cost
+# again and gives ``SONARE_LIB_PATH`` a second resolution point, which can load
+# a different file when the environment changes between the two first uses.
+_LOADER_OWNERS = {"_ffi.py", "_runtime.py"}
+
+
+def test_only_one_module_calls_the_library_loader() -> None:
+    """Derived from the source: a second cached loader fails here."""
+    root = Path(__file__).parents[1] / "src" / "libsonare"
+    callers = set()
+    for path in sorted(root.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "load_library"
+            ):
+                callers.add(path.name)
+    # Non-vacuity: the owner has to still be calling it.
+    assert "_runtime.py" in callers
+    assert callers <= _LOADER_OWNERS, f"a second library loader appeared in {sorted(callers)}"
+
+
+def test_every_module_shares_one_configured_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reaching the CDLL through Audio first must not load it a second time."""
+    from libsonare import _runtime
+    from libsonare import audio as audio_module
+
+    loads = []
+    real_load = _runtime.load_library
+
+    def counting_load(*args, **kwargs):
+        loads.append(args)
+        return real_load(*args, **kwargs)
+
+    monkeypatch.setattr(_runtime, "load_library", counting_load)
+    monkeypatch.setattr(_runtime, "_lib", None)
+
+    through_audio = audio_module._get_lib()
+    through_runtime = _runtime._get_lib()
+
+    assert through_audio is through_runtime
+    assert len(loads) == 1, f"the library was loaded {len(loads)} times"
+    # No module may keep a second cache of it.
+    assert not hasattr(audio_module, "_lib")
+
+
+def _abi_version_mirrors() -> list[tuple[str, str]]:
+    """The (file, literal name) pairs check_abi_versions.py models for Python."""
+    import importlib.util
+
+    tool = Path(__file__).resolve().parents[3] / "tools" / "abi" / "check_abi_versions.py"
+    spec = importlib.util.spec_from_file_location("_sonare_check_abi_versions", tool)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return [
+        (path, re.match(r"(\w+)", pattern).group(1))
+        for path, pattern, _key in module.MIRRORS
+        if path.startswith("bindings/python/")
+    ]
+
+
+def test_every_abi_version_literal_lives_only_where_the_checker_reads_it() -> None:
+    """An unmirrored duplicate stays stale through a bump while the check is green.
+
+    check_abi_versions.py compares one file per literal against the C source of
+    truth. A second copy elsewhere in the binding is simply unchecked, so it
+    keeps claiming the old version after a bump with nothing to catch it.
+    """
+    root = Path(__file__).parents[1] / "src" / "libsonare"
+    mirrors = _abi_version_mirrors()
+    # Non-vacuity: the checker has to still model the Python binding.
+    assert len(mirrors) >= 3, mirrors
+
+    for modelled_path, literal in mirrors:
+        modelled = Path(modelled_path).name
+        declaring = set()
+        for path in sorted(root.glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                targets = (
+                    node.targets
+                    if isinstance(node, ast.Assign)
+                    else [node.target]
+                    if isinstance(node, ast.AnnAssign)
+                    else []
+                )
+                if any(isinstance(t, ast.Name) and t.id == literal for t in targets):
+                    declaring.add(path.name)
+        assert declaring == {modelled}, (
+            f"{literal} must be declared only in {modelled}, the file "
+            f"check_abi_versions.py reads; found it in {sorted(declaring)}"
+        )
+
+
+# Every handle-owning class assigns its handle sentinel before anything that can
+# raise, so a failed construction cannot make __del__ read a missing attribute.
+# The convention is documented on StreamAnalyzer; applying it is a per-class
+# edit, so the set is derived from the source rather than listed.
+def _handle_owning_inits() -> list[tuple[str, str, ast.FunctionDef]]:
+    """Every class with a close()/__del__ whose __init__ assigns self._handle."""
+    root = Path(__file__).parents[1] / "src" / "libsonare"
+    found: list[tuple[str, str, ast.FunctionDef]] = []
+    for path in sorted(root.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
+            methods = {m.name: m for m in cls.body if isinstance(m, ast.FunctionDef)}
+            init = methods.get("__init__")
+            if init is None or not ({"close", "__del__"} & set(methods)):
+                continue
+            if any(
+                isinstance(t, ast.Attribute)
+                and isinstance(t.value, ast.Name)
+                and t.value.id == "self"
+                and t.attr == "_handle"
+                for node in ast.walk(init)
+                for t in (
+                    node.targets
+                    if isinstance(node, ast.Assign)
+                    else [node.target]
+                    if isinstance(node, ast.AnnAssign)
+                    else []
+                )
+            ):
+                found.append((path.name, cls.name, init))
+    return found
+
+
+def test_every_handle_class_sets_its_handle_before_anything_can_raise() -> None:
+    """A raise before the assignment leaves __del__ reading a missing attribute."""
+    owners = _handle_owning_inits()
+    # Non-vacuity: the walk has to be finding the handle classes at all.
+    assert len(owners) >= 8, owners
+
+    late = []
+    for filename, class_name, init in owners:
+        body = init.body
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+            body = body[1:]  # a docstring cannot raise
+        first = body[0] if body else None
+        targets = (
+            first.targets
+            if isinstance(first, ast.Assign)
+            else [first.target]
+            if isinstance(first, ast.AnnAssign)
+            else []
+        )
+        if not any(
+            isinstance(t, ast.Attribute)
+            and isinstance(t.value, ast.Name)
+            and t.value.id == "self"
+            and t.attr == "_handle"
+            for t in targets
+        ):
+            late.append(f"{filename}::{class_name}")
+    assert late == [], (
+        "these constructors can raise before self._handle exists, so __del__ "
+        f"would report an AttributeError over the real error: {late}"
+    )
+
+
+@pytest.mark.parametrize("subject", ["engine", "project"])
+def test_a_failed_handle_construction_reports_only_the_real_error(
+    monkeypatch: pytest.MonkeyPatch, subject: str
+) -> None:
+    """No second exception escapes __del__ to obscure the construction failure.
+
+    Both classes have a bare ``__del__`` that calls ``close()``, so before the
+    sentinel an AttributeError reached the unraisable hook and printed an
+    "Exception ignored in" traceback pointing at the wrapper rather than at the
+    incompatible library.
+    """
+    import gc
+    import sys
+    from types import SimpleNamespace
+
+    import libsonare
+    from libsonare import _project
+    from libsonare import engine as engine_module
+
+    if subject == "engine":
+        stub = SimpleNamespace(
+            sonare_engine_abi_version=lambda: engine_module.EXPECTED_ENGINE_ABI_VERSION + 1
+        )
+        monkeypatch.setattr(engine_module, "_get_lib", lambda: stub)
+        construct = libsonare.RealtimeEngine
+        expected = "engine ABI mismatch"
+    else:
+
+        def reject(_lib: object) -> None:
+            raise RuntimeError("libsonare project ABI mismatch: stubbed")
+
+        monkeypatch.setattr(_project, "_check_project_abi", reject)
+        construct = libsonare.Project
+        expected = "project ABI mismatch"
+
+    unraisable: list[object] = []
+    monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
+
+    message = ""
+    try:
+        construct()
+    except RuntimeError as exc:
+        message = str(exc)
+    # The `except ... as` name is already gone, so nothing pins the traceback
+    # that would otherwise keep the half-built instance alive past this point.
+    gc.collect()
+
+    assert expected in message
+    assert unraisable == [], f"__del__ raised {unraisable}"

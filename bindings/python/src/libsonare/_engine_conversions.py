@@ -42,10 +42,6 @@ from ._runtime import (
 )
 from ._types_engine import EngineTrackMonitorMode
 
-# Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
-# binding's EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
-# binary lays out engine structs differently than this wrapper expects.
-EXPECTED_ENGINE_ABI_VERSION = 3
 _CAPTURE_SOURCE_VALUES = {"output": 0, "input": 1}
 _TRACK_MONITOR_MODE_VALUES = {
     "off": int(EngineTrackMonitorMode.OFF),
@@ -349,8 +345,13 @@ def _meter_telemetry_wide_from_c(
 
 
 def _scope_telemetry_from_c(raw: SonareScopeTelemetryRecord) -> ScopeTelemetryRecord:
-    band_count = int(raw.band_count)
-    point_count = int(raw.point_count)
+    # Clamped to the mirror arrays the way the meter reader above and the WASM
+    # reader both are: a count past the fixed capacity truncates rather than
+    # raising IndexError on one surface while another returns a short record.
+    # The point mirror is flattened to interleaved floats, so it holds half as
+    # many points as it does entries.
+    band_count = max(0, min(int(raw.band_count), len(raw.bands)))
+    point_count = max(0, min(int(raw.point_count), len(raw.points) // 2))
     bands = [float(raw.bands[i]) for i in range(band_count)]
     points = [(float(raw.points[2 * i]), float(raw.points[2 * i + 1])) for i in range(point_count)]
     return ScopeTelemetryRecord(

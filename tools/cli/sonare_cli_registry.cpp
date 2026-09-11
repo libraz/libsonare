@@ -292,9 +292,14 @@ CliValidationError validate_project_bounce_channels(const CliArgs& args) {
   const int channels = args.get_int("channels", 2);
   const int mono = sonare::channel_count(sonare::ChannelLayout::Mono);
   const int stereo = sonare::channel_count(sonare::ChannelLayout::Stereo);
-  if (channels == mono || channels == stereo) return {};
+  // `<= 0` is the bounce options struct's own documented "let the engine
+  // choose" sentinel (sonare_c_project_core.h: num_channels <= 0 => 2), so
+  // refusing it made this validator stricter than the oracle it fronts and
+  // stricter than the Python CLI, which accepts it. Only a positive count that
+  // is neither mono nor stereo is a value nothing downstream can honour.
+  if (channels <= 0 || channels == mono || channels == stereo) return {};
   return {"invalid value for --channels: " + std::to_string(channels) + " (expected one of " +
-              std::to_string(mono) + ", " + std::to_string(stereo) + ")",
+              std::to_string(mono) + ", " + std::to_string(stereo) + ", or <= 0 for the default)",
           true};
 }
 #endif

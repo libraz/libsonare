@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from typing import Any, cast
 
@@ -71,13 +72,23 @@ def _project_bounce(
                     "the project's own rate"
                 )
             sample_rate = requested_sample_rate
+            bounce_sample_rate = requested_sample_rate
         else:
-            sample_rate = int(round(project_sample_rate))
+            # floor(x + 0.5) rather than round(): Python rounds a .5 tie to even
+            # and the native CLI's std::lround rounds it away from zero, so a
+            # project at exactly 44100.5 Hz tagged its WAV 44100 here and 44101
+            # there. Sample rates are positive, so the two agree everywhere else.
+            sample_rate = int(math.floor(project_sample_rate + 0.5))
+            # 0 is the C ABI's "render at the project's own rate" sentinel, and
+            # it is the only way the full-precision rate reaches the render.
+            # Pinning the rounded value here made a project whose rate is not an
+            # integer fail the ABI's own equality check against that rate.
+            bounce_sample_rate = 0
         kwargs = {
             "total_frames": args.frames,
             "block_size": args.block_size,
             "num_channels": args.channels,
-            "sample_rate": sample_rate,
+            "sample_rate": bounce_sample_rate,
             "instrument_latency_samples": args.instrument_latency,
         }
         use_synth = force_synth or args.synth is not None

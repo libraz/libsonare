@@ -98,6 +98,12 @@ from .types import (
 # binary lays out engine structs differently than this wrapper expects.
 EXPECTED_ENGINE_ABI_VERSION = 3
 
+# The most MIDI 1.0 messages one queued external-MIDI record can lower to, and
+# therefore the smallest drain budget that can consume a record at all. Mirrors
+# sonare::host::ExternalMidi1Lowered::messages, which the C ABI reads for the
+# same guard (src/c_api/sonare_c_engine_midi.cpp).
+_MAX_LOWERED_MIDI1_MESSAGES = 3
+
 
 class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     """Thin Python wrapper around the native realtime engine handle."""
@@ -111,6 +117,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         telemetry_capacity: int = 1024,
         max_channels: int = 64,
     ) -> None:
+        # Set first so a failed create -- an ABI mismatch is the reachable one --
+        # leaves a valid attribute for __del__/close() instead of raising
+        # AttributeError over the real error.
+        self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         abi_version = int(lib.sonare_engine_abi_version())
         if abi_version != EXPECTED_ENGINE_ABI_VERSION:
@@ -121,7 +131,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         handle = ctypes.c_void_p()
         _check(lib.sonare_engine_create(ctypes.byref(handle)))
-        self._handle: ctypes.c_void_p | None = handle
+        self._handle = handle
         self._capture_arrays: list[ctypes.Array[ctypes.c_float]] = []
         self._capture_ptrs: ctypes.Array[Any] | None = None
         self._clip_page_providers: list[ClipPageProvider] = []
@@ -662,28 +672,76 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value)
 
+    def clip_page_request_overflow_count(self) -> int:
+        """Number of clip-page requests dropped because the bounded queue was full.
+
+        Advisory telemetry; monotonic within a prepared session and reset by
+        :meth:`prepare`. A non-zero count means the host is draining
+        :meth:`pop_clip_page_request` too slowly and some pages were never asked
+        for, so their reads produced silence.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_clip_page_request_overflow_count"):
+            raise RuntimeError("libsonare was built without clip-page streaming support")
+        out = ctypes.c_uint32()
+        _check(
+            lib.sonare_engine_clip_page_request_overflow_count(
+                self._require_handle(), ctypes.byref(out)
+            )
+        )
+        return int(out.value)
+
+    def warp_stretch_overflow_count(self) -> int:
+        """Number of blocks in which a time-stretched clip fell back to resampling.
+
+        Advisory telemetry; monotonic within a prepared session and reset by
+        :meth:`prepare`. Only a fixed number of stretcher voices exist, so a
+        project with more overlapping time-stretch clips than voices plays some
+        of them pitch-shifted instead; a non-zero count is the only way to
+        detect that degradation.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_warp_stretch_overflow_count"):
+            raise RuntimeError("libsonare was built without clip-warp support")
+        out = ctypes.c_uint32()
+        _check(
+            lib.sonare_engine_warp_stretch_overflow_count(self._require_handle(), ctypes.byref(out))
+        )
+        return int(out.value)
+
     def drain_external_midi(self, max_records: int = 1024) -> list[ExternalMidiEvent]:
         """Drain queued external-MIDI events, lowered to MIDI 1.0 byte messages.
 
         Each returned :class:`ExternalMidiEvent` is one MIDI 1.0 message (1..3
         bytes). ``max_records`` caps the number of output events returned — the
         shared unit across every surface. Events past the cap stay queued for the
-        next call (lossless); call again to drain the rest. The native drain
-        requires a capacity of at least 3 (the most one record can lower to), so
-        a remaining budget below 3 stops the drain rather than over-fetch.
+        next call (lossless); call again to drain the rest. A remaining budget
+        below the per-record lowering bound stops the drain rather than
+        over-fetch.
+
+        ``max_records`` of 0 or less drains nothing and returns an empty list. A
+        positive budget below the lowering bound could never consume a record, so
+        it is rejected with :class:`SonareValueError` — the same refusal the C
+        ABI and the other bindings give it — instead of reporting nothing while
+        the queue keeps growing.
         """
         if max_records <= 0:
             return []
+        if max_records < _MAX_LOWERED_MIDI1_MESSAGES:
+            raise SonareValueError(
+                "drain_external_midi: max_records must be 0 or at least "
+                f"{_MAX_LOWERED_MIDI1_MESSAGES} to guarantee forward progress"
+            )
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_drain_external_midi"):
             raise RuntimeError("libsonare was built without external-MIDI output support")
-        capacity = max(int(max_records), 3)
+        capacity = int(max_records)
         raw = (SonareExternalMidiEvent * capacity)()
         written = ctypes.c_size_t()
         results: list[ExternalMidiEvent] = []
         while len(results) < max_records:
             remaining = max_records - len(results)
-            if remaining < 3:
+            if remaining < _MAX_LOWERED_MIDI1_MESSAGES:
                 break  # too small to lower one record without loss
             cap = min(capacity, remaining)
             _check(

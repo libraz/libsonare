@@ -94,6 +94,16 @@ int project_exit_code(SonareError err) {
   }
 }
 
+// Reports a failed write of the caller's output artifact. Every project handler
+// that writes one routes here, so the six copies of this rejection cannot drift
+// apart. The class is the one save_wav already gives a failed render rather
+// than the plain `1` these used to return, which normalize_handler_exit folds to
+// the invalid-parameter code -- that names the argument, not the write.
+int report_output_write_failure(const std::string& path) {
+  std::cerr << color::red << "Error: cannot write " << path << color::reset << "\n";
+  return project_exit_code(SONARE_ERROR_ENCODE_FAILED);
+}
+
 // The one diagnostic an oversized input reports, raised both by the size probe
 // and by the read that enforces the same cap on the bytes actually delivered.
 // Sharing it keeps those two rejections indistinguishable to a caller.
@@ -312,8 +322,7 @@ int cmd_project_new(const CliArgs& args) {
   const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
   sonare_free_string(json);
   if (!ok) {
-    std::cerr << color::red << "Error: cannot write " << args.output_file << color::reset << "\n";
-    return 1;
+    return report_output_write_failure(args.output_file);
   }
   if (args.json_output) {
     JsonBuilder()
@@ -336,13 +345,12 @@ int cmd_project_validate(const CliArgs& args) {
   std::string diagnostics;
   SonareError load_error = SONARE_OK;
   if (!load_project_from_args(args, &handle, &diagnostics, &load_error)) {
-    // A syntactically malformed project is a format failure, not a generic
-    // project state failure. Keep stdout empty so machine callers can branch
-    // on the exit code without having to parse an error payload.
-    if (load_error == SONARE_ERROR_INVALID_FORMAT) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                    "failed to parse project JSON");
-    }
+    // The loader has already printed the diagnostic, and its message carries the
+    // deserializer detail this one cannot. Returning the class it reported keeps
+    // that the single Error line: throwing here made main's handler print a
+    // second, less specific one for the same failure. A malformed project still
+    // exits with the format class, and stdout still stays empty either way, so a
+    // machine caller branches on the exit code without parsing a payload.
     return project_exit_code(load_error);
   }
   // A successful parse is valid even when the loader emitted repair/warning
@@ -365,8 +373,7 @@ int cmd_project_validate(const CliArgs& args) {
         write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
     if (!ok) {
       sonare_free_string(json);
-      std::cerr << color::red << "Error: cannot write " << args.output_file << color::reset << "\n";
-      return 1;
+      return report_output_write_failure(args.output_file);
     }
   }
   sonare_free_string(json);
@@ -438,7 +445,11 @@ int cmd_project_compile(const CliArgs& args) {
     }
   }
   sonare_project_free_compile_result(&result);
-  return has_timeline ? 0 : 1;
+  // A project that compiled without a renderable timeline is a project-state
+  // failure, the class `project validate --strict` already reports for its own
+  // failing outcome. A plain 1 normalizes to the invalid-parameter code, which
+  // says the arguments were wrong when they were not.
+  return has_timeline ? 0 : kExitInvalidState;
 }
 
 // `project bounce --in in.json -o out.wav` — compile + render the project
@@ -496,8 +507,14 @@ int cmd_project_bounce(const CliArgs& args) {
                 << " Hz); project bounce renders at the project's own rate" << color::reset << "\n";
       return kExitInvalidParameter;
     }
+    options.sample_rate = render_sample_rate;
   }
-  options.sample_rate = render_sample_rate;
+  // Left at 0 when the caller did not ask for a rate, which is what the C ABI
+  // reads as "the project's own". Pinning the rounded rate unconditionally made
+  // a project whose rate is not an integer fail the ABI's own equality check
+  // against the full-precision value the int cannot carry. The header below
+  // still reports the nearest integer to the rate the engine rendered at, which
+  // is the closest a RIFF header can come to a fractional rate.
 
   float* interleaved = nullptr;
   size_t total = 0;
@@ -558,8 +575,7 @@ int cmd_project_export_smf(const CliArgs& args) {
   const bool ok = write_binary_file(args.output_file, bytes, len);
   sonare_free_bytes(bytes);
   if (!ok) {
-    std::cerr << color::red << "Error: cannot write " << args.output_file << color::reset << "\n";
-    return 1;
+    return report_output_write_failure(args.output_file);
   }
   if (args.json_output) {
     JsonBuilder()
@@ -593,8 +609,7 @@ int cmd_project_export_midi2(const CliArgs& args) {
   const bool ok = write_binary_file(args.output_file, bytes, len);
   sonare_free_bytes(bytes);
   if (!ok) {
-    std::cerr << color::red << "Error: cannot write " << args.output_file << color::reset << "\n";
-    return 1;
+    return report_output_write_failure(args.output_file);
   }
   if (args.json_output) {
     JsonBuilder()
@@ -650,8 +665,7 @@ int cmd_project_import_smf(const CliArgs& args) {
   const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
   sonare_free_string(json);
   if (!ok) {
-    std::cerr << color::red << "Error: cannot write " << args.output_file << color::reset << "\n";
-    return 1;
+    return report_output_write_failure(args.output_file);
   }
   if (args.json_output) {
     JsonBuilder()
@@ -704,8 +718,7 @@ int cmd_project_import_midi2(const CliArgs& args) {
   const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
   sonare_free_string(json);
   if (!ok) {
-    std::cerr << color::red << "Error: cannot write " << args.output_file << color::reset << "\n";
-    return 1;
+    return report_output_write_failure(args.output_file);
   }
   if (args.json_output) {
     JsonBuilder()
@@ -720,6 +733,32 @@ int cmd_project_import_midi2(const CliArgs& args) {
               << "\n";
   }
   return 0;
+}
+
+// Every option a `project.*` leaf accepts that @p curated does not already
+// name, rendered the way the leaf-level help renders it. Matching on the flag
+// followed by a space or a newline keeps one option from hiding another whose
+// name it is a prefix of.
+std::vector<std::string> unlisted_project_options(const std::string& curated) {
+  std::vector<std::string> out;
+  for (const auto& command : cli_command_registry()) {
+    if (command.path.rfind("project.", 0) != 0) continue;
+    for (const auto& option : command.options) {
+      if (!option.inventory || option.name == "json") continue;
+      const std::string flag = "--" + option.name;
+      if (curated.find(flag + " ") != std::string::npos) continue;
+      if (curated.find(flag + "\n") != std::string::npos) continue;
+      std::string display = flag;
+      if (option.arity == CliOptionArity::RequiredValue) {
+        display += " <value>";
+      } else if (option.arity == CliOptionArity::OptionalValue) {
+        display += " [value]";
+      }
+      if (std::find(out.begin(), out.end(), display) == out.end()) out.push_back(display);
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
 }
 
 void print_project_usage(std::ostream& out) {
@@ -742,20 +781,29 @@ void print_project_usage(std::ostream& out) {
          "out.midi2)\n"
       << "  import-midi2         Import MIDI2 Clip File into a new project (--midi2 in.midi2 -o "
          "out.json)\n"
-      << "\nOPTIONS:\n"
-      << "  --in <file>          Input project JSON\n"
-      << "  --smf <file>         Input Standard MIDI File (import-smf)\n"
-      << "  --midi2 <file>       Input MIDI 2.0 Clip File (import-midi2)\n"
-      << "  -o, --output <file>  Output file\n"
-      << "  --sample-rate <hz>   Sample rate (new / bounce; bounce defaults to the project's own "
-         "rate)\n"
-      << "  --frames <n>         Bounce length in frames\n"
-      << "  --channels <n>       Bounce channel count: 1 (mono downmix) or 2 (default 2)\n"
-      << "  --strict             Treat project load diagnostics as validation failures\n"
-      << "  --synth [preset]     Bare flag: GM program/channel routing + channel-10 drums\n"
-      << "                       Value: fixed NativeSynth preset (see synth-presets)\n"
-      << "                       No --sf2/--synth-json CLI wiring in this command\n"
-      << "  --json               Emit JSON results\n";
+      << "\nOPTIONS:\n";
+
+  // The curated lines carry per-option guidance the registry has no room for,
+  // so they stay hand-written; what cannot stay hand-written is which options
+  // exist. Anything a project leaf accepts and these lines do not name is
+  // appended from the registry below, so a new leaf option cannot be visible in
+  // `project <leaf> --help` and missing from this overview.
+  const std::string curated =
+      "  --in <file>          Input project JSON\n"
+      "  --smf <file>         Input Standard MIDI File (import-smf)\n"
+      "  --midi2 <file>       Input MIDI 2.0 Clip File (import-midi2)\n"
+      "  -o, --output <file>  Output file\n"
+      "  --sample-rate <hz>   Sample rate (new / bounce; bounce defaults to the project's own "
+      "rate)\n"
+      "  --frames <n>         Bounce length in frames\n"
+      "  --channels <n>       Bounce channel count: 1 (mono downmix) or 2 (default 2)\n"
+      "  --strict             Treat project load diagnostics as validation failures\n"
+      "  --synth [preset]     Bare flag: GM program/channel routing + channel-10 drums\n"
+      "                       Value: fixed NativeSynth preset (see synth-presets)\n"
+      "                       No --sf2/--synth-json CLI wiring in this command\n"
+      "  --json               Emit JSON results\n";
+  out << curated;
+  for (const auto& option : unlisted_project_options(curated)) out << "  " << option << "\n";
 }
 
 // `project <subcommand> ...` — dispatches the headless-project subcommands. The

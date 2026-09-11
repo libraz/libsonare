@@ -374,7 +374,9 @@ def _planar_channel_arrays(
     output back into these planes cannot reach the caller's array, and the numpy
     backing is pinned to the ctypes object so it outlives the call.
 
-    ``subject`` names the argument in the rejection messages.
+    ``subject`` names the argument in every rejection raised here, including the
+    per-channel rank check, so a 2-D channel reports the name the caller used
+    rather than the coercion helper's default.
     """
     if not channels:
         raise SonareValueError(f"{subject} must not be empty")
@@ -385,7 +387,12 @@ def _planar_channel_arrays(
     for channel in channels:
         if len(channel) != frame_count:
             raise SonareValueError(f"all {subject} must have the same length")
-        buf = np.array(_as_float32_buffer(channel), dtype=np.float32, copy=True, order="C")
+        buf = np.array(
+            _as_float32_buffer(channel, arg_name=subject),
+            dtype=np.float32,
+            copy=True,
+            order="C",
+        )
         c_array = (ctypes.c_float * frame_count).from_buffer(buf)
         c_array._np_backing = buf  # type: ignore[attr-defined]
         arrays.append(c_array)

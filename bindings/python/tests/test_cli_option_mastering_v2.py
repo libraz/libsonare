@@ -279,18 +279,21 @@ def test_mastering_processor_stereo_only_catalog_auto_routes(monkeypatch, capsys
 
 
 def test_eq_params_and_shortcut_conflict_is_invalid_parameter(monkeypatch) -> None:
-    from libsonare import _cli_mastering
+    """A shortcut spelled alongside --params is refused, default-valued or not.
+
+    Driven through the parser rather than a hand-built namespace: whether a
+    shortcut was supplied is something only argv answers, so a namespace
+    carrying a non-default value pinned a comparison the CLI no longer makes.
+    """
+    from libsonare import _cli_mastering, cli
 
     monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: ([0.0], 44_100))
-    args = argparse.Namespace(
-        file="input.wav",
-        params="band0.gainDb=1",
-        type=0,
-        frequency_hz=1500.0,
-        bits=16,
-    )
-    with pytest.raises(ValueError, match="cannot be combined"):
-        _cli_mastering.cmd_eq(args)
+    for shortcut in (["--frequency-hz", "1500"], ["--q", "1.0"]):
+        args = cli._build_parser().parse_args(
+            ["eq", "input.wav", "--params", "band0.gainDb=1", *shortcut]
+        )
+        with pytest.raises(ValueError, match="cannot be combined"):
+            _cli_mastering.cmd_eq(args)
 
 
 def test_mastering_pair_analyze_forwards_params(monkeypatch) -> None:
@@ -480,6 +483,120 @@ def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
         args = cli._build_parser().parse_args(["mastering", "input.wav", *option])
         with pytest.raises(ValueError, match="requires --assistant"):
             _cli_mastering.cmd_mastering(args)
+
+
+@pytest.mark.parametrize(
+    ("option", "value", "key"),
+    [
+        ("--target-lufs", "-14.0", "targetLufs"),
+        ("--ceiling-db", "-1.0", "ceilingDb"),
+    ],
+)
+def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
+    monkeypatch, option, value, key
+) -> None:
+    """Naming a flag is what makes it explicit, not the number it carries.
+
+    The assistant treats an unsupplied loudness field as free for the delivery
+    target to fill, so a caller who pinned the target to the documented default
+    silently got the target's own figure instead of the one they asked for.
+    """
+    import libsonare
+    from libsonare import _cli_mastering, cli
+
+    calls: dict[str, object] = {}
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: ([0.0], 48_000))
+    monkeypatch.setattr(
+        libsonare,
+        "mastering_assistant_suggest",
+        lambda *args, **kwargs: (
+            calls.update(params=kwargs["params"])
+            or json.dumps({"chainConfig": {"version": 1, "params": {}}, "explanation": []})
+        ),
+    )
+    monkeypatch.setattr(libsonare, "mastering_chain", lambda *args, **kwargs: _result())
+
+    def suggestion_params(*extra: str) -> dict[str, object]:
+        args = cli._build_parser().parse_args(
+            ["mastering", "input.wav", "--assistant", "--json", *extra]
+        )
+        assert _cli_mastering.cmd_mastering(args) == 0
+        return dict(calls["params"])  # type: ignore[arg-type]
+
+    assert key not in suggestion_params()
+    assert suggestion_params(f"{option}={value}")[key] == float(value)
+    # The separate-token spelling is the same request.
+    assert suggestion_params(option, value)[key] == float(value)
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--target-lufs", "-14.0"),
+        ("--ceiling-db", "-1.0"),
+        ("--true-peak-oversample", "4"),
+    ],
+)
+def test_a_loudness_option_carrying_its_default_is_refused_by_the_preset_chain(
+    monkeypatch, option, value
+) -> None:
+    """A preset chain ignores the loudness flags, so supplying one is refused."""
+    from libsonare import _cli_mastering, cli
+
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: ([0.0], 48_000))
+    args = cli._build_parser().parse_args(
+        ["mastering", "input.wav", "--preset", "pop", f"{option}={value}"]
+    )
+    with pytest.raises(ValueError, match=f"{option} cannot be combined with --preset"):
+        _cli_mastering.cmd_mastering(args)
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--target-platform=streaming", "--speech-mono-amount=1.0"],
+)
+def test_an_assistant_option_carrying_its_default_is_refused_without_assistant(
+    monkeypatch, option
+) -> None:
+    """The refusal follows the flag, not the value it happens to carry."""
+    from libsonare import _cli_mastering, cli
+
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: ([0.0], 48_000))
+    args = cli._build_parser().parse_args(["mastering", "input.wav", option])
+    with pytest.raises(ValueError, match="requires --assistant"):
+        _cli_mastering.cmd_mastering(args)
+
+
+def test_presence_gated_mastering_options_match_the_native_handler() -> None:
+    """Both CLIs answer "was this spelled?" over the same option names.
+
+    The two lists are declared separately, so one surface gaining a flag is
+    invisible to the other; this is the only place the pair is compared.
+    """
+    from libsonare import _cli_mastering
+
+    native = (
+        Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_mastering_mixing.cpp"
+    )
+    text = native.read_text(encoding="utf-8")
+    for name in (
+        "enable-repair",
+        "explain",
+        "target-platform",
+        "no-streaming-safe",
+        "speech-mono-amount",
+        "target-lufs",
+        "ceiling-db",
+        "true-peak-oversample",
+    ):
+        assert f'args.has("{name}")' in text or f'"{name}",' in text
+
+    # ``--detector-delay-ms`` is the native spelling of the option argparse keys
+    # as ``lookahead-ms``; every other eq shortcut is named identically.
+    shortcuts = set(_cli_mastering._EQ_SHORTCUT_NAMES) - {"lookahead-ms"}
+    assert shortcuts
+    for name in shortcuts:
+        assert f'"{name}"' in text
 
 
 def test_unknown_target_platform_is_rejected_against_the_delivery_table() -> None:

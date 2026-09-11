@@ -39,6 +39,7 @@ from libsonare import (
     RealtimeEngine,
     ScopeTelemetryRecord,
     SonareError,
+    SonareValueError,
     engine_abi_version,
     voice_changer_abi_version,
 )
@@ -1574,6 +1575,62 @@ def test_realtime_engine_scope_telemetry() -> None:
         assert argmax <= 2
 
 
+@pytest.mark.parametrize("reader", ["scope", "meter_wide"])
+def test_telemetry_counts_are_clamped_to_the_mirror_arrays(reader: str) -> None:
+    """An over-large count truncates, as it does on Node and WASM.
+
+    The count is trusted from the C record, so a count past the fixed-array
+    capacity used to raise IndexError out of the Python reader while the WASM
+    reader (`b < rec.band_count && b < rec.bands.size()`) and the Node addon
+    (engine/common.h clamps to SONARE_SCOPE_MAX_BANDS) returned a short record
+    for the same bytes.
+    """
+    from libsonare._engine_conversions import (
+        _meter_telemetry_wide_from_c,
+        _scope_telemetry_from_c,
+    )
+    from libsonare._ffi_types_core import (
+        SonareMeterTelemetryRecordWide,
+        SonareScopeTelemetryRecord,
+    )
+
+    if reader == "scope":
+        raw = SonareScopeTelemetryRecord()
+        max_bands = len(raw.bands)
+        max_points = len(raw.points) // 2
+        raw.band_count = max_bands + 7
+        raw.point_count = max_points + 7
+        record = _scope_telemetry_from_c(raw)
+        assert len(record.bands) == max_bands
+        assert len(record.points) == max_points
+    else:
+        raw_wide = SonareMeterTelemetryRecordWide()
+        max_planes = len(raw_wide.peak_db)
+        raw_wide.channel_count = max_planes + 7
+        wide = _meter_telemetry_wide_from_c(raw_wide)
+        assert wide.channel_count == max_planes
+        assert len(wide.peak_db) == max_planes
+        assert len(wide.rms_db) == max_planes
+        assert len(wide.true_peak_db) == max_planes
+
+
+def test_scope_telemetry_still_returns_a_count_it_can_serve() -> None:
+    """The clamp must not truncate a count the mirror can actually hold."""
+    from libsonare._engine_conversions import _scope_telemetry_from_c
+    from libsonare._ffi_types_core import SonareScopeTelemetryRecord
+
+    raw = SonareScopeTelemetryRecord()
+    raw.band_count = 3
+    raw.point_count = 2
+    raw.bands[0], raw.bands[1], raw.bands[2] = 1.0, 2.0, 3.0
+    raw.points[0], raw.points[1] = 0.25, -0.25
+    raw.points[2], raw.points[3] = 0.5, -0.5
+
+    record = _scope_telemetry_from_c(raw)
+    assert record.bands == [1.0, 2.0, 3.0]
+    assert record.points == [(0.25, -0.25), (0.5, -0.5)]
+
+
 def _midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
     return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
 
@@ -1788,6 +1845,76 @@ def test_engine_drain_external_midi_honors_max_records_cap_losslessly() -> None:
         for i in range(n_notes):
             assert (40 + i) in note_ons
             assert (40 + i) in note_offs
+
+
+def test_engine_overflow_counters_start_at_zero_and_stay_there_when_nothing_drops() -> None:
+    """The two advisory overflow counters mirror external_midi_dropped_count.
+
+    Both are monotonic within a prepared session and reset by prepare, so a
+    freshly prepared engine reads zero and an ordinary block leaves it there.
+    A non-zero reading is the only signal the host gets that a clip page was
+    never requested, or that a time-stretched clip fell back to resampling.
+    """
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        assert engine.clip_page_request_overflow_count() == 0
+        assert engine.warp_stretch_overflow_count() == 0
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+        assert engine.clip_page_request_overflow_count() == 0
+        assert engine.warp_stretch_overflow_count() == 0
+
+
+@pytest.mark.parametrize("max_records", [1, 2])
+def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
+    max_records,
+) -> None:
+    """A budget too small to consume a record is refused, not silently ignored.
+
+    One queued record lowers to at most three MIDI 1.0 messages, so a budget of
+    1 or 2 can never consume one. It used to take neither the empty-budget early
+    return nor a drain: the loop broke on its first iteration and returned an
+    empty list with the events still queued, on every repeated call. The C ABI
+    and the other bindings refuse the same budget.
+    """
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        engine.set_midi_destination_external(5, True)
+        engine.set_midi_clips(
+            [
+                EngineMidiClipSchedule(
+                    id=7,
+                    track_id=5,
+                    destination_id=5,
+                    length_samples=256,
+                    events=[
+                        EngineMidiEvent(
+                            0, word0=_midi1_word(0x9, 1, 60, 100), word_count=1, group=1
+                        ),
+                        EngineMidiEvent(1, word0=_midi1_word(0x8, 1, 60, 0), word_count=1, group=1),
+                    ],
+                )
+            ]
+        )
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+
+        with pytest.raises(SonareValueError, match="at least 3"):
+            engine.drain_external_midi(max_records)
+        # A refusal is also caught by the plain argument-validation style.
+        with pytest.raises(ValueError):
+            engine.drain_external_midi(max_records)
+
+        # An empty or negative budget keeps drawing nothing without raising, so
+        # the boundary between "drain nothing" and "refuse" is explicit.
+        assert engine.drain_external_midi(0) == []
+        assert engine.drain_external_midi(-1) == []
+
+        # Positive control: no refused call consumed an event.
+        assert len(engine.drain_external_midi()) == 2
+        assert engine.external_midi_dropped_count() == 0
 
 
 def test_engine_forwards_midi_clock_transport_to_external_queue() -> None:

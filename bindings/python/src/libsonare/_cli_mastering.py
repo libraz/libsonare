@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _atomic_wav_writer,
+    _atomic_write_bytes,
     _float_sequence,
     _parse_json_config,
     _parse_json_list,
@@ -79,9 +80,14 @@ def _mastering_report_payload(report: Any) -> dict[str, object]:
 
 
 def _write_mastering_report(path: str, report: Any) -> None:
-    with open(path, "w", encoding="utf-8") as output:
-        output.write(_strict_json_dumps(_mastering_report_payload(report)))
-        output.write("\n")
+    """Write the report through the shared artifact writer.
+
+    Routing it there rather than through a bare ``open`` gives the report the
+    same atomic replace and the same write-failure exit class as every other
+    artifact the CLI produces.
+    """
+    payload = _strict_json_dumps(_mastering_report_payload(report)) + "\n"
+    _atomic_write_bytes(path, payload.encode("utf-8"))
 
 
 def _wav_bits(args: argparse.Namespace) -> int:
@@ -92,33 +98,15 @@ def _wav_bits(args: argparse.Namespace) -> int:
     return bits
 
 
-def _option_supplied(args: argparse.Namespace, name: str, default: object) -> bool:
-    """Detect a non-default option without changing argparse's public Namespace.
+def _option_supplied(args: argparse.Namespace, name: str) -> bool:
+    """Report whether the caller spelled ``--name`` on the command line.
 
-    The Python parser currently does not retain whether an option equal to its
-    default was spelled on the command line.  A future parser may expose that
-    information as ``_supplied_options`` or ``supplied_options``; when it does,
-    this helper consumes it.  Until then, values differing from the documented
-    default are sufficient to reject semantic no-op combinations.
+    The parser records the destination of every option present on argv, so an
+    option carrying its documented default still counts as supplied -- the same
+    answer the native ``CliArgs::has`` gives for identical argv.
     """
-    explicit = getattr(args, "_supplied_options", None)
-    if explicit is None:
-        explicit = getattr(args, "supplied_options", None)
-    if isinstance(explicit, dict):
-        values = list(explicit.values())
-        explicit = (
-            [item for item, supplied in explicit.items() if supplied]
-            if values and all(isinstance(value, bool) for value in values)
-            else explicit.keys()
-        )
-    if explicit is not None:
-        normalized = name.replace("_", "-")
-        for item in explicit:
-            candidate = str(item).lstrip("-").replace("_", "-")
-            if candidate == normalized:
-                return True
-    value = getattr(args, name.replace("-", "_"), default)
-    return value != default
+    supplied = getattr(args, "_supplied_options", ())
+    return name.replace("-", "_") in supplied
 
 
 def _mastering_config(raw: str | None) -> dict[str, Any]:
@@ -170,34 +158,38 @@ def _mastering_chain_payload(
     return payload
 
 
+# Every ``eq`` option that selects part of the band --params would otherwise
+# specify in full, in the native handler's order.
+_EQ_SHORTCUT_NAMES = (
+    "type",
+    "frequency-hz",
+    "gain-db",
+    "q",
+    "coeff-mode",
+    "slope-db-oct",
+    "placement",
+    "proportional-q",
+    "dynamic",
+    "threshold-db",
+    "auto-threshold",
+    "ratio",
+    "range-db",
+    "attack-ms",
+    "release-ms",
+    "lookahead-ms",
+    "sidechain-freq-hz",
+    "sidechain-q",
+    "phase-mode",
+    "resolution",
+    "auto-gain",
+    "gain-scale",
+    "output-gain-db",
+    "output-pan",
+)
+
+
 def _eq_shortcut_names(args: argparse.Namespace) -> list[str]:
-    defaults: dict[str, object] = {
-        "type": 0,
-        "frequency-hz": 1000.0,
-        "gain-db": 0.0,
-        "q": 1.0,
-        "coeff-mode": 0,
-        "slope-db-oct": 12,
-        "placement": 0,
-        "proportional-q": False,
-        "dynamic": False,
-        "threshold-db": -24.0,
-        "auto-threshold": False,
-        "ratio": 2.0,
-        "range-db": -6.0,
-        "attack-ms": 5.0,
-        "release-ms": 50.0,
-        "lookahead-ms": 0.0,
-        "sidechain-freq-hz": -1.0,
-        "sidechain-q": 1.0,
-        "phase-mode": 1,
-        "resolution": 0,
-        "auto-gain": False,
-        "gain-scale": 1.0,
-        "output-gain-db": 0.0,
-        "output-pan": 0.0,
-    }
-    return [name for name, default in defaults.items() if _option_supplied(args, name, default)]
+    return [name for name in _EQ_SHORTCUT_NAMES if _option_supplied(args, name)]
 
 
 # Highest accepted index of every ``eq`` option that selects an enumerator, keyed
@@ -280,35 +272,27 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     target_platform = getattr(args, "target_platform", "streaming") or "streaming"
     no_streaming_safe = bool(getattr(args, "no_streaming_safe", False))
     speech_mono_amount = float(getattr(args, "speech_mono_amount", 1.0))
-    if enable_repair and not assistant:
-        raise ValueError("--enable-repair requires --assistant")
-    if explain and not assistant:
-        raise ValueError("--explain requires --assistant")
-    # Every remaining option that only reaches an AssistantConfig field. argparse
-    # cannot report whether a default-valued option was supplied, so a
-    # non-default value is what makes the request explicit -- the same rule the
-    # ignored-loudness check below applies.
+    # Every option that only reaches an AssistantConfig field, refused rather
+    # than accepted and dropped -- the same list, in the same order, the native
+    # handler refuses.
     if not assistant:
-        for name, supplied in (
-            ("target-platform", target_platform != "streaming"),
-            ("no-streaming-safe", no_streaming_safe),
-            ("speech-mono-amount", speech_mono_amount != 1.0),
+        for name in (
+            "enable-repair",
+            "explain",
+            "target-platform",
+            "no-streaming-safe",
+            "speech-mono-amount",
         ):
-            if supplied:
+            if _option_supplied(args, name):
                 raise ValueError(f"--{name} requires --assistant")
 
-    # Native CliArgs can distinguish an explicitly supplied default-valued
-    # option.  Python argparse cannot yet do so; non-default values are still
-    # rejected here rather than silently discarded by a preset/config chain.
+    # The preset/config chain is driven entirely by its config, so a standalone
+    # loudness flag would be silently discarded.
     if selectors and not assistant:
         ignored_loudness = [
             name
-            for name, default in (
-                ("target-lufs", -14.0),
-                ("ceiling-db", -1.0),
-                ("true-peak-oversample", 4),
-            )
-            if _option_supplied(args, name, default)
+            for name in ("target-lufs", "ceiling-db", "true-peak-oversample")
+            if _option_supplied(args, name)
         ]
         if ignored_loudness:
             joined = ", ".join(f"--{name}" for name in ignored_loudness)
@@ -349,11 +333,10 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         # Sent only when the caller named them. Supplying a key marks the field
         # as explicit for the assistant, and a delivery target only fills in what
         # the caller left alone -- so passing the default through unconditionally
-        # suppressed every platform target's loudness. The native CLI reports the
-        # same distinction from CliArgs::has().
-        if _option_supplied(args, "target-lufs", -14.0):
+        # suppressed every platform target's loudness.
+        if _option_supplied(args, "target-lufs"):
             suggestion_params["targetLufs"] = float(getattr(args, "target_lufs", -14.0))
-        if _option_supplied(args, "ceiling-db", -1.0):
+        if _option_supplied(args, "ceiling-db"):
             suggestion_params["ceilingDb"] = float(getattr(args, "ceiling_db", -1.0))
         suggestion = json.loads(
             mastering_assistant_suggest(samples, sample_rate=sr, params=suggestion_params)
@@ -365,7 +348,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         # Match the native assistant route: an explicitly supplied shortcut
         # wins over a flat --params override; an omitted shortcut leaves the
         # assistant's suggested/default chain value intact.
-        if _option_supplied(args, "true-peak-oversample", 4):
+        if _option_supplied(args, "true-peak-oversample"):
             config["loudness.truePeakOversample"] = float(getattr(args, "true_peak_oversample", 4))
         result = mastering_chain(samples, sample_rate=sr, config=config)
         explanation_value = suggestion.get("explanation", [])

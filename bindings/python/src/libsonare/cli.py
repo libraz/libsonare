@@ -142,6 +142,9 @@ from ._cli_inventory import (
     _cli_domain as _cli_domain,
 )
 from ._cli_inventory import (
+    _cli_scalar_type as _cli_scalar_type,
+)
+from ._cli_inventory import (
     _inventory_option as _inventory_option,
 )
 from ._cli_inventory import (
@@ -175,7 +178,18 @@ class _ContractArgumentParser(argparse.ArgumentParser):
     1, so parser errors need to go through the same switch as dispatch errors.
     Keeping this behavior in the parser class also covers errors raised by
     nested subparsers and typed options before command dispatch begins.
+
+    The class is also the one place two facts about argv are established: which
+    options the caller actually spelled (``_supplied_options``, the counterpart
+    of the native ``CliArgs::has``) and that every float-typed value is finite.
+    Both are installed here rather than at the call sites, so a new option
+    inherits them without opting in.
     """
+
+    def add_argument(self, *args: Any, **kwargs: Any) -> Any:
+        if kwargs.get("type") is float:
+            kwargs["type"] = _finite_float
+        return super().add_argument(*args, **kwargs)
 
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
@@ -187,12 +201,91 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         args: Iterable[str] | None = None,
         namespace: Any = None,
     ) -> tuple[Any, list[str]]:
-        parsed, extras = super().parse_known_args(args, namespace)
+        argv = list(sys.argv[1:] if args is None else args)
+        parsed, extras = super().parse_known_args(self._expand_flag_values(argv), namespace)
+        # Recorded from the ORIGINAL argv: a flag written as --flag=false was
+        # still named by the caller, and presence is about what was spelled.
+        self._record_supplied_options(parsed, argv)
         _restore_parser_compat_defaults(parsed)
         _reject_stdout_output(parsed, self)
         if self.prog.endswith(" pitch") or getattr(parsed, "command", None) == "pitch":
             _validate_pitch_namespace(parsed, self)
         return parsed, extras
+
+    def _expand_flag_values(self, argv: list[str]) -> list[str]:
+        """Rewrite ``--flag=value`` into the bare flag, or drop it when false.
+
+        The native parser accepts an inline value on every flag-arity option
+        (``parse_option`` in tools/cli/sonare_cli_args.cpp), reading the same
+        false literals ``is_false_flag_literal`` lists; argparse has no such
+        form and rejected the spelling outright. Rewriting here rather than at
+        the actions means every flag inherits it, including one added later, and
+        the only ``=`` forms touched are those resolving to a store_true /
+        store_false action -- a valued option keeps argparse's own handling.
+        """
+        if not any(token.startswith("--") and "=" in token for token in argv):
+            return argv
+        expanded: list[str] = []
+        passthrough = False
+        for token in argv:
+            if passthrough or token == "--" or not token.startswith("--") or "=" not in token:
+                expanded.append(token)
+                passthrough = passthrough or token == "--"
+                continue
+            name, _, value = token.partition("=")
+            action = self._action_for_token(name)
+            if not isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction)):
+                expanded.append(token)
+                continue
+            # An empty value is not a false literal on the native side either:
+            # only the four spellings below turn a flag off.
+            if value.strip().lower() in _FALSE_FLAG_LITERALS:
+                continue
+            expanded.append(name)
+        return expanded
+
+    def _record_supplied_options(self, args: Any, argv: list[str]) -> None:
+        """Record the destination of every option present on ``argv``.
+
+        A subparser parses its own slice into the same namespace, so the set
+        accumulates across parser levels instead of being replaced.
+        """
+        supplied = getattr(args, "_supplied_options", None)
+        if not isinstance(supplied, set):
+            supplied = set()
+            args._supplied_options = supplied
+        for token in argv:
+            if token == "--":
+                break
+            action = self._action_for_token(token)
+            if action is not None:
+                supplied.add(action.dest)
+
+    def _action_for_token(self, token: str) -> Any:
+        """Resolve one argv token to the option action argparse would choose."""
+        if token in ("-", "--") or not token.startswith("-"):
+            return None
+        action = self._option_string_actions.get(token.split("=", 1)[0])
+        if action is not None:
+            return action
+        if not token.startswith("--"):
+            # A short option may carry its value attached, as in ``-o out.wav``.
+            return self._option_string_actions.get(token[:2])
+        if not self.allow_abbrev:
+            return None
+        name = token.split("=", 1)[0]
+        matched = {
+            candidate
+            for option, candidate in self._option_string_actions.items()
+            if option.startswith(name)
+        }
+        return next(iter(matched)) if len(matched) == 1 else None
+
+
+# The values that turn a flag off when written inline, mirroring
+# is_false_flag_literal in tools/cli/sonare_cli_args.cpp. Compared
+# case-insensitively there, so lowered here before the lookup.
+_FALSE_FLAG_LITERALS = frozenset({"false", "0", "no", "off"})
 
 
 def _finite_float(value: str) -> float:
@@ -235,6 +328,26 @@ def _positive_int(value: str) -> int:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed
 
+
+def _candidate_count(value: str) -> int:
+    """Parse ``--candidates``, accepting the native CLI's ``true`` shorthand.
+
+    The native handler reads the raw string and maps ``true`` to the top five,
+    so a script written against it reaches the Python CLI with that literal.
+    """
+    if value == "true":
+        return 5
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("must be an integer or 'true'") from exc
+
+
+# The contract type of a ``type=`` callable that stands in for a builtin. Left
+# unstated, the inventory guesses from the default, and an option defaulting to
+# None has no default to guess from.
+_cli_scalar_type(_finite_float, "number")
+_cli_scalar_type(_candidate_count, "integer")
 
 # The accepted value set each of the checkers above enforces, in the shape the
 # published inventory uses.  A ``type=`` callable is opaque to argparse, so the
@@ -435,7 +548,7 @@ def _build_parser() -> _ContractArgumentParser:
     key_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
     key_p.add_argument(
         "--candidates",
-        type=int,
+        type=_candidate_count,
         default=None,
         metavar="N",
         help="Also show the top N key candidates",
@@ -451,7 +564,10 @@ def _build_parser() -> _ContractArgumentParser:
         "--loudness-weighted", action="store_true", help="Weight key chroma frames by RMS"
     )
     key_p.add_argument(
-        "--high-pass-hz", type=float, default=0.0, help="High-pass cutoff before key analysis"
+        "--high-pass-hz",
+        type=_finite_float,
+        default=0.0,
+        help="High-pass cutoff before key analysis",
     )
     key_p.add_argument(
         "--modes",
@@ -478,13 +594,16 @@ def _build_parser() -> _ContractArgumentParser:
         "chords", parents=[fft_stdout_options], help="Detect chord progression"
     )
     chords_p.add_argument(
-        "--min-duration", type=float, default=0.3, help="Minimum chord duration in seconds"
+        "--min-duration", type=_finite_float, default=0.3, help="Minimum chord duration in seconds"
     )
     chords_p.add_argument(
-        "--smoothing-window", type=float, default=2.0, help="Chroma smoothing window in seconds"
+        "--smoothing-window",
+        type=_finite_float,
+        default=2.0,
+        help="Chroma smoothing window in seconds",
     )
     chords_p.add_argument(
-        "--threshold", type=float, default=0.5, help="Chord detection confidence threshold"
+        "--threshold", type=_finite_float, default=0.5, help="Chord detection confidence threshold"
     )
     chords_p.add_argument(
         "--triads-only", action="store_true", help="Restrict output to triad qualities"
@@ -539,9 +658,14 @@ def _build_parser() -> _ContractArgumentParser:
         help="Beat unit reported for the detected meter (default: 4)",
     )
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
-    mel_p.add_argument("--fmin", type=float, default=0.0, help="Lowest mel band frequency in Hz")
     mel_p.add_argument(
-        "--fmax", type=float, default=0.0, help="Highest mel band frequency in Hz (0 = Nyquist)"
+        "--fmin", type=_finite_float, default=0.0, help="Lowest mel band frequency in Hz"
+    )
+    mel_p.add_argument(
+        "--fmax",
+        type=_finite_float,
+        default=0.0,
+        help="Highest mel band frequency in Hz (0 = Nyquist)",
     )
     mel_p.add_argument(
         "--htk", action="store_true", help="Use the HTK mel formula instead of Slaney"
@@ -599,10 +723,13 @@ def _build_parser() -> _ContractArgumentParser:
         "pitch-correct", parents=[common], help="Pitch-correct from a current to a target MIDI note"
     )
     pitch_correct_p.add_argument(
-        "--current-midi", type=float, default=69.0, help="Current pitch as a MIDI note number"
+        "--current-midi",
+        type=_finite_float,
+        default=69.0,
+        help="Current pitch as a MIDI note number",
     )
     pitch_correct_p.add_argument(
-        "--target-midi", type=float, default=69.0, help="Target pitch as a MIDI note number"
+        "--target-midi", type=_finite_float, default=69.0, help="Target pitch as a MIDI note number"
     )
     pitch_tv_p = sub.add_parser(
         "pitch-correct-timevarying",
@@ -610,11 +737,11 @@ def _build_parser() -> _ContractArgumentParser:
         help="Track pYIN contour and correct toward a note or scale",
     )
     pitch_tv_p.add_argument("--mode", choices=["midi", "scale"], default="midi")
-    pitch_tv_p.add_argument("--target-midi", type=float, default=69.0)
+    pitch_tv_p.add_argument("--target-midi", type=_finite_float, default=69.0)
     pitch_tv_p.add_argument("--hop-length", type=int, default=512)
     pitch_tv_p.add_argument("--scale-root", type=int, default=0)
     pitch_tv_p.add_argument("--scale-mode-mask", type=lambda value: int(value, 0), default=0xAB5)
-    pitch_tv_p.add_argument("--reference-midi", type=float, default=69.0)
+    pitch_tv_p.add_argument("--reference-midi", type=_finite_float, default=69.0)
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
     note_move_p.add_argument("--onset", type=int, default=0)
     note_move_p.add_argument("--offset", type=int, default=None)
@@ -622,10 +749,10 @@ def _build_parser() -> _ContractArgumentParser:
     scale_quantize_p = sub.add_parser(
         "scale-quantize", parents=[stdout_options], help="Quantize one MIDI value to a scale"
     )
-    scale_quantize_p.add_argument("midi", type=float)
+    scale_quantize_p.add_argument("midi", type=_finite_float)
     scale_quantize_p.add_argument("--root", type=int, default=0)
     scale_quantize_p.add_argument("--mode-mask", type=lambda value: int(value, 0), default=0xAB5)
-    scale_quantize_p.add_argument("--reference-midi", type=float, default=69.0)
+    scale_quantize_p.add_argument("--reference-midi", type=_finite_float, default=69.0)
     note_stretch_p = sub.add_parser(
         "note-stretch", parents=[common], help="Time-stretch a single note region"
     )
@@ -636,7 +763,10 @@ def _build_parser() -> _ContractArgumentParser:
         "--offset", type=int, default=0, help="End sample index of the note region"
     )
     note_stretch_p.add_argument(
-        "--ratio", type=float, default=1.0, help="Stretch factor for the region (>1 lengthens)"
+        "--ratio",
+        type=_finite_float,
+        default=1.0,
+        help="Stretch factor for the region (>1 lengthens)",
     )
     # Effect commands that map directly to the Python effects API. The C++ CLI
     # still exposes some low-level converters and section/melody analyses that
@@ -644,14 +774,16 @@ def _build_parser() -> _ContractArgumentParser:
     pitch_shift_p = sub.add_parser(
         "pitch-shift", parents=[common], help="Shift pitch by a number of semitones"
     )
-    pitch_shift_p.add_argument("--semitones", type=float, help="Semitones to shift (positive = up)")
+    pitch_shift_p.add_argument(
+        "--semitones", type=_finite_float, help="Semitones to shift (positive = up)"
+    )
     pitch_shift_p.add_argument("--n-fft", type=int, default=2048)
     pitch_shift_p.add_argument("--hop-length", type=int, default=512)
     time_stretch_p = sub.add_parser(
         "time-stretch", parents=[common], help="Time-stretch without changing pitch"
     )
     time_stretch_p.add_argument(
-        "--rate", type=float, help="Stretch factor (>1 speeds up, <1 slows down)"
+        "--rate", type=_finite_float, help="Stretch factor (>1 speeds up, <1 slows down)"
     )
     time_stretch_p.add_argument("--n-fft", type=int, default=2048)
     time_stretch_p.add_argument("--hop-length", type=int, default=512)
@@ -660,18 +792,21 @@ def _build_parser() -> _ContractArgumentParser:
     )
     normalize_p.add_argument("--mode", default="peak", help="Normalization mode (default: peak)")
     normalize_p.add_argument(
-        "--target-db", type=float, default=None, help="Target peak level in dB"
+        "--target-db", type=_finite_float, default=None, help="Target peak level in dB"
     )
     trim_silence_p = sub.add_parser(
         "trim-silence", parents=[common], help="Trim leading/trailing silence"
     )
     trim_silence_p.add_argument(
-        "--threshold-db", type=float, default=None, help="Silence threshold in dB (default: -60)"
+        "--threshold-db",
+        type=_finite_float,
+        default=None,
+        help="Silence threshold in dB (default: -60)",
     )
     # ``--threshold-db`` and ``--top-db`` select two handler paths. Leave the
     # alternate selector absent by default so the handler can distinguish the
     # default threshold mode from an explicit top-dB request.
-    trim_silence_p.add_argument("--top-db", type=float, default=None)
+    trim_silence_p.add_argument("--top-db", type=_finite_float, default=None)
     trim_silence_p.add_argument("--n-fft", type=int, default=2048)
     trim_silence_p.add_argument("--hop-length", type=int, default=512)
     resample_p = sub.add_parser(
@@ -688,10 +823,12 @@ def _build_parser() -> _ContractArgumentParser:
     voice_change_p = sub.add_parser(
         "voice-change", parents=[common], help="Apply a voice-change effect"
     )
-    voice_change_p.add_argument("--pitch-semitones", type=float, help="Pitch shift in semitones")
+    voice_change_p.add_argument(
+        "--pitch-semitones", type=_finite_float, help="Pitch shift in semitones"
+    )
     voice_change_p.add_argument(
         "--formant-factor",
-        type=float,
+        type=_finite_float,
         help="Formant scaling factor (1.0 = unchanged)",
     )
     voice_change_p.add_argument("--preset", default="", help="Realtime voice changer preset id")
@@ -745,25 +882,27 @@ def _build_parser() -> _ContractArgumentParser:
     )
     acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
     acoustic_p.add_argument("--n-bands", type=int, default=6)
-    acoustic_p.add_argument("--min-decay-db", type=float, default=30.0)
-    acoustic_p.add_argument("--noise-floor-margin-db", type=float, default=10.0)
+    acoustic_p.add_argument("--min-decay-db", type=_finite_float, default=30.0)
+    acoustic_p.add_argument("--noise-floor-margin-db", type=_finite_float, default=10.0)
 
     def _add_room_geometry(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--length", type=float, default=7.0, help="Room length (m)")
-        p.add_argument("--width", type=float, default=5.0, help="Room width (m)")
-        p.add_argument("--height", type=float, default=3.0, help="Room height (m)")
-        p.add_argument("--absorption", type=float, default=0.2, help="Uniform wall absorption")
-        p.add_argument("--source-x", type=float, default=1.0)
-        p.add_argument("--source-y", type=float, default=1.0)
-        p.add_argument("--source-z", type=float, default=1.2)
-        p.add_argument("--listener-x", type=float, default=5.0)
-        p.add_argument("--listener-y", type=float, default=4.0)
-        p.add_argument("--listener-z", type=float, default=1.7)
+        p.add_argument("--length", type=_finite_float, default=7.0, help="Room length (m)")
+        p.add_argument("--width", type=_finite_float, default=5.0, help="Room width (m)")
+        p.add_argument("--height", type=_finite_float, default=3.0, help="Room height (m)")
+        p.add_argument(
+            "--absorption", type=_finite_float, default=0.2, help="Uniform wall absorption"
+        )
+        p.add_argument("--source-x", type=_finite_float, default=1.0)
+        p.add_argument("--source-y", type=_finite_float, default=1.0)
+        p.add_argument("--source-z", type=_finite_float, default=1.2)
+        p.add_argument("--listener-x", type=_finite_float, default=5.0)
+        p.add_argument("--listener-y", type=_finite_float, default=4.0)
+        p.add_argument("--listener-z", type=_finite_float, default=1.7)
         p.add_argument("--ism-order", type=int, default=3, help="Image-source reflection order")
         p.add_argument("--seed", type=int, default=1, help="Deterministic late-tail seed")
         p.add_argument(
             "--max-seconds",
-            type=float,
+            type=_finite_float,
             default=0.0,
             help="Hard cap on RIR/tail length in seconds (0 = natural length)",
         )
@@ -776,10 +915,14 @@ def _build_parser() -> _ContractArgumentParser:
     estimate_room_p = sub.add_parser(
         "estimate-room", parents=[stdout_options], help="Estimate equivalent room from a recording"
     )
-    estimate_room_p.add_argument("--aspect-lw", type=float, default=1.0, help="length/width prior")
-    estimate_room_p.add_argument("--aspect-lh", type=float, default=1.0, help="length/height prior")
     estimate_room_p.add_argument(
-        "--reference-absorption", type=float, default=0.15, help="absorption prior"
+        "--aspect-lw", type=_finite_float, default=1.0, help="length/width prior"
+    )
+    estimate_room_p.add_argument(
+        "--aspect-lh", type=_finite_float, default=1.0, help="length/height prior"
+    )
+    estimate_room_p.add_argument(
+        "--reference-absorption", type=_finite_float, default=0.15, help="absorption prior"
     )
     estimate_room_p.add_argument(
         "--sabine", action="store_true", help="Use the Sabine model (default Eyring)"
@@ -804,21 +947,23 @@ def _build_parser() -> _ContractArgumentParser:
         "room-morph", parents=[common], help="Morph reverberation toward a target room"
     )
     _add_room_geometry(room_morph_p)
-    room_morph_p.add_argument("--wet", type=float, default=0.5, help="Target-room mix [0,1]")
     room_morph_p.add_argument(
-        "--suppression", type=float, default=0.5, help="Source-tail suppression [0,1]"
+        "--wet", type=_finite_float, default=0.5, help="Target-room mix [0,1]"
+    )
+    room_morph_p.add_argument(
+        "--suppression", type=_finite_float, default=0.5, help="Source-tail suppression [0,1]"
     )
 
     rhythm_p = sub.add_parser(
         "rhythm", parents=[fft_stdout_options], help="Analyze rhythm primitives"
     )
-    rhythm_p.add_argument("--start-bpm", type=float, default=120.0)
-    rhythm_p.add_argument("--bpm-min", type=float, default=60.0)
-    rhythm_p.add_argument("--bpm-max", type=float, default=200.0)
+    rhythm_p.add_argument("--start-bpm", type=_finite_float, default=120.0)
+    rhythm_p.add_argument("--bpm-min", type=_finite_float, default=60.0)
+    rhythm_p.add_argument("--bpm-max", type=_finite_float, default=200.0)
     dynamics_p = sub.add_parser(
         "dynamics", parents=[stdout_options], help="Analyze dynamics/loudness"
     )
-    dynamics_p.add_argument("--window-sec", type=float, default=0.4)
+    dynamics_p.add_argument("--window-sec", type=_finite_float, default=0.4)
     # Dynamics windows the loudness series but runs no FFT, so it takes the hop
     # control without the matching --n-fft.
     dynamics_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
@@ -837,8 +982,8 @@ def _build_parser() -> _ContractArgumentParser:
     )
     tempogram_p.add_argument("--win-length", type=int, default=384)
     plp_p = sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
-    plp_p.add_argument("--tempo-min", type=float, default=30.0)
-    plp_p.add_argument("--tempo-max", type=float, default=300.0)
+    plp_p.add_argument("--tempo-min", type=_finite_float, default=30.0)
+    plp_p.add_argument("--tempo-max", type=_finite_float, default=300.0)
     plp_p.add_argument("--win-length", type=int, default=384)
 
     # Mastering commands
@@ -847,8 +992,8 @@ def _build_parser() -> _ContractArgumentParser:
     )
     mastering_p.add_argument("--preset", default="")
     mastering_p.add_argument("--config", default=None)
-    mastering_p.add_argument("--target-lufs", type=float, default=-14.0)
-    mastering_p.add_argument("--ceiling-db", type=float, default=-1.0)
+    mastering_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
+    mastering_p.add_argument("--ceiling-db", type=_finite_float, default=-1.0)
     mastering_p.add_argument("--params", default="")
     _add_wav_bits_argument(mastering_p)
     mastering_p.add_argument(
@@ -918,9 +1063,9 @@ def _build_parser() -> _ContractArgumentParser:
         choices=range(_EQ_ENUM_BOUNDS["type"] + 1),
         reject_exit="invalid_parameter",
     )
-    eq_p.add_argument("--frequency-hz", type=float, default=1000.0)
-    eq_p.add_argument("--gain-db", type=float, default=0.0)
-    eq_p.add_argument("--q", type=float, default=1.0)
+    eq_p.add_argument("--frequency-hz", type=_finite_float, default=1000.0)
+    eq_p.add_argument("--gain-db", type=_finite_float, default=0.0)
+    eq_p.add_argument("--q", type=_finite_float, default=1.0)
     _cli_domain(
         eq_p.add_argument("--coeff-mode", type=int, default=0, help="0 RBJ, 1 Vicanek"),
         choices=range(_EQ_ENUM_BOUNDS["coeff_mode"] + 1),
@@ -955,25 +1100,29 @@ def _build_parser() -> _ContractArgumentParser:
         reject_exit="invalid_parameter",
     )
     eq_p.add_argument("--auto-gain", action="store_true")
-    eq_p.add_argument("--gain-scale", type=float, default=1.0)
-    eq_p.add_argument("--output-gain-db", type=float, default=0.0)
-    eq_p.add_argument("--output-pan", type=float, default=0.0)
+    eq_p.add_argument("--gain-scale", type=_finite_float, default=1.0)
+    eq_p.add_argument("--output-gain-db", type=_finite_float, default=0.0)
+    eq_p.add_argument("--output-pan", type=_finite_float, default=0.0)
     eq_p.add_argument("--proportional-q", action="store_true")
     eq_p.add_argument("--dynamic", action="store_true")
-    eq_p.add_argument("--threshold-db", type=float, default=-24.0)
+    eq_p.add_argument("--threshold-db", type=_finite_float, default=-24.0)
     eq_p.add_argument("--auto-threshold", action="store_true")
-    eq_p.add_argument("--ratio", type=float, default=2.0)
-    eq_p.add_argument("--range-db", type=float, default=-6.0)
-    eq_p.add_argument("--attack-ms", type=float, default=5.0)
-    eq_p.add_argument("--release-ms", type=float, default=50.0)
+    eq_p.add_argument("--ratio", type=_finite_float, default=2.0)
+    eq_p.add_argument("--range-db", type=_finite_float, default=-6.0)
+    eq_p.add_argument("--attack-ms", type=_finite_float, default=5.0)
+    eq_p.add_argument("--release-ms", type=_finite_float, default=50.0)
     # "--lookahead-ms" is the flag's former (misleading) spelling; still
     # accepted, both writing to the same destination, so a stored script
     # keeps working.
     eq_p.add_argument(
-        "--detector-delay-ms", "--lookahead-ms", dest="lookahead_ms", type=float, default=0.0
+        "--detector-delay-ms",
+        "--lookahead-ms",
+        dest="lookahead_ms",
+        type=_finite_float,
+        default=0.0,
     )
-    eq_p.add_argument("--sidechain-freq-hz", type=float, default=-1.0)
-    eq_p.add_argument("--sidechain-q", type=float, default=1.0)
+    eq_p.add_argument("--sidechain-freq-hz", type=_finite_float, default=-1.0)
+    eq_p.add_argument("--sidechain-q", type=_finite_float, default=1.0)
     _add_wav_bits_argument(eq_p)
     sub.add_parser(
         "mastering-processors", parents=[stdout_options], help="List mastering processor names"
@@ -1021,10 +1170,10 @@ def _build_parser() -> _ContractArgumentParser:
     )
     mstream_p.add_argument("--platforms-file", default=None, help="Platform targets JSON file")
     declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
-    declip_p.add_argument("--clip-threshold", type=float, default=0.98)
+    declip_p.add_argument("--clip-threshold", type=_finite_float, default=0.98)
     declip_p.add_argument("--lpc-order", type=int, default=36)
     declip_p.add_argument("--iterations", type=int, default=2)
-    declip_p.add_argument("--lpc-blend", type=float, default=0.65)
+    declip_p.add_argument("--lpc-blend", type=_finite_float, default=0.65)
     sub.add_parser(
         "mastering-presets", parents=[stdout_options], help="List mastering preset names"
     )
@@ -1254,7 +1403,23 @@ def _dump_cli_contract() -> None:
 
 
 def main() -> None:
-    """CLI entry point."""
+    """CLI entry point.
+
+    One reporting path covers every failure, and it wraps parsing as well as
+    dispatch: Ctrl-C is a BaseException, so an interrupt anywhere inside used to
+    reach the interpreter's traceback printer instead of the one-line Error
+    every other failure reports.
+    """
+    try:
+        _dispatch()
+    except (Exception, KeyboardInterrupt) as exc:
+        message = "cancelled" if isinstance(exc, KeyboardInterrupt) else str(exc)
+        print(f"Error: {message}", file=sys.stderr)
+        sys.exit(_exit_code_for(exc))
+
+
+def _dispatch() -> None:
+    """Build the parser, route argv to a command handler, and exit with its status."""
     if len(sys.argv) == 2 and sys.argv[1] == "--dump-cli-contract":
         _dump_cli_contract()
         return
@@ -1336,15 +1501,11 @@ def main() -> None:
         print(f"Unknown command: {args.command}", file=sys.stderr)
         sys.exit(1 if _legacy_exit_codes() else EXIT_USAGE)
 
-    try:
-        # `common` supplies -o to every parser for a uniform CLI shape, but an
-        # analysis result has no audio artifact to write. That rejection happens
-        # at the parser boundary (`_reject_stdout_output`), which sees every
-        # command and reports one exit code for all of them.
-        sys.exit(handler(args))
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(_exit_code_for(e))
+    # `common` supplies -o to every parser for a uniform CLI shape, but an
+    # analysis result has no audio artifact to write. That rejection happens at
+    # the parser boundary (`_reject_stdout_output`), which sees every command and
+    # reports one exit code for all of them.
+    sys.exit(handler(args))
 
 
 _rebind_facade_exports(globals(), "libsonare._cli_", "libsonare.cli")

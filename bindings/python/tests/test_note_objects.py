@@ -800,3 +800,53 @@ def test_merge_notes_rejects_a_run_that_does_not_ascend_or_runs_past_the_set() -
     assert len(whole) == 1
     assert whole[0].frame_start == notes[0].frame_start
     assert whole[0].frame_end == notes[2].frame_end
+
+
+def test_the_documented_pitch_pyin_to_extract_notes_pipeline_runs() -> None:
+    """The shipped example is executable, and its fill_na=True is load-bearing.
+
+    pitch_pyin leaves an unvoiced frame as NaN by default, and extract_notes is
+    guarded against non-finite f0_hz, so the example as originally written
+    raised on any recording with a silent passage. The two halves are asserted
+    separately: that the default really does produce NaN (otherwise the
+    fill_na=True below would be decoration), and that the documented call then
+    succeeds.
+    """
+    import math
+
+    import numpy as np
+
+    import libsonare
+
+    sr = 22050
+    t = np.arange(sr, dtype=np.float32) / sr
+    samples = (0.4 * np.sin(2.0 * math.pi * 220.0 * t)).astype(np.float32)
+    samples[sr // 3 : 2 * sr // 3] = 0.0  # a silent passage -> unvoiced frames
+
+    # Non-vacuity: the default track really is NaN-bearing on this input, so
+    # the success below is the argument doing work rather than the input being
+    # too clean to tell.
+    default_track = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512)
+    assert np.isnan(np.asarray(default_track.f0, dtype=np.float64)).any()
+    with pytest.raises(libsonare.SonareValueError, match="NaN or Inf"):
+        libsonare.extract_notes(
+            samples,
+            sr,
+            default_track.f0,
+            sr / 512,
+            voiced=[int(v) for v in default_track.voiced_flag],
+        )
+
+    # The example as shipped.
+    pitch = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512, fill_na=True)
+    notes = libsonare.extract_notes(
+        samples,
+        sr,
+        pitch.f0,
+        sr / 512,
+        voiced=[int(v) for v in pitch.voiced_flag],
+    )
+    assert notes, "the documented pipeline produced no notes on a voiced input"
+    notes[0].edit.gain_db = -6.0
+    quieter = libsonare.render_notes(samples, sr, notes)
+    assert len(quieter) == len(samples)

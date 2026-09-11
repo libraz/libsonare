@@ -557,6 +557,8 @@ def test_catalog_json_uses_native_cli_object_shapes(monkeypatch, capsys) -> None
 def test_atomic_byte_writer_preserves_old_output_and_cleans_temp(monkeypatch, tmp_path) -> None:
     """A failed final replace leaves the previous artifact untouched."""
     from libsonare import cli
+    from libsonare._cli_common import EXIT_ENCODE_FAILED
+    from libsonare._runtime import SonareError
 
     output = tmp_path / "result.bin"
     output.write_bytes(b"old")
@@ -565,8 +567,9 @@ def test_atomic_byte_writer_preserves_old_output_and_cleans_temp(monkeypatch, tm
         raise OSError("injected replace failure")
 
     monkeypatch.setattr(os, "replace", fail_replace)
-    with pytest.raises(OSError, match="injected"):
+    with pytest.raises(SonareError, match="injected") as raised:
         cli._atomic_write_bytes(str(output), b"new")
+    assert cli._exit_code_for(raised.value) == EXIT_ENCODE_FAILED
 
     assert output.read_bytes() == b"old"
     assert list(tmp_path.iterdir()) == [output]

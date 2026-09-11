@@ -333,13 +333,18 @@ def test_stdout_only_output_is_parser_failure_without_dispatch(
     assert called is False
 
 
+# `--with-seventh=true` was a case here and has been retired rather than
+# corrected: it pinned behaviour that was right until the inline flag-value form
+# was adopted, not a defect. The native parser has always accepted an inline
+# value on every flag-arity option, and the two surfaces now agree; refusing it
+# here is no longer the contract. The numeric cases below are unaffected --
+# --chroma-highpass takes a value, so its domain check is untouched.
 @pytest.mark.parametrize(
     "extra",
     [
         ["--chroma-highpass", "nan"],
         ["--chroma-highpass", "inf"],
         ["--chroma-highpass", "-1"],
-        ["--with-seventh=true"],
     ],
 )
 def test_analyze_options_have_strict_parser_validation(

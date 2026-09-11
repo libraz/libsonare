@@ -80,11 +80,14 @@ class Project(
     """
 
     def __init__(self) -> None:
+        # Set first so a failed create (e.g. an ABI mismatch) leaves a valid
+        # attribute for __del__/close() instead of raising AttributeError.
+        self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         _check_project_abi(lib)
         handle = ctypes.c_void_p()
         _check(lib.sonare_project_create(ctypes.byref(handle)))
-        self._handle: ctypes.c_void_p | None = handle
+        self._handle = handle
 
     @classmethod
     def create(cls) -> Self:

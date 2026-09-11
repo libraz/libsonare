@@ -744,6 +744,9 @@ def extract_notes(
         sample_rate: Sample rate in Hz.
         f0_hz: Per-frame F0 in Hz, one entry per analysis frame. Every value
             must be finite and non-negative; zero denotes an unvoiced frame.
+            :func:`pitch_pyin` emits NaN for an unvoiced frame unless it is
+            called with ``fill_na=True``, which returns the zero this expects,
+            so a track taken from it needs that argument.
         frame_rate: F0 frames per second; must be finite and positive.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
             ``voiced_prob``; pass :func:`pitch_pyin`'s ``voiced_flag`` here.
@@ -770,7 +773,12 @@ def extract_notes(
             empty or non-finite.
 
     Example:
-        >>> pitch = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512)
+        ``fill_na=True`` is required, not optional: pYIN's default leaves an
+        unvoiced frame as NaN, which this function rejects.
+
+        >>> pitch = libsonare.pitch_pyin(
+        ...     samples, sample_rate=sr, hop_length=512, fill_na=True
+        ... )
         >>> notes = libsonare.extract_notes(
         ...     samples,
         ...     sr,

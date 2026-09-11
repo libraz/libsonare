@@ -4638,6 +4638,21 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "no_timeline",
+          "argv": [
+            "project",
+            "compile",
+            "--in",
+            "{project_warning}",
+            "--json"
+          ],
+          "exit": 9,
+          "legacy_exit": 1,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}

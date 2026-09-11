@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -64,9 +65,19 @@ def test_key_hpss_canonical_and_legacy_spellings_forward_identically(
     assert calls[0]["use_hpss"] is True
 
 
-def test_key_candidates_default_is_empty_and_bare_legacy_value_means_five(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("value", "shown"),
+    [(None, 0), ("true", 5), ("3", 3), ("-2", 0), ("0", 0)],
+)
+def test_key_candidates_matches_the_native_cli_value_by_value(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], value, shown
 ) -> None:
+    """Every literal the native handler accepts means the same thing here.
+
+    ``true`` is the native shorthand for the top five and reaches this CLI from
+    scripts written against it; a negative count clamps to none on both. The
+    literal is resolved by the parser, so the handler sees only a count.
+    """
     import libsonare
     from libsonare import _cli_analysis
 
@@ -80,17 +91,48 @@ def test_key_candidates_default_is_empty_and_bare_legacy_value_means_five(
 
     def fake_detect_key_candidates(samples: Any, **kwargs: object) -> list[object]:
         candidate_calls.append(kwargs)
-        return []
+        return [SimpleNamespace(key=_key_result(), correlation=0.5)] * 8
 
     monkeypatch.setattr(libsonare, "detect_key", fake_detect_key)
     monkeypatch.setattr(libsonare, "detect_key_candidates", fake_detect_key_candidates)
 
-    assert _cli_analysis.cmd_key(_key_args()) == 0
-    assert candidate_calls == []
+    argv = ["key", "input.wav", "--json"]
+    if value is not None:
+        argv.append(f"--candidates={value}")
+    assert _cli_analysis.cmd_key(_parser().parse_args(argv)) == 0
 
-    assert _cli_analysis.cmd_key(_key_args(candidates=True)) == 0
-    assert len(candidate_calls) == 1
-    assert candidate_calls[0] == key_calls[0]
+    payload = json.loads(capsys.readouterr().out)
+    assert len(payload.get("candidates", [])) == shown
+    if shown:
+        assert candidate_calls == [key_calls[0]]
+    else:
+        assert candidate_calls == []
+
+
+@pytest.mark.parametrize("value", ["", "bogus", "1.5", "true "])
+def test_key_candidates_refuses_a_value_the_native_cli_refuses(value) -> None:
+    """Only the integer forms and the ``true`` shorthand get through."""
+    with pytest.raises(SystemExit) as raised:
+        _parser().parse_args(["key", "input.wav", f"--candidates={value}"])
+    assert raised.value.code == 2
+
+
+def test_key_candidates_shorthand_is_resolved_in_one_place() -> None:
+    """The parser owns the literal, so no handler re-normalizes it.
+
+    The handler used to carry bool and string branches for forms its own parser
+    could never deliver, next to a comment describing a bare ``--candidates``
+    that neither CLI accepts.
+    """
+    from pathlib import Path
+
+    handler = Path(__file__).parents[1] / "src" / "libsonare" / "_cli_analysis.py"
+    text = handler.read_text(encoding="utf-8")
+    assert '"true"' not in text
+    assert "isinstance(raw_candidate_count" not in text
+
+    native = Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_analysis.cpp"
+    assert '(value == "true") ? 5' in native.read_text(encoding="utf-8")
 
 
 def test_chords_forwards_smoothing_window_and_beat_sync_flag(

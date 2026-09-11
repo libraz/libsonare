@@ -19,7 +19,9 @@ until it is guarded or explicitly exempted.
 
 from __future__ import annotations
 
+import ast
 import inspect
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -269,3 +271,83 @@ def test_non_finite_buffer_is_rejected(name: str) -> None:
     with pytest.raises(SonareValueError) as excinfo:
         getattr(libsonare, name)(*args)
     assert name in str(excinfo.value), f"{name}: message does not name the function"
+
+
+# The rank rejection is raised inside `_as_float32_buffer`, which names the
+# argument from `arg_name` and defaults it to "samples". A call site coercing a
+# differently-named argument therefore has to forward the real name, and
+# forwarding is a per-call-site edit — the same drift this module exists to
+# catch for the guards. Derived from the source rather than listed: a new call
+# site fails here until it either forwards a name or is coercing something
+# actually called `samples`.
+_BINDING_SOURCE_ROOT = Path(__file__).parents[1] / "src" / "libsonare"
+
+
+def _buffer_coercion_call_sites() -> list[tuple[str, int, ast.Call]]:
+    """Every `_as_float32_buffer(...)` call in the binding, with its location."""
+    sites: list[tuple[str, int, ast.Call]] = []
+    for path in sorted(_BINDING_SOURCE_ROOT.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "_as_float32_buffer"
+            ):
+                sites.append((path.name, node.lineno, node))
+    return sites
+
+
+def test_every_buffer_coercion_site_names_the_argument_it_coerces() -> None:
+    """A rank rejection must not report the helper's default for another name."""
+    sites = _buffer_coercion_call_sites()
+    # Non-vacuity: the walk has to be finding the call sites at all.
+    assert len(sites) >= 10, sites
+
+    misnaming = []
+    for filename, lineno, call in sites:
+        if any(keyword.arg == "arg_name" for keyword in call.keywords):
+            continue
+        coerced = call.args[0] if call.args else None
+        if isinstance(coerced, ast.Name) and coerced.id == "samples":
+            continue  # the helper's default already names it correctly
+        misnaming.append(f"{filename}:{lineno}")
+    assert misnaming == [], (
+        "these coercions would report the default argument name 'samples' for a "
+        f"differently-named argument: {misnaming}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    [(None, "channels"), ("clip channels", "clip channels")],
+)
+def test_planar_rank_rejection_names_the_caller_subject(subject, expected) -> None:
+    """A 2-D channel reports the subject the caller passed, not 'samples'."""
+    from libsonare._runtime import _planar_channel_arrays
+
+    channels = [np.zeros((2, 2), dtype=np.float32)]
+    kwargs = {} if subject is None else {"subject": subject}
+    with pytest.raises(SonareValueError) as excinfo:
+        _planar_channel_arrays(channels, **kwargs)
+    message = str(excinfo.value)
+    assert message.startswith(f"{expected} must be a 1-D buffer"), message
+    assert "samples must be" not in message
+
+
+@pytest.mark.parametrize("bad_side", ["left", "right"])
+def test_planar_stereo_rank_rejection_names_the_side(bad_side: str) -> None:
+    """Each planar-stereo channel reports its own parameter name."""
+    good = np.zeros(128, dtype=np.float32)
+    bad = np.zeros((2, 64), dtype=np.float32)
+    arguments = (bad, good) if bad_side == "left" else (good, bad)
+
+    with (
+        libsonare.RealtimeVoiceChanger(
+            48000, "bright-idol", max_block_size=128, channels=2
+        ) as changer,
+        pytest.raises(SonareValueError) as excinfo,
+    ):
+        changer.process_planar_stereo(*arguments)
+    message = str(excinfo.value)
+    assert message.startswith(f"{bad_side} must be a 1-D buffer"), message

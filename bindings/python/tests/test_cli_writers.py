@@ -39,6 +39,70 @@ def test_native_project_midi_sparse_file_limit(tmp_path, size, accepted) -> None
             cli._read_bounded(str(source), _NATIVE_PROJECT_MIDI_LIMIT)
 
 
+def _artifact_writers(source: Path, destination: Path) -> dict[str, Any]:
+    """One call per kind of user-named artifact the CLI writes."""
+    from libsonare import cli
+
+    return {
+        "wav": lambda: cli._write_wav(str(destination), [0.25] * 16, 22_050),
+        "bytes": lambda: cli._atomic_write_bytes(str(destination), b"payload"),
+        "project": lambda: cli.cmd_project(
+            cli._build_parser().parse_args(["project", "new", "-o", str(destination)])
+        ),
+        "mastering-report": lambda: cli.cmd_mastering(
+            cli._build_parser().parse_args(
+                ["mastering", str(source), "--report", str(destination), "--json"]
+            )
+        ),
+    }
+
+
+@pytest.mark.parametrize("artifact", ["wav", "bytes", "project", "mastering-report"])
+def test_every_artifact_writer_classifies_a_failed_write(tmp_path, capsys, artifact) -> None:
+    """No writer's OSError reaches the generic error code.
+
+    The destination is an existing directory, the commonest instance of a
+    refused write: nothing rejects it until the atomic replace, and before this
+    two of the four writers reported it as an unknown internal failure.
+    """
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_ENCODE_FAILED
+    from libsonare._runtime import SonareError
+
+    source = tmp_path / "tone.wav"
+    cli._write_wav(str(source), [0.25, -0.25] * 512, 22_050)
+    destination = tmp_path / "destination"
+    destination.mkdir()
+
+    with pytest.raises(SonareError) as raised:
+        _artifact_writers(source, destination)[artifact]()
+    assert cli._exit_code_for(raised.value) == EXIT_ENCODE_FAILED
+    # The destination the caller named, not the scratch file the errno mentions.
+    assert str(destination) in str(raised.value)
+    capsys.readouterr()
+
+
+def test_bounded_reader_classifies_a_path_it_cannot_read(tmp_path) -> None:
+    """A directory reads as invalid format, the class the native CLI reports.
+
+    A missing path keeps the file-not-found class, so the two refusals stay
+    distinguishable.
+    """
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_FILE_NOT_FOUND, EXIT_INVALID_FORMAT
+    from libsonare._runtime import SonareError
+
+    directory = tmp_path / "not-a-file"
+    directory.mkdir()
+    with pytest.raises(SonareError) as raised:
+        cli._read_bounded(str(directory), _NATIVE_PROJECT_MIDI_LIMIT)
+    assert cli._exit_code_for(raised.value) == EXIT_INVALID_FORMAT
+
+    with pytest.raises(FileNotFoundError) as missing:
+        cli._read_bounded(str(tmp_path / "absent.json"), _NATIVE_PROJECT_MIDI_LIMIT)
+    assert cli._exit_code_for(missing.value) == EXIT_FILE_NOT_FOUND
+
+
 class _TemporaryFileProxy:
     def __init__(self, raw: Any, *, fail_write: bool, fail_close: bool) -> None:
         self._raw = raw
@@ -69,6 +133,8 @@ def test_atomic_byte_writer_preserves_old_output_at_every_failure_stage(
 ) -> None:
     import libsonare._cli_common as implementation
     from libsonare import cli
+    from libsonare._cli_common import EXIT_ENCODE_FAILED
+    from libsonare._runtime import SonareError
 
     output = tmp_path / "result.bin"
     output.write_bytes(b"old artifact")
@@ -90,8 +156,15 @@ def test_atomic_byte_writer_preserves_old_output_at_every_failure_stage(
             lambda _source, _target: (_ for _ in ()).throw(OSError("injected replace failure")),
         )
 
-    with pytest.raises(OSError, match=f"injected {stage} failure"):
+    # The byte writer carries the same contract as the WAV writer: every stage
+    # is a stage of producing the output file, so all three report the encode
+    # class instead of the generic error code a bare OSError landed on, and the
+    # message names the destination the caller asked for rather than the scratch
+    # file the errno mentions.
+    with pytest.raises(SonareError, match=f"injected {stage} failure") as raised:
         cli._atomic_write_bytes(str(output), b"new artifact")
+    assert cli._exit_code_for(raised.value) == EXIT_ENCODE_FAILED
+    assert str(output) in str(raised.value)
 
     _assert_only_old_output(tmp_path, output)
 

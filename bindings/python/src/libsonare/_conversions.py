@@ -311,7 +311,16 @@ def peak_pick(
     delta: float,
     wait: int,
 ) -> list[int]:
-    """Pick peaks using librosa.util.peak_pick-compatible parameters."""
+    """Pick peaks using librosa.util.peak_pick-compatible parameters.
+
+    ``delta`` is a threshold above the local mean, in the units of ``values``
+    itself. The envelope is not normalized -- :func:`onset_envelope` returns
+    half-wave rectified Mel-spectrogram flux, whose scale depends on the input
+    level and on ``n_mels`` -- so a delta that works for one signal need not
+    work for another. Read a starting value off your own envelope (a small
+    fraction of ``max(values)`` is a reasonable first try) rather than carrying
+    one over from another source.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(values)
     with _out_int_array(lib) as (out, out_length):

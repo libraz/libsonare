@@ -3538,10 +3538,12 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     auto [diagnostic_code, diagnostic_output] =
         exec_command(CLI + " project compile --in " + invalid + " --json -q");
-    // A project that loads but does not compile is a handler failure with no
-    // error code of its own, so it lands on the same invalid-parameter code
-    // every other command uses for that state.
-    REQUIRE(diagnostic_code == 3);
+    // A project that loads but compiles without a renderable timeline is a
+    // project-state failure, the class `project validate --strict` already
+    // reports for its own parsed-but-failing outcome, and the class the Python
+    // CLI reports for this same input. It used to return a plain 1, which
+    // normalizes to invalid-parameter and says the arguments were wrong.
+    REQUIRE(diagnostic_code == 9);
     const auto diagnostic_payload = sonare::util::json::parse_strict(diagnostic_output);
     REQUIRE(diagnostic_payload["diagnostic_count"].as_int() > 0);
     REQUIRE(diagnostic_payload["messages"].is_string());

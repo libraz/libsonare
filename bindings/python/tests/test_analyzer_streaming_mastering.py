@@ -168,6 +168,70 @@ def test_streaming_equalizer_processes_blocks_and_exposes_spectrum() -> None:
         assert eq.latency_samples > 0
 
 
+def test_eq_spectrum_band_lists_are_sized_by_the_ctypes_mirror() -> None:
+    """The published lengths, the mirror and the constants are one chain."""
+    from libsonare import StreamingEqualizer
+    from libsonare._ffi_types_mastering_project import (
+        SONARE_EQ_MAX_BANDS,
+        SONARE_EQ_SPECTRUM_PROFILE_BANDS,
+        SonareEqSnapshot,
+    )
+
+    declared = dict(SonareEqSnapshot._fields_)
+    assert declared["band_gain_db"]._length_ == SONARE_EQ_MAX_BANDS
+    assert declared["profile_db"]._length_ == SONARE_EQ_SPECTRUM_PROFILE_BANDS
+
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        eq.process_mono([0.0] * 256)
+        snapshot = eq.spectrum()
+
+    assert len(snapshot.band_gain_db) == declared["band_gain_db"]._length_
+    assert len(snapshot.profile_db) == declared["profile_db"]._length_
+
+
+def test_eq_spectrum_follows_a_resized_ctypes_mirror(monkeypatch) -> None:
+    """A grown C array reaches the caller instead of being cut to the old length.
+
+    The literals this used to carry equalled the constants, so the duplication
+    was invisible while the sizes agreed. Resizing the mirror is the only way to
+    assert the derivation rather than today's numbers.
+    """
+    import ctypes
+    from types import SimpleNamespace
+
+    from libsonare import StreamingEqualizer, _mastering_streaming
+    from libsonare._ffi_types_mastering_project import SonareEqSnapshot
+
+    declared = dict(SonareEqSnapshot._fields_)
+    grown_bands = declared["band_gain_db"]._length_ + 2
+    grown_profile = declared["profile_db"]._length_ + 3
+    grown_fields = []
+    for name, kind in SonareEqSnapshot._fields_:
+        if name == "band_gain_db":
+            kind = ctypes.c_float * grown_bands
+        elif name == "profile_db":
+            kind = ctypes.c_float * grown_profile
+        grown_fields.append((name, kind))
+
+    grown_snapshot = type("_GrownEqSnapshot", (ctypes.Structure,), {"_fields_": grown_fields})
+    monkeypatch.setattr(_mastering_streaming, "SonareEqSnapshot", grown_snapshot)
+
+    with StreamingEqualizer(sample_rate=48000, max_block_size=256) as eq:
+        # The native call cannot fill a layout it was not compiled against, so
+        # it stands in as a success that writes nothing: the lengths under test
+        # come from the mirror, not from the payload. Restored before the
+        # context manager exits, which needs the real destroy.
+        real_lib = eq._lib
+        eq._lib = SimpleNamespace(sonare_eq_spectrum=lambda handle, ref: 0)
+        try:
+            snapshot = eq.spectrum()
+        finally:
+            eq._lib = real_lib
+
+    assert len(snapshot.band_gain_db) == grown_bands
+    assert len(snapshot.profile_db) == grown_profile
+
+
 def test_streaming_equalizer_match_configures_bands() -> None:
     """StreamingEqualizer.match forwards to the live EQ match C API."""
     from libsonare import StreamingEqualizer

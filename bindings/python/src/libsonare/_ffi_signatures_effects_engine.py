@@ -823,6 +823,18 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_uint32),
         ]
+    if hasattr(lib, "sonare_engine_clip_page_request_overflow_count"):
+        lib.sonare_engine_clip_page_request_overflow_count.restype = ctypes.c_int32
+        lib.sonare_engine_clip_page_request_overflow_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+    if hasattr(lib, "sonare_engine_warp_stretch_overflow_count"):
+        lib.sonare_engine_warp_stretch_overflow_count.restype = ctypes.c_int32
+        lib.sonare_engine_warp_stretch_overflow_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
     if hasattr(lib, "sonare_engine_drain_external_midi"):
         lib.sonare_engine_drain_external_midi.restype = ctypes.c_int32
         lib.sonare_engine_drain_external_midi.argtypes = [

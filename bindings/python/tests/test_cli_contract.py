@@ -358,6 +358,274 @@ def test_cli_unknown_project_subcommand_is_a_usage_error(tmp_path) -> None:
     assert result.returncode == 2
 
 
+# Every spelling of a value that parses as a float but is not one. The overflow
+# literals are here because Python widens them to infinity where the native
+# strtof reports a range error: both surfaces have to refuse, whichever way the
+# conversion failed.
+_NON_FINITE_LITERALS = ("nan", "NaN", "inf", "Infinity", "1e400")
+_NEGATIVE_NON_FINITE_LITERALS = ("-nan", "-inf", "-1e400")
+
+# One float option per declaration shape the parser uses: a numeric default, an
+# assistant-gated option, a domain-narrowed converter, a None default, an option
+# whose two spellings share a destination, and a positional. The mastering rows
+# appear with and without --assistant because that flag selects a different
+# consumer for the same value.
+_NON_FINITE_FLOAT_SITES = (
+    (["mastering", "input.wav"], "--target-lufs"),
+    (["mastering", "input.wav", "--assistant"], "--target-lufs"),
+    (["mastering", "input.wav", "--assistant"], "--speech-mono-amount"),
+    (["pitch", "input.wav"], "--fmin"),
+    (["normalize", "input.wav", "-o", "out.wav"], "--target-db"),
+    (["time-stretch", "input.wav", "-o", "out.wav"], "--rate"),
+    (["eq", "input.wav"], "--detector-delay-ms"),
+    (["acoustic", "input.wav"], "--min-decay-db"),
+    (["scale-quantize"], None),
+)
+
+
+def _float_typed_actions(parser, path=()):
+    """Every parser action whose ``type=`` converts an argv token to a float.
+
+    Derived from the parser rather than from a list, so an option added
+    tomorrow is covered without anyone remembering to name it here.
+    """
+    from libsonare import cli
+
+    for action in parser._actions:  # noqa: SLF001
+        if not callable(action.type):
+            continue
+        try:
+            converted = action.type("0.5")
+        except Exception:  # noqa: BLE001 - a converter that refuses 0.5 is not a float option
+            continue
+        if isinstance(converted, float):
+            yield " ".join((*path, action.dest)), action
+    for name, child in cli._inventory_subparsers(parser).items():
+        yield from _float_typed_actions(child, (*path, name))
+
+
+def _non_finite_argv(prefix: list[str], option: str | None, literal: str) -> list[list[str]]:
+    """Every argv that carries @p literal into @p option.
+
+    A value beginning with ``-`` has only the attached spelling: argparse reads
+    ``-inf`` as an option-like token, and the native parser's negative-number
+    matcher does not accept it either.
+    """
+    if option is None:
+        return [[*prefix, literal]]
+    spellings = [[*prefix, f"{option}={literal}"]]
+    if not literal.startswith("-"):
+        spellings.append([*prefix, option, literal])
+    return spellings
+
+
+def test_no_cli_option_converts_its_value_with_the_unchecked_float_builtin() -> None:
+    """``float`` accepts NaN and Inf, so no option may be declared with it."""
+    from libsonare import cli
+
+    actions = list(_float_typed_actions(cli._build_parser()))
+    # Non-vacuity: the walk has to be finding the float options at all.
+    assert len(actions) > 50
+    assert [name for name, action in actions if action.type is float] == []
+
+
+@pytest.mark.parametrize("literal", _NON_FINITE_LITERALS + _NEGATIVE_NON_FINITE_LITERALS)
+def test_every_float_typed_cli_option_refuses_a_non_finite_value(literal) -> None:
+    """The refusal belongs to the option, not to the handful that opted in."""
+    import argparse
+
+    from libsonare import cli
+
+    accepted = []
+    for name, action in _float_typed_actions(cli._build_parser()):
+        try:
+            action.type(literal)
+        except (argparse.ArgumentTypeError, ValueError):
+            continue
+        accepted.append(name)
+    assert accepted == []
+
+
+@pytest.mark.parametrize("literal", _NON_FINITE_LITERALS + _NEGATIVE_NON_FINITE_LITERALS)
+def test_a_non_finite_option_value_is_a_usage_error(literal) -> None:
+    """Exit 2, the class the native CLI reports for the same argv.
+
+    The native parser refuses a non-finite value before dispatch
+    (``validate_numeric_option_values``), which is a usage-stage rejection; the
+    Python CLI reaches it through the parser's type conversion.
+    """
+    from libsonare import cli
+
+    for prefix, option in _NON_FINITE_FLOAT_SITES:
+        # Non-vacuity: the same argv with a finite value has to parse, or the
+        # exit below would be some unrelated usage error.
+        finite = _non_finite_argv(prefix, option, "0.5" if option else "60.5")[0]
+        cli._build_parser().parse_args(finite)
+
+        for argv in _non_finite_argv(prefix, option, literal):
+            with pytest.raises(SystemExit) as raised:
+                cli._build_parser().parse_args(argv)
+            assert raised.value.code == 2, argv
+
+
+@pytest.mark.parametrize("interrupt_point", ["parse", "dispatch"])
+def test_an_interrupt_reports_like_every_other_failure(
+    monkeypatch, capsys, interrupt_point
+) -> None:
+    """Ctrl-C exits 11 with one Error line instead of a traceback.
+
+    KeyboardInterrupt is a BaseException, so the dispatch-only ``except
+    Exception`` never saw it and the interpreter printed its own traceback --
+    and exit 11 was unreachable from this surface as a result.
+    """
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_CANCELLED
+
+    def interrupt(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    if interrupt_point == "parse":
+        monkeypatch.setattr(cli, "_build_parser", interrupt)
+    else:
+        monkeypatch.setattr(cli, "cmd_version", interrupt)
+    monkeypatch.setattr(sys, "argv", ["sonare", "version"])
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main()
+    assert raised.value.code == EXIT_CANCELLED
+    assert capsys.readouterr().err.splitlines() == ["Error: cancelled"]
+
+
+def test_an_interrupt_and_an_error_share_one_reporting_path(monkeypatch, capsys) -> None:
+    """The same single Error line, with each failure's own exit code."""
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_CANCELLED, EXIT_INVALID_PARAMETER
+
+    monkeypatch.setattr(sys, "argv", ["sonare", "version"])
+    for failure, expected, line in (
+        (KeyboardInterrupt(), EXIT_CANCELLED, "Error: cancelled"),
+        (ValueError("bad value"), EXIT_INVALID_PARAMETER, "Error: bad value"),
+    ):
+        monkeypatch.setattr(
+            cli, "cmd_version", lambda args, exc=failure: (_ for _ in ()).throw(exc)
+        )
+        with pytest.raises(SystemExit) as raised:
+            cli.main()
+        assert raised.value.code == expected
+        assert capsys.readouterr().err.splitlines() == [line]
+
+
+def _flag_arity_actions(parser, path=()):
+    """Every store_true / store_false action, with the parser that OWNS it.
+
+    The owning parser matters: an option declared on a subparser is not in the
+    top-level parser's option table, and the expansion happens at the level that
+    can resolve the name -- which is the level argparse hands the tokens to.
+    """
+    import argparse
+
+    from libsonare import cli
+
+    for action in parser._actions:
+        if isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction)):
+            yield " ".join((*path, action.dest)), parser, action
+    for name, child in cli._inventory_subparsers(parser).items():
+        yield from _flag_arity_actions(child, (*path, name))
+
+
+# The native parser accepts an inline value on EVERY flag-arity option, reading
+# these four spellings (case-insensitively) as "off" and anything else as "on".
+_FALSE_FLAG_SPELLINGS = ("false", "0", "no", "off", "FALSE", "Off")
+_TRUE_FLAG_SPELLINGS = ("true", "yes", "1", "", "anything")
+
+
+def test_every_flag_option_accepts_the_inline_value_form() -> None:
+    """The divergence was total, so a partial fix would be a third behaviour.
+
+    Checked against every store_true / store_false action the parser declares
+    rather than the handful the finding named, so a flag added later inherits
+    the form instead of quietly reopening the gap.
+    """
+    from libsonare import cli
+
+    actions = list(_flag_arity_actions(cli._build_parser()))
+    # Non-vacuity: the walk has to be finding the flags at all.
+    assert len(actions) > 50
+
+    refused = []
+    for name, owner, action in actions:
+        for option in action.option_strings:
+            if not option.startswith("--"):
+                continue
+            for value in _FALSE_FLAG_SPELLINGS + _TRUE_FLAG_SPELLINGS:
+                token = f"{option}={value}"
+                if owner._expand_flag_values([token]) == [token]:
+                    refused.append(f"{name}: {token}")
+    assert refused == []
+
+
+@pytest.mark.parametrize("value", _FALSE_FLAG_SPELLINGS)
+def test_a_false_inline_flag_value_leaves_the_flag_off(value) -> None:
+    """Only these four spellings turn a flag off, and case does not matter."""
+    from libsonare import cli
+
+    args = cli._build_parser().parse_args(["version", f"--json={value}"])
+    assert args.json is False
+    # Still recorded as supplied: presence is about what the caller spelled, not
+    # about the value it carried.
+    assert "json" in args._supplied_options
+
+
+@pytest.mark.parametrize("value", _TRUE_FLAG_SPELLINGS)
+def test_any_other_inline_flag_value_turns_the_flag_on(value) -> None:
+    """Anything that is not one of the four false literals reads as on."""
+    from libsonare import cli
+
+    args = cli._build_parser().parse_args(["version", f"--json={value}"])
+    assert args.json is True
+
+
+def test_an_inline_value_on_a_valued_option_is_untouched() -> None:
+    """Only flag-arity options gain the form; a valued option keeps argparse's."""
+    from libsonare import cli
+
+    args = cli._build_parser().parse_args(["mastering", "input.wav", "--target-lufs=-9.5"])
+    assert args.target_lufs == pytest.approx(-9.5)
+    # And a valued option still refuses a value it cannot parse.
+    with pytest.raises(SystemExit) as raised:
+        cli._build_parser().parse_args(["mastering", "input.wav", "--target-lufs=nope"])
+    assert raised.value.code == 2
+
+
+def test_inline_flag_values_match_the_native_cli() -> None:
+    """The two surfaces agree spelling for spelling, read from the native source.
+
+    The false-literal set is declared in C++ and mirrored in Python, so the two
+    lists are compared directly rather than assumed to agree.
+    """
+    native = (
+        Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_args.cpp"
+    ).read_text(encoding="utf-8")
+    from libsonare.cli import _FALSE_FLAG_LITERALS
+
+    for literal in _FALSE_FLAG_LITERALS:
+        assert f'lowered == "{literal}"' in native, literal
+    # And nothing the native side accepts is missing from the Python set.
+    start = native.index("bool is_false_flag_literal")
+    body = native[start : native.index("}", start)]
+    assert body.count("lowered ==") == len(_FALSE_FLAG_LITERALS)
+
+
+def test_a_non_finite_option_value_exits_two_from_the_console_script(tmp_path) -> None:
+    """The parse-time refusal survives the real process boundary."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    result = _run_console("mastering", str(source), "--target-lufs=nan")
+    assert result.returncode == 2
+    assert "finite" in result.stderr
+
+
 def test_pitch_correct_cli_reaches_requested_pitch(tmp_path) -> None:
     """The CLI must inherit the library's immediate constant-transpose contract."""
     import libsonare
@@ -917,6 +1185,56 @@ def test_project_bounce_uses_the_project_own_sample_rate_by_default(tmp_path, st
     assert json.loads(result.stdout)["sample_rate"] == stored_rate
     with wave.open(str(wav), "rb") as rendered:
         assert rendered.getframerate() == stored_rate
+
+
+@pytest.mark.parametrize(
+    ("stored_rate", "expected_header"),
+    [(44100.5, 44101), (44100.4, 44100), (22050.25, 22050)],
+)
+def test_project_bounce_renders_a_fractional_project_rate(
+    tmp_path, stored_rate, expected_header
+) -> None:
+    """A rate the WAV header cannot carry still renders, at the project's rate.
+
+    Without --sample-rate the CLI must leave the option at the C ABI's ``<= 0``
+    sentinel, which is the only path that reaches the render with the stored
+    rate's full precision. Pinning the rounded integer instead made the ABI's
+    own equality check reject the project outright. The header still reports
+    the nearest integer, rounded away from zero so it agrees with the native
+    CLI's ``std::lround`` on a ``.5`` tie rather than with Python's round-half-
+    to-even.
+    """
+    proj = tmp_path / "project.sonare"
+    wav = tmp_path / "bounce.wav"
+    proj.write_text(
+        json.dumps({"version": 1, "sample_rate": stored_rate, "tracks": [], "clips": []}),
+        encoding="utf-8",
+    )
+
+    result = _run_console(
+        "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "64", "--json"
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sample_rate"] == expected_header
+    with wave.open(str(wav), "rb") as rendered:
+        assert rendered.getframerate() == expected_header
+
+    # An explicit rate is still checked against the stored one, so the sentinel
+    # did not turn the mismatch check off.
+    rejected = _run_console(
+        "project",
+        "bounce",
+        "--in",
+        str(proj),
+        "-o",
+        str(tmp_path / "rejected.wav"),
+        "--frames",
+        "64",
+        "--sample-rate",
+        str(int(stored_rate)),
+    )
+    assert rejected.returncode == 3
+    assert "does not match the project's sample rate" in rejected.stderr
 
 
 def test_project_bounce_accepts_an_explicit_sample_rate_matching_the_project(tmp_path) -> None:

@@ -8,8 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ._ffi import load_library
-from ._runtime import _check, _out_float_array, _to_c_float_array
+from ._runtime import _check, _get_lib, _out_float_array, _to_c_float_array
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -165,15 +164,6 @@ from .types import (
 
 if TYPE_CHECKING:
     pass
-
-_lib: ctypes.CDLL | None = None
-
-
-def _get_lib() -> ctypes.CDLL:
-    global _lib
-    if _lib is None:
-        _lib = load_library()
-    return _lib
 
 
 class Audio:

@@ -78,6 +78,19 @@ def _cli_domain(target: _TargetT, **domain: Any) -> _TargetT:
     return target
 
 
+# The contract type a ``type=`` callable produces. argparse only exposes the
+# callable, so a strict converter standing in for a builtin has to say which
+# scalar it yields or the inventory falls back to guessing from the default --
+# and an option defaulting to None has no default to guess from.
+_SCALAR_TYPE_ATTRIBUTE = "sonare_cli_scalar_type"
+
+
+def _cli_scalar_type(target: _TargetT, scalar_type: str) -> _TargetT:
+    """Record the contract type a type callable produces, returning @p target."""
+    setattr(target, _SCALAR_TYPE_ATTRIBUTE, scalar_type)
+    return target
+
+
 def _action_domain(action: argparse.Action) -> dict[str, Any] | None:
     """Return the published domain for one action, or None when unnarrowed.
 
@@ -113,6 +126,9 @@ def _option_type(action: argparse.Action, canonical: str) -> str:
         return "boolean"
     if canonical in _PATH_OPTION_NAMES:
         return "path"
+    declared = getattr(action.type, _SCALAR_TYPE_ATTRIBUTE, None)
+    if isinstance(declared, str):
+        return declared
     if action.type is int:
         return "integer"
     if action.type is float:

@@ -88,8 +88,10 @@ class RealtimeVoiceChanger:
         max_block_size: int = 128,
         channels: int = 1,
     ) -> None:
-        self._lib = _get_lib()
+        # Set first so a failed loader or create leaves a valid attribute for
+        # __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p()
+        self._lib = _get_lib()
         self._max_block_size = int(max_block_size)
         self._channels = int(channels)
         rc = self._lib.sonare_realtime_voice_changer_create_json(
@@ -264,8 +266,8 @@ class RealtimeVoiceChanger:
         ``(left, right)`` tuple of ``numpy.ndarray`` (dtype ``float32``)
         processed in place.
         """
-        left_buf = _as_float32_buffer(left)
-        right_buf = _as_float32_buffer(right)
+        left_buf = _as_float32_buffer(left, arg_name="left")
+        right_buf = _as_float32_buffer(right, arg_name="right")
         total = int(left_buf.shape[0])
         if total != int(right_buf.shape[0]):
             raise SonareValueError("left and right channels must have equal length")
@@ -588,6 +590,9 @@ class StreamingRetune:
         mix: float = 1.0,
         grain_size: int = 0,
     ) -> None:
+        # Set first so the non-finite rejection below leaves a valid attribute
+        # for __del__/close() instead of raising AttributeError over it.
+        self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         handle = self._lib.sonare_streaming_retune_create(
             ctypes.c_float(semitones), ctypes.c_float(mix), ctypes.c_int(grain_size)

@@ -18,12 +18,6 @@ from ._runtime import (
     _planar_channel_arrays,
 )
 
-# Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
-# binding's EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
-# binary lays out engine structs differently than this wrapper expects.
-EXPECTED_ENGINE_ABI_VERSION = 3
-_CAPTURE_SOURCE_VALUES = {"output": 0, "input": 1}
-
 
 class ClipPageProvider:
     """Host-supplied paged audio source for realtime clip streaming."""

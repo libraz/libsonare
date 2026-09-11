@@ -1,3 +1,5 @@
+#include <limits>
+
 #include "sonare_cli.h"
 
 namespace {
@@ -332,7 +334,12 @@ int cmd_timbre(const CliArgs& args, const Audio& audio) {
 int cmd_dynamics(const CliArgs& args, const Audio& audio) {
   DynamicsConfig config;
   config.window_sec = args.get_float("window-sec", 0.4f);
-  config.hop_length = args.hop_length;
+  // The C ABI the other surfaces call refuses a non-positive hop; reaching the
+  // analyzer directly skipped that and silently clamped to 1, so the same
+  // argument ran here and was rejected everywhere else. Rejecting through
+  // get_int_in_range reports the invalid-parameter class the C ABI returns.
+  config.hop_length =
+      args.get_int_in_range("hop-length", 1, std::numeric_limits<int>::max(), args.hop_length);
 
   DynamicsAnalyzer analyzer(audio, config);
   const Dynamics& d = analyzer.dynamics();

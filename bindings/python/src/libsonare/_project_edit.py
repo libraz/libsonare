@@ -232,7 +232,7 @@ class _ProjectEditMixin:
             layout_value: object = 1 if layout == "mono" else 2 if layout == "stereo" else layout
             if layout_value not in (1, 2) or len(planes) != layout_value:
                 raise SonareValueError("planar_samples must match mono or stereo layout")
-            arrays = [_as_float32_buffer(plane) for plane in planes]
+            arrays = [_as_float32_buffer(plane, arg_name="planar_samples") for plane in planes]
             if not arrays or any(array.size != arrays[0].size for array in arrays):
                 raise SonareValueError("all planar_samples entries must have equal length")
             names.append(name.encode("utf-8"))

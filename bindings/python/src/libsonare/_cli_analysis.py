@@ -132,17 +132,10 @@ def cmd_key(args: argparse.Namespace) -> int:
     }
     key = detect_key(samples, **key_options)
     name = f"{PITCH_NAMES[key.root.value]} {MODE_NAMES[key.mode.value]}"
-    raw_candidate_count = getattr(args, "candidates", 0)
-    # Native accepts a bare ``--candidates`` as the historical shorthand for
-    # the top five candidates.  The Python parser normally supplies an int,
-    # but normalize bool/string namespaces here so both parser generations
-    # have the same handler behavior.
-    if isinstance(raw_candidate_count, bool):
-        candidate_count = 5 if raw_candidate_count else 0
-    elif isinstance(raw_candidate_count, str) and raw_candidate_count == "true":
-        candidate_count = 5
-    else:
-        candidate_count = max(0, int(raw_candidate_count))
+    # The ``true`` shorthand is resolved to a count by the parser, the one place
+    # that sees the literal; a negative count clamps to none, as on the native
+    # CLI.
+    candidate_count = max(0, int(getattr(args, "candidates", 0)))
     candidates = (
         detect_key_candidates(samples, **key_options)[:candidate_count] if candidate_count else []
     )

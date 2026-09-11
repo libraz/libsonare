@@ -153,15 +153,19 @@ std::string mastering_report_json(const mastering::api::MasteringReport& report)
   return json.build();
 }
 
+// Opening the file and writing it are both stages of producing the artifact, so
+// both carry the class save_wav gives a failed render: EncodeFailed, which is
+// exit 12. As std::invalid_argument they landed on the invalid-parameter code
+// that describes the argument rather than the write.
 void write_mastering_report(const std::string& path,
                             const mastering::api::MasteringReport& report) {
   std::ofstream file(path, std::ios::binary | std::ios::trunc);
   if (!file.is_open()) {
-    throw std::invalid_argument("cannot write mastering report: " + path);
+    throw SonareException(ErrorCode::EncodeFailed, "cannot write mastering report: " + path);
   }
   file << mastering_report_json(report) << '\n';
   if (!file) {
-    throw std::invalid_argument("cannot write mastering report: " + path);
+    throw SonareException(ErrorCode::EncodeFailed, "cannot write mastering report: " + path);
   }
 }
 

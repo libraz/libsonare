@@ -252,13 +252,16 @@ class SampleBank:
     """
 
     def __init__(self) -> None:
+        # Set first so a failed create or a missing build leaves a valid
+        # attribute for __del__/close() instead of raising AttributeError.
+        self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         if not hasattr(lib, "sonare_sample_bank_create"):
             raise RuntimeError("libsonare was built without the sample-bank ABI")
         handle = lib.sonare_sample_bank_create()
         if not handle:
             raise _generic_error(int(ErrorCode.OUT_OF_MEMORY))
-        self._handle: ctypes.c_void_p | None = ctypes.c_void_p(handle)
+        self._handle = ctypes.c_void_p(handle)
 
     # -- lifecycle ----------------------------------------------------------
 

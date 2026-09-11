@@ -137,6 +137,10 @@ def _exit_code_for(exc: BaseException) -> int:
         return 1
     if isinstance(exc, SonareError):
         return _SONARE_CODE_TO_EXIT.get(exc.code, EXIT_ERROR)
+    # Ctrl-C is the one cancellation this surface can originate, and it carries
+    # the same code the core reports for a cancelled operation.
+    if isinstance(exc, KeyboardInterrupt):
+        return EXIT_CANCELLED
     if isinstance(exc, FileNotFoundError):
         return EXIT_FILE_NOT_FOUND
     if isinstance(exc, MemoryError):
@@ -417,18 +421,24 @@ def _atomic_write_bytes(path: str, data: bytes) -> None:
     directory = os.path.dirname(target)
     temporary = ""
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            prefix=f".{os.path.basename(target)}.",
-            suffix=".tmp",
-            dir=directory,
-            delete=False,
-        ) as fh:
-            temporary = fh.name
-            fh.write(data)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(temporary, target)
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                prefix=f".{os.path.basename(target)}.",
+                suffix=".tmp",
+                dir=directory,
+                delete=False,
+            ) as fh:
+                temporary = fh.name
+                fh.write(data)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(temporary, target)
+        except OSError as exc:
+            # Same classification the WAV writer applies: every stage here is
+            # part of producing the output, and the raw errno names the scratch
+            # file rather than the destination the caller asked for.
+            raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     except BaseException:
         if temporary:
             with suppress(FileNotFoundError):
@@ -440,11 +450,20 @@ def _read_bounded(path: str, max_bytes: int) -> bytes:
     """Read at most ``max_bytes`` and reject oversized files before facade copies."""
     if max_bytes < 0:
         raise ValueError("max_bytes must be non-negative")
-    size = os.stat(path).st_size
-    if size > max_bytes:
-        raise ValueError(f"input file exceeds {max_bytes} byte limit")
-    with open(path, "rb") as fh:
-        data = fh.read(max_bytes + 1)
+    # A missing path keeps the FileNotFoundError the file-not-found exit maps.
+    # Anything else -- a directory, an unreadable file -- is a path that exists
+    # but holds nothing this reader can accept, which is the class the native
+    # CLI reports for it after its own read returns no parseable bytes.
+    try:
+        size = os.stat(path).st_size
+        if size > max_bytes:
+            raise ValueError(f"input file exceeds {max_bytes} byte limit")
+        with open(path, "rb") as fh:
+            data = fh.read(max_bytes + 1)
+    except FileNotFoundError:
+        raise
+    except OSError as exc:
+        raise SonareError(SONARE_ERROR_INVALID_FORMAT, f"cannot read {path}: {exc}") from exc
     if len(data) > max_bytes:
         raise ValueError(f"input file exceeds {max_bytes} byte limit")
     return data
