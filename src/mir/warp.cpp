@@ -9,10 +9,183 @@
 #include "effects/hpss.h"
 #include "effects/phase_vocoder.h"
 #include "feature/chroma.h"
+#include "mir/warp_detail.h"
 #include "util/exception.h"
 #include "util/sequence.h"
 
 namespace sonare::mir {
+namespace detail {
+
+std::vector<double> chroma_column_norms(const std::vector<float>& m, int n_chroma, int frames) {
+  std::vector<double> norms(static_cast<size_t>(frames));
+  for (int i = 0; i < frames; ++i) {
+    double n = 0.0;
+    for (int c = 0; c < n_chroma; ++c) {
+      const double v = m[static_cast<size_t>(c) * frames + i];
+      n += v * v;
+    }
+    norms[static_cast<size_t>(i)] = std::sqrt(n);
+  }
+  return norms;
+}
+
+// Banded DTW: only cells within +/- band_radius of the projected path's target
+// index (per reference frame) are evaluated, widened only where consecutive
+// rows would otherwise not overlap and at the two corners. For the
+// non-decreasing projection project_path produces, that bounds the evaluated
+// cells at O(ref_frames * band_width + tgt_frames): each widened row spans
+// hi[i] - hi[i-1], and those telescope over a non-decreasing hi.
+//
+// We implement this as a self-contained deterministic DP over the band so we do
+// not have to thread a band mask through util/sequence::dtw. The cost is the
+// cosine distance between chroma columns; steps are the symmetric P0 pattern
+// {(1,1),(1,0),(0,1)} matching util/sequence's default.
+std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, int n_chroma,
+                                                 int ref_frames, const std::vector<float>& tgt,
+                                                 int tgt_frames,
+                                                 const std::vector<int>& projected_tgt,
+                                                 int band_radius) {
+  const float kInf = 1e30f;
+  // Per reference frame i, the target band is [lo[i], hi[i]] (inclusive).
+  std::vector<int> lo(ref_frames), hi(ref_frames);
+  for (int i = 0; i < ref_frames; ++i) {
+    const int center = projected_tgt[i];
+    lo[i] = std::max(0, center - band_radius);
+    hi[i] = std::min(tgt_frames - 1, center + band_radius);
+    if (hi[i] < lo[i]) hi[i] = lo[i];
+  }
+  // Anchor the start corner before the repair below, so the repair sees it.
+  lo[0] = 0;
+  // A diagonal or up step lands at most one column past where row i-1 sat, so
+  // row i is enterable iff lo[i] <= hi[i-1] + 1 and hi[i] >= reach_lo, the
+  // first column of row i-1 that is itself reachable. Repair on the row that
+  // fails the condition, widening by the deficit alone; a running min over lo
+  // and max over hi cannot express it, because a non-decreasing projection pins
+  // every floor to lo[0] and never fires the max.
+  int reach_lo = lo[0];
+  for (int i = 1; i < ref_frames; ++i) {
+    lo[i] = std::min(lo[i], hi[i - 1] + 1);
+    hi[i] = std::max(hi[i], reach_lo);
+    reach_lo = std::max(reach_lo, lo[i]);
+  }
+  // Anchor the end corner. The last row now runs contiguously from lo[last],
+  // reachable from the row above, up to tgt_frames-1 via successive left steps,
+  // so (ref_frames-1, tgt_frames-1) is reachable without widening any interior
+  // row.
+  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
+
+  // Each operand's norm depends on one index only, so deriving it inside the
+  // (i, j) loop below redoes the same ref_frames + tgt_frames reductions once
+  // per cell. Each norm is still summed over c in the same order, so the
+  // denominator is the same double, bit for bit.
+  const std::vector<double> ref_norms = chroma_column_norms(ref, n_chroma, ref_frames);
+  const std::vector<double> tgt_norms = chroma_column_norms(tgt, n_chroma, tgt_frames);
+
+  auto cos_dist = [&](int i, int j) -> float {
+    const double denom = ref_norms[static_cast<size_t>(i)] * tgt_norms[static_cast<size_t>(j)];
+    if (denom <= 0.0) return 1.0f;
+    double dot = 0.0;
+    for (int c = 0; c < n_chroma; ++c) {
+      const double a = ref[static_cast<size_t>(c) * ref_frames + i];
+      const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
+      dot += a * b;
+    }
+    return static_cast<float>(1.0 - dot / denom);
+  };
+
+  // The recurrence reads rows i-1 and i only, so the accumulated cost is a
+  // two-row window over each row's own band. `back` stays full: the traceback
+  // below walks every row.
+  std::vector<std::vector<int>> back(ref_frames);  // 0=diag,1=up(ref-1),2=left(tgt-1)
+  for (int i = 0; i < ref_frames; ++i) {
+    back[i].assign(hi[i] - lo[i] + 1, -1);
+  }
+  std::vector<float> prev_acc;
+  std::vector<float> curr_acc;
+  int prev_lo = 0;
+  int prev_hi = -1;  // Row -1 is an empty band, so every read of it is inf.
+  int curr_row = 0;
+  // Both windows are indexed by their own row's lo, because the band edges move
+  // per row and a fixed width would read the neighbouring row off by its shift.
+  auto at_prev = [&](int j) -> float {
+    if (j < prev_lo || j > prev_hi) return kInf;
+    return prev_acc[j - prev_lo];
+  };
+  auto at_curr = [&](int j) -> float {
+    if (j < lo[curr_row] || j > hi[curr_row]) return kInf;
+    return curr_acc[j - lo[curr_row]];
+  };
+
+  for (int i = 0; i < ref_frames; ++i) {
+    curr_row = i;
+    // Refilled per row: a cell the recurrence leaves unreachable must read back
+    // as inf, not as whatever the row two above left in that slot.
+    curr_acc.assign(hi[i] - lo[i] + 1, kInf);
+    for (int j = lo[i]; j <= hi[i]; ++j) {
+      const float local = cos_dist(i, j);
+      if (i == 0 && j == 0) {
+        curr_acc[j - lo[i]] = local;
+        back[i][j - lo[i]] = -1;
+        continue;
+      }
+      const float d = at_prev(j - 1);                   // diagonal
+      const float u = at_prev(j);                       // ref advance
+      const float l = (j > 0) ? at_curr(j - 1) : kInf;  // tgt advance
+      float best = d;
+      int bk = 0;
+      if (u < best) {
+        best = u;
+        bk = 1;
+      }
+      if (l < best) {
+        best = l;
+        bk = 2;
+      }
+      if (best >= kInf) {
+        // Unreachable cell inside the band: leave as inf.
+        continue;
+      }
+      curr_acc[j - lo[i]] = best + local;
+      back[i][j - lo[i]] = bk;
+    }
+    prev_acc.swap(curr_acc);
+    prev_lo = lo[i];
+    prev_hi = hi[i];
+  }
+
+  // Backtrack from the (ref_frames-1, tgt_frames-1) corner.
+  std::vector<std::pair<int, int>> path;
+  int i = ref_frames - 1;
+  int j = tgt_frames - 1;
+  // The sweep left its last row in the window's previous slot.
+  if (j < lo[i] || j > hi[i] || at_prev(j) >= kInf) {
+    // A guard, not a live path: the end anchor puts hi[last] at tgt_frames-1
+    // and the overlap repair makes every row reachable, so the band built above
+    // always holds a reachable corner and this clamp is the identity for it.
+    j = std::clamp(j, lo[i], hi[i]);
+  }
+  while (i >= 0 && j >= 0) {
+    path.emplace_back(i, j);
+    if (i == 0 && j == 0) break;
+    const int bk = (j >= lo[i] && j <= hi[i]) ? back[i][j - lo[i]] : 0;
+    if (bk == 0) {
+      --i;
+      --j;
+    } else if (bk == 1) {
+      --i;
+    } else {
+      --j;
+    }
+    if (i < 0) i = 0;
+    if (j < 0) j = 0;
+    if (bk == -1) break;
+  }
+  std::reverse(path.begin(), path.end());
+  return path;
+}
+
+}  // namespace detail
+
 namespace {
 
 // Octave span of the chroma CQT grid, matching ChromaCqtConfig's default
@@ -128,163 +301,6 @@ std::vector<std::pair<int, int>> full_dtw_path(const std::vector<float>& ref, in
   return std::move(r.path);  // already (X, Y) ordered start->end.
 }
 
-// Banded DTW: only cells within +/- band_radius of the projected path's target
-// index (per reference frame) are evaluated. O(ref_frames * band_width) memory.
-//
-// We implement this as a self-contained deterministic DP over the band so we do
-// not have to thread a band mask through util/sequence::dtw. The cost is the
-// cosine distance between chroma columns; steps are the symmetric P0 pattern
-// {(1,1),(1,0),(0,1)} matching util/sequence's default.
-std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, int n_chroma,
-                                                 int ref_frames, const std::vector<float>& tgt,
-                                                 int tgt_frames,
-                                                 const std::vector<int>& projected_tgt,
-                                                 int band_radius) {
-  const float kInf = 1e30f;
-  // Per reference frame i, the target band is [lo[i], hi[i]] (inclusive).
-  std::vector<int> lo(ref_frames), hi(ref_frames);
-  for (int i = 0; i < ref_frames; ++i) {
-    const int center = projected_tgt[i];
-    lo[i] = std::max(0, center - band_radius);
-    hi[i] = std::min(tgt_frames - 1, center + band_radius);
-    if (hi[i] < lo[i]) hi[i] = lo[i];
-  }
-  // Ensure monotonic, overlapping bands so a continuous path exists.
-  for (int i = 1; i < ref_frames; ++i) {
-    lo[i] = std::min(lo[i], lo[i - 1]);
-    hi[i] = std::max(hi[i], hi[i - 1]);
-  }
-  // Anchor BOTH corners. The DTW must start at (0,0) and end at
-  // (ref_frames-1, tgt_frames-1); if the projected band misses either corner
-  // the cell is unreachable and the backtrack falls back to a clamped in-band
-  // cell, yielding a path that never touches the true end corner. Forcing the
-  // first row to include j=0 and the last row to include j=tgt_frames-1 keeps
-  // both corners in-band. The last row stays contiguous from lo[last] (reachable
-  // from the row above) up to tgt_frames-1 via successive left steps, so the
-  // corner is reachable without widening any interior row.
-  lo[0] = 0;
-  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
-
-  // Each operand's norm depends on one index only, so deriving it inside the
-  // (i, j) loop below redoes the same ref_frames + tgt_frames reductions once
-  // per cell. Each norm is still summed over c in the same order, so the
-  // denominator is the same double, bit for bit.
-  auto column_norms = [&](const std::vector<float>& m, int frames) {
-    std::vector<double> norms(static_cast<size_t>(frames));
-    for (int i = 0; i < frames; ++i) {
-      double n = 0.0;
-      for (int c = 0; c < n_chroma; ++c) {
-        const double v = m[static_cast<size_t>(c) * frames + i];
-        n += v * v;
-      }
-      norms[static_cast<size_t>(i)] = std::sqrt(n);
-    }
-    return norms;
-  };
-  const std::vector<double> ref_norms = column_norms(ref, ref_frames);
-  const std::vector<double> tgt_norms = column_norms(tgt, tgt_frames);
-
-  auto cos_dist = [&](int i, int j) -> float {
-    const double denom = ref_norms[static_cast<size_t>(i)] * tgt_norms[static_cast<size_t>(j)];
-    if (denom <= 0.0) return 1.0f;
-    double dot = 0.0;
-    for (int c = 0; c < n_chroma; ++c) {
-      const double a = ref[static_cast<size_t>(c) * ref_frames + i];
-      const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
-      dot += a * b;
-    }
-    return static_cast<float>(1.0 - dot / denom);
-  };
-
-  // The recurrence reads rows i-1 and i only, so the accumulated cost is a
-  // two-row window over each row's own band. `back` stays full: the traceback
-  // below walks every row.
-  std::vector<std::vector<int>> back(ref_frames);  // 0=diag,1=up(ref-1),2=left(tgt-1)
-  for (int i = 0; i < ref_frames; ++i) {
-    back[i].assign(hi[i] - lo[i] + 1, -1);
-  }
-  std::vector<float> prev_acc;
-  std::vector<float> curr_acc;
-  int prev_lo = 0;
-  int prev_hi = -1;  // Row -1 is an empty band, so every read of it is inf.
-  int curr_row = 0;
-  // Both windows are indexed by their own row's lo, because the band edges move
-  // per row and a fixed width would read the neighbouring row off by its shift.
-  auto at_prev = [&](int j) -> float {
-    if (j < prev_lo || j > prev_hi) return kInf;
-    return prev_acc[j - prev_lo];
-  };
-  auto at_curr = [&](int j) -> float {
-    if (j < lo[curr_row] || j > hi[curr_row]) return kInf;
-    return curr_acc[j - lo[curr_row]];
-  };
-
-  for (int i = 0; i < ref_frames; ++i) {
-    curr_row = i;
-    // Refilled per row: a cell the recurrence leaves unreachable must read back
-    // as inf, not as whatever the row two above left in that slot.
-    curr_acc.assign(hi[i] - lo[i] + 1, kInf);
-    for (int j = lo[i]; j <= hi[i]; ++j) {
-      const float local = cos_dist(i, j);
-      if (i == 0 && j == 0) {
-        curr_acc[j - lo[i]] = local;
-        back[i][j - lo[i]] = -1;
-        continue;
-      }
-      const float d = at_prev(j - 1);                   // diagonal
-      const float u = at_prev(j);                       // ref advance
-      const float l = (j > 0) ? at_curr(j - 1) : kInf;  // tgt advance
-      float best = d;
-      int bk = 0;
-      if (u < best) {
-        best = u;
-        bk = 1;
-      }
-      if (l < best) {
-        best = l;
-        bk = 2;
-      }
-      if (best >= kInf) {
-        // Unreachable cell inside the band: leave as inf.
-        continue;
-      }
-      curr_acc[j - lo[i]] = best + local;
-      back[i][j - lo[i]] = bk;
-    }
-    prev_acc.swap(curr_acc);
-    prev_lo = lo[i];
-    prev_hi = hi[i];
-  }
-
-  // Backtrack from the (ref_frames-1, tgt_frames-1) corner.
-  std::vector<std::pair<int, int>> path;
-  int i = ref_frames - 1;
-  int j = tgt_frames - 1;
-  // The sweep left its last row in the window's previous slot.
-  if (j < lo[i] || j > hi[i] || at_prev(j) >= kInf) {
-    // Corner outside the band (degenerate); fall back to nearest in-band cell.
-    j = std::clamp(j, lo[i], hi[i]);
-  }
-  while (i >= 0 && j >= 0) {
-    path.emplace_back(i, j);
-    if (i == 0 && j == 0) break;
-    const int bk = (j >= lo[i] && j <= hi[i]) ? back[i][j - lo[i]] : 0;
-    if (bk == 0) {
-      --i;
-      --j;
-    } else if (bk == 1) {
-      --i;
-    } else {
-      --j;
-    }
-    if (i < 0) i = 0;
-    if (j < 0) j = 0;
-    if (bk == -1) break;
-  }
-  std::reverse(path.begin(), path.end());
-  return path;
-}
-
 // Project a path from a coarse level (factors of `scale`) up to a finer level
 // by multiplying indices and clamping. Returns, per finer reference frame, the
 // projected target frame index.
@@ -337,8 +353,8 @@ std::vector<std::pair<int, int>> mrmsdtw_path(const std::vector<float>& ref, int
   for (int lvl = static_cast<int>(pyramid.size()) - 2; lvl >= 0; --lvl) {
     const Level& fine = pyramid[lvl];
     std::vector<int> projected = project_path(path, scale, fine.ref_frames, fine.tgt_frames);
-    path = banded_dtw_path(fine.ref, n_chroma, fine.ref_frames, fine.tgt, fine.tgt_frames,
-                           projected, cfg.band_radius);
+    path = detail::banded_dtw_path(fine.ref, n_chroma, fine.ref_frames, fine.tgt, fine.tgt_frames,
+                                   projected, cfg.band_radius);
   }
   return path;
 }

@@ -17,6 +17,7 @@
 
 #include "core/audio.h"
 #include "mir/warp.h"
+#include "mir/warp_detail.h"
 #include "util/constants.h"
 
 namespace {
@@ -258,8 +259,9 @@ struct BandRng {
   float unit() { return static_cast<float>(next() >> 8) / static_cast<float>(1u << 24); }
 };
 
-// The band the DP is handed today: a non-decreasing projection widened row by
-// row, then both corners anchored.
+// A band that only ever widens: a non-decreasing projection with a running min
+// over lo and a running max over hi, then both corners anchored. Kept as a band
+// shape for the two-row window below, not as the shape the DP is handed.
 void make_band_widening(int ref_frames, int tgt_frames, int radius, BandRng& rng,
                         std::vector<int>& lo, std::vector<int>& hi) {
   lo.assign(ref_frames, 0);
@@ -315,6 +317,48 @@ void make_band_disjoint(int ref_frames, int tgt_frames, int radius, std::vector<
   }
   lo[0] = 0;
   hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
+}
+
+// The band the DP is handed: the projection's radius neighbourhood, repaired
+// only where consecutive rows would not overlap, with both corners anchored.
+// Mirrors banded_dtw_path's construction, which has internal linkage.
+void make_band_projected(const std::vector<int>& projected_tgt, int tgt_frames, int radius,
+                         std::vector<int>& lo, std::vector<int>& hi) {
+  const int ref_frames = static_cast<int>(projected_tgt.size());
+  lo.assign(ref_frames, 0);
+  hi.assign(ref_frames, 0);
+  for (int i = 0; i < ref_frames; ++i) {
+    const int center = projected_tgt[i];
+    lo[i] = std::max(0, center - radius);
+    hi[i] = std::min(tgt_frames - 1, center + radius);
+    if (hi[i] < lo[i]) hi[i] = lo[i];
+  }
+  lo[0] = 0;
+  int reach_lo = lo[0];
+  for (int i = 1; i < ref_frames; ++i) {
+    lo[i] = std::min(lo[i], hi[i - 1] + 1);
+    hi[i] = std::max(hi[i], reach_lo);
+    reach_lo = std::max(reach_lo, lo[i]);
+  }
+  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
+}
+
+// Cells the DP evaluates, which is also what it allocates for backpointers.
+long long band_cells(const std::vector<int>& lo, const std::vector<int>& hi) {
+  long long n = 0;
+  for (size_t i = 0; i < lo.size(); ++i) n += hi[i] - lo[i] + 1;
+  return n;
+}
+
+// A DTW step advances at least one axis and neither by more than one.
+bool path_is_continuous(const BandPath& path) {
+  if (path.empty()) return false;
+  for (size_t k = 1; k < path.size(); ++k) {
+    const int di = path[k].first - path[k - 1].first;
+    const int dj = path[k].second - path[k - 1].second;
+    if (di < 0 || dj < 0 || di > 1 || dj > 1 || (di == 0 && dj == 0)) return false;
+  }
+  return true;
 }
 
 // Small integer costs: every accumulated cost stays an exact integer, so the
@@ -638,11 +682,13 @@ TEST_CASE("TSM uses WSOLA to stretch percussive click spacing", "[mir]") {
 
 TEST_CASE("the banded chroma cost is unchanged by hoisting the column norms", "[mir]") {
   // The banded DP derives each column's norm once instead of once per cell, and
-  // the two forms have to agree to the last bit: inside the DP a single rounding
-  // step is enough to hand a tie to the other predecessor and move the path.
-  // Both forms live here because the banded DP has internal linkage and the only
-  // route into it is a multi-second alignment, so this pins the arithmetic
-  // rather than the call site.
+  // the two forms have to agree to the last bit. Both forms live here, so this
+  // pins the algebra on its own; the case below pins the production reduction.
+  // Exactness here is cheap insurance, not a guarded fragility: perturbing the
+  // cost surface left the emitted path unchanged at one ulp and at 1e-4
+  // relative, and first moved it at 1e-3 -- including on fixtures whose chroma
+  // repeats with period 8, which makes exact ties structural rather than hoped
+  // for.
   const int n_chroma = 12;
   const int ref_frames = 23;
   const int tgt_frames = 29;
@@ -780,6 +826,236 @@ TEST_CASE("the banded DTW path survives keeping only two accumulated-cost rows",
   }
 }
 
+TEST_CASE("the banded DTW band is bounded by its radius, not by the target length", "[mir]") {
+  // The band's whole claim is that the DP allocates by band width rather than by
+  // the full matrix. A band assembled from a running min over lo and a running
+  // max over hi cannot hold it: the projection is non-decreasing, so that min
+  // pins every row's floor to lo[0] and each row ends up spanning the target
+  // from 0, which is the full matrix in all but name.
+  const int ref_frames = 48;
+  const int radius = 3;
+
+  SECTION("each interior row keeps its radius and the interior is flat in tgt_frames") {
+    long long interior_cells = -1;
+    for (int tgt_frames : {60, 120, 240, 480, 960}) {
+      std::vector<int> projected(ref_frames);
+      for (int i = 0; i < ref_frames; ++i) projected[i] = std::min(tgt_frames - 1, i);
+      std::vector<int> lo;
+      std::vector<int> hi;
+      make_band_projected(projected, tgt_frames, radius, lo, hi);
+      CAPTURE(tgt_frames);
+      // The two corner-anchored rows are the only ones allowed past the radius.
+      for (int i = 1; i + 1 < ref_frames; ++i) {
+        CAPTURE(i);
+        REQUIRE(hi[i] - lo[i] + 1 <= 2 * radius + 1);
+      }
+      const long long cells = band_cells(lo, hi) - (hi[ref_frames - 1] - lo[ref_frames - 1] + 1);
+      if (interior_cells < 0) interior_cells = cells;
+      REQUIRE(cells == interior_cells);
+    }
+  }
+
+  SECTION("a projection that jumps further than the band is wide stays bounded") {
+    // What project_path hands the finer level: a coarse target index multiplied
+    // by the pyramid's scale, so the centre jumps by a multiple of scale at each
+    // coarse step and the repair has to run.
+    const int tgt_frames = 160;
+    const int scale = 4;
+    std::vector<int> projected(ref_frames);
+    for (int i = 0; i < ref_frames; ++i) {
+      projected[i] = std::min(tgt_frames - 1, (i / scale) * 3 * scale);
+    }
+    std::vector<int> lo;
+    std::vector<int> hi;
+    make_band_projected(projected, tgt_frames, radius, lo, hi);
+    // A row is either left at its radius or pulled back to exactly one column
+    // past the row above: one less disconnects the band, one more pays for cells
+    // no path can reach.
+    for (int i = 1; i < ref_frames; ++i) {
+      CAPTURE(i);
+      const int unrepaired = std::max(0, projected[i] - radius);
+      REQUIRE((lo[i] == unrepaired || lo[i] == hi[i - 1] + 1));
+    }
+    // A repaired row spans hi[i] - hi[i-1] and those telescope over a
+    // non-decreasing hi, so the repair and the two anchors together cost at most
+    // 2 * tgt_frames on top of the radius band.
+    const long long bound =
+        static_cast<long long>(ref_frames) * (2 * radius + 1) + 2LL * tgt_frames;
+    REQUIRE(band_cells(lo, hi) <= bound);
+    REQUIRE(band_cells(lo, hi) * 4 < static_cast<long long>(ref_frames) * tgt_frames);
+  }
+}
+
+TEST_CASE("the banded DTW band overlaps row to row so a continuous path exists", "[mir]") {
+  // Narrowing the band is what makes continuity a real question: a row whose
+  // floor sits more than one column past the row above is unreachable, and the
+  // traceback then walks out of the band instead of along a path. The condition
+  // is asserted on the band and the consequence on the path.
+  const int n_chroma = 12;
+
+  for (int trial = 0; trial < 40; ++trial) {
+    BandRng rng{static_cast<uint32_t>(0x2545f491u + trial * 2654435761u)};
+    const int ref_frames = rng.in(3, 40);
+    const int tgt_frames = rng.in(3, 60);
+    const int radius = rng.in(1, 5);
+    const int scale = rng.in(2, 4);
+
+    std::vector<int> projected(ref_frames);
+    switch (trial % 4) {
+      case 0:
+        for (int i = 0; i < ref_frames; ++i) projected[i] = std::min(tgt_frames - 1, i);
+        break;
+      case 1:
+        for (int i = 0; i < ref_frames; ++i) {
+          projected[i] = std::min(tgt_frames - 1, i * (tgt_frames - 1) / (ref_frames - 1));
+        }
+        break;
+      case 2: {
+        // The coarse-quantised staircase project_path produces.
+        int coarse = 0;
+        for (int i = 0; i < ref_frames; ++i) {
+          if (i > 0 && i % scale == 0) coarse += rng.in(0, 3);
+          projected[i] = std::clamp(coarse * scale, 0, tgt_frames - 1);
+        }
+        break;
+      }
+      default:
+        // Not a shape project_path can produce, but the band must not depend on
+        // an unstated monotonicity precondition to stay connected.
+        for (int i = 0; i < ref_frames; ++i) {
+          projected[i] = rng.in(0, tgt_frames - 1);
+        }
+        break;
+    }
+
+    std::vector<int> lo;
+    std::vector<int> hi;
+    make_band_projected(projected, tgt_frames, radius, lo, hi);
+
+    CAPTURE(trial);
+    CAPTURE(ref_frames);
+    CAPTURE(tgt_frames);
+    CAPTURE(radius);
+
+    // The overlap condition, row by row: a step lands at most one column past
+    // where the row above sat, and the row above's first reachable column has to
+    // still be in this row.
+    REQUIRE(lo[0] == 0);
+    int reach_lo = lo[0];
+    for (int i = 1; i < ref_frames; ++i) {
+      CAPTURE(i);
+      REQUIRE(lo[i] <= hi[i]);
+      REQUIRE(lo[i] <= hi[i - 1] + 1);
+      REQUIRE(hi[i] >= reach_lo);
+      reach_lo = std::max(reach_lo, lo[i]);
+    }
+    REQUIRE(hi[ref_frames - 1] == tgt_frames - 1);
+
+    std::vector<float> ref(static_cast<size_t>(n_chroma) * ref_frames);
+    std::vector<float> tgt(static_cast<size_t>(n_chroma) * tgt_frames);
+    for (float& v : ref) v = rng.unit();
+    for (float& v : tgt) v = rng.unit();
+    const CellCost cosine = [&](int i, int j) -> float {
+      double dot = 0.0;
+      double na = 0.0;
+      double nb = 0.0;
+      for (int c = 0; c < n_chroma; ++c) {
+        const double a = ref[static_cast<size_t>(c) * ref_frames + i];
+        const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
+        dot += a * b;
+        na += a * a;
+        nb += b * b;
+      }
+      const double denom = std::sqrt(na) * std::sqrt(nb);
+      if (denom <= 0.0) return 1.0f;
+      return static_cast<float>(1.0 - dot / denom);
+    };
+
+    for (int regime = 0; regime < 2; ++regime) {
+      const CellCost cost = regime == 0 ? CellCost(tie_rich_cost) : cosine;
+      const BandedDtwOut oracle = banded_dtw_full_matrix(ref_frames, tgt_frames, lo, hi, cost);
+      const BandedDtwOut windowed = banded_dtw_row_window(ref_frames, tgt_frames, lo, hi, cost);
+      CAPTURE(regime);
+      // Corner to corner, stepping by at most one on each axis.
+      REQUIRE(windowed.final_cost < kBandInf);
+      REQUIRE(path_is_continuous(windowed.path));
+      REQUIRE(windowed.path.front().first == 0);
+      REQUIRE(windowed.path.front().second == 0);
+      REQUIRE(windowed.path.back().first == ref_frames - 1);
+      REQUIRE(windowed.path.back().second == tgt_frames - 1);
+      // Every element inside the band it was allowed to use.
+      for (const auto& cell : windowed.path) {
+        CAPTURE(cell.first);
+        CAPTURE(cell.second);
+        REQUIRE(cell.second >= lo[cell.first]);
+        REQUIRE(cell.second <= hi[cell.first]);
+      }
+      // The two accumulated-cost shapes still agree element for element.
+      REQUIRE(windowed.final_cost == oracle.final_cost);
+      REQUIRE(windowed.path.size() == oracle.path.size());
+      for (size_t k = 0; k < oracle.path.size(); ++k) {
+        CAPTURE(k);
+        REQUIRE(windowed.path[k].first == oracle.path[k].first);
+        REQUIRE(windowed.path[k].second == oracle.path[k].second);
+      }
+    }
+  }
+}
+
+TEST_CASE("the banded DTW traceback clamps to the last row's band at the corner", "[mir]") {
+  // The band the DP builds always holds a reachable corner: the end anchor puts
+  // hi[last] at tgt_frames-1 and the overlap repair makes every row reachable.
+  // So the clamp is a guard, and the only shapes that reach it are bands that
+  // break one of those two -- which is what these two are.
+  const int ref_frames = 4;
+  const int tgt_frames = 8;
+  const CellCost cost = CellCost(tie_rich_cost);
+
+  SECTION("a last row whose band stops short of the corner") {
+    // hi[last] = 4 against a target end of 7, so the clamp moves the traceback
+    // start rather than returning it unchanged.
+    const std::vector<int> lo = {0, 0, 1, 2};
+    const std::vector<int> hi = {1, 2, 3, 4};
+    const BandedDtwOut oracle = banded_dtw_full_matrix(ref_frames, tgt_frames, lo, hi, cost);
+    const BandedDtwOut windowed = banded_dtw_row_window(ref_frames, tgt_frames, lo, hi, cost);
+
+    const BandPath expected = {{0, 0}, {0, 1}, {1, 2}, {2, 2}, {3, 3}, {3, 4}};
+    REQUIRE(windowed.path.size() == expected.size());
+    REQUIRE(oracle.path.size() == expected.size());
+    for (size_t k = 0; k < expected.size(); ++k) {
+      CAPTURE(k);
+      REQUIRE(windowed.path[k].first == expected[k].first);
+      REQUIRE(windowed.path[k].second == expected[k].second);
+      REQUIRE(oracle.path[k].first == expected[k].first);
+      REQUIRE(oracle.path[k].second == expected[k].second);
+    }
+    // Clamped to the last row's own band, not the row above it, and the result
+    // is still a continuous path from the start corner.
+    REQUIRE(windowed.path.back().second == hi[ref_frames - 1]);
+    REQUIRE(path_is_continuous(windowed.path));
+    REQUIRE(windowed.final_cost < kBandInf);
+    REQUIRE(windowed.final_cost == oracle.final_cost);
+  }
+
+  SECTION("a corner in band but with no step reaching it") {
+    // The gap between rows 1 and 2 is two columns wide, so every row past it is
+    // unreachable; the corner is in band and the clamp is the identity, which is
+    // why breaking the clamp cannot be seen on a band shaped like this.
+    const std::vector<int> lo = {0, 0, 4, 4};
+    const std::vector<int> hi = {1, 1, 7, 7};
+    const BandedDtwOut oracle = banded_dtw_full_matrix(ref_frames, tgt_frames, lo, hi, cost);
+    const BandedDtwOut windowed = banded_dtw_row_window(ref_frames, tgt_frames, lo, hi, cost);
+
+    REQUIRE(windowed.final_cost >= kBandInf);
+    REQUIRE(windowed.path.size() == 1);
+    REQUIRE(windowed.path[0].first == ref_frames - 1);
+    REQUIRE(windowed.path[0].second == tgt_frames - 1);
+    REQUIRE(oracle.path.size() == windowed.path.size());
+    REQUIRE(oracle.path[0].first == windowed.path[0].first);
+    REQUIRE(oracle.path[0].second == windowed.path[0].second);
+  }
+}
+
 TEST_CASE("the banded DTW tie-break is what the path assertion pins", "[mir]") {
   // Integer cell costs make the three-way min tie in a large fraction of the
   // band. Loosening the min to `<=` leaves every accumulated cost bit-identical
@@ -801,4 +1077,115 @@ TEST_CASE("the banded DTW tie-break is what the path assertion pins", "[mir]") {
       banded_dtw_row_window(ref_frames, tgt_frames, lo, hi, cost, /*loose_tie=*/true);
   REQUIRE(loose.final_cost == oracle.final_cost);
   REQUIRE(loose.path != oracle.path);
+}
+
+namespace {
+
+/// @brief Chroma-shaped matrix [n_chroma x frames], row-major, with a couple of
+///        dominant pitch classes over a noise floor.
+std::vector<float> detail_chroma(int n_chroma, int frames, uint64_t seed) {
+  std::vector<float> m(static_cast<size_t>(n_chroma) * frames);
+  uint64_t state = seed;
+  for (int c = 0; c < n_chroma; ++c) {
+    for (int t = 0; t < frames; ++t) {
+      state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+      const float unit = static_cast<float>((state >> 40) & 0xFFFFFF) / 16777216.0f;
+      const float tonic = ((c + t / 7) % 12 < 3) ? 0.9f : 0.05f;
+      m[static_cast<size_t>(c) * frames + t] = tonic * (0.3f + 0.7f * unit) + 0.01f * unit;
+    }
+  }
+  return m;
+}
+
+/// @brief A non-decreasing projection spanning the full target axis.
+std::vector<int> detail_projection(int ref_frames, int tgt_frames) {
+  std::vector<int> projected(static_cast<size_t>(ref_frames));
+  for (int i = 0; i < ref_frames; ++i) {
+    const double f =
+        static_cast<double>(i) / static_cast<double>(ref_frames > 1 ? ref_frames - 1 : 1);
+    projected[static_cast<size_t>(i)] = static_cast<int>(f * (tgt_frames - 1));
+  }
+  return projected;
+}
+
+}  // namespace
+
+TEST_CASE("the production column-norm reduction sums bins in ascending order", "[mir]") {
+  // Against the production function, not a local copy of it. The reduction is a
+  // free function across a translation-unit boundary, so what runs here is the
+  // out-of-line codegen rather than the copy the banded DP inlines. That costs
+  // nothing for this claim -- both operands are floats widened to double, so
+  // every product is exact in a double and contraction has no rounding to skip
+  // -- but it does mean this case guards the summation ORDER and is not a
+  // statement about generated code.
+  const int n_chroma = 12;
+  const int frames = 200;
+  const std::vector<float> m = detail_chroma(n_chroma, frames, 0xABCDEF01u);
+
+  const std::vector<double> produced =
+      sonare::mir::detail::chroma_column_norms(m, n_chroma, frames);
+  REQUIRE(produced.size() == static_cast<size_t>(frames));
+
+  // The pre-hoist shape: the same terms in the same order, reached by a
+  // three-accumulator pass. Exact agreement is the contract.
+  for (int i = 0; i < frames; ++i) {
+    CAPTURE(i);
+    double na = 0.0;
+    for (int c = 0; c < n_chroma; ++c) {
+      const double v = m[static_cast<size_t>(c) * frames + i];
+      na += v * v;
+    }
+    REQUIRE(produced[static_cast<size_t>(i)] == std::sqrt(na));
+  }
+
+  // Non-vacuity, at the assertion: summing the same terms in the opposite order
+  // must disagree somewhere, or the exact comparison above proves nothing about
+  // order. Reversal moved roughly half the columns by one to three ulp when this
+  // was measured, so requiring a single disagreement is a wide margin.
+  int reversed_disagreements = 0;
+  for (int i = 0; i < frames; ++i) {
+    double na = 0.0;
+    for (int c = n_chroma - 1; c >= 0; --c) {
+      const double v = m[static_cast<size_t>(c) * frames + i];
+      na += v * v;
+    }
+    if (produced[static_cast<size_t>(i)] != std::sqrt(na)) ++reversed_disagreements;
+  }
+  REQUIRE(reversed_disagreements > 0);
+}
+
+TEST_CASE("the banded DTW path spans both corners in unit steps", "[mir]") {
+  // The production banded DP, in the default run. The two cases that reach it
+  // through a full alignment are tagged out of the default suite and compare
+  // with a tolerance, so without this the DP's emitted path is unasserted here.
+  const int n_chroma = 12;
+  const int ref_frames = 120;
+  const int tgt_frames = 150;
+  const std::vector<float> ref = detail_chroma(n_chroma, ref_frames, 0xABCDEF01u);
+  const std::vector<float> tgt = detail_chroma(n_chroma, tgt_frames, 0x1234ABCDu);
+
+  const std::vector<std::pair<int, int>> path = sonare::mir::detail::banded_dtw_path(
+      ref, n_chroma, ref_frames, tgt, tgt_frames, detail_projection(ref_frames, tgt_frames),
+      /*band_radius=*/20);
+
+  REQUIRE_FALSE(path.empty());
+  REQUIRE(path.front() == std::pair<int, int>{0, 0});
+  REQUIRE(path.back() == std::pair<int, int>{ref_frames - 1, tgt_frames - 1});
+  for (size_t k = 1; k < path.size(); ++k) {
+    CAPTURE(k);
+    const int di = path[k].first - path[k - 1].first;
+    const int dj = path[k].second - path[k - 1].second;
+    // The symmetric P0 step set: diagonal, ref advance, or target advance.
+    REQUIRE(di >= 0);
+    REQUIRE(dj >= 0);
+    REQUIRE(di + dj >= 1);
+    REQUIRE(di <= 1);
+    REQUIRE(dj <= 1);
+  }
+
+  // Deterministic: the same input must give the same discrete path.
+  const std::vector<std::pair<int, int>> again = sonare::mir::detail::banded_dtw_path(
+      ref, n_chroma, ref_frames, tgt, tgt_frames, detail_projection(ref_frames, tgt_frames),
+      /*band_radius=*/20);
+  REQUIRE(again == path);
 }
