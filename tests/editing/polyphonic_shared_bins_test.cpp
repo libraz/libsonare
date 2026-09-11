@@ -1808,6 +1808,10 @@ TEST_CASE("a bin whose data is degenerate while its prediction is not", "[polyph
           10.0 * std::polar(decay, theta0 * m) - 9.0 * std::polar(decay, (theta0 + delta) * m);
       energy += std::norm(clean[static_cast<size_t>(m)]);
     }
+    // Scaled from the span's mean energy against a 0.97^m decay, so the effective
+    // SNR varies threefold across these frames and the case passes because that is
+    // mild. At 80 frames it is not -- 96 entries fall past the residual gate -- so
+    // changing kFrames or the decay moves a margin nothing else here records.
     const double scale = 0.01 * std::sqrt(energy / static_cast<double>(kFrames));
     for (int m = 0; m < kFrames; ++m) {
       const std::complex<double> with_error =
