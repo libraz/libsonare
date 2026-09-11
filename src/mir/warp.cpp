@@ -196,30 +196,44 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
     return static_cast<float>(1.0 - dot / denom);
   };
 
-  // Accumulated cost stored densely per row over [lo[i], hi[i]].
-  std::vector<std::vector<float>> acc(ref_frames);
+  // The recurrence reads rows i-1 and i only, so the accumulated cost is a
+  // two-row window over each row's own band. `back` stays full: the traceback
+  // below walks every row.
   std::vector<std::vector<int>> back(ref_frames);  // 0=diag,1=up(ref-1),2=left(tgt-1)
   for (int i = 0; i < ref_frames; ++i) {
-    const int width = hi[i] - lo[i] + 1;
-    acc[i].assign(width, kInf);
-    back[i].assign(width, -1);
+    back[i].assign(hi[i] - lo[i] + 1, -1);
   }
-  auto at = [&](int i, int j) -> float {
-    if (i < 0 || j < lo[i] || j > hi[i]) return kInf;
-    return acc[i][j - lo[i]];
+  std::vector<float> prev_acc;
+  std::vector<float> curr_acc;
+  int prev_lo = 0;
+  int prev_hi = -1;  // Row -1 is an empty band, so every read of it is inf.
+  int curr_row = 0;
+  // Both windows are indexed by their own row's lo, because the band edges move
+  // per row and a fixed width would read the neighbouring row off by its shift.
+  auto at_prev = [&](int j) -> float {
+    if (j < prev_lo || j > prev_hi) return kInf;
+    return prev_acc[j - prev_lo];
+  };
+  auto at_curr = [&](int j) -> float {
+    if (j < lo[curr_row] || j > hi[curr_row]) return kInf;
+    return curr_acc[j - lo[curr_row]];
   };
 
   for (int i = 0; i < ref_frames; ++i) {
+    curr_row = i;
+    // Refilled per row: a cell the recurrence leaves unreachable must read back
+    // as inf, not as whatever the row two above left in that slot.
+    curr_acc.assign(hi[i] - lo[i] + 1, kInf);
     for (int j = lo[i]; j <= hi[i]; ++j) {
       const float local = cos_dist(i, j);
       if (i == 0 && j == 0) {
-        acc[i][j - lo[i]] = local;
+        curr_acc[j - lo[i]] = local;
         back[i][j - lo[i]] = -1;
         continue;
       }
-      const float d = at(i - 1, j - 1);               // diagonal
-      const float u = at(i - 1, j);                   // ref advance
-      const float l = (j > 0) ? at(i, j - 1) : kInf;  // tgt advance
+      const float d = at_prev(j - 1);                   // diagonal
+      const float u = at_prev(j);                       // ref advance
+      const float l = (j > 0) ? at_curr(j - 1) : kInf;  // tgt advance
       float best = d;
       int bk = 0;
       if (u < best) {
@@ -234,16 +248,20 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
         // Unreachable cell inside the band: leave as inf.
         continue;
       }
-      acc[i][j - lo[i]] = best + local;
+      curr_acc[j - lo[i]] = best + local;
       back[i][j - lo[i]] = bk;
     }
+    prev_acc.swap(curr_acc);
+    prev_lo = lo[i];
+    prev_hi = hi[i];
   }
 
   // Backtrack from the (ref_frames-1, tgt_frames-1) corner.
   std::vector<std::pair<int, int>> path;
   int i = ref_frames - 1;
   int j = tgt_frames - 1;
-  if (j < lo[i] || j > hi[i] || acc[i][j - lo[i]] >= kInf) {
+  // The sweep left its last row in the window's previous slot.
+  if (j < lo[i] || j > hi[i] || at_prev(j) >= kInf) {
     // Corner outside the band (degenerate); fall back to nearest in-band cell.
     j = std::clamp(j, lo[i], hi[i]);
   }

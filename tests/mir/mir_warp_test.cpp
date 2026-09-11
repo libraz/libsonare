@@ -10,7 +10,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -75,6 +77,278 @@ double total_energy(const Audio& a) {
   double e = 0.0;
   for (size_t i = 0; i < a.size(); ++i) e += static_cast<double>(a[i]) * a[i];
   return e;
+}
+
+// ---------------------------------------------------------------------------
+// Banded DTW, both accumulated-cost shapes.
+//
+// The banded DP has internal linkage and the only route into it is a
+// multi-second alignment, so both shapes live here: the full per-row matrix as
+// the oracle, and the two-row window the DP runs. They must agree on the PATH
+// element for element, not merely on the cost -- the three-way min is a min
+// with a tie-break, so a cell can keep its cost while handing the tie to
+// another predecessor, and only the path shows it.
+// ---------------------------------------------------------------------------
+
+// The DP's unreachable-cell sentinel.
+constexpr float kBandInf = 1e30f;
+
+using BandPath = std::vector<std::pair<int, int>>;
+using CellCost = std::function<float(int, int)>;
+
+struct BandedDtwOut {
+  BandPath path;
+  float final_cost = 0.0f;
+};
+
+// Oracle: one densely-stored accumulated-cost row per reference frame.
+BandedDtwOut banded_dtw_full_matrix(int ref_frames, int tgt_frames, const std::vector<int>& lo,
+                                    const std::vector<int>& hi, const CellCost& cell_cost) {
+  std::vector<std::vector<float>> acc(ref_frames);
+  std::vector<std::vector<int>> back(ref_frames);
+  for (int i = 0; i < ref_frames; ++i) {
+    const int width = hi[i] - lo[i] + 1;
+    acc[i].assign(width, kBandInf);
+    back[i].assign(width, -1);
+  }
+  auto at = [&](int i, int j) -> float {
+    if (i < 0 || j < lo[i] || j > hi[i]) return kBandInf;
+    return acc[i][j - lo[i]];
+  };
+  for (int i = 0; i < ref_frames; ++i) {
+    for (int j = lo[i]; j <= hi[i]; ++j) {
+      const float local = cell_cost(i, j);
+      if (i == 0 && j == 0) {
+        acc[i][j - lo[i]] = local;
+        continue;
+      }
+      const float d = at(i - 1, j - 1);
+      const float u = at(i - 1, j);
+      const float l = (j > 0) ? at(i, j - 1) : kBandInf;
+      float best = d;
+      int bk = 0;
+      if (u < best) {
+        best = u;
+        bk = 1;
+      }
+      if (l < best) {
+        best = l;
+        bk = 2;
+      }
+      if (best >= kBandInf) continue;
+      acc[i][j - lo[i]] = best + local;
+      back[i][j - lo[i]] = bk;
+    }
+  }
+  int i = ref_frames - 1;
+  int j = tgt_frames - 1;
+  if (j < lo[i] || j > hi[i] || acc[i][j - lo[i]] >= kBandInf) {
+    j = std::clamp(j, lo[i], hi[i]);
+  }
+  BandedDtwOut out;
+  out.final_cost = acc[i][j - lo[i]];
+  while (i >= 0 && j >= 0) {
+    out.path.emplace_back(i, j);
+    if (i == 0 && j == 0) break;
+    const int bk = (j >= lo[i] && j <= hi[i]) ? back[i][j - lo[i]] : 0;
+    if (bk == 0) {
+      --i;
+      --j;
+    } else if (bk == 1) {
+      --i;
+    } else {
+      --j;
+    }
+    if (i < 0) i = 0;
+    if (j < 0) j = 0;
+    if (bk == -1) break;
+  }
+  std::reverse(out.path.begin(), out.path.end());
+  return out;
+}
+
+// The shipped shape: rows i-1 and i only, each re-based on its own band.
+// `loose_tie` flips the three-way min to `<=`, which leaves every accumulated
+// cost untouched and moves the path -- it is what proves the path assertion
+// below is not vacuous.
+BandedDtwOut banded_dtw_row_window(int ref_frames, int tgt_frames, const std::vector<int>& lo,
+                                   const std::vector<int>& hi, const CellCost& cell_cost,
+                                   bool loose_tie = false) {
+  std::vector<std::vector<int>> back(ref_frames);
+  for (int i = 0; i < ref_frames; ++i) {
+    back[i].assign(hi[i] - lo[i] + 1, -1);
+  }
+  std::vector<float> prev_acc;
+  std::vector<float> curr_acc;
+  int prev_lo = 0;
+  int prev_hi = -1;
+  int curr_row = 0;
+  auto at_prev = [&](int j) -> float {
+    if (j < prev_lo || j > prev_hi) return kBandInf;
+    return prev_acc[j - prev_lo];
+  };
+  auto at_curr = [&](int j) -> float {
+    if (j < lo[curr_row] || j > hi[curr_row]) return kBandInf;
+    return curr_acc[j - lo[curr_row]];
+  };
+  for (int i = 0; i < ref_frames; ++i) {
+    curr_row = i;
+    curr_acc.assign(hi[i] - lo[i] + 1, kBandInf);
+    for (int j = lo[i]; j <= hi[i]; ++j) {
+      const float local = cell_cost(i, j);
+      if (i == 0 && j == 0) {
+        curr_acc[j - lo[i]] = local;
+        continue;
+      }
+      const float d = at_prev(j - 1);
+      const float u = at_prev(j);
+      const float l = (j > 0) ? at_curr(j - 1) : kBandInf;
+      float best = d;
+      int bk = 0;
+      if (loose_tie ? (u <= best) : (u < best)) {
+        best = u;
+        bk = 1;
+      }
+      if (loose_tie ? (l <= best) : (l < best)) {
+        best = l;
+        bk = 2;
+      }
+      if (best >= kBandInf) continue;
+      curr_acc[j - lo[i]] = best + local;
+      back[i][j - lo[i]] = bk;
+    }
+    prev_acc.swap(curr_acc);
+    prev_lo = lo[i];
+    prev_hi = hi[i];
+  }
+  int i = ref_frames - 1;
+  int j = tgt_frames - 1;
+  if (j < lo[i] || j > hi[i] || at_prev(j) >= kBandInf) {
+    j = std::clamp(j, lo[i], hi[i]);
+  }
+  BandedDtwOut out;
+  out.final_cost = at_prev(j);
+  while (i >= 0 && j >= 0) {
+    out.path.emplace_back(i, j);
+    if (i == 0 && j == 0) break;
+    const int bk = (j >= lo[i] && j <= hi[i]) ? back[i][j - lo[i]] : 0;
+    if (bk == 0) {
+      --i;
+      --j;
+    } else if (bk == 1) {
+      --i;
+    } else {
+      --j;
+    }
+    if (i < 0) i = 0;
+    if (j < 0) j = 0;
+    if (bk == -1) break;
+  }
+  std::reverse(out.path.begin(), out.path.end());
+  return out;
+}
+
+struct BandRng {
+  uint32_t state;
+  uint32_t next() {
+    state = state * 1664525u + 1013904223u;
+    return state;
+  }
+  int in(int a, int b) { return a + static_cast<int>(next() % static_cast<uint32_t>(b - a + 1)); }
+  float unit() { return static_cast<float>(next() >> 8) / static_cast<float>(1u << 24); }
+};
+
+// The band the DP is handed today: a non-decreasing projection widened row by
+// row, then both corners anchored.
+void make_band_widening(int ref_frames, int tgt_frames, int radius, BandRng& rng,
+                        std::vector<int>& lo, std::vector<int>& hi) {
+  lo.assign(ref_frames, 0);
+  hi.assign(ref_frames, 0);
+  int center = 0;
+  for (int i = 0; i < ref_frames; ++i) {
+    center = std::min(tgt_frames - 1, center + rng.in(0, 2));
+    lo[i] = std::max(0, center - radius);
+    hi[i] = std::min(tgt_frames - 1, center + radius);
+    if (hi[i] < lo[i]) hi[i] = lo[i];
+  }
+  for (int i = 1; i < ref_frames; ++i) {
+    lo[i] = std::min(lo[i], lo[i - 1]);
+    hi[i] = std::max(hi[i], hi[i - 1]);
+  }
+  lo[0] = 0;
+  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
+}
+
+// A band whose edges move and narrow per row. The window has to index each
+// neighbour by that neighbour's own lo, which a band that never narrows cannot
+// distinguish from indexing by a constant width.
+void make_band_narrowing(int ref_frames, int tgt_frames, int radius, BandRng& rng,
+                         std::vector<int>& lo, std::vector<int>& hi) {
+  lo.assign(ref_frames, 0);
+  hi.assign(ref_frames, 0);
+  for (int i = 0; i < ref_frames; ++i) {
+    const int center = std::min(tgt_frames - 1, i * tgt_frames / std::max(1, ref_frames));
+    const int r = rng.in(1, std::max(1, radius));
+    lo[i] = std::max(0, center - r);
+    hi[i] = std::min(tgt_frames - 1, center + r);
+    if (hi[i] < lo[i]) hi[i] = lo[i];
+  }
+  lo[0] = 0;
+  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
+}
+
+// A band with a gap wide enough that no step crosses it, so every row past the
+// cut is unreachable and the last row's corner cell stays at infinity.
+void make_band_disjoint(int ref_frames, int tgt_frames, int radius, std::vector<int>& lo,
+                        std::vector<int>& hi) {
+  lo.assign(ref_frames, 0);
+  hi.assign(ref_frames, 0);
+  const int cut = std::max(1, ref_frames / 2);
+  for (int i = 0; i < ref_frames; ++i) {
+    if (i < cut) {
+      lo[i] = 0;
+      hi[i] = std::min(tgt_frames - 1, radius);
+    } else {
+      lo[i] = std::min(tgt_frames - 1, hi[cut - 1] + 2);
+      hi[i] = std::max(tgt_frames - 1, lo[i]);
+    }
+  }
+  lo[0] = 0;
+  hi[ref_frames - 1] = std::max(hi[ref_frames - 1], tgt_frames - 1);
+}
+
+// Small integer costs: every accumulated cost stays an exact integer, so the
+// three-way min ties constantly. Random floats essentially never tie, which is
+// why a suite built only on them covers the DP and misses how it fails.
+float tie_rich_cost(int i, int j) { return static_cast<float>((i * 7 + j * 13) % 3); }
+
+// How many reachable cells have more than one predecessor at the minimum.
+int count_tied_cells(int ref_frames, const std::vector<int>& lo, const std::vector<int>& hi,
+                     const CellCost& cell_cost) {
+  std::vector<std::vector<float>> acc(ref_frames);
+  for (int i = 0; i < ref_frames; ++i) acc[i].assign(hi[i] - lo[i] + 1, kBandInf);
+  auto at = [&](int i, int j) -> float {
+    if (i < 0 || j < lo[i] || j > hi[i]) return kBandInf;
+    return acc[i][j - lo[i]];
+  };
+  int ties = 0;
+  for (int i = 0; i < ref_frames; ++i) {
+    for (int j = lo[i]; j <= hi[i]; ++j) {
+      const float local = cell_cost(i, j);
+      if (i == 0 && j == 0) {
+        acc[i][j - lo[i]] = local;
+        continue;
+      }
+      const float d = at(i - 1, j - 1);
+      const float u = at(i - 1, j);
+      const float l = (j > 0) ? at(i, j - 1) : kBandInf;
+      const float best = std::min(d, std::min(u, l));
+      if (best >= kBandInf) continue;
+      if ((d == best ? 1 : 0) + (u == best ? 1 : 0) + (l == best ? 1 : 0) > 1) ++ties;
+      acc[i][j - lo[i]] = best + local;
+    }
+  }
+  return ties;
 }
 
 std::vector<size_t> peak_positions(const Audio& a, float threshold, size_t refractory) {
@@ -439,4 +713,92 @@ TEST_CASE("the banded chroma cost is unchanged by hoisting the column norms", "[
       REQUIRE(hoisted(i, j) == fused(i, j));
     }
   }
+}
+
+TEST_CASE("the banded DTW path survives keeping only two accumulated-cost rows", "[mir]") {
+  // The recurrence reads rows i-1 and i, so the accumulated cost is a two-row
+  // window while the backpointers stay full. The window is re-based on each
+  // row's own band, which only a band whose edges move can distinguish from a
+  // constant-width one, so the band shapes below are the point of the case.
+  const int n_chroma = 12;
+
+  for (int trial = 0; trial < 60; ++trial) {
+    BandRng rng{static_cast<uint32_t>(0x9e3779b9u + trial * 2654435761u)};
+    const int ref_frames = rng.in(2, 24);
+    const int tgt_frames = rng.in(2, 24);
+    const int radius = rng.in(1, 6);
+    std::vector<int> lo;
+    std::vector<int> hi;
+    switch (trial % 3) {
+      case 0:
+        make_band_widening(ref_frames, tgt_frames, radius, rng, lo, hi);
+        break;
+      case 1:
+        make_band_narrowing(ref_frames, tgt_frames, radius, rng, lo, hi);
+        break;
+      default:
+        make_band_disjoint(ref_frames, tgt_frames, radius, lo, hi);
+        break;
+    }
+
+    std::vector<float> ref(static_cast<size_t>(n_chroma) * ref_frames);
+    std::vector<float> tgt(static_cast<size_t>(n_chroma) * tgt_frames);
+    for (float& v : ref) v = rng.unit();
+    for (float& v : tgt) v = rng.unit();
+    const CellCost cosine = [&](int i, int j) -> float {
+      double dot = 0.0;
+      double na = 0.0;
+      double nb = 0.0;
+      for (int c = 0; c < n_chroma; ++c) {
+        const double a = ref[static_cast<size_t>(c) * ref_frames + i];
+        const double b = tgt[static_cast<size_t>(c) * tgt_frames + j];
+        dot += a * b;
+        na += a * a;
+        nb += b * b;
+      }
+      const double denom = std::sqrt(na) * std::sqrt(nb);
+      if (denom <= 0.0) return 1.0f;
+      return static_cast<float>(1.0 - dot / denom);
+    };
+
+    for (int regime = 0; regime < 2; ++regime) {
+      const CellCost cost = regime == 0 ? CellCost(tie_rich_cost) : cosine;
+      const BandedDtwOut oracle = banded_dtw_full_matrix(ref_frames, tgt_frames, lo, hi, cost);
+      const BandedDtwOut windowed = banded_dtw_row_window(ref_frames, tgt_frames, lo, hi, cost);
+      CAPTURE(trial);
+      CAPTURE(regime);
+      CAPTURE(ref_frames);
+      CAPTURE(tgt_frames);
+      REQUIRE(windowed.final_cost == oracle.final_cost);
+      REQUIRE(windowed.path.size() == oracle.path.size());
+      for (size_t k = 0; k < oracle.path.size(); ++k) {
+        CAPTURE(k);
+        REQUIRE(windowed.path[k].first == oracle.path[k].first);
+        REQUIRE(windowed.path[k].second == oracle.path[k].second);
+      }
+    }
+  }
+}
+
+TEST_CASE("the banded DTW tie-break is what the path assertion pins", "[mir]") {
+  // Integer cell costs make the three-way min tie in a large fraction of the
+  // band. Loosening the min to `<=` leaves every accumulated cost bit-identical
+  // and hands those ties to a different predecessor: the cost stays equal and
+  // the path moves, which is why the case above asserts the path element for
+  // element instead of the cost alone.
+  const int ref_frames = 19;
+  const int tgt_frames = 23;
+  BandRng rng{0x51ed2701u};
+  std::vector<int> lo;
+  std::vector<int> hi;
+  make_band_narrowing(ref_frames, tgt_frames, 5, rng, lo, hi);
+
+  const CellCost cost = CellCost(tie_rich_cost);
+  REQUIRE(count_tied_cells(ref_frames, lo, hi, cost) > 20);
+
+  const BandedDtwOut oracle = banded_dtw_full_matrix(ref_frames, tgt_frames, lo, hi, cost);
+  const BandedDtwOut loose =
+      banded_dtw_row_window(ref_frames, tgt_frames, lo, hi, cost, /*loose_tie=*/true);
+  REQUIRE(loose.final_cost == oracle.final_cost);
+  REQUIRE(loose.path != oracle.path);
 }

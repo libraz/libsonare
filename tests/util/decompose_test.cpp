@@ -618,16 +618,29 @@ TEST_CASE("nn_filter matches a frame-major oracle for every aggregator", "[util]
     require_bit_equal(nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2),
                       oracle_nn_filter(narrow.data(), 6, 6, aggregate, /*k=*/4, /*width=*/2));
   }
+
+  // More features than frames. Everywhere else here the feature extent is the smaller of the
+  // two, so a loop bound taken from the frame extent runs past the end rather than stopping
+  // short of the last rows, and only this shape turns that into a plain wrong answer.
+  const std::vector<float> tall = traversal_fixture(37, 11, 0xc0a1u);
+  for (const std::string& aggregate :
+       {std::string("mean"), std::string("median"), std::string("min"), std::string("max")}) {
+    CAPTURE(aggregate);
+    require_bit_equal(nn_filter(tall.data(), 37, 11, aggregate, /*k=*/4, /*width=*/2),
+                      oracle_nn_filter(tall.data(), 37, 11, aggregate, /*k=*/4, /*width=*/2));
+  }
 }
 
 TEST_CASE("nn_filter matches the oracle on single-row and single-column inputs",
           "[util][decompose]") {
   SECTION("one frame") {
     // No neighbour survives, so every output column is a copy -- the branch that reads S and
-    // writes out with the same stride.
+    // writes out with the same stride. All four aggregators run it because the copy is shared
+    // between them rather than repeated per aggregator.
     const int n_features = 5;
     const std::vector<float> S = traversal_fixture(n_features, 1, 0x1234u);
-    for (const std::string& aggregate : {std::string("mean"), std::string("median")}) {
+    for (const std::string& aggregate :
+         {std::string("mean"), std::string("median"), std::string("min"), std::string("max")}) {
       CAPTURE(aggregate);
       require_bit_equal(nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1),
                         oracle_nn_filter(S.data(), n_features, 1, aggregate, /*k=*/3, /*width=*/1));

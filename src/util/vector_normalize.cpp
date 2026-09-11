@@ -12,8 +12,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 float compute_norm(const float* x, std::size_t n, NormType type) {
@@ -44,6 +42,47 @@ float compute_norm(const float* x, std::size_t n, NormType type) {
     }
   }
   return 0.0f;
+}
+
+/// @brief Norms of columns [c0, c0 + n) of a row-major [rows x cols] matrix.
+/// @details Mirrors compute_norm() per column down to its accumulator type. Every column takes
+///          its terms in ascending row either way, so the norms match a per-column gather bit
+///          for bit while the traversal stays contiguous. `norms` and `acc` are caller-owned so
+///          a tile loop reuses them instead of reallocating per tile.
+void block_column_norms(const float* x, int rows, int cols, int c0, int n, NormType type,
+                        std::vector<float>& norms, std::vector<double>& acc) {
+  norms.assign(static_cast<std::size_t>(n), 0.0f);
+  if (rows == 0) return;
+  const std::size_t stride = static_cast<std::size_t>(cols);
+  switch (type) {
+    case NormType::Inf:
+      for (int r = 0; r < rows; ++r) {
+        const float* row = x + static_cast<std::size_t>(r) * stride + c0;
+        for (int c = 0; c < n; ++c) norms[c] = std::max(norms[c], std::abs(row[c]));
+      }
+      return;
+    case NormType::L1:
+      for (int r = 0; r < rows; ++r) {
+        const float* row = x + static_cast<std::size_t>(r) * stride + c0;
+        for (int c = 0; c < n; ++c) norms[c] += std::abs(row[c]);
+      }
+      return;
+    case NormType::L2:
+    case NormType::Power: {
+      acc.assign(static_cast<std::size_t>(n), 0.0);
+      for (int r = 0; r < rows; ++r) {
+        const float* row = x + static_cast<std::size_t>(r) * stride + c0;
+        for (int c = 0; c < n; ++c) {
+          const double v = row[c];
+          acc[c] += v * v;
+        }
+      }
+      for (int c = 0; c < n; ++c) {
+        norms[c] = static_cast<float>(type == NormType::L2 ? std::sqrt(acc[c]) : acc[c]);
+      }
+      return;
+    }
+  }
 }
 
 }  // namespace
@@ -100,20 +139,26 @@ std::vector<float> normalize_matrix(const float* x, int rows, int cols, int axis
       }
     }
   } else {
-    // axis == 0: each column is a vector of length rows.
-    std::vector<float> tmp(static_cast<std::size_t>(rows));
-    for (int c = 0; c < cols; ++c) {
-      for (int r = 0; r < rows; ++r) {
-        tmp[static_cast<std::size_t>(r)] =
-            out[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) +
-                static_cast<std::size_t>(c)];
+    // axis == 0: each column is a vector of length rows, staged in column tiles rather than
+    // gathered one column at a time, so both passes read along each row contiguously while the
+    // staging stays bounded instead of scaling with the column count. Each column still takes
+    // its terms in ascending row, so the norms are unchanged bit for bit.
+    constexpr int kColumnTile = 256;
+    std::vector<float> norms;
+    std::vector<float> inv;
+    std::vector<double> acc;
+    for (int c0 = 0; c0 < cols; c0 += kColumnTile) {
+      const int tile_cols = std::min(kColumnTile, cols - c0);
+      block_column_norms(out.data(), rows, cols, c0, tile_cols, norm, norms, acc);
+      inv.assign(static_cast<std::size_t>(tile_cols), 0.0f);
+      for (int c = 0; c < tile_cols; ++c) {
+        if (norms[c] >= effective_thr) inv[c] = 1.0f / norms[c];
       }
-      const float norm_val = compute_norm(tmp.data(), static_cast<std::size_t>(rows), norm);
-      if (norm_val >= effective_thr) {
-        const float inv = 1.0f / norm_val;
-        for (int r = 0; r < rows; ++r) {
-          out[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) +
-              static_cast<std::size_t>(c)] *= inv;
+      for (int r = 0; r < rows; ++r) {
+        float* row = out.data() + static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c0;
+        // A below-threshold column is left untouched rather than scaled by one.
+        for (int c = 0; c < tile_cols; ++c) {
+          if (norms[c] >= effective_thr) row[c] *= inv[c];
         }
       }
     }

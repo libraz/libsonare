@@ -322,64 +322,61 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   }
 
   std::vector<float> out(static_cast<size_t>(n_features) * n_frames, 0.0f);
-  // Reused across frames and features; the gather below overwrites every element.
+  // Reused across cells; the gather below overwrites every element.
   std::vector<float> vals;
-  // Left frame-major: this step reads scattered columns, which stride whatever the loop
-  // order is, and the only shape that would remove the stride is a full
-  // [n_features x n_frames] transpose -- the temporary spectral_flatness refuses for memory.
-  for (int t = 0; t < n_frames; ++t) {
-    const auto& selectors = selectors_for[t];
-    if (selectors.empty()) {
-      for (int f = 0; f < n_features; ++f) {
-        const size_t base = static_cast<size_t>(f) * n_frames;
-        out[base + t] = S[base + t];
-      }
-      continue;
-    }
-    if (aggregate == "median") {
-      for (int f = 0; f < n_features; ++f) {
-        const size_t base = static_cast<size_t>(f) * n_frames;
-        const float* row = S + base;
-        vals.resize(selectors.size());
-        for (size_t q = 0; q < selectors.size(); ++q) vals[q] = row[selectors[q]];
-        const auto mid = vals.begin() + vals.size() / 2;
-        std::nth_element(vals.begin(), mid, vals.end());
-        float median = *mid;
-        // numpy.median (used by librosa.decompose.nn_filter for aggregate=median)
-        // averages the two central elements for an even count; nth_element alone
-        // returns only the upper one.
-        if ((vals.size() % 2) == 0) {
-          const float lower = *std::max_element(vals.begin(), mid);
-          median = 0.5f * (lower + median);
-        }
-        out[base + t] = median;
-      }
-    } else if (aggregate == "min") {
-      for (int f = 0; f < n_features; ++f) {
-        const size_t base = static_cast<size_t>(f) * n_frames;
-        const float* row = S + base;
-        float m = std::numeric_limits<float>::infinity();
-        for (int i : selectors) m = std::min(m, row[i]);
-        out[base + t] = m;
-      }
-    } else if (aggregate == "max") {
-      for (int f = 0; f < n_features; ++f) {
-        const size_t base = static_cast<size_t>(f) * n_frames;
-        const float* row = S + base;
-        float m = -std::numeric_limits<float>::infinity();
-        for (int i : selectors) m = std::max(m, row[i]);
-        out[base + t] = m;
-      }
-    } else {  // "mean"
-      const float inv_count = 1.0f / static_cast<float>(selectors.size());
-      for (int f = 0; f < n_features; ++f) {
-        const size_t base = static_cast<size_t>(f) * n_frames;
-        const float* row = S + base;
-        float s = 0.0f;
-        for (int i : selectors) s += row[i];
-        out[base + t] = s * inv_count;
+  // Feature-major: out is written contiguously and every gather stays inside one row of S.
+  // Each cell still reads its selectors in ascending order, so the aggregates are unchanged.
+  const auto emit = [&](auto cell) {
+    for (int f = 0; f < n_features; ++f) {
+      const size_t base = static_cast<size_t>(f) * n_frames;
+      const float* row = S + base;
+      for (int t = 0; t < n_frames; ++t) {
+        out[base + t] = selectors_for[t].empty() ? row[t] : cell(row, t);
       }
     }
+  };
+  // Dispatched once: inside the nest the comparison would run per output cell.
+  if (aggregate == "median") {
+    emit([&](const float* row, int t) {
+      const std::vector<int>& selectors = selectors_for[t];
+      vals.resize(selectors.size());
+      for (size_t q = 0; q < selectors.size(); ++q) vals[q] = row[selectors[q]];
+      const auto mid = vals.begin() + vals.size() / 2;
+      std::nth_element(vals.begin(), mid, vals.end());
+      float median = *mid;
+      // numpy.median (used by librosa.decompose.nn_filter for aggregate=median)
+      // averages the two central elements for an even count; nth_element alone
+      // returns only the upper one.
+      if ((vals.size() % 2) == 0) {
+        const float lower = *std::max_element(vals.begin(), mid);
+        median = 0.5f * (lower + median);
+      }
+      return median;
+    });
+  } else if (aggregate == "min") {
+    emit([&](const float* row, int t) {
+      float m = std::numeric_limits<float>::infinity();
+      for (int i : selectors_for[t]) m = std::min(m, row[i]);
+      return m;
+    });
+  } else if (aggregate == "max") {
+    emit([&](const float* row, int t) {
+      float m = -std::numeric_limits<float>::infinity();
+      for (int i : selectors_for[t]) m = std::max(m, row[i]);
+      return m;
+    });
+  } else {  // "mean"
+    // One reciprocal per frame; taken inside the nest it would be one division per cell.
+    std::vector<float> inv_counts(static_cast<size_t>(n_frames), 0.0f);
+    for (int t = 0; t < n_frames; ++t) {
+      const size_t count = selectors_for[t].size();
+      if (count != 0) inv_counts[static_cast<size_t>(t)] = 1.0f / static_cast<float>(count);
+    }
+    emit([&](const float* row, int t) {
+      float s = 0.0f;
+      for (int i : selectors_for[t]) s += row[i];
+      return s * inv_counts[static_cast<size_t>(t)];
+    });
   }
   return out;
 }

@@ -6,6 +6,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "util/exception.h"
@@ -14,6 +17,41 @@
 using namespace sonare;
 using namespace sonare::test;
 using Catch::Matchers::WithinAbs;
+
+namespace {
+
+/// @brief Deterministic row-major [rows x cols] matrix with one dominant term per column.
+/// @details The dominant term pushes the remaining terms off the end of a float accumulator
+///          while a wider one still carries them, which is what makes the norm's own
+///          accumulator width observable. Columns 0 and `cols - 1` are zero and column 1 sits
+///          under the epsilon floor, so the branch that leaves a column alone is reached in the
+///          first and the last column tile rather than only in the first.
+std::vector<float> matrix_fixture(int rows, int cols, std::uint32_t seed) {
+  std::vector<float> m(static_cast<std::size_t>(rows) * cols, 0.0f);
+  std::uint32_t state = seed;
+  for (int r = 0; r < rows; ++r) {
+    for (int c = 0; c < cols; ++c) {
+      state = state * 1664525u + 1013904223u;
+      const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+      float v = std::ldexp(unit - 0.5f, static_cast<int>(state % 40u) - 20);
+      if (r == 0) v = std::ldexp(1.0f + unit, 20);
+      if (c == 0 || c == cols - 1) v = 0.0f;
+      if (c == 1) v = 1e-12f * (unit + 0.5f);
+      m[static_cast<std::size_t>(r) * cols + c] = v;
+    }
+  }
+  return m;
+}
+
+/// @brief Column `c` of a row-major matrix, normalized through the single-vector entry point.
+std::vector<float> normalized_column(const std::vector<float>& m, int rows, int cols, int c,
+                                     NormType norm) {
+  std::vector<float> column(static_cast<std::size_t>(rows), 0.0f);
+  for (int r = 0; r < rows; ++r) column[r] = m[static_cast<std::size_t>(r) * cols + c];
+  return normalize(column, norm);
+}
+
+}  // namespace
 
 TEST_CASE("normalize Inf norm puts peak at 1", "[util][normalize]") {
   std::vector<float> x{1.0f, -2.0f, 3.0f, -4.0f};
@@ -84,4 +122,78 @@ TEST_CASE("matrix normalize matches librosa along both axes", "[librosa][util][n
   };
   check_axis(1, "axis1_inf_norm_flat");
   check_axis(0, "axis0_inf_norm_flat");
+}
+
+TEST_CASE("matrix normalize along axis 0 matches the single-vector norm per column",
+          "[util][normalize]") {
+  // Exact equality rather than a tolerance: the axis-0 traversal is the thing under test, and
+  // a tolerance would re-admit exactly the drift a reordered or wider accumulator introduces.
+  // Both narrow orientations run because an index or a stride taken from the wrong extent stays
+  // in range in only one of them, and out of range is not a readable failure. The wide shape
+  // spans three column tiles with the last one partial, which is the only way an offset that is
+  // correct for the first tile and wrong for the rest becomes visible at all.
+  for (const std::pair<int, int>& shape :
+       {std::make_pair(7, 23), std::make_pair(23, 7), std::make_pair(5, 600)}) {
+    const int rows = shape.first;
+    const int cols = shape.second;
+    const std::vector<float> m = matrix_fixture(rows, cols, 0x51ce5u);
+    for (NormType norm : {NormType::Inf, NormType::L1, NormType::L2, NormType::Power}) {
+      CAPTURE(rows, cols, static_cast<int>(norm));
+      const std::vector<float> got = normalize_matrix(m.data(), rows, cols, /*axis=*/0, norm);
+      REQUIRE(got.size() == m.size());
+      for (int c = 0; c < cols; ++c) {
+        const std::vector<float> want = normalized_column(m, rows, cols, c, norm);
+        for (int r = 0; r < rows; ++r) {
+          CAPTURE(r, c);
+          REQUIRE(got[static_cast<std::size_t>(r) * cols + c] == want[r]);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("matrix normalize leaves a sub-threshold column untouched", "[util][normalize][edge]") {
+  // Asserted against the input rather than against normalize(), which the case above uses as
+  // its oracle: a floor dropped from both sides at once would keep that comparison green. An
+  // all-zero column is an ordinary silent frame for the chroma callers of the axis-0 path, and
+  // without the floor it is scaled by the reciprocal of zero and comes back NaN.
+  SECTION("a zero column and a column under the epsilon floor") {
+    // Run wide as well as narrow so the guarded columns land in the last column tile and not
+    // only in the first, where a tile offset is zero and every offset bug looks correct.
+    for (const std::pair<int, int>& shape : {std::make_pair(7, 23), std::make_pair(5, 600)}) {
+      const int rows = shape.first;
+      const int cols = shape.second;
+      const std::vector<float> m = matrix_fixture(rows, cols, 0x51ce5u);
+      for (NormType norm : {NormType::Inf, NormType::L1, NormType::L2, NormType::Power}) {
+        CAPTURE(rows, cols, static_cast<int>(norm));
+        const std::vector<float> got = normalize_matrix(m.data(), rows, cols, /*axis=*/0, norm);
+        for (int r = 0; r < rows; ++r) {
+          for (int c : {0, 1, cols - 1}) {
+            CAPTURE(r, c);
+            const std::size_t i = static_cast<std::size_t>(r) * cols + c;
+            REQUIRE(std::isfinite(got[i]));
+            REQUIRE(got[i] == m[i]);
+          }
+        }
+      }
+    }
+  }
+
+  SECTION("a threshold above every column norm") {
+    // The floor is max(threshold, epsilon), so a threshold this large takes every column down
+    // the untouched branch, including the ones the section above normalizes.
+    const int rows = 7;
+    const int cols = 23;
+    const std::vector<float> m = matrix_fixture(rows, cols, 0x51ce5u);
+    for (NormType norm : {NormType::Inf, NormType::L1, NormType::L2, NormType::Power}) {
+      CAPTURE(static_cast<int>(norm));
+      const std::vector<float> got =
+          normalize_matrix(m.data(), rows, cols, /*axis=*/0, norm, /*threshold=*/1e30f);
+      REQUIRE(got.size() == m.size());
+      for (std::size_t i = 0; i < m.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE(got[i] == m[i]);
+      }
+    }
+  }
 }
