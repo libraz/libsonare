@@ -1726,6 +1726,165 @@ TEST_CASE("a claim on a partial one note does not have while the other does",
   REQUIRE(target_absent_weight < 1e-3);
 }
 
+TEST_CASE("a bin whose data is degenerate while its prediction is not", "[polyphony_shared_bins]") {
+  // Aimed at the gate's structural blind spot, not at the clamp. The gate reads
+  // the refined f0 and the claim geometry and never the data, so it cannot refuse
+  // a bin whose trajectory is degenerate when the prediction says the two partials
+  // are three hertz apart. That gap is reachable in production through ordinary f0
+  // error; here it is built directly, which is only possible because a hand-built
+  // spectrogram does not have to be physically realizable.
+  //
+  // What sits on the target bins is two poles a thousandth of a radian apart plus
+  // one per cent of something the model cannot represent. The pair spans nearly
+  // one dimension, so the order-2 subspace still captures the data -- the residual
+  // gate measures exactly that and should pass -- while the split between the two
+  // components is ill-conditioned, which is what the weights are made of.
+  constexpr int kFrames = 40;
+  const int n_bins = kNfft / 2 + 1;
+  const double bin_hz = static_cast<double>(kSampleRate) / static_cast<double>(kNfft);
+  const auto rate_of = [](double hz) {
+    return sonare::constants::kTwoPiD * hz * static_cast<double>(kHopLength) /
+           static_cast<double>(kSampleRate);
+  };
+
+  std::vector<double> partials;
+  for (int h = 1; h <= kFixturePartials; ++h) {
+    partials.push_back(300.0 * static_cast<double>(h));
+    partials.push_back(451.5 * static_cast<double>(h));
+  }
+  // Every bin carries one pole at the partial nearest it, so the bins each note
+  // holds alone re-estimate to exactly the pitch the track declares and the gate
+  // is handed the separation it is supposed to see.
+  const auto nearest_partial = [&](int bin) {
+    const double hz = static_cast<double>(bin) * bin_hz;
+    double best = partials.front();
+    for (const double candidate : partials) {
+      if (std::abs(candidate - hz) < std::abs(best - hz)) best = candidate;
+    }
+    return best;
+  };
+
+  std::vector<Complex> data(static_cast<size_t>(n_bins) * static_cast<size_t>(kFrames),
+                            Complex(0.0f, 0.0f));
+  for (int b = 0; b < n_bins; ++b) {
+    const double theta = rate_of(nearest_partial(b));
+    for (int m = 0; m < kFrames; ++m) {
+      const double decay = std::pow(0.97, static_cast<double>(m));
+      data[static_cast<size_t>(b) * kFrames + static_cast<size_t>(m)] =
+          Complex(static_cast<float>(decay * std::cos(theta * m)),
+                  static_cast<float>(decay * std::sin(theta * m)));
+    }
+  }
+
+  const auto build = [&](const std::vector<Complex>& cells) {
+    return sonare::Spectrogram::from_complex(cells.data(), n_bins, kFrames, kNfft, kHopLength,
+                                             kSampleRate, sonare::WindowType::Hann, false);
+  };
+  const sonare::Spectrogram probe = build(data);
+  const MultiF0Track track = track_of_pitches(probe, {300.0f, 451.5f});
+  const NoteMaskSet probe_masks = matched_masks(probe, track);
+  const std::vector<int> probe_counts = claim_counts(probe_masks);
+
+  // The claim geometry depends on the track and the framing, never on the content,
+  // so the bins are known before the content that goes in them.
+  std::vector<int> target;
+  for (int b = 0; b < n_bins; ++b) {
+    if (static_cast<double>(b) * bin_hz > 1350.0) continue;
+    if (probe_counts[at_index(probe_masks, b, kFrames / 2)] >= 2) target.push_back(b);
+  }
+  INFO("target bins " << target.size());
+  REQUIRE(!target.empty());
+
+  const double theta0 = rate_of(900.0);
+  const double delta = 0.001;
+  const std::vector<float> junk = noise_samples(23u, target.size() * kFrames * 2 + 8);
+  size_t at = 0;
+  for (const int b : target) {
+    std::vector<std::complex<double>> clean(static_cast<size_t>(kFrames));
+    double energy = 0.0;
+    for (int m = 0; m < kFrames; ++m) {
+      const double decay = std::pow(0.97, static_cast<double>(m));
+      clean[static_cast<size_t>(m)] =
+          10.0 * std::polar(decay, theta0 * m) - 9.0 * std::polar(decay, (theta0 + delta) * m);
+      energy += std::norm(clean[static_cast<size_t>(m)]);
+    }
+    const double scale = 0.01 * std::sqrt(energy / static_cast<double>(kFrames));
+    for (int m = 0; m < kFrames; ++m) {
+      const std::complex<double> with_error =
+          clean[static_cast<size_t>(m)] +
+          std::complex<double>(static_cast<double>(junk[at]) * scale,
+                               static_cast<double>(junk[at + 1]) * scale);
+      at += 2;
+      data[static_cast<size_t>(b) * kFrames + static_cast<size_t>(m)] =
+          Complex(static_cast<float>(with_error.real()), static_cast<float>(with_error.imag()));
+    }
+  }
+
+  const sonare::Spectrogram spec = build(data);
+  const NoteMaskSet masks = matched_masks(spec, track);
+  const std::vector<int> counts = claim_counts(masks);
+
+  // Both notes re-estimate, or the bins refuse on a missing f0 and the gate is
+  // never reached.
+  const std::vector<float> refined = refine_track_f0(spec, track, masks);
+  REQUIRE(refined.size() == 2);
+  INFO("refined f0 " << refined[0] << " and " << refined[1]);
+  REQUIRE(refined[0] > 0.0f);
+  REQUIRE(refined[1] > 0.0f);
+
+  const SharedBinConfig config;
+  SharedBinReport report;
+  const NoteMaskSet solved = solve_and_check(spec, masks, track, config, report);
+
+  size_t entries = 0;
+  size_t solved_here = 0;
+  double worst_weight = 0.0;
+  double worst_residual = 0.0;
+  double separation = 0.0;
+  for (const Entry& entry : entries_of(solved)) {
+    if (counts[entry.cell] < 2) continue;
+    if (static_cast<double>(entry.bin) * bin_hz > 1350.0) continue;
+    ++entries;
+    if (report.outcome[entry.cell] == SharedBinOutcome::Solved) ++solved_here;
+    worst_weight = std::max(
+        worst_weight, static_cast<double>(std::abs(solved.notes[entry.note].weights[entry.at])));
+    worst_residual = std::max(worst_residual, static_cast<double>(report.fit_residual[entry.cell]));
+    separation = std::max(separation, static_cast<double>(report.partial_separation[entry.cell]));
+    UNSCOPED_INFO("  degenerate cell: bin "
+                  << entry.bin << " frame " << entry.frame << " note " << entry.note << " outcome "
+                  << name_of(report.outcome[entry.cell]) << " separation "
+                  << report.partial_separation[entry.cell] << " residual "
+                  << report.fit_residual[entry.cell] << " |w| "
+                  << std::abs(solved.notes[entry.note].weights[entry.at]) << " |x| "
+                  << std::abs(spec.at(entry.bin, entry.frame)));
+  }
+
+  INFO("entries " << entries << ", solved " << solved_here << ", largest |w| " << worst_weight
+                  << ", largest residual " << worst_residual << " against a gate of "
+                  << config.max_fit_residual << ", separation " << separation << " against "
+                  << config.min_partial_separation);
+  REQUIRE(entries > 0);
+
+  // The blind spot, stated as the outcome: nothing refuses. The prediction sees
+  // two partials three hertz apart and the subspace captures the data, so every
+  // cell is solved on a trajectory whose two poles are a thousandth of a radian
+  // apart.
+  REQUIRE(solved_here == entries);
+  REQUIRE(static_cast<double>(separation) >
+          20.0 * static_cast<double>(config.min_partial_separation));
+  REQUIRE(worst_residual < static_cast<double>(config.max_fit_residual));
+
+  // And the weights collapse rather than explode, which is the measurement that
+  // matters beyond this case. An ill-conditioned split does not produce two large
+  // cancelling components -- least squares takes the minimum-norm answer, so the
+  // components come back near the observation and the weight near one. Sweeping
+  // the pole gap on this same fixture: 0.001 rad gives 1.01, 0.03 gives 3.29,
+  // 0.08 gives 6.30, and the ceiling is only reached at 0.20, which is the
+  // separation the prediction already declared. So a weight over the ceiling is
+  // itself evidence that the decomposition was well determined.
+  REQUIRE(worst_weight < 2.0);
+}
+
 // --- The ceiling on a weight ------------------------------------------------
 
 TEST_CASE("a weight over the ceiling is scaled back in modulus with its angle kept",
