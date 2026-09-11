@@ -9,6 +9,7 @@
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <string>
 #include <utility>
@@ -1015,6 +1016,14 @@ TEST_CASE("the median filters accept the largest legal kernel", "[hpss]") {
   const int largest_legal = kMaxHpssKernelSize - 1;
   REQUIRE(largest_legal % 2 == 1);
 
+  // largest_legal follows the constant, so on its own it cannot tell a correct
+  // ceiling from one quietly lowered: both move together and the case stays
+  // green. This literal does not move. The ceiling was set by measuring what the
+  // filters service in practice, and a kernel of half a million was two
+  // milliseconds there, so a fix that narrows the ceiling past this value has
+  // narrowed it past what the implementation was measured to handle.
+  static_assert(kMaxHpssKernelSize > 499999, "the serviceable kernel ceiling must not narrow");
+
   // A window this wide spans the whole grid, so every cell is the median of its
   // entire row or column -- the average of the two, exactly representable here.
   const std::vector<float> horizontal =
@@ -1118,4 +1127,71 @@ TEST_CASE("hpss refuses an oversized kernel through its public entry point", "[h
   // The default configuration still separates, so the case above is not passing
   // because this entry point rejects every configuration.
   REQUIRE_NOTHROW(hpss(audio, HpssConfig(), stft_config));
+}
+
+TEST_CASE("every hpss entry point reaches the kernel ceiling", "[hpss]") {
+  // The filters are called from two independent sites -- the shared mask filler
+  // and the three-way split -- and each site wires kernel_size_harmonic to the
+  // horizontal filter and kernel_size_percussive to the vertical one on its own.
+  // Asserting one entry point says nothing about the other site's wiring, and a
+  // guard restored in one filter only is exactly the regression this catches, so
+  // every public entry point is checked against the filter name its field must
+  // reach. Requesting a single component does not skip a filter: both run
+  // whichever mask is asked for, so both fields reach the guard from every entry
+  // point here.
+  Audio audio = create_harmonic_audio(440.0f, 22050, 0.05f);
+  StftConfig stft_config;
+  stft_config.n_fft = 256;
+  stft_config.hop_length = 64;
+  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  struct EntryPoint {
+    const char* name;
+    std::function<void(const HpssConfig&)> call;
+  };
+
+  const EntryPoint entry_points[] = {
+      {"hpss(spectrogram)", [&](const HpssConfig& c) { static_cast<void>(hpss(spec, c)); }},
+      {"harmonic",
+       [&](const HpssConfig& c) { static_cast<void>(harmonic(audio, c, stft_config)); }},
+      {"percussive",
+       [&](const HpssConfig& c) { static_cast<void>(percussive(audio, c, stft_config)); }},
+      {"hpss_with_residual(spectrogram)",
+       [&](const HpssConfig& c) { static_cast<void>(hpss_with_residual(spec, c)); }},
+      {"hpss_with_residual(audio)",
+       [&](const HpssConfig& c) { static_cast<void>(hpss_with_residual(audio, c, stft_config)); }},
+      {"residual",
+       [&](const HpssConfig& c) { static_cast<void>(residual(audio, c, stft_config)); }},
+  };
+
+  for (const EntryPoint& entry : entry_points) {
+    CAPTURE(entry.name);
+
+    for (const bool percussive_side : {false, true}) {
+      CAPTURE(percussive_side);
+      HpssConfig config;
+      if (percussive_side) {
+        config.kernel_size_percussive = kMaxHpssKernelSize + 1;
+      } else {
+        config.kernel_size_harmonic = kMaxHpssKernelSize + 1;
+      }
+
+      try {
+        entry.call(config);
+        FAIL("Expected the entry point to refuse a kernel above kMaxHpssKernelSize");
+      } catch (const SonareException& error) {
+        REQUIRE(error.code() == ErrorCode::InvalidParameter);
+        REQUIRE(names_kernel_ceiling(error));
+        const std::string message(error.what());
+        const std::string expected_filter =
+            percussive_side ? "median_filter_vertical" : "median_filter_horizontal";
+        CAPTURE(message);
+        REQUIRE(message.find(expected_filter) != std::string::npos);
+      }
+    }
+
+    // The default configuration goes through, so neither refusal above passes
+    // because this entry point rejects every configuration.
+    REQUIRE_NOTHROW(entry.call(HpssConfig()));
+  }
 }
