@@ -8,11 +8,21 @@
  * ceiling guard an oversized kernel surfaced as an allocation failure rather
  * than as a refusal, and a bare "it throws" would accept that.
  *
- * The three entry points do not narrow alike. `hpss` and `hpssWithResidual`
- * hand the kernel to embind, which truncates a number past the signed range
- * into one the parity guard rejects; `extractPercussiveEvents` range-checks its
- * options object first and names the option. Each is asserted for what it
- * actually produces rather than flattened into a single expectation.
+ * The three entry points do not refuse an out-of-range kernel in the same
+ * place. `extractPercussiveEvents` reads its options object through the
+ * module's own range-checked reader, which names the option; `hpss` and
+ * `hpssWithResidual` hand the kernel to a positional embind parameter declared
+ * `int`, which WRAPS, so the facade range-checks those before the call. Each is
+ * asserted for what it actually produces rather than flattened.
+ *
+ * `INT_MAX` is exactly representable as a JS number and arrives intact, so a
+ * test that drove only `INT_MAX` would report the guard working while the values
+ * one step above it were the live defect: `2 ** 32` wrapped to 0 and
+ * `2 ** 32 + 1` to 1, both of which every downstream guard accepts, so the call
+ * SUCCEEDED on a kernel the caller never asked for. A refusal-shaped assertion
+ * cannot see that, so every wrapping case below also compares its outcome
+ * against two results built explicitly here: the default-kernel run, and the run
+ * with the wrapped value as a legal kernel.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -63,6 +73,52 @@ const FIRST_ABOVE_CEILING = 524289;
 const INT_MAX = 2147483647;
 /** Even, so it is refused for parity rather than for the ceiling. */
 const INT_MAX_MINUS_ONE = 2147483646;
+
+/**
+ * Values past the signed 32-bit range, each with what the narrowing turns it
+ * into.
+ *
+ * The wrapped value is what makes these the interesting inputs rather than
+ * `INT_MAX`: two of them land on an ordinary legal kernel and two on 0, which
+ * the percussive-event config reads as "use the default". Every one of them
+ * therefore has a plausible successful outcome waiting for it if the range check
+ * is ever dropped.
+ */
+const WRAPPING: ReadonlyArray<{ passed: number; wrapsTo: number }> = [
+  { passed: 2 ** 32, wrapsTo: 0 },
+  { passed: 2 ** 32 + 1, wrapsTo: 1 },
+  { passed: 2 ** 32 + 3, wrapsTo: 3 },
+  { passed: 3 * 2 ** 32, wrapsTo: 0 },
+  { passed: 2 ** 31, wrapsTo: -2147483648 },
+];
+
+/** A refusal reduced to the same domain as a result, so the two can be compared. */
+const REFUSED = 'refused';
+
+/**
+ * One comparable string per outcome. A thrown call collapses to {@link REFUSED};
+ * anything else is reduced over its float fields, so two runs that separated on
+ * different kernels cannot compare equal.
+ */
+function outcomeSignature(run: () => unknown): string {
+  let value: unknown;
+  try {
+    value = run();
+  } catch {
+    return REFUSED;
+  }
+  const parts: string[] = [];
+  for (const [key, field] of Object.entries(value as Record<string, unknown>)) {
+    if (field instanceof Float32Array) {
+      let digest = 0;
+      for (let i = 0; i < field.length; i++) {
+        digest = (digest * 31 + field[i]) % 1e9;
+      }
+      parts.push(`${key}:${field.length}:${digest.toFixed(6)}`);
+    }
+  }
+  return parts.join('|');
+}
 
 type Direction = 'harmonic' | 'percussive';
 
@@ -149,18 +205,34 @@ describe('HPSS kernel ceiling', () => {
         });
       }
 
-      it(`${entry.name} truncates a ${direction} kernel past the signed range into a parity refusal`, () => {
-        // Neither entry point range-checks its kernel arguments, so a value past
-        // the signed range is narrowed on the way in and reaches the parity guard
-        // rather than the ceiling guard. Asserted rather than avoided, because
-        // the narrowing is what a caller actually gets.
-        for (const kernel of [INT_MAX + 1, 2 ** 32]) {
+      for (const { passed, wrapsTo } of WRAPPING) {
+        it(`${entry.name} refuses a ${direction} kernel of ${passed} by naming the argument`, () => {
           const error = expectParameterRefusal(
-            capture(() => entry.run(kernels(direction, kernel))),
+            capture(() => entry.run(kernels(direction, passed))),
+          );
+          // The facade's own refusal, ahead of the narrowing, so it names the
+          // argument rather than the median filter the value never reached.
+          expect(error.message).toContain(
+            `${entry.name}: kernel${direction === 'harmonic' ? 'Harmonic' : 'Percussive'} must be an integer within the signed 32-bit range`,
           );
           expect(error.message).not.toContain('exceeds the maximum');
-        }
-      });
+        });
+
+        it(`${entry.name} never separates a ${direction} kernel of ${passed} as ${wrapsTo}`, () => {
+          // The assertion the refusal above cannot make: a dropped range check
+          // does not throw, it returns one of these two results.
+          const outcome = outcomeSignature(() => entry.run(kernels(direction, passed)));
+          expect(outcome).toBe(REFUSED);
+          expect(outcome).not.toBe(outcomeSignature(() => entry.run({})));
+          // 0 and the most negative int are not legal kernels, so there is no
+          // wrapped run to build for them; the refusal is the whole statement.
+          if (wrapsTo > 0 && wrapsTo % 2 === 1) {
+            expect(outcome).not.toBe(
+              outcomeSignature(() => entry.run(kernels(direction, wrapsTo))),
+            );
+          }
+        });
+      }
     }
   }
 
@@ -193,8 +265,42 @@ describe('HPSS kernel ceiling', () => {
  * core's own guards.
  */
 describe('percussive-event separation kernel', () => {
+  const spans = (events: ReturnType<typeof extractPercussiveEvents>): string =>
+    JSON.stringify(events.map((event) => [event.onsetSample, event.offsetSample]));
+
+  /** The event-list counterpart of {@link outcomeSignature}. */
+  const eventOutcome = (kernel: Record<string, number>): string => {
+    try {
+      return spans(extractPercussiveEvents({ samples: hits, sampleRate, ...kernel }));
+    } catch {
+      return REFUSED;
+    }
+  };
+
   for (const direction of directions) {
     const key = direction === 'harmonic' ? 'hpssKernelHarmonic' : 'hpssKernelPercussive';
+
+    for (const { passed, wrapsTo } of WRAPPING) {
+      it(`refuses a ${direction} kernel of ${passed} by naming the option`, () => {
+        const error = expectParameterRefusal(
+          capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed })),
+        );
+        expect(error.message).toContain(`${key} must be a finite number within the 32-bit integer`);
+        expect(error.message).not.toContain('exceeds the maximum');
+      });
+
+      it(`never separates a ${direction} kernel of ${passed} as ${wrapsTo}`, () => {
+        // The worst outcome this guards is not a wrong refusal but a silent
+        // success: 0 is this config's spelling of "use the default", so a kernel
+        // that wrapped to it returned the default run's events unchanged.
+        const outcome = eventOutcome({ [key]: passed });
+        expect(outcome).toBe(REFUSED);
+        expect(outcome).not.toBe(eventOutcome({}));
+        if (wrapsTo >= 0 && (wrapsTo === 0 || wrapsTo % 2 === 1)) {
+          expect(outcome).not.toBe(eventOutcome({ [key]: wrapsTo }));
+        }
+      });
+    }
 
     for (const kernel of [INT_MAX, FIRST_ABOVE_CEILING]) {
       it(`refuses ${direction} kernel ${kernel} by naming the ceiling`, () => {

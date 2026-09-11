@@ -1446,6 +1446,53 @@ const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'SonareWrap.hpss',
+    missingRequired: [],
+    // Stateless separation over a buffer, so there is no handle state to
+    // snapshot; the C-1 half is the whole assertion. Only a MAGNITUDE the
+    // narrowing would wrap is a rejection here — a wrong TYPE falls back to the
+    // default and is pinned as such further down, because these two are
+    // different contracts over the same argument. The two entry points read the
+    // same arguments through one reader, so between them each of its sites is
+    // driven once.
+    //
+    // Each value is chosen so ToInt32 lands it on something the downstream
+    // guards ACCEPT, which is what makes the wrap a silent success rather than a
+    // refusal by luck: 2^32 + 1 wraps to a legal odd kernel, 2^32 + 2048 to the
+    // default framing and 2^32 + 512 to the default hop. Driving nFft with
+    // 2^32 + 1 instead proved the point in the wrong direction — it wraps to 1,
+    // which the core rejects as not even, so the case would have passed on a
+    // guard that has nothing to do with the narrowing.
+    rejectsArgument: [
+      {
+        argument: 'kernelPercussive past the signed range',
+        call: () => addon.hpss(samples(2048), SR, 31, 2 ** 32 + 1),
+        error: RangeError,
+      },
+      {
+        argument: 'nFft past the signed range',
+        call: () => addon.hpss(samples(2048), SR, 31, 31, 2 ** 32 + 2048),
+        error: RangeError,
+      },
+    ],
+  },
+  {
+    name: 'SonareWrap.hpssWithResidual',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'kernelHarmonic past the signed range',
+        call: () => addon.hpssWithResidual(samples(2048), SR, 2 ** 32 + 1, 31),
+        error: RangeError,
+      },
+      {
+        argument: 'hopLength past the signed range',
+        call: () => addon.hpssWithResidual(samples(2048), SR, 31, 31, 2048, 2 ** 32 + 512),
+        error: RangeError,
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.segmentSubsegment',
     missingRequired: [],
     // A short argument list short-circuited ahead of every reader, so the call
@@ -1906,6 +1953,140 @@ function expectNativeStillWorks(): void {
   expect(withEngine((engine) => engine.graphNodeCount())).toBe(0);
   expect(withProject((project) => project.trackCount())).toBe(0);
 }
+
+/**
+ * The other half of the positional readers' contract, which the table above
+ * cannot express: that table pins REJECTIONS, and this is the opposite.
+ *
+ * `sonare_wrap_options.h` states it for the whole `node_arg_*` family in as many
+ * words — "a missing OR present-but-non-number argument at index falls back to
+ * fallback (a type-checked fallback, not a presence-only check)" — and until
+ * now nothing asserted it, which is exactly how moving these sites onto the
+ * strict reader changed the behaviour with nothing going red.
+ *
+ * The two contracts are separate and both are live on the same argument. A
+ * magnitude past the native `int` must be refused, because ToInt32 wraps it into
+ * a different, legal kernel and the call then separates on a setting the caller
+ * never asked for. A non-number must NOT be refused, because falling back is
+ * what this family promises. Asserted by result rather than by "it did not
+ * throw", so a fallback that quietly selected something other than the default
+ * fails too.
+ */
+/** The shape a C-ABI-coded refusal reaches JS as; the addon never constructs a class. */
+interface SonareErrorShape extends Error {
+  code?: number;
+}
+
+/** Mirrors the C ABI's SONARE_ERROR_INVALID_PARAMETER, which is what `.code` carries. */
+const INVALID_PARAMETER = 4;
+
+const captureError = (run: () => unknown): SonareErrorShape | undefined => {
+  try {
+    run();
+    return undefined;
+  } catch (error) {
+    return error as SonareErrorShape;
+  }
+};
+
+describe('the HPSS positional readers keep their type-checked fallback', () => {
+  const tone = new Float32Array(2048).map((_, i) => Math.sin((2 * Math.PI * 440 * i) / SR));
+
+  /** Every float field of a result reduced to one comparable string. */
+  const digest = (result: unknown): string =>
+    Object.entries(result as Record<string, unknown>)
+      .filter(([, field]) => field instanceof Float32Array)
+      .map(([key, field]) => {
+        const values = field as Float32Array;
+        let acc = 0;
+        for (let i = 0; i < values.length; i++) {
+          acc = (acc * 31 + values[i]) % 1e9;
+        }
+        return `${key}:${values.length}:${acc.toFixed(6)}`;
+      })
+      .join('|');
+
+  const entries = [
+    { name: 'hpss', run: (...rest: unknown[]) => addon.hpss(tone, SR, ...rest) },
+    {
+      name: 'hpssWithResidual',
+      run: (...rest: unknown[]) => addon.hpssWithResidual(tone, SR, ...rest),
+    },
+  ];
+
+  // The default each argument falls back to, written positionally. A wrong type
+  // at one position must produce exactly this run.
+  const DEFAULTS = [31, 31, 2048, 512];
+  const POSITIONS = ['kernelHarmonic', 'kernelPercussive', 'nFft', 'hopLength'];
+
+  for (const entry of entries) {
+    for (const [index, argument] of POSITIONS.entries()) {
+      it(`${entry.name}: a wrong-typed ${argument} falls back to its default`, () => {
+        const args = [...DEFAULTS];
+        expect(digest(entry.run(...args.map((value, at) => (at === index ? 'x' : value))))).toBe(
+          digest(entry.run(...args)),
+        );
+      });
+    }
+
+    it(`${entry.name}: omitted arguments fall back to the same defaults`, () => {
+      // A short argument list and an explicit default must agree, or the
+      // documented fallback is only half implemented.
+      expect(digest(entry.run())).toBe(digest(entry.run(...DEFAULTS)));
+    });
+
+    // A well-formed number the library does not accept is the core's to refuse,
+    // and it answers with a code-carrying SonareError naming the constraint it
+    // broke. An addon-side copy of that rule would be redundant and would
+    // downgrade the refusal: a caller switching on `.code` cannot classify a
+    // bare RangeError, which is what one entry point used to hand back here.
+    for (const [index, argument] of ['nFft', 'hopLength'].entries()) {
+      for (const bad of [0, -2048]) {
+        it(`${entry.name}: a ${argument} of ${bad} is refused by the core with a code`, () => {
+          const args = [...DEFAULTS];
+          args[index + 2] = bad;
+          const error = captureError(() => entry.run(...args)) as SonareErrorShape;
+          expect(error?.name).toBe('SonareError');
+          expect(error?.code).toBe(INVALID_PARAMETER);
+          // Which of the two was wrong, not merely that one of them was.
+          expect(error?.message).toContain(argument);
+        });
+      }
+    }
+
+    // A value that cannot be represented at all is the reader's to refuse, and
+    // it is the one class that must NOT be deferred: ToInt32 turns every
+    // non-finite number into 0, so the core then reports a rule about 0 — a
+    // value the caller never wrote, and for a kernel it does not even say which
+    // argument it means.
+    for (const [index, argument] of POSITIONS.entries()) {
+      it(`${entry.name}: a NaN ${argument} is refused by name rather than read as 0`, () => {
+        const args: unknown[] = [...DEFAULTS];
+        args[index] = Number.NaN;
+        expect(() => entry.run(...args)).toThrow(RangeError);
+        expect(captureError(() => entry.run(...args))?.message).toContain(argument);
+      });
+    }
+
+    for (const infinite of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      it(`${entry.name}: a kernelPercussive of ${infinite} is refused by name`, () => {
+        expect(() => entry.run(31, infinite, 2048, 512)).toThrow(RangeError);
+        expect(captureError(() => entry.run(31, infinite, 2048, 512))?.message).toContain(
+          'kernelPercussive',
+        );
+      });
+    }
+
+    it(`${entry.name}: the digest separates a run that used different arguments`, () => {
+      // Every case above is an invariance claim, and a digest that came out the
+      // same for every input would satisfy all of them while checking nothing.
+      // Both halves of the argument list are varied, so neither the kernels nor
+      // the framing can be the flat one.
+      expect(digest(entry.run(1, 1, 2048, 512))).not.toBe(digest(entry.run(...DEFAULTS)));
+      expect(digest(entry.run(31, 31, 1024, 256))).not.toBe(digest(entry.run(...DEFAULTS)));
+    });
+  }
+});
 
 describe('addon object readers stop at the first bad field', () => {
   for (const { name, rejectsArgument } of CASES) {

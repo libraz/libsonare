@@ -1,3 +1,5 @@
+import { ErrorCode, SonareError } from './errors';
+
 /**
  * Per-call validation options accepted by guarded wrappers. Empty-buffer
  * checks are always performed; pass `{ validate: false }` to opt out of the
@@ -82,6 +84,55 @@ export function assertSampleRate(fnName: string, sampleRate: number): void {
 export function validateAudioBuffer(samples: Float32Array, sampleRate: number): void {
   assertSamples('Audio.fromBuffer', samples, true);
   assertSampleRate('Audio.fromBuffer', sampleRate);
+}
+
+/** Bounds of the native `int` every embind argument below is narrowed into. */
+export const C_INT_MIN = -2147483648;
+export const C_INT_MAX = 2147483647;
+
+/**
+ * Reject an argument embind's declared-`int` narrowing would wrap.
+ *
+ * A positional embind parameter declared `int` WRAPS rather than saturates, so
+ * a kernel of `2 ** 32` arrives as 0 and `2 ** 32 + 1` as 1 — both values the
+ * native guards accept, so the call succeeds having separated on a setting the
+ * caller never asked for. (The options-object path narrows through
+ * `checkedIntFromVal`, which refuses the same inputs in the module; this is the
+ * positional path's equivalent.)
+ *
+ * Reported as the branded `SonareError` carrying `InvalidParameter` rather than
+ * a `RangeError`, because the class follows what the rejection stands in for: a
+ * `RangeError` is this surface refusing an argument on its own authority, while
+ * this one pre-empts a native refusal the caller would have received under that
+ * code had the narrowing not wrapped the value into the accepted domain first.
+ * The agreement with the Node and Python surfaces is asserted by the Node
+ * package's `tests/narrowing-code-parity.test.ts`, which drives one value
+ * through all three — weakening this check turns that red.
+ */
+export function assertInt32(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value) || value < C_INT_MIN || value > C_INT_MAX) {
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      `${fnName}: ${argName} must be an integer within the signed 32-bit range`,
+    );
+  }
+}
+
+/**
+ * Check both HPSS kernels before embind narrows them.
+ *
+ * Parity, positivity and the ceiling stay the core's to enforce, and it names
+ * the median filter that rejected the value. What cannot be deferred is the
+ * narrowing itself: a wrapped kernel arrives as a legal one and separates on it.
+ */
+export function assertHpssKernels(
+  fnName: string,
+  kernelHarmonic: number,
+  kernelPercussive: number,
+): void {
+  assertInt32(fnName, kernelHarmonic, 'kernelHarmonic');
+  assertInt32(fnName, kernelPercussive, 'kernelPercussive');
 }
 
 export function assertNonNegativeInteger(fnName: string, value: number, argName: string): void {

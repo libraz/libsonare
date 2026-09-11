@@ -2,7 +2,7 @@ import { resolveFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
-import { assertSamples } from './validation.js';
+import { assertHpssKernels, assertSamples } from './validation.js';
 
 function resolveHardMaskOption(fnName: string, value: unknown): boolean {
   if (value === undefined) {
@@ -426,11 +426,14 @@ export function hpssWithResidual(
       : samples;
   const fftOptions = resolveFftOptions('hpssWithResidual', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
+  const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
+  const resolvedKernelPercussive = request.kernelPercussive ?? 31;
+  assertHpssKernels('hpssWithResidual', resolvedKernelHarmonic, resolvedKernelPercussive);
   return addon.hpssWithResidual(
     request.samples,
     request.sampleRate ?? 22050,
-    request.kernelHarmonic ?? 31,
-    request.kernelPercussive ?? 31,
+    resolvedKernelHarmonic,
+    resolvedKernelPercussive,
     fftOptions.nFft,
     fftOptions.hopLength,
     resolvedHardMask,

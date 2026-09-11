@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors.js';
 import type { ProjectMidiEvent } from './types.js';
 
 /**
@@ -110,6 +111,58 @@ export function midi1Event(
   // in project.test.ts (mirrored in the WASM suite) so it cannot silently drift.
   const word = ((0x2 << 28) | (g << 24) | (status << 20) | (ch << 16) | (d1 << 8) | d2) >>> 0;
   return { ppq, data0: word, data1: 0 };
+}
+
+/** Bounds of the native `int` every addon argument below is narrowed into. */
+export const C_INT_MIN = -2147483648;
+export const C_INT_MAX = 2147483647;
+
+/**
+ * Reject an argument the addon's `Int32Value()` narrowing would wrap.
+ *
+ * `Int32Value()` is ECMAScript ToInt32, so it wraps rather than saturates: a
+ * kernel of `2 ** 32` arrives as 0 and `2 ** 32 + 1` as 1, both of which are
+ * values the native guards accept. The call then succeeds having separated on a
+ * setting the caller never asked for, which no refusal-shaped check downstream
+ * can see. Anything narrowed into a C `int` whose wrapped value would still be
+ * in domain has to be checked here instead.
+ *
+ * Unlike the `RangeError` its neighbours raise, this reports the branded
+ * `SonareError` carrying `InvalidParameter`. The class follows what the
+ * rejection stands in for, not JS idiom: a `RangeError` is this surface
+ * refusing an argument on its own authority, while this one pre-empts a native
+ * refusal the caller would have received under that code had the narrowing not
+ * wrapped the value into the accepted domain first.
+ *
+ * That the WASM and Python surfaces answer the same input with the same code is
+ * asserted by `tests/narrowing-code-parity.test.ts`, which drives one value
+ * through all three, rather than left here as a claim — editing one surface's
+ * validator says nothing about the other two on its own.
+ */
+export function assertInt32(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value) || value < C_INT_MIN || value > C_INT_MAX) {
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      `${fnName}: ${argName} must be an integer within the signed 32-bit range`,
+    );
+  }
+}
+
+/**
+ * Check both HPSS kernels before the addon narrows them.
+ *
+ * Parity, positivity and the ceiling stay the core's to enforce, and it names
+ * the median filter that rejected the value. What cannot be deferred is the
+ * narrowing itself: a wrapped kernel arrives as a legal one and separates on it.
+ */
+export function assertHpssKernels(
+  fnName: string,
+  kernelHarmonic: number,
+  kernelPercussive: number,
+): void {
+  assertInt32(fnName, kernelHarmonic, 'kernelHarmonic');
+  assertInt32(fnName, kernelPercussive, 'kernelPercussive');
 }
 
 export function assertU32(fnName: string, value: number, argName: string): void {

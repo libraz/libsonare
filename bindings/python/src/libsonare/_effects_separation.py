@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from numbers import Integral
 
 import numpy as np
 
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._runtime import (
-    _C_INT_MAX,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -24,6 +22,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int_array,
     _validate_effect_fft_options,
+    _validate_hpss_kernel,
     _validate_samples,
 )
 
@@ -36,17 +35,6 @@ def _unsupported_effect_symbol(symbol: str) -> SonareError:
         int(ErrorCode.NOT_SUPPORTED),
         f"libsonare does not export {symbol}; install a matching native library",
     )
-
-
-def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, Integral):
-        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
-    value = int(value)
-    if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
-        raise SonareValueError(
-            f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer"
-        )
-    return value
 
 
 # ============================================================================

@@ -31,6 +31,52 @@ inline int node_arg_int(const Napi::CallbackInfo& info, size_t index, int fallba
              : fallback;
 }
 
+/// @brief Read an int positional argument with this family's type-checked
+///        fallback, but refuse a NUMBER the narrowing would wrap.
+/// @details The one member of this family that can fail, because its two halves
+///          pull apart. A missing or non-number argument still falls back,
+///          exactly as above. A number cannot: Int32Value() is ToInt32 and
+///          WRAPS, so 2^32 arrives as 0 and 2^32 + 1 as 1 -- values the
+///          downstream guards accept, so the call succeeds on a setting the
+///          caller never asked for and no refusal downstream can see it.
+///          Truncation is deliberately left alone: 31.5 still reaches the callee
+///          as 31, which is what ToInt32 did and does not change a magnitude.
+///          Use Int32Arg where a wrong TYPE should be refused too; this is for
+///          the sites whose documented contract is the fallback.
+///
+///          A RangeError here and a SonareError for the same 2^32 + 1 in the TS
+///          facade is not a contradiction: each layer guards a different
+///          boundary. The facade guards the library's public domain, so it
+///          pre-empts a native refusal and reports that code; this guards the C
+///          int itself, where the value has no faithful representation at all,
+///          which is the addon's own RangeError class (MidiByteProperty,
+///          Int32Arg). A facade caller never reaches this check.
+/// @return false with one pending JS RangeError when a number would wrap; the
+///         caller must return before any further N-API call.
+inline bool node_arg_int_no_wrap(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                 const char* name, int fallback, int* out) {
+  if (env.IsExceptionPending() || out == nullptr) return false;
+  if (index >= info.Length() || !info[index].IsNumber()) {
+    *out = fallback;
+    return true;
+  }
+  const double number = info[index].As<Napi::Number>().DoubleValue();
+  if (env.IsExceptionPending()) return false;
+  // Compared after the truncation ToInt32 applies first, so a fractional value
+  // just inside the range is accepted rather than read as out of it.
+  const double truncated = std::trunc(number);
+  constexpr double kMinInt = static_cast<double>(std::numeric_limits<int>::min());
+  constexpr double kMaxInt = static_cast<double>(std::numeric_limits<int>::max());
+  if (!std::isfinite(number) || truncated < kMinInt || truncated > kMaxInt) {
+    Napi::RangeError::New(
+        env, std::string(name) + " must be a finite number within the native int range")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = static_cast<int>(truncated);
+  return true;
+}
+
 /// @brief Read a uint32 positional argument, falling back if absent or non-number.
 inline uint32_t node_arg_uint32(const Napi::CallbackInfo& info, size_t index, uint32_t fallback) {
   return index < info.Length() && info[index].IsNumber()

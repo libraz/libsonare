@@ -338,34 +338,19 @@ Napi::Value SonareWrap::HpssWithResidual(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = info[1].As<Napi::Number>().Int32Value();
-  int kernel_harmonic =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 31;
-  int kernel_percussive =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 31;
-  int n_fft = info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value()
-                                                       : sonare::constants::kDefaultNFft;
-  int hop_length = info.Length() >= 6 && info[5].IsNumber()
-                       ? info[5].As<Napi::Number>().Int32Value()
-                       : sonare::constants::kDefaultHopLength;
-  const bool hard_mask =
-      info.Length() >= 7 && info[6].IsBoolean() ? info[6].As<Napi::Boolean>().Value() : false;
+  // Shared with Hpss, so the defaults and the narrowing agree on both.
+  HpssArguments args;
+  if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
 
-  // Re-apply the boundary checks this direct core call would otherwise bypass,
-  // so the addon rejects the same inputs sonare_hpss_ex does.
-  if (n_fft <= 0 || hop_length <= 0) {
-    Napi::RangeError::New(env, "hpssWithResidual: nFft and hopLength must be positive")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   sonare::validate_offline_audio_input(arr.Data(), arr.ElementLength(), sr);
   sonare::Audio audio = sonare::Audio::from_buffer(arr.Data(), arr.ElementLength(), sr);
   sonare::HpssConfig config;
-  config.kernel_size_harmonic = kernel_harmonic;
-  config.kernel_size_percussive = kernel_percussive;
-  config.use_soft_mask = !hard_mask;
+  config.kernel_size_harmonic = args.kernel_harmonic;
+  config.kernel_size_percussive = args.kernel_percussive;
+  config.use_soft_mask = !args.hard_mask;
   sonare::StftConfig stft_config;
-  stft_config.n_fft = n_fft;
-  stft_config.hop_length = hop_length;
+  stft_config.n_fft = args.n_fft;
+  stft_config.hop_length = args.hop_length;
   sonare::HpssAudioResultWithResidual source_result =
       sonare::hpss_with_residual(audio, config, stft_config);
 

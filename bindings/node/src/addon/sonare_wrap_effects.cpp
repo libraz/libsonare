@@ -51,29 +51,21 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = info[1].As<Napi::Number>().Int32Value();
-  int kernel_harmonic =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 31;
-  int kernel_percussive =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 31;
-  int n_fft =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
-  const bool hard_mask =
-      info.Length() >= 7 && info[6].IsBoolean() ? info[6].As<Napi::Boolean>().Value() : false;
+  HpssArguments args;
+  if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
 
   sonare::HpssConfig config;
-  config.kernel_size_harmonic = kernel_harmonic;
-  config.kernel_size_percussive = kernel_percussive;
-  config.use_soft_mask = !hard_mask;
+  config.kernel_size_harmonic = args.kernel_harmonic;
+  config.kernel_size_percussive = args.kernel_percussive;
+  config.use_soft_mask = !args.hard_mask;
 
   sonare::StftConfig stft_config;
-  stft_config.n_fft = n_fft;
-  stft_config.hop_length = hop_length;
+  stft_config.n_fft = args.n_fft;
+  stft_config.hop_length = args.hop_length;
 
   sonare::HpssAudioResult result = sonare::hpss(audio, config, stft_config);
 

@@ -49,6 +49,24 @@ INT_MAX = 2147483647
 # Even, so it is refused for parity rather than for the ceiling.
 INT_MAX_MINUS_ONE = 2147483646
 
+# Values past the signed 32-bit range, each with what a ctypes c_int32 field
+# truncates it to. The truncated value is what makes these the interesting
+# inputs rather than ``INT_MAX``, which is exactly representable and arrives
+# intact: two of them land on an ordinary legal kernel and two on 0, which the
+# percussive-event config reads as "use the default". Every one therefore has a
+# plausible SUCCESSFUL outcome waiting for it if the range check is dropped, and
+# a refusal-shaped assertion cannot see that.
+WRAPPING = [
+    (2**32, 0),
+    (2**32 + 1, 1),
+    (2**32 + 3, 3),
+    (3 * 2**32, 0),
+    (2**31, -2147483648),
+]
+
+# A refusal reduced to the same domain as a result, so the two can be compared.
+REFUSED = "refused"
+
 
 @pytest.fixture(scope="module")
 def tone() -> list[float]:
@@ -94,6 +112,29 @@ def _kernels(direction: str, value: int) -> dict[str, int]:
         "kernel_harmonic": value if direction == "harmonic" else 31,
         "kernel_percussive": value if direction == "percussive" else 31,
     }
+
+
+def _hpss_outcome(entry, tone, **kernels) -> str:
+    """One comparable string per outcome, so two runs on different kernels differ."""
+    try:
+        result = entry(tone, SR, **kernels)
+    except SonareError:
+        return REFUSED
+    fields = result if isinstance(result, dict) else {"harmonic": result.harmonic}
+    return "|".join(
+        f"{name}:{len(values)}:{float(np.asarray(values, dtype=np.float64).sum()):.9g}"
+        for name, values in sorted(fields.items())
+        if not isinstance(values, (int, float))
+    )
+
+
+def _event_outcome(hits, **separation) -> str:
+    """The event-list counterpart of :func:`_hpss_outcome`."""
+    try:
+        events = extract_percussive_events(hits, SR, **separation)
+    except SonareError:
+        return REFUSED
+    return repr([(event.onset_sample, event.offset_sample) for event in events])
 
 
 @pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
@@ -148,6 +189,41 @@ def test_a_kernel_past_the_signed_range_is_refused_rather_than_wrapped(
     assert f"kernel_{direction} must be a positive odd signed 32-bit integer" in str(raised.value)
 
 
+@pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
+@pytest.mark.parametrize("direction", ["harmonic", "percussive"])
+@pytest.mark.parametrize(("passed", "truncates_to"), WRAPPING)
+def test_a_wrapping_kernel_is_refused_by_name(entry, direction, passed, truncates_to, tone) -> None:
+    """Every value past the range is refused by the binding, naming the keyword."""
+    del truncates_to
+    with pytest.raises(SonareValueError) as raised:
+        entry(tone, SR, **_kernels(direction, passed))
+    _assert_parameter_refusal(raised.value)
+    assert f"kernel_{direction} must be a positive odd signed 32-bit integer" in str(raised.value)
+    assert "exceeds the maximum" not in str(raised.value)
+
+
+@pytest.mark.parametrize("entry", [hpss, hpss_with_residual])
+@pytest.mark.parametrize("direction", ["harmonic", "percussive"])
+@pytest.mark.parametrize(("passed", "truncates_to"), WRAPPING)
+def test_a_wrapping_kernel_never_separates_as_the_truncated_one(
+    entry, direction, passed, truncates_to, tone
+) -> None:
+    """The assertion the refusal above cannot make.
+
+    A dropped range check does not raise -- it returns the default-kernel result
+    or the truncated-kernel one, both of which look like an ordinary success.
+    Both references are built here and compared against, so the silent path is
+    what fails rather than merely the loud one.
+    """
+    outcome = _hpss_outcome(entry, tone, **_kernels(direction, passed))
+    assert outcome == REFUSED
+    assert outcome != _hpss_outcome(entry, tone)
+    # 0 and the most negative int are not legal kernels, so there is no
+    # truncated run to build for them; the refusal is the whole statement.
+    if truncates_to > 0 and truncates_to % 2 == 1:
+        assert outcome != _hpss_outcome(entry, tone, **_kernels(direction, truncates_to))
+
+
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])
 def test_the_largest_legal_kernel_still_separates(direction, tone) -> None:
     """Without this, a guard that refused every kernel would satisfy the cases above."""
@@ -187,6 +263,40 @@ def test_percussive_events_oversized_kernel_reaches_the_ceiling_guard(
     with pytest.raises(SonareError) as raised:
         extract_percussive_events(hits, SR, **{f"hpss_kernel_{direction}": kernel})
     _assert_names_ceiling(raised.value, direction, kernel)
+
+
+@pytest.mark.parametrize("direction", ["harmonic", "percussive"])
+@pytest.mark.parametrize(("passed", "truncates_to"), WRAPPING)
+def test_percussive_events_refuse_a_wrapping_kernel_by_name(
+    direction, passed, truncates_to, hits
+) -> None:
+    """The separation fields are range-checked before the C struct truncates them."""
+    del truncates_to
+    arg_name = f"hpss_kernel_{direction}"
+    with pytest.raises(SonareValueError) as raised:
+        extract_percussive_events(hits, SR, **{arg_name: passed})
+    _assert_parameter_refusal(raised.value)
+    assert f"{arg_name} must fit in a signed 32-bit integer" in str(raised.value)
+    assert "exceeds the maximum" not in str(raised.value)
+
+
+@pytest.mark.parametrize("direction", ["harmonic", "percussive"])
+@pytest.mark.parametrize(("passed", "truncates_to"), WRAPPING)
+def test_percussive_events_never_separate_on_the_truncated_kernel(
+    direction, passed, truncates_to, hits
+) -> None:
+    """The worst path on this facade is a success, not a wrong refusal.
+
+    0 is this config's spelling of "use the default", so a kernel that truncated
+    to it returned the default run's events unchanged -- byte for byte the right
+    answer to a question the caller never asked.
+    """
+    arg_name = f"hpss_kernel_{direction}"
+    outcome = _event_outcome(hits, **{arg_name: passed})
+    assert outcome == REFUSED
+    assert outcome != _event_outcome(hits)
+    if truncates_to >= 0 and (truncates_to == 0 or truncates_to % 2 == 1):
+        assert outcome != _event_outcome(hits, **{arg_name: truncates_to})
 
 
 @pytest.mark.parametrize("direction", ["harmonic", "percussive"])

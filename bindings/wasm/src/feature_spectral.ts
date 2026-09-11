@@ -9,6 +9,7 @@ import type {
 } from './sonare.js';
 import type { ValidateOptions } from './validation';
 import {
+  assertHpssKernels,
   assertInterleavedSamples,
   assertNonNegativeInteger,
   assertPositiveInteger,
@@ -652,6 +653,10 @@ export function phaseVocoder(
 
 /**
  * HPSS into harmonic / percussive / residual signals.
+ *
+ * @throws SonareError (`InvalidParameter`) on a kernel that is not an integer
+ *   within the signed 32-bit range, or one the core rejects as even,
+ *   non-positive or above its ceiling
  */
 export function hpssWithResidual(request: HpssWithResidualRequest): WasmHpssWithResidualResult;
 export function hpssWithResidual(
@@ -686,6 +691,7 @@ export function hpssWithResidual(
   }
   const fftOptions = resolveFftOptions('hpssWithResidual', nFft, hopLength);
   const resolvedHardMask = resolveHardMask('hpssWithResidual', hardMask);
+  assertHpssKernels('hpssWithResidual', kernelHarmonic, kernelPercussive);
   return requireModule().hpssWithResidualEx(
     samples,
     sampleRate,

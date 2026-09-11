@@ -203,12 +203,17 @@ const POSITIONAL_READER_DEFINITION =
  * without touching its out-parameter, refuses to throw while an exception is
  * already pending, and so lets its caller bail out before any C-ABI call.
  *
- * The lenient `node_arg_*` family is deliberately absent. Those type-check and
- * fall back to a default instead of throwing, so they leave no pending
- * exception and cannot reach the C ABI with a dummy value alongside one.
+ * The lenient `node_arg_*` family is otherwise absent. Those type-check and fall
+ * back to a default instead of throwing, so they leave no pending exception and
+ * cannot reach the C ABI with a dummy value alongside one. `node_arg_int_no_wrap`
+ * is the exception and belongs here: it keeps that family's type-checked
+ * fallback but refuses a number the narrowing would wrap, so it can leave an
+ * exception pending like the rest of this list. Omitting it would drop its
+ * callers out of {@link positionalArgEntryPoints} — they would stop being
+ * covered while the table that names them still read as green.
  */
 const BAILOUT_READER =
-  /\b(?:Optional(?:Int|Uint32|Int64|Float|Double|Bool|String|MidiByte)Arg|Required(?:Int|Int64)Arg|NonNegativeSizeTArg|Int32Arg)\s*\(/;
+  /\b(?:Optional(?:Int|Uint32|Int64|Float|Double|Bool|String|MidiByte)Arg|Required(?:Int|Int64)Arg|NonNegativeSizeTArg|Int32Arg|node_arg_int_no_wrap)\s*\(/;
 
 /**
  * Every positional-reader definition across the addon sources.

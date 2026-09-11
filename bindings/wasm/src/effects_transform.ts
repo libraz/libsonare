@@ -17,7 +17,7 @@ import type {
   VoicedFlags,
 } from './public_types';
 import type { ValidateOptions } from './validation';
-import { assertSampleRate, assertSamples } from './validation';
+import { assertHpssKernels, assertSampleRate, assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -380,6 +380,9 @@ export interface SpectralEditRequest extends SpectralEditOptions, ValidateOption
  * @param kernelHarmonic - Horizontal median filter size for harmonic (default: 31)
  * @param kernelPercussive - Vertical median filter size for percussive (default: 31)
  * @returns Separated harmonic and percussive components
+ * @throws SonareError (`InvalidParameter`) on a kernel that is not an integer
+ *   within the signed 32-bit range, or one the core rejects as even,
+ *   non-positive or above its ceiling
  */
 export function hpss(request: HpssRequest): HpssResult;
 export function hpss(
@@ -406,11 +409,14 @@ export function hpss(
       : samples;
   const fftOptions = resolveFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask(request.hardMask, 'hpss');
+  const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
+  const resolvedKernelPercussive = request.kernelPercussive ?? 31;
+  assertHpssKernels('hpss', resolvedKernelHarmonic, resolvedKernelPercussive);
   return requireModule().hpssEx(
     request.samples,
     request.sampleRate ?? 22050,
-    request.kernelHarmonic ?? 31,
-    request.kernelPercussive ?? 31,
+    resolvedKernelHarmonic,
+    resolvedKernelPercussive,
     fftOptions.nFft,
     fftOptions.hopLength,
     resolvedHardMask,
@@ -1135,10 +1141,10 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
  * @returns One {@link PercussiveEvent} per detected hit, in time order; an empty
  *   array when nothing was detected
  * @throws RangeError when the samples or sample rate fail the shared input checks
- * @throws SonareError (`InvalidParameter`) on a negative framing or kernel size,
- *   a framing that breaks constant overlap-add, a negative or non-finite
- *   `onsetWait` / `onsetDelta` / `maxEventMs`, or a `minPercussiveRatio` outside
- *   `[0, 1]`
+ * @throws SonareError (`InvalidParameter`) on a framing or kernel size that is
+ *   negative or outside the 32-bit integer range, a framing that breaks constant
+ *   overlap-add, a negative or non-finite `onsetWait` / `onsetDelta` /
+ *   `maxEventMs`, or a `minPercussiveRatio` outside `[0, 1]`
  *
  * @example
  * ```ts

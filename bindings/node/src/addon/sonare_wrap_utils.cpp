@@ -5,9 +5,14 @@
 #include <string>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "effects/hpss.h"
 #include "sonare_wrap_options.h"
+#include "util/constants.h"
 
 namespace sonare_node {
+
+using sonare::constants::kDefaultHopLength;
+using sonare::constants::kDefaultNFft;
 
 const char* ErrorMessageForCode(SonareError err) {
   const char* detail = sonare_last_error_message();
@@ -179,6 +184,20 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   return ReadMeterCandidateNumerators(object, "meterCandidateNumerators",
                                       options->meter_candidate_numerators,
                                       &options->meter_candidate_numerator_count);
+}
+
+bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArguments* out) {
+  const sonare::HpssConfig defaults;
+  if (!node_arg_int_no_wrap(env, info, 2, "kernelHarmonic", defaults.kernel_size_harmonic,
+                            &out->kernel_harmonic) ||
+      !node_arg_int_no_wrap(env, info, 3, "kernelPercussive", defaults.kernel_size_percussive,
+                            &out->kernel_percussive) ||
+      !node_arg_int_no_wrap(env, info, 4, "nFft", kDefaultNFft, &out->n_fft) ||
+      !node_arg_int_no_wrap(env, info, 5, "hopLength", kDefaultHopLength, &out->hop_length)) {
+    return false;
+  }
+  out->hard_mask = node_arg_bool(info, 6, false);
+  return true;
 }
 
 bool IsFloat32Array(const Napi::Value& value) {

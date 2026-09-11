@@ -69,6 +69,40 @@ bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
                                   int (&numerators)[SONARE_MAX_METER_CANDIDATE_NUMERATORS],
                                   int* count);
 
+/// @brief The arguments both HPSS entry points take after the audio and its
+///        sample rate: the two median-filter kernels, the STFT geometry, and
+///        the mask mode.
+struct HpssArguments {
+  int kernel_harmonic;
+  int kernel_percussive;
+  int n_fft;
+  int hop_length;
+  bool hard_mask;
+};
+
+/// @brief Read the HPSS arguments at info[2..6] into @p out, applying the core's
+///        own defaults where an argument was omitted.
+///
+/// One reader for both entry points, so neither the defaults nor the narrowing
+/// can drift apart between them.
+///
+/// The kernels and the geometry go through node_arg_int_no_wrap rather than a
+/// bare Int32Value(), which is ToInt32 and therefore WRAPS: a kernel of 2^32
+/// arrives as 0 and 2^32 + 1 as 1, both of which the core's own guards accept,
+/// so the call separates on a kernel the caller never asked for instead of being
+/// refused. Only the wrap is closed — a non-number argument keeps the
+/// type-checked fallback the node_arg_* family documents.
+///
+/// Nothing else is re-checked here. The core refuses a non-positive or
+/// odd nFft, a non-positive hop, a hop past nFft / 2, and every kernel outside
+/// the parity and ceiling rules, reporting each as a code-carrying SonareError
+/// naming the constraint it broke. An addon-side copy of any of those would be
+/// redundant and would answer with a vaguer message and no code.
+///
+/// @return false with exactly one pending JS exception on rejection; the caller
+///         must return before any further N-API call.
+bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArguments* out);
+
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
 bool IsInt32Array(const Napi::Value& value);

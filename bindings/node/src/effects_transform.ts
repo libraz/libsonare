@@ -16,7 +16,7 @@ import type {
   SpectralRegionOp,
   VoicedFlags,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertHpssKernels, assertInt32, assertSampleRate } from './validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so normalize here rather than at the N-API boundary.
@@ -29,6 +29,21 @@ function toVoicedInt32(voiced: VoicedFlags): Int32Array {
     out[index] = voiced[index] ? 1 : 0;
   }
   return out;
+}
+
+/**
+ * Check the separation an extracted or rendered event set is measured against
+ * before the addon narrows it. Every field defaults at 0 here, so a value that
+ * wrapped to 0 would select the default and report success.
+ */
+function assertPercussiveSeparation(fnName: string, options: PercussiveSeparationOptions): void {
+  const fields = ['nFft', 'hopLength', 'hpssKernelHarmonic', 'hpssKernelPercussive'] as const;
+  for (const field of fields) {
+    const value = options[field];
+    if (value !== undefined) {
+      assertInt32(fnName, value, field);
+    }
+  }
 }
 
 function resolveHardMask(fnName: string, hardMask: unknown): boolean {
@@ -356,11 +371,14 @@ export function hpss(
       : samples;
   const fftOptions = resolveFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask('hpss', request.hardMask);
+  const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
+  const resolvedKernelPercussive = request.kernelPercussive ?? 31;
+  assertHpssKernels('hpss', resolvedKernelHarmonic, resolvedKernelPercussive);
   return addon.hpss(
     request.samples,
     request.sampleRate ?? 22050,
-    request.kernelHarmonic ?? 31,
-    request.kernelPercussive ?? 31,
+    resolvedKernelHarmonic,
+    resolvedKernelPercussive,
     fftOptions.nFft,
     fftOptions.hopLength,
     resolvedHardMask,
@@ -979,7 +997,8 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
  * @returns One {@link PercussiveEvent} per detected hit, in time order. Audio in
  *   which nothing was detected returns an empty array rather than throwing.
  * @throws {RangeError} `sampleRate` is out of the supported range.
- * @throws {SonareError} `samples` is empty, the framing breaks constant
+ * @throws {SonareError} `samples` is empty, a separation field is not an
+ *   integer within the signed 32-bit range, the framing breaks constant
  *   overlap-add, `maxEventMs` is not positive and finite, or
  *   `minPercussiveRatio` is outside `[0, 1]`.
  *
@@ -998,6 +1017,7 @@ export function extractPercussiveEvents(
 ): PercussiveEvent[] {
   const { samples, sampleRate, ...options } = request;
   assertSampleRate('extractPercussiveEvents', sampleRate);
+  assertPercussiveSeparation('extractPercussiveEvents', options);
   return addon.extractPercussiveEvents(toSamples(samples), sampleRate, options);
 }
 
@@ -1033,10 +1053,10 @@ export function extractPercussiveEvents(
  * @throws {TypeError} `events` is not an array, or one of its entries is not a
  *   plain object.
  * @throws {RangeError} `sampleRate` is out of the supported range.
- * @throws {SonareError} `samples` is empty, an event's span is empty, reversed
- *   or outside the audio, two source spans overlap, a `gainDb` is not finite,
- *   the framing breaks constant overlap-add, or `fadeMs` is not positive and
- *   finite.
+ * @throws {SonareError} `samples` is empty, a separation field is not an integer
+ *   within the signed 32-bit range, an event's span is empty, reversed or
+ *   outside the audio, two source spans overlap, a `gainDb` is not finite, the
+ *   framing breaks constant overlap-add, or `fadeMs` is not positive and finite.
  *
  * @example
  * ```ts
@@ -1055,5 +1075,6 @@ export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): 
   if (!Array.isArray(events)) {
     throw new TypeError('renderPercussiveEvents: events must be an array');
   }
+  assertPercussiveSeparation('renderPercussiveEvents', options);
   return addon.renderPercussiveEvents(toSamples(samples), sampleRate, events, options);
 }

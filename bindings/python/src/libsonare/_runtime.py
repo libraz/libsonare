@@ -580,6 +580,63 @@ def _resolve_enum(
 
 
 _C_INT_MAX = 2**31 - 1
+_C_INT_MIN = -(2**31)
+
+
+def _validate_c_int_field(fn_name: str, value: int, arg_name: str) -> int:
+    """Narrow a config field onto a C ``int``, refusing anything that would wrap.
+
+    ctypes truncates on assignment to a ``c_int32`` field, so a value past the
+    signed range reaches the core as a different, legal number instead of being
+    refused: ``2**32`` arrives as 0, which every field of the versioned configs
+    reads as "keep the default", and ``2**32 + 1`` arrives as 1. Either way the
+    call succeeds having used a setting the caller never asked for.
+
+    Args:
+        fn_name: Caller name, used to prefix the error message.
+        value: Requested field value.
+        arg_name: Keyword name, named in the error message.
+
+    Returns:
+        The value as a plain ``int``.
+
+    Raises:
+        SonareValueError: If the value is not an integer or does not fit.
+    """
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
+    value = int(value)
+    if value < _C_INT_MIN or value > _C_INT_MAX:
+        raise SonareValueError(f"{fn_name}: {arg_name} must fit in a signed 32-bit integer")
+    return value
+
+
+def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
+    """Validate an HPSS median-filter kernel against the domain the core accepts.
+
+    One definition for the whole binding: both HPSS entry points narrow the
+    kernel into a C ``int``, where a value past the signed range wraps into a
+    different kernel the core then happily separates on.
+
+    Args:
+        fn_name: Caller name, used to prefix the error message.
+        value: Requested kernel size.
+        arg_name: Keyword name, named in the error message.
+
+    Returns:
+        The kernel size as a plain ``int``.
+
+    Raises:
+        SonareValueError: If the value is not a positive odd signed 32-bit int.
+    """
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
+    value = int(value)
+    if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
+        raise SonareValueError(
+            f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer"
+        )
+    return value
 
 
 def _require_power_of_two(value: int, name: str) -> None:

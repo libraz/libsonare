@@ -33,7 +33,6 @@ from ._ffi import (
     SonareSpectralRegionOp,
 )
 from ._runtime import (
-    _C_INT_MAX,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -48,7 +47,9 @@ from ._runtime import (
     _resolve_enum,
     _to_c_float_array,
     _to_c_int_array,
+    _validate_c_int_field,
     _validate_effect_fft_options,
+    _validate_hpss_kernel,
     _validate_samples,
 )
 from .types import HpssResult
@@ -69,17 +70,6 @@ def _unsupported_effect_symbol(symbol: str) -> SonareError:
         int(ErrorCode.NOT_SUPPORTED),
         f"libsonare does not export {symbol}; install a matching native library",
     )
-
-
-def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, Integral):
-        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
-    value = int(value)
-    if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
-        raise SonareValueError(
-            f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer"
-        )
-    return value
 
 
 def hpss(
@@ -1474,6 +1464,7 @@ class PercussiveEvent:
 
 
 def _percussive_separation(
+    fn_name: str,
     n_fft: int | None,
     hop_length: int | None,
     hpss_kernel_harmonic: int | None,
@@ -1483,15 +1474,19 @@ def _percussive_separation(
 
     Extraction measures events against this separation and rendering has to
     repeat it, so it is one set of fields both sides take rather than a framing
-    each of them restates.
+    each of them restates -- and one place the signed-32-bit narrowing is
+    checked, since 0 is the default here and a value that wraps to it would
+    separate on the default while reporting success.
     """
+    fields = {
+        "n_fft": n_fft,
+        "hop_length": hop_length,
+        "hpss_kernel_harmonic": hpss_kernel_harmonic,
+        "hpss_kernel_percussive": hpss_kernel_percussive,
+    }
     return {
-        "n_fft": 0 if n_fft is None else int(n_fft),
-        "hop_length": 0 if hop_length is None else int(hop_length),
-        "hpss_kernel_harmonic": (0 if hpss_kernel_harmonic is None else int(hpss_kernel_harmonic)),
-        "hpss_kernel_percussive": (
-            0 if hpss_kernel_percussive is None else int(hpss_kernel_percussive)
-        ),
+        name: 0 if value is None else _validate_c_int_field(fn_name, value, name)
+        for name, value in fields.items()
     }
 
 
@@ -1606,7 +1601,8 @@ def extract_percussive_events(
         detected, which is reported rather than raised.
 
     Raises:
-        SonareValueError: If ``samples`` is empty or non-finite.
+        SonareValueError: If ``samples`` is empty or non-finite, or a framing or
+            kernel size does not fit in a signed 32-bit integer.
         SonareError: If the C call rejects the request (a framing that breaks
             overlap-add, a negative or non-finite ``max_event_ms``, or a
             ``min_percussive_ratio`` outside ``[0, 1]``). 0 is not rejected for
@@ -1624,7 +1620,13 @@ def extract_percussive_events(
     c_array, length = _to_c_float_array(samples)
     config = SonarePercussiveEventConfig(
         struct_version=_PERCUSSIVE_STRUCT_VERSION,
-        **_percussive_separation(n_fft, hop_length, hpss_kernel_harmonic, hpss_kernel_percussive),
+        **_percussive_separation(
+            "extract_percussive_events",
+            n_fft,
+            hop_length,
+            hpss_kernel_harmonic,
+            hpss_kernel_percussive,
+        ),
         onset_wait=0 if onset_wait is None else int(onset_wait),
         onset_delta=0.0 if onset_delta is None else float(onset_delta),
         max_event_ms=0.0 if max_event_ms is None else float(max_event_ms),
@@ -1706,7 +1708,8 @@ def render_percussive_events(
         ``numpy.ndarray`` of ``float32`` with the same length as the input.
 
     Raises:
-        SonareValueError: If ``samples`` is empty or non-finite.
+        SonareValueError: If ``samples`` is empty or non-finite, or a framing or
+            kernel size does not fit in a signed 32-bit integer.
         SonareError: If the C call rejects the request (an empty, reversed or
             out-of-range span, overlapping source spans, a non-finite gain, a
             framing that breaks overlap-add, or a negative or non-finite
@@ -1728,7 +1731,13 @@ def render_percussive_events(
     c_events, count = _percussive_events_to_c(events)
     config = SonarePercussiveRenderConfig(
         struct_version=_PERCUSSIVE_STRUCT_VERSION,
-        **_percussive_separation(n_fft, hop_length, hpss_kernel_harmonic, hpss_kernel_percussive),
+        **_percussive_separation(
+            "render_percussive_events",
+            n_fft,
+            hop_length,
+            hpss_kernel_harmonic,
+            hpss_kernel_percussive,
+        ),
         fade_ms=0.0 if fade_ms is None else float(fade_ms),
     )
     with _out_float_array(lib) as (out, out_length):
