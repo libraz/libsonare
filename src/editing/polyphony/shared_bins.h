@@ -104,12 +104,7 @@ struct SharedBinConfig {
   /// The mechanism is arithmetic rather than conjecture: clamping one window's
   /// weight and not the other's changes what each contributes, so a pair at a
   /// 55:1 modulus ratio averages as 1:1 and the mean's angle moves by up to 87
-  /// degrees. Which order is better is untested, and has not been shown
-  /// untestable. One property of the population is measured and holds: where the
-  /// two poles nearly coincide the split is underdetermined, least squares
-  /// returns the minimum-norm answer, and the weight collapses toward one. So
-  /// the degenerate end cannot supply a clamped cell, and any case would have to
-  /// come from the separated end, about which nothing is established either way.
+  /// degrees. Which order separates better is untested.
   ///
   /// It also bounds how loud the residual can get, and that axis is not what set
   /// the default. @ref mask_total runs to roughly this value where a bin is
