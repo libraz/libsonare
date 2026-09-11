@@ -119,6 +119,108 @@ TEST_CASE("plp pulse is phase-locked to the onset envelope", "[plp][unit]") {
   REQUIRE(interior_mean < 0.5);
 }
 
+TEST_CASE("plp's tempo-band scan keeps the lowest bin of an exact tie", "[plp][unit]") {
+  // plp() picks one tempo bin per frame and rebuilds the pulse from that bin alone, so the
+  // selected index is the whole of what the band scan contributes. A tie leaves the
+  // magnitudes identical and moves the index, which nothing asserted about the pulse's values
+  // can see, so this is the one property worth stating about the scan itself.
+  //
+  // The surface is the library's own: fourier_tempogram() is std::abs() over the same complex
+  // tempogram plp() builds internally, from the config below. The reference is the definition
+  // -- the largest in-band magnitude, then the lowest bin attaining it -- rather than a copy
+  // of either scan, so agreeing with it says something about the result and not about the
+  // loop shape. Reconstructing the pulse a different winner would emit needs the tempogram
+  // phase, which is not exported, which is why the claim lives on the index sequence.
+  constexpr int kFrames = 512;
+  constexpr int kPeriod = 16;
+  std::vector<float> env(kFrames, 0.0f);
+  for (int i = 0; i < kFrames; i += kPeriod) {
+    env[i] = 1.0f;
+  }
+
+  PlpConfig cfg;
+  cfg.sr = 22050;
+  cfg.hop_length = 512;
+  cfg.win_length = 128;
+  // Narrow enough to admit two bins, so a tie between them is the whole contest.
+  cfg.tempo_min = 100.0f;
+  cfg.tempo_max = 140.0f;
+
+  TempogramConfig tcfg;  // the configuration plp() builds for its own front end
+  tcfg.hop_length = cfg.hop_length;
+  tcfg.win_length = cfg.win_length;
+  tcfg.window = WindowType::Hann;
+  tcfg.center = true;
+  tcfg.norm = false;
+  const std::vector<float> magnitude = fourier_tempogram(env, cfg.sr, tcfg);
+
+  const int n_bins = cfg.win_length / 2 + 1;
+  const int n_frames = kFrames;
+  REQUIRE(magnitude.size() == static_cast<size_t>(n_bins) * n_frames);
+
+  std::vector<int> band;
+  for (int b = 1; b < n_bins; ++b) {
+    const double bpm = static_cast<double>(b) / static_cast<double>(cfg.win_length) * 60.0 *
+                       static_cast<double>(cfg.sr) / static_cast<double>(cfg.hop_length);
+    if (bpm >= cfg.tempo_min && bpm <= cfg.tempo_max) {
+      band.push_back(b);
+    }
+  }
+  REQUIRE(band.size() == 2);
+
+  std::vector<int> expected(n_frames, 0);
+  int tied_frames = 0;
+  for (int t = 0; t < n_frames; ++t) {
+    float best = -1.0f;
+    for (int b : band) {
+      best = std::max(best, magnitude[b * n_frames + t]);
+    }
+    int hits = 0;
+    for (int b : band) {
+      if (magnitude[b * n_frames + t] != best) continue;
+      if (hits == 0) expected[t] = b;
+      ++hits;
+    }
+    if (hits > 1) ++tied_frames;
+  }
+  // Random magnitudes essentially never tie, so a fixture without this count is one that runs
+  // the scan hundreds of times and its tie-break not once.
+  CAPTURE(tied_frames);
+  REQUIRE(tied_frames > 0);
+
+  // A frame at a time, every bin compared against that frame's incumbent.
+  std::vector<int> per_frame(n_frames, 0);
+  for (int t = 0; t < n_frames; ++t) {
+    float best = -1.0f;
+    for (int b : band) {
+      const float v = magnitude[b * n_frames + t];
+      if (v > best) {
+        best = v;
+        per_frame[t] = b;
+      }
+    }
+  }
+  // A bin at a time over its contiguous row, carrying one incumbent per frame -- the shape
+  // plp() runs. Ascending bins and a strict `>` are what keep the two agreeing under a tie.
+  std::vector<int> bin_major(n_frames, 0);
+  std::vector<float> running(static_cast<size_t>(n_frames), -1.0f);
+  for (int b : band) {
+    for (int t = 0; t < n_frames; ++t) {
+      const float v = magnitude[b * n_frames + t];
+      if (v > running[static_cast<size_t>(t)]) {
+        running[static_cast<size_t>(t)] = v;
+        bin_major[t] = b;
+      }
+    }
+  }
+
+  for (int t = 0; t < n_frames; ++t) {
+    CAPTURE(t, expected[t], per_frame[t], bin_major[t]);
+    REQUIRE(per_frame[t] == expected[t]);
+    REQUIRE(bin_major[t] == expected[t]);
+  }
+}
+
 TEST_CASE("plp from onset envelope is consistent with audio overload", "[plp][unit][smoke]") {
   auto y = impulse_train(22050, 4.0f, 120.0f);
   Audio audio = Audio::from_vector(std::move(y), 22050);

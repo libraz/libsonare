@@ -270,21 +270,24 @@ std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig
     return freq * 60.0 * static_cast<double>(config.sr) / static_cast<double>(config.hop_length);
   };
 
-  // Restrict to tempo band, pick argmax per frame to define mask.
+  // Restrict to tempo band, pick argmax per frame to define mask. Bin-major with per-frame
+  // running maxima: ft is row-major [n_bins x n_frames], so a bin is one contiguous row and
+  // the band test costs one evaluation per bin. Bins are visited in ascending order against a
+  // strict `>`, so a frame whose maximum is attained by several bins keeps the lowest-index
+  // winner.
   std::vector<int> argmax(n_frames, 0);
-  for (int t = 0; t < n_frames; ++t) {
-    float best = -1.0f;
-    int best_b = 0;
-    for (int b = 1; b < n_bins; ++b) {
-      double bpm = bin_to_bpm(b);
-      if (bpm < config.tempo_min || bpm > config.tempo_max) continue;
-      float v = std::abs(ft[b * n_frames + t]);
-      if (v > best) {
-        best = v;
-        best_b = b;
+  std::vector<float> best(static_cast<std::size_t>(n_frames), -1.0f);
+  for (int b = 1; b < n_bins; ++b) {
+    const double bpm = bin_to_bpm(b);
+    if (bpm < config.tempo_min || bpm > config.tempo_max) continue;
+    const std::complex<float>* row = ft.data() + static_cast<std::size_t>(b) * n_frames;
+    for (int t = 0; t < n_frames; ++t) {
+      const float v = std::abs(row[t]);
+      if (v > best[static_cast<std::size_t>(t)]) {
+        best[static_cast<std::size_t>(t)] = v;
+        argmax[t] = b;
       }
     }
-    argmax[t] = best_b;
   }
 
   // Inverse STFT of the masked tempogram at hop_length = 1, n_fft = win_length.
