@@ -298,3 +298,52 @@ TEST_CASE("MelSpectrogram at accessor", "[mel_spectrogram]") {
     }
   }
 }
+
+TEST_CASE("MelConfig binds its converted fields by name", "[mel][config]") {
+  // Both conversions used to be positional initializers, and StftConfig opens with three
+  // consecutive ints: reordering two of them rebound the conversion to different fields with
+  // no diagnostic and no failing test, moving the framing of every mel analysis. The
+  // assertions below are compile-time, so such a reorder now fails the build here.
+  constexpr MelConfig mel = [] {
+    MelConfig config;
+    config.n_mels = 40;
+    config.fmin = 50.0f;
+    config.fmax = 7000.0f;
+    config.htk = true;
+    config.norm = MelNorm::None;
+    config.n_fft = 512;
+    config.hop_length = 128;
+    config.win_length = 256;
+    config.window = WindowType::Hamming;
+    config.center = false;
+    return config;
+  }();
+
+  constexpr StftConfig stft = mel.to_stft_config();
+  static_assert(stft.n_fft == 512, "n_fft must come from MelConfig::n_fft");
+  static_assert(stft.hop_length == 128, "hop_length must come from MelConfig::hop_length");
+  static_assert(stft.win_length == 256, "win_length must come from MelConfig::win_length");
+  static_assert(stft.window == WindowType::Hamming, "window must come from MelConfig::window");
+  static_assert(!stft.center, "center must come from MelConfig::center");
+  static_assert(stft.pad_mode == PadMode::Constant, "the mel path pads with zeros");
+
+  constexpr MelFilterConfig bank = mel.to_mel_filter_config();
+  static_assert(bank.n_mels == 40, "n_mels must come from MelConfig::n_mels");
+  static_assert(bank.fmin == 50.0f, "fmin and fmax are adjacent floats and must not exchange");
+  static_assert(bank.fmax == 7000.0f, "fmin and fmax are adjacent floats and must not exchange");
+  static_assert(bank.htk, "htk must come from MelConfig::htk");
+  static_assert(bank.norm == MelNorm::None, "norm must come from MelConfig::norm");
+
+  // The same bindings off a value the compiler has not folded, so the case also asserts at
+  // runtime rather than reporting as a test with no assertions.
+  MelConfig runtime = mel;
+  runtime.n_fft = 1024;
+  runtime.hop_length = 64;
+  const StftConfig runtime_stft = runtime.to_stft_config();
+  REQUIRE(runtime_stft.n_fft == runtime.n_fft);
+  REQUIRE(runtime_stft.hop_length == runtime.hop_length);
+  REQUIRE(runtime_stft.win_length == runtime.win_length);
+  REQUIRE(runtime_stft.window == runtime.window);
+  REQUIRE(runtime_stft.center == runtime.center);
+  REQUIRE(runtime_stft.pad_mode == PadMode::Constant);
+}

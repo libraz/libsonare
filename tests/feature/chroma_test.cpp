@@ -387,3 +387,53 @@ TEST_CASE("Chroma at accessor", "[chroma]") {
     }
   }
 }
+
+TEST_CASE("ChromaConfig binds its converted fields by name", "[chroma][config]") {
+  // Both conversions used to be positional initializers, and StftConfig opens with three
+  // consecutive ints: reordering two of them rebound the conversion to different fields with
+  // no diagnostic and no failing test, moving the framing of every chroma analysis. The
+  // assertions below are compile-time, so such a reorder now fails the build here.
+  constexpr ChromaConfig chroma = [] {
+    ChromaConfig config;
+    config.n_chroma = 24;
+    config.tuning = 0.25f;
+    config.fmin = 65.0f;
+    config.n_octaves = 5;
+    config.n_fft = 512;
+    config.hop_length = 128;
+    config.win_length = 256;
+    config.window = WindowType::Hamming;
+    config.center = false;
+    return config;
+  }();
+
+  constexpr StftConfig stft = chroma.to_stft_config();
+  static_assert(stft.n_fft == 512, "n_fft must come from ChromaConfig::n_fft");
+  static_assert(stft.hop_length == 128, "hop_length must come from ChromaConfig::hop_length");
+  static_assert(stft.win_length == 256, "win_length must come from ChromaConfig::win_length");
+  static_assert(stft.window == WindowType::Hamming, "window must come from ChromaConfig::window");
+  static_assert(!stft.center, "center must come from ChromaConfig::center");
+  static_assert(stft.pad_mode == PadMode::Constant, "the chroma path pads with zeros");
+
+  constexpr ChromaFilterConfig bank = chroma.to_chroma_filter_config();
+  static_assert(bank.n_chroma == 24, "n_chroma must come from ChromaConfig::n_chroma");
+  static_assert(bank.tuning == 0.25f, "tuning must come from ChromaConfig::tuning");
+  static_assert(bank.fmin == 65.0f, "fmin must come from ChromaConfig::fmin");
+  static_assert(bank.n_octaves == 5, "n_octaves must come from ChromaConfig::n_octaves");
+  // The four fields ChromaConfig does not carry keep the bank's own librosa-matching defaults.
+  static_assert(bank.norm == ChromaFilterNorm::L2, "the bank's default normalization");
+  static_assert(bank.base_c, "the bank is anchored on C by default");
+
+  // The same bindings off a value the compiler has not folded, so the case also asserts at
+  // runtime rather than reporting as a test with no assertions.
+  ChromaConfig runtime = chroma;
+  runtime.n_fft = 1024;
+  runtime.hop_length = 64;
+  const StftConfig runtime_stft = runtime.to_stft_config();
+  REQUIRE(runtime_stft.n_fft == runtime.n_fft);
+  REQUIRE(runtime_stft.hop_length == runtime.hop_length);
+  REQUIRE(runtime_stft.win_length == runtime.win_length);
+  REQUIRE(runtime_stft.window == runtime.window);
+  REQUIRE(runtime_stft.center == runtime.center);
+  REQUIRE(runtime_stft.pad_mode == PadMode::Constant);
+}

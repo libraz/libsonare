@@ -30,13 +30,32 @@ struct MelConfig {
   bool center = true;                    ///< Pad signal to center frames
 
   /// @brief Converts to StftConfig for STFT computation.
-  StftConfig to_stft_config() const {
-    return StftConfig{n_fft, hop_length, win_length, window, center};
+  /// @details Every field is bound by name. A StftConfig member that is added or reordered can
+  ///          then not silently rebind this conversion to a different field, which a positional
+  ///          initializer of three consecutive ints does without a diagnostic.
+  constexpr StftConfig to_stft_config() const {
+    StftConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    config.win_length = win_length;
+    config.window = window;
+    config.center = center;
+    // Stated rather than inherited, even though it is the StftConfig default: a mel analysis
+    // pads with zeros.
+    config.pad_mode = PadMode::Constant;
+    return config;
   }
 
   /// @brief Converts to MelFilterConfig for filterbank generation.
-  MelFilterConfig to_mel_filter_config() const {
-    return MelFilterConfig{n_mels, fmin, fmax, htk, norm};
+  /// @details Bound by name for the same reason; fmin and fmax are adjacent floats.
+  constexpr MelFilterConfig to_mel_filter_config() const {
+    MelFilterConfig config;
+    config.n_mels = n_mels;
+    config.fmin = fmin;
+    config.fmax = fmax;
+    config.htk = htk;
+    config.norm = norm;
+    return config;
   }
 };
 

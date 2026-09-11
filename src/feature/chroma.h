@@ -35,13 +35,33 @@ struct ChromaConfig {
   bool center = true;                    ///< Pad signal to center frames
 
   /// @brief Converts to StftConfig for STFT computation.
-  StftConfig to_stft_config() const {
-    return StftConfig{n_fft, hop_length, win_length, window, center};
+  /// @details Every field is bound by name. A StftConfig member that is added or reordered can
+  ///          then not silently rebind this conversion to a different field, which a positional
+  ///          initializer of three consecutive ints does without a diagnostic.
+  constexpr StftConfig to_stft_config() const {
+    StftConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    config.win_length = win_length;
+    config.window = window;
+    config.center = center;
+    // Stated rather than inherited, even though it is the StftConfig default: a chroma analysis
+    // pads with zeros.
+    config.pad_mode = PadMode::Constant;
+    return config;
   }
 
   /// @brief Converts to ChromaFilterConfig for filterbank generation.
-  ChromaFilterConfig to_chroma_filter_config() const {
-    return ChromaFilterConfig{n_chroma, tuning, fmin, n_octaves};
+  /// @details Bound by name for the same reason. The bank's remaining fields (norm, ctroct,
+  ///          octwidth, base_c) have no counterpart here and keep the librosa-matching defaults
+  ///          filters/chroma.h declares, which is the one place they are stated.
+  constexpr ChromaFilterConfig to_chroma_filter_config() const {
+    ChromaFilterConfig config;
+    config.n_chroma = n_chroma;
+    config.tuning = tuning;
+    config.fmin = fmin;
+    config.n_octaves = n_octaves;
+    return config;
   }
 };
 
