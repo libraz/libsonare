@@ -80,6 +80,21 @@ class SectionAnalyzer {
   SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
                   const SectionConfig& config = SectionConfig());
 
+  /// @brief Constructs section analyzer from pre-computed boundaries and STFT.
+  /// @details For a caller that already holds the analyzer's STFT — one computed
+  /// over this same audio with @ref SectionConfig's framing. Nothing caches a
+  /// spectrogram, so letting the analyzer build its own costs a second full STFT
+  /// of a signal the caller already transformed.
+  /// @param audio Input audio for energy analysis
+  /// @param boundaries Pre-computed boundary times in seconds
+  /// @param spec STFT of @p audio; its geometry is checked against @p config and
+  ///        a mismatch throws, because a framing the descriptors did not ask for
+  ///        reads section spans off the wrong frames rather than failing.
+  /// @param config Section analysis configuration
+  /// @throws SonareException (InvalidParameter) if @p spec does not match.
+  SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries, const Spectrogram& spec,
+                  const SectionConfig& config = SectionConfig());
+
   /// @brief Returns detected sections.
   const std::vector<Section>& sections() const { return sections_; }
 
@@ -113,6 +128,13 @@ class SectionAnalyzer {
 
  private:
   void analyze();
+
+  /// @brief Cuts @ref boundaries_ into sections, merges them and labels them.
+  /// @param spec The analyzer's STFT, read by both merge passes and by
+  ///        classification. Every constructor funnels through here so the three
+  ///        of them cannot drift in what they do with a segmentation.
+  void build_sections(const Spectrogram& spec);
+
   void merge_short_sections();
 
   /// @brief Merges adjacent sections whose chroma content is indistinguishable.

@@ -12,9 +12,11 @@
 #include <utility>
 #include <vector>
 
+#include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "support/section_form.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/math_utils.h"
 
 using namespace sonare;
@@ -85,6 +87,31 @@ Audio create_sectioned_audio(int sr = 22050) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Two 1.5 s tones a fifth apart, so a boundary at 1.5 s separates two
+///        stretches the chroma descriptors can tell apart.
+Audio create_two_part_audio(int sr = 22050) {
+  constexpr float kDuration = 3.0f;
+  const int n_samples = static_cast<int>(static_cast<float>(sr) * kDuration);
+  std::vector<float> samples(static_cast<size_t>(n_samples));
+
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    const float frequency = t < 0.5f * kDuration ? 261.63f : 392.00f;
+    samples[static_cast<size_t>(i)] =
+        0.5f * std::sin(2.0f * sonare::constants::kPiD * frequency * t);
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief The STFT geometry @ref SectionAnalyzer analyzes @p config with.
+StftConfig section_stft_config(const SectionConfig& config) {
+  ChromaConfig chroma_config;
+  chroma_config.n_fft = config.n_fft;
+  chroma_config.hop_length = config.hop_length;
+  return chroma_config.to_stft_config();
+}
+
 /// @brief Creates simple sine wave.
 Audio create_sine(float freq, int sr = 22050, float duration = 10.0f) {
   int n_samples = static_cast<int>(sr * duration);
@@ -99,6 +126,63 @@ Audio create_sine(float freq, int sr = 22050, float duration = 10.0f) {
 }
 
 }  // namespace
+
+TEST_CASE("A section analysis handed its STFT matches one that built its own",
+          "[section_analyzer]") {
+  const Audio audio = create_two_part_audio();
+
+  // A framing none of the defaults produce: a spectrogram that had quietly
+  // reverted to one would be read here as frames of a hop this call never asked
+  // for, and the section spans would land on the wrong ones.
+  SectionConfig config;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.min_section_sec = 1.0f;
+  const std::vector<float> boundaries = {1.5f};
+
+  const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(config));
+  const SectionAnalyzer own(audio, boundaries, config);
+  const SectionAnalyzer shared(audio, boundaries, spec, config);
+
+  REQUIRE(own.count() == 2);
+  REQUIRE(shared.count() == own.count());
+  REQUIRE(shared.form() == own.form());
+  for (size_t index = 0; index < own.sections().size(); ++index) {
+    const Section& expected = own.sections()[index];
+    const Section& measured = shared.sections()[index];
+    REQUIRE(measured.start == expected.start);
+    REQUIRE(measured.end == expected.end);
+    REQUIRE(measured.energy_level == expected.energy_level);
+    REQUIRE(measured.confidence == expected.confidence);
+    REQUIRE(measured.type == expected.type);
+  }
+  REQUIRE(shared.section_self_similarity() == own.section_self_similarity());
+}
+
+TEST_CASE("A section analysis rejects an STFT that is not the one it asked for",
+          "[section_analyzer]") {
+  const Audio audio = create_two_part_audio();
+  SectionConfig config;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.min_section_sec = 1.0f;
+  const std::vector<float> boundaries = {1.5f};
+
+  SECTION("a different hop") {
+    SectionConfig other = config;
+    other.hop_length = config.hop_length * 2;
+    const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(other));
+    REQUIRE_THROWS_AS(SectionAnalyzer(audio, boundaries, spec, config), SonareException);
+  }
+
+  SECTION("an STFT of the native-rate signal") {
+    // Above 22.05 kHz the analyzer measures a downsampled copy, so a spectrogram
+    // of the input as handed in describes frames of a different hop duration.
+    const Audio high_rate = create_two_part_audio(44100);
+    const Spectrogram spec = Spectrogram::compute(high_rate, section_stft_config(config));
+    REQUIRE_THROWS_AS(SectionAnalyzer(high_rate, boundaries, spec, config), SonareException);
+  }
+}
 
 TEST_CASE("SectionAnalyzer basic", "[section_analyzer]") {
   Audio audio = create_sine(440.0f);

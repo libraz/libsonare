@@ -159,40 +159,28 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
   // Compute RMS energy curve
   energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);
 
-  // Create sections from pre-computed boundaries
-  float audio_duration = audio_.duration();
-
-  // Add start and end as implicit boundaries
-  std::vector<float> all_boundaries;
-  all_boundaries.push_back(0.0f);
-  for (float b : boundaries_) {
-    all_boundaries.push_back(b);
-  }
-  all_boundaries.push_back(audio_duration);
-
-  // Create sections
-  sections_.clear();
-  for (size_t i = 0; i + 1 < all_boundaries.size(); ++i) {
-    Section section;
-    section.start = all_boundaries[i];
-    section.end = all_boundaries[i + 1];
-    section.energy_level = compute_section_energy(section.start, section.end);
-    section.confidence = 0.5f;          // Will be updated by classification
-    section.type = SectionType::Verse;  // Default, will be classified later
-
-    sections_.push_back(section);
-  }
-
   // One STFT for the whole pass: the merge and the descriptors both read it.
-  const Spectrogram spec =
-      Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config());
+  build_sections(Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config()));
+}
 
-  merge_short_sections();
-  merge_indistinct_sections(spec);
-  add_fallback_section(sections_, audio_duration);
+SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
+                                 const Spectrogram& spec, const SectionConfig& config)
+    : boundaries_(boundaries),
+      audio_(section_analysis_audio(audio)),
+      config_(config),
+      sr_(audio_.sample_rate()),
+      hop_length_(config.hop_length) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Classify sections
-  classify_sections(spec);
+  // Checked against the geometry this analyzer would have computed for itself.
+  // audio_ is the analysis-rate signal, which is what the caller's STFT has to
+  // have been taken over -- a spectrogram of the native-rate input fails here
+  // rather than mapping section spans onto frames of a different hop duration.
+  validate_reused_geometry(spec, section_chroma_config(config_).to_stft_config(),
+                           audio_.sample_rate(), audio_.size());
+
+  energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);
+  build_sections(spec);
 }
 
 void SectionAnalyzer::analyze() {
@@ -210,8 +198,12 @@ void SectionAnalyzer::analyze() {
   BoundaryDetector detector(audio_, boundary_config);
   boundaries_ = detector.boundary_times();
 
-  // Create sections from boundaries
-  float audio_duration = audio_.duration();
+  // One STFT for the whole pass: the merge and the descriptors both read it.
+  build_sections(Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config()));
+}
+
+void SectionAnalyzer::build_sections(const Spectrogram& spec) {
+  const float audio_duration = audio_.duration();
 
   // Add start and end as implicit boundaries
   std::vector<float> all_boundaries;
@@ -233,10 +225,6 @@ void SectionAnalyzer::analyze() {
 
     sections_.push_back(section);
   }
-
-  // One STFT for the whole pass: the merge and the descriptors both read it.
-  const Spectrogram spec =
-      Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config());
 
   merge_short_sections();
   merge_indistinct_sections(spec);

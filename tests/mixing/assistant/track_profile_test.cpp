@@ -182,6 +182,42 @@ TEST_CASE("Track profile shares one STFT geometry across every track", "[mixing]
   CHECK(profiles[1].channel_count == 2);
 }
 
+TEST_CASE("Track profile folds the bands out of the profile's own STFT", "[mixing][assistant]") {
+  // A geometry none of the defaults would produce. The band envelope and the
+  // averaged spectrum are folded out of the STFT the audio profile measured its
+  // spectral block from, so a framing that reverted to a default would be read
+  // here as frames of a length this call never asked for.
+  assistant::TrackProfileConfig config;
+  config.n_fft = 512;
+  config.hop_length = 128;
+
+  const std::vector<float> left = tone(0.5f, 220.0f);
+  const std::vector<float> right = tone(0.5f, 1310.0f);
+  std::vector<float> downmix(left.size());
+  for (std::size_t i = 0; i < downmix.size(); ++i) downmix[i] = 0.5f * (left[i] + right[i]);
+
+  const assistant::TrackProfile stereo =
+      assistant::analyze_track_profile(stereo_track("stereo", left, right), config);
+  const assistant::TrackProfile mono =
+      assistant::analyze_track_profile(mono_track("mono", downmix), config);
+
+  REQUIRE(stereo.usable);
+  REQUIRE(mono.usable);
+  REQUIRE(stereo.bands.n_fft == config.n_fft);
+  REQUIRE(stereo.bands.hop_length == config.hop_length);
+  REQUIRE(stereo.bands.n_frames == expected_frames(left.size(), config.hop_length));
+
+  // The stereo branch folds the profiler's own downmix and the mono branch folds
+  // the one written out here. Exactly equal, band for band and bin for bin, or
+  // the two downmixes are not the same signal.
+  REQUIRE(stereo.bands.n_frames == mono.bands.n_frames);
+  REQUIRE(stereo.bands.energy.size() == mono.bands.energy.size());
+  REQUIRE(stereo.bands.energy == mono.bands.energy);
+  REQUIRE(stereo.spectrum.n_bins == config.n_fft / 2 + 1);
+  REQUIRE(stereo.spectrum.power == mono.spectrum.power);
+  REQUIRE(stereo.band_occupancy == mono.band_occupancy);
+}
+
 TEST_CASE("Track profile excludes a silent track", "[mixing][assistant]") {
   const std::vector<float> quiet = silence(0.5f);
   const assistant::TrackProfile profile =

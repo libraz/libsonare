@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <random>
 
@@ -78,6 +79,16 @@ std::vector<float> pad_center(const float* data, size_t size, int pad_length, Pa
   return reflect_center_pad(data, size, static_cast<int>(pad));
 }
 
+/// @brief Frames the framing loop emits over an already-padded signal.
+int frames_for_padded_length(size_t padded_length, int n_fft, int hop_length) {
+  if (padded_length < static_cast<size_t>(n_fft)) return 1;
+  const size_t frames =
+      1 + (padded_length - static_cast<size_t>(n_fft)) / static_cast<size_t>(hop_length);
+  SONARE_CHECK(frames <= static_cast<size_t>(std::numeric_limits<int>::max()),
+               ErrorCode::InvalidParameter);
+  return static_cast<int>(frames);
+}
+
 /// @brief Computes the STFT of @p signal with an arbitrary precomputed window.
 /// @details Single source of truth for the framing/windowing/FFT loop shared by
 ///          Spectrogram::compute and the reassignment path. Centers the signal
@@ -96,14 +107,7 @@ std::vector<std::complex<float>> stft_with_window(
     signal_length = padded_signal.size();
   }
 
-  int n_frames = 1;
-  if (signal_length >= static_cast<size_t>(n_fft)) {
-    const size_t frames =
-        1 + (signal_length - static_cast<size_t>(n_fft)) / static_cast<size_t>(hop_length);
-    SONARE_CHECK(frames <= static_cast<size_t>(std::numeric_limits<int>::max()),
-                 ErrorCode::InvalidParameter);
-    n_frames = static_cast<int>(frames);
-  }
+  const int n_frames = frames_for_padded_length(signal_length, n_fft, hop_length);
 
   const int n_bins = n_fft / 2 + 1;
   // Compute the element count in size_t so the n_bins*n_frames multiply (and the
@@ -165,11 +169,12 @@ Spectrogram::Spectrogram()
       sample_rate_(0),
       win_length_(0),
       center_(true),
-      window_(WindowType::Hann) {}
+      window_(WindowType::Hann),
+      pad_mode_(PadMode::Constant) {}
 
 Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
                          int hop_length, int sample_rate, int win_length, bool center,
-                         WindowType window)
+                         WindowType window, PadMode pad_mode)
     : data_(std::move(data)),
       n_bins_(n_bins),
       n_frames_(n_frames),
@@ -178,7 +183,8 @@ Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int 
       sample_rate_(sample_rate),
       win_length_(win_length > 0 ? win_length : n_fft),
       center_(center),
-      window_(window) {
+      window_(window),
+      pad_mode_(pad_mode) {
   // A real STFT frame needs at least a 2-point FFT; smaller sizes make the
   // n_fft/2 center-trim degenerate. Guards to_audio() against tiny-n_fft input.
   SONARE_CHECK(n_fft >= 2, ErrorCode::InvalidParameter);
@@ -236,12 +242,12 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   int n_bins = n_fft / 2 + 1;
 
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, audio.sample_rate(),
-                     win_length, checked.center, checked.window);
+                     win_length, checked.center, checked.window, checked.pad_mode);
 }
 
 Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
                                       int n_fft, int hop_length, int sample_rate, WindowType window,
-                                      bool center, int win_length) {
+                                      bool center, int win_length, PadMode pad_mode) {
   // Validate the caller-supplied STFT metadata before sizing or copying the
   // external buffer.  Apart from preventing malformed dimensions from being
   // carried into iSTFT, this keeps the invariant used by FFT::inverse:
@@ -268,7 +274,34 @@ Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bin
                ErrorCode::InvalidParameter);
   std::vector<std::complex<float>> spectrum(data, data + total);
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, sample_rate,
-                     win_length, center, window);
+                     win_length, center, window, pad_mode);
+}
+
+int stft_frame_count(std::size_t signal_length, const StftConfig& config) {
+  const StftConfig checked = Validated<StftConfig>::make(config).get();
+  const std::size_t padded = checked.center
+                                 ? signal_length + 2 * static_cast<std::size_t>(checked.n_fft / 2)
+                                 : signal_length;
+  return frames_for_padded_length(padded, checked.n_fft, checked.hop_length);
+}
+
+void validate_reused_geometry(const Spectrogram& spec, const StftConfig& config, int sample_rate,
+                              std::size_t signal_length) {
+  const StftConfig checked = Validated<StftConfig>::make(config).get();
+  SONARE_CHECK_MSG(spec.sample_rate() == sample_rate, ErrorCode::InvalidParameter,
+                   "reused spectrogram was analyzed at a different sample rate");
+  SONARE_CHECK_MSG(spec.n_fft() == checked.n_fft && spec.hop_length() == checked.hop_length &&
+                       spec.win_length() == checked.actual_win_length(),
+                   ErrorCode::InvalidParameter,
+                   "reused spectrogram was analyzed with a different framing");
+  SONARE_CHECK_MSG(spec.window() == checked.window, ErrorCode::InvalidParameter,
+                   "reused spectrogram was analyzed with a different window");
+  SONARE_CHECK_MSG(
+      spec.center() == checked.center && (!checked.center || spec.pad_mode() == checked.pad_mode),
+      ErrorCode::InvalidParameter, "reused spectrogram was analyzed with a different centering");
+  SONARE_CHECK_MSG(spec.n_frames() == stft_frame_count(signal_length, checked),
+                   ErrorCode::InvalidParameter,
+                   "reused spectrogram does not span the signal it is read alongside");
 }
 
 float Spectrogram::duration() const {

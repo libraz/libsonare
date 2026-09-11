@@ -1,8 +1,9 @@
 /// @file track_profile.cpp
 /// @brief Per-track profiling for the mixing assistant.
-/// @details Offline only. One STFT per track, folded straight into the band
-///          envelope the cross-track phase reads and into the time-averaged
-///          spectrum; the raw spectrogram is never retained.
+/// @details Offline only. One STFT per track — the one the audio profile measures
+///          its spectral block from — folded straight into the band envelope the
+///          cross-track phase reads and into the time-averaged spectrum; the raw
+///          spectrogram is never retained.
 
 #include "mixing/assistant/track_profile.h"
 
@@ -12,7 +13,6 @@
 #include <cstddef>
 #include <vector>
 
-#include "core/audio.h"
 #include "core/spectrum.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mixing/assistant/source_classifier.h"
@@ -256,32 +256,31 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   base_config.n_fft = config.n_fft;
   base_config.hop_length = config.hop_length;
 
-  // Mono sum for the spectral fold. Only band shares are read from it and one
-  // STFT is half the cost of one per channel, so L/R are never kept apart here.
-  std::vector<float> mono;
+  // The profile measures its spectral block from an STFT of this same track, so
+  // the band envelope and the averaged spectrum are folded out of that one rather
+  // than out of a second STFT of the same signal. A stereo track is folded from
+  // the profiler's own mono downmix: only band shares are read from it, and one
+  // STFT is half the cost of one per channel.
+  Spectrogram spec;
   if (stereo) {
     std::vector<float> interleaved(frames * 2);
-    mono.resize(frames);
     for (std::size_t frame = 0; frame < frames; ++frame) {
-      const float left = track.left[frame];
-      const float right = track.right[frame];
-      interleaved[frame * 2] = left;
-      interleaved[frame * 2 + 1] = right;
-      mono[frame] = 0.5f * (left + right);
+      interleaved[frame * 2] = track.left[frame];
+      interleaved[frame * 2 + 1] = track.right[frame];
     }
     // BS.1770 channel summing. Profiling the mono downmix instead would read
     // decorrelated stereo roughly 6 dB low.
     profile.base = mastering::assistant::analyze_audio_profile_interleaved(
-        interleaved.data(), frames, 2, track.sample_rate, base_config);
+        interleaved.data(), frames, 2, track.sample_rate, base_config, &spec);
   } else {
-    profile.base = mastering::assistant::analyze_audio_profile(track.left, frames,
-                                                               track.sample_rate, base_config);
+    profile.base = mastering::assistant::analyze_audio_profile(
+        track.left, frames, track.sample_rate, base_config, &spec);
   }
 
-  const Audio audio =
-      Audio::from_buffer(stereo ? mono.data() : track.left, frames, track.sample_rate);
-  const Spectrogram spec =
-      Spectrogram::compute(audio, make_stft_config(config.n_fft, config.hop_length));
+  // The framing the bands are read on is checked against the one this profiler
+  // asked for, not assumed from the two configs sharing their defaults.
+  validate_reused_geometry(spec, make_stft_config(config.n_fft, config.hop_length),
+                           track.sample_rate, frames);
   profile.bands = fold_bands(spec, track.sample_rate);
   profile.spectrum = mean_power_spectrum(spec, track.sample_rate);
 

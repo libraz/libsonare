@@ -274,8 +274,13 @@ std::vector<GenreCandidate> infer_genres(float bpm, const SpectralProfile& spect
 
 AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
                                    const AudioProfileConfig& config) {
+  return analyze_audio_profile(samples, length, sample_rate, config, nullptr);
+}
+
+AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
+                                   const AudioProfileConfig& config, Spectrogram* spec_out) {
   if (samples == nullptr || length == 0 || sample_rate <= 0) return AudioProfile{};
-  return analyze_audio_profile(Audio::from_buffer(samples, length, sample_rate), config);
+  return analyze_audio_profile(Audio::from_buffer(samples, length, sample_rate), config, spec_out);
 }
 
 namespace {
@@ -284,8 +289,12 @@ namespace {
 // These describe shape and timing rather than absolute level, so the stereo
 // entry point measures them on the downmix and only replaces the loudness
 // block, keeping mono and stereo profiles comparable field by field.
-void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
-                       AudioProfile& profile) {
+//
+// `short_term_series`, when given, is the short-term loudness the caller's own
+// loudness pass already measured over this same signal; `spec_out`, when given,
+// receives the analysis STFT.
+void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, AudioProfile& profile,
+                       const std::vector<float>* short_term_series, Spectrogram* spec_out) {
   // Detrend (DC-remove) the onset envelope so the attack-density peak picking
   // discriminates transient bursts from steady energy. This consumer opts in
   // explicitly; the public OnsetConfig default is detrend=false (librosa).
@@ -299,7 +308,7 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
   // onset path asks for is the framing this spectrogram is built with rather than a second
   // default that happens to agree.
   onset_config.center = stft_config.center;
-  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
 
   const int n_bins = spec.n_bins();
   const int n_frames = spec.n_frames();
@@ -333,8 +342,13 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
   profile.spectral.rolloff_hz = mean_finite(
       spectral_rolloff(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
 
-  const auto short_term = metering::short_term_lufs(audio);
-  profile.dynamics.short_term_lufs_std = stddev_finite(short_term);
+  // Measured here only when the caller has no series to hand down: the stereo
+  // entry point's loudness runs on the channel-summed program rather than on this
+  // downmix, so its short-term blocks describe a different signal.
+  std::vector<float> measured_short_term;
+  if (short_term_series == nullptr) measured_short_term = metering::short_term_lufs(audio);
+  profile.dynamics.short_term_lufs_std =
+      stddev_finite(short_term_series != nullptr ? *short_term_series : measured_short_term);
 
   MelConfig mel_config;
   mel_config.n_fft = config.n_fft;
@@ -344,6 +358,9 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
   // step the overload applies.
   const MelSpectrogram mel = MelSpectrogram::from_spectrogram(spec, audio.sample_rate(),
                                                               mel_config.to_mel_filter_config());
+  // Last read of the STFT; the caller takes it from here rather than paying for
+  // a second one over the same signal.
+  if (spec_out != nullptr) *spec_out = std::move(spec);
   const auto onset =
       center_onset_strength(compute_onset_strength(mel, onset_config), stft_config.n_fft,
                             stft_config.hop_length, onset_config.center);
@@ -369,24 +386,39 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
 }  // namespace
 
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config) {
+  return analyze_audio_profile(audio, config, nullptr);
+}
+
+AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config,
+                                   Spectrogram* spec_out) {
   AudioProfile profile;
   if (audio.empty() || audio.sample_rate() <= 0) return profile;
 
   profile.duration_sec = audio.duration();
 
-  const auto loudness = metering::lufs(audio);
+  // One K-weighting pass over the signal serves both loudness readings: the
+  // scalars here and the short-term spread the body reduces from the series.
+  std::vector<float> short_term;
+  const auto loudness = metering::lufs(audio, metering::LufsConfig(), &short_term);
   profile.loudness.integrated_lufs = loudness.integrated_lufs;
   profile.loudness.lra_lu = loudness.loudness_range;
   profile.loudness.true_peak_db = metering::true_peak_db(audio, config.true_peak_oversample);
   profile.loudness.crest_factor_db = metering::crest_factor_db(audio);
 
-  fill_profile_body(audio, config, profile);
+  fill_profile_body(audio, config, profile, &short_term, spec_out);
   return profile;
 }
 
 AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t frames,
                                                int channels, int sample_rate,
                                                const AudioProfileConfig& config) {
+  return analyze_audio_profile_interleaved(samples, frames, channels, sample_rate, config, nullptr);
+}
+
+AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t frames,
+                                               int channels, int sample_rate,
+                                               const AudioProfileConfig& config,
+                                               Spectrogram* spec_out) {
   AudioProfile profile;
   if (samples == nullptr || frames == 0 || channels <= 0 || sample_rate <= 0) return profile;
 
@@ -412,7 +444,7 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
   profile.loudness.crest_factor_db =
       metering::crest_factor_db_interleaved(samples, frames, channels);
 
-  fill_profile_body(audio, config, profile);
+  fill_profile_body(audio, config, profile, nullptr, spec_out);
   return profile;
 }
 

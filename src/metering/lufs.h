@@ -51,6 +51,15 @@ struct LufsConfig {
 };
 
 LufsResult lufs(const Audio& audio, const LufsConfig& config = {});
+
+/// @brief `lufs` that also yields the short-term series the measurement built.
+/// @param short_term_out Receives the per-block short-term loudness in LUFS. The
+///        measurement already accumulates these blocks to reduce them to scalars,
+///        so a caller that needs the series as well pays for one K-weighting pass
+///        instead of two. Element for element identical to @ref short_term_lufs
+///        over the same audio and config.
+LufsResult lufs(const Audio& audio, const LufsConfig& config, std::vector<float>* short_term_out);
+
 LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, int sample_rate,
                             const LufsConfig& config = {});
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config = {});

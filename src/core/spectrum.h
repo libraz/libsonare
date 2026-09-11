@@ -4,6 +4,7 @@
 /// @brief STFT/iSTFT and Spectrogram class.
 
 #include <complex>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -112,6 +113,17 @@ inline StftConfig make_stft_config(int n_fft, int hop_length) {
   return config;
 }
 
+/// @brief Frame count @ref Spectrogram::compute produces for a signal of
+///        @p signal_length samples under @p config.
+/// @details The framing loop's own count, shared with it rather than restated.
+///          Exposed so a consumer handed a spectrogram it did not build can tie
+///          it back to the signal it is about to be read alongside.
+/// @param signal_length Length of the unpadded input signal in samples.
+/// @param config Analysis geometry.
+/// @return Number of frames; 1 for a signal shorter than one padded frame.
+/// @throws SonareException(InvalidParameter) if the count exceeds int range.
+int stft_frame_count(std::size_t signal_length, const StftConfig& config);
+
 /// @brief Configuration for Griffin-Lim algorithm.
 /// @details Griffin-Lim iteratively estimates phase from magnitude spectrogram.
 ///          Momentum accelerates convergence but may cause instability if too high.
@@ -163,9 +175,14 @@ class Spectrogram {
   ///        default: a wrong window here produces a reconstruction gain ripple
   ///        rather than an error, so every caller has to state which one
   ///        produced its data instead of inheriting a guess.
+  /// @param pad_mode Padding the source signal was centered with. Defaults to the
+  ///        @ref StftConfig default, which is what a spectrum assembled from a
+  ///        library STFT carries; a caller whose data came from reflect padding
+  ///        states it so @ref validate_reused_geometry can tell the two apart.
   static Spectrogram from_complex(const std::complex<float>* data, int n_bins, int n_frames,
                                   int n_fft, int hop_length, int sample_rate, WindowType window,
-                                  bool center = true, int win_length = 0);
+                                  bool center = true, int win_length = 0,
+                                  PadMode pad_mode = PadMode::Constant);
 
   /// @brief Returns number of frequency bins (n_fft/2 + 1).
   int n_bins() const { return n_bins_; }
@@ -240,13 +257,21 @@ class Spectrogram {
   /// @brief Returns the analysis window this spectrogram was produced with.
   WindowType window() const { return window_; }
 
+  /// @brief Returns the padding mode the analysis centered the signal with.
+  /// @details Only meaningful when @ref center is true. Carried so the whole
+  ///          analysis geometry is observable from the object: a consumer handed
+  ///          a spectrogram it did not build can otherwise not tell what padding
+  ///          produced it, and reuse then rests on the framings happening to
+  ///          agree rather than on a check.
+  PadMode pad_mode() const { return pad_mode_; }
+
   /// @brief Access complex value at (bin, frame).
   const std::complex<float>& at(int bin, int frame) const;
 
  private:
   Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
               int hop_length, int sample_rate, int win_length = 0, bool center = true,
-              WindowType window = WindowType::Hann);
+              WindowType window = WindowType::Hann, PadMode pad_mode = PadMode::Constant);
 
   std::vector<std::complex<float>> data_;  ///< Complex spectrum [n_bins * n_frames]
   int n_bins_;
@@ -257,11 +282,28 @@ class Spectrogram {
   int win_length_;  ///< Window length used for analysis (defaults to n_fft)
   bool center_;
   WindowType window_;  ///< Window family used for analysis; drives iSTFT normalization
+  PadMode pad_mode_;   ///< Padding applied when center_ is true
 
   // Cached derived data (computed lazily)
   mutable std::vector<float> magnitude_cache_;
   mutable std::vector<float> power_cache_;
 };
+
+/// @brief Validates that @p spec is the STFT @p config over that signal produces.
+/// @details The guard a consumer applies to a spectrogram it did not build. Every
+///          field of the analysis geometry is compared, plus the sample rate and
+///          the frame count the signal implies, so a framing that merely shares
+///          today's defaults cannot pass for the one the consumer asked for. Two
+///          independently computed STFTs that disagree only produce two slightly
+///          differently framed measurements; a reused one that disagrees produces
+///          a measurement read off frames it never asked for.
+/// @param spec Spectrogram to check.
+/// @param config Geometry the consumer needs.
+/// @param sample_rate Sample rate of the signal the consumer holds.
+/// @param signal_length Length of that signal in samples.
+/// @throws SonareException(InvalidParameter) on any mismatch.
+void validate_reused_geometry(const Spectrogram& spec, const StftConfig& config, int sample_rate,
+                              std::size_t signal_length);
 
 /// @brief Magnitude + phase decomposition of a complex spectrum.
 struct MagPhase {

@@ -452,6 +452,47 @@ TEST_CASE("LUFS curves expose momentary and short term blocks", "[meter]") {
   REQUIRE(std::isfinite(short_term.front()));
 }
 
+TEST_CASE("LUFS yields the short-term series it reduced to scalars", "[meter][lufs]") {
+  // Amplitude steps half way through, so the series varies and a reading taken
+  // off the wrong blocks cannot hide behind a flat curve. Six seconds at 22.05 kHz
+  // also runs the block accumulator past its chunk boundary, which the
+  // whole-signal filter the series meter uses does not have.
+  constexpr int sample_rate = 22050;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 6);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float amplitude = i < samples.size() / 2 ? 0.1f : 0.5f;
+    samples[i] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  // A window the default does not use: a series measured under a config the
+  // overload ignored comes back a different length rather than the same one.
+  metering::LufsConfig config;
+  config.short_term_duration_sec = 2.0f;
+
+  std::vector<float> series;
+  const auto result = metering::lufs(audio, config, &series);
+  const auto measured = metering::short_term_lufs(audio, config);
+
+  // Element for element, not within a tolerance: the whole point of the
+  // out-parameter is that both readings come from one K-weighting pass, so a
+  // difference of any size means they did not.
+  REQUIRE(!series.empty());
+  REQUIRE(series.size() == measured.size());
+  for (size_t index = 0; index < series.size(); ++index) {
+    REQUIRE(series[index] == measured[index]);
+  }
+  REQUIRE(series.front() != series.back());
+
+  const auto plain = metering::lufs(audio, config);
+  REQUIRE(result.integrated_lufs == plain.integrated_lufs);
+  REQUIRE(result.short_term_lufs == plain.short_term_lufs);
+  REQUIRE(result.max_short_term_lufs == plain.max_short_term_lufs);
+  REQUIRE(result.loudness_range == plain.loudness_range);
+}
+
 TEST_CASE("LUFS momentary measures -23 LUFS sine within tolerance", "[meter][lufs]") {
   // 1 kHz sine at peak amplitude sqrt(2) * 10^(-23/20) has -23 dBFS RMS and
   // over 3 s should yield a

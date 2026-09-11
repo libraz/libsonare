@@ -683,6 +683,116 @@ TEST_CASE("Spectrogram from_complex can preserve win_length", "[spectrum]") {
   REQUIRE(spec.center());
 }
 
+TEST_CASE("A spectrogram carries the padding it was analyzed with", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int n_fft = 256;
+  constexpr int hop_length = 64;
+  const Audio audio = Audio::from_vector(generate_sine(sr / 4, 440.0f, sr), sr);
+
+  StftConfig reflect_config = make_stft_config(n_fft, hop_length);
+  reflect_config.pad_mode = PadMode::Reflect;
+
+  const Spectrogram constant_padded =
+      Spectrogram::compute(audio, make_stft_config(n_fft, hop_length));
+  const Spectrogram reflect_padded = Spectrogram::compute(audio, reflect_config);
+
+  REQUIRE(constant_padded.pad_mode() == PadMode::Constant);
+  REQUIRE(reflect_padded.pad_mode() == PadMode::Reflect);
+  // Every other field of the geometry is the same, so padding is the only thing
+  // telling these two apart -- and they are not the same spectrum.
+  REQUIRE(constant_padded.n_frames() == reflect_padded.n_frames());
+  bool first_frame_differs = false;
+  for (int bin = 0; bin < constant_padded.n_bins(); ++bin) {
+    if (constant_padded.at(bin, 0) != reflect_padded.at(bin, 0)) first_frame_differs = true;
+  }
+  REQUIRE(first_frame_differs);
+}
+
+TEST_CASE("The reuse guard rejects every geometry a consumer did not ask for", "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int n_fft = 256;
+  constexpr int hop_length = 64;
+  const std::size_t length = static_cast<std::size_t>(sr) / 4;
+  const Audio audio = Audio::from_vector(generate_sine(static_cast<int>(length), 440.0f, sr), sr);
+
+  const StftConfig wanted = make_stft_config(n_fft, hop_length);
+  const Spectrogram spec = Spectrogram::compute(audio, wanted);
+  REQUIRE_NOTHROW(validate_reused_geometry(spec, wanted, sr, length));
+
+  SECTION("a different FFT size") {
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, make_stft_config(512, hop_length), sr, length),
+                      SonareException);
+  }
+
+  SECTION("a different hop") {
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, make_stft_config(n_fft, 32), sr, length),
+                      SonareException);
+  }
+
+  SECTION("a different window length") {
+    StftConfig config = wanted;
+    config.win_length = n_fft / 2;
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, config, sr, length), SonareException);
+  }
+
+  SECTION("a different window") {
+    StftConfig config = wanted;
+    config.window = WindowType::Hamming;
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, config, sr, length), SonareException);
+  }
+
+  SECTION("a different centering") {
+    StftConfig config = wanted;
+    config.center = false;
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, config, sr, length), SonareException);
+  }
+
+  SECTION("a different padding") {
+    StftConfig config = wanted;
+    config.pad_mode = PadMode::Reflect;
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, config, sr, length), SonareException);
+  }
+
+  SECTION("a different sample rate") {
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, wanted, 44100, length), SonareException);
+  }
+
+  SECTION("a signal the spectrogram does not span") {
+    REQUIRE_THROWS_AS(validate_reused_geometry(spec, wanted, sr, length + hop_length),
+                      SonareException);
+  }
+
+  SECTION("an uncomputed spectrogram") {
+    REQUIRE_THROWS_AS(validate_reused_geometry(Spectrogram(), wanted, sr, length), SonareException);
+  }
+
+  SECTION("padding is not compared when the analysis was not centered") {
+    StftConfig uncentered = wanted;
+    uncentered.center = false;
+    const Spectrogram raw = Spectrogram::compute(audio, uncentered);
+    StftConfig other_padding = uncentered;
+    other_padding.pad_mode = PadMode::Reflect;
+    REQUIRE_NOTHROW(validate_reused_geometry(raw, other_padding, sr, length));
+  }
+}
+
+TEST_CASE("The frame count helper reports what the STFT produces", "[spectrum]") {
+  constexpr int sr = 22050;
+  const std::size_t length = static_cast<std::size_t>(sr) / 4;
+  const Audio audio = Audio::from_vector(generate_sine(static_cast<int>(length), 440.0f, sr), sr);
+
+  StftConfig config = make_stft_config(256, 64);
+  REQUIRE(Spectrogram::compute(audio, config).n_frames() == stft_frame_count(length, config));
+
+  config.center = false;
+  REQUIRE(Spectrogram::compute(audio, config).n_frames() == stft_frame_count(length, config));
+
+  // A signal shorter than one frame still yields the single frame the framing
+  // loop zero-fills.
+  const Audio brief = Audio::from_vector(generate_sine(16, 440.0f, sr), sr);
+  REQUIRE(Spectrogram::compute(brief, config).n_frames() == stft_frame_count(16, config));
+}
+
 TEST_CASE("Griffin-Lim momentum=0.99 produces better SNR than momentum=0.0", "[spectrum]") {
   constexpr int sr = 22050;
   constexpr int samples = sr;  // 1 second

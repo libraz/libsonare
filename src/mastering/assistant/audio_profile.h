@@ -9,6 +9,10 @@
 
 #include "core/audio.h"
 
+namespace sonare {
+class Spectrogram;
+}  // namespace sonare
+
 namespace sonare::mastering::assistant {
 
 struct LoudnessProfile {
@@ -62,6 +66,22 @@ AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int
                                    const AudioProfileConfig& config = {});
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config = {});
 
+/// @brief Profiling overloads that hand back the analysis STFT.
+/// @details The spectral and dynamics blocks are measured from one STFT of the
+///          profiled signal. A caller that needs the same spectrogram reads it
+///          here rather than computing a second one: nothing in the tree caches a
+///          spectrogram, so the duplicate costs a whole STFT. Check the geometry
+///          with @ref sonare::validate_reused_geometry before reading it — the
+///          framing is this profiler's, not the caller's.
+/// @param spec_out Receives the STFT; left empty when the input is degenerate and
+///          no profile is measured. May be null.
+/// @{
+AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
+                                   const AudioProfileConfig& config, Spectrogram* spec_out);
+AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config,
+                                   Spectrogram* spec_out);
+/// @}
+
 /// @brief Multi-channel counterpart preserving BS.1770 channel summing.
 /// @details Only the `loudness` block is measured from the channels: integrated
 ///          LUFS and LRA come from the channel-summed program and the true peak
@@ -79,6 +99,16 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
 AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t frames,
                                                int channels, int sample_rate,
                                                const AudioProfileConfig& config = {});
+
+/// @brief Multi-channel profiling that hands back the analysis STFT.
+/// @details The STFT is the one measured over the downmix, which is the signal
+///          the spectral block describes; the loudness block is measured from the
+///          channels and has no spectrogram.
+/// @param spec_out Receives the downmix STFT. May be null.
+AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t frames,
+                                               int channels, int sample_rate,
+                                               const AudioProfileConfig& config,
+                                               Spectrogram* spec_out);
 std::string audio_profile_to_json(const AudioProfile& profile);
 
 }  // namespace sonare::mastering::assistant

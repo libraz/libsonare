@@ -150,6 +150,13 @@ TEST_CASE("Assistant AudioProfile measures a stereo pair with channel summing",
   REQUIRE(stereo.dynamics.attack_density == mono.dynamics.attack_density);
   REQUIRE(stereo.dynamics.sustain_ratio == mono.dynamics.sustain_ratio);
   REQUIRE(stereo.bpm == mono.bpm);
+
+  // The short-term spread is one of those, and the two entry points reach it by
+  // different routes: the mono profile reduces the series its own loudness pass
+  // produced, the stereo one measures the downmix separately because its loudness
+  // describes the channel-summed program. Equal to the bit or one of them is
+  // reading a series that does not belong to the signal it describes.
+  REQUIRE(stereo.dynamics.short_term_lufs_std == mono.dynamics.short_term_lufs_std);
 }
 
 TEST_CASE("Assistant stereo entry points reject degenerate input", "[mastering][assistant]") {
