@@ -96,6 +96,8 @@ add_executable(sonare_tests
   analysis/section_analyzer_test.cpp
   analysis/music_analyzer_test.cpp
   editing/percussive_event_test.cpp
+  editing/polyphonic_f0_test.cpp
+  editing/polyphonic_f0_eval_test.cpp
   streaming/stream_analyzer_core_test.cpp
   streaming/stream_analyzer_quantized_test.cpp
   streaming/stream_analyzer_integration_test.cpp
@@ -478,6 +480,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_efx_types_test.cpp
     midi/gs_system_effects_test.cpp
     midi/gs_cc_rpn_test.cpp
+    midi/drum_exclusive_group_test.cpp
     midi/gs_efx_send_routing_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
