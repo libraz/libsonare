@@ -104,12 +104,15 @@ struct SharedBinConfig {
   /// The mechanism is arithmetic rather than conjecture: clamping one window's
   /// weight and not the other's changes what each contributes, so a pair at a
   /// 55:1 modulus ratio averages as 1:1 and the mean's angle moves by up to 87
-  /// degrees. What is unverified is the choice -- whether holding that angle
-  /// separates better on real material -- and no signal here can settle it. A
-  /// sum of decaying sinusoids is exactly what the pole model fits, so every
-  /// window is exact, both orders agree identically, and the clamp fires on both
-  /// or on neither. Deciding it needs noise, vibrato, or a third partial in the
-  /// bin, each of which fights the clean population the ceiling above needs.
+  /// degrees. The ordering is nonetheless unreachable, for a reason belonging to
+  /// the fit rather than to any signal: **a weight over the ceiling is itself
+  /// evidence that the decomposition was well determined.** Getting there takes
+  /// two large cancelling components, which the fit commits to only where the
+  /// poles are separable -- the well-conditioned case, in which every window
+  /// recovers the same answer. Where they nearly coincide the split is instead
+  /// underdetermined, least squares returns the minimum-norm answer, and the
+  /// weight sits near one. So no trajectory has both a clampable weight and
+  /// windows that disagree, and the two orders cannot be told apart.
   ///
   /// It also bounds how loud the residual can get, and that axis is not what set
   /// the default. @ref mask_total runs to roughly this value where a bin is
