@@ -156,7 +156,16 @@ _BUFFER_ARGS = (
 )
 
 # Parameters that accept an (empty) sequence of side inputs.
-_SEQUENCE_ARGS = ("intervals", "boundaries", "notes", "ops", "voiced", "platforms", "factors")
+_SEQUENCE_ARGS = (
+    "intervals",
+    "boundaries",
+    "notes",
+    "ops",
+    "voiced",
+    "platforms",
+    "factors",
+    "events",
+)
 
 
 def _is_buffer_parameter(parameter: inspect.Parameter) -> bool:
