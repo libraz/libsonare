@@ -291,9 +291,27 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
+/// @brief The mono processor ids this build supports, separated by '\n'.
+/// @details Backed by thread-local storage built once on first use; the pointer
+///          is valid for the calling thread's lifetime and stays valid across
+///          later API calls on that thread. Do NOT cache it across threads, use
+///          it after the producing thread exits, or free it. Returns NULL if the
+///          name table cannot be built. Same contract as
+///          @ref sonare_mastering_insert_names. NOTE the mixing header's
+///          `*_names` getters look alike but differ: theirs are rebuilt on every
+///          call and are valid only until the next call on the same thread.
 const char* sonare_mastering_processor_names(void);
+/// @brief The pair (L/R) processor ids, separated by '\n'.
+/// @details Same storage and lifetime contract as
+///          @ref sonare_mastering_processor_names.
 const char* sonare_mastering_pair_processor_names(void);
+/// @brief The pair analysis ids, separated by '\n'.
+/// @details Same storage and lifetime contract as
+///          @ref sonare_mastering_processor_names.
 const char* sonare_mastering_pair_analysis_names(void);
+/// @brief The stereo analysis ids, separated by '\n'.
+/// @details Same storage and lifetime contract as
+///          @ref sonare_mastering_processor_names.
 const char* sonare_mastering_stereo_analysis_names(void);
 
 /// @brief Machine-readable classification catalog for every named processor id.
@@ -582,6 +600,13 @@ int sonare_eq_latency_samples(const SonareEq* eq);
 /// @details The supplied planar block must have the same @p num_samples as the
 /// next @ref sonare_eq_process call. It is used only by bands with
 /// @c externalSidechain enabled.
+///
+/// BORROWED, NOT COPIED. The @p channels pointer array and every buffer it
+/// names must outlive the next @ref sonare_eq_process call and must not be
+/// freed, reallocated or moved until @ref sonare_eq_clear_sidechain or another
+/// @ref sonare_eq_set_sidechain replaces them; the processor dereferences them
+/// on the audio thread. This is the same borrow contract
+/// @ref sonare_engine_set_capture_buffer states in sonare_c_engine.h.
 SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
                                     int num_samples);
 /// @brief Clears the external sidechain. Accepts NULL.
@@ -631,7 +656,10 @@ typedef struct SonareStreamingMasteringChain SonareStreamingMasteringChain;
 /// (e.g. unknown key, non-streaming stage enabled). When the params enable the
 /// loudness stage this throws (the streaming chain cannot measure whole-signal
 /// integrated LUFS); use @ref sonare_streaming_mastering_chain_create_ex to run
-/// a loudness-enabled chain with a caller-precomputed static gain.
+/// a loudness-enabled chain with a caller-precomputed static gain. A non-NULL
+/// handle is owned by the caller and stays valid until
+/// @ref sonare_streaming_mastering_chain_destroy, which must be called exactly
+/// once.
 SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
     const SonareMasteringParam* params, size_t param_count);
 
@@ -646,7 +674,9 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
 ///        is clamped to `ceiling_db - peak_db` so the streaming preview does not
 ///        overdrive the loudness limiter harder than the offline chain (which
 ///        applies the same ceiling clamp). Pass NaN to apply the static gain
-///        verbatim (no clamp). Returns NULL on error.
+///        verbatim (no clamp). Returns NULL on error; a non-NULL handle is
+///        owned by the caller and stays valid until
+///        @ref sonare_streaming_mastering_chain_destroy.
 SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
     float loudness_static_gain_peak_db);

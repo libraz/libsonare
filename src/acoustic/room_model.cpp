@@ -92,6 +92,15 @@ void validate_material_bands(const std::vector<float>& values, const char* field
 }
 
 ShoeboxRoom make_uniform_room(const RoomDimensions& dims, const WallMaterialRequest& request) {
+  // Every field is validated here, before the branch that decides which one is
+  // used, so the verdict does not depend on which absorption form the caller
+  // supplied. It used to be checked only on the scalar branch, which meant a
+  // caller reaching this directly -- the Node addon and the WASM binding both
+  // build the request themselves -- could pass a NaN absorption alongside a band
+  // table and have it accepted, while the same values through the C ABI were
+  // rejected by its own unconditional check. The scalar defaults to 0.2, so a
+  // request that only sets a preset or a band table still passes.
+  validate_material_coefficient(request.absorption, "absorption");
   validate_material_bands(request.absorption_bands, "bandAbsorption");
   validate_material_bands(request.scattering_bands, "bandScattering");
 
@@ -108,7 +117,6 @@ ShoeboxRoom make_uniform_room(const RoomDimensions& dims, const WallMaterialRequ
     }
     wall.scattering.assign(wall.absorption.size(), 0.0f);
   } else {
-    validate_material_coefficient(request.absorption, "absorption");
     wall = uniform_material(std::clamp(request.absorption, 0.0f, 0.999f), 0.0f);
   }
 

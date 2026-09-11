@@ -775,6 +775,51 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json round-trips preset
   sonare_free_string(normalized);
 }
 
+TEST_CASE("sonare_realtime_voice_changer_validate_preset_json returns a code on every input",
+          "[voice_changer][c-api]") {
+  // The entry point is guarded by SONARE_C_TRY/SONARE_C_CATCH like its
+  // siblings, so no input may leave it through an unwind, and each branch must
+  // honour the header's out-parameter contract.
+  const auto check = [](const std::string& json) {
+    char* normalized = reinterpret_cast<char*>(0x1);
+    char* error = reinterpret_cast<char*>(0x1);
+    const SonareError err =
+        sonare_realtime_voice_changer_validate_preset_json(json.c_str(), &normalized, &error);
+    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(normalized == nullptr);
+    REQUIRE(error != nullptr);
+    REQUIRE(error[0] != '\0');
+    sonare_free_string(error);
+  };
+
+  SECTION("empty document") { check(""); }
+  SECTION("truncated object") { check("{\"schemaVersion\":1,"); }
+  SECTION("wrong root type") { check("[1,2,3]"); }
+  SECTION("embedded NUL terminates the document early") {
+    check(std::string("{\"schemaVersion\":1}\0trailing", 27));
+  }
+  SECTION("nesting past the parser depth guard") {
+    // The parser throws once past its depth limit; the throw must surface as a
+    // code, not as an unwind through the extern "C" frame.
+    std::string deep;
+    const int levels = 4096;
+    for (int i = 0; i < levels; ++i) deep += "[";
+    for (int i = 0; i < levels; ++i) deep += "]";
+    check(deep);
+  }
+
+  SECTION("null out-parameters are rejected before anything is allocated") {
+    char* normalized = nullptr;
+    char* error = nullptr;
+    REQUIRE(sonare_realtime_voice_changer_validate_preset_json(nullptr, &normalized, &error) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_realtime_voice_changer_validate_preset_json("{}", nullptr, &error) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_realtime_voice_changer_validate_preset_json("{}", &normalized, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 // ===================================================================
 // DSP functional: compressor actually reduces RMS above threshold.
 // ===================================================================

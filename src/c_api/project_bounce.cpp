@@ -88,8 +88,13 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
                               float** out_interleaved, size_t* out_len) {
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
-  if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
+  // Above the pointer rejection, not below it: sonare_project_bounce routes
+  // straight here with no clear of its own, so a rejected call used to leave the
+  // previous bounce's diagnostics queryable. Null-safe, and the four
+  // bounce_with_* entries already cleared before calling, so this is idempotent
+  // for them.
   clear_last_bounce_result(project);
+  if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
 
   SonareProjectBounceOptions opts{};
   if (options) opts = *options;

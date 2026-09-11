@@ -6,11 +6,20 @@
 #include "mastering/eq/band_strings.h"
 #include "sonare_c_internal.h"
 #include "util/json.h"
+#include "util/numeric_validation.h"
 
 namespace {
 
 [[noreturn]] void invalid_eq_json(const std::string& message) {
   throw sonare_c_detail::SonareException(sonare::ErrorCode::InvalidParameter,
+                                         "sonare_eq_set_band: " + message);
+}
+
+// A syntactically malformed document exits as InvalidFormat across the whole C
+// ABI (midi_fx_json.h, parse_scene_json); a well-formed document carrying a bad
+// field stays InvalidParameter.
+[[noreturn]] void malformed_eq_json(const std::string& message) {
+  throw sonare_c_detail::SonareException(sonare::ErrorCode::InvalidFormat,
                                          "sonare_eq_set_band: " + message);
 }
 
@@ -39,6 +48,51 @@ double json_number_any(const JsonValue& object, const char* first_key, const cha
   }
   if (value) return value->as_number();
   return json_number(object, second_key, fallback);
+}
+
+// Every JSON double reaches a float field through here: as_number() yields a
+// full double, so a literal like 1e39 is out of float range and its raw
+// narrowing would be undefined behaviour. Mirrors project_serializer_decode's
+// float_or.
+float json_float(const JsonValue& object, const char* key, float fallback) {
+  float converted = 0.0f;
+  if (!sonare::numeric::checked_float_cast(json_number(object, key, fallback), &converted)) {
+    invalid_eq_json(std::string("numeric JSON field is non-finite or out of float range: ") + key);
+  }
+  return converted;
+}
+
+float json_float_any(const JsonValue& object, const char* first_key, const char* second_key,
+                     float fallback) {
+  float converted = 0.0f;
+  if (!sonare::numeric::checked_float_cast(json_number_any(object, first_key, second_key, fallback),
+                                           &converted)) {
+    invalid_eq_json(std::string("numeric JSON field is non-finite or out of float range: ") +
+                    first_key);
+  }
+  return converted;
+}
+
+// A dB field that ends up as a filter gain: rbj_peak raises 10^(dB/40), which
+// overflows to +inf past roughly 12330 dB and installs infinite numerator taps
+// that normalize() lets through because a0 stays finite.
+float json_gain_db_any(const JsonValue& object, const char* first_key, const char* second_key,
+                       float fallback) {
+  const float value = json_float_any(object, first_key, second_key, fallback);
+  if (!std::isfinite(std::pow(10.0, static_cast<double>(value) / 40.0))) {
+    invalid_eq_json(std::string("dB JSON field is too large to realize as a filter: ") + first_key);
+  }
+  return value;
+}
+
+int json_int_any(const JsonValue& object, const char* first_key, const char* second_key,
+                 int fallback) {
+  int converted = 0;
+  if (!sonare::numeric::checked_integral_cast(
+          std::round(json_number_any(object, first_key, second_key, fallback)), &converted)) {
+    invalid_eq_json(std::string("integer JSON field is non-finite or out of range: ") + first_key);
+  }
+  return converted;
 }
 
 bool json_bool(const JsonValue& object, const char* key, bool fallback) {
@@ -106,51 +160,48 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   try {
     json = sonare::util::json::parse_strict(std::string(band_json));
   } catch (const sonare::util::json::JsonError& ex) {
-    invalid_eq_json(std::string("invalid JSON: ") + ex.what());
+    malformed_eq_json(std::string("invalid JSON: ") + ex.what());
   }
   if (!json.is_object()) invalid_eq_json("band_json must be a JSON object");
   sonare::mastering::eq::EqBand band;
   band.type = parse_band_type(json_string(json, "type", "Peak"));
   band.coeff_mode = parse_coeff_mode(json_string_any(json, "coeffMode", "coeff_mode", "Rbj"));
-  band.frequency_hz =
-      static_cast<float>(json_number_any(json, "frequencyHz", "frequency_hz", band.frequency_hz));
-  band.gain_db = static_cast<float>(json_number_any(json, "gainDb", "gain_db", band.gain_db));
-  band.q = static_cast<float>(json_number(json, "q", band.q));
+  band.frequency_hz = json_float_any(json, "frequencyHz", "frequency_hz", band.frequency_hz);
+  band.gain_db = json_gain_db_any(json, "gainDb", "gain_db", band.gain_db);
+  band.q = json_float(json, "q", band.q);
   band.enabled = json_bool(json, "enabled", band.enabled);
-  band.slope_db_oct = static_cast<int>(
-      std::round(json_number_any(json, "slopeDbOct", "slope_db_oct", band.slope_db_oct)));
+  band.slope_db_oct = json_int_any(json, "slopeDbOct", "slope_db_oct", band.slope_db_oct);
   band.placement = parse_placement(json_string(json, "placement", "Stereo"));
   band.phase = parse_band_phase(json_string(json, "phase", "Inherit"));
   band.soloed = json_bool(json, "soloed", false);
   band.bypassed = json_bool(json, "bypassed", false);
   band.proportional_q = json_bool_any(json, "proportionalQ", "proportional_q", false);
-  band.proportional_q_strength = static_cast<float>(json_number_any(
-      json, "proportionalQStrength", "proportional_q_strength", band.proportional_q_strength));
+  band.proportional_q_strength = json_float_any(
+      json, "proportionalQStrength", "proportional_q_strength", band.proportional_q_strength);
 
   band.dyn.enabled = json_bool_any(json, "dynamic", "dynEnabled", false);
   band.dyn.enabled = json_bool(json, "dyn_enabled", band.dyn.enabled);
-  band.dyn.threshold_db = static_cast<float>(
-      json_number_any(json, "thresholdDb", "threshold_db", band.dyn.threshold_db));
+  // threshold_db and range_db are the two dynamic terms that reach the biquad
+  // as gain (detector_db - threshold_db, scaled by ratio, clamped to range_db),
+  // so they carry the same realizability bound as the static gain.
+  band.dyn.threshold_db =
+      json_gain_db_any(json, "thresholdDb", "threshold_db", band.dyn.threshold_db);
   band.dyn.auto_threshold =
       json_bool_any(json, "autoThreshold", "auto_threshold", band.dyn.auto_threshold);
-  band.dyn.ratio = static_cast<float>(json_number(json, "ratio", band.dyn.ratio));
-  band.dyn.range_db =
-      static_cast<float>(json_number_any(json, "rangeDb", "range_db", band.dyn.range_db));
-  band.dyn.attack_ms =
-      static_cast<float>(json_number_any(json, "attackMs", "attack_ms", band.dyn.attack_ms));
-  band.dyn.release_ms =
-      static_cast<float>(json_number_any(json, "releaseMs", "release_ms", band.dyn.release_ms));
+  band.dyn.ratio = json_float(json, "ratio", band.dyn.ratio);
+  band.dyn.range_db = json_gain_db_any(json, "rangeDb", "range_db", band.dyn.range_db);
+  band.dyn.attack_ms = json_float_any(json, "attackMs", "attack_ms", band.dyn.attack_ms);
+  band.dyn.release_ms = json_float_any(json, "releaseMs", "release_ms", band.dyn.release_ms);
   // "lookaheadMs"/"lookahead_ms" are the field's former (misleading) spelling;
   // still accepted so a stored config keeps working, but the canonical
   // "detectorDelayMs"/"detector_delay_ms" wins if both are present.
-  band.dyn.detector_delay_ms = static_cast<float>(
-      json_number_any(json, "lookaheadMs", "lookahead_ms", band.dyn.detector_delay_ms));
-  band.dyn.detector_delay_ms = static_cast<float>(
-      json_number_any(json, "detectorDelayMs", "detector_delay_ms", band.dyn.detector_delay_ms));
-  band.dyn.sidechain_freq_hz = static_cast<float>(
-      json_number_any(json, "sidechainFreqHz", "sidechain_freq_hz", band.dyn.sidechain_freq_hz));
-  band.dyn.sidechain_q =
-      static_cast<float>(json_number_any(json, "sidechainQ", "sidechain_q", band.dyn.sidechain_q));
+  band.dyn.detector_delay_ms =
+      json_float_any(json, "lookaheadMs", "lookahead_ms", band.dyn.detector_delay_ms);
+  band.dyn.detector_delay_ms =
+      json_float_any(json, "detectorDelayMs", "detector_delay_ms", band.dyn.detector_delay_ms);
+  band.dyn.sidechain_freq_hz =
+      json_float_any(json, "sidechainFreqHz", "sidechain_freq_hz", band.dyn.sidechain_freq_hz);
+  band.dyn.sidechain_q = json_float_any(json, "sidechainQ", "sidechain_q", band.dyn.sidechain_q);
   band.dyn.external_sidechain =
       json_bool_any(json, "externalSidechain", "external_sidechain", band.dyn.external_sidechain);
   return band;

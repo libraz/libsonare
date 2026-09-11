@@ -117,6 +117,108 @@ TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
           SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("chroma C API defines the whole out-struct on rejected input", "[c_api]") {
+  // Poisoned so an untouched field reads back as the sentinel rather than as a
+  // plausible zero; every chroma entry point must overwrite all six fields
+  // before its validate_audio_params early return.
+  const auto poison = [](SonareChromaResult& r) {
+    r.n_chroma = -1;
+    r.n_frames = -1;
+    r.sample_rate = -1;
+    r.hop_length = -1;
+    r.features = reinterpret_cast<float*>(0x1);
+    r.mean_energy = reinterpret_cast<float*>(0x1);
+  };
+  const auto require_defined = [](const SonareChromaResult& r) {
+    REQUIRE(r.n_chroma == 0);
+    REQUIRE(r.n_frames == 0);
+    REQUIRE(r.sample_rate == 0);
+    REQUIRE(r.hop_length == 0);
+    REQUIRE(r.features == nullptr);
+    REQUIRE(r.mean_energy == nullptr);
+  };
+
+  SonareChromaResult result{};
+
+  SECTION("sonare_chroma") {
+    poison(result);
+    REQUIRE(sonare_chroma(nullptr, 0, 22050, 2048, 512, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    require_defined(result);
+  }
+
+  SECTION("sonare_chroma_cens_ex") {
+    poison(result);
+    REQUIRE(sonare_chroma_cens_ex(nullptr, 0, 22050, 512, 12, 36, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    require_defined(result);
+  }
+
+  SECTION("sonare_chroma_cqt_ex") {
+    poison(result);
+    REQUIRE(sonare_chroma_cqt_ex(nullptr, 0, 22050, 512, 12, 36, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    require_defined(result);
+  }
+
+  SECTION("sonare_bass_chroma") {
+    poison(result);
+    REQUIRE(sonare_bass_chroma(nullptr, 0, 22050, 512, 12, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    require_defined(result);
+  }
+}
+
+TEST_CASE("sonare_hz_to_note honours its documented borrow contract", "[c_api]") {
+  // The header says the buffer is thread-local and overwritten IN PLACE by the
+  // next call on the same thread. Assert both halves, so the doc and the code
+  // cannot drift apart: a future change to caller-owned storage would return a
+  // different address and fail here rather than silently widen the contract.
+  const char* a4 = sonare_hz_to_note(440.0f);
+  REQUIRE(a4 != nullptr);
+  const std::string first(a4);
+  REQUIRE(first == "A4");
+
+  const char* c4 = sonare_hz_to_note(261.6256f);
+  REQUIRE(c4 != nullptr);
+  REQUIRE(c4 == a4);                  // same storage, not a fresh allocation
+  REQUIRE(std::string(c4) != first);  // and the earlier value is gone
+  REQUIRE(std::string(a4) == std::string(c4));
+
+  // A rejected input still yields a readable string rather than a null.
+  REQUIRE(std::string(sonare_hz_to_note(0.0f)) == "?");
+  REQUIRE(std::string(sonare_hz_to_note(-1.0f)) == "?");
+  REQUIRE(std::string(sonare_hz_to_note(std::numeric_limits<float>::quiet_NaN())) == "?");
+}
+
+TEST_CASE("sonare_peak_pick delta is in the units of its input", "[c_api]") {
+  // The header now says delta is an absolute offset in the units of `values`
+  // and that the envelope is not normalized. Assert exactly that: scaling the
+  // input while holding delta fixed must change the result, which is what makes
+  // "read a starting value off your own envelope" the right advice.
+  std::vector<float> values(64, 0.01f);
+  for (size_t i = 16; i < 64; i += 16) values[i] = 1.0f;
+
+  const auto pick = [](const std::vector<float>& v, float delta) {
+    int* out = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_peak_pick(v.data(), v.size(), 3, 3, 3, 3, delta, 2, &out, &count) == SONARE_OK);
+    const size_t found = count;
+    sonare_free_ints(out);
+    return found;
+  };
+
+  const float delta = 0.5f;
+  const size_t at_unit_scale = pick(values, delta);
+  REQUIRE(at_unit_scale > 0);
+
+  std::vector<float> quiet = values;
+  for (auto& v : quiet) v *= 0.01f;
+  // Same peaks, same shape, 100x quieter: the fixed delta now sits above them.
+  REQUIRE(pick(quiet, delta) < at_unit_scale);
+  // Scaling delta with the data recovers them, which is the documented recipe.
+  REQUIRE(pick(quiet, delta * 0.01f) == at_unit_scale);
+}
+
 TEST_CASE("sonare_fourier_tempogram", "[c_api]") {
   SECTION("returns an [n_bins x n_frames] magnitude matrix") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);

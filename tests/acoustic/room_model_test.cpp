@@ -2,10 +2,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <limits>
 #include <vector>
 
 #include "acoustic/material.h"
 #include "core/diagnostic.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -343,4 +345,50 @@ TEST_CASE("face_material on empty materials is memory-safe", "[acoustic][room_mo
   room.faces = unit_cube();  // no materials assigned
   const Material& m = face_material(room, 0);
   REQUIRE(m.absorption.empty());  // returns the static empty fallback, no crash
+}
+
+// Every absorption-source branch has to reach the same verdict for the same
+// field values. The scalar used to be checked only on the branch that reads it,
+// so a caller supplying a band table alongside a bad scalar was accepted here
+// while the C ABI, which validates the scalar unconditionally before it ever
+// calls in, rejected the identical request. The Node addon and the WASM binding
+// both build the request and call this directly, so that gap was reachable.
+TEST_CASE("uniform room rejects a bad absorption on every branch", "[acoustic][room_model]") {
+  const RoomDimensions dims{4.0f, 3.0f, 2.5f};
+
+  for (const float bad : {std::numeric_limits<float>::quiet_NaN(), -0.5f, 1.5f}) {
+    CAPTURE(bad);
+
+    WallMaterialRequest scalar_only;
+    scalar_only.absorption = bad;
+    REQUIRE_THROWS_AS(make_uniform_room(dims, scalar_only), SonareException);
+
+    // The branch the check used to miss: a band table selects the material, but
+    // the scalar the caller also supplied is still part of the request.
+    WallMaterialRequest with_bands;
+    with_bands.absorption = bad;
+    with_bands.absorption_bands = {0.3f, 0.3f, 0.3f};
+    REQUIRE_THROWS_AS(make_uniform_room(dims, with_bands), SonareException);
+
+    WallMaterialRequest with_preset;
+    with_preset.absorption = bad;
+    with_preset.has_preset = true;
+    with_preset.preset = MaterialPreset::Wood;
+    REQUIRE_THROWS_AS(make_uniform_room(dims, with_preset), SonareException);
+  }
+
+  // Non-vacuity: a request that leaves the scalar at its default still builds on
+  // every branch, so the new check cannot be satisfied by rejecting everything.
+  WallMaterialRequest bands_default_scalar;
+  bands_default_scalar.absorption_bands = {0.3f, 0.3f, 0.3f};
+  REQUIRE_NOTHROW(make_uniform_room(dims, bands_default_scalar));
+
+  WallMaterialRequest preset_default_scalar;
+  preset_default_scalar.has_preset = true;
+  preset_default_scalar.preset = MaterialPreset::Wood;
+  REQUIRE_NOTHROW(make_uniform_room(dims, preset_default_scalar));
+
+  WallMaterialRequest scalar_in_range;
+  scalar_in_range.absorption = 0.4f;
+  REQUIRE_NOTHROW(make_uniform_room(dims, scalar_in_range));
 }

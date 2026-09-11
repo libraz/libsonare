@@ -69,10 +69,26 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
 /// @brief Extracts the melody contour from monophonic audio via plain YIN
 ///   (left-aligned, no Viterbi smoothing). Shorthand for sonare_analyze_melody_ex
 ///   with use_pyin=0.
+/// @param threshold YIN's aperiodicity cutoff on the cumulative mean normalized
+///   difference function, NOT a level in the units of @p samples. The CMNDF is
+///   normalized by construction, so this is scale-free: the same value behaves
+///   the same on quiet and loud input, and it does not need calibrating against
+///   the caller's own data. Must be within (0, 1]; anything else is rejected
+///   with @c SONARE_ERROR_INVALID_PARAMETER. 0.1 is the library default and
+///   librosa's. Lower accepts only strongly periodic frames, raising the
+///   unvoiced count; higher admits noisier ones.
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
                                   float fmax, int frame_length, int hop_length, float threshold,
                                   SonareMelodyResult* out);
 /// @brief Extracts the melody contour with selectable tracker.
+/// @param threshold Aperiodicity cutoff on the cumulative mean normalized
+///   difference function, NOT a level in the units of @p samples. Normalized by
+///   construction and therefore scale-free. Must be within (0, 1]; anything
+///   else is rejected with @c SONARE_ERROR_INVALID_PARAMETER, and 0.1 is the
+///   default. Its MEANING depends on @p use_pyin: for plain YIN it is the
+///   single cutoff a frame's CMNDF minimum must fall below, while for pYIN it
+///   is the UPPER BOUND of the swept threshold distribution — see
+///   @ref sonare_pitch_pyin.
 /// @param use_pyin Non-zero selects the pYIN tracker (Viterbi-smoothed, less
 ///   octave-jumpy) instead of plain per-frame YIN.
 /// @param center When use_pyin is set, non-zero zero-pads by frame_length/2
@@ -582,10 +598,28 @@ void sonare_free_segment_indices(SonareSegmentIndices* result);
 /// @details Like librosa.yin, every complete frame receives a finite frequency estimate;
 /// voiced_flag reports whether the threshold was crossed. fill_na is retained for ABI
 /// compatibility and has no effect on YIN output.
+/// @param threshold Aperiodicity cutoff on the cumulative mean normalized
+///   difference function: a frame is voiced when its first CMNDF minimum falls
+///   below this. NOT a level in the units of @p samples -- the CMNDF is
+///   normalized by construction, so this is scale-free and needs no calibration
+///   against the caller's own data. Must be within (0, 1]; anything else is
+///   rejected with @c SONARE_ERROR_INVALID_PARAMETER. 0.1 is the library
+///   default and librosa's.
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
                              int hop_length, float fmin, float fmax, float threshold, int fill_na,
                              SonarePitchResult* out);
 /// @brief Estimate f0 with probabilistic YIN (librosa.pyin).
+/// @param threshold UPPER BOUND of pYIN's swept threshold distribution, not a
+///   single cutoff: the tracker sweeps a ladder of CMNDF thresholds from 0 to
+///   this value and weights each by a Beta(2, 18) prior, so raising it widens
+///   the range of aperiodicity the observation model considers rather than
+///   moving one decision boundary. Plain YIN uses the same parameter as a
+///   single cutoff (@ref sonare_pitch_yin), so the value does not transfer
+///   between the two with the same meaning. NOT a level in the units of
+///   @p samples: the CMNDF is normalized by construction, so this is
+///   scale-free. Must be within (0, 1]; anything else is rejected with
+///   @c SONARE_ERROR_INVALID_PARAMETER. 0.1 is the library default and
+///   librosa's.
 /// @param fill_na If non-zero, return 0 for unvoiced pYIN f0 frames; otherwise keep NaN.
 /// @note @c out->voiced_flag is the voicing decision — the Viterbi path's
 ///       voiced/unvoiced state — and is what a consumer should gate on.
@@ -682,6 +716,10 @@ float sonare_hz_to_mel(float hz);
 float sonare_mel_to_hz(float mel);
 float sonare_hz_to_midi(float hz);
 float sonare_midi_to_hz(float midi);
+/// @brief Nearest note name for @p hz (e.g. "A4", "C#5"), or NULL on failure.
+/// @details Thread-local storage, overwritten in place by the next
+///   @ref sonare_hz_to_note call on the same thread and dangling once that
+///   thread exits. Copy it to keep it across either; never free it.
 const char* sonare_hz_to_note(float hz);
 float sonare_note_to_hz(const char* note);
 float sonare_frames_to_time(int frames, int sr, int hop_length);
@@ -758,9 +796,26 @@ SonareError sonare_fix_length(const float* values, size_t length, size_t target_
 ///   silently gain a frame at @p x_min. The result is never empty.
 SonareError sonare_fix_frames(const int* frames, size_t length, int x_min, int x_max, int pad,
                               int** out, size_t* out_length);
+/// @brief Picks local peaks above an adaptive threshold (librosa.util.peak_pick).
+/// @details @p delta is an absolute offset added to the running mean, expressed
+///   in the units of @p values — not a normalized or dB quantity. @p values is
+///   typically an onset envelope, which this library does not normalize, so the
+///   usable range of @p delta depends entirely on the magnitudes the caller's
+///   own envelope happens to carry and cannot be derived from the signature.
+///   Read a starting value off your own data: run @ref sonare_onset_strength on
+///   representative audio and take a small fraction of the envelope's mean or
+///   median, then adjust. The remaining windows are in frames.
 SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, int post_max,
                              int pre_avg, int post_avg, float delta, int wait, int** out,
                              size_t* out_length);
+/// @brief Normalizes a vector by the selected norm (librosa.util.normalize).
+/// @details @p threshold is compared against the computed norm of @p values, so
+///   it is in the units of the caller's own array and not a normalized or dB
+///   quantity -- a vector whose norm falls below it is returned unchanged
+///   rather than scaled (librosa's @c fill=None). There is no usable range
+///   independent of the caller's data; read one off the norm your own input
+///   produces. Values at or below @c 1e-10 are raised to that floor, so passing
+///   0 means "normalize everything that is not numerically zero".
 SonareError sonare_vector_normalize(const float* values, size_t length, int norm_type,
                                     float threshold, float** out, size_t* out_length);
 

@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "arrangement/edit_command.h"
@@ -25,6 +27,39 @@ using sonare::serialize::project_from_json;
 using sonare::serialize::project_to_json;
 
 namespace {
+
+// Compile-time aggregate field count, so an equality helper below can assert it
+// compares every field of the type it claims to. Mirrors the canonical probe in
+// src/mastering/api/param_field_tables.h, duplicated rather than included
+// because that header sits behind SONARE_WITH_MASTERING and a serialize test
+// must not depend on it.
+template <typename Aggregate>
+struct AnyField {
+  template <typename Field>
+  operator Field() const;  // NOLINT(google-explicit-constructor)
+};
+
+template <typename Aggregate, typename Indices, typename = void>
+struct BraceInitializableWith : std::false_type {};
+
+template <typename Aggregate, std::size_t... I>
+struct BraceInitializableWith<Aggregate, std::index_sequence<I...>,
+                              std::void_t<decltype(Aggregate{(void(I), AnyField<Aggregate>{})...})>>
+    : std::true_type {};
+
+// Brace initialization accepts any count up to the field count and rejects
+// anything beyond it, so the largest accepted count is the answer.
+template <typename Aggregate, std::size_t N = 0>
+constexpr std::size_t field_count() {
+  static_assert(std::is_aggregate_v<Aggregate>,
+                "field_count requires a plain aggregate: no base classes, no user-declared "
+                "constructor, no private members");
+  if constexpr (BraceInitializableWith<Aggregate, std::make_index_sequence<N + 1>>::value) {
+    return field_count<Aggregate, N + 1>();
+  } else {
+    return N;
+  }
+}
 
 // Builds a representative project exercising every serialized field group:
 // an audio clip + a MIDI clip + an automation lane + markers + a rich
@@ -72,6 +107,12 @@ Fixture make_fixture() {
   atrack.kind = Track::Kind::kAudio;
   atrack.channel_strip_ref = "strip.audio";
   atrack.output_target = "bus.main";
+  // Non-default on every remaining field, so a decoder that drops one is not
+  // masked by the field's default happening to match.
+  atrack.gain = 0.6f;
+  atrack.pan = -0.35f;
+  atrack.mute = true;
+  atrack.solo = true;
   automation::AutomationLane lane(42);
   lane.set_points({{0.0, 0.1f, automation::CurveType::Linear},
                    {480.0, 0.9f, automation::CurveType::SCurve},
@@ -83,6 +124,11 @@ Fixture make_fixture() {
   mtrack.name = "MIDI";
   mtrack.kind = Track::Kind::kMidi;
   mtrack.channel_strip_ref = "strip.midi";
+  mtrack.gain = 1.4f;
+  mtrack.pan = 0.8f;
+  mtrack.mute = true;
+  mtrack.solo = true;
+  mtrack.midi_destination_id = 7;
   const TrackId mtid = p.add_track(mtrack);
 
   // Audio clip with fades + loop + warp ref.
@@ -257,6 +303,8 @@ bool eq(const automation::AutomationLane& a, const automation::AutomationLane& b
 
 bool eq(const Track& a, const Track& b) {
   if (a.id != b.id || a.name != b.name || a.kind != b.kind) return false;
+  if (a.gain != b.gain || a.pan != b.pan) return false;
+  if (a.mute != b.mute || a.solo != b.solo) return false;
   if (a.channel_strip_ref != b.channel_strip_ref || a.output_target != b.output_target)
     return false;
   if (a.midi_destination_id != b.midi_destination_id) return false;
@@ -266,6 +314,27 @@ bool eq(const Track& a, const Track& b) {
   }
   return true;
 }
+// Adding a field to Track without adding it to eq() above leaves this test
+// green while no longer preserving all fields, which is the defect this file
+// exists to catch. The count makes that a compile error instead. Counts fields,
+// not names: two same-typed fields swapping meaning stays invisible.
+static_assert(field_count<Track>() == 11,
+              "Track gained or lost a field: add it to eq(const Track&) above, then update this "
+              "count and set it to a non-default value in make_rich_project()");
+
+bool eq(const SectionSegment& a, const SectionSegment& b) {
+  return a.start_ppq == b.start_ppq && a.end_ppq == b.end_ppq && a.label == b.label;
+}
+static_assert(field_count<SectionSegment>() == 3,
+              "SectionSegment gained or lost a field: add it to eq(const SectionSegment&) above "
+              "and update this count");
+
+bool eq(const OnsetMarker& a, const OnsetMarker& b) {
+  return a.ppq == b.ppq && a.confidence == b.confidence;
+}
+static_assert(field_count<OnsetMarker>() == 2,
+              "OnsetMarker gained or lost a field: add it to eq(const OnsetMarker&) above and "
+              "update this count");
 
 bool eq(const EditClip& a, const EditClip& b) {
   return a.id == b.id && a.track_id == b.track_id && a.source_id == b.source_id &&
@@ -428,7 +497,11 @@ void check_project_equal(const Project& a, const Project& b) {
   for (size_t i = 0; i < a.annotation().chords.size(); ++i)
     CHECK(eq(a.annotation().chords[i], b.annotation().chords[i]));
   REQUIRE(a.annotation().sections.size() == b.annotation().sections.size());
+  for (size_t i = 0; i < a.annotation().sections.size(); ++i)
+    CHECK(eq(a.annotation().sections[i], b.annotation().sections[i]));
   REQUIRE(a.annotation().onsets.size() == b.annotation().onsets.size());
+  for (size_t i = 0; i < a.annotation().onsets.size(); ++i)
+    CHECK(eq(a.annotation().onsets[i], b.annotation().onsets[i]));
 
   REQUIRE(a.assist_sidecars().size() == b.assist_sidecars().size());
   for (size_t i = 0; i < a.assist_sidecars().size(); ++i)
@@ -1538,6 +1611,36 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
       {"MIDI event beyond the public ppq ceiling",
        R"({"version":1,"midi_content":{"1":[{"ppq":1e30,"data0":546323556,"data1":0}]}})",
        "invalid_midi_event_ppq"},
+      // The tempo and time-signature setters bound more than the position's
+      // sign: sonare_project_set_tempo_segments runs valid_public_tempo_segment
+      // and _set_time_signatures runs valid_public_time_signature_segment, so
+      // each field those predicates reject must fail the load too.
+      {"tempo segment beyond the public ppq ceiling",
+       R"({"version":1,"tempo_segments":[{"start_ppq":1e30,"bpm":120.0}]})",
+       "invalid_tempo_segment"},
+      // Already covered by the decoder's own per-field checks, which run first
+      // and report a more specific code. Kept so the field is on the record as
+      // covered rather than looking like a gap the next reader re-opens.
+      {"tempo segment with a non-positive bpm",
+       R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":0.0}]})", "invalid_tempo_bpm"},
+      {"tempo segment beyond the public tempo ceiling",
+       R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":100000.1}]})",
+       "invalid_tempo_segment"},
+      {"tempo ramp with a negative end_bpm",
+       R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0,"end_bpm":-1.0}]})",
+       "invalid_tempo_end_bpm"},
+      {"tempo ramp beyond the public tempo ceiling",
+       R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0,"end_bpm":100000.1}]})",
+       "invalid_tempo_segment"},
+      {"time signature beyond the public ppq ceiling",
+       R"({"version":1,"time_signatures":[{"start_ppq":1e30,"numerator":4,"denominator":4}]})",
+       "invalid_time_signature_segment"},
+      {"time signature with a non-positive numerator",
+       R"({"version":1,"time_signatures":[{"start_ppq":0.0,"numerator":0,"denominator":4}]})",
+       "invalid_time_signature"},
+      {"time signature with a non-positive denominator",
+       R"({"version":1,"time_signatures":[{"start_ppq":0.0,"numerator":4,"denominator":0}]})",
+       "invalid_time_signature"},
   };
   for (const Case& c : cases) {
     INFO(c.what);
@@ -1547,6 +1650,32 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
     REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
                         [&](const serialize::Diagnostic& d) { return d.code == c.code; }));
   }
+
+  // The tightened tempo/time-signature bounds must not start refusing a
+  // document the edit API would have produced: a ramp at the exact ceilings,
+  // and a second segment after it, both load.
+  const auto at_bounds =
+      project_from_json(R"({"version":1,"tempo_segments":[)"
+                        R"({"start_ppq":0.0,"bpm":100000.0,"end_bpm":100000.0},)"
+                        R"({"start_ppq":1e12,"bpm":120.0,"end_bpm":0.0}],)"
+                        R"("time_signatures":[{"start_ppq":1e12,"numerator":7,"denominator":8}]})");
+  REQUIRE(at_bounds.ok());
+  REQUIRE_FALSE(at_bounds.has_error());
+  REQUIRE(at_bounds.project->tempo_segments().size() == 2);
+  REQUIRE(at_bounds.project->time_signatures().size() == 1);
+
+  // The setters ALSO require strictly increasing start_ppq, but the load path
+  // meets that by sorting and de-duplicating rather than by rejecting, so an
+  // out-of-order document still loads and comes back ordered. That difference
+  // is deliberate; tightening it here would refuse documents the encoder never
+  // produces but older hand-edited ones may carry.
+  const auto unordered =
+      project_from_json(R"({"version":1,"tempo_segments":[)"
+                        R"({"start_ppq":960.0,"bpm":140.0},{"start_ppq":0.0,"bpm":120.0}]})");
+  REQUIRE(unordered.ok());
+  REQUIRE(unordered.project->tempo_segments().size() == 2);
+  REQUIRE(unordered.project->tempo_segments()[0].start_ppq == 0.0);
+  REQUIRE(unordered.project->tempo_segments()[1].start_ppq == 960.0);
 
   // Zero is a legal position; only negatives are rejected.
   const auto ok =

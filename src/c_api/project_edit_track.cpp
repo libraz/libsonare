@@ -153,6 +153,9 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<sonare::transport::TempoSegment> out;
+  // The staging vector is sized from a caller-supplied count, so its allocation
+  // has to sit inside the try or a bad_alloc crosses the extern "C" boundary.
+  SONARE_C_TRY
   out.reserve(segment_count);
   double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
@@ -176,7 +179,6 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
     out.push_back(seg);
     previous_start_ppq = in.start_ppq;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::SetTempoSegment>(std::move(out));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
@@ -195,6 +197,9 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<sonare::transport::TimeSignatureSegment> out;
+  // Same reason as sonare_project_set_tempo_segments: a caller-sized allocation
+  // must not throw outside the try.
+  SONARE_C_TRY
   out.reserve(segment_count);
   double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
@@ -215,7 +220,6 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
     out.push_back(seg);
     previous_start_ppq = in.start_ppq;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::SetTimeSignatureSegment>(std::move(out));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
@@ -325,7 +329,16 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   // build.
   if (!project || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  auto scene = sonare::mixing::api::scene_from_json(scene_json);
+  sonare::mixing::api::Scene scene;
+  try {
+    scene = sonare::mixing::api::scene_from_json(scene_json);
+  } catch (const sonare::util::json::JsonError& ex) {
+    // Malformed JSON is INVALID_FORMAT at every other C-ABI JSON entry point;
+    // without this arm it reached SONARE_C_CATCH's std::exception tail as
+    // SONARE_ERROR_UNKNOWN.
+    set_last_error(ex.what());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
   auto command = std::make_unique<arr::SetScene>(std::move(scene));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
@@ -360,6 +373,8 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<arr::WarpAnchorRef> anchors;
+  // Same reason as the two segment setters: anchor_count is caller-supplied.
+  SONARE_C_TRY
   anchors.reserve(desc->anchor_count);
   for (size_t i = 0; i < desc->anchor_count; ++i) {
     const SonareProjectWarpAnchor& in = desc->anchors[i];
@@ -375,7 +390,6 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
     anchors.push_back(arr::WarpAnchorRef{in.warp_sample, in.source_sample});
   }
 
-  SONARE_C_TRY
   arr::WarpMapRef map;
   map.id = desc->id;
   map.name = desc->name ? desc->name : "";

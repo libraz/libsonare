@@ -83,8 +83,7 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  out->features = nullptr;
-  out->mean_energy = nullptr;
+  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     ChromaConfig config;

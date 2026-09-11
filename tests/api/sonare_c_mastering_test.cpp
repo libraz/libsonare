@@ -16,14 +16,17 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":9,"
                                "\"q\":1,\"enabled\":true,\"coeffMode\":\"Vicanek\","
                                "\"proportionalQ\":true}") == SONARE_OK);
-    REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Unknown\",\"enabled\":true}") ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    // A syntactically malformed document is INVALID_FORMAT, matching every
+    // other JSON-accepting C-ABI entry point; a well-formed document with a bad
+    // field stays INVALID_PARAMETER.
+    REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"enabled\":truish}") ==
-            SONARE_ERROR_INVALID_PARAMETER);
+            SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\" \"enabled\":true}") ==
-            SONARE_ERROR_INVALID_PARAMETER);
+            SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"type\":\"Notch\"}") ==
+            SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Unknown\",\"enabled\":true}") ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":7,\"enabled\":true}") ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -1180,5 +1183,199 @@ TEST_CASE("the stereo named-processor path reports loudness_target_limited like 
 
   sonare_free_mastering_result(&mono);
   sonare_free_mastering_stereo_result(&stereo);
+}
+
+TEST_CASE("EQ band JSON narrows every numeric field through a checked cast",
+          "[c_api][mastering][eq]") {
+  struct NumericField {
+    const char* camel;
+    const char* snake;  // nullptr when the field accepts only one spelling
+    bool gain_db;       // reaches the biquad design as a dB gain
+  };
+  // Every numeric field parse_eq_band_json reads, in both spellings where it
+  // takes two. A table rather than a hand-picked sample, so a field added to
+  // the parser without a row here shows up as an uncovered name.
+  const NumericField fields[] = {
+      {"frequencyHz", "frequency_hz", false},
+      {"gainDb", "gain_db", true},
+      {"q", nullptr, false},
+      {"slopeDbOct", "slope_db_oct", false},
+      {"proportionalQStrength", "proportional_q_strength", false},
+      {"thresholdDb", "threshold_db", true},
+      {"ratio", nullptr, false},
+      {"rangeDb", "range_db", true},
+      {"attackMs", "attack_ms", false},
+      {"releaseMs", "release_ms", false},
+      {"lookaheadMs", "lookahead_ms", false},
+      {"detectorDelayMs", "detector_delay_ms", false},
+      {"sidechainFreqHz", "sidechain_freq_hz", false},
+      {"sidechainQ", "sidechain_q", false},
+  };
+  // Value classes crossed with every field above. `accepted` says whether the
+  // narrowing guard must let the literal through, not whether the value is
+  // musically sensible: parse_eq_band_json does not domain-validate.
+  struct ValueClass {
+    const char* literal;
+    bool accepted;
+    bool accepted_for_gain_db;
+  };
+  const ValueClass classes[] = {
+      {"1", true, true},        // finite, in float range
+      {"20000", true, false},   // finite, but 10^(dB/40) overflows
+      {"1e39", false, false},   // finite double, out of float range
+      {"-1e39", false, false},  // likewise, negative
+      {"1e400", false, false},  // out of double range
+      {"\"1\"", false, false},  // wrong type: string
+      {"true", false, false},   // wrong type: bool
+      {"null", false, false},   // wrong type: null
+      {"{}", false, false},     // wrong type: object
+      {"[]", false, false},     // wrong type: array
+  };
+
+  const auto parses = [](const std::string& json) {
+    try {
+      (void)sonare::c_api::parse_eq_band_json(json.c_str());
+      return true;
+    } catch (const sonare::SonareException&) {
+      return false;
+    }
+  };
+
+  // Positive controls. Without these a parser that rejects unconditionally
+  // satisfies every rejection row below.
+  REQUIRE(parses("{\"type\":\"Peak\"}"));
+  REQUIRE(
+      parses("{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":6,\"q\":1.2,\"slopeDbOct\":12,"
+             "\"proportionalQStrength\":0.5,\"dynamic\":true,\"thresholdDb\":-24,\"ratio\":4,"
+             "\"rangeDb\":12,\"attackMs\":5,\"releaseMs\":80,\"detectorDelayMs\":2,"
+             "\"sidechainFreqHz\":800,\"sidechainQ\":0.7}"));
+
+  // Axis 1: every field x every class, with every other field left at its
+  // default, so nothing else in the object can raise before the injected value
+  // is read.
+  for (const NumericField& field : fields) {
+    for (const ValueClass& value : classes) {
+      const bool expected = field.gain_db ? value.accepted_for_gain_db : value.accepted;
+      for (const char* key : {field.camel, field.snake}) {
+        if (key == nullptr) continue;
+        const std::string json =
+            std::string("{\"type\":\"Peak\",\"") + key + "\":" + value.literal + "}";
+        INFO(json);
+        REQUIRE(parses(json) == expected);
+        // Every accepted row must survive the whole C ABI, not just the parser.
+        if (!expected) continue;
+        SonareEq* eq = sonare_eq_create(48000.0, 512);
+        REQUIRE(eq != nullptr);
+        const SonareError err = sonare_eq_set_band(eq, 0, json.c_str());
+        REQUIRE((err == SONARE_OK || err == SONARE_ERROR_INVALID_PARAMETER));
+        sonare_eq_destroy(eq);
+      }
+    }
+  }
+
+  // Axis 2: masking. frequencyHz and q are caught downstream (design_eq_biquad
+  // and checked_q) while gainDb, ratio, attackMs, releaseMs and
+  // detectorDelayMs are admitted, so a document poisoning one of each could
+  // pass for the wrong reason — the caught field raising before the admitting
+  // one is read. Pin that both orderings still reject.
+  for (const char* admitting : {"gainDb", "ratio", "attackMs", "releaseMs", "detectorDelayMs"}) {
+    for (const char* caught : {"frequencyHz", "q"}) {
+      const std::string caught_first =
+          std::string("{\"type\":\"Peak\",\"") + caught + "\":1e39,\"" + admitting + "\":1e39}";
+      const std::string admitting_first =
+          std::string("{\"type\":\"Peak\",\"") + admitting + "\":1e39,\"" + caught + "\":1e39}";
+      INFO(caught_first << " | " << admitting_first);
+      REQUIRE_FALSE(parses(caught_first));
+      REQUIRE_FALSE(parses(admitting_first));
+      // And the admitting field alone still rejects, so the pair above cannot
+      // be passing only because of its partner.
+      REQUIRE_FALSE(parses(std::string("{\"type\":\"Peak\",\"") + admitting + "\":1e39}"));
+    }
+  }
+}
+
+TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
+          "[c_api][mastering][eq]") {
+  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  REQUIRE(eq != nullptr);
+
+  const char* good =
+      "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":6,\"q\":1,"
+      "\"enabled\":true}";
+  REQUIRE(sonare_eq_set_band(eq, 0, good) == SONARE_OK);
+
+  // An out-of-float-range double and a finite-but-unrealizable dB value both
+  // have to be refused before the band is installed, not absorbed as +inf.
+  REQUIRE(sonare_eq_set_band(eq, 0,
+                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":1e39,\"q\":1,"
+                             "\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_eq_set_band(eq, 0,
+                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":20000,\"q\":1,"
+                             "\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
+
+  // The refused bands left no infinite tap behind: the still-installed band
+  // must produce finite audio.
+  std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
+  std::vector<float> right = left;
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_eq_process(eq, channels, 2, static_cast<int>(left.size())) == SONARE_OK);
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE(std::isfinite(left[i]));
+    REQUIRE(std::isfinite(right[i]));
+  }
+
+  sonare_eq_destroy(eq);
+}
+
+TEST_CASE("mastering *_names getters keep their documented write-once storage",
+          "[c_api][mastering]") {
+  // The header promises these stay valid across later API calls on the thread,
+  // which only holds because the thread_local is built once. Pin the pointer
+  // identity: a change to rebuild-per-call would silently demote them to the
+  // weaker contract the mixing *_names getters carry, and nothing else would
+  // notice.
+  for (auto* fn : {&sonare_mastering_processor_names, &sonare_mastering_pair_processor_names,
+                   &sonare_mastering_pair_analysis_names, &sonare_mastering_stereo_analysis_names,
+                   &sonare_mastering_insert_names, &sonare_mastering_preset_names,
+                   &sonare_mastering_platform_names}) {
+    const char* first = (*fn)();
+    REQUIRE(first != nullptr);
+    // Another API call in between is exactly what the doc says is survivable.
+    (void)sonare_mastering_processor_catalog();
+    REQUIRE((*fn)() == first);
+  }
+}
+
+TEST_CASE("an unrealizable dynamic EQ gain never reaches the audio as NaN",
+          "[c_api][mastering][eq]") {
+  // The composed path the per-field guards cannot cover on their own: the
+  // detector delta is added to the static gain, so values that are each
+  // realizable can still sum past the overflow point. normalize() is the
+  // backstop, so drive several blocks and require the output stays finite.
+  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  REQUIRE(eq != nullptr);
+  REQUIRE(sonare_eq_set_band(eq, 0,
+                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":12300,\"q\":1,"
+                             "\"enabled\":true,\"dynamic\":true,\"thresholdDb\":-60,"
+                             "\"ratio\":20,\"rangeDb\":300,\"attackMs\":1,\"releaseMs\":10}") ==
+          SONARE_OK);
+  // 12300 dB is realizable on its own (10^307.5 is finite) so the per-field
+  // guard admits it; adding the 300 dB range crosses the overflow point.
+
+  std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
+  std::vector<float> right = left;
+  for (int block = 0; block < 8; ++block) {
+    std::vector<float> l = left;
+    std::vector<float> r = right;
+    float* channels[] = {l.data(), r.data()};
+    REQUIRE(sonare_eq_process(eq, channels, 2, static_cast<int>(l.size())) == SONARE_OK);
+    for (size_t i = 0; i < l.size(); ++i) {
+      INFO("block " << block << " sample " << i);
+      REQUIRE(std::isfinite(l[i]));
+      REQUIRE(std::isfinite(r[i]));
+    }
+  }
+
+  sonare_eq_destroy(eq);
 }
 #endif

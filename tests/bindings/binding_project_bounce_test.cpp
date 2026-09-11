@@ -1102,6 +1102,28 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   CHECK(after_callback.has_timeline == 0);
   sonare_project_free_compile_result(&after_callback);
 
+  // The plain entry point routes straight into the shared bounce core with no
+  // clear of its own, so it is the one that used to leave the previous result
+  // readable. Re-seed the diagnostics first: without that the assertion below
+  // would pass on an already-empty result and prove nothing.
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_ERROR_INVALID_STATE);
+  SonareProjectCompileResult seeded{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project, &seeded) == SONARE_OK);
+  REQUIRE(seeded.diagnostic_count > 0);
+  sonare_project_free_compile_result(&seeded);
+
+  float* rejected_out = reinterpret_cast<float*>(0x1);
+  REQUIRE(sonare_project_bounce(project, &options, &rejected_out, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  // The error code is the easy half. What the rejection must also leave behind
+  // is an empty result and a cleared output pointer.
+  REQUIRE(rejected_out == nullptr);
+  SonareProjectCompileResult after_null{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project, &after_null) == SONARE_OK);
+  CHECK(after_null.diagnostic_count == 0);
+  CHECK(after_null.has_timeline == 0);
+  sonare_project_free_compile_result(&after_null);
+
   REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_ERROR_INVALID_STATE);
   SonareSf2InstrumentBinding sf2_binding{};
   sf2_binding.destination_id = 1u;
@@ -1814,6 +1836,90 @@ TEST_CASE("bounce dispatches every note of a sequential melody, not just the fir
   REQUIRE(state.note_on_frames[1] < state.note_on_frames[2]);
   // And every note-off too (3) -- otherwise the first note would hang.
   REQUIRE(state.note_off == 3);
+
+  sonare_project_destroy(project);
+}
+
+namespace {
+
+// Counts every dispatched event and separately the control-changes, so a test
+// can assert nothing was dropped rather than only that something arrived.
+struct DenseTickState {
+  int events = 0;
+  int control_changes = 0;
+};
+
+void dense_on_event(void* user, uint32_t /*destination_id*/, const uint32_t* words, int word_count,
+                    int64_t /*render_frame*/) {
+  if (word_count < 1) return;
+  auto* state = static_cast<DenseTickState*>(user);
+  state->events += 1;
+  if (static_cast<uint8_t>((words[0] >> 16) & 0xF0u) == 0xB0u) state->control_changes += 1;
+}
+
+void dense_render(void* /*user*/, float* const* /*channels*/, int /*num_channels*/,
+                  int /*num_frames*/) {}
+
+}  // namespace
+
+TEST_CASE("a tick denser than the per-block event hold loses no events", "[project]") {
+  // The adapter holds a sub-block's events in a fixed 512-entry array. The
+  // sequencer batches every event sharing a render frame into one dispatch, so a
+  // dense tick can overrun that hold, and an overrun used to discard the newest
+  // events with no flag and no diagnostic -- invisible to the host.
+  //
+  // Control-changes, not note-ons: the sequencer tracks sounding notes in a
+  // 256-entry active-note table (midi/sequencer.h:63) and refuses a note-on past
+  // it, recording the refusal in its own atomic counter. That cap is BELOW the
+  // 512 hold, so no number of same-tick note-ons can reach the adapter's
+  // overflow at all. A CC consumes no active-note slot, so it is the event that
+  // can actually fill the hold.
+  constexpr int kEvents = 700;  // comfortably past the 512-entry hold
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  // Every event shares ppq 0, so they all land on one render frame and reach the
+  // adapter in a single dispatch.
+  std::vector<SonareMidiEventPod> events(static_cast<size_t>(kEvents));
+  for (int i = 0; i < kEvents; ++i) {
+    const auto controller = static_cast<uint32_t>(i % 120);  // below the mode-message range
+    const auto channel = static_cast<uint32_t>((i / 120) % 16);
+    events[static_cast<size_t>(i)].ppq = 0.0;
+    events[static_cast<size_t>(i)].data0 =
+        0x20B00000u | (channel << 16) | (controller << 8) | 0x40u;
+    events[static_cast<size_t>(i)].data1 = 0u;
+  }
+  REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 48000;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  DenseTickState state;
+  SonareInstrumentBinding binding{};
+  binding.destination_id = 5;
+  binding.callbacks.user_data = &state;
+  binding.callbacks.on_event = &dense_on_event;
+  binding.callbacks.render = &dense_render;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len) ==
+          SONARE_OK);
+  sonare_free_floats(out);
+
+  // Every control-change dispatched must have reached the host. More than the
+  // hold's 512 were sent, so this fails on the pre-fix adapter.
+  REQUIRE(state.control_changes == kEvents);
+  REQUIRE(state.events >= kEvents);
 
   sonare_project_destroy(project);
 }

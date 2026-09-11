@@ -1125,6 +1125,64 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   sonare_project_destroy(project);
 }
 
+TEST_CASE("C-ABI staging-vector setters keep exceptions inside the ABI", "[project][c-abi-edit]") {
+  // reserve()/push_back() run on a caller-supplied count, so they must sit
+  // inside SONARE_C_TRY. Driving a real allocation failure is not the bar here
+  // (a lazily-reserved 5960 GiB still succeeds on this platform); what is
+  // assertable is that an above-bound count never allocates and that a rejected
+  // element in the middle of a genuinely large list returns a code.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  const SonareProjectTempoSegment one_tempo[] = {{0.0, 120.0, 0.0, 0.0}};
+  REQUIRE(
+      sonare_project_set_tempo_segments(project, one_tempo, std::numeric_limits<size_t>::max()) ==
+      SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTimeSignatureSegment one_sig[] = {{0.0, 4, 4}};
+  REQUIRE(
+      sonare_project_set_time_signatures(project, one_sig, std::numeric_limits<size_t>::max()) ==
+      SONARE_ERROR_INVALID_PARAMETER);
+
+  // Both setters demand strictly increasing start_ppq, so build monotonic lists.
+  const size_t large_count = 100000;
+  std::vector<SonareProjectTempoSegment> tempo(large_count);
+  for (size_t i = 0; i < large_count; ++i) {
+    tempo[i] = {static_cast<double>(i), 120.0, 0.0, 0.0};
+  }
+  REQUIRE(sonare_project_set_tempo_segments(project, tempo.data(), tempo.size()) == SONARE_OK);
+  tempo[large_count / 2].bpm = -1.0;
+  REQUIRE(sonare_project_set_tempo_segments(project, tempo.data(), tempo.size()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  std::vector<SonareProjectTimeSignatureSegment> sig(large_count);
+  for (size_t i = 0; i < large_count; ++i) {
+    sig[i] = {static_cast<double>(i), 4, 4};
+  }
+  REQUIRE(sonare_project_set_time_signatures(project, sig.data(), sig.size()) == SONARE_OK);
+  sig[large_count / 2].numerator = 0;
+  REQUIRE(sonare_project_set_time_signatures(project, sig.data(), sig.size()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // Warp anchors must be strictly increasing on both axes.
+  std::vector<SonareProjectWarpAnchor> anchors(large_count);
+  for (size_t i = 0; i < large_count; ++i) {
+    anchors[i] = {static_cast<double>(i), static_cast<double>(i)};
+  }
+  SonareProjectWarpMapDesc map{};
+  map.id = 4242;
+  map.name = "large warp";
+  map.anchors = anchors.data();
+  map.anchor_count = anchors.size();
+  REQUIRE(sonare_project_set_warp_map(project, &map) == SONARE_OK);
+  map.anchor_count = std::numeric_limits<size_t>::max();
+  REQUIRE(sonare_project_set_warp_map(project, &map) == SONARE_ERROR_INVALID_PARAMETER);
+  map.anchor_count = anchors.size();
+  anchors[large_count / 2].warp_sample = -1.0;
+  REQUIRE(sonare_project_set_warp_map(project, &map) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

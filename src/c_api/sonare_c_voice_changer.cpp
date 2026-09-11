@@ -616,20 +616,21 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
   if (!json || !out_normalized_json || !out_error) return SONARE_ERROR_INVALID_PARAMETER;
   *out_normalized_json = nullptr;
   *out_error = nullptr;
-  try {
-    std::string normalized;
-    std::string error;
-    if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(json, &normalized,
-                                                                             &error)) {
-      *out_error = copy_string(error.empty() ? "invalid preset JSON" : error);
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    *out_normalized_json = copy_string(normalized);
-    return SONARE_OK;
-  } catch (const std::exception& ex) {
-    *out_error = copy_string(ex.what());
+  // Both copy_string calls stay inside the guarded body so an allocation
+  // failure maps to SONARE_ERROR_OUT_OF_MEMORY like everywhere else; the
+  // message a caught exception carries reaches the caller through
+  // sonare_last_error_message().
+  SONARE_C_TRY
+  std::string normalized;
+  std::string error;
+  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(json, &normalized,
+                                                                           &error)) {
+    *out_error = copy_string(error.empty() ? "invalid preset JSON" : error);
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  *out_normalized_json = copy_string(normalized);
+  return SONARE_OK;
+  SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(json, out_normalized_json, out_error);
 #endif

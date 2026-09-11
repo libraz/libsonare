@@ -6,6 +6,7 @@
 
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::rt {
 
@@ -43,20 +44,24 @@ float safe_div(float numerator, float denominator, float fallback) {
   return std::abs(denominator) > 1.0e-12f ? numerator / denominator : fallback;
 }
 
-// RT-safe: never throws. A degenerate a0 (zero or non-finite) cannot be
-// normalized, so fall back to a unity-gain passthrough biquad
+// RT-safe: never throws. A tap that cannot be represented as a finite float —
+// a degenerate a0, or a numerator an overflowing gain term drove to infinity
+// while a0 stayed finite — falls back to a unity-gain passthrough biquad
 // (b0=1, all other taps 0) rather than terminating a noexcept callback.
 BiquadCoeffs normalize(double b0, double b1, double b2, double a0, double a1, double a2) noexcept {
-  if (!(std::abs(a0) > 0.0) || !std::isfinite(a0)) {
-    return {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-  }
+  constexpr BiquadCoeffs kPassthrough{1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  if (!(std::abs(a0) > 0.0) || !std::isfinite(a0)) return kPassthrough;
 
   const double inv_a0 = 1.0 / a0;
-  return {
-      static_cast<float>(b0 * inv_a0), static_cast<float>(b1 * inv_a0),
-      static_cast<float>(b2 * inv_a0), static_cast<float>(a1 * inv_a0),
-      static_cast<float>(a2 * inv_a0),
-  };
+  const double wide[5] = {b0 * inv_a0, b1 * inv_a0, b2 * inv_a0, a1 * inv_a0, a2 * inv_a0};
+  float taps[5] = {};
+  for (int i = 0; i < 5; ++i) {
+    // Checked rather than a bare narrowing: a finite double outside float range
+    // is undefined behaviour to cast, and an infinite one would install a tap
+    // that turns the filter state to NaN on its second sample.
+    if (!numeric::checked_float_cast(wide[i], &taps[i])) return kPassthrough;
+  }
+  return {taps[0], taps[1], taps[2], taps[3], taps[4]};
 }
 
 float magnitude_at(const BiquadCoeffs& coeffs, float omega) {

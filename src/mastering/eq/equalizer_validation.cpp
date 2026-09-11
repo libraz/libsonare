@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "mastering/eq/equalizer.h"
 #include "util/exception.h"
 
@@ -7,6 +9,14 @@ namespace {
 
 bool is_cut_band(EqBandType type) noexcept {
   return type == EqBandType::LowPass || type == EqBandType::HighPass;
+}
+
+// The peak and shelf designs raise 10^(dB/40); past roughly 12330 dB that
+// amplitude overflows and the numerator taps come out infinite. Bound on that
+// realizability condition rather than on an invented dB ceiling.
+bool gain_db_is_realizable(float gain_db) noexcept {
+  return std::isfinite(gain_db) &&
+         std::isfinite(std::pow(10.0, static_cast<double>(gain_db) / 40.0));
 }
 
 int cut_order(int slope_db_oct) {
@@ -48,6 +58,10 @@ void EqualizerProcessor::validate_band_index(size_t index) {
 void EqualizerProcessor::validate_supported_band(const EqBand& band, PhaseMode global_phase) {
   if (!band.enabled) {
     return;
+  }
+  if (!gain_db_is_realizable(band.gain_db)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EQ band gain is too large to realize as finite coefficients");
   }
   const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? global_phase : band.phase;
   const bool brickwall_cut = is_cut_band(band.type) && band.slope_db_oct == 0;
@@ -178,6 +192,12 @@ void EqualizerProcessor::validate_dynamic_params(const DynamicParams& dyn) {
   }
   if (!(dyn.ratio >= 1.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "dynamic ratio must be at least 1");
+  }
+  // Both reach the biquad as gain: the detector delta is (detector_db -
+  // threshold_db) scaled by ratio and clamped to range_db.
+  if (!gain_db_is_realizable(dyn.threshold_db) || !gain_db_is_realizable(dyn.range_db)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "dynamic EQ threshold or range is too large to realize");
   }
   if (!(dyn.sidechain_q > 0.0f) || dyn.attack_ms < 0.0f || dyn.release_ms < 0.0f ||
       dyn.detector_delay_ms < 0.0f ||

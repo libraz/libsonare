@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 
 #include "util/constants.h"
 
@@ -141,4 +142,26 @@ TEST_CASE("K-weighting uses BS.1770 DeMan design away from 48 kHz", "[rt][biquad
                  0.508244558913602},
                 1.0e-12);
   require_close(at_22050.rlb, {1.0, -2.0, 1.0, -1.978397602590054, 0.978514419503187}, 1.0e-12);
+}
+
+TEST_CASE("rbj_peak falls back to passthrough when the gain overflows its taps", "[rt][biquad]") {
+  // 10^(gain_db/40) overflows past roughly 12330 dB, leaving b0 = +inf and
+  // b2 = -inf while a0 stays 1.0 — the shape normalize() used to let through
+  // because it inspected a0 alone.
+  const float w0 = static_cast<float>(2.0 * sonare::constants::kPiD * 1000.0 / 48000.0);
+  const auto sane = sonare::rt::rbj_peak(w0, 1.0f, 6.0f);
+  REQUIRE(std::isfinite(sane.b0));
+  REQUIRE(sane.b0 != 1.0f);
+
+  for (const float gain_db :
+       {20000.0f, 1.0e30f, -1.0e30f, std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
+    const auto coeffs = sonare::rt::rbj_peak(w0, 1.0f, gain_db);
+    INFO(gain_db);
+    REQUIRE(std::isfinite(coeffs.b0));
+    REQUIRE(std::isfinite(coeffs.b1));
+    REQUIRE(std::isfinite(coeffs.b2));
+    REQUIRE(std::isfinite(coeffs.a1));
+    REQUIRE(std::isfinite(coeffs.a2));
+  }
 }

@@ -72,6 +72,7 @@ class CallbackInstrument final : public sonare::midi::MidiInstrument {
 
   void prepare(double sample_rate, int max_block_size) override {
     pending_count_ = 0;
+    max_block_size_ = max_block_size > 0 ? max_block_size : 1;
     if (cb_.prepare) cb_.prepare(cb_.user_data, sample_rate, max_block_size);
   }
   void set_transport(const sonare::transport::TransportState& state) noexcept override {
@@ -91,7 +92,16 @@ class CallbackInstrument final : public sonare::midi::MidiInstrument {
   void on_event(uint32_t destination_id, const sonare::midi::MidiEvent& event) noexcept override {
     // Only the UMP words cross the seam, so nothing here borrows the event's
     // SysEx view, which is valid for the duration of this call alone.
-    if (cb_.on_event == nullptr || pending_count_ >= pending_.size()) return;
+    if (cb_.on_event == nullptr) return;
+    // A full hold forwards what it already has instead of discarding the newest
+    // event. The sequencer batches every same-frame event across all clips and
+    // tracks into one dispatch, so a dense tick can exceed the hold, and a drop
+    // here is invisible to the host. Order is preserved because everything held
+    // is older than this event, and the basis matches process()'s own flush
+    // (rendered_frames_ has not advanced yet). The offsets of a flush forced
+    // here are clamped against the prepared block size rather than this block's
+    // length, which is not yet known; the ordinary flush clamps the rest.
+    if (pending_count_ >= pending_.size()) flush_pending(max_block_size_);
     pending_[pending_count_++] = {destination_id, event.render_frame, event.ump};
   }
 
@@ -139,9 +149,12 @@ class CallbackInstrument final : public sonare::midi::MidiInstrument {
   SonareInstrumentCallbacks cb_;
   // Bounded per-block event hold. One sub-block normally carries a single event
   // (the engine splits at every MIDI frame); the dense case is a hang-note
-  // release, which is capped by the sequencer's active-note table.
+  // release, which is capped by the sequencer's active-note table. Filling it is
+  // not a loss: on_event flushes and keeps going, so the size is a latency /
+  // placement-precision trade rather than a ceiling on events.
   std::array<PendingEvent, 512> pending_{};
   size_t pending_count_ = 0;
+  int max_block_size_ = 1;
   int64_t block_first_frame_ = 0;
   int64_t rendered_frames_ = 0;
 };

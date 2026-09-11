@@ -31,6 +31,11 @@ SonareError sonare_audio_file_channel_count(const char* path, int* out_channels)
 #endif
 
 void sonare_audio_free(SonareAudio* audio);
+/// @brief Borrowed view of the handle's interleaved samples, or NULL for a NULL
+///        @p audio.
+/// @details Owned by the @ref SonareAudio handle, not the caller: valid until
+///          @ref sonare_audio_free, and never to be freed separately. Use
+///          @ref sonare_audio_length for the element count.
 const float* sonare_audio_data(const SonareAudio* audio);
 size_t sonare_audio_length(const SonareAudio* audio);
 int sonare_audio_sample_rate(const SonareAudio* audio);
@@ -90,11 +95,21 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 typedef struct {
   int32_t n_fft;
   int32_t hop_length;
+  /* Minimum onset strength a peak must reach; 0 selects the adaptive path.
+     Expressed in the units of the onset envelope this call computes internally,
+     which is not normalized, so the usable range depends on the magnitudes the
+     caller's own audio produces and cannot be derived from the signature. The
+     envelope is the same one sonare_onset_strength returns, so run that on
+     representative audio to see the scale before setting this. */
   float threshold;
   int32_t pre_max;
   int32_t post_max;
   int32_t pre_avg;
   int32_t post_avg;
+  /* Offset added to the running mean of the onset envelope, in that envelope's
+     own units -- the same quantity and the same caveat as sonare_peak_pick's
+     delta, which this field ultimately feeds. Not a normalized or dB value.
+     Take a small fraction of the envelope's mean or median and adjust. */
   float delta;
   int32_t wait;
   uint8_t backtrack;
@@ -252,6 +267,11 @@ void sonare_free_key_candidates(SonareKeyCandidate* ptr);
 void sonare_free_result(SonareAnalysisResult* result);
 
 // Error handling
+/// @brief Returns a short static description of @p error.
+/// @details A string literal with static storage duration: never NULL, never
+///          invalidated by any later call, and never to be freed. Contrast
+///          @ref sonare_last_error_message, which is thread-local and
+///          overwritten.
 const char* sonare_error_message(SonareError error);
 
 /// @brief Returns the detailed message for the most recent error on the calling thread.
@@ -306,6 +326,9 @@ const char* sonare_last_error_message(void);
 const char* sonare_last_warning_message(void);
 
 // Version
+/// @brief Returns the library version string (e.g. "1.2.3").
+/// @details A string literal with static storage duration: never NULL, never
+///          invalidated by any later call, and never to be freed.
 const char* sonare_version(void);
 uint32_t sonare_engine_abi_version(void);
 
