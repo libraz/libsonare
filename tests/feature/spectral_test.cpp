@@ -599,7 +599,9 @@ namespace {
 ///          bin-major for cache locality, which is only legitimate if the per-frame
 ///          summation order over bins is preserved. Exact equality against a frame-major
 ///          oracle is what makes that claim checkable; a tolerance would not see a
-///          reordered accumulation.
+///          reordered accumulation. Bandwidth is the exception and says why at its own
+///          comparison: its accumulate is a multiply-add, so it contracts differently in
+///          the two translation units.
 float oracle_sanitize(float magnitude) {
   return std::isfinite(magnitude) ? std::max(magnitude, 0.0f) : 0.0f;
 }
@@ -731,10 +733,12 @@ TEST_CASE("spectral descriptors match a frame-major oracle", "[spectral]") {
   REQUIRE(bandwidth.size() == bandwidth_ref.size());
   for (size_t i = 0; i < bandwidth.size(); ++i) {
     CAPTURE(i);
-    // Not bit-compared: the library and this oracle are separate translation
-    // units, so floating-point contraction may fuse the accumulate in one and
-    // not the other. A tiling or traversal error is orders of magnitude larger
-    // than the one-unit-in-the-last-place that leaves.
+    // The tolerance is load-bearing: both accumulates are multiply-adds, and the
+    // shipped library contracts this one to an FMA where this oracle does not,
+    // costing one ulp on frames 51, 90, 113 and 221. The traversal is not the
+    // cause -- compared same-TU under the shipped flags, bin-major matches a
+    // frame-major walk exactly. Centroid above compares exactly only because its
+    // two sides contract alike; without contraction it moves 90 of 301 frames.
     REQUIRE(bandwidth[i] == Catch::Approx(bandwidth_ref[i]).epsilon(1.0e-6));
   }
 
