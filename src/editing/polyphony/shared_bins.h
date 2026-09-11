@@ -104,15 +104,16 @@ struct SharedBinConfig {
   /// The mechanism is arithmetic rather than conjecture: clamping one window's
   /// weight and not the other's changes what each contributes, so a pair at a
   /// 55:1 modulus ratio averages as 1:1 and the mean's angle moves by up to 87
-  /// degrees. The ordering is nonetheless unreachable, for a reason belonging to
-  /// the fit rather than to any signal: **a weight over the ceiling is itself
-  /// evidence that the decomposition was well determined.** Getting there takes
-  /// two large cancelling components, which the fit commits to only where the
-  /// poles are separable -- the well-conditioned case, in which every window
-  /// recovers the same answer. Where they nearly coincide the split is instead
-  /// underdetermined, least squares returns the minimum-norm answer, and the
-  /// weight sits near one. So no trajectory has both a clampable weight and
-  /// windows that disagree, and the two orders cannot be told apart.
+  /// degrees. Which order is better is untested, and it has not been shown
+  /// untestable. Two things about the population are measured. A weight over the
+  /// ceiling is evidence the decomposition was well determined, since reaching it
+  /// takes two large cancelling components and the fit commits to those only
+  /// where the poles are separable. And the windows disagree *more* as the poles
+  /// separate, not less: where they nearly coincide the split is underdetermined,
+  /// least squares returns the minimum-norm answer, and both windows are pinned
+  /// to it with the weight near one. Those rise together rather than trading off,
+  /// so the population that clamps is also the one where the windows differ --
+  /// which is where a case would have to be built, and where none has been.
   ///
   /// It also bounds how loud the residual can get, and that axis is not what set
   /// the default. @ref mask_total runs to roughly this value where a bin is
