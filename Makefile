@@ -17,7 +17,10 @@ ACCURACY_REPORT_JSON ?= $(CURDIR)/build-optional-fixtures/accuracy-report.json
 INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
 RYE ?= rye
 CMAKE ?= cmake
-HARDENING_JOBS ?= 2
+# Compile workers for every target that builds into a private -B directory.
+# An explicit --parallel outranks CMAKE_BUILD_PARALLEL_LEVEL, so honour that
+# variable here or the documented way to cap a shared machine silently loses.
+HARDENING_JOBS ?= $(if $(CMAKE_BUILD_PARALLEL_LEVEL),$(CMAKE_BUILD_PARALLEL_LEVEL),2)
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 PYTHON_PKG_DIR := bindings/python/src/libsonare
 UNAME_S := $(shell uname -s)
