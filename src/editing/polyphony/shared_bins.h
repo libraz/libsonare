@@ -101,10 +101,19 @@ struct SharedBinConfig {
   /// window before averaging: clamping first moves the angle of the average,
   /// which is the one quantity the clamp exists to preserve.
   ///
-  /// The mechanism is arithmetic rather than conjecture: clamping one window's
-  /// weight and not the other's changes what each contributes, so a pair at a
-  /// 55:1 modulus ratio averages as 1:1 and the mean's angle moves by up to 87
-  /// degrees. Which order separates better is untested.
+  /// The ordering is out of reach, for a reason as arithmetic as the effect
+  /// itself. Once both windows clamp they carry the same modulus, so clamping
+  /// first bisects their angles while averaging first takes the modulus-weighted
+  /// mean; the two part company only as that ratio leaves one, reaching 87
+  /// degrees at 55:1. It does not leave one. Both windows must reproduce the bin
+  /// across their whole overlap, and two separated modes are linearly independent
+  /// over two frames or more, so their fits differ by no more than their
+  /// residuals do. The same ratio of conditioning to noise governs the
+  /// minimum-norm collapse, so a bin degenerate enough for the fits to part has
+  /// already lost its weight to about one and cannot reach the ceiling. Measured,
+  /// the ratio stays under 1.26 wherever both windows pass the residual gate and
+  /// under 1.10 at the degenerate end, where the bound is measurement rather than
+  /// algebra; at 1.2 even antiphase windows move the mean by about 0.01 rad.
   ///
   /// It also bounds how loud the residual can get, and that axis is not what set
   /// the default. @ref mask_total runs to roughly this value where a bin is
