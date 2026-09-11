@@ -9,21 +9,26 @@
 /// note; this file makes the neutral choice of an equal split and estimates
 /// nothing about which note the energy came from.
 ///
-/// The weights sum to one at every bin, so adding every note back to the
-/// residual returns the input to within float rounding. That identity is the
-/// point of the representation: an edit is a change to one note's masked
-/// spectrum, and everything not edited is carried through untouched rather than
-/// re-synthesised.
+/// Adding every note back to the residual returns the input to within float
+/// rounding. That identity is the point of the representation: an edit is a
+/// change to one note's masked spectrum, and everything not edited is carried
+/// through untouched rather than re-synthesised.
 ///
 /// That identity holds for any division whatsoever, since the residual is one
 /// minus whatever the notes took. It says the representation loses nothing; it
 /// says nothing about whether a note got the right share, and a reconstruction
 /// that matches is not evidence that the separation is good.
 ///
+/// A weight is complex because two partials sharing a bin interfere, and the
+/// sum's phase is neither one's. The equal split built here is real, but a later
+/// stage estimates the division and needs the phase to state it; a real weight
+/// caps what that stage can reach about 45 dB short.
+///
 /// A mask is stored sparsely because a note only reaches its own partials. Dense
 /// per note would be a spectrogram each, which for a full arrangement is the
 /// input many times over.
 
+#include <complex>
 #include <cstdint>
 #include <vector>
 
@@ -53,6 +58,13 @@ struct NoteMaskConfig {
   /// 0.88 of it at the same width, which is the wrong trade against a leak
   /// already under 1e-4.
   ///
+  /// That argument is against widening only. Narrowing costs something it cannot
+  /// see: a claim has to stay wider than the track's f0 error for the partial to
+  /// fall inside it at all, and ten cents at 1800 Hz is already 0.97 bins, so a
+  /// stage dividing shared bins loses its tolerance to a track's error well
+  /// before the claim loses energy. The two bound the default from opposite
+  /// sides.
+  ///
   /// Overlap is the normal case and not an edge. Counting partial positions at
   /// 20 partials a note, @c n_fft 4096 and 44.1 kHz: an octave puts ten of the
   /// lower note's twenty in the same bin as one of the upper note's, a fifth
@@ -79,9 +91,10 @@ struct NoteMaskConfig {
 ///          Every function taking one checks that shape before it allocates
 ///          against it, because a hand-built mask is otherwise a write outside
 ///          its own arrays rather than a rejected input. The weights are checked
-///          against their own range too: a weight of zero or two is not a shape
-///          error and would break the total and the residual without any call
-///          failing, which is a worse outcome than a rejection.
+///          against their own range too: a weight of zero or one that is not
+///          finite is not a shape error and would break the total and the
+///          residual without any call failing, which is a worse outcome than a
+///          rejection.
 struct NoteMask {
   /// Index into the track's ridges, so a mask can be traced back to the pitch
   /// that produced it.
@@ -96,8 +109,11 @@ struct NoteMask {
   std::vector<int32_t> frame_offset;
   /// Linear STFT bin of each weight.
   std::vector<int32_t> bins;
-  /// Share of that bin this note takes, in (0, 1].
-  std::vector<float> weights;
+  /// Share of that bin this note takes. Finite and non-zero. An equal split is
+  /// real and in (0, 1]; an estimated one carries the partial's phase and may
+  /// exceed one in modulus, which is correct where two partials partly cancel
+  /// and the observed bin is smaller than either component.
+  std::vector<std::complex<float>> weights;
 
   int frame_end() const noexcept { return frame_start + n_frames; }
 };
@@ -111,7 +127,84 @@ struct NoteMaskSet {
   int n_frames = 0;
   int hop_length = 0;
   int sample_rate = 0;
+  /// The geometry the claims were placed with, carried so a later stage can tell
+  /// which partial of which note stands on a bin. That is not recoverable from
+  /// the bins: the claim centre is @c h * f0 * sqrt(1 + B * h^2), so recovering
+  /// the harmonic number as @c round(bin_hz / f0) disagrees from about the
+  /// fourteenth partial up at an ordinary piano stretch, and at the first for a
+  /// note low enough that a claim spans more than half a step.
+  ///
+  /// It is metadata about how the bins were chosen and not part of the set's
+  /// shape, so the functions that consume a set do not validate it: a hand-built
+  /// set carrying the default is accepted everywhere a set is accepted. Only a
+  /// stage that has to interpret the claims reads it, and such a stage validates
+  /// it for itself.
+  NoteMaskConfig config;
 };
+
+/// @brief One partial's claim: which harmonic, where it sits, which bins it takes.
+/// @details Two different edge rules meet here and are not the same rule. A
+///          partial whose @c centre_hz is **above** Nyquist claims nothing and is
+///          dropped, because a real signal has nothing up there -- a claim
+///          reaching back down from above Nyquist would take bins that cannot
+///          hold that note's content. A partial at or below Nyquist whose claim
+///          *width* runs off either end is **clamped** to the spectrum and kept,
+///          so a partial near the top keeps the part of its width that fits.
+///
+///          A partial exactly at Nyquist is therefore kept. That bin is
+///          real-valued but can carry content, and the bins its claim reaches
+///          below it certainly can -- dropping the claim to avoid the one would
+///          discard the others with it.
+struct PartialClaim {
+  int harmonic = 0;        ///< 1-based, so @c centre_hz is that multiple of the f0.
+  float centre_hz = 0.0f;  ///< @c harmonic * f0 * sqrt(1 + B * harmonic^2).
+  /// The claimed bins, as a closed interval: bin @c last_bin is claimed. Both are
+  /// already clamped to <tt>[0, n_bins)</tt>, so a consumer never clamps again,
+  /// and @c first_bin <= @c last_bin always -- a claim with nothing left after
+  /// clamping is not returned at all.
+  int first_bin = 0;
+  int last_bin = 0;
+};
+
+/// @brief Where one note's partials fall and what each of them claims.
+/// @details The single derivation of claim geometry. @ref build_note_masks places
+///          its claims from this, and a stage that has to know which partial of
+///          which note stands on a bin reads it rather than recovering a harmonic
+///          number from the bin's frequency -- two routes to one quantity, with
+///          nothing asserting they agree, is how the stretch below goes unnoticed
+///          until it is outside every tested range.
+///
+///          Strictly ascending in @c harmonic, and the ranges are disjoint and
+///          ascending with it -- but the harmonics may skip, so
+///          <tt>claims[i].harmonic</tt> is not @c i+1. Two partials closer
+///          together than a bin resolve to one claim, the upper one having
+///          nothing left once the lower has taken the bins: at the default
+///          framing that begins below about 10.8 Hz, and an f0 of 5 with 128
+///          harmonics returns 60 claims with 59 gaps. Keeping
+///          <tt>first_bin <= last_bin</tt> is worth more than an index identity,
+///          because a consumer expands the range and a reversed one is a real
+///          fault where a skipped harmonic is only a missing entry.
+///
+///          Partial frequency is monotone in the harmonic for any
+///          @c inharmonicity the config allows, so the partials that fall off the
+///          top fall off together: the result is shorter than
+///          @c config.n_harmonics near the top of the register and empty for an
+///          f0 above Nyquist.
+/// @param spec Supplies the framing -- @c n_bins, @c win_length, @c sample_rate.
+///        Its contents are never read, so the claim geometry does not depend on
+///        the signal.
+/// @param f0_hz Positive and finite.
+/// @param config Claim geometry.
+/// @throws SonareException(InvalidParameter) on an empty @p spec or one whose
+///         @c n_fft, @c win_length, @c hop_length or @c sample_rate is not
+///         positive; an @p f0_hz that is not positive and finite; an
+///         @c n_harmonics outside [1, 128]; a @c claim_lobes outside (0, 64]; or
+///         a negative @c inharmonicity. The same grounds @ref build_note_masks
+///         rejects, enumerated rather than referenced because this is a public
+///         entry point of its own and an unenumerated contract is an unverified
+///         one.
+std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
+                                         const NoteMaskConfig& config = {});
 
 /// @brief Builds one mask per ridge over @p spec.
 /// @details The claim of a partial is flat across its width, and a claim running
@@ -157,13 +250,19 @@ Spectrogram residual_spectrum(const Spectrogram& spec, const NoteMaskSet& masks)
 
 /// @brief Total weight the notes place on each bin, @c [n_bins x n_frames] in
 ///        the spectrogram's own layout.
-/// @details Never below zero, and one at every claimed bin up to the rounding of
-///          adding @c k copies of @c 1/k -- which for a bin many notes claim can
-///          carry the sum a few ULP past one. It is not clamped: a clamp would
-///          hide a total that is genuinely wrong as readily as one that is merely
-///          rounded, and this exists so the sum can be checked rather than
-///          assumed. It is the one property every later stage rests on.
+/// @details From @ref build_note_masks this is one at every claimed bin, up to
+///          the rounding of adding @c k copies of @c 1/k -- which for a bin many
+///          notes claim can carry the sum a few ULP past one. From a stage that
+///          estimates the division it is one only where the estimate accounted
+///          for the whole bin, and the shortfall is what the residual then
+///          carries; that is the intent, since energy pushed into a note that did
+///          not produce it breaks when the note moves.
+///
+///          It is not clamped or normalised. A clamp would hide a total that is
+///          genuinely wrong as readily as one that is merely rounded, and
+///          normalising would erase exactly the shortfall the residual is for.
+///          This exists so the sum can be checked rather than assumed.
 /// @throws SonareException(InvalidParameter) on a @p masks with no shape.
-std::vector<float> mask_total(const NoteMaskSet& masks);
+std::vector<std::complex<float>> mask_total(const NoteMaskSet& masks);
 
 }  // namespace sonare::editing::polyphony
