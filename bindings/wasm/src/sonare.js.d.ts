@@ -1139,6 +1139,7 @@ export interface WasmRealtimeEngine {
   clipPageRequestScratchClipId: () => number;
   clipPageRequestScratchSample: () => number;
   clipPageRequestOverflowCount: () => number;
+  warpStretchOverflowCount: () => number;
   setClipPagePrefetchFrames: (frames: number) => void;
   clipPagePrefetchFrames: () => number;
   setCaptureBuffer: (numChannels: number, capacityFrames: number) => void;

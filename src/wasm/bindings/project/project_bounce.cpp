@@ -176,7 +176,7 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
       opts.total_frames = static_cast<int64_t>(options["totalFrames"].as<double>());
     }
     if (hasProperty(options, "blockSize")) {
-      opts.block_size = options["blockSize"].as<int>();
+      opts.block_size = checkedIntFromVal(options["blockSize"], "blockSize");
     }
     if (hasProperty(options, "numChannels")) {
       opts.num_channels = options["numChannels"].as<int>();
@@ -190,10 +190,11 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
       }
     }
     if (hasProperty(options, "sampleRate")) {
-      opts.sample_rate = options["sampleRate"].as<int>();
+      opts.sample_rate = checkedIntFromVal(options["sampleRate"], "sampleRate");
     }
     if (hasProperty(options, "instrumentLatencySamples")) {
-      opts.instrument_latency_samples = options["instrumentLatencySamples"].as<int>();
+      opts.instrument_latency_samples =
+          checkedIntFromVal(options["instrumentLatencySamples"], "instrumentLatencySamples");
     }
   }
   return opts;
@@ -208,19 +209,7 @@ SonareBuiltinInstrumentBinding ProjectWasm::builtinBindingFromVal(val desc) {
     binding.destination_id = desc["destinationId"].as<uint32_t>();
   }
   if (hasProperty(desc, "waveform")) {
-    val wf = desc["waveform"];
-    if (wf.typeOf().as<std::string>() == "string") {
-      const std::string s = wf.as<std::string>();
-      const int mapped = sonare_synth_builtin_waveform_from_name(s.c_str());
-      if (mapped < 0) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "Unknown synth waveform name: '" + s +
-                                          "' (expected sine, saw, sawtooth, square, or triangle)");
-      }
-      binding.config.waveform = mapped;
-    } else {
-      binding.config.waveform = wf.as<int>();
-    }
+    binding.config.waveform = builtinWaveformFromVal(desc["waveform"]);
   }
   if (hasProperty(desc, "gain")) {
     binding.config.gain = desc["gain"].as<float>();
@@ -238,7 +227,7 @@ SonareBuiltinInstrumentBinding ProjectWasm::builtinBindingFromVal(val desc) {
     binding.config.release_ms = desc["releaseMs"].as<float>();
   }
   if (hasProperty(desc, "polyphony")) {
-    binding.config.polyphony = desc["polyphony"].as<int>();
+    binding.config.polyphony = checkedIntFromVal(desc["polyphony"], "polyphony");
   }
   return binding;
 }
@@ -396,7 +385,7 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
     binding.config.gain = desc["gain"].as<float>();
   }
   if (hasProperty(desc, "polyphony")) {
-    binding.config.polyphony = desc["polyphony"].as<int>();
+    binding.config.polyphony = checkedIntFromVal(desc["polyphony"], "polyphony");
   }
   if (hasProperty(desc, "preferModelForModeledFamilies")) {
     binding.config.struct_version = 2;

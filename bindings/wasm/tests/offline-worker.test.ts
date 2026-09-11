@@ -123,6 +123,65 @@ describe('OfflineWorkerClient', () => {
     client.dispose();
   });
 
+  it('cancels work already running inside the native call', async () => {
+    // The case above cancels BEFORE the native call starts, which the pre-call
+    // guard already handled. This one cancels while the call is running, which
+    // needs a real thread: on the loopback the cancel message and the progress
+    // callback both arrive through queueMicrotask and cannot interleave with a
+    // synchronous native call, so only the SharedArrayBuffer flag written from
+    // another thread can reach it mid-flight.
+    //
+    // Note what this must NOT assert on its own. Before the fix the cancelled
+    // run still rejected with Cancelled — the post-call guard saw the flag once
+    // the work had finished — so an error-class assertion passes against the
+    // defect. Measured on the pre-fix bundle: 11 progress ticks and Cancelled,
+    // versus 11 ticks and completed uncancelled. The tick COUNT is the only
+    // thing that separates "unwound early" from "ran to the end and then
+    // reported cancelled", so it is the assertion that carries this test.
+    const analyzeTicks = async (cancelOnFirstTick: boolean): Promise<number> => {
+      const worker = new NodeWorker(
+        new URL('./fixtures/offline-worker-node-entry.mjs', import.meta.url),
+      );
+      const client = new OfflineWorkerClient({
+        worker: worker as unknown as OfflineWorkerLike,
+        terminateWorkerOnDispose: true,
+      });
+      try {
+        let ticks = 0;
+        const task = client.analyze(
+          { samples: makeTone(20) },
+          {
+            copy: true,
+            onProgress: () => {
+              ticks += 1;
+              if (cancelOnFirstTick && ticks === 1) {
+                task.cancel();
+              }
+            },
+          },
+        );
+        if (cancelOnFirstTick) {
+          await expect(task.result).rejects.toSatisfy(
+            (error: unknown) => isSonareError(error) && error.code === ErrorCode.Cancelled,
+          );
+        } else {
+          expect((await task.result).bpm).toBeGreaterThan(0);
+        }
+        return ticks;
+      } finally {
+        client.dispose();
+      }
+    };
+
+    const uncancelled = await analyzeTicks(false);
+    // Positive control: without several ticks to cut short there is nothing for
+    // the comparison below to measure.
+    expect(uncancelled).toBeGreaterThan(4);
+
+    const cancelled = await analyzeTicks(true);
+    expect(cancelled).toBeLessThan(uncancelled / 2);
+  });
+
   it('works through a real Node worker_threads boundary', async () => {
     const worker = new NodeWorker(
       new URL('./fixtures/offline-worker-node-entry.mjs', import.meta.url),

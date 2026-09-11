@@ -38,8 +38,9 @@ mastering, mixing, or realtime-engine APIs, import the smaller analysis entry:
 import { detectBpm, init } from '@libraz/libsonare/analysis';
 ```
 
-With emsdk 5.0.2, the analysis binary is 0.91 MiB raw / 368 KiB gzip; the full
-entry is 3.88 MiB raw / 1.31 MiB gzip. The analysis entry deliberately has no
+With emsdk 5.0.2, the analysis binary is 0.94 MiB raw / 358 KiB gzip; the full
+entry is 4.75 MiB raw / 1.50 MiB gzip. Both are the measurement recorded in
+`wasm-size-baseline.json`. The analysis entry deliberately has no
 `masterAudio`, `mixStereo`, `Project`, `Mixer`, or `RealtimeEngine` export.
 
 ## Quick Start
@@ -306,7 +307,8 @@ switched off, or when no track survived exclusion.
   `exclusionReason`, and gets no suggestion; an empty track list yields an empty
   scene. A malformed *call* is rejected instead — a missing or non-string track
   id, a `left` that is not a `Float32Array`, a `right` whose length differs from
-  `left`, or a non-positive `sampleRate` throws.
+  `left`, or a `sampleRate` that is not an integer within `[8000, 384000]`
+  throws.
 - **Genre- and material-dependent.** The relative levels and placements follow
   common recording practice, not a universal correct answer. Expect to treat the
   result as a first pass on unusual material.
@@ -317,8 +319,15 @@ switched off, or when no track survived exclusion.
 
 ### Options
 
-Every field is optional, and an omitted field keeps the core default rather than
-being sent as an explicit value. `sampleRate` itself defaults to `48000`.
+`sampleRate` is **required** and is not one of these options — it sits beside
+`tracks` on the request itself. Every band edge, high-pass corner, sibilance
+band and alignment lag is derived from it, so there is no default that would be
+safe to guess: 44.1 kHz material read as 48 kHz is misread by 8.8%, and
+`channelDelaySamples` and `durationSec` come back wrong with it. It must be an
+integer within `[8000, 384000]`; anything else is a `RangeError`.
+
+Every field in the table below *is* optional, and an omitted field keeps the
+core default rather than being sent as an explicit value.
 
 | Option               | Default | Meaning                                                        |
 | -------------------- | ------- | -------------------------------------------------------------- |

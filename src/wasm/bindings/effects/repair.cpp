@@ -24,9 +24,13 @@ bool repairOptionValue(const val& options, const char* key, val* value) {
 
 int repairIntOption(const val& options, const char* key, int fallback) {
   val value = val::undefined();
-  return repairOptionValue(options, key, &value) && value.typeOf().as<std::string>() == "number"
-             ? value.as<int>()
-             : fallback;
+  if (!repairOptionValue(options, key, &value) || value.typeOf().as<std::string>() != "number") {
+    return fallback;
+  }
+  // Range-check before narrowing, for the reason intProperty does: val::as<int>()
+  // saturates, so 2^31 and 4294967295 both arrived as INT_MAX and produced one
+  // identical output that every downstream positivity check accepted.
+  return checkedIntFromVal(value, key);
 }
 
 float repairFloatOption(const val& options, const char* key, float fallback) {

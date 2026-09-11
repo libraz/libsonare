@@ -314,7 +314,7 @@ val js_metering_spectrum(val samples, int sample_rate, val options) {
       cfg.apply_octave_smoothing = options["applyOctaveSmoothing"].as<bool>();
     }
     if (hasProperty(options, "octaveFraction")) {
-      const int f = options["octaveFraction"].as<int>();
+      const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
       if (f < 0) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "meteringSpectrum: octaveFraction must be non-negative");
@@ -373,7 +373,7 @@ val js_metering_spectrum_frame(val samples, int sample_rate, size_t frame_offset
       cfg.apply_octave_smoothing = options["applyOctaveSmoothing"].as<bool>();
     }
     if (hasProperty(options, "octaveFraction")) {
-      const int f = options["octaveFraction"].as<int>();
+      const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
       if (f < 0) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "meteringSpectrumFrame: octaveFraction must be non-negative");

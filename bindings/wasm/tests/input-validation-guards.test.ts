@@ -5,6 +5,7 @@
  * every other surface rejects.
  */
 
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyze,
@@ -74,6 +75,41 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
     expect(() => engine.prepare(48000, 128, 1024, 1024, 0)).toThrow();
     expect(() => engine.prepare(48000, 128, 1024, 1024, 65)).toThrow();
     expect(() => engine.prepare(48000, 128, 1024, 1024, 2)).not.toThrow();
+  });
+
+  it('puts the channel ceiling exactly where the engine constant puts it', () => {
+    // The two cases above spell 65, which keeps passing if the ceiling moves
+    // down and only ever asserts "something above 64 is refused". Derive the
+    // boundary from kMaxAudioChannels instead, on both the constructor and the
+    // prepare() path, so lowering the constant fails here rather than leaving a
+    // green test pinning a value the engine no longer uses.
+    const header = readFileSync(
+      new URL('../../../src/engine/realtime_engine.h', import.meta.url).pathname,
+      'utf8',
+    );
+    const declared = header.match(/kMaxAudioChannels\s*=\s*(\d+);/)?.[1];
+    // Self-check: the assertions below are vacuous if the constant moved or the
+    // regex stopped matching.
+    expect(declared, 'kMaxAudioChannels in src/engine/realtime_engine.h').toBeDefined();
+    const maxChannels = Number(declared);
+    expect(maxChannels).toBeGreaterThan(2);
+
+    const atLimit = new RealtimeEngine(48000, 128, 1024, 1024, maxChannels);
+    atLimit.delete();
+    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, maxChannels + 1)).toThrow();
+
+    const engine = new RealtimeEngine(48000, 128, 1024, 1024, 2);
+    try {
+      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels)).not.toThrow();
+      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels + 1)).toThrow();
+      // The prepared scratch rows share the same ceiling and the same constant.
+      expect(() => engine.prepareChannels(maxChannels, 128)).not.toThrow();
+      expect(() => engine.prepareChannels(maxChannels + 1, 128)).toThrow();
+      expect(() => engine.prepareMonitorChannels(maxChannels, 128)).not.toThrow();
+      expect(() => engine.prepareMonitorChannels(maxChannels + 1, 128)).toThrow();
+    } finally {
+      engine.delete();
+    }
   });
 
   it('forwards prepare() maxChannels and reports an over-limit process block', () => {

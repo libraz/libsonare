@@ -66,7 +66,8 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
   }
 #else
   (void)lanes;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -111,7 +112,8 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
   }
 #else
   (void)buses;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -129,7 +131,8 @@ void RealtimeEngineWasm::setBusStripJson(uint32_t bus_id, const std::string& sce
 #else
   (void)bus_id;
   (void)scene_json;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -150,7 +153,8 @@ void RealtimeEngineWasm::setTrackStripJson(uint32_t track_id, const std::string&
 #else
   (void)track_id;
   (void)scene_json;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -167,7 +171,8 @@ void RealtimeEngineWasm::setTrackStripEqBandJson(uint32_t track_id, int band_ind
   (void)track_id;
   (void)band_index;
   (void)band_json;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -183,7 +188,8 @@ void RealtimeEngineWasm::setTrackStripInsertBypassed(uint32_t track_id, unsigned
   (void)insert_index;
   (void)bypassed;
   (void)reset_on_bypass;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -200,7 +206,8 @@ void RealtimeEngineWasm::setMasterStripJson(const std::string& scene_json) {
   }
 #else
   (void)scene_json;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -215,7 +222,8 @@ void RealtimeEngineWasm::setMasterStripEqBandJson(int band_index, const std::str
 #else
   (void)band_index;
   (void)band_json;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -230,7 +238,8 @@ void RealtimeEngineWasm::setMasterStripInsertBypassed(unsigned int insert_index,
   (void)insert_index;
   (void)bypassed;
   (void)reset_on_bypass;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -246,7 +255,8 @@ void RealtimeEngineWasm::setBusStripInsertBypassed(uint32_t bus_id, unsigned int
   (void)insert_index;
   (void)bypassed;
   (void)reset_on_bypass;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -270,7 +280,8 @@ void RealtimeEngineWasm::setTrackStripInsertParamByName(uint32_t track_id,
   (void)insert_index;
   (void)param_name;
   (void)value;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -291,7 +302,8 @@ void RealtimeEngineWasm::setMasterStripInsertParamByName(unsigned int insert_ind
   (void)insert_index;
   (void)param_name;
   (void)value;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -313,7 +325,8 @@ void RealtimeEngineWasm::setBusStripInsertParamByName(uint32_t bus_id, unsigned 
   (void)insert_index;
   (void)param_name;
   (void)value;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -369,7 +382,8 @@ void RealtimeEngineWasm::setTrackStripPan(uint32_t track_id, float pan) {
 #else
   (void)track_id;
   (void)pan;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -385,7 +399,8 @@ void RealtimeEngineWasm::setTrackStripPanLaw(uint32_t track_id, int pan_law) {
 #else
   (void)track_id;
   (void)pan_law;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -401,7 +416,8 @@ void RealtimeEngineWasm::setTrackStripPanMode(uint32_t track_id, int pan_mode) {
 #else
   (void)track_id;
   (void)pan_mode;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -415,7 +431,8 @@ void RealtimeEngineWasm::setTrackStripDualPan(uint32_t track_id, float left_pan,
   (void)track_id;
   (void)left_pan;
   (void)right_pan;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -428,7 +445,8 @@ void RealtimeEngineWasm::setTrackStripChannelDelaySamples(uint32_t track_id, int
 #else
   (void)track_id;
   (void)delay_samples;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 

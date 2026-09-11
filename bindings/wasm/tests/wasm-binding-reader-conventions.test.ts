@@ -32,7 +32,10 @@ import { describe, expect, it } from 'vitest';
 import {
   bareArrayLengthReadSites,
   bareFieldReadSites,
+  integerNarrowingSites,
+  localIntReaderSites,
   offlineRenderWrapperSites,
+  valReaderFunctions,
   wasmBindingSources,
 } from './_wasm_binding_sources';
 
@@ -252,5 +255,160 @@ describe('WASM inherits the C ABI feature gate on mixing-only engine commands', 
         "success, and drops it on the engine's unknown-target telemetry. Wrap the " +
         'body in #if defined(SONARE_WITH_MIXING) and throw NotImplemented in the #else.',
     ).toEqual([]);
+  });
+});
+
+/**
+ * The Node addon forbids DEFINING a positional reader outside its shared header
+ * and has a test that says so. The WASM surface had the same rule in spirit and
+ * nothing enforcing it, which is how a second options-bag integer reader came to
+ * live in `effects/repair.cpp` and serve 15 fields: fixing the shared
+ * `intProperty` could not reach it, and an acceptance sampling `intProperty`
+ * fields could not see it.
+ */
+/**
+ * SCOPE, because this guard's name could be read as more than it checks: it
+ * matches functions whose SIGNATURE is that of a reader -- an integer-returning
+ * function taking a `val` -- which is the shape `repairIntOption` had and the
+ * one the shared reader exists to replace. It does NOT match every inline
+ * `as<int>()`. A return-type-agnostic scan finds 14 such sites, most of them
+ * array-element reads and enum-ordinal converters rather than options-bag size
+ * fields; triaging that population is a separate question from this one.
+ *
+ * File-local integer narrowing that may stay, with the measured reason.
+ *
+ * `automationCurveFromVal` narrows an ENUM ORDINAL rather than a size or a
+ * count, and the ordinal it produces is range-checked against `[0, SCurve]` by
+ * the C ABI it feeds (`src/c_api/project_edit_track.cpp:64`), which rejects a
+ * saturated INT_MAX with InvalidParameter. So it matches the shape and is not
+ * the defect: unlike a count, an out-of-range ordinal has nowhere plausible to
+ * land. Keyed `file:function`.
+ */
+const LOCAL_INT_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
+  [
+    'project/project_edit.cpp:automationCurveFromVal',
+    'Narrows an enum ordinal, not a size. The C ABI range-checks it against [0, SCurve] at project_edit_track.cpp:64 and rejects a saturated INT_MAX, so the value cannot reach a consumer as a plausible curve.',
+  ],
+]);
+
+describe('WASM options-bag reader functions narrow only through the shared reader', () => {
+  it('self-checks the scanner against the reader it was written for', () => {
+    // Vacuity guard: this assertion is a set difference, so a scanner that
+    // stopped matching would report a clean sweep. Pin that it still recognises
+    // a delegating reader as acceptable and still sees the files at all.
+    expect(wasmBindingSources().length).toBeGreaterThan(20);
+    const repair = wasmBindingSources().find((s) => s.file === 'effects/repair.cpp');
+    expect(repair, 'effects/repair.cpp is in the scanned set').toBeDefined();
+    expect(repair?.text).toContain('checkedIntFromVal');
+  });
+
+  it('defines no file-local options-bag integer reader outside common.cpp', () => {
+    expect(
+      localIntReaderSites()
+        .filter((site) => !LOCAL_INT_READER_ALLOWLIST.has(`${site.file}:${site.name}`))
+        .map((site) => `${site.file}:${site.line} ${site.name}(...)`),
+      'A function that narrows an embind val to an integer must call ' +
+        'checkedIntFromVal from wasm/bindings/common/common.h. A file-local copy uses ' +
+        'val::as<int>() directly, which SATURATES: 2^31 and 4294967295 both arrive as ' +
+        'INT_MAX and pass every downstream check that only asks for a positive value. ' +
+        'That is not hypothetical - repairIntOption did exactly this for 15 fields.',
+    ).toEqual([]);
+  });
+
+  it('keeps the allowlist free of entries whose site no longer exists', () => {
+    // An entry that outlives its site keeps asserting a reviewed decision, so
+    // the next reader to take that name inherits the blessing unexamined.
+    const live = new Set(localIntReaderSites().map((site) => `${site.file}:${site.name}`));
+    expect([...LOCAL_INT_READER_ALLOWLIST.keys()].filter((id) => !live.has(id))).toEqual([]);
+  });
+});
+
+describe('the two narrowing scans agree, and disagreeing is the failure', () => {
+  // A scanner cannot detect its own blind spot by any amount of care in writing
+  // it: a regex sweeping this tree has now been wrong three times, and each was
+  // found by something outside the regex disagreeing with its count, never by
+  // re-reading it. So two scans run over the same tree by different routes -
+  // scan A top-down over `val`-taking DEFINITIONS, scan B bottom-up over
+  // `.as<IntType>()` EXPRESSIONS - and their disagreement is asserted rather
+  // than logged.
+  //
+  // What this does NOT cross-check: both scans classify a cast type through the
+  // one shared list, so a type spelled outside it is invisible to both and the
+  // agreement stays green. That is the known common mode, stated here rather
+  // than papered over.
+
+  it('self-checks that both scans still see a tree to scan', () => {
+    // Both assertions below are agreement checks, and two empty sets agree
+    // perfectly. Pin that neither scan has silently stopped matching.
+    expect(valReaderFunctions().length).toBeGreaterThan(20);
+    expect(integerNarrowingSites().length).toBeGreaterThan(50);
+  });
+
+  it('sees both receiver shapes, so a population figure can state its shape', () => {
+    // A narrowing chained on a plain `val` variable rather than a literal-keyed
+    // index is invisible to the bracket-keyed scan, and a count drawn from that
+    // scan alone is an undercount by an amount nobody can name. Pin that both
+    // shapes resolve, and pin one `other` site by name so the classification
+    // cannot quietly collapse into a single bucket.
+    const sites = integerNarrowingSites();
+    const other = sites.filter((s) => s.receiverShape === 'other');
+    expect(sites.filter((s) => s.receiverShape === 'bracket-literal-key').length).toBeGreaterThan(
+      50,
+    );
+    expect(other.length).toBeGreaterThan(10);
+    // Anchored on the file holding the most `other` sites, so remediating any
+    // single one does not silently turn this into a vacuous check. The anchor
+    // asserts that the classification still resolves - it is not a judgement
+    // that these reads are correct.
+    expect(
+      other.filter((s) => s.file === 'realtime/clips.cpp').length,
+      'these reads are chained on local vals, not literal keys',
+    ).toBeGreaterThan(1);
+  });
+
+  it('every narrowing expression sits inside a definition scan A found', () => {
+    // The direction that catches a definition pattern too narrow to match what
+    // it should. Written without a qualified-name alternative, scan A misses
+    // every `Type::member` definition and 76 of this tree's narrowings come
+    // back with no container - which is the shape of the defect, visible here
+    // and invisible to anyone reading the pattern.
+    expect(
+      integerNarrowingSites()
+        .filter((site) => site.container === null)
+        .map((site) => `${site.file}:${site.line} .as<${site.castType}>()`),
+      'An integer narrowing with no enclosing val-taking definition means the ' +
+        'two scans disagree about the tree: either the definition pattern is ' +
+        'too narrow to match the function holding this read, or the brace ' +
+        'matching that measures its body is wrong. Fix the scan, not this list.',
+    ).toEqual([]);
+  });
+
+  it('the two scans count the same narrowings in every definition', () => {
+    // The other direction: scan A counts from a body slice, scan B counts from
+    // a whole-file sweep mapped back into spans. They share a type list and
+    // nothing else, so a mis-measured body span shows up as a count that does
+    // not reconcile.
+    const perContainer = new Map<string, number>();
+    for (const site of integerNarrowingSites()) {
+      if (site.container === null) {
+        continue;
+      }
+      const id = `${site.file}:${site.container}`;
+      perContainer.set(id, (perContainer.get(id) ?? 0) + 1);
+    }
+    const disagreements = valReaderFunctions()
+      .map((fn) => {
+        const id = `${fn.file}:${fn.name}`;
+        const fromB = perContainer.get(id) ?? 0;
+        return { id, line: fn.line, fromA: fn.narrowingCount, fromB };
+      })
+      .filter((row) => row.fromA !== row.fromB)
+      .map(
+        (row) => `${row.id} (line ${row.line}): scan A saw ${row.fromA}, scan B saw ${row.fromB}`,
+      );
+
+    expect(disagreements, 'The declaration scan and the expression scan must reconcile.').toEqual(
+      [],
+    );
   });
 });

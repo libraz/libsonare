@@ -151,6 +151,8 @@ val js_capabilities() {
 // SonareError whose numeric code matches the C ABI / Node / Python surfaces.
 // The integer codes mirror the C ABI SonareError enum (the C-ABI TU is not
 // linked into WASM, so the values are written out here rather than referenced).
+// The switch carries no default:, so a new ErrorCode enumerator fails the build
+// here instead of reaching JS as Unknown/99.
 val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   val info = val::object();
   int code = 99;  // SONARE_ERROR_UNKNOWN
@@ -196,6 +198,10 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
         case sonare::ErrorCode::Cancelled:
           code = 8;
           code_name = "Cancelled";
+          break;
+        case sonare::ErrorCode::EncodeFailed:
+          code = 9;
+          code_name = "EncodeFailed";
           break;
       }
     }

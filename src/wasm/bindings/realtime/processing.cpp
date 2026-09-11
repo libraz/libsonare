@@ -3,10 +3,17 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <string>
+
 #include "realtime_engine_wasm.h"
 #include "util/resource_limits.h"
 
 namespace {
+
+/// Channel ceiling for the prepared scratch rows, taken from the engine's own
+/// constant so the guards and the messages below move with it.
+constexpr int kMaxPreparedChannels =
+    static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);
 
 #if defined(SONARE_WITH_GRAPH)
 
@@ -160,7 +167,8 @@ void RealtimeEngineWasm::setGraph(val spec) {
   }
 #else
   (void)spec;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "graph support is not enabled");
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "graph support is not compiled in");
 #endif
 }
 
@@ -195,10 +203,11 @@ val RealtimeEngineWasm::process(val channels_val) {
 // thread (mirrors RealtimeVoiceChanger's prepared API). Call
 // prepareChannels(numChannels, maxFrames) once on the main thread first.
 void RealtimeEngineWasm::prepareChannels(int num_channels, int max_frames) {
-  if (num_channels <= 0 || num_channels > 64 || max_frames <= 0) {
+  if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.prepareChannels: channels must be within 1..64; "
-                                  "max_frames must be positive");
+                                  "RealtimeEngine.prepareChannels: channels must be within 1.." +
+                                      std::to_string(kMaxPreparedChannels) +
+                                      "; max_frames must be positive");
   }
   prepared_channels_ = num_channels;
   prepared_capacity_ = max_frames;
@@ -245,11 +254,12 @@ void RealtimeEngineWasm::processPrepared(int num_frames) {
 // planes. Call prepareMonitorChannels() once, off the audio thread, after
 // prepareChannels().
 void RealtimeEngineWasm::prepareMonitorChannels(int num_channels, int max_frames) {
-  if (num_channels <= 0 || num_channels > 64 || max_frames <= 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "RealtimeEngine.prepareMonitorChannels: channels must be within 1..64; "
-        "max_frames must be positive");
+  if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "RealtimeEngine.prepareMonitorChannels: channels must be "
+                                  "within 1.." +
+                                      std::to_string(kMaxPreparedChannels) +
+                                      "; max_frames must be positive");
   }
   monitor_channels_ = num_channels;
   monitor_capacity_ = max_frames;

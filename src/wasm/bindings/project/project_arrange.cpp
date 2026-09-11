@@ -68,9 +68,12 @@ uint32_t ProjectWasm::addClip(val desc) {
   d.source_offset_ppq =
       hasProperty(desc, "sourceOffsetPpq") ? desc["sourceOffsetPpq"].as<double>() : 0.0;
   d.gain = hasProperty(desc, "gain") ? desc["gain"].as<float>() : 1.0f;
-  d.audio_channels = hasProperty(desc, "audioChannels") ? desc["audioChannels"].as<int>() : 0;
-  d.audio_sample_rate =
-      hasProperty(desc, "audioSampleRate") ? desc["audioSampleRate"].as<int>() : 0;
+  d.audio_channels = hasProperty(desc, "audioChannels")
+                         ? checkedIntFromVal(desc["audioChannels"], "audioChannels")
+                         : 0;
+  d.audio_sample_rate = hasProperty(desc, "audioSampleRate")
+                            ? checkedIntFromVal(desc["audioSampleRate"], "audioSampleRate")
+                            : 0;
   if (hasProperty(desc, "audio")) {
     if (d.audio_channels == 0) d.audio_channels = 1;
     audio = float32ArrayToVector(desc["audio"]);
@@ -103,9 +106,12 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   d.track_id = hasProperty(desc, "trackId") ? desc["trackId"].as<uint32_t>() : 0;
   d.start_ppq = hasProperty(desc, "startPpq") ? desc["startPpq"].as<double>() : 0.0;
   d.loop_length_ppq = hasProperty(desc, "loopLengthPpq") ? desc["loopLengthPpq"].as<double>() : 0.0;
-  d.audio_channels = hasProperty(desc, "audioChannels") ? desc["audioChannels"].as<int>() : 1;
-  d.audio_sample_rate =
-      hasProperty(desc, "audioSampleRate") ? desc["audioSampleRate"].as<int>() : 48000;
+  d.audio_channels = hasProperty(desc, "audioChannels")
+                         ? checkedIntFromVal(desc["audioChannels"], "audioChannels")
+                         : 1;
+  d.audio_sample_rate = hasProperty(desc, "audioSampleRate")
+                            ? checkedIntFromVal(desc["audioSampleRate"], "audioSampleRate")
+                            : 48000;
   if (hasProperty(desc, "audio")) {
     audio = float32ArrayToVector(desc["audio"]);
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {

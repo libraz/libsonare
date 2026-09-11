@@ -166,6 +166,37 @@ describe('geometric room acoustics', () => {
     expect(Array.from(zero.rir)).not.toEqual(Array.from(two.rir));
   });
 
+  it('reaches the whole uint32 seed space the C ABI accepts', () => {
+    // The binding read the seed through intProperty, whose embind `as<int>()`
+    // SATURATES rather than wrapping: measured against the pre-fix module, every
+    // seed from 2^31 up — including 2^32 and 2^40, which are outside the C ABI's
+    // range entirely — produced one identical RIR, the one belonging to INT_MAX.
+    // So the whole upper half of the seed space collapsed onto a single seed
+    // instead of being reachable or rejected. (The Node addon had the same gap
+    // for a different reason: Int32Value wraps, so its high seeds fell back to
+    // the default. Hence the distinctness and rejection assertions below rather
+    // than only a comparison against the default.)
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
+    const asArray = (seed: number): number[] => Array.from(synthesizeRir({ ...base, seed }).rir);
+    const defaultRir = asArray(1);
+    // Positive control: a seed inside the int32 range already varied the tail,
+    // so "differs from the default" is not free.
+    expect(asArray(2)).not.toEqual(defaultRir);
+
+    for (const seed of [2 ** 31, 2 ** 31 + 1, 3_000_000_000, 4_294_967_295]) {
+      expect(asArray(seed), `seed ${seed}`).not.toEqual(defaultRir);
+      // Deterministic: the same high seed reproduces its own RIR exactly.
+      expect(asArray(seed), `seed ${seed} repeat`).toEqual(asArray(seed));
+    }
+    // Distinct high seeds stay distinct rather than collapsing onto each other.
+    expect(asArray(2 ** 31)).not.toEqual(asArray(4_294_967_295));
+
+    // Past the uint32 range there is no C-ABI seed to reach, so it is rejected
+    // rather than silently answered with the default RIR.
+    expect(() => synthesizeRir({ ...base, seed: 2 ** 32 })).toThrow();
+    expect(() => synthesizeRir({ ...base, seed: 2 ** 40 })).toThrow();
+  });
+
   it('honors per-band wall scattering', () => {
     const base = {
       lengthM: 7,

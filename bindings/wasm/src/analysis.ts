@@ -14,9 +14,58 @@ export { ErrorCode, isSonareError, SonareError } from './errors';
 export * from './feature_core';
 export * from './feature_music';
 export * from './feature_pitch';
-export * from './feature_resample';
-export * from './feature_spectral';
-export * from './feature_spectrogram';
+// The three modules below also hold functions the analysis-only embind source
+// set never registers, so they are re-exported by name rather than wholesale:
+// `export *` published symbols that imported fine and then threw
+// "is not a function" at call time, on a binary that never had them. Types stay
+// wholesale — a type cannot fail to resolve. The lists are not maintained by
+// hand: `analysis-entry.test.ts` compares every function this entry exports
+// against the registrations of the module it loads and fails on a mismatch in
+// either direction, so adding a name here that the analysis binary lacks, or
+// omitting one it gained, is a test failure rather than a runtime surprise.
+export type * from './feature_resample';
+export type * from './feature_spectral';
+export {
+  ebur128LoudnessRange,
+  estimateTuning,
+  lufsInterleaved,
+  pitchTuning,
+  polyFeatures,
+  rmsEnergy,
+  segmentAgglomerative,
+  segmentCrossSimilarity,
+  segmentLagToRecurrence,
+  segmentPathEnhance,
+  segmentRecurrenceMatrix,
+  segmentRecurrenceToLag,
+  segmentSubsegment,
+  spectralBandwidth,
+  spectralCentroid,
+  spectralContrast,
+  spectralFlatness,
+  spectralFlux,
+  spectralRolloff,
+  zeroCrossingRate,
+  zeroCrossings,
+} from './feature_spectral';
+export type * from './feature_spectrogram';
+export {
+  bassChroma,
+  chroma,
+  chromaCens,
+  chromaCqt,
+  griffinLim,
+  melDelta,
+  melSpectrogram,
+  melToAudio,
+  melToStft,
+  mfcc,
+  mfccToAudio,
+  mfccToMel,
+  reassignedSpectrogram,
+  stft,
+  stftDb,
+} from './feature_spectrogram';
 export * from './metering';
 export * from './public_types';
 export type {

@@ -1031,6 +1031,11 @@ export class RealtimeEngine {
     return this.native.clipPageRequestOverflowCount();
   }
 
+  /** Cumulative warp-stretch requests dropped because the native queue was full. */
+  warpStretchOverflowCount(): number {
+    return this.native.warpStretchOverflowCount();
+  }
+
   /**
    * Sets the clip-page look-ahead window in timeline frames.
    *

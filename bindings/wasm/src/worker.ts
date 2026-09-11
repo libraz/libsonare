@@ -107,19 +107,22 @@ export function installOfflineWorkerEndpoint(endpoint: OfflineWorkerEndpoint): v
       endpoint.postMessage({ type: 'sonare:offline-progress', id: message.id, progress, stage });
       return isCancelled() ? false : undefined;
     };
-
     try {
       await init();
       if (isCancelled()) {
         throw cancelledError();
       }
 
+      // `cancel` is a separate channel from `onProgress`: the native call polls
+      // it and never reads what the progress callback returns, so passing only
+      // onProgress left a running operation no way to learn it was cancelled.
       let result: unknown;
       switch (message.operation) {
         case 'analyze':
           result = analyzeWithProgress({
             ...(message.request as unknown as MusicAnalyzeRequest),
             onProgress,
+            cancel: isCancelled,
           });
           break;
         case 'detectBpm':
@@ -135,12 +138,14 @@ export function installOfflineWorkerEndpoint(endpoint: OfflineWorkerEndpoint): v
           result = masterAudio({
             ...(message.request as unknown as MasterAudioRequest),
             onProgress,
+            cancel: isCancelled,
           });
           break;
         case 'masterAudioStereo':
           result = masterAudioStereo({
             ...(message.request as unknown as MasterAudioStereoRequest),
             onProgress,
+            cancel: isCancelled,
           });
           break;
       }

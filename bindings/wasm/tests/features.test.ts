@@ -267,16 +267,49 @@ describe('Feature API precision (reference compatibility)', () => {
       const tone = generateSine(440, SR, DURATION);
       const result = stft(tone, SR, 2048, 512);
       const refMag = refData.magnitude as number[];
+      const [, nFrames] = refData.shape as [number, number];
 
-      // Spot-check first few non-trivial elements
-      for (let i = 0; i < Math.min(10, refMag.length); i++) {
-        if (refMag[i] > 1.0) {
-          expect(
-            withinRel(result.magnitude[i], refMag[i], 5e-2),
-            `magnitude[${i}]: got ${result.magnitude[i]}, expected ${refMag[i]}`,
-          ).toBe(true);
+      // The array is bin-major: flat index = bin * nFrames + frame. This check
+      // used to walk the first ten flat indices, which are all bin 0 — the DC
+      // bin — across frames 0..9, and of those only two clear the `> 1.0`
+      // filter (7.97 and 3.98, the window's DC edge artifact; frames 2..9 sit
+      // at ~0.001). So it compared two edge values and nothing carrying the
+      // tone. The 440 Hz energy is at bin 41, flat index 1804 and up.
+      const at = (bin: number, frame: number): number => bin * nFrames + frame;
+      const toneBin = Math.round((440 * 2048) / SR);
+      const midFrame = Math.floor(nFrames / 2);
+      const indices = [
+        at(0, 0), // the DC edge this check already covered
+        at(0, 1),
+        at(toneBin - 1, 5), // the tone's lower shoulder
+        at(toneBin, 5), // the tone itself
+        at(toneBin + 1, 5), // its upper shoulder
+        at(toneBin, midFrame), // and again once the frame is fully inside
+      ];
+
+      // Positive control on the selection itself: if the tone bin did not carry
+      // the energy, every "signal band" index below would be another edge
+      // value and the test would be back where it started.
+      expect(
+        refMag[at(toneBin, 5)],
+        `bin ${toneBin} should hold the 440 Hz energy`,
+      ).toBeGreaterThan(refMag[at(0, 5)] * 100);
+
+      let compared = 0;
+      for (const i of indices) {
+        if (!(refMag[i] > 1.0)) {
+          continue;
         }
+        compared += 1;
+        expect(
+          withinRel(result.magnitude[i], refMag[i], 5e-2),
+          `magnitude[${i}]: got ${result.magnitude[i]}, expected ${refMag[i]}`,
+        ).toBe(true);
       }
+      // An empty comparison set must fail rather than pass with nothing run:
+      // the filter above is a guard against comparing noise, not a licence to
+      // compare nothing.
+      expect(compared, 'spot check ran no comparisons').toBe(indices.length);
     });
   });
 

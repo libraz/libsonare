@@ -40,20 +40,8 @@ void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val confi
   sonare::midi::BuiltinSynthConfig cfg;
   if (!config.isUndefined() && !config.isNull()) {
     if (hasProperty(config, "waveform")) {
-      val wf = config["waveform"];
-      if (wf.typeOf().as<std::string>() == "string") {
-        const std::string name = wf.as<std::string>();
-        const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
-        if (mapped < 0) {
-          throw sonare::SonareException(
-              sonare::ErrorCode::InvalidParameter,
-              "Unknown synth waveform name: '" + name +
-                  "' (expected sine, saw, sawtooth, square, or triangle)");
-        }
-        cfg.waveform = static_cast<sonare::midi::SynthWaveform>(mapped);
-      } else {
-        cfg.waveform = static_cast<sonare::midi::SynthWaveform>(wf.as<int>());
-      }
+      cfg.waveform =
+          static_cast<sonare::midi::SynthWaveform>(builtinWaveformFromVal(config["waveform"]));
     }
     cfg.gain = floatProperty(config, "gain", 0.0f);
     cfg.attack_ms = floatProperty(config, "attackMs", 0.0f);
@@ -67,7 +55,7 @@ void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val confi
 #else
   (void)destination_id;
   (void)config;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -150,7 +138,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
   engine_.set_midi_clips(std::move(clips));
 #else
   (void)clips_val;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -179,7 +167,7 @@ void RealtimeEngineWasm::setSynthInstrument(uint32_t destination_id, val patch) 
 #else
   (void)destination_id;
   (void)patch;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -218,7 +206,7 @@ void RealtimeEngineWasm::loadSoundFont(val data) {
   soundfont_ = std::move(soundfont);
 #else
   (void)data;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -254,7 +242,7 @@ void RealtimeEngineWasm::setSf2Instrument(uint32_t destination_id, val config) {
 #else
   (void)destination_id;
   (void)config;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -325,7 +313,7 @@ void RealtimeEngineWasm::bindMidiCc(int channel, int controller, uint32_t param_
   (void)param_id;
   (void)min_value;
   (void)max_value;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -370,7 +358,7 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
   }
 #else
   (void)object;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -400,7 +388,7 @@ void RealtimeEngineWasm::setMidiFx(uint32_t destination_id, const std::string& c
 #else
   (void)destination_id;
   (void)config_json;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -419,7 +407,7 @@ void RealtimeEngineWasm::setMidiInputSource(uint32_t destination_id) {
   midi_input_source_enabled_ = true;
 #else
   (void)destination_id;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -451,7 +439,7 @@ void RealtimeEngineWasm::setMidiDestinationExternal(uint32_t destination_id, boo
 #else
   (void)destination_id;
   (void)external;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -463,7 +451,7 @@ void RealtimeEngineWasm::setExternalMidiClockEnabled(bool enabled) {
   engine_.set_external_midi_clock_enabled(enabled);
 #else
   (void)enabled;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -617,7 +605,7 @@ void RealtimeEngineWasm::pushMidiInputCc(int group, int channel, int controller,
   (void)controller;
   (void)value;
   (void)port_time_samples;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
@@ -688,19 +676,23 @@ void RealtimeEngineWasm::pushMidiUmp(uint32_t destination_id, uint32_t word0,
 }
 
 // Queues an immediate (live) MIDI SysEx frame to a MIDI destination. @p data is
-// the full message including the leading 0xF0 and trailing 0xF7 (1..512 bytes);
-// its bytes are copied out of the Uint8Array before the call returns. Reaches
-// the registered host instrument at @p render_frame (-1 = immediate). Mirrors
-// the C ABI sonare_engine_push_midi_sysex.
+// the full message including the leading 0xF0 and trailing 0xF7, 1 byte up to
+// RealtimeEngine::kMaxSysExPayloadBytes; its bytes are copied out of the
+// Uint8Array before the call returns. Reaches the registered host instrument at
+// @p render_frame (-1 = immediate). Mirrors the C ABI
+// sonare_engine_push_midi_sysex.
 void RealtimeEngineWasm::pushMidiSysex(uint32_t destination_id, val data, int64_t render_frame) {
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
   // Distinguish the two rejection classes the C ABI reports (it bypasses the
   // C-ABI translation unit here, so the mapping is reproduced): malformed or
   // oversized requests are InvalidParameter, while a full command queue is
-  // transient OutOfMemory back-pressure.
-  if (bytes.empty() || bytes.size() > 512) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "pushMidiSysex: data must contain 1..512 bytes");
+  // transient OutOfMemory back-pressure. The ceiling is the engine's own
+  // constant, not a copy of its value, so raising it moves this guard with it.
+  constexpr size_t kMaxSysExBytes = sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes;
+  if (bytes.empty() || bytes.size() > kMaxSysExBytes) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "pushMidiSysex: data must contain 1.." + std::to_string(kMaxSysExBytes) + " bytes");
   }
   if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(), render_frame)) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
@@ -772,7 +764,7 @@ void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, in
   (void)velocity;
   (void)port_time_samples;
   (void)note_on;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }

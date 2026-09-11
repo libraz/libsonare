@@ -72,6 +72,49 @@ describe('WASM cross-binding consistency', () => {
       }
     });
 
+    it('rejects a numeric waveform outside the enum, in the same words as a name', () => {
+      // The numeric spelling used to fall through unchecked and land on sine,
+      // and the first value past a four-value enum is 4 - what an off-by-one or
+      // a 1-based mirror emits - so the silent fallback sat immediately beside
+      // the valid range. -1 is the other one that matters: it is the sentinel a
+      // generated binding reaches for. 2**31 is deliberately NOT the interesting
+      // case, and a test driving only large values passes against a fix that
+      // starts checking at 5.
+      for (const waveform of [4, -1, 5, 2 ** 31]) {
+        const project = buildMidiOnlyProject();
+        try {
+          expect(
+            () =>
+              project.bounceWithBuiltinInstrument(
+                { waveform: waveform as unknown as 'sine' },
+                { totalFrames: 4800, numChannels: 1 },
+              ),
+            `waveform ${waveform} must be rejected, not resolved to sine`,
+          ).toThrow(/sawtooth/);
+        } finally {
+          project.delete();
+        }
+      }
+    });
+
+    it('accepts every in-domain waveform ordinal and they stay distinct', () => {
+      // Vacuity guard for the rejection above: a fix that rejected everything
+      // would satisfy it. Four ordinals, four different renders.
+      const renders = [0, 1, 2, 3].map((waveform) => {
+        const project = buildMidiOnlyProject();
+        try {
+          const audio = project.bounceWithBuiltinInstrument(
+            { waveform: waveform as unknown as 'sine' },
+            { totalFrames: SR, numChannels: 1 },
+          );
+          return audio.reduce((hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0, 0);
+        } finally {
+          project.delete();
+        }
+      });
+      expect(new Set(renders).size, 'the four waveforms must render differently').toBe(4);
+    });
+
     it('accepts "sawtooth" as an alias of "saw"', () => {
       const project = buildMidiOnlyProject();
       try {

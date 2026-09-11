@@ -5,8 +5,12 @@
 
 #include "common.h"
 
+#include <sonare/sonare_c_project_instruments.h>
+
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
 
 #include "util/numeric_validation.h"
 
@@ -252,9 +256,59 @@ float floatProperty(val object, const char* key, float default_value) {
   return value.isUndefined() ? default_value : value.as<float>();
 }
 
+int checkedIntFromVal(const val& value, const char* key) {
+  // val::as<int>() SATURATES out of range, so 2^31, 2^40, 3e9 and 4294967295 all
+  // arrive as INT_MAX and pass every downstream guard that only asks for a
+  // positive value -- four distinct caller mistakes becoming one plausible
+  // number. The positional embind path escapes this by accident rather than by
+  // design: a declared int parameter WRAPS, so the same inputs land non-positive
+  // and the existing guards reject them. Rejecting here is what makes the two
+  // agree; widening the positional path to match the saturating one would look
+  // consistent and remove the only range check this surface has.
+  const double number = value.as<double>();
+  if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
+      number > static_cast<double>(std::numeric_limits<int>::max())) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        std::string(key) + " must be a finite number within the 32-bit integer range");
+  }
+  return static_cast<int>(number);
+}
+
 int intProperty(val object, const char* key, int default_value) {
   val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : value.as<int>();
+  return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
+}
+
+int builtinWaveformFromVal(const val& value) {
+  // One rejection for both spellings. The numeric path used to fall through
+  // unchecked, and the first value past the enum is 4 -- what an off-by-one or a
+  // 1-based mirror emits -- so the silent fallback to sine sat immediately
+  // beside the valid range rather than out at some implausible number.
+  static const char* kExpected = "' (expected sine, saw, sawtooth, square, or triangle)";
+  const std::string type = value.typeOf().as<std::string>();
+  if (type == "string") {
+    const std::string name = value.as<std::string>();
+    const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
+    if (mapped < 0) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "Unknown synth waveform: '" + name + kExpected);
+    }
+    return mapped;
+  }
+  // A wrong TYPE is out of domain too, and letting it through would put the two
+  // surfaces back out of step: the addon's typed read rejects a boolean, while
+  // val::as<double>() would coerce true to 1 and render a saw.
+  if (type != "number") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "Unknown synth waveform: '" + type + kExpected);
+  }
+  const int ordinal = checkedIntFromVal(value, "waveform");
+  if (ordinal < SONARE_SYNTH_WAVEFORM_SINE || ordinal > SONARE_SYNTH_WAVEFORM_TRIANGLE) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "Unknown synth waveform: '" + std::to_string(ordinal) + kExpected);
+  }
+  return ordinal;
 }
 
 bool boolProperty(val object, const char* key, bool default_value) {

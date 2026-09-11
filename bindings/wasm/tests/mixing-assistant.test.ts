@@ -9,6 +9,7 @@
  *    guards are not linked into this surface.
  */
 
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { MixAssistantTrack, SuggestMixSceneRequest } from '../dist/index.js';
 import {
@@ -332,6 +333,38 @@ describe('mixing assistant (WASM)', () => {
       const request = { tracks: musicalTracks() } as unknown as SuggestMixSceneRequest;
       expect(() => suggestMixScene(request)).toThrow();
       expect(() => suggestMixSceneJson(request)).toThrow();
+    });
+
+    it('documents the sampleRate contract this file already enforces', () => {
+      // The two cases above have guarded the CODE since the 48000 default was
+      // removed; the README kept saying "Every field is optional" and
+      // "`sampleRate` itself defaults to `48000`" regardless, because nothing
+      // read it. This reads it.
+      //
+      // The bounds are parsed OUT of the README and then driven against the
+      // API, rather than compared to a constant. Comparing text to text would
+      // only prove two files agree; this proves the documented numbers are the
+      // values at which the behaviour actually changes, and it adds no third
+      // copy of them to drift.
+      const readme = readFileSync(new URL('../README.md', import.meta.url).pathname, 'utf8');
+      const assistant = readme.slice(readme.indexOf('suggestMixScene'));
+
+      expect(assistant).not.toMatch(/sampleRate.{0,40}defaults? to/i);
+      expect(assistant).toMatch(/`sampleRate` is \*\*required\*\*/);
+
+      const bounds = assistant.match(/integer within `\[(\d+), (\d+)\]`/);
+      expect(bounds, 'the README states the accepted sampleRate range').not.toBeNull();
+      const min = Number(bounds?.[1]);
+      const max = Number(bounds?.[2]);
+
+      const at = (sampleRate: number) => () =>
+        suggestMixScene({ tracks: musicalTracks(), sampleRate });
+      expect(at(min)).not.toThrow();
+      expect(at(max)).not.toThrow();
+      expect(at(min - 1)).toThrow(RangeError);
+      expect(at(max + 1)).toThrow(RangeError);
+      // Documented as an integer, so a fractional rate inside the range is out.
+      expect(at(min + 0.5)).toThrow(RangeError);
     });
 
     it('rejects two tracks sharing an id', () => {

@@ -204,6 +204,7 @@ class RealtimeEngineWasm {
   uint32_t clipPageRequestScratchClipId() const;
   double clipPageRequestScratchSample() const;
   uint32_t clipPageRequestOverflowCount() const;
+  uint32_t warpStretchOverflowCount() const;
   void setClipPagePrefetchFrames(double frames);
   double clipPagePrefetchFrames() const;
 

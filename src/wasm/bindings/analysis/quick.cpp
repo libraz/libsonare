@@ -387,25 +387,21 @@ val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_le
 val js_detect_onsets(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   OnsetDetectConfig config;
-  const auto integer = [&](const char* name, int fallback) {
-    const val value = options[name];
-    return value.isUndefined() ? fallback : value.as<int>();
-  };
   const auto number = [&](const char* name, float fallback) {
     const val value = options[name];
     return value.isUndefined() ? fallback : value.as<float>();
   };
-  config.n_fft = integer("nFft", config.n_fft);
-  config.hop_length = integer("hopLength", config.hop_length);
+  config.n_fft = intProperty(options, "nFft", config.n_fft);
+  config.hop_length = intProperty(options, "hopLength", config.hop_length);
   config.threshold = number("threshold", config.threshold);
-  config.pre_max = integer("preMax", config.pre_max);
-  config.post_max = integer("postMax", config.post_max);
-  config.pre_avg = integer("preAvg", config.pre_avg);
-  config.post_avg = integer("postAvg", config.post_avg);
+  config.pre_max = intProperty(options, "preMax", config.pre_max);
+  config.post_max = intProperty(options, "postMax", config.post_max);
+  config.pre_avg = intProperty(options, "preAvg", config.pre_avg);
+  config.post_avg = intProperty(options, "postAvg", config.post_avg);
   config.delta = number("delta", config.delta);
-  config.wait = integer("wait", config.wait);
+  config.wait = intProperty(options, "wait", config.wait);
   config.backtrack = !options["backtrack"].isUndefined() && options["backtrack"].as<bool>();
-  config.backtrack_range = integer("backtrackRange", config.backtrack_range);
+  config.backtrack_range = intProperty(options, "backtrackRange", config.backtrack_range);
   std::vector<float> onsets = detect_onsets(audio, config);
   return vectorToFloat32Array(onsets);
 }
@@ -795,6 +791,26 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   return make_uniform_room(dims, request);
 }
 
+// Reads a deterministic late-tail seed, keeping @p fallback when the option is
+// absent, not a number, or <= 0 (the C ABI's "seed == 0 keeps the library
+// default", so seed: 0 yields the same RIR on every surface instead of seeding
+// the PRNG with 0). The value is read as a double because the C ABI's seed is a
+// uint32: intProperty narrows through ToInt32, which turned every seed above
+// 2^31-1 negative and silently substituted the default, leaving half the seed
+// space unreachable. A value past the uint32 range is rejected rather than
+// substituted, since a silent default is what made the gap invisible.
+unsigned seedFromVal(val opts, unsigned fallback) {
+  const val seed_val = objectProperty(opts, "seed");
+  if (seed_val.typeOf().as<std::string>() != "number") return fallback;
+  const double seed_in = seed_val.as<double>();
+  if (!(seed_in > 0.0)) return fallback;  // also rejects NaN
+  if (seed_in > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "seed must be within [0, 4294967295]");
+  }
+  return static_cast<unsigned>(seed_in);
+}
+
 sonare::acoustic::SourceListener placementFromVal(val opts) {
   return {{floatProperty(opts, "sourceX", 1.0f), floatProperty(opts, "sourceY", 1.0f),
            floatProperty(opts, "sourceZ", 1.2f)},
@@ -900,11 +916,7 @@ val js_synthesize_rir(val opts) {
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
-  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
-  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
-  // surface instead of seeding the PRNG with 0.
-  if (const int seed_in = intProperty(opts, "seed", 0); seed_in > 0)
-    config.seed = static_cast<unsigned>(seed_in);
+  config.seed = seedFromVal(opts, config.seed);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
   // crossfadeMs == 0 keeps the library default; every other value is the
@@ -1017,11 +1029,7 @@ val js_room_morph(val samples, int sample_rate, val opts) {
       floatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
   config.wet = floatProperty(opts, "wet", config.wet);
   config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
-  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
-  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
-  // surface instead of seeding the PRNG with 0.
-  if (const int seed_in = intProperty(opts, "seed", 0); seed_in > 0)
-    config.seed = static_cast<unsigned>(seed_in);
+  config.seed = seedFromVal(opts, config.seed);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring

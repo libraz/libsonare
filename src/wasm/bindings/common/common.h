@@ -206,7 +206,24 @@ std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
 float floatProperty(val object, const char* key, float default_value);
+/// @brief Narrows a JS number to int, rejecting anything out of range.
+/// @details The one place that knows how to do this safely. A reader that needs
+///          an int from a val must call this rather than val::as<int>(), which
+///          saturates: a file-local copy in repair.cpp accepted 2^31 and
+///          4294967295 as the same INT_MAX for 15 fields.
+/// @throws SonareException(InvalidParameter) naming @p key.
+int checkedIntFromVal(const val& value, const char* key);
 int intProperty(val object, const char* key, int default_value);
+/// @brief Resolves a built-in oscillator waveform given as a JS string or a JS
+///        number to its @ref SonareSynthWaveform ordinal.
+/// @details Both spellings reach the same rejection naming the accepted set.
+///          Validating only the string form leaves the numeric form -- the one a
+///          generated binding produces -- silently falling back to sine, and the
+///          first value past the enum is 4, not some implausible number. Not
+///          reachable through @ref checkedIntFromVal alone: 4 and -1 are in range
+///          for an int, so this is a domain check, not a narrowing check.
+/// @throws SonareException(InvalidParameter) for any value outside the set.
+int builtinWaveformFromVal(const val& value);
 bool boolProperty(val object, const char* key, bool default_value);
 std::string stringProperty(val object, const char* key, const std::string& default_value);
 /// @brief Type-checked optional reader: returns the numeric value only when @p v

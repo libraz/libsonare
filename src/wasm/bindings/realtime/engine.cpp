@@ -5,6 +5,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <cmath>
+#include <string>
 
 #include "realtime_engine_wasm.h"
 
@@ -41,9 +42,13 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, int max_block_s
                                              int command_capacity, int telemetry_capacity,
                                              int max_channels) {
   validatePrepare(sample_rate, max_block_size);
-  if (max_channels <= 0 || max_channels > 64) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "prepare: max_channels must be within 1..64");
+  // Both the bound and the message it reports come from the engine's constant,
+  // so raising the ceiling moves the guard and the text a host reads together.
+  constexpr int kMaxChannels = static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);
+  if (max_channels <= 0 || max_channels > kMaxChannels) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "prepare: max_channels must be within 1.." + std::to_string(kMaxChannels));
   }
   // Mirrors the C ABI: the engine clamps these, but a host asking for more than
   // it can get should hear about it rather than quietly receive a smaller

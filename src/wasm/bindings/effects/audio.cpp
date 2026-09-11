@@ -1250,18 +1250,18 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
     // requires n_fft/hop_length >= 1 and heal_radius_frames >= 1. Previously the
     // WASM path passed 0 through verbatim and threw where Node/Python succeeded.
     if (hasProperty(options, "nFft")) {
-      const int n_fft = options["nFft"].as<int>();
+      const int n_fft = checkedIntFromVal(options["nFft"], "nFft");
       if (n_fft != 0) config.n_fft = n_fft;
     }
     if (hasProperty(options, "hopLength")) {
-      const int hop_length = options["hopLength"].as<int>();
+      const int hop_length = checkedIntFromVal(options["hopLength"], "hopLength");
       if (hop_length != 0) config.hop_length = hop_length;
     }
     if (hasProperty(options, "window")) {
       config.window = parseSpectralEditWindow(options["window"]);
     }
     if (hasProperty(options, "healRadiusFrames")) {
-      const int heal_radius = options["healRadiusFrames"].as<int>();
+      const int heal_radius = checkedIntFromVal(options["healRadiusFrames"], "healRadiusFrames");
       if (heal_radius != 0) config.heal_radius_frames = heal_radius;
     }
   }

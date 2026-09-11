@@ -491,6 +491,10 @@ uint32_t RealtimeEngineWasm::clipPageRequestOverflowCount() const {
   return engine_.clip_page_request_overflow_count();
 }
 
+uint32_t RealtimeEngineWasm::warpStretchOverflowCount() const {
+  return engine_.warp_stretch_overflow_count();
+}
+
 // Clip-page look-ahead: the player reports pages it is about to read that are
 // not resident yet, so a streaming host can service them before the audio
 // thread reaches them (a miss alone is only reported after the read already
@@ -521,6 +525,7 @@ void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
       .function("clipPageRequestScratchClipId", &RealtimeEngineWasm::clipPageRequestScratchClipId)
       .function("clipPageRequestScratchSample", &RealtimeEngineWasm::clipPageRequestScratchSample)
       .function("clipPageRequestOverflowCount", &RealtimeEngineWasm::clipPageRequestOverflowCount)
+      .function("warpStretchOverflowCount", &RealtimeEngineWasm::warpStretchOverflowCount)
       .function("setClipPagePrefetchFrames", &RealtimeEngineWasm::setClipPagePrefetchFrames)
       .function("clipPagePrefetchFrames", &RealtimeEngineWasm::clipPagePrefetchFrames);
 }
