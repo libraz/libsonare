@@ -137,8 +137,9 @@ const decoded = Audio.fromBuffer(samples, sampleRate);
 
 If the app only needs analysis, feature extraction, or metering, use the
 smaller `@libraz/libsonare/analysis` entry. It excludes mastering, mixing, and
-realtime APIs (0.91 MiB raw / 368 KiB gzip with emsdk 5.0.2; full entry: 3.88
-MiB raw / 1.31 MiB gzip).
+realtime APIs. With emsdk 5.0.2 it measures 0.94 MiB raw / 358 KiB gzip against
+the full entry's 4.75 MiB raw / 1.50 MiB gzip; both figures are the measurement
+recorded in `bindings/wasm/wasm-size-baseline.json`.
 
 → [JavaScript API](https://libsonare.libraz.net/docs/js-api) · [Browser / WASM](https://libsonare.libraz.net/docs/wasm)
 
