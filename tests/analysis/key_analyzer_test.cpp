@@ -7,8 +7,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
+#include "effects/hpss.h"
+#include "feature/chroma.h"
+#include "feature/spectral.h"
+#include "filters/iir.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -75,6 +80,58 @@ Audio create_low_bass_with_c_major(int sr = 22050, float duration = 2.0f) {
   for (const auto& [freq, amplitude] : tones) {
     for (int i = 0; i < n_samples; ++i) {
       const float t = static_cast<float>(i) / static_cast<float>(sr);
+      samples[static_cast<size_t>(i)] +=
+          amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+    }
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief C major triad over sub-bass that the auto path's 60 Hz fallback high-pass removes.
+/// @details Read whole, the rumble pulls the key to E minor; read through the fallback's
+///          high-pass and harmonic separation it reads C major, which is what makes this
+///          signal take the high-pass fallback branch.
+Audio create_sub_bass_over_c_major(int sr = 22050, float duration = 2.0f) {
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  const std::vector<std::pair<float, float>> tones = {
+      {38.0f, 1.6f},    // sub-bass pair, below the fallback high-pass
+      {52.0f, 1.0f},    //
+      {261.63f, 0.3f},  // C4
+      {329.63f, 0.3f},  // E4
+      {392.00f, 0.3f},  // G4
+      {440.00f, 0.2f},  // A4
+  };
+
+  for (const auto& [freq, amplitude] : tones) {
+    for (int i = 0; i < n_samples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(sr);
+      samples[static_cast<size_t>(i)] +=
+          amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+    }
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief A long quiet C major triad followed by a short loud E flat major one.
+/// @details Chroma frames are normalized, so only the loudness weighting can tell the two
+///          chords apart: the weighted candidate hears the loud chord and the unweighted
+///          fallback hears the long one, and they name different keys. That disagreement is
+///          what sends a signal with a configured high-pass into the fallback branch.
+Audio create_loud_eflat_after_quiet_c(int sr = 22050, float duration = 2.0f) {
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  const std::vector<float> c_major = {261.63f, 329.63f, 392.00f};      // C4 E4 G4
+  const std::vector<float> eflat_major = {311.13f, 392.00f, 466.16f};  // D#4 G4 A#4
+  const int split = static_cast<int>(0.75f * static_cast<float>(n_samples));
+
+  for (int i = 0; i < n_samples; ++i) {
+    const bool quiet = i < split;
+    const float amplitude = quiet ? 0.15f : 0.9f;
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    for (float freq : quiet ? c_major : eflat_major) {
       samples[static_cast<size_t>(i)] +=
           amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
     }
@@ -460,5 +517,164 @@ TEST_CASE("Silence spreads key confidence evenly instead of scoring mid-range", 
   REQUIRE(candidates.size() == 24);
   for (const auto& candidate : candidates) {
     REQUIRE_THAT(candidate.key.confidence, WithinAbs(1.0f / 24.0f, 1e-5f));
+  }
+}
+
+namespace {
+
+/// @brief Result of the independent auto-candidate front-end below.
+struct AutoFrontEndResult {
+  std::array<float, 12> mean_chroma{};
+  KeyConfig config;
+  bool used_highpass_fallback = false;
+};
+
+Audio oracle_high_passed(const Audio& audio, const KeyConfig& config) {
+  if (config.high_pass_hz <= 0.0f) return audio;
+  const auto cascade = highpass_coeffs_4th(config.high_pass_hz, audio.sample_rate());
+  return Audio::from_vector(apply_cascade_filtfilt(audio.data(), audio.size(), cascade),
+                            audio.sample_rate());
+}
+
+ChromaConfig oracle_chroma_config(const KeyConfig& config) {
+  ChromaConfig chroma_config;
+  chroma_config.n_fft = config.n_fft;
+  chroma_config.hop_length = config.hop_length;
+  return chroma_config;
+}
+
+/// @brief One chromagram per mean, which is the arrangement the analyzer no longer uses.
+std::array<float, 12> oracle_mean_chroma(const Audio& analysis_audio, const KeyConfig& config,
+                                         bool loudness_weighted) {
+  const Chroma chroma = Chroma::compute(analysis_audio, oracle_chroma_config(config));
+  if (loudness_weighted) {
+    return chroma.weighted_mean_energy(rms_energy(analysis_audio, config.n_fft, config.hop_length));
+  }
+  return chroma.mean_energy();
+}
+
+/// @brief Reimplements KeyAnalyzer's auto-candidate front-end with a chromagram per mean.
+/// @details The analyzer derives a signal's weighted and unweighted means from one shared
+///          chromagram; this derives each from its own, so comparing the two exactly is what
+///          shows the sharing changed no arithmetic. The candidate table, the selection bias
+///          and the fallback thresholds are mirrored from the analyzer, so a deliberate change
+///          to any of them has to be made here too or this comparison stops meaning anything.
+AutoFrontEndResult run_auto_front_end_oracle(const Audio& audio, const KeyConfig& config) {
+  struct AudioCandidate {
+    bool use_hpss;
+    bool loudness_weighted;
+    float selection_bias;
+  };
+  const AudioCandidate audio_candidates[] = {
+      {false, false, 0.0f}, {true, false, 0.0f}, {false, true, 0.0f}, {true, true, 0.17f}};
+
+  const Audio filtered_audio = oracle_high_passed(audio, config);
+  const Audio harmonic_audio =
+      harmonic(filtered_audio, HpssConfig(), oracle_chroma_config(config).to_stft_config());
+
+  std::array<std::array<float, 12>, 4> candidate_means{};
+  candidate_means[0] = oracle_mean_chroma(filtered_audio, config, false);
+  candidate_means[1] = oracle_mean_chroma(harmonic_audio, config, false);
+  candidate_means[2] = oracle_mean_chroma(filtered_audio, config, true);
+  candidate_means[3] = oracle_mean_chroma(harmonic_audio, config, true);
+
+  AutoFrontEndResult best;
+  bool has_best = false;
+  float best_score = -std::numeric_limits<float>::infinity();
+  for (size_t i = 0; i < 4; ++i) {
+    KeyConfig candidate_config = config;
+    candidate_config.genre_hint = "auto";
+    candidate_config.use_hpss = audio_candidates[i].use_hpss;
+    candidate_config.loudness_weighted = audio_candidates[i].loudness_weighted;
+
+    const KeyAnalyzer analyzer(candidate_means[i], candidate_config);
+    const float score = analyzer.evidence_score() + audio_candidates[i].selection_bias;
+    if (!has_best || score > best_score) {
+      has_best = true;
+      best_score = score;
+      best.mean_chroma = candidate_means[i];
+      best.config = candidate_config;
+    }
+  }
+
+  const KeyAnalyzer best_analyzer(best.mean_chroma, best.config);
+  if (best_analyzer.evidence_score() <= 0.75f) {
+    KeyConfig fallback_config = config;
+    fallback_config.genre_hint = "";
+    fallback_config.use_hpss = true;
+    fallback_config.loudness_weighted = false;
+    fallback_config.high_pass_hz =
+        fallback_config.high_pass_hz > 0.0f ? fallback_config.high_pass_hz : 60.0f;
+    fallback_config.profile_type = KeyProfileType::KrumhanslSchmuckler;
+
+    const Audio fallback_filtered = oracle_high_passed(audio, fallback_config);
+    const Audio fallback_harmonic = harmonic(
+        fallback_filtered, HpssConfig(), oracle_chroma_config(fallback_config).to_stft_config());
+    const auto fallback_mean = oracle_mean_chroma(fallback_harmonic, fallback_config, false);
+    const KeyAnalyzer fallback_analyzer(fallback_mean, fallback_config);
+
+    const bool keys_differ = best_analyzer.key().root != fallback_analyzer.key().root ||
+                             best_analyzer.key().mode != fallback_analyzer.key().mode;
+    if (keys_differ && fallback_analyzer.evidence_score() >= 0.50f) {
+      best.mean_chroma = fallback_mean;
+      best.config = fallback_config;
+      best.used_highpass_fallback = true;
+    }
+  }
+  return best;
+}
+
+/// @brief Requires the analyzer to agree with the oracle bit for bit on one signal.
+/// @details Equality is exact throughout: a tolerance would pass against a front-end that
+///          shifted the result slightly, which is the failure this has to catch.
+void require_auto_matches_oracle(const Audio& audio, const KeyConfig& config,
+                                 bool expect_highpass_fallback) {
+  const AutoFrontEndResult oracle = run_auto_front_end_oracle(audio, config);
+  const KeyAnalyzer analyzer(audio, config);
+  const KeyAnalyzer expected(oracle.mean_chroma, oracle.config);
+
+  // Pins which branch this signal takes, so the case set covers both.
+  REQUIRE(oracle.used_highpass_fallback == expect_highpass_fallback);
+
+  for (size_t i = 0; i < 12; ++i) {
+    REQUIRE(analyzer.mean_chroma()[i] == oracle.mean_chroma[i]);
+  }
+  REQUIRE(analyzer.key().root == expected.key().root);
+  REQUIRE(analyzer.key().mode == expected.key().mode);
+  REQUIRE(analyzer.evidence_score() == expected.evidence_score());
+  REQUIRE(analyzer.key().confidence == expected.key().confidence);
+
+  const Key quick = detect_key(audio, config);
+  REQUIRE(quick.root == expected.key().root);
+  REQUIRE(quick.mode == expected.key().mode);
+  REQUIRE(quick.confidence == expected.key().confidence);
+}
+
+}  // namespace
+
+TEST_CASE("Auto key selection is exact against a chromagram-per-mean front-end", "[key_analyzer]") {
+  KeyConfig config;
+  config.genre_hint = "auto";
+  config.n_fft = 2048;
+
+  SECTION("C major scale") { require_auto_matches_oracle(create_c_major_scale(), config, false); }
+
+  SECTION("A minor scale") { require_auto_matches_oracle(create_a_minor_scale(), config, false); }
+
+  SECTION("low bass under a C major triad") {
+    require_auto_matches_oracle(create_low_bass_with_c_major(), config, false);
+  }
+
+  SECTION("sub-bass that sends the selection to the high-pass fallback") {
+    require_auto_matches_oracle(create_sub_bass_over_c_major(), config, true);
+  }
+
+  // A configured high-pass makes the fallback's analysis signal the harmonic one the
+  // candidates already used, which is the case the analyzer answers by reuse. The oracle
+  // recomputes it from the audio, so the exact comparison is what says the reuse is sound.
+  SECTION("configured high-pass, fallback over an already-analyzed signal") {
+    KeyConfig high_passed = config;
+    high_passed.high_pass_hz = 120.0f;
+    require_auto_matches_oracle(create_loud_eflat_after_quiet_c(), high_passed, true);
   }
 }

@@ -173,6 +173,14 @@ ChromaConfig chroma_config_for(const KeyConfig& config) {
   return chroma_config;
 }
 
+/// @brief True when two configs drive the chroma analysis of one input identically.
+/// @details Exactly the fields that reach high_passed_audio() and chroma_config_for(), which
+///          together decide the analysis signal and its chromagram. A KeyConfig field added
+///          to either of those belongs here too.
+bool same_chroma_analysis(const KeyConfig& a, const KeyConfig& b) {
+  return a.high_pass_hz == b.high_pass_hz && a.n_fft == b.n_fft && a.hop_length == b.hop_length;
+}
+
 /// @brief Returns the analysis input, high-passed when the config asks for it.
 Audio high_passed_audio(const Audio& audio, const KeyConfig& config) {
   if (config.high_pass_hz <= 0.0f) return audio;
@@ -181,14 +189,22 @@ Audio high_passed_audio(const Audio& audio, const KeyConfig& config) {
                             audio.sample_rate());
 }
 
-/// @brief Mean chroma of one analysis signal, optionally loudness-weighted.
-std::array<float, 12> mean_chroma_of(const Audio& analysis_audio, const KeyConfig& config,
-                                     bool loudness_weighted) {
-  Chroma chroma = Chroma::compute(analysis_audio, chroma_config_for(config));
+/// @brief Reduces one chromagram to a mean, loudness-weighting its frames when asked.
+/// @details Split from the computation so a signal's weighted and unweighted means can
+///          both be taken from a single chromagram.
+std::array<float, 12> chroma_mean(const Chroma& chroma, const Audio& analysis_audio,
+                                  const KeyConfig& config, bool loudness_weighted) {
   if (loudness_weighted) {
     return chroma.weighted_mean_energy(rms_energy(analysis_audio, config.n_fft, config.hop_length));
   }
   return chroma.mean_energy();
+}
+
+/// @brief Mean chroma of one analysis signal, optionally loudness-weighted.
+std::array<float, 12> mean_chroma_of(const Audio& analysis_audio, const KeyConfig& config,
+                                     bool loudness_weighted) {
+  const Chroma chroma = Chroma::compute(analysis_audio, chroma_config_for(config));
+  return chroma_mean(chroma, analysis_audio, config, loudness_weighted);
 }
 
 std::array<float, 12> compute_mean_chroma_for_audio(const Audio& audio, const KeyConfig& config,
@@ -264,12 +280,18 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(
     std::array<std::array<float, 12>, 4> candidate_means{};
     {
       const Audio filtered_audio = high_passed_audio(audio, config);
-      candidate_means[0] = mean_chroma_of(filtered_audio, config, /*loudness_weighted=*/false);
-      candidate_means[2] = mean_chroma_of(filtered_audio, config, /*loudness_weighted=*/true);
+      const Chroma filtered_chroma = Chroma::compute(filtered_audio, chroma_config_for(config));
+      candidate_means[0] =
+          chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/false);
+      candidate_means[2] =
+          chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/true);
       const Audio harmonic_audio =
           harmonic(filtered_audio, HpssConfig(), chroma_config_for(config).to_stft_config());
-      candidate_means[1] = mean_chroma_of(harmonic_audio, config, /*loudness_weighted=*/false);
-      candidate_means[3] = mean_chroma_of(harmonic_audio, config, /*loudness_weighted=*/true);
+      const Chroma harmonic_chroma = Chroma::compute(harmonic_audio, chroma_config_for(config));
+      candidate_means[1] =
+          chroma_mean(harmonic_chroma, harmonic_audio, config, /*loudness_weighted=*/false);
+      candidate_means[3] =
+          chroma_mean(harmonic_chroma, harmonic_audio, config, /*loudness_weighted=*/true);
     }
 
     bool has_best = false;
@@ -300,7 +322,11 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(
       fallback_config.high_pass_hz =
           fallback_config.high_pass_hz > 0.0f ? fallback_config.high_pass_hz : 60.0f;
       fallback_config.profile_type = KeyProfileType::KrumhanslSchmuckler;
-      const auto fallback_mean = compute_mean_chroma_for_audio(audio, fallback_config, true, false);
+      // Same high-pass, same harmonic signal: candidate 1's mean is this one bit for bit.
+      const auto fallback_mean =
+          same_chroma_analysis(fallback_config, config)
+              ? candidate_means[1]
+              : compute_mean_chroma_for_audio(audio, fallback_config, true, false);
       KeyAnalyzer fallback_analyzer(fallback_mean, fallback_config);
       if (should_use_harmonic_highpass_fallback(best_analyzer, fallback_analyzer)) {
         best_analyzer = fallback_analyzer;
