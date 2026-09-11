@@ -45,8 +45,13 @@ const char* ErrorCodeName(SonareError err) {
   }
 }
 
+// Mirrors the C ABI's map_sonare_exception. The switch carries no default:, so
+// a new ErrorCode enumerator is diagnosed here rather than reaching the caller
+// as SONARE_ERROR_UNKNOWN.
 SonareError CErrorFromException(const sonare::SonareException& e) {
   switch (e.code()) {
+    case sonare::ErrorCode::Ok:
+      return SONARE_ERROR_UNKNOWN;
     case sonare::ErrorCode::FileNotFound:
       return SONARE_ERROR_FILE_NOT_FOUND;
     case sonare::ErrorCode::InvalidFormat:
@@ -63,10 +68,12 @@ SonareError CErrorFromException(const sonare::SonareException& e) {
       return SONARE_ERROR_INVALID_STATE;
     case sonare::ErrorCode::Cancelled:
       return SONARE_ERROR_CANCELLED;
-    case sonare::ErrorCode::Ok:
-    default:
-      return SONARE_ERROR_UNKNOWN;
+    case sonare::ErrorCode::EncodeFailed:
+      return SONARE_ERROR_ENCODE_FAILED;
   }
+  // A scoped enum can hold any value of its underlying type, so an out-of-range
+  // code still needs a landing place the switch cannot provide.
+  return SONARE_ERROR_UNKNOWN;
 }
 
 sonare::ErrorCode CodeFromCError(SonareError err) {

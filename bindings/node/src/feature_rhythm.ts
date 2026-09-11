@@ -53,6 +53,42 @@ export function onsetBacktrack(
   return addon.onsetBacktrack(request.events, request.energy);
 }
 
+/**
+ * Pick local peaks that rise above an adaptive threshold, mirroring
+ * `librosa.util.peak_pick`. Returns the indices of the picked peaks.
+ *
+ * `values` is typically an onset envelope from {@link onsetEnvelope}.
+ *
+ * @param values Signal to pick peaks from, usually an onset envelope.
+ * @param preMax Frames before a candidate that its local maximum is taken over.
+ * @param postMax Frames after a candidate that its local maximum is taken over.
+ * @param preAvg Frames before a candidate that its running mean is taken over.
+ * @param postAvg Frames after a candidate that its running mean is taken over.
+ * @param delta Absolute offset added to the running mean, **in the units of
+ *   `values`** — not a normalized or dB quantity. This library does not
+ *   normalize the onset envelope, so the usable range depends entirely on the
+ *   magnitudes your own envelope happens to carry and cannot be derived from
+ *   this signature. Read a starting value off your own data: run
+ *   {@link onsetEnvelope} on representative audio and take a small fraction of
+ *   the envelope's mean or median, then adjust.
+ * @param wait Frames to skip after picking a peak before another may be picked.
+ *
+ * @example
+ * ```ts
+ * const envelope = onsetEnvelope(samples, 22050);
+ * const mean = envelope.reduce((a, b) => a + b, 0) / envelope.length;
+ * // Start from the envelope's own scale rather than a guessed constant.
+ * const peaks = peakPick({
+ *   values: envelope,
+ *   preMax: 3,
+ *   postMax: 3,
+ *   preAvg: 3,
+ *   postAvg: 5,
+ *   delta: mean * 0.1,
+ *   wait: 10,
+ * });
+ * ```
+ */
 export function peakPick(
   request: ValuesRequest & {
     preMax: number;

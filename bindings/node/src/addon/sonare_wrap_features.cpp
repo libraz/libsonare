@@ -383,7 +383,12 @@ Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!RequireFloat32Array(info, 0, "Expected data Float32Array") || info.Length() < 4) {
+  if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
+  // A short argument list used to short-circuit ahead of the reader, so the call
+  // returned undefined with nothing pending and the caller saw no error at all.
+  if (info.Length() < 4) {
+    Napi::TypeError::New(env, "Expected (data, rows, cols, boundaries, nSegments?)")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY

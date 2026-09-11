@@ -298,14 +298,39 @@ function withoutComments(text: string): string {
     .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
 }
 
+/** The explicit value accessors an `As<Napi::X>()` can be followed by. */
+const VALUE_ACCESSOR =
+  '(?:Uint32Value|Int32Value|Int64Value|FloatValue|DoubleValue|Utf8Value|Value)';
+
 /**
- * An inline typed read of a positional argument: `info[i].As<Napi::X>()`
- * followed by a value accessor. The accessor is the part that matters — it is
- * what fails on a type mismatch, leaving a pending exception and a dummy value.
- * A bare `.As<Napi::Object>()` with no accessor cannot fail and is not matched.
+ * An inline typed read of a positional argument, in either of its two forms.
+ *
+ * The **explicit** form is `info[i].As<Napi::X>()` followed by a value
+ * accessor. The accessor is the part that matters — it is what fails on a type
+ * mismatch, leaving a pending exception and a dummy value. A bare
+ * `.As<Napi::Object>()` with no accessor cannot fail and is not matched.
+ *
+ * The **implicit** form is `info[i].As<Napi::Number>()` with no accessor at
+ * all, consumed straight into a numeric parameter. `Napi::Number` carries
+ * conversion operators (`operator float`, `operator double`, `operator
+ * int32_t`, `operator uint32_t`, `operator int64_t`), so the conversion still
+ * runs and can still fail — the accessor call is simply written by the
+ * compiler instead of by the author. This scanner's comment used to assert
+ * that an accessor-less `.As<>()` "cannot fail", which is true of
+ * `Napi::Object` and false of `Napi::Number`, and the regex was built on that
+ * premise; an addon-wide sweep found 15 reads of the implicit form that no
+ * scan had ever looked at. The exclusion is therefore per type, not blanket.
  */
-const INLINE_TYPED_READ =
-  /\binfo\s*\[\s*([A-Za-z0-9_]+)\s*\]\s*\.\s*As\s*<\s*Napi::\w+\s*>\s*\(\s*\)\s*\.\s*(?:Uint32Value|Int32Value|Int64Value|FloatValue|DoubleValue|Utf8Value|Value)\s*\(/g;
+const INLINE_TYPED_READ = new RegExp(
+  '\\binfo\\s*\\[\\s*([A-Za-z0-9_]+)\\s*\\]\\s*\\.\\s*As\\s*<\\s*Napi::(?:' +
+    // Any Napi type, when an explicit accessor follows.
+    `\\w+\\s*>\\s*\\(\\s*\\)\\s*\\.\\s*${VALUE_ACCESSOR}\\s*\\(` +
+    '|' +
+    // Napi::Number only, when none does: the conversion is implicit.
+    `Number\\s*>\\s*\\(\\s*\\)\\s*(?!\\s*\\.\\s*${VALUE_ACCESSOR})` +
+    ')',
+  'g',
+);
 
 /**
  * Inline typed positional reads with NO type check on that same index anywhere

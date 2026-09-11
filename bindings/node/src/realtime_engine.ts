@@ -1031,6 +1031,16 @@ export class RealtimeEngine {
     return this.native.externalMidiDroppedCount();
   }
 
+  /** Cumulative page misses dropped because the native bounded request queue was full. */
+  clipPageRequestOverflowCount(): number {
+    return this.native.clipPageRequestOverflowCount();
+  }
+
+  /** Cumulative warp-stretch requests dropped because the native queue was full. */
+  warpStretchOverflowCount(): number {
+    return this.native.warpStretchOverflowCount();
+  }
+
   /**
    * Drains queued external-MIDI events, already lowered to MIDI 1.0 byte
    * messages so the host can write them straight to an output port. Returns one
@@ -1038,6 +1048,12 @@ export class RealtimeEngine {
    * `destinationId === 0xFFFFFFFF`. `maxRecords` caps the number of output
    * events returned — the shared unit across every surface. Events past the cap
    * stay queued for the next call (lossless); call again to drain the rest.
+   *
+   * `maxRecords` must be 0 (drain nothing) or at least 3, the most MIDI 1.0
+   * messages a single queued event can lower to: a smaller budget could never
+   * consume a record, so it is rejected with a `RangeError` rather than
+   * returning an empty array while the queue keeps growing. A negative or
+   * fractional value is likewise a `RangeError`, a non-number a `TypeError`.
    */
   drainExternalMidi(maxRecords = 1024): EngineExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
@@ -24,6 +25,23 @@ namespace {
 // same out-of-range rates (the C++ functions are otherwise called directly).
 constexpr int kAcousticMinSampleRate = 8000;
 constexpr int kAcousticMaxSampleRate = 384000;
+
+// Reads a deterministic late-tail seed, keeping @p fallback when the option is
+// absent or <= 0 (the C ABI's "seed == 0 keeps the library default", so seed: 0
+// yields the same RIR on every surface instead of seeding the PRNG with 0). The
+// read is int64 because the C ABI's seed is a uint32: an int32 read turned every
+// seed above 2^31-1 negative and silently substituted the default, leaving half
+// the seed space unreachable. A value past the uint32 range is rejected rather
+// than substituted, since a silent default is what made the gap invisible.
+unsigned SeedFromOptions(const Napi::Object& opts, unsigned fallback) {
+  const int64_t seed_in = node_int64_option(opts, "seed", 0);
+  if (seed_in <= 0) return fallback;
+  if (seed_in > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "seed must be within [0, 4294967295]");
+  }
+  return static_cast<unsigned>(seed_in);
+}
 
 // Throws (via ThrowAsJavaScriptException) and returns false when the rate is out
 // of range, mirroring the C ABI's validate_audio_params bound.
@@ -236,11 +254,7 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   cfg.late_model = node_bool_option(opts, "preferEyring", true)
                        ? sonare::acoustic::ReverbModel::Eyring
                        : sonare::acoustic::ReverbModel::Sabine;
-  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
-  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
-  // surface instead of seeding the PRNG with 0.
-  if (const int seed_in = node_int_option(opts, "seed", 0); seed_in > 0)
-    cfg.seed = static_cast<unsigned>(seed_in);
+  cfg.seed = SeedFromOptions(opts, cfg.seed);
   cfg.max_seconds = node_float_option(opts, "maxSeconds", cfg.max_seconds);
   cfg.mixing_time_ms = node_float_option(opts, "mixingTimeMs", cfg.mixing_time_ms);
   // crossfadeMs == 0 keeps the RirSynthConfig default (5 ms), matching the C ABI's
@@ -377,11 +391,7 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
       node_float_option(opts, "sourceTailSuppression", cfg.source_tail_suppression);
   cfg.wet = node_float_option(opts, "wet", cfg.wet);
   cfg.ism_order = node_int_option(opts, "ismOrder", cfg.ism_order);
-  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
-  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
-  // surface instead of seeding the PRNG with 0.
-  if (const int seed_in = node_int_option(opts, "seed", 0); seed_in > 0)
-    cfg.seed = static_cast<unsigned>(seed_in);
+  cfg.seed = SeedFromOptions(opts, cfg.seed);
   cfg.max_seconds = node_float_option(opts, "maxSeconds", cfg.max_seconds);
   cfg.late_model = node_bool_option(opts, "preferEyring", true)
                        ? sonare::acoustic::ReverbModel::Eyring

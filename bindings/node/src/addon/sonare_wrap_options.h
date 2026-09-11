@@ -2,6 +2,11 @@
 #define SONARE_NODE_SONARE_WRAP_OPTIONS_H_
 
 #include <napi.h>
+#include <sonare/sonare_c.h>
+// ReadBuiltinWaveform names SonareSynthWaveform and the name resolver directly;
+// the umbrella does not pull this one in, so the header owns its own include
+// rather than relying on a consumer that happens to include it first.
+#include <sonare/sonare_c_project_instruments.h>
 
 #include <cmath>
 #include <cstddef>
@@ -301,6 +306,44 @@ inline bool RequiredMidiByteValue(Napi::Env env, const Napi::Value& value, const
     return false;
   }
   *out = static_cast<uint8_t>(number);
+  return true;
+}
+
+/// @brief Resolve a built-in oscillator waveform given as a JS string or a JS
+///        number to its @ref SonareSynthWaveform ordinal.
+/// @details Both spellings reach the same rejection naming the accepted set.
+///          Validating only the string form leaves the numeric form -- the one a
+///          generated binding produces -- silently falling back to sine, and the
+///          first value past the enum is 4, not some implausible number. An
+///          undefined value leaves @p out untouched and succeeds, so a config
+///          object that omits the field keeps its caller's default.
+/// @return false with a pending JS TypeError for any value outside the set.
+inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* out) {
+  static const char* kExpected = "' (expected sine, saw, sawtooth, square, or triangle)";
+  if (value.IsUndefined() || value.IsNull()) {
+    return true;
+  }
+  if (value.IsString()) {
+    const std::string name = value.As<Napi::String>().Utf8Value();
+    const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
+    if (mapped < 0) {
+      Napi::TypeError::New(env, "Unknown synth waveform: '" + name + kExpected)
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    *out = mapped;
+    return true;
+  }
+  int ordinal = 0;
+  if (!RequiredIntValue(env, value, "waveform", &ordinal)) {
+    return false;
+  }
+  if (ordinal < SONARE_SYNTH_WAVEFORM_SINE || ordinal > SONARE_SYNTH_WAVEFORM_TRIANGLE) {
+    Napi::TypeError::New(env, "Unknown synth waveform: '" + std::to_string(ordinal) + kExpected)
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = ordinal;
   return true;
 }
 

@@ -154,8 +154,8 @@ switched off, or when no track survived exclusion.
   energy in the analysis bands comes back with `usable: false` and an
   `exclusionReason`, and gets no suggestion; an empty track list yields an empty
   scene. A malformed *call* is rejected instead — a missing or duplicate track
-  id, a non-positive `sampleRate`, or a `right` channel whose length differs
-  from `left` throws.
+  id, a `sampleRate` that is not an integer within `[8000, 384000]`, or a
+  `right` channel whose length differs from `left` throws.
 - **Genre- and material-dependent.** The relative levels and placements follow
   common recording practice, not a universal correct answer. Expect to treat the
   result as a first pass on unusual material.

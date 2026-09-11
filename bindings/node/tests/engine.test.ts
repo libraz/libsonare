@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
@@ -72,6 +72,31 @@ describe('RealtimeEngine native binding', () => {
       engine.destroy();
     }
     expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 0)).toThrow();
+  });
+
+  it('puts the channel ceiling exactly where the engine constant puts it', () => {
+    // The case above spells 65, which keeps passing if the ceiling moves down
+    // and only ever asserts "something above 64 is refused". Derive the boundary
+    // from kMaxAudioChannels instead, so lowering the constant fails here rather
+    // than leaving a green test pinning a value the engine no longer uses.
+    const header = readFileSync(
+      new URL('../../../src/engine/realtime_engine.h', import.meta.url).pathname,
+      'utf8',
+    );
+    const declared = header.match(/kMaxAudioChannels\s*=\s*(\d+);/)?.[1];
+    // Self-check: the assertions below are vacuous if the constant moved or the
+    // regex stopped matching.
+    expect(declared, 'kMaxAudioChannels in src/engine/realtime_engine.h').toBeDefined();
+    const maxChannels = Number(declared);
+    expect(maxChannels).toBeGreaterThan(2);
+
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels)).not.toThrow();
+      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels + 1)).toThrow();
+    } finally {
+      engine.destroy();
+    }
   });
 
   it('reports oversized process channels after prepare as max-channel telemetry', () => {
@@ -2118,6 +2143,26 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('reports the clip-page and warp-stretch overflow counters', () => {
+    // Both mirror sonare_engine_external_midi_dropped_count, which this file
+    // already covers. A fresh engine has dropped nothing, so the assertion is
+    // that the counters EXIST and read zero -- the addon method missing
+    // entirely is a TypeError, which is what this catches.
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      expect(engine.clipPageRequestOverflowCount()).toBe(0);
+      expect(engine.warpStretchOverflowCount()).toBe(0);
+      // Positive control on the reader itself: the sibling counter that has
+      // always existed reads the same way, so a zero here is the counter
+      // answering rather than a stub returning a default.
+      expect(engine.externalMidiDroppedCount()).toBe(0);
+      expect(typeof engine.clipPageRequestOverflowCount()).toBe('number');
+      expect(typeof engine.warpStretchOverflowCount()).toBe('number');
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('forwards MIDI clock/transport to the external queue', () => {
     const engine = new RealtimeEngine(48000, 24000);
     engine.setTempo(120);
@@ -2136,5 +2181,201 @@ describe('RealtimeEngine native binding', () => {
     expect(drained[0].bytes[0]).toBe(0xfa); // Start
     expect(drained[1].bytes[0]).toBe(0xf8); // Clock
     engine.destroy();
+  });
+
+  /**
+   * An engine with `queued` external-MIDI messages already waiting in the
+   * output queue. One note-on plus one note-off lower to one message each.
+   */
+  const engineWithQueuedExternalMidi = (): { engine: RealtimeEngine; queued: number } => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setMidiDestinationExternal(5, true);
+    engine.setMidiClips([
+      {
+        id: 7,
+        trackId: 5,
+        destinationId: 5,
+        lengthSamples: 256,
+        events: [
+          { renderFrame: 0, word0: midi1Word(0x9, 1, 64, 110), wordCount: 1 },
+          { renderFrame: 48, word0: midi1Word(0x8, 1, 64, 0), wordCount: 1 },
+        ],
+      },
+    ]);
+    engine.play();
+    engine.process([new Float32Array(128), new Float32Array(128)]);
+    return { engine, queued: 2 };
+  };
+
+  // The maxRecords domain, one row per boundary of the argument space: the
+  // type boundary, the non-integer and non-finite boundaries, the negative and
+  // above-MAX_SAFE_INTEGER boundaries, the "cannot make forward progress"
+  // window below the 3-message worst case, and the first accepting value.
+  const MAX_RECORDS_CASES: Array<{ label: string; value: unknown; outcome: unknown }> = [
+    { label: 'a string', value: '16', outcome: TypeError },
+    { label: 'a boolean', value: true, outcome: TypeError },
+    { label: 'NaN', value: Number.NaN, outcome: RangeError },
+    { label: 'Infinity', value: Number.POSITIVE_INFINITY, outcome: RangeError },
+    { label: 'a fraction', value: 2.5, outcome: RangeError },
+    { label: '-1', value: -1, outcome: RangeError },
+    { label: 'past MAX_SAFE_INTEGER', value: 2 ** 53, outcome: RangeError },
+    { label: '1', value: 1, outcome: RangeError },
+    { label: '2', value: 2, outcome: RangeError },
+    { label: '0', value: 0, outcome: 'empty' },
+    { label: '3', value: 3, outcome: 'drains' },
+    { label: '1024', value: 1024, outcome: 'drains' },
+    { label: 'undefined', value: undefined, outcome: 'drains' },
+    { label: 'null', value: null, outcome: 'drains' },
+  ];
+
+  it('applies one maxRecords domain rule across the whole argument space', () => {
+    // Drives every boundary against both queue states: an out-of-domain
+    // maxRecords must be rejected identically whether or not there is anything
+    // to drain, and must never consume a queued event on the way out.
+    for (const { label, value, outcome } of MAX_RECORDS_CASES) {
+      for (const queueState of ['empty', 'non-empty'] as const) {
+        const { engine, queued } =
+          queueState === 'non-empty'
+            ? engineWithQueuedExternalMidi()
+            : { engine: new RealtimeEngine(48000, 128), queued: 0 };
+        try {
+          const call = () => (engine.drainExternalMidi as (max: unknown) => unknown[])(value);
+          let drained = 0;
+          if (outcome === 'empty') {
+            expect(call(), `${label} on a ${queueState} queue`).toEqual([]);
+          } else if (outcome === 'drains') {
+            drained = call().length;
+            // Forward progress: an accepted budget never returns empty while
+            // events are queued, which is the whole point of the domain rule.
+            expect(drained > 0, `${label} on a ${queueState} queue`).toBe(queued > 0);
+          } else {
+            expect(call, `${label} on a ${queueState} queue`).toThrow(outcome as ErrorConstructor);
+          }
+          // Lossless: nothing above consumed a queued event it did not return,
+          // so the remainder is still drainable with a generous budget.
+          expect(engine.drainExternalMidi(1024).length, `${label} left the queue drainable`).toBe(
+            queued - drained,
+          );
+        } finally {
+          engine.destroy();
+        }
+      }
+    }
+  });
+
+  it('rejects a bad maxRecords with the same error class as the sibling drains', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      const drains = [
+        (max: unknown) => (engine.drainTelemetry as (m: unknown) => unknown)(max),
+        (max: unknown) => (engine.drainMeterTelemetry as (m: unknown) => unknown)(max),
+        (max: unknown) => (engine.drainMeterTelemetryWide as (m: unknown) => unknown)(max),
+        (max: unknown) => (engine.drainScopeTelemetry as (m: unknown) => unknown)(max),
+        (max: unknown) => (engine.drainExternalMidi as (m: unknown) => unknown)(max),
+      ];
+      for (const drain of drains) {
+        expect(() => drain(-1)).toThrow(RangeError);
+        expect(() => drain(2.5)).toThrow(RangeError);
+        expect(() => drain(Number.NaN)).toThrow(RangeError);
+        expect(() => drain('16')).toThrow(TypeError);
+        expect(drain(0)).toEqual([]);
+      }
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('bounds every drained record to the fixed 3-byte message array', () => {
+    // Covers both ends of the byte_count range in one drain: clock bytes lower
+    // to one byte, channel-voice messages to three.
+    const engine = new RealtimeEngine(48000, 24000);
+    engine.setTempo(120);
+    engine.setExternalMidiClockEnabled(true);
+    engine.setMidiDestinationExternal(5, true);
+    engine.setMidiClips([
+      {
+        id: 9,
+        trackId: 5,
+        destinationId: 5,
+        lengthSamples: 24000,
+        events: [{ renderFrame: 0, word0: midi1Word(0x9, 1, 64, 110), wordCount: 1 }],
+      },
+    ]);
+    engine.play(0);
+    engine.process([new Float32Array(24000), new Float32Array(24000)]);
+
+    const drained = engine.drainExternalMidi(1024);
+    const lengths = new Set(drained.map((event) => event.bytes.length));
+    // Positive control: a run that lowered only clock bytes would make the
+    // bound below hold without ever exercising a full-width record.
+    expect(lengths.has(1)).toBe(true);
+    expect(lengths.has(3)).toBe(true);
+    for (const event of drained) {
+      expect(event.bytes.length).toBeGreaterThanOrEqual(1);
+      expect(event.bytes.length).toBeLessThanOrEqual(3);
+      for (const byte of event.bytes) {
+        expect(Number.isInteger(byte)).toBe(true);
+        expect(byte).toBeGreaterThanOrEqual(0);
+        expect(byte).toBeLessThanOrEqual(0xff);
+      }
+    }
+    engine.destroy();
+  });
+
+  it('destroy() releases the clip page providers it still owns', () => {
+    const pageFrames = 1 << 20;
+    const pages = 8;
+    const supplied = 2 * pages * pageFrames * 4;
+    const page = [new Float32Array(pageFrames), new Float32Array(pageFrames)];
+
+    /** Loads `supplied` bytes of clip pages into a fresh engine. */
+    const loadPages = (target: RealtimeEngine): number => {
+      const provider = target.createClipPageProvider(2, pageFrames * pages, pageFrames);
+      for (let index = 0; index < pages; index++) {
+        target.supplyClipPage(provider.id, index, page);
+      }
+      return provider.id;
+    };
+
+    const engine = new RealtimeEngine(48000, 128);
+    const second = engine.createClipPageProvider(1, pageFrames, pageFrames);
+    const third = engine.createClipPageProvider(1, pageFrames, pageFrames);
+    // Explicitly destroying one leaves a nulled slot: the release path has to
+    // walk past it rather than free it a second time.
+    second.destroy();
+
+    const baselineRss = process.memoryUsage().rss;
+    const first = { id: loadPages(engine) };
+    const loadedDelta = process.memoryUsage().rss - baselineRss;
+    // Positive control: the pages have to be resident for the reuse check below
+    // to mean anything.
+    expect(loadedDelta).toBeGreaterThan(supplied / 2);
+
+    // No destroyClipPageProvider(first.id) here: destroy() alone must reach it.
+    engine.destroy();
+    // RSS is measured by reuse rather than by a drop, because the allocator is
+    // free to hold freed blocks: loading the same pages again must land inside
+    // the memory the first load released rather than stacking a second copy on
+    // top of it (which is what the leak measured, at nearly twice this bound).
+    const reload = new RealtimeEngine(48000, 128);
+    loadPages(reload);
+    expect(process.memoryUsage().rss - baselineRss).toBeLessThan(loadedDelta + supplied / 2);
+    reload.destroy();
+
+    // The provider table is empty, so neither id resolves any more.
+    expect(() => engine.supplyClipPage(first.id, 0, page)).toThrow(TypeError);
+    expect(() => engine.supplyClipPage(third.id, 0, page)).toThrow(TypeError);
+    // Idempotent: the facade's destroy() is guarded by its own disposed flag, so
+    // reach past it to drive the native release a second time directly.
+    const native = (engine as unknown as { native: { destroy(): void } }).native;
+    expect(() => native.destroy()).not.toThrow();
+    expect(() => engine.destroy()).not.toThrow();
+    // A provider handed out before the sweep and released after it must not free
+    // an already-freed provider either.
+    expect(() => third.destroy()).not.toThrow();
+    // The process is still usable, not merely free of an escaping exception.
+    const after = new RealtimeEngine(48000, 128);
+    expect(after.getTransportState().playing).toBe(false);
+    after.destroy();
   });
 });

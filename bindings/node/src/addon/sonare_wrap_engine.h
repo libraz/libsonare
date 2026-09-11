@@ -136,9 +136,16 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetMidiDestinationExternal(const Napi::CallbackInfo& info);
   Napi::Value SetExternalMidiClockEnabled(const Napi::CallbackInfo& info);
   Napi::Value ExternalMidiDroppedCount(const Napi::CallbackInfo& info);
+  Napi::Value ClipPageRequestOverflowCount(const Napi::CallbackInfo& info);
+  Napi::Value WarpStretchOverflowCount(const Napi::CallbackInfo& info);
   Napi::Value DrainExternalMidi(const Napi::CallbackInfo& info);
   Napi::Value GetTransportState(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
+
+  /// @brief Frees every native handle the wrap owns: the engine, the clip-page
+  ///        providers and the capture storage. Idempotent, so destroy() followed
+  ///        by the destructor (or a second destroy()) frees nothing twice.
+  void ReleaseNativeResources();
 
   SonareRealtimeEngine* engine_ = nullptr;
   std::vector<SonareClipPageProvider*> clip_page_providers_;

@@ -33,19 +33,8 @@ bool ParseBuiltinInstrument(Napi::Env env, const Napi::Object& obj,
                                 ? 0u
                                 : obj.Get("destinationId").As<Napi::Number>().Uint32Value();
   SonareBuiltinSynthConfig& config = binding->config;
-  Napi::Value waveform = obj.Get("waveform");
-  if (waveform.IsString()) {
-    const std::string name = waveform.As<Napi::String>().Utf8Value();
-    const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
-    if (mapped < 0) {
-      Napi::TypeError::New(env, "Unknown synth waveform name: '" + name +
-                                    "' (expected sine, saw, sawtooth, square, or triangle)")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    config.waveform = mapped;
-  } else if (waveform.IsNumber()) {
-    config.waveform = waveform.As<Napi::Number>().Int32Value();
+  if (!ReadBuiltinWaveform(env, obj.Get("waveform"), &config.waveform)) {
+    return false;
   }
   config.gain = FloatProperty(obj, "gain", 0.0f);
   config.attack_ms = FloatProperty(obj, "attackMs", 0.0f);

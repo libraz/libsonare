@@ -7,6 +7,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "engine/common.h"
@@ -20,19 +21,8 @@ namespace {
 
 bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
                                   SonareEngineBuiltinSynthConfig* config) {
-  Napi::Value waveform = obj.Get("waveform");
-  if (waveform.IsString()) {
-    const std::string name = waveform.As<Napi::String>().Utf8Value();
-    const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
-    if (mapped < 0) {
-      Napi::TypeError::New(env, "Unknown synth waveform name: '" + name +
-                                    "' (expected sine, saw, sawtooth, square, or triangle)")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    config->waveform = mapped;
-  } else if (waveform.IsNumber()) {
-    config->waveform = waveform.As<Napi::Number>().Int32Value();
+  if (!ReadBuiltinWaveform(env, obj.Get("waveform"), &config->waveform)) {
+    return false;
   }
   config->gain = FloatProperty(obj, "gain", config->gain);
   config->attack_ms = FloatProperty(obj, "attackMs", config->attack_ms);
@@ -248,6 +238,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetExternalMidiClockEnabled>(
               "setExternalMidiClockEnabled"),
           InstanceMethod<&RealtimeEngineWrap::ExternalMidiDroppedCount>("externalMidiDroppedCount"),
+          InstanceMethod<&RealtimeEngineWrap::ClipPageRequestOverflowCount>(
+              "clipPageRequestOverflowCount"),
+          InstanceMethod<&RealtimeEngineWrap::WarpStretchOverflowCount>("warpStretchOverflowCount"),
           InstanceMethod<&RealtimeEngineWrap::DrainExternalMidi>("drainExternalMidi"),
           InstanceMethod<&RealtimeEngineWrap::GetTransportState>("getTransportState"),
           InstanceMethod<&RealtimeEngineWrap::Destroy>("destroy"),
@@ -293,15 +286,30 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
   ThrowIfError(env, err);
 }
 
-RealtimeEngineWrap::~RealtimeEngineWrap() {
-  for (SonareClipPageProvider* provider : clip_page_providers_) {
-    sonare_clip_page_provider_destroy(provider);
-  }
-  clip_page_providers_.clear();
+RealtimeEngineWrap::~RealtimeEngineWrap() { ReleaseNativeResources(); }
+
+void RealtimeEngineWrap::ReleaseNativeResources() {
   if (engine_ != nullptr) {
     sonare_engine_destroy(engine_);
     engine_ = nullptr;
   }
+  // After the engine is gone nothing can still page from a provider, so the
+  // providers are released next. Entries are nulled by destroyClipPageProvider,
+  // which is what makes a second pass here a no-op rather than a double free.
+  for (SonareClipPageProvider* provider : clip_page_providers_) {
+    if (provider != nullptr) sonare_clip_page_provider_destroy(provider);
+  }
+  clip_page_providers_.clear();
+  clip_page_providers_.shrink_to_fit();
+  // A capture buffer sized for a long session is the largest allocation the
+  // wrap owns, and once the engine is gone nothing can read it: capturedAudio()
+  // rejects a destroyed engine. Release it here rather than waiting for the JS
+  // object to be collected.
+  capture_buffers_.clear();
+  capture_buffers_.shrink_to_fit();
+  capture_ptrs_.clear();
+  capture_ptrs_.shrink_to_fit();
+  capture_capacity_frames_ = 0;
 }
 
 Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
@@ -310,10 +318,11 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "RealtimeEngine is destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Both leading arguments are required: an absent one reads as undefined and is
+  // rejected by the reader below, so it reaches the caller as a TypeError rather
+  // than as a silent no-op.
   double sample_rate = 0.0;
-  if (info.Length() < 2 || !ReadEngineSampleRate(env, info[0], &sample_rate)) {
-    return env.Undefined();
-  }
+  if (!ReadEngineSampleRate(env, info[0], &sample_rate)) return env.Undefined();
   int max_block_size = 0;
   int64_t command_capacity = 1024;
   int64_t telemetry_capacity = 1024;
@@ -1124,46 +1133,80 @@ Napi::Value RealtimeEngineWrap::ExternalMidiDroppedCount(const Napi::CallbackInf
   return Napi::Number::New(env, static_cast<double>(count));
 }
 
+Napi::Value RealtimeEngineWrap::ClipPageRequestOverflowCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  uint32_t count = 0;
+  ThrowIfError(env, sonare_engine_clip_page_request_overflow_count(engine_, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value RealtimeEngineWrap::WarpStretchOverflowCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  uint32_t count = 0;
+  ThrowIfError(env, sonare_engine_warp_stretch_overflow_count(engine_, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
 // Drains queued external-MIDI events, already lowered to MIDI 1.0 byte
 // messages. Each returned item is { destinationId, renderFrame, bytes:
 // number[] }; transport/clock bytes carry destinationId === 0xFFFFFFFF. A
 // single queued channel-voice event may lower to more than one item. @p
 // maxRecords caps the number of output events produced (the unit shared by
-// every surface). The C-ABI capacity passed per call is clamped to the
-// remaining budget so the destructive drain never consumes more events than it
-// can return — events that do not fit stay queued for the next call (lossless).
-// A budget below 3 (the most one record can lower to) stops the drain rather
-// than risk dropping a partially-lowered record.
+// every surface) and goes through the same domain check as the telemetry
+// drains. The C-ABI capacity passed per call is clamped to the remaining budget
+// so the destructive drain never consumes more events than it can return —
+// events that do not fit stay queued for the next call (lossless). A budget
+// below kMaxLoweredMessages could never consume a record, so it is rejected
+// rather than draining nothing while the queue keeps growing.
 Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  int max_records = 1024;
-  if (!OptionalIntArg(env, info, 0, "maxRecords", 1024, &max_records)) return env.Undefined();
+  // The most MIDI-1 messages one queue record can lower to, and hence the
+  // smallest capacity the C ABI accepts.
+  constexpr size_t kMaxLoweredMessages = 3;
+  constexpr uint32_t kMaxBytes =
+      static_cast<uint32_t>(std::extent<decltype(SonareExternalMidiEvent::bytes)>::value);
+  size_t max_records = 1024;
+  if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
+    if (!NonNegativeSizeTArg(env, info, 0, "maxRecords", &max_records)) return env.Undefined();
+  }
+  if (max_records > 0 && max_records < kMaxLoweredMessages) {
+    Napi::RangeError::New(env, "maxRecords must be 0 or at least " +
+                                   std::to_string(kMaxLoweredMessages) +
+                                   " to guarantee forward progress")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   Napi::Array out = Napi::Array::New(env);
-  if (max_records <= 0) return out;
+  if (max_records == 0) return out;
   std::array<SonareExternalMidiEvent, 256> records{};
-  uint32_t out_index = 0;
-  while (static_cast<int>(out_index) < max_records) {
-    const size_t remaining = static_cast<size_t>(max_records) - out_index;
-    if (remaining < 3) break;  // too small to lower one record without loss
-    const size_t want = std::min(records.size(), remaining);
+  size_t out_index = 0;
+  while (out_index + kMaxLoweredMessages <= max_records) {
+    const size_t want = std::min(records.size(), max_records - out_index);
     size_t written = 0;
     const SonareError err =
         sonare_engine_drain_external_midi(engine_, records.data(), want, &written);
     ThrowIfError(env, err);
     if (env.IsExceptionPending()) return env.Undefined();
     if (written == 0) break;
-    // written <= want <= remaining, so every drained event fits in the budget.
+    // Defensive: the C ABI promises written <= want, but clamp anyway so a
+    // misreporting drain cannot read past the buffer or overrun the budget.
+    written = std::min(written, want);
     for (size_t i = 0; i < written; ++i) {
       const SonareExternalMidiEvent& rec = records[i];
       Napi::Object item = Napi::Object::New(env);
       item.Set("destinationId", Napi::Number::New(env, static_cast<double>(rec.destination_id)));
       item.Set("renderFrame", Napi::Number::New(env, static_cast<double>(rec.render_frame)));
-      Napi::Array bytes = Napi::Array::New(env, rec.byte_count);
-      for (uint32_t b = 0; b < rec.byte_count; ++b) {
+      // byte_count is documented as 1..3, but it indexes a fixed-size array:
+      // bound it by the array extent before reading through it.
+      const uint32_t byte_count = std::min(rec.byte_count, kMaxBytes);
+      Napi::Array bytes = Napi::Array::New(env, byte_count);
+      for (uint32_t b = 0; b < byte_count; ++b) {
         bytes.Set(b, Napi::Number::New(env, rec.bytes[b]));
       }
       item.Set("bytes", bytes);
-      out.Set(out_index++, item);
+      out.Set(static_cast<uint32_t>(out_index++), item);
     }
   }
   return out;
@@ -1201,17 +1244,5 @@ Napi::Value RealtimeEngineWrap::GetTransportState(const Napi::CallbackInfo& info
 
 void RealtimeEngineWrap::Destroy(const Napi::CallbackInfo& info) {
   (void)info;
-  if (engine_ != nullptr) {
-    sonare_engine_destroy(engine_);
-    engine_ = nullptr;
-  }
-  // A capture buffer sized for a long session is the largest allocation the
-  // wrap owns, and once the engine is gone nothing can read it: capturedAudio()
-  // rejects a destroyed engine. Release it here rather than waiting for the JS
-  // object to be collected.
-  capture_buffers_.clear();
-  capture_buffers_.shrink_to_fit();
-  capture_ptrs_.clear();
-  capture_ptrs_.shrink_to_fit();
-  capture_capacity_frames_ = 0;
+  ReleaseNativeResources();
 }

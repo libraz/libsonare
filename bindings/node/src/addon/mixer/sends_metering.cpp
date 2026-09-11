@@ -200,8 +200,11 @@ Napi::Value MixerWrap::ReadGoniometerLatest(const Napi::CallbackInfo& info) {
   }
   const size_t max_points = std::min(requested, kGoniometerReadCap);
   std::vector<SonareMixGoniometerPoint> points(max_points);
-  const size_t count = sonare_strip_read_goniometer_latest(
-      strip, max_points > 0 ? points.data() : nullptr, max_points);
+  // Defensive: the C ABI promises a count no larger than the capacity it was
+  // given, but clamp anyway so a misreporting read cannot index past the buffer.
+  const size_t count = std::min(sonare_strip_read_goniometer_latest(
+                                    strip, max_points > 0 ? points.data() : nullptr, max_points),
+                                max_points);
   Napi::Array out = Napi::Array::New(env, count);
   for (size_t index = 0; index < count; ++index) {
     Napi::Object point = Napi::Object::New(env);

@@ -34,6 +34,7 @@ using sonare_node::OptionalIntArg;
 using sonare_node::OptionalMidiByteArg;
 using sonare_node::OptionalStringArg;
 using sonare_node::OptionalUint32Arg;
+using sonare_node::ReadBuiltinWaveform;
 using sonare_node::RequiredDoubleProperty;
 using sonare_node::RequiredDoubleValue;
 using sonare_node::RequiredFloatProperty;
