@@ -15,6 +15,11 @@
 /// spectrum, and everything not edited is carried through untouched rather than
 /// re-synthesised.
 ///
+/// That identity holds for any division whatsoever, since the residual is one
+/// minus whatever the notes took. It says the representation loses nothing; it
+/// says nothing about whether a note got the right share, and a reconstruction
+/// that matches is not evidence that the separation is good.
+///
 /// A mask is stored sparsely because a note only reaches its own partials. Dense
 /// per note would be a spectrogram each, which for a full arrangement is the
 /// input many times over.
