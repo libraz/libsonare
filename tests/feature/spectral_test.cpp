@@ -3,11 +3,13 @@
 
 #include "feature/spectral.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -586,4 +588,228 @@ TEST_CASE("spectral_flatness sanitizes non-finite magnitudes", "[spectral]") {
   REQUIRE(std::isfinite(clean[0]));
   REQUIRE(clean[0] > 0.0f);
   REQUIRE(clean[0] < 1.0f);
+}
+
+namespace {
+
+/// @brief Reference implementations of the spectral descriptors in the frame-major
+///        traversal order, kept independent of the production code.
+/// @details The descriptors walk the row-major [n_bins x n_frames] magnitude buffer
+///          bin-major for cache locality, which is only legitimate if the per-frame
+///          summation order over bins is preserved. Exact equality against a frame-major
+///          oracle is what makes that claim checkable; a tolerance would not see a
+///          reordered accumulation.
+float oracle_sanitize(float magnitude) {
+  return std::isfinite(magnitude) ? std::max(magnitude, 0.0f) : 0.0f;
+}
+
+std::vector<float> oracle_bin_frequencies(int n_bins, int sr, int n_fft) {
+  std::vector<float> freqs(static_cast<size_t>(n_bins));
+  const float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
+  for (int k = 0; k < n_bins; ++k) {
+    freqs[static_cast<size_t>(k)] = static_cast<float>(k) * bin_width;
+  }
+  return freqs;
+}
+
+std::vector<float> oracle_centroid(const std::vector<float>& magnitude, int n_bins, int n_frames,
+                                   int sr, int n_fft) {
+  const std::vector<float> freqs = oracle_bin_frequencies(n_bins, sr, n_fft);
+  std::vector<float> centroid(static_cast<size_t>(n_frames));
+  for (int t = 0; t < n_frames; ++t) {
+    float weighted_sum = 0.0f;
+    float magnitude_sum = 0.0f;
+    for (int k = 0; k < n_bins; ++k) {
+      const float mag = oracle_sanitize(magnitude[static_cast<size_t>(k * n_frames + t)]);
+      weighted_sum += freqs[static_cast<size_t>(k)] * mag;
+      magnitude_sum += mag;
+    }
+    centroid[static_cast<size_t>(t)] = magnitude_sum > 0.0f ? weighted_sum / magnitude_sum : 0.0f;
+  }
+  return centroid;
+}
+
+std::vector<float> oracle_bandwidth(const std::vector<float>& magnitude, int n_bins, int n_frames,
+                                    int sr, int n_fft, float p) {
+  const std::vector<float> freqs = oracle_bin_frequencies(n_bins, sr, n_fft);
+  const std::vector<float> centroids = oracle_centroid(magnitude, n_bins, n_frames, sr, n_fft);
+  std::vector<float> bandwidth(static_cast<size_t>(n_frames));
+  for (int t = 0; t < n_frames; ++t) {
+    const float centroid = centroids[static_cast<size_t>(t)];
+    float sum_weighted = 0.0f;
+    float sum_magnitude = 0.0f;
+    for (int k = 0; k < n_bins; ++k) {
+      const float mag = oracle_sanitize(magnitude[static_cast<size_t>(k * n_frames + t)]);
+      const float diff = std::abs(freqs[static_cast<size_t>(k)] - centroid);
+      sum_weighted += std::pow(diff, p) * mag;
+      sum_magnitude += mag;
+    }
+    bandwidth[static_cast<size_t>(t)] =
+        sum_magnitude > 0.0f ? std::pow(sum_weighted / sum_magnitude, 1.0f / p) : 0.0f;
+  }
+  return bandwidth;
+}
+
+std::vector<float> oracle_rolloff(const std::vector<float>& magnitude, int n_bins, int n_frames,
+                                  int sr, int n_fft, float roll_percent) {
+  const std::vector<float> freqs = oracle_bin_frequencies(n_bins, sr, n_fft);
+  std::vector<float> rolloff(static_cast<size_t>(n_frames));
+  for (int t = 0; t < n_frames; ++t) {
+    float total = 0.0f;
+    for (int k = 0; k < n_bins; ++k) {
+      total += oracle_sanitize(magnitude[static_cast<size_t>(k * n_frames + t)]);
+    }
+    if (total <= 0.0f) {
+      rolloff[static_cast<size_t>(t)] = 0.0f;
+      continue;
+    }
+    const float threshold = roll_percent * total;
+    float cumulative = 0.0f;
+    int rolloff_bin = n_bins - 1;
+    for (int k = 0; k < n_bins; ++k) {
+      cumulative += oracle_sanitize(magnitude[static_cast<size_t>(k * n_frames + t)]);
+      if (cumulative >= threshold) {
+        rolloff_bin = k;
+        break;
+      }
+    }
+    rolloff[static_cast<size_t>(t)] = freqs[static_cast<size_t>(rolloff_bin)];
+  }
+  return rolloff;
+}
+
+/// @brief Deterministic magnitude matrix seeded so awkward frames are actually present.
+/// @details Frame 0 is silent (the documented 0 Hz rolloff contract), frame 1 carries a
+///          single non-finite bin, and one frame puts most of its energy low with real
+///          energy still above it, so an implementation that fails to stop at the first
+///          threshold crossing reports a different bin.
+std::vector<float> descriptor_fixture(int n_bins, int n_frames) {
+  std::vector<float> magnitude(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames), 0.0f);
+  uint32_t state = 0x5eedu;
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      state = state * 1664525u + 1013904223u;
+      const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+      float value = unit * unit * 4.0f;
+      if (t == 0) {
+        value = 0.0f;  // silent frame
+      } else if (t == 1 && k == n_bins / 2) {
+        value = std::numeric_limits<float>::quiet_NaN();
+      } else if (t == 2) {
+        value = k == 1 ? 100.0f : 1.0f;  // crossing at a low bin, energy above it
+      }
+      magnitude[static_cast<size_t>(k * n_frames + t)] = value;
+    }
+  }
+  return magnitude;
+}
+
+}  // namespace
+
+TEST_CASE("spectral descriptors match a frame-major oracle exactly", "[spectral]") {
+  // n_frames is deliberately not a multiple of any plausible blocking factor.
+  const int n_bins = 37;
+  const int n_frames = 301;
+  const int sr = 22050;
+  const int n_fft = 72;
+  const std::vector<float> magnitude = descriptor_fixture(n_bins, n_frames);
+
+  const std::vector<float> centroid =
+      spectral_centroid(magnitude.data(), n_bins, n_frames, sr, n_fft);
+  const std::vector<float> centroid_ref = oracle_centroid(magnitude, n_bins, n_frames, sr, n_fft);
+  REQUIRE(centroid.size() == centroid_ref.size());
+  for (size_t i = 0; i < centroid.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(centroid[i] == centroid_ref[i]);
+  }
+
+  const std::vector<float> bandwidth =
+      spectral_bandwidth(magnitude.data(), n_bins, n_frames, sr, n_fft, 2.0f);
+  const std::vector<float> bandwidth_ref =
+      oracle_bandwidth(magnitude, n_bins, n_frames, sr, n_fft, 2.0f);
+  REQUIRE(bandwidth.size() == bandwidth_ref.size());
+  for (size_t i = 0; i < bandwidth.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(bandwidth[i] == bandwidth_ref[i]);
+  }
+
+  for (float roll_percent : {0.15f, 0.5f, 0.85f, 0.99f}) {
+    CAPTURE(roll_percent);
+    const std::vector<float> rolloff =
+        spectral_rolloff(magnitude.data(), n_bins, n_frames, sr, n_fft, roll_percent);
+    const std::vector<float> rolloff_ref =
+        oracle_rolloff(magnitude, n_bins, n_frames, sr, n_fft, roll_percent);
+    REQUIRE(rolloff.size() == rolloff_ref.size());
+    for (size_t i = 0; i < rolloff.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(rolloff[i] == rolloff_ref[i]);
+    }
+  }
+}
+
+TEST_CASE("spectral_rolloff stops at the first bin to reach the threshold", "[spectral]") {
+  // One frame, five bins: the running sum reaches 0.5 * 12 = 6 at bin 1 and keeps rising.
+  // Latching on the first crossing gives bin 1; taking the last crossing gives bin 4.
+  const std::vector<float> magnitude = {1.0f, 9.0f, 1.0f, 0.5f, 0.5f};
+  const int sr = 1000;
+  const int n_fft = 8;  // bin width 125 Hz
+
+  const std::vector<float> rolloff = spectral_rolloff(magnitude.data(), 5, 1, sr, n_fft, 0.5f);
+  REQUIRE(rolloff.size() == 1);
+  REQUIRE(rolloff[0] == 125.0f);
+}
+
+TEST_CASE("spectral_contrast does not depend on how many frames it is given", "[spectral]") {
+  // Every contrast frame is computed from that frame's bins alone, so a prefix of the
+  // input must produce a prefix of the output. This is what fails if the frame blocking
+  // inside the band loop miscomputes an offset -- and the sizes straddle the block size.
+  const int n_fft = 64;
+  const int n_bins = n_fft / 2 + 1;
+  const int n_frames_full = 600;
+  const int sr = 22050;
+  const int hop_length = 16;
+  const int n_bands = 4;
+  const float fmin = 200.0f;
+  const float quantile = 0.02f;
+
+  std::vector<std::complex<float>> full(static_cast<size_t>(n_bins) *
+                                        static_cast<size_t>(n_frames_full));
+  uint32_t state = 0xc0ffeeu;
+  for (auto& value : full) {
+    state = state * 1664525u + 1013904223u;
+    const float re = static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
+    state = state * 1664525u + 1013904223u;
+    const float im = static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
+    value = {re, im};
+  }
+
+  const auto contrast_of = [&](int n_frames) {
+    std::vector<std::complex<float>> sliced(static_cast<size_t>(n_bins) *
+                                            static_cast<size_t>(n_frames));
+    for (int k = 0; k < n_bins; ++k) {
+      for (int t = 0; t < n_frames; ++t) {
+        sliced[static_cast<size_t>(k * n_frames + t)] =
+            full[static_cast<size_t>(k * n_frames_full + t)];
+      }
+    }
+    Spectrogram spec = Spectrogram::from_complex(sliced.data(), n_bins, n_frames, n_fft, hop_length,
+                                                 sr, WindowType::Hann, /*center=*/true);
+    return spectral_contrast(spec, sr, n_bands, fmin, quantile);
+  };
+
+  const std::vector<float> reference = contrast_of(n_frames_full);
+  REQUIRE(reference.size() == static_cast<size_t>((n_bands + 1) * n_frames_full));
+
+  for (int n_frames : {1, 255, 256, 257, 512, 513}) {
+    CAPTURE(n_frames);
+    const std::vector<float> prefix = contrast_of(n_frames);
+    REQUIRE(prefix.size() == static_cast<size_t>((n_bands + 1) * n_frames));
+    for (int b = 0; b <= n_bands; ++b) {
+      for (int t = 0; t < n_frames; ++t) {
+        CAPTURE(b, t);
+        REQUIRE(prefix[static_cast<size_t>(b * n_frames + t)] ==
+                reference[static_cast<size_t>(b * n_frames_full + t)]);
+      }
+    }
+  }
 }

@@ -126,6 +126,9 @@ struct FFT::Impl {
   kiss_fftr_cfg inverse_cfg = nullptr;
   kiss_fft_cfg forward_complex_cfg = nullptr;
 
+  // Set once ensure_complex() has settled on a backend for the complex transform.
+  bool complex_ready = false;
+
   explicit Impl(int n) {
 #if SONARE_HAVE_PFFFT
     real_setup.create(n, PFFFT_REAL);
@@ -138,18 +141,16 @@ struct FFT::Impl {
       real_out.allocate(count, "Failed to allocate PFFFT real output buffer");
       real_work.allocate(count, "Failed to allocate PFFFT real work buffer");
     }
-    complex_setup.create(n, PFFFT_COMPLEX);
-    if (complex_setup) {
-      const size_t count = 2 * static_cast<size_t>(n);
-      complex_in.allocate(count, "Failed to allocate PFFFT complex input buffer");
-      complex_out.allocate(count, "Failed to allocate PFFFT complex output buffer");
-      complex_work.allocate(count, "Failed to allocate PFFFT complex work buffer");
-    }
+    // The complex setup and its three buffers are built on the first
+    // forward_complex() call instead of here: most instances only ever run the
+    // real transform, and this is the larger half of the construction cost.
+    // Safe because the class already forbids sharing one instance between
+    // threads without external synchronization (see the Thread Safety block in
+    // fft.h) -- the backend scratch buffers are written during every transform,
+    // so an instance was never usable concurrently to begin with.
     const bool need_kiss_real = !real_setup;
-    const bool need_kiss_complex = !complex_setup;
 #else
     const bool need_kiss_real = true;
-    const bool need_kiss_complex = true;
 #endif
 
     // The KissFFT handles are raw, and a throwing constructor runs no destructor
@@ -163,12 +164,6 @@ struct FFT::Impl {
         failure = "Failed to allocate KissFFT real config";
       }
     }
-    if (need_kiss_complex && failure == nullptr) {
-      forward_complex_cfg = kiss_fft_alloc(n, 0, nullptr, nullptr);
-      if (!forward_complex_cfg) {
-        failure = "Failed to allocate KissFFT complex config";
-      }
-    }
     if (failure != nullptr) {
       release_kiss();
       throw SonareException(ErrorCode::OutOfMemory, failure);
@@ -176,6 +171,37 @@ struct FFT::Impl {
   }
 
   ~Impl() { release_kiss(); }
+
+  /// Builds the complex-transform state on first use. Idempotent, and called
+  /// only from forward_complex(), which the class's thread-safety contract
+  /// already requires a caller to serialize per instance. complex_ready latches
+  /// the whole decision, not just the PFFFT half: for a length PFFFT declines,
+  /// the KissFFT fallback must be chosen once rather than re-attempting the
+  /// failing setup on every transform. An allocation failure leaves it clear so
+  /// a retry is still possible.
+  void ensure_complex(int n) {
+    if (complex_ready) return;
+#if SONARE_HAVE_PFFFT
+    if (!complex_setup) {
+      complex_setup.create(n, PFFFT_COMPLEX);
+    }
+    if (complex_setup) {
+      const size_t count = 2 * static_cast<size_t>(n);
+      complex_in.allocate(count, "Failed to allocate PFFFT complex input buffer");
+      complex_out.allocate(count, "Failed to allocate PFFFT complex output buffer");
+      complex_work.allocate(count, "Failed to allocate PFFFT complex work buffer");
+      complex_ready = true;
+      return;
+    }
+#endif
+    if (forward_complex_cfg == nullptr) {
+      forward_complex_cfg = kiss_fft_alloc(n, 0, nullptr, nullptr);
+      if (!forward_complex_cfg) {
+        throw SonareException(ErrorCode::OutOfMemory, "Failed to allocate KissFFT complex config");
+      }
+    }
+    complex_ready = true;
+  }
 
   void release_kiss() {
     if (forward_cfg) kiss_fft_free(forward_cfg);
@@ -226,6 +252,7 @@ void FFT::forward(const float* input, std::complex<float>* output) {
 void FFT::forward_complex(const std::complex<float>* input, std::complex<float>* output) {
   SONARE_CHECK_MSG(input != nullptr && output != nullptr, ErrorCode::InvalidParameter,
                    "Null pointer passed to FFT::forward_complex");
+  impl_->ensure_complex(n_fft_);
 #if SONARE_HAVE_PFFFT
   if (impl_->complex_setup) {
     const size_t floats = 2 * static_cast<size_t>(n_fft_);

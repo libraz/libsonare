@@ -353,6 +353,34 @@ TEST_CASE("residual helper function", "[hpss]") {
   REQUIRE(res.sample_rate() == audio.sample_rate());
 }
 
+TEST_CASE("residual() matches hpss_with_residual() sample for sample", "[hpss]") {
+  // residual() stopped routing through the audio-level hpss_with_residual, which
+  // ran three inverse transforms and discarded two. The case above only asserted
+  // the result was non-empty, so the shortcut could have changed what it returns
+  // with nothing to notice. Bit-identical, not close: the two paths share the
+  // same spectrogram-level separation, so any difference is a defect rather than
+  // a tolerance question.
+  Audio audio = create_harmonic_audio();
+
+  const Audio shortcut = residual(audio);
+  const Audio full = hpss_with_residual(audio).residual;
+
+  REQUIRE(shortcut.size() == full.size());
+  REQUIRE(shortcut.sample_rate() == full.sample_rate());
+  REQUIRE(shortcut.channels() == full.channels());
+  // Positive control: an all-zero residual would satisfy the comparison below
+  // without either path having computed anything.
+  double energy = 0.0;
+  for (size_t i = 0; i < shortcut.size(); ++i) {
+    energy += static_cast<double>(shortcut[i]) * static_cast<double>(shortcut[i]);
+  }
+  REQUIRE(energy > 0.0);
+
+  for (size_t i = 0; i < shortcut.size(); ++i) {
+    REQUIRE(shortcut[i] == full[i]);
+  }
+}
+
 TEST_CASE("median_filter_horizontal handles NaN/Inf without UB", "[hpss][nan]") {
   // Inject NaN and Inf into a small magnitude grid. The sliding-window median
   // path used to rely on std::lower_bound + erase with floating-point equality,

@@ -48,6 +48,11 @@ std::vector<float> yin_difference(const float* frame, int frame_length, int max_
 /// @return CMNDF values [same size as diff]
 std::vector<float> yin_cmndf(const std::vector<float>& diff);
 
+/// @brief Out-parameter form of yin_cmndf(), for per-frame loops.
+/// @param diff Difference function from yin_difference()
+/// @param cmndf Caller-owned buffer, resized to diff.size() and overwritten
+void yin_cmndf_into(const std::vector<float>& diff, std::vector<float>& cmndf);
+
 /// @brief Finds the best pitch period using parabolic interpolation.
 /// @param cmndf Cumulative mean normalized difference function
 /// @param threshold YIN threshold

@@ -155,11 +155,11 @@ std::vector<float> yin_difference(const float* frame, int frame_length, int max_
   return diff;
 }
 
-std::vector<float> yin_cmndf(const std::vector<float>& diff) {
-  std::vector<float> cmndf(diff.size());
+void yin_cmndf_into(const std::vector<float>& diff, std::vector<float>& cmndf) {
+  cmndf.assign(diff.size(), 0.0f);
 
   if (diff.empty()) {
-    return cmndf;
+    return;
   }
 
   cmndf[0] = 1.0f;  // By definition
@@ -173,7 +173,11 @@ std::vector<float> yin_cmndf(const std::vector<float>& diff) {
       cmndf[tau] = 1.0f;
     }
   }
+}
 
+std::vector<float> yin_cmndf(const std::vector<float>& diff) {
+  std::vector<float> cmndf;
+  yin_cmndf_into(diff, cmndf);
   return cmndf;
 }
 
@@ -438,22 +442,31 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   std::vector<double> voiced_prob(static_cast<size_t>(n_frames), 0.0);
   YinDiffContext yin_ctx;
   std::vector<float> yin_diff;
+  // Per-frame scratch, allocated once; cmndf_at() reads the [min_period, max_period]
+  // window in place instead of copying it out.
+  std::vector<float> full_cmndf;
+  std::vector<int> troughs;
+  std::vector<double> trough_probs;
+  const int cmndf_size = max_period + 1 - min_period;
+  const auto cmndf_at = [&](int index) {
+    return full_cmndf[static_cast<size_t>(min_period + index)];
+  };
 
   for (int i = 0; i < n_frames; ++i) {
     int start = i * config.hop_length;
 
     yin_ctx.compute(data + start, config.frame_length, max_period + 1, yin_diff);
-    const std::vector<float> full_cmndf = yin_cmndf(yin_diff);
-    std::vector<float> cmndf(full_cmndf.begin() + min_period, full_cmndf.begin() + max_period + 1);
+    yin_cmndf_into(yin_diff, full_cmndf);
 
-    std::vector<int> troughs;
-    for (int index = 0; index < static_cast<int>(cmndf.size()); ++index) {
-      const bool is_left_edge = index == 0 && index + 1 < static_cast<int>(cmndf.size()) &&
-                                cmndf[index] < cmndf[index + 1];
-      const bool is_local_min = index > 0 && index + 1 < static_cast<int>(cmndf.size()) &&
-                                cmndf[index] < cmndf[index - 1] && cmndf[index] <= cmndf[index + 1];
-      const bool is_right_edge = index > 0 && index + 1 == static_cast<int>(cmndf.size()) &&
-                                 cmndf[index] < cmndf[index - 1];
+    troughs.clear();
+    for (int index = 0; index < cmndf_size; ++index) {
+      const bool is_left_edge =
+          index == 0 && index + 1 < cmndf_size && cmndf_at(index) < cmndf_at(index + 1);
+      const bool is_local_min = index > 0 && index + 1 < cmndf_size &&
+                                cmndf_at(index) < cmndf_at(index - 1) &&
+                                cmndf_at(index) <= cmndf_at(index + 1);
+      const bool is_right_edge =
+          index > 0 && index + 1 == cmndf_size && cmndf_at(index) < cmndf_at(index - 1);
       if (is_left_edge || is_local_min || is_right_edge) {
         troughs.push_back(index);
       }
@@ -466,12 +479,12 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
       continue;
     }
 
-    std::vector<double> trough_probs(troughs.size(), 0.0);
+    trough_probs.assign(troughs.size(), 0.0);
     for (int threshold_index = 0; threshold_index < kThresholds; ++threshold_index) {
       const double threshold = thresholds[static_cast<size_t>(threshold_index + 1)];
       int below_count = 0;
       for (int index : troughs) {
-        below_count += cmndf[static_cast<size_t>(index)] < threshold ? 1 : 0;
+        below_count += cmndf_at(index) < threshold ? 1 : 0;
       }
       if (below_count == 0) {
         continue;
@@ -483,7 +496,7 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
       int below_position = 0;
       for (size_t trough_index = 0; trough_index < troughs.size(); ++trough_index) {
         const int index = troughs[trough_index];
-        if (cmndf[static_cast<size_t>(index)] < threshold) {
+        if (cmndf_at(index) < threshold) {
           const double prior = std::exp(-kBoltzmann * below_position) / norm;
           trough_probs[trough_index] += prior * beta_probs[static_cast<size_t>(threshold_index)];
           ++below_position;
@@ -492,12 +505,12 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
     }
 
     auto global_min_it = std::min_element(troughs.begin(), troughs.end(), [&](int lhs, int rhs) {
-      return cmndf[static_cast<size_t>(lhs)] < cmndf[static_cast<size_t>(rhs)];
+      return cmndf_at(lhs) < cmndf_at(rhs);
     });
     const size_t global_min_index =
         static_cast<size_t>(std::distance(troughs.begin(), global_min_it));
     int thresholds_below_min = 0;
-    const double global_min_height = cmndf[static_cast<size_t>(*global_min_it)];
+    const double global_min_height = cmndf_at(*global_min_it);
     for (int threshold_index = 0; threshold_index < kThresholds; ++threshold_index) {
       if (global_min_height >= thresholds[static_cast<size_t>(threshold_index + 1)]) {
         ++thresholds_below_min;
@@ -515,10 +528,8 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
         continue;
       }
       float offset = 0.0f;
-      if (index > 0 && index + 1 < static_cast<int>(cmndf.size())) {
-        offset = parabolic_interp(cmndf[static_cast<size_t>(index - 1)],
-                                  cmndf[static_cast<size_t>(index)],
-                                  cmndf[static_cast<size_t>(index + 1)]);
+      if (index > 0 && index + 1 < cmndf_size) {
+        offset = parabolic_interp(cmndf_at(index - 1), cmndf_at(index), cmndf_at(index + 1));
       }
       const double period = static_cast<double>(min_period + index) + offset;
       const double f0 = static_cast<double>(sr) / period;
@@ -568,23 +579,24 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   const double log_stay_prob = std::log(1.0 - kSwitchProb);
   const double log_switch_prob = std::log(kSwitchProb);
 
-  // Flat row-major [n_frames x n_states] for Viterbi log-likelihoods and backpointers.
-  // Row-major matches the forward update (sweeps curr_state for fixed i), the per-frame
-  // log-observation add (sweeps state for fixed i), and the backtrack pass (reads frame i+1's
-  // states then the row's argmax at n_frames-1) — all contiguous accesses.
-  // Allocations drop from 3 * n_frames to 3 across observation / viterbi / backtrack.
-  std::vector<double> viterbi(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states),
-                              -std::numeric_limits<double>::infinity());
+  // The forward update reads frame i-1's scores and nothing older, and the backtrack pass reads
+  // backpointers rather than scores, so only two score rows are ever live. Backpointers stay
+  // flat row-major [n_frames x n_states]: the backtrack pass reads frame i+1's states, and the
+  // forward update sweeps curr_state for a fixed i, so both accesses are contiguous.
+  const double log_neg_inf = -std::numeric_limits<double>::infinity();
+  std::vector<double> viterbi_prev(static_cast<size_t>(n_states), log_neg_inf);
+  std::vector<double> viterbi_curr(static_cast<size_t>(n_states), log_neg_inf);
   std::vector<int> backtrack(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states), -1);
   const double log_init = -std::log(static_cast<double>(n_states));
   for (int state = 0; state < n_states; ++state) {
-    viterbi[obs_idx(0, state)] =
+    viterbi_prev[static_cast<size_t>(state)] =
         log_init + std::log(std::max(observation[obs_idx(0, state)], kLogFloor));
   }
 
   for (int i = 1; i < n_frames; ++i) {
+    std::fill(viterbi_curr.begin(), viterbi_curr.end(), log_neg_inf);
     for (int prev_state = 0; prev_state < n_states; ++prev_state) {
-      const double previous = viterbi[obs_idx(i - 1, prev_state)];
+      const double previous = viterbi_prev[static_cast<size_t>(prev_state)];
       if (!std::isfinite(previous)) {
         continue;
       }
@@ -598,27 +610,24 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
              pitch_log_transitions[static_cast<size_t>(prev_bin)]) {
           const int curr_state = state_offset + curr_bin;
           const double score = base + log_pitch_prob;
-          const size_t curr_idx = obs_idx(i, curr_state);
-          if (score > viterbi[curr_idx]) {
-            viterbi[curr_idx] = score;
-            backtrack[curr_idx] = prev_state;
+          if (score > viterbi_curr[static_cast<size_t>(curr_state)]) {
+            viterbi_curr[static_cast<size_t>(curr_state)] = score;
+            backtrack[obs_idx(i, curr_state)] = prev_state;
           }
         }
       }
     }
     for (int state = 0; state < n_states; ++state) {
-      viterbi[obs_idx(i, state)] += std::log(std::max(observation[obs_idx(i, state)], kLogFloor));
+      viterbi_curr[static_cast<size_t>(state)] +=
+          std::log(std::max(observation[obs_idx(i, state)], kLogFloor));
     }
+    viterbi_prev.swap(viterbi_curr);
   }
 
+  // After the last swap viterbi_prev holds frame n_frames-1; for n_frames == 1 it holds frame 0.
   std::vector<int> best_path(n_frames);
-  {
-    const size_t last_row_begin = obs_idx(n_frames - 1, 0);
-    const auto row_begin = viterbi.begin() + static_cast<std::ptrdiff_t>(last_row_begin);
-    const auto row_end = row_begin + n_states;
-    best_path[static_cast<size_t>(n_frames - 1)] =
-        static_cast<int>(std::distance(row_begin, std::max_element(row_begin, row_end)));
-  }
+  best_path[static_cast<size_t>(n_frames - 1)] = static_cast<int>(std::distance(
+      viterbi_prev.begin(), std::max_element(viterbi_prev.begin(), viterbi_prev.end())));
   for (int i = n_frames - 2; i >= 0; --i) {
     const int next_state = best_path[static_cast<size_t>(i + 1)];
     const int previous = backtrack[obs_idx(i + 1, next_state)];

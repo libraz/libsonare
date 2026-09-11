@@ -10,21 +10,33 @@
 
 namespace sonare {
 
+/// @brief Largest median-filter kernel either HPSS direction accepts.
+/// @details Set past the edge of meaningful input rather than to a memory
+///          budget: a kernel is a median width in STFT frames or bins, and an
+///          hour at hop 512 / 48 kHz is about 337k frames, so a caller at this
+///          bound has stopped choosing a resolution. Cost is a PRODUCT and not
+///          a per-element constant -- each worker allocates its own
+///          sliding-median array and scratch window, so residency is 8 bytes x
+///          kernel x @c hardware_concurrency() and scales with the host.
+inline constexpr int kMaxHpssKernelSize = 1 << 19;
+
 /// @brief Configuration for HPSS algorithm.
 /// @details HPSS separates audio into harmonic (tonal) and percussive (transient)
 ///          components using median filtering. Horizontal filtering enhances
 ///          harmonics, vertical filtering enhances percussives.
 struct HpssConfig {
-  int kernel_size_harmonic = 31;    ///< Horizontal median filter size (must be odd and positive)
-  int kernel_size_percussive = 31;  ///< Vertical median filter size (must be odd and positive)
-  float power = 2.0f;               ///< Exponent for mask computation (typically 1.0-2.0)
-  float margin_harmonic = 1.0f;     ///< Weight for harmonic mask (> 1.0 favors harmonic)
-  float margin_percussive = 1.0f;   ///< Weight for percussive mask (> 1.0 favors percussive)
-                                    ///< Soft mask (librosa parity, margin applied before the
-                                    ///< power): mask_harm = H^p / (H^p + (margin_h * P)^p),
-                                    ///< mask_perc = P^p / (P^p + (margin_p * H)^p)
-  bool use_soft_mask = true;        ///< true = soft masks (smooth blend),
-                                    ///< false = hard masks (binary assignment)
+  /// Horizontal median filter size: odd, positive, at most @ref kMaxHpssKernelSize.
+  int kernel_size_harmonic = 31;
+  /// Vertical median filter size: odd, positive, at most @ref kMaxHpssKernelSize.
+  int kernel_size_percussive = 31;
+  float power = 2.0f;              ///< Exponent for mask computation (typically 1.0-2.0)
+  float margin_harmonic = 1.0f;    ///< Weight for harmonic mask (> 1.0 favors harmonic)
+  float margin_percussive = 1.0f;  ///< Weight for percussive mask (> 1.0 favors percussive)
+                                   ///< Soft mask (librosa parity, margin applied before the
+                                   ///< power): mask_harm = H^p / (H^p + (margin_h * P)^p),
+                                   ///< mask_perc = P^p / (P^p + (margin_p * H)^p)
+  bool use_soft_mask = true;       ///< true = soft masks (smooth blend),
+                                   ///< false = hard masks (binary assignment)
 };
 
 /// @brief Result of HPSS on spectrogram.

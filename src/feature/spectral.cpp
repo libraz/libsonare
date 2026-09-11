@@ -67,15 +67,25 @@ std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_f
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> centroid(n_frames);
 
-  for (int t = 0; t < n_frames; ++t) {
-    float weighted_sum = 0.0f;
-    float magnitude_sum = 0.0f;
-    for (int k = 0; k < n_bins; ++k) {
-      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
-      weighted_sum += freqs[k] * mag;
-      magnitude_sum += mag;
+  // Bin-major with per-frame accumulators, as spectral_flatness below: `magnitude` is
+  // row-major [n_bins x n_frames], so a bin is one contiguous row. Each frame still sums
+  // bins 0..n_bins-1 in order, so the accumulated value is unchanged bit for bit.
+  std::vector<float> weighted_sum(static_cast<size_t>(n_frames), 0.0f);
+  std::vector<float> magnitude_sum(static_cast<size_t>(n_frames), 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    const float* row = magnitude + static_cast<size_t>(k) * static_cast<size_t>(n_frames);
+    const float freq = freqs[static_cast<size_t>(k)];
+    for (int t = 0; t < n_frames; ++t) {
+      const float mag = sanitized_magnitude(row[t]);
+      weighted_sum[static_cast<size_t>(t)] += freq * mag;
+      magnitude_sum[static_cast<size_t>(t)] += mag;
     }
-    centroid[t] = magnitude_sum > 0.0f ? weighted_sum / magnitude_sum : 0.0f;
+  }
+
+  for (int t = 0; t < n_frames; ++t) {
+    const size_t index = static_cast<size_t>(t);
+    centroid[index] =
+        magnitude_sum[index] > 0.0f ? weighted_sum[index] / magnitude_sum[index] : 0.0f;
   }
 
   return centroid;
@@ -96,22 +106,28 @@ std::vector<float> spectral_bandwidth(const float* magnitude, int n_bins, int n_
   std::vector<float> centroids = spectral_centroid(magnitude, n_bins, n_frames, sr, n_fft);
   std::vector<float> bandwidth(n_frames);
 
-  for (int t = 0; t < n_frames; ++t) {
-    float centroid = centroids[t];
-    float sum_weighted = 0.0f;
-    float sum_magnitude = 0.0f;
-
-    for (int k = 0; k < n_bins; ++k) {
-      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
-      float diff = std::abs(freqs[k] - centroid);
-      sum_weighted += std::pow(diff, p) * mag;
-      sum_magnitude += mag;
+  // Bin-major, per-frame accumulators; see spectral_centroid above for why the sums are
+  // bit-identical to a frame-major walk.
+  std::vector<float> sum_weighted(static_cast<size_t>(n_frames), 0.0f);
+  std::vector<float> sum_magnitude(static_cast<size_t>(n_frames), 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    const float* row = magnitude + static_cast<size_t>(k) * static_cast<size_t>(n_frames);
+    const float freq = freqs[static_cast<size_t>(k)];
+    for (int t = 0; t < n_frames; ++t) {
+      const size_t index = static_cast<size_t>(t);
+      const float mag = sanitized_magnitude(row[t]);
+      const float diff = std::abs(freq - centroids[index]);
+      sum_weighted[index] += std::pow(diff, p) * mag;
+      sum_magnitude[index] += mag;
     }
+  }
 
-    if (sum_magnitude > 0.0f) {
-      bandwidth[t] = std::pow(sum_weighted / sum_magnitude, 1.0f / p);
+  for (int t = 0; t < n_frames; ++t) {
+    const size_t index = static_cast<size_t>(t);
+    if (sum_magnitude[index] > 0.0f) {
+      bandwidth[index] = std::pow(sum_weighted[index] / sum_magnitude[index], 1.0f / p);
     } else {
-      bandwidth[t] = 0.0f;
+      bandwidth[index] = 0.0f;
     }
   }
 
@@ -132,36 +148,52 @@ std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_fr
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> rolloff(n_frames);
 
+  // Two bin-major passes over the row-major [n_bins x n_frames] buffer, as spectral_centroid
+  // above: one for the per-frame total, one to find the first bin whose running sum reaches
+  // the threshold. Both sums still run bins 0..n_bins-1 per frame, so they are bit-identical
+  // to the frame-major walk; the per-frame `break` becomes a latch on rolloff_bin, which
+  // freezes on the same bin because sanitized magnitudes are non-negative and the running sum
+  // therefore never falls back below the threshold.
+  std::vector<float> total(static_cast<size_t>(n_frames), 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    const float* row = magnitude + static_cast<size_t>(k) * static_cast<size_t>(n_frames);
+    for (int t = 0; t < n_frames; ++t) {
+      total[static_cast<size_t>(t)] += sanitized_magnitude(row[t]);
+    }
+  }
+
+  std::vector<float> threshold(static_cast<size_t>(n_frames));
   for (int t = 0; t < n_frames; ++t) {
-    float total = 0.0f;
-    for (int k = 0; k < n_bins; ++k) {
-      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
-      total += mag;
-    }
+    threshold[static_cast<size_t>(t)] = roll_percent * total[static_cast<size_t>(t)];
+  }
 
-    // librosa returns the lowest bin frequency (0 Hz) when the frame has no
-    // energy. Without this short-circuit, ``threshold = 0`` would still match
-    // bin 0 on the first iteration, but the explicit path documents the
-    // empty-frame contract and avoids relying on cumulative >= 0.
-    if (total <= 0.0f) {
-      rolloff[t] = 0.0f;
-      continue;
-    }
-
-    float threshold = roll_percent * total;
-    float cumulative = 0.0f;
-
-    int rolloff_bin = n_bins - 1;
-    for (int k = 0; k < n_bins; ++k) {
-      float mag = sanitized_magnitude(magnitude[k * n_frames + t]);
-      cumulative += mag;
-      if (cumulative >= threshold) {
-        rolloff_bin = k;
-        break;
+  std::vector<float> cumulative(static_cast<size_t>(n_frames), 0.0f);
+  std::vector<int> rolloff_bin(static_cast<size_t>(n_frames), -1);
+  for (int k = 0; k < n_bins; ++k) {
+    const float* row = magnitude + static_cast<size_t>(k) * static_cast<size_t>(n_frames);
+    for (int t = 0; t < n_frames; ++t) {
+      const size_t index = static_cast<size_t>(t);
+      if (rolloff_bin[index] >= 0) {
+        continue;
+      }
+      cumulative[index] += sanitized_magnitude(row[t]);
+      if (cumulative[index] >= threshold[index]) {
+        rolloff_bin[index] = k;
       }
     }
+  }
 
-    rolloff[t] = freqs[rolloff_bin];
+  for (int t = 0; t < n_frames; ++t) {
+    const size_t index = static_cast<size_t>(t);
+    // librosa returns the lowest bin frequency (0 Hz) when the frame has no energy. The
+    // threshold is 0 for such a frame, so the latch above would fire on bin 0 anyway; the
+    // explicit path documents the empty-frame contract rather than relying on that.
+    if (total[index] <= 0.0f) {
+      rolloff[index] = 0.0f;
+      continue;
+    }
+    const int bin = rolloff_bin[index] < 0 ? n_bins - 1 : rolloff_bin[index];
+    rolloff[index] = freqs[static_cast<size_t>(bin)];
   }
 
   return rolloff;
@@ -254,6 +286,8 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> peak((n_bands + 1) * n_frames, 0.0f);
   std::vector<float> valley((n_bands + 1) * n_frames, 0.0f);
+  // Frame-tile staging buffer, reused across every band and tile; resized per band below.
+  std::vector<float> tile;
 
   for (int b = 0; b <= n_bands; ++b) {
     std::vector<int> band_indices;
@@ -297,26 +331,48 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
     }
     q_count = std::min(q_count, static_cast<int>(band_indices.size()));
 
-    for (int t = 0; t < n_frames; ++t) {
-      std::vector<float> band_mags;
-      band_mags.reserve(band_indices.size());
-      for (int k : band_indices) {
-        // std::sort requires a strict weak ordering. NaN violates that contract,
-        // so treat malformed/non-finite magnitudes as zero just as the other
-        // spectral descriptors do before they enter an ordering operation.
-        band_mags.push_back(sanitized_magnitude(magnitude[k * n_frames + t]));
+    // Stage the band bin-major in frame tiles instead of gathering a column per frame.
+    // `magnitude` is row-major [n_bins x n_frames], so a per-frame gather touches one cache
+    // line per bin; a tile reads along each bin row contiguously while bounding the staging
+    // buffer to band_size * kFrameTile floats, so the cache win does not cost the
+    // [n_bins x n_frames]-sized temporary spectral_flatness deliberately avoids. The sort
+    // sees the same multiset per frame, so peak/valley are unchanged bit for bit.
+    constexpr int kFrameTile = 256;
+    const size_t band_size = band_indices.size();
+    tile.resize(band_size * static_cast<size_t>(kFrameTile));
+
+    for (int tile_start = 0; tile_start < n_frames; tile_start += kFrameTile) {
+      const int tile_frames = std::min(kFrameTile, n_frames - tile_start);
+
+      for (size_t i = 0; i < band_size; ++i) {
+        const float* row = magnitude.data() +
+                           static_cast<size_t>(band_indices[i]) * static_cast<size_t>(n_frames) +
+                           static_cast<size_t>(tile_start);
+        for (int t = 0; t < tile_frames; ++t) {
+          // std::sort requires a strict weak ordering. NaN violates that contract, so treat
+          // malformed/non-finite magnitudes as zero just as the other spectral descriptors
+          // do before they enter an ordering operation.
+          tile[static_cast<size_t>(t) * band_size + i] = sanitized_magnitude(row[t]);
+        }
       }
 
-      std::sort(band_mags.begin(), band_mags.end());
+      for (int t = 0; t < tile_frames; ++t) {
+        const auto frame_begin =
+            tile.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(t) * band_size);
+        const auto frame_end = frame_begin + static_cast<std::ptrdiff_t>(band_size);
+        std::sort(frame_begin, frame_end);
 
-      float valley_sum = 0.0f;
-      float peak_sum = 0.0f;
-      for (int i = 0; i < q_count; ++i) {
-        valley_sum += band_mags[i];
-        peak_sum += band_mags[band_mags.size() - static_cast<size_t>(q_count) + i];
+        float valley_sum = 0.0f;
+        float peak_sum = 0.0f;
+        for (int i = 0; i < q_count; ++i) {
+          valley_sum += *(frame_begin + i);
+          peak_sum += *(frame_end - q_count + i);
+        }
+        const size_t out = static_cast<size_t>(b) * static_cast<size_t>(n_frames) +
+                           static_cast<size_t>(tile_start + t);
+        valley[out] = valley_sum / static_cast<float>(q_count);
+        peak[out] = peak_sum / static_cast<float>(q_count);
       }
-      valley[b * n_frames + t] = valley_sum / static_cast<float>(q_count);
-      peak[b * n_frames + t] = peak_sum / static_cast<float>(q_count);
     }
   }
 

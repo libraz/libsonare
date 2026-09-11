@@ -1212,3 +1212,37 @@ TEST_CASE("dynamic_range percentiles come from the shared percentile kernel",
     REQUIRE(result.low_percentile_db < sorted[ceil_rank]);
   }
 }
+
+TEST_CASE("Welch spectrum normalizes a zero-padded tail frame by its own window span",
+          "[meter][spectrum]") {
+  // The per-frame coherent gain is the sum of the window over the samples that were
+  // actually populated. Every full frame shares one value, so it is computed once
+  // outside the frame loop; a tail frame shorter than n_fft must still get its own.
+  // Dividing a 512-sample tail by the full 2048-point window sum under-reports it by
+  // roughly the ratio of the two sums, so the two readings below would part company
+  // by about an order of magnitude.
+  using sonare::Audio;
+  using sonare::metering::SpectrumConfig;
+
+  SpectrumConfig config;
+  config.n_fft = 2048;
+
+  const float level = 0.5f;
+  const int sample_rate = 48000;
+
+  // One frame that fills the whole window.
+  Audio full =
+      Audio::from_vector(std::vector<float>(static_cast<size_t>(config.n_fft), level), sample_rate);
+  // One frame that fills a quarter of it and is zero-padded to n_fft.
+  Audio tail = Audio::from_vector(std::vector<float>(512, level), sample_rate);
+
+  const auto full_result = sonare::metering::spectrum(full, config);
+  const auto tail_result = sonare::metering::spectrum(tail, config);
+
+  REQUIRE(full_result.magnitude.size() == tail_result.magnitude.size());
+  REQUIRE(full_result.magnitude[0] > 0.0f);
+  // Constant input: the DC bin is the signal level scaled by the one-sided bin
+  // convention, whatever that convention is, and does not depend on how much of the
+  // window the frame filled.
+  REQUIRE_THAT(tail_result.magnitude[0], WithinAbs(full_result.magnitude[0], 1e-4f));
+}

@@ -111,6 +111,12 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   std::vector<double> power_accum(static_cast<size_t>(n_bins), 0.0);
   FFT fft(config.n_fft);
 
+  // Every full frame divides by the same coherent gain, so the sum over the
+  // whole window is taken once here; only the zero-padded tail frame, which
+  // populates fewer than n_fft samples, needs its own.
+  double full_window_sum = 0.0;
+  for (size_t i = 0; i < n_fft; ++i) full_window_sum += static_cast<double>(window[i]);
+
   size_t num_frames = 0;
   for (size_t start = 0;; start += hop) {
     const size_t available = start < audio.size() ? audio.size() - start : 0;
@@ -127,8 +133,11 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
     // and a 512-sample buffer that ratio is about 0.09, i.e. roughly -21 dB --
     // enough to make a short one-shot unusable against the peak/RMS meters
     // measured on the same buffer.
-    double frame_window_sum = 0.0;
-    for (size_t i = 0; i < copy_count; ++i) frame_window_sum += static_cast<double>(window[i]);
+    double frame_window_sum = full_window_sum;
+    if (copy_count != n_fft) {
+      frame_window_sum = 0.0;
+      for (size_t i = 0; i < copy_count; ++i) frame_window_sum += static_cast<double>(window[i]);
+    }
     const double frame_norm = frame_window_sum > 0.0 ? 1.0 / frame_window_sum : 0.0;
 
     fft.forward(frame.data(), bins.data());

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <complex>
 #include <cstring>
+#include <string>
 #include <vector>
 #ifndef __EMSCRIPTEN__
 #include <future>
@@ -145,6 +146,13 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
                                             int kernel_size) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
+  // Bound before the per-thread allocations below, not after: each worker
+  // builds its own pair, so the cost is 8 bytes x kernel x thread count rather
+  // than a per-element constant. WASM's bounded heap reports the overflow as an
+  // allocation failure; an overcommitting host accepts it and maps for 20 s.
+  SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
+                   "median_filter_horizontal: kernel_size " + std::to_string(kernel_size) +
+                       " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
 
   int half = kernel_size / 2;
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
@@ -208,6 +216,13 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
                                           int kernel_size) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
+  // Bound before the per-thread allocations below, not after: each worker
+  // builds its own pair, so the cost is 8 bytes x kernel x thread count rather
+  // than a per-element constant. WASM's bounded heap reports the overflow as an
+  // allocation failure; an overcommitting host accepts it and maps for 20 s.
+  SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
+                   "median_filter_vertical: kernel_size " + std::to_string(kernel_size) +
+                       " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
 
   int half = kernel_size / 2;
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
@@ -579,8 +594,16 @@ HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssCon
 }
 
 Audio residual(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
-  HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
-  return result.residual;
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
+
+  /// Only the residual is reconstructed. Routing through the audio-level
+  /// hpss_with_residual ran three inverse transforms and discarded two of them.
+  /// The three MASKS are not avoidable here -- the residual is what is left
+  /// after the harmonic and percussive ones, so computing it requires both.
+  HpssSpectrogramResultWithResidual spec_result =
+      hpss_with_residual(Spectrogram::compute(audio, stft_config), config);
+  return spec_result.residual.to_audio(static_cast<int>(audio.size()));
 }
 
 }  // namespace sonare

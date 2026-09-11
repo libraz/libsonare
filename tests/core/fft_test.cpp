@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <vector>
 
 #include "util/constants.h"
@@ -281,6 +282,63 @@ TEST_CASE("FFT input validation", "[fft]") {
       fft.forward_complex(input.data(), nullptr);
     } catch (const SonareException& e) {
       REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
+}
+
+TEST_CASE("FFT forward_complex builds its backend on first use", "[fft]") {
+  // The complex transform's setup and buffers are created on the first forward_complex()
+  // call rather than in the constructor. The null-pointer guards above return before that
+  // point, so they cannot show the lazily built state is correct. These two sizes straddle
+  // the backend split: one is served by the SIMD backend, the other falls back.
+  for (int n : {64, 12}) {
+    CAPTURE(n);
+
+    std::vector<float> real_input(static_cast<size_t>(n));
+    std::vector<std::complex<float>> input(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {
+      const float value =
+          std::sin(kTwoPi * 3.0f * static_cast<float>(i) / static_cast<float>(n)) +
+          0.25f * std::cos(kTwoPi * 5.0f * static_cast<float>(i) / static_cast<float>(n));
+      real_input[static_cast<size_t>(i)] = value;
+      input[static_cast<size_t>(i)] = {value, 0.0f};
+    }
+
+    // An instance whose very first transform is the complex one.
+    FFT complex_first(n);
+    std::vector<std::complex<float>> from_complex(static_cast<size_t>(n));
+    complex_first.forward_complex(input.data(), from_complex.data());
+
+    // The real transform of the same signal agrees on the one-sided bins, whatever the
+    // sign convention is -- so this pins the lazily built complex path without hard-coding
+    // a reference DFT.
+    FFT real_only(n);
+    std::vector<std::complex<float>> from_real(static_cast<size_t>(n / 2 + 1));
+    real_only.forward(real_input.data(), from_real.data());
+    for (int k = 0; k <= n / 2; ++k) {
+      CAPTURE(k);
+      REQUIRE_THAT(from_complex[static_cast<size_t>(k)].real(),
+                   WithinAbs(from_real[static_cast<size_t>(k)].real(), 1e-3f));
+      REQUIRE_THAT(from_complex[static_cast<size_t>(k)].imag(),
+                   WithinAbs(from_real[static_cast<size_t>(k)].imag(), 1e-3f));
+    }
+
+    // Running a real transform first must not change what the complex one returns, and a
+    // repeat call must reuse the state instead of rebuilding it.
+    FFT real_first(n);
+    std::vector<std::complex<float>> warmup(static_cast<size_t>(n / 2 + 1));
+    real_first.forward(real_input.data(), warmup.data());
+    std::vector<std::complex<float>> after_real(static_cast<size_t>(n));
+    real_first.forward_complex(input.data(), after_real.data());
+    std::vector<std::complex<float>> repeated(static_cast<size_t>(n));
+    real_first.forward_complex(input.data(), repeated.data());
+    for (int k = 0; k < n; ++k) {
+      CAPTURE(k);
+      REQUIRE_THAT(after_real[static_cast<size_t>(k)].real(),
+                   WithinAbs(from_complex[static_cast<size_t>(k)].real(), 1e-4f));
+      REQUIRE_THAT(after_real[static_cast<size_t>(k)].imag(),
+                   WithinAbs(from_complex[static_cast<size_t>(k)].imag(), 1e-4f));
+      REQUIRE(repeated[static_cast<size_t>(k)] == after_real[static_cast<size_t>(k)]);
     }
   }
 }

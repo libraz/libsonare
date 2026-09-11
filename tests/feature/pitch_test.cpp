@@ -685,3 +685,30 @@ TEST_CASE("yin_track and pyin reject the same PitchConfig domains", "[pitch][val
   REQUIRE_THROWS_AS(yin_track(tiny, swapped), SonareException);
   REQUIRE_THROWS_AS(pyin(tiny, swapped), SonareException);
 }
+
+TEST_CASE("pyin resolves a single-frame input", "[pitch][edge]") {
+  // The Viterbi forward pass never runs when there is only one frame, so the best-path
+  // argmax has to read the initial observation row rather than whatever a per-frame
+  // buffer happens to hold. Exactly one frame: center off, and the signal is exactly
+  // one frame long.
+  PitchConfig config;
+  config.fmin = 100.0f;
+  config.fmax = 1000.0f;
+  config.threshold = 0.3f;
+  config.frame_length = 2048;
+  config.hop_length = 512;
+  config.center = false;
+
+  const int sr = 22050;
+  Audio audio =
+      Audio::from_vector(sonare::test::generate_sine_samples(440.0f, sr, config.frame_length), sr);
+  REQUIRE(audio.size() == static_cast<size_t>(config.frame_length));
+
+  PitchResult result = pyin(audio, config);
+
+  REQUIRE(result.n_frames() == 1);
+  REQUIRE(result.voiced_flag[0]);
+  // A row that was never written reads as all -inf, whose argmax is state 0 -- i.e. fmin.
+  // Landing on 440 Hz is what separates the two.
+  REQUIRE_THAT(result.f0[0], WithinRel(440.0f, 0.03f));
+}
