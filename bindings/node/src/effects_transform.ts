@@ -110,7 +110,11 @@ export interface NoteTrackRequest extends EffectSamplesRequest, NoteExtractorOpt
    * segments differently.
    */
   sampleRate: number;
-  /** Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. */
+  /**
+   * Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. A
+   * {@link pitchPyin} track only satisfies that with `fillNa: true` — its
+   * default leaves unvoiced frames NaN, which this rejects.
+   */
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
@@ -717,7 +721,8 @@ export function noteMove(
  *
  * @example
  * ```ts
- * const pitch = pitchPyin({ samples, sampleRate });
+ * // fillNa is required: the default leaves unvoiced frames NaN.
+ * const pitch = pitchPyin({ samples, sampleRate, fillNa: true });
  * const notes = extractNotes({
  *   samples,
  *   sampleRate,

@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { NoteObject, NoteObjectInput, NoteSetEntry } from '../src/index.js';
 import {
   decomposeNotePitch,
+  ErrorCode,
   extractNotes,
+  isSonareError,
   mergeNotes,
+  pitchPyin,
   renderNotes,
   splitNote,
 } from '../src/index.js';
@@ -836,6 +839,77 @@ describe('splitNote and mergeNotes', () => {
     // every edit at the identity, so the halves still reproduce the input.
     expect(renderNotes({ samples: source.samples, sampleRate: SR, notes: split })).toEqual(
       source.samples,
+    );
+  });
+});
+
+describe('the documented pitchPyin to extractNotes pipeline', () => {
+  // A tone with its middle third silenced, so pYIN has genuinely unvoiced
+  // frames to report. A continuous tone has none, and the first case below
+  // would then pass on an input too clean to tell.
+  const PIPELINE_LENGTH = SR;
+  const gappedTone = (() => {
+    const samples = new Float32Array(PIPELINE_LENGTH);
+    for (let i = 0; i < PIPELINE_LENGTH; i += 1) {
+      samples[i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / SR);
+    }
+    samples.fill(0, Math.floor(PIPELINE_LENGTH / 3), Math.floor((2 * PIPELINE_LENGTH) / 3));
+    return samples;
+  })();
+
+  it('rejects the default track, whose unvoiced frames are NaN', () => {
+    const pitch = pitchPyin({ samples: gappedTone, sampleRate: SR });
+
+    // Both halves of the track are real: the silence is NaN and the tone is
+    // not, so neither the rejection below nor the success in the next case is
+    // an artefact of a degenerate fixture.
+    const nanFrames = [...pitch.f0].filter((hz) => Number.isNaN(hz)).length;
+    expect(nanFrames).toBeGreaterThan(0);
+    expect(nanFrames).toBeLessThan(pitch.f0.length);
+    expect(pitch.voicedFlag.filter(Boolean).length).toBeGreaterThan(0);
+
+    let caught: unknown;
+    try {
+      extractNotes({
+        samples: gappedTone,
+        sampleRate: SR,
+        f0Hz: pitch.f0,
+        voiced: pitch.voicedFlag,
+        frameRate: FRAME_RATE,
+        minNoteMs: 40,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    if (isSonareError(caught)) {
+      expect(caught.code).toBe(ErrorCode.InvalidParameter);
+    }
+  });
+
+  it('segments the track fillNa produces', () => {
+    const pitch = pitchPyin({ samples: gappedTone, sampleRate: SR, fillNa: true });
+    expect([...pitch.f0].every((hz) => Number.isFinite(hz))).toBe(true);
+
+    const notes = extractNotes({
+      samples: gappedTone,
+      sampleRate: SR,
+      f0Hz: pitch.f0,
+      voiced: pitch.voicedFlag,
+      frameRate: FRAME_RATE,
+      minNoteMs: 40,
+    });
+    expect(notes.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note.offsetSample).toBeGreaterThan(note.onsetSample);
+      expect(note.medianHz).toBeCloseTo(220, 0);
+    }
+
+    // The notes go back where they came from: the whole point of extracting
+    // them is to edit and render them.
+    notes[0].edit.gainDb = -6;
+    expect(renderNotes({ samples: gappedTone, sampleRate: SR, notes })).toHaveLength(
+      PIPELINE_LENGTH,
     );
   });
 });

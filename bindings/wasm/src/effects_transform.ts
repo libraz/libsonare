@@ -158,7 +158,11 @@ export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptio
    * segments differently.
    */
   sampleRate: number;
-  /** Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. */
+  /**
+   * Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. A
+   * {@link pitchPyin} track only satisfies that with `fillNa: true` — its
+   * default leaves unvoiced frames NaN, which this rejects.
+   */
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
@@ -231,7 +235,11 @@ export interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
    */
   samples: Float32Array;
   sampleRate: number;
-  /** Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. */
+  /**
+   * Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. A
+   * {@link pitchPyin} track only satisfies that with `fillNa: true` — its
+   * default leaves unvoiced frames NaN, which this rejects.
+   */
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
@@ -856,12 +864,13 @@ export function noteMove(
  *
  * @example
  * ```ts
- * const { f0Hz, voicedFlag } = pitchPyin(samples, sampleRate);
+ * // fillNa is required: the default leaves unvoiced frames NaN.
+ * const pitch = pitchPyin({ samples, sampleRate, fillNa: true });
  * const notes = extractNotes({
  *   samples,
  *   sampleRate,
- *   f0Hz,
- *   voiced: voicedFlag,
+ *   f0Hz: pitch.f0,
+ *   voiced: pitch.voicedFlag,
  *   frameRate: sampleRate / 512,
  *   minNoteMs: 40,
  * });

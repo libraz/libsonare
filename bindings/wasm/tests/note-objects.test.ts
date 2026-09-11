@@ -21,6 +21,7 @@ import {
   mergeNotes,
   type NoteObject,
   type NoteObjectInput,
+  pitchPyin,
   renderNotes,
   splitNote,
 } from '../src/index';
@@ -1112,5 +1113,75 @@ describe('mergeNotes', () => {
     expect(all).toHaveLength(1);
     expect(all[0].frameStart).toBe(before[0].frameStart);
     expect(all[0].frameEnd).toBe(before[2].frameEnd);
+  });
+});
+
+/**
+ * The one fixture here measured rather than hand-built: whether the shipped
+ * pitchPyin-to-extractNotes example runs is a question about what pitchPyin
+ * actually returns, so a hand-written track cannot answer it.
+ */
+describe('the documented pitchPyin to extractNotes pipeline', () => {
+  const pipelineLength = sampleRate;
+
+  // A tone with its middle third silenced, so pYIN has genuinely unvoiced
+  // frames to report. A continuous tone has none, and the first case below
+  // would then pass on an input too clean to tell.
+  const gappedTone = (() => {
+    const out = new Float32Array(pipelineLength);
+    for (let i = 0; i < pipelineLength; i++) {
+      out[i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+    }
+    out.fill(0, Math.floor(pipelineLength / 3), Math.floor((2 * pipelineLength) / 3));
+    return out;
+  })();
+
+  it('rejects the default track, whose unvoiced frames are NaN', () => {
+    const pitch = pitchPyin({ samples: gappedTone, sampleRate });
+
+    // Both halves of the track are real: the silence is NaN and the tone is
+    // not, so neither the rejection below nor the success in the next case is
+    // an artefact of a degenerate fixture.
+    const nanFrames = [...pitch.f0].filter((hz) => Number.isNaN(hz)).length;
+    expect(nanFrames).toBeGreaterThan(0);
+    expect(nanFrames).toBeLessThan(pitch.f0.length);
+    expect(pitch.voicedFlag.filter(Boolean).length).toBeGreaterThan(0);
+
+    expectInvalidParameter(() =>
+      extractNotes({
+        samples: gappedTone,
+        sampleRate,
+        f0Hz: pitch.f0,
+        voiced: pitch.voicedFlag,
+        frameRate,
+        minNoteMs: 40,
+      }),
+    );
+  });
+
+  it('segments the track fillNa produces', () => {
+    const pitch = pitchPyin({ samples: gappedTone, sampleRate, fillNa: true });
+    // The track lives on `f0`; `f0Hz` is the name extractNotes reads it under.
+    expect(pitch.f0).toBeInstanceOf(Float32Array);
+    expect([...pitch.f0].every((hz) => Number.isFinite(hz))).toBe(true);
+
+    const notes = extractNotes({
+      samples: gappedTone,
+      sampleRate,
+      f0Hz: pitch.f0,
+      voiced: pitch.voicedFlag,
+      frameRate,
+      minNoteMs: 40,
+    });
+    expect(notes.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note.offsetSample).toBeGreaterThan(note.onsetSample);
+      expectWithinRel(note.medianHz, 220, 0.02);
+    }
+
+    // The notes go back where they came from: the whole point of extracting
+    // them is to edit and render them.
+    notes[0].edit.pitchShiftSemitones = 1;
+    expect(renderNotes({ samples: gappedTone, sampleRate, notes })).toHaveLength(pipelineLength);
   });
 });
