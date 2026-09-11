@@ -491,6 +491,18 @@ class Sf2Player final : public MidiInstrument {
   /// note-on before the SoundFont / fallback split, which is what lets it skip
   /// an age gate — nothing this note-on allocates exists yet.
   void choke_part(uint8_t channel, int note) noexcept;
+  /// Chokes every voice already sounding @p group on @p part, in BOTH pools.
+  /// @details The engine a voice sounds through is not part of the comparison:
+  ///   a sampled hi-hat belongs to the same exclusive/assign group as a modelled
+  ///   one and has to choke it, which is what a per-pool loop could not do.
+  ///   @p sf2_age_gate excludes voices this same note-on already allocated —
+  ///   the SoundFont path allocates one per matching zone, so a later zone's
+  ///   choke must not kill an earlier zone's voice. A caller that has allocated
+  ///   nothing yet passes the pool's current next_age(), which excludes nothing.
+  ///   The two pools keep the group in differently named fields
+  ///   (Sf2Voice::params.exclusive_class, NativeSynthVoice::exclusive_class),
+  ///   so the comparison is written twice rather than through one accessor.
+  void choke_exclusive_group(uint8_t part, uint8_t group, uint64_t sf2_age_gate) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
   /// CC64 with half-pedal semantics: 0 releases held notes, 127 holds them

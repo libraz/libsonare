@@ -17,6 +17,14 @@ namespace sonare::midi::synth {
 
 bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   const GsSysEx msg = parse_gs_sysex(data, size);
+  // A frame's kind is classified from its FIRST decoded byte alone (gs_layer.cpp),
+  // so a case that returns here discards every later byte of the same run. The
+  // resets below are whole-frame messages and still return; the two part-scoped
+  // kinds record that they were handled and fall through to the appliers, which
+  // walk every decoded write. Neither address has a case in those appliers
+  // (apply_gs_part_sysex has none for USE FOR RHYTHM PART, apply_gs_system_sysex
+  // none for the part EFX assign), so falling through cannot apply either twice.
+  bool handled = false;
   switch (msg.kind) {
     case GsSysExKind::kGm1Reset:
       gm_reset(GmLevel::kGeneralMidi1);
@@ -35,7 +43,11 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
       // both the fallback ambience floor and the bank's rig are keyed on it.
       refresh_channel_mod(msg.channel & 0x0Fu);
       refresh_part_rig(msg.channel & 0x0Fu);
-      return true;
+      // 40 1x 16-1E (key shift, pitch offset, level, velocity sense depth and
+      // offset, pan, key range low/high) are the addresses immediately after
+      // this one, and a real file writes them in one run with it.
+      handled = true;
+      break;
     case GsSysExKind::kEfxPartSwitch:
       // Route/unroute the part through the EFX. Offline (inline) updates the
       // mirror here on the render thread; live leaves the mirror to the control
@@ -44,7 +56,8 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
         efx_part_assign_[msg.channel & 0x0Fu] = msg.value;
         gs_efx_dirty_ = true;
       }
-      return true;
+      handled = true;
+      break;
     case GsSysExKind::kNone:
       break;
   }
@@ -78,7 +91,10 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
     gs_system_dirty_ = true;
     return true;
   }
-  return false;
+  // True when the switch above consumed the frame's first byte even though no
+  // applier claimed the rest, so a single-byte write of one of those two
+  // addresses still reports as handled.
+  return handled;
 }
 
 bool Sf2Player::apply_gs_system_sysex(const uint8_t* data, size_t size) noexcept {

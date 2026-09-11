@@ -143,6 +143,26 @@ void Sf2Player::choke_part(uint8_t channel, int note) noexcept {
   }
 }
 
+void Sf2Player::choke_exclusive_group(uint8_t part, uint8_t group, uint64_t sf2_age_gate) noexcept {
+  if (group == 0) return;
+  // Both pools, for the reason the note-on comment has always stated: a note
+  // that falls through to the modelled floor has to choke a ringing sampled
+  // voice of the same group, and vice versa. Each loop walks a fixed-size pool
+  // and touches no memory it does not already own, so this stays allocation-free
+  // on the audio thread.
+  for (Sf2Voice& v : pool_) {
+    if (v.active && v.age < sf2_age_gate && v.channel == part &&
+        v.params.exclusive_class == group) {
+      v.release();
+    }
+  }
+  for (NativeSynthVoice& v : fallback_pool_) {
+    if (v.active && v.channel == part && v.patch != nullptr && v.exclusive_class == group) {
+      v.choke();
+    }
+  }
+}
+
 const GsUserDrumSource* Sf2Player::user_drum_source(const ChannelState& ch, bool is_drum,
                                                     uint8_t note) const noexcept {
   if (!is_drum) return nullptr;
@@ -291,15 +311,10 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       // bypassed filter cannot open. Either source is enough on its own.
       if (gs_part_has_filter_destination(ch.ctrl_dest)) params.filter_bypass = false;
 
-      // Exclusive class: choke same-class voices on this channel (hi-hats).
-      if (params.exclusive_class != 0) {
-        for (Sf2Voice& v : pool_) {
-          if (v.active && v.age < age_before_note_on && v.channel == (channel & 0x0Fu) &&
-              v.params.exclusive_class == params.exclusive_class) {
-            v.release();
-          }
-        }
-      }
+      // Exclusive class: choke same-group voices on this channel (hi-hats), in
+      // either pool. The age gate keeps a later zone of this same note-on from
+      // choking an earlier zone's voice.
+      choke_exclusive_group(channel & 0x0Fu, params.exclusive_class, age_before_note_on);
 
       Sf2Voice* voice = pool_.allocate(channel & 0x0Fu, note, source_track_id);
       if (voice == nullptr) continue;
@@ -340,14 +355,9 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // from the kit piece's own. The engine a voice sounds through is not part of
   // the comparison: a sampled hi-hat belongs to the same group as a modelled
   // one and has to choke it.
-  if (exclusive_class != 0) {
-    for (NativeSynthVoice& v : fallback_pool_) {
-      if (v.active && v.channel == (channel & 0x0Fu) && v.patch != nullptr &&
-          v.exclusive_class == exclusive_class) {
-        v.choke();
-      }
-    }
-  }
+  // next_age() excludes nothing: this path is reached only when the SoundFont
+  // side found no renderable zone, so no voice of this note-on exists yet.
+  choke_exclusive_group(channel & 0x0Fu, exclusive_class, pool_.next_age());
   NativeSynthVoice* voice = fallback_pool_.allocate(channel & 0x0Fu, note, source_track_id);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - fallback_pool_.data());
@@ -757,6 +767,11 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   st.mod_wheel = 0;
   st.expression = 127;
   st.pitch_bend = 8192;
+  // Channel aftertouch is an RP-015 performance controller and is the second
+  // source the controller-destination block reads, so it is cleared here rather
+  // than left latched: refresh_channel_mod below scales every destination by
+  // where its source sits, and a stale pressure kept driving them after CC121.
+  st.channel_pressure = 0;
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);

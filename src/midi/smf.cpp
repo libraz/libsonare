@@ -1042,6 +1042,14 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         continue;  // Unresolved SysEx / dropped 2.0-only messages are not emitted.
       }
       uint32_t delta = static_cast<uint32_t>(std::max<int64_t>(0, tick - prev_tick));
+      // Whether this event put anything in the track. prev_tick has to stay on
+      // the last event actually written, because the delta below spans from
+      // there: an event whose every message failed to lower contributes no
+      // bytes, and advancing past it consumed its elapsed ticks with nothing to
+      // carry them, pulling every later event in the track early. The two
+      // earlier skip branches already leave prev_tick alone for this reason,
+      // which is what smf.h's lossiness contract promises.
+      bool emitted_any = false;
       for (uint8_t mi = 0; mi < lowered.count; ++mi) {
         const Ump& ump = lowered.messages[mi];
         if (ump.message_type() != UmpMessageType::kMidi1ChannelVoice || ump.word_count == 0) {
@@ -1060,8 +1068,9 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         // so the output is unambiguous and simple to re-import.
         body.insert(body.end(), raw.begin(), raw.begin() + n);
         delta = 0;
+        emitted_any = true;
       }
-      prev_tick = tick;
+      if (emitted_any) prev_tick = tick;
     }
     put_meta(&body, 0, kMetaEndOfTrack, nullptr, 0);
     append_track_chunk(&result.bytes, body);

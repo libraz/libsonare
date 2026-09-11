@@ -36,6 +36,17 @@ inline bool int_or(const json::Value& obj, const char* key, int fallback, int* o
   return sonare::numeric::checked_integral_cast(value->as_number(), out);
 }
 
+// Float sibling of int_or: as_number() is a full double, so the narrowing has
+// to be range-checked rather than performed and inspected afterwards.
+inline bool float_or(const json::Value& obj, const char* key, float fallback, float* out) {
+  const json::Value* value = obj.find(key);
+  if (value == nullptr || !value->is_number()) {
+    *out = fallback;
+    return true;
+  }
+  return sonare::numeric::checked_float_cast(value->as_number(), out);
+}
+
 inline bool ppq_frames(double ppq, int64_t* out) {
   if (!sonare::transport::valid_public_ppq(ppq)) return false;
   return sonare::numeric::checked_round_cast(
@@ -73,11 +84,9 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
                             has_number(root, "velocity_gamma");
   if (has_velocity) {
     velocity.enabled = true;
-    velocity.scale = static_cast<float>(number_or(root, "velocity_scale", 1.0));
-    velocity.offset = static_cast<float>(number_or(root, "velocity_offset", 0.0));
-    velocity.gamma = static_cast<float>(number_or(root, "velocity_gamma", 1.0));
-    if (!std::isfinite(velocity.scale) || !std::isfinite(velocity.offset) ||
-        !std::isfinite(velocity.gamma) || velocity.gamma <= 0.0f) {
+    if (!float_or(root, "velocity_scale", 1.0f, &velocity.scale) ||
+        !float_or(root, "velocity_offset", 0.0f, &velocity.offset) ||
+        !float_or(root, "velocity_gamma", 1.0f, &velocity.gamma) || velocity.gamma <= 0.0f) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     chain->set_velocity_curve(velocity);

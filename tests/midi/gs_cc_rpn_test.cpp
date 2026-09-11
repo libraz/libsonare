@@ -7,6 +7,7 @@
 /// recording, so every case asserts direction, monotonicity or a boundary, and
 /// none asserts an absolute timbre.
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -106,6 +107,29 @@ void note_off(Sf2Player& player, uint8_t channel, uint8_t note) {
 void select_rpn(Sf2Player& player, uint8_t channel, uint8_t msb, uint8_t lsb) {
   cc(player, channel, 101, msb);
   cc(player, channel, 100, lsb);
+}
+
+/// Part block of melodic channel 0, the `x` in a 40 1x / 40 2x address.
+constexpr uint8_t kMelodicBlock = 1;
+
+/// A framed Roland DT1 write of @p data at @p addr, with the checksum.
+std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
+  const uint8_t a0 = static_cast<uint8_t>((addr >> 16) & 0x7Fu);
+  const uint8_t a1 = static_cast<uint8_t>((addr >> 8) & 0x7Fu);
+  const uint8_t a2 = static_cast<uint8_t>(addr & 0x7Fu);
+  std::vector<uint8_t> msg{0xF0, 0x41, 0x10, 0x42, 0x12, a0, a1, a2};
+  msg.insert(msg.end(), data.begin(), data.end());
+  int sum = a0 + a1 + a2;
+  for (const uint8_t b : data) sum += b;
+  msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
+  msg.push_back(0xF7);
+  return msg;
+}
+
+float peak_abs(const std::vector<float>& samples) {
+  float peak = 0.0f;
+  for (const float sample : samples) peak = std::max(peak, std::abs(sample));
+  return peak;
 }
 
 /// Mean frequency over [@p from, @p to) from rising zero crossings.
@@ -562,6 +586,98 @@ TEST_CASE("RPN 7F 7F Null discards later data entry", "[midi][sf2][gs]") {
     note_on(player, 0, kNoteC4);
     REQUIRE(render(player, 9600) == baseline);
   }
+}
+
+// RP-015 names ten things Reset All Controllers clears, and "every field" is an
+// invariant a fix for one of them satisfies by accident. Rather than assert the
+// field the defect happened to be in, this compares a channel that has been
+// driven hard and then reset against one that was never touched: any RP-015
+// controller left latched changes the rendered note, so the whole set is
+// covered by one comparison and a field added later is covered for free.
+//
+// The aftertouch routing is installed on BOTH players because it is a GS
+// setting, which RP-015 deliberately does not reset -- it is what makes channel
+// pressure audible at all, and having it on one side only would compare the
+// routing rather than the reset.
+// A DT1 frame's kind is classified from its first decoded byte alone, and two
+// kinds used to consume the frame at that point and return. 40 1x 15 (USE FOR
+// RHYTHM PART) is one of them, and 40 1x 16 (PITCH KEY SHIFT) is the very next
+// address in the same block -- so a real file writing the rhythm flag and the
+// part's attributes in one run got the flag and lost everything after it.
+//
+// The invariant is that a byte's POSITION in a run is never itself a reason it
+// is skipped, so the test writes the same address twice: once as the second
+// byte of a run beginning at 15, and once as the first byte of its own frame.
+// Both must land on the same value.
+TEST_CASE("A GS run starting at USE FOR RHYTHM PART applies its later bytes", "[midi][sf2][gs]") {
+  constexpr uint8_t kKeyShiftUp6 = 0x46;  // 0x40 is centre; range 0x28..0x58.
+
+  // The control: written alone, at the start of its own frame, this has always
+  // worked. If it fails the fixture is wrong rather than the defect present.
+  Sf2Player control = make_player();
+  const std::vector<uint8_t> shift_only =
+      dt1(0x401016u | (static_cast<uint32_t>(kMelodicBlock) << 8), {kKeyShiftUp6});
+  REQUIRE(control.handle_sysex(shift_only.data(), shift_only.size()));
+  REQUIRE(control.pitch_key_shift(0) == kKeyShiftUp6);
+  REQUIRE(control.pitch_key_shift(0) != 0x40);
+
+  // The same byte, one position later in a run that begins at 15.
+  Sf2Player player = make_player();
+  const std::vector<uint8_t> run =
+      dt1(0x401015u | (static_cast<uint32_t>(kMelodicBlock) << 8), {0x01, kKeyShiftUp6});
+  REQUIRE(player.handle_sysex(run.data(), run.size()));
+  CHECK(player.pitch_key_shift(0) == control.pitch_key_shift(0));
+
+  // The run's own first byte still applies, so falling through did not cost the
+  // case its original effect.
+  CHECK(player.rx_switches(0) == control.rx_switches(0));
+
+  // And a single-byte write of that address is still reported as handled, which
+  // is what the accumulated flag preserves now that the case no longer returns.
+  Sf2Player lone = make_player();
+  const std::vector<uint8_t> rhythm_only =
+      dt1(0x401015u | (static_cast<uint32_t>(kMelodicBlock) << 8), {0x01});
+  CHECK(lone.handle_sysex(rhythm_only.data(), rhythm_only.size()));
+}
+
+TEST_CASE("Reset All Controllers returns every RP-015 controller to rest", "[midi][sf2][gs]") {
+  // Source 2 is channel aftertouch, destination 2 is AMPLITUDE CONTROL at
+  // -100%: with pressure applied the part goes silent, so a latched pressure is
+  // audible rather than merely readable.
+  const std::vector<uint8_t> route_aftertouch =
+      dt1(0x402022u | (static_cast<uint32_t>(kMelodicBlock) << 8), {0x00});
+
+  Sf2Player baseline_player = make_player();
+  REQUIRE(baseline_player.handle_sysex(route_aftertouch.data(), route_aftertouch.size()));
+  note_on(baseline_player, 0, kNoteC4);
+  const std::vector<float> baseline = render(baseline_player, 4800);
+  // Non-vacuity: the untouched part is audible, so a silent comparison below
+  // would be a real difference rather than two silences agreeing.
+  REQUIRE(peak_abs(baseline) > 0.01f);
+
+  Sf2Player player = make_player();
+  REQUIRE(player.handle_sysex(route_aftertouch.data(), route_aftertouch.size()));
+  // Every RP-015 performance controller, moved off its reset value.
+  cc(player, 0, 1, 127);        // modulation
+  cc(player, 0, 11, 40);        // expression
+  cc(player, 0, 64, 127);       // damper
+  cc(player, 0, 65, 127);       // portamento on/off
+  cc(player, 0, 66, 127);       // sostenuto
+  cc(player, 0, 67, 127);       // soft
+  select_rpn(player, 0, 0, 0);  // leaves an RPN selected, which RP-015 nulls
+  player.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, 16383)));
+  player.on_event(0, event(sonare::midi::make_midi1_channel_pressure(0, 0, 127)));
+
+  // Pressure at full with the routing above takes the part to silence, which is
+  // what makes the reset observable rather than assumed.
+  note_on(player, 0, kNoteC4);
+  REQUIRE(peak_abs(render(player, 4800)) < 0.01f);
+  note_off(player, 0, kNoteC4);
+  render(player, 4800);
+
+  cc(player, 0, 121, 0);  // Reset All Controllers
+  note_on(player, 0, kNoteC4);
+  REQUIRE(render(player, 4800) == baseline);
 }
 
 TEST_CASE("Reset All Controllers turns portamento off", "[midi][sf2][gs]") {

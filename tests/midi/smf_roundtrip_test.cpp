@@ -437,6 +437,53 @@ TEST_CASE("SMF import normalizes invalid UTF-8 text metadata", "[midi]") {
           "erse");
 }
 
+// smf.h's lossiness contract promises that a skipped event's delta time is still
+// consumed, so what follows stays in time. Two of the three skip paths honoured
+// it by leaving prev_tick alone; the per-message conversion-failure path fell
+// through to an unconditional prev_tick = tick, so an event that wrote no bytes
+// still consumed its elapsed ticks and pulled every later event in the track
+// early.
+//
+// The discriminating assertion is the ABSOLUTE position of the event AFTER the
+// skipped one. A file with a re-timed tail still parses and still carries the
+// right number of events, so neither of those tells the two behaviours apart.
+// The middle event is genuinely unrepresentable rather than synthetically
+// skipped: a MIDI 1.0 channel-voice UMP whose status nibble is 0xF passes
+// midi2_to_midi1_messages unchanged (count 1) and then fails
+// ump_to_midi1_bytes, because midi1_status_data_count has no entry for it.
+TEST_CASE("SMF export keeps the timing of events after an unrepresentable one", "[midi]") {
+  Ump unrepresentable{};
+  unrepresentable.word_count = 1;
+  // message type 2 (MIDI 1.0 channel voice), group 0, status nibble 0xF,
+  // channel 0, two data bytes that will never be written.
+  unrepresentable.words[0] = (0x2u << 28) | (0xFu << 20) | (0x40u << 8);
+  REQUIRE(unrepresentable.message_type() == sonare::midi::UmpMessageType::kMidi1ChannelVoice);
+
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(MidiClipEvent{1.0, unrepresentable});
+  clip.add_event(MidiClipEvent{2.0, sonare::midi::make_midi1_note_on(0, 0, 67, 100)});
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf({clip}, {}, {}, {}, opts);
+  REQUIRE(exported.ok());
+  // Non-vacuity: the middle event really was refused, so the timing assertion
+  // below is about a skip that happened rather than one that never arose.
+  REQUIRE(exported.skipped_events == 1);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.size() == 1);
+  const auto& events = round.clips[0].events();
+  REQUIRE(events.size() == 2);
+
+  // The surviving pair keeps its absolute positions: the second note stays two
+  // quarters in, rather than sliding to one where the dropped event sat.
+  REQUIRE(events[0].ppq == Catch::Approx(0.0));
+  REQUIRE(events[1].ppq == Catch::Approx(2.0));
+}
+
 TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
   const std::vector<uint8_t> smf = make_known_smf();
   const SmfImportResult imported = import_smf(smf);

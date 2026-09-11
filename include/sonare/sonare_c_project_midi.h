@@ -150,30 +150,49 @@ SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint
                                 SonareMidiEventPod* out);
 
 /// @brief Returns the General MIDI Level 1 instrument name for @p program.
-/// @details Returns NULL when @p program is outside [0,127]. The returned
-///          pointer is owned by libsonare and valid for the program lifetime.
+/// @details The returned pointer is a static table entry owned by libsonare,
+///          valid for the program lifetime; never free it. NULL means EITHER
+///          @p program is outside [0,127] OR this build has no arrangement
+///          support, and a caller cannot tell the two apart from the return
+///          value alone. To distinguish them, probe with a known-valid argument
+///          (@c sonare_midi_gm_instrument_name(0)): NULL there means the feature
+///          is absent. Every name getter in this family shares this contract.
 const char* sonare_midi_gm_instrument_name(int program);
 /// @brief Reverse GM instrument lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_gm_program_for_name(const char* name);
 /// @brief Returns the GM family name for @p family [0,15], or NULL.
+/// @details Pointer lifetime and the two meanings of NULL are as in
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm_family_name(int family);
 /// @brief Returns the first GM program in @p family [0,15], or -1.
 int sonare_midi_gm_family_first_program(int family);
 /// @brief Returns the GM2 melodic instrument name for bank LSB + program.
+/// @details Pointer lifetime and the two meanings of NULL are as in
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm2_instrument_name(int bank_lsb, int program);
 /// @brief Returns the GM drum name for note [35,81], or NULL.
+/// @details Pointer lifetime and the two meanings of NULL are as in
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm_drum_name(int note);
 /// @brief Reverse GM drum lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_gm_drum_note_for_name(const char* name);
 /// @brief Returns the GM2 drum set name for bank LSB, or NULL.
+/// @details Pointer lifetime and the two meanings of NULL are as in
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm2_drum_set_name(int bank_lsb);
 /// @brief Returns the GM2 drum name for bank LSB + note, or NULL.
+/// @details Pointer lifetime and the two meanings of NULL are as in
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_gm2_drum_name(int bank_lsb, int note);
 /// @brief Returns the standard MIDI CC name for controller [0,127], or NULL.
+/// @details Pointer lifetime and the two meanings of NULL are as in
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_cc_name(int controller);
 /// @brief Reverse standard MIDI CC lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_cc_index_for_name(const char* name);
 /// @brief Returns a MIDI 2.0 registered per-note controller name, or NULL.
+/// @details Pointer lifetime and the two meanings of NULL are as in
+///          @ref sonare_midi_gm_instrument_name.
 const char* sonare_midi_per_note_controller_name(int index);
 /// @brief Lowers a bank/program selection to MIDI 1.0 bank MSB, bank LSB,
 ///        program-change events at @p ppq.
