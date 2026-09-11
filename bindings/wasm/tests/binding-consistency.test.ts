@@ -77,10 +77,9 @@ describe('WASM cross-binding consistency', () => {
       // and the first value past a four-value enum is 4 - what an off-by-one or
       // a 1-based mirror emits - so the silent fallback sat immediately beside
       // the valid range. -1 is the other one that matters: it is the sentinel a
-      // generated binding reaches for. 2**31 is deliberately NOT the interesting
-      // case, and a test driving only large values passes against a fix that
-      // starts checking at 5.
-      for (const waveform of [4, -1, 5, 2 ** 31]) {
+      // generated binding reaches for. A test driving only large values passes
+      // against a fix that starts checking at 5.
+      for (const waveform of [4, -1, 5]) {
         const project = buildMidiOnlyProject();
         try {
           expect(
@@ -91,6 +90,28 @@ describe('WASM cross-binding consistency', () => {
               ),
             `waveform ${waveform} must be rejected, not resolved to sine`,
           ).toThrow(/sawtooth/);
+        } finally {
+          project.delete();
+        }
+      }
+    });
+
+    it('rejects a waveform outside the integer range before naming the enum', () => {
+      // A value the int cannot hold is refused as out of range, not as an
+      // unknown ordinal. Asserting the enum wording here would be asserting a
+      // lie: the ordinal in that message would be a saturated or wrapped number
+      // the caller never wrote. Node answers in these same words.
+      for (const waveform of [2 ** 31, -(2 ** 31) - 1, Number.POSITIVE_INFINITY, Number.NaN]) {
+        const project = buildMidiOnlyProject();
+        try {
+          expect(
+            () =>
+              project.bounceWithBuiltinInstrument(
+                { waveform: waveform as unknown as 'sine' },
+                { totalFrames: 4800, numChannels: 1 },
+              ),
+            `waveform ${waveform} must be rejected as out of range`,
+          ).toThrow(/32-bit integer range/);
         } finally {
           project.delete();
         }

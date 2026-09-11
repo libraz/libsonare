@@ -727,6 +727,53 @@ TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed
   sonare_project_destroy(project);
 }
 
+TEST_CASE("bounce_with_builtin_instruments refuses a waveform outside the enum", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 1200;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = 5;
+
+  // The first invalid ordinal is the one immediately past the enum, which is
+  // what an off-by-one or a 1-based mirror emits, and -1 is the sentinel a
+  // generated binding reaches for. A check that starts further out passes
+  // against both.
+  for (const int waveform : {SONARE_SYNTH_WAVEFORM_COUNT, -1, 5, 2147483647}) {
+    CAPTURE(waveform);
+    binding.config.waveform = waveform;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_builtin_instruments(
+                project, &options, &binding, 1, &out, &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+  }
+
+  // Every ordinal the enum does name is still accepted, so the guard rejects by
+  // domain rather than by having broken the field.
+  for (int waveform = 0; waveform < SONARE_SYNTH_WAVEFORM_COUNT; ++waveform) {
+    CAPTURE(waveform);
+    binding.config.waveform = waveform;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                           &out_len) == SONARE_OK);
+    sonare_free_floats(out);
+  }
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("bounce_with_synth_instruments validates null handles before patch conversion",
           "[project]") {
   SonareProjectBounceOptions options{};

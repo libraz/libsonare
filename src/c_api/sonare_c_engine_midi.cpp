@@ -167,6 +167,7 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
+  if (!valid_builtin_waveform(config->waveform)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(engine_synth_config_from_c(*config));
   return bind_engine_instrument(engine, destination_id, std::move(synth));

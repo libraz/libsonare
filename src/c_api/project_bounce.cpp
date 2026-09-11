@@ -288,8 +288,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   return SONARE_OK;
 }
 
-// Maps the public built-in waveform ordinal to the core enum (out-of-range
-// values fall back to sine via clamp_synth_config).
+// Maps the public built-in waveform ordinal to the core enum. The ordinal is
+// the caller's to get right: valid_builtin_waveform gates it at the entry point
+// before this runs.
 sonare::midi::BuiltinSynthConfig synth_config_from_c(const SonareBuiltinSynthConfig& c) noexcept {
   sonare::midi::BuiltinSynthConfig cfg;
   cfg.waveform = static_cast<sonare::midi::SynthWaveform>(c.waveform);
@@ -398,6 +399,14 @@ SonareError sonare_project_bounce_with_builtin_instruments(
   std::vector<HostedInstrument> hosted;
   owned.reserve(instrument_count);
   hosted.reserve(instrument_count);
+  for (size_t i = 0; i < instrument_count; ++i) {
+    // Checked before any instrument is constructed, so a bad ordinal anywhere in
+    // the list refuses the whole bounce rather than rendering the earlier
+    // bindings and then failing.
+    if (!sonare_c_detail::valid_builtin_waveform(instruments[i].config.waveform)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
   for (size_t i = 0; i < instrument_count; ++i) {
     owned.push_back(
         std::make_unique<sonare::midi::BuiltinSynth>(synth_config_from_c(instruments[i].config)));

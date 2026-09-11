@@ -334,10 +334,20 @@ inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* ou
     *out = mapped;
     return true;
   }
-  int ordinal = 0;
-  if (!RequiredIntValue(env, value, "waveform", &ordinal)) {
+  if (!RequireNumberValue(env, value, "waveform")) return false;
+  // Range-checked before the int read rather than after it. Int32Value() WRAPS,
+  // so 2^31 arrives as -2147483648 and the enum rejection below then names a
+  // number the caller never wrote. The WASM reader refuses the same input as
+  // out of 32-bit range, and this is the only field where the two are required
+  // to answer in the same words.
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
+      number > static_cast<double>(std::numeric_limits<int>::max())) {
+    Napi::TypeError::New(env, "waveform must be a finite number within the 32-bit integer range")
+        .ThrowAsJavaScriptException();
     return false;
   }
+  const int ordinal = static_cast<int>(number);
   if (ordinal < SONARE_SYNTH_WAVEFORM_SINE || ordinal > SONARE_SYNTH_WAVEFORM_TRIANGLE) {
     Napi::TypeError::New(env, "Unknown synth waveform: '" + std::to_string(ordinal) + kExpected)
         .ThrowAsJavaScriptException();

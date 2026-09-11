@@ -671,7 +671,8 @@ SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
 /// @details Same zero-init contract as project bounce built-in instruments:
 ///          non-positive fields use the default sine patch values.
 typedef struct {
-  int waveform;     /* 0=sine, 1=saw, 2=square, 3=triangle */
+  int waveform;     /* SonareSynthWaveform: 0=sine, 1=saw, 2=square, 3=triangle.
+                       Anything else fails with SONARE_ERROR_INVALID_PARAMETER. */
   float gain;       /* 0 => 0.2 */
   float attack_ms;  /* 0 => 5 */
   float decay_ms;   /* 0 => 60 */

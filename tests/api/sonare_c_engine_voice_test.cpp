@@ -1921,6 +1921,38 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine refuses a built-in waveform outside the enum", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SonareEngineBuiltinSynthConfig synth{};
+  synth.gain = 0.5f;
+  // Same domain as the bounce surface: the two entry points share one validator
+  // so they cannot answer differently for the same ordinal.
+  for (const int waveform : {SONARE_SYNTH_WAVEFORM_COUNT, -1, 5, 2147483647}) {
+    CAPTURE(waveform);
+    synth.waveform = waveform;
+    REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+  // A refused bind leaves nothing attached, so the destination is still free.
+  size_t count = 1;
+  REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
+  REQUIRE(count == 0);
+
+  for (int waveform = 0; waveform < SONARE_SYNTH_WAVEFORM_COUNT; ++waveform) {
+    CAPTURE(waveform);
+    synth.waveform = waveform;
+    REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
+  }
+  REQUIRE(sonare_engine_clear_midi_instrument(engine, 7) == SONARE_OK);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine malformed SoundFont bytes report invalid format", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

@@ -5,6 +5,7 @@
 ///        project bounce surface and the realtime engine surface (the 2-host
 ///        principle: one patch struct drives both).
 
+#include <sonare/sonare_c_project_instruments.h>
 #include <sonare/sonare_c_types.h>
 
 #include <algorithm>
@@ -111,6 +112,14 @@ inline sonare::midi::synth::ModDestination mod_destination_from_c(int value) noe
 }
 
 inline bool valid_c_enum(int value, int count) noexcept { return value >= 0 && value < count; }
+
+/// The built-in synth's oscillator waveform ordinal, shared by the project
+/// bounce and realtime-engine entry points so the two cannot answer differently
+/// for the same value. Unlike the surrounding numeric fields there is no
+/// nearest value to clamp an unknown ordinal to, so it is refused.
+inline bool valid_builtin_waveform(int value) noexcept {
+  return valid_c_enum(value, SONARE_SYNTH_WAVEFORM_COUNT);
+}
 
 /// Resolves a versioned C synth patch onto a NativeSynthConfig: the base is
 /// the named preset (or the default subtractive patch when @p c.preset is

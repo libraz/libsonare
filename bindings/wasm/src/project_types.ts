@@ -135,7 +135,11 @@ export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 
 export interface BuiltinSynthBinding {
   /** MIDI destination id this patch answers to (default 0; see {@link Project.setTrackMidiDestination}). */
   destinationId?: number;
-  /** Oscillator waveform (default `'sine'`). */
+  /**
+   * Oscillator waveform (default `'sine'`). The one field with no nearest
+   * sensible value — a name or an ordinal outside the set throws rather than
+   * falling back to sine.
+   */
   waveform?: BuiltinSynthWaveform;
   /** Master output gain, linear (0 => 0.2). */
   gain?: number;

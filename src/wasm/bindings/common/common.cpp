@@ -281,10 +281,10 @@ int intProperty(val object, const char* key, int default_value) {
 }
 
 int builtinWaveformFromVal(const val& value) {
-  // One rejection for both spellings. The numeric path used to fall through
-  // unchecked, and the first value past the enum is 4 -- what an off-by-one or a
-  // 1-based mirror emits -- so the silent fallback to sine sat immediately
-  // beside the valid range rather than out at some implausible number.
+  // One rejection for both spellings, matching the C ABI. The first invalid
+  // ordinal is 4 -- what an off-by-one or a 1-based mirror emits -- so the
+  // numeric path has to be checked at the edge of the range, not out at some
+  // implausible number.
   static const char* kExpected = "' (expected sine, saw, sawtooth, square, or triangle)";
   const std::string type = value.typeOf().as<std::string>();
   if (type == "string") {

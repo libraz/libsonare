@@ -484,7 +484,9 @@ class BuiltinSynthConfig:
     Every numeric field uses "0 (or non-positive) => sensible default", so a
     default-constructed config is the default sine patch; override only what you
     need. ``waveform`` may be an ordinal (0=sine, 1=saw, 2=square, 3=triangle)
-    or a name (``"sine"`` / ``"saw"`` / ``"square"`` / ``"triangle"``).
+    or a name (``"sine"`` / ``"saw"`` / ``"square"`` / ``"triangle"``). It is the
+    one field with no "nearest sensible value": anything outside that set raises
+    :class:`SonareValueError` rather than falling back to sine.
     """
 
     waveform: str | int = SYNTH_WAVEFORM_SINE
@@ -577,7 +579,19 @@ def _synth_waveform_value(waveform: str | int) -> int:
             if value >= 0:
                 return value
             raise SonareValueError(f"unknown synth waveform: {waveform!r}")
-    return _resolve_enum(waveform, _SYNTH_WAVEFORM_NAMES, "synth waveform")
+    # validate_int keeps the ordinal on the same contract as the name: the C ABI
+    # refuses an ordinal outside the enum, and without this a caller's 4 or -1
+    # would pass through the binding and be refused there instead, or silently
+    # not at all on an older core. reject_bool because True is an int in Python
+    # and would otherwise resolve to saw.
+    return _resolve_enum(
+        waveform,
+        _SYNTH_WAVEFORM_NAMES,
+        "synth waveform",
+        validate_int=True,
+        reject_bool=True,
+        expected=True,
+    )
 
 
 @dataclass(frozen=True)

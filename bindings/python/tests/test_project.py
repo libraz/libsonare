@@ -22,6 +22,7 @@ from libsonare import (
     Project,
     ProjectMarker,
     SonareError,
+    SonareValueError,
     project_abi_version,
 )
 from libsonare._project import EXPECTED_PROJECT_ABI_VERSION
@@ -500,6 +501,35 @@ def test_bounce_with_builtin_instrument_accepts_waveform_patch() -> None:
             patch, total_frames=24000, num_channels=2, sample_rate=48000
         )
         assert float(np.max(np.abs(audio))) > 0.0
+    finally:
+        project.close()
+
+
+def test_builtin_synth_waveform_outside_the_enum_is_rejected() -> None:
+    """An ordinal the enum does not name raises instead of resolving to sine.
+
+    The values matter more than the count: 4 is the first one past the enum,
+    which is what an off-by-one or a 1-based mirror emits, and -1 is the
+    sentinel a generated caller reaches for. A guard that starts checking
+    further out would pass on 42 alone. ``True`` is included because it is an
+    ``int`` in Python and would otherwise resolve to saw.
+    """
+    project = _build_midi_only_project()
+    try:
+        for waveform in (4, -1, 5, 2**31, True):
+            with pytest.raises(SonareValueError):
+                project.bounce_with_builtin_instrument(
+                    BuiltinSynthConfig(waveform=waveform), total_frames=1200
+                )
+        with pytest.raises(SonareValueError):
+            project.bounce_with_builtin_instrument(
+                BuiltinSynthConfig(waveform="noise"), total_frames=1200
+            )
+        # Rejection is by domain, not by the field having stopped working.
+        for waveform in (0, 1, 2, 3, "sine", "saw", "sawtooth", "square", "triangle"):
+            project.bounce_with_builtin_instrument(
+                BuiltinSynthConfig(waveform=waveform), total_frames=1200
+            )
     finally:
         project.close()
 

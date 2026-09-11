@@ -383,7 +383,11 @@ export interface BuiltinInstrumentConfig {
    * {@link Project.setTrackMidiDestination}). Defaults to `0`.
    */
   destinationId?: number;
-  /** Oscillator waveform: a {@link SynthWaveform} name or numeric enum (0=sine). */
+  /**
+   * Oscillator waveform: a {@link SynthWaveform} name or numeric enum (0=sine).
+   * The one config field with no nearest sensible value — a name or an ordinal
+   * outside the set throws rather than falling back to sine.
+   */
   waveform?: SynthWaveform | number;
   /** Master output gain (linear); 0 / omit => 0.2. */
   gain?: number;

@@ -102,26 +102,34 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
 // ============================================================================
 
 /// @brief Oscillator waveform for the built-in synth (see
-///        @ref SonareBuiltinSynthConfig). Out-of-range values fall back to sine.
+///        @ref SonareBuiltinSynthConfig). A value outside this set is rejected
+///        with @c SONARE_ERROR_INVALID_PARAMETER, not substituted.
 typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_WAVEFORM_SINE = 0,
   SONARE_SYNTH_WAVEFORM_SAW = 1,
   SONARE_SYNTH_WAVEFORM_SQUARE = 2,
   SONARE_SYNTH_WAVEFORM_TRIANGLE = 3,
 } SonareSynthWaveform;
+#define SONARE_SYNTH_WAVEFORM_COUNT 4
+#ifdef __cplusplus
+static_assert(SONARE_SYNTH_WAVEFORM_TRIANGLE + 1 == SONARE_SYNTH_WAVEFORM_COUNT,
+              "SonareSynthWaveform count changed");
+#endif
 
 /// @brief Patch for the built-in minimal synth. Zero-initialize then override:
-///        a zero-init config is sanitized into a usable sine patch (every field
-///        is clamped to an audible range), so callers may fill only what they
-///        need. This is a deliberately plain electronic sound source so MIDI
-///        arrangements bounce to audio instead of silence; a richer instrument
-///        bank is planned separately.
-/// Every numeric field uses "0 (or non-positive) => default", so a zero-init
-/// config is the default sine patch and callers override only what they need.
+///        a zero-init config is sanitized into a usable sine patch, so callers
+///        may fill only what they need. This is a deliberately plain electronic
+///        sound source so MIDI arrangements bounce to audio instead of silence;
+///        a richer instrument bank is planned separately.
+/// Every numeric field uses "0 (or non-positive) => default" and is clamped to
+/// an audible range. @c waveform is the exception: it names a member of a small
+/// enum rather than sizing a quantity, so there is no meaningful nearest value
+/// to clamp an unknown ordinal to and it is rejected instead.
 typedef struct {
-  int waveform;     /* SonareSynthWaveform; 0 = sine. NOTE: a distinct enum from
-                       SonareSynthOscWaveform (sonare_c_types_analysis.h), whose 0
-                       means "keep base preset", not sine. Do not mix the two. */
+  int waveform;     /* SonareSynthWaveform; 0 = sine, outside the enum rejected.
+                       NOTE: a distinct enum from SonareSynthOscWaveform
+                       (sonare_c_types_analysis.h), whose 0 means "keep base
+                       preset", not sine. Do not mix the two. */
   float gain;       /* master output gain (linear); 0 => 0.2 */
   float attack_ms;  /* ADSR attack in ms; 0 => 5 */
   float decay_ms;   /* ADSR decay in ms; 0 => 60 */
