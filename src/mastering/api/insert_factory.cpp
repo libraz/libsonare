@@ -71,6 +71,7 @@
 #include "util/base64.h"
 #include "util/exception.h"
 #include "util/json.h"
+#include "util/resource_limits.h"
 
 #ifdef SONARE_HAVE_FX
 #include <algorithm>
@@ -110,18 +111,78 @@ using detail::f;
 using detail::limiter_config;
 using detail::ParamKind;
 using detail::ParamMap;
+using sonare::util::json::Value;
+
+// Matches util::json::parse_strict's own default.
+constexpr std::size_t kJsonMaxDepth = 128;
+
+// The JSON budget for one make_insert call. Insert params arrive as a string
+// lifted out of an already-admitted project document, so the fragment is parsed
+// under that document's own budget rather than none — a string inside a
+// document cannot be larger than the document. The budget is a call-local
+// total: an admission deducts what it read, so the readers that used to
+// re-parse the same text cannot spend the ceiling a second time.
+class ParseBudget {
+ public:
+  explicit ParseBudget(const sonare::resource::ProjectImportResourceLimits& limits)
+      : bytes_(limits.max_json_bytes),
+        nodes_(limits.max_json_nodes),
+        string_bytes_(limits.max_string_bytes) {}
+
+  // Parses @p text as a JSON object under what is left of the budget. Empty
+  // text is an absent document (the processor's own defaults): it allocates
+  // nothing, so it costs nothing and leaves the budget untouched.
+  bool admit(const std::string& text, Value* out_root) {
+    if (text.empty()) return false;
+    if (text.size() > bytes_) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "make_insert: json_params exceeds the JSON byte budget");
+    }
+    try {
+      // Strict parse: insert params are a flat map of `{name: value}` and a
+      // duplicate key would silently shadow the earlier value, which is almost
+      // certainly a caller bug worth surfacing.
+      *out_root =
+          sonare::util::json::Parser(text, kJsonMaxDepth, /*reject_duplicate_keys=*/true,
+                                     sonare::util::json::ParseResourceLimits{nodes_, string_bytes_})
+              .parse_document();
+    } catch (const sonare::util::json::JsonResourceError& e) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          std::string("make_insert: json_params exceeds the JSON parse budget (") + e.what() + ")");
+    } catch (const sonare::util::json::JsonError& e) {
+      throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
+    } catch (const std::invalid_argument& e) {
+      throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
+    }
+    if (!out_root->is_object()) {
+      throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
+    }
+    // A parse of N bytes cannot have produced more than N nodes or N string
+    // bytes, so one deduction bounds all three axes without a second walk.
+    deduct(text.size());
+    return true;
+  }
+
+ private:
+  void deduct(std::size_t consumed) {
+    bytes_ -= std::min(bytes_, consumed);
+    nodes_ -= std::min(nodes_, consumed);
+    string_bytes_ -= std::min(string_bytes_, consumed);
+  }
+
+  std::size_t bytes_;
+  std::size_t nodes_;
+  std::size_t string_bytes_;
+};
 
 // Decodes a little-endian f32 array carried as base64 under @p key. Two inserts
 // take an IR this way (the convolution reverb and the amp sim's cabinet), so the
 // key is a parameter rather than being baked in. Not FX-gated: the amp sim ships
 // in every configuration.
-std::vector<float> parse_ir_f32_base64_json(const std::string& json_params, const char* key) {
-  if (json_params.empty()) return {};
-  const auto root = sonare::util::json::parse_strict(json_params);
-  if (!root.is_object()) {
-    throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
-  }
-  const auto* value = root.find(key);
+std::vector<float> read_ir_f32_base64_key(const Value* root, const char* key) {
+  if (root == nullptr) return {};
+  const auto* value = root->find(key);
   if (value == nullptr) return {};
   if (!value->is_string()) {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a string");
@@ -154,16 +215,12 @@ std::vector<float> parse_ir_f32_base64_json(const std::string& json_params, cons
   return ir;
 }
 
-// Reads a string-valued key straight from the original JSON. The flat ParamMap
+// Reads a string-valued key from the admitted params document. The flat ParamMap
 // holds doubles, so anything that is not a number has to be fetched this way.
 // Absent -> empty; present but not a string -> a caller error worth surfacing.
-std::string parse_string_json(const std::string& json_params, const char* key) {
-  if (json_params.empty()) return {};
-  const auto root = sonare::util::json::parse_strict(json_params);
-  if (!root.is_object()) {
-    throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
-  }
-  const auto* value = root.find(key);
+std::string read_string_key(const Value* root, const char* key) {
+  if (root == nullptr) return {};
+  const auto* value = root->find(key);
   if (value == nullptr) return {};
   if (!value->is_string()) {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a string");
@@ -183,51 +240,38 @@ bool insert_reads_json_string_key(const std::string& insert_name, const std::str
   return false;
 }
 
-std::vector<Param> parse_insert_params_json(const std::string& json_params,
-                                            const std::string& insert_name) {
+std::vector<Param> insert_params_from_root(const Value* root, const std::string& insert_name) {
+  if (root == nullptr) return {};
   const bool allow_acoustic_material_arrays = insert_name == "effects.acoustic.roomMorph";
-  try {
-    if (json_params.empty()) return {};
-    // Strict parse: insert params are a flat map of `{name: value}` and a
-    // duplicate key would silently shadow the earlier value, which is almost
-    // certainly a caller bug worth surfacing.
-    const auto root = sonare::util::json::parse_strict(json_params);
-    if (!root.is_object())
-      throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
-    std::vector<Param> params;
-    params.reserve(root.as_object().size());
-    for (const auto& [key, value] : root.as_object()) {
-      if (value.is_bool()) {
-        params.push_back(Param{key, value.as_bool() ? 1.0 : 0.0});
-      } else if (value.is_number()) {
-        params.push_back(Param{key, value.as_number()});
-      } else if (allow_acoustic_material_arrays &&
-                 (key == "bandAbsorption" || key == "bandScattering") && value.is_array()) {
-        // The flat ParamMap cannot carry an array. Acoustic room-morph consumes
-        // these two options from the original JSON object in build_effects();
-        // accepting them here keeps the generic JSON validation layer from
-        // rejecting an option that the acoustic facade already supports.
-        continue;
-      } else if (value.is_string() && insert_reads_json_string_key(insert_name, key)) {
-        // A named rig (the discrete topology/tube/cab/capsule switches no
-        // numeric param can reach) or a base64 impulse response. The flat
-        // ParamMap holds doubles only, so the insert that owns the key reads it
-        // straight from the original JSON object; accepting it here keeps the
-        // generic validation layer from rejecting a param the insert supports.
-        // Every OTHER insert falls through to the rejection below, so a key
-        // aimed at the wrong processor is reported instead of dropped.
-        continue;
-      } else {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "JSON params values must be numbers or booleans");
-      }
+  std::vector<Param> params;
+  params.reserve(root->as_object().size());
+  for (const auto& [key, value] : root->as_object()) {
+    if (value.is_bool()) {
+      params.push_back(Param{key, value.as_bool() ? 1.0 : 0.0});
+    } else if (value.is_number()) {
+      params.push_back(Param{key, value.as_number()});
+    } else if (allow_acoustic_material_arrays &&
+               (key == "bandAbsorption" || key == "bandScattering") && value.is_array()) {
+      // The flat ParamMap cannot carry an array. Acoustic room-morph consumes
+      // these two options from the admitted JSON object in build_effects();
+      // accepting them here keeps the generic JSON validation layer from
+      // rejecting an option that the acoustic facade already supports.
+      continue;
+    } else if (value.is_string() && insert_reads_json_string_key(insert_name, key)) {
+      // A named rig (the discrete topology/tube/cab/capsule switches no numeric
+      // param can reach) or a base64 impulse response. The flat ParamMap holds
+      // doubles only, so the insert that owns the key reads it from the same
+      // admitted document; accepting it here keeps the generic validation layer
+      // from rejecting a param the insert supports. Every OTHER insert falls
+      // through to the rejection below, so a key aimed at the wrong processor is
+      // reported instead of dropped.
+      continue;
+    } else {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "JSON params values must be numbers or booleans");
     }
-    return params;
-  } catch (const std::invalid_argument& e) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
-  } catch (const sonare::util::json::JsonError& e) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
   }
+  return params;
 }
 
 using Processor = sonare::rt::ProcessorBase;
@@ -350,7 +394,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
 }
 
 std::unique_ptr<Processor> build_saturation(const std::string& name, const ParamMap& params,
-                                            const std::string* json_params) {
+                                            const Value* json_root) {
   if (name == "saturation.tape") {
     return make<saturation::Tape>(detail::tape_config(params));
   }
@@ -393,11 +437,9 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
     (void)params.find("preset");
     (void)params.find("cabIrF32Base64");
     saturation::AmpSimConfig base;
-    if (json_params != nullptr) {
-      const std::string preset = parse_string_json(*json_params, "preset");
-      if (!preset.empty()) {
-        base = saturation::amp_preset_config(saturation::amp_preset_from_string(preset));
-      }
+    const std::string preset = read_string_key(json_root, "preset");
+    if (!preset.empty()) {
+      base = saturation::amp_preset_config(saturation::amp_preset_from_string(preset));
     }
     auto amp = make<saturation::AmpSim>(detail::amp_sim_config(params, base));
     // A cabinet IR may ride in the param bag as base64 f32, so a scene or a
@@ -416,12 +458,10 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
     // chain has no equivalent for — whether the cabinet's other drivers are
     // summed, which is the whole difference between an IR and an EQ curve.
     detail::apply_amp_cab_ir(params, *static_cast<saturation::AmpSim*>(amp.get()));
-    if (json_params != nullptr) {
-      const std::vector<float> ir = parse_ir_f32_base64_json(*json_params, "cabIrF32Base64");
-      if (!ir.empty()) {
-        // A supplied capture wins over a generated cabinet.
-        static_cast<saturation::AmpSim*>(amp.get())->load_cab_ir(ir, ir_rate);
-      }
+    const std::vector<float> ir = read_ir_f32_base64_key(json_root, "cabIrF32Base64");
+    if (!ir.empty()) {
+      // A supplied capture wins over a generated cabinet.
+      static_cast<saturation::AmpSim*>(amp.get())->load_cab_ir(ir, ir_rate);
     }
     return amp;
   }
@@ -558,8 +598,7 @@ bool acoustic_material_preset_from_int(int selector, sonare::acoustic::MaterialP
 // Reads one material-band array out of the insert's JSON side-channel. Only the
 // JSON shape is checked here; the coefficients themselves are validated by the
 // core builder, on the same rule as every other surface.
-std::vector<float> acoustic_material_bands(const sonare::util::json::Value* value,
-                                           const char* key) {
+std::vector<float> acoustic_material_bands(const Value* value, const char* key) {
   if (value == nullptr) return {};
   if (!value->is_array()) {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an array");
@@ -578,7 +617,7 @@ std::vector<float> acoustic_material_bands(const sonare::util::json::Value* valu
 }
 
 sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& params,
-                                                      const std::string* json_params) {
+                                                      const Value* json_root) {
   using namespace sonare::acoustic;
 
   const RoomDimensions dims{f(params, "lengthM", 7.0f), f(params, "widthM", 5.0f),
@@ -592,22 +631,18 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
   request.has_preset =
       acoustic_material_preset_from_int(detail::i(params, "materialPreset", 0), &request.preset);
   request.absorption = f(params, "absorption", 0.2f);
-  if (json_params != nullptr && !json_params->empty()) {
-    const auto root = sonare::util::json::parse_strict(*json_params);
-    if (!root.is_object()) {
-      throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
-    }
+  if (json_root != nullptr) {
     request.absorption_bands =
-        acoustic_material_bands(root.find("bandAbsorption"), "bandAbsorption");
+        acoustic_material_bands(json_root->find("bandAbsorption"), "bandAbsorption");
     request.scattering_bands =
-        acoustic_material_bands(root.find("bandScattering"), "bandScattering");
+        acoustic_material_bands(json_root->find("bandScattering"), "bandScattering");
   }
   return make_uniform_room(dims, request);
 }
 #endif
 
 std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params,
-                                         const std::string* json_params) {
+                                         const Value* json_root) {
   using namespace sonare::effects::reverb;
   // "effects.reverb.plate" is an alias for "effects.reverb.dattorro": both names
   // construct the same DattorroReverb processor with identical parameters.
@@ -710,8 +745,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     config.seed = static_cast<uint32_t>(std::max(0, detail::i(params, "seed", config.seed)));
     auto reverb = std::make_unique<ConvolutionReverb>(config);
-    std::vector<float> ir =
-        json_params ? parse_ir_f32_base64_json(*json_params, "irF32Base64") : std::vector<float>{};
+    const std::vector<float> ir = read_ir_f32_base64_key(json_root, "irF32Base64");
     if (!ir.empty()) {
       reverb->load_ir(ir);
     }
@@ -759,7 +793,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // options even though the flat ParamMap cannot hold their values.
     (void)params.find("bandAbsorption");
     (void)params.find("bandScattering");
-    config.target = acoustic_room_from_json(params, json_params);
+    config.target = acoustic_room_from_json(params, json_root);
     config.placement.source = {f(params, "sourceX", 1.0f), f(params, "sourceY", 1.0f),
                                f(params, "sourceZ", 1.2f)};
     config.placement.listener = {f(params, "listenerX", 5.0f), f(params, "listenerY", 4.0f),
@@ -885,28 +919,34 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
 namespace {
 
 std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
-                                        const std::string* json_params = nullptr) {
+                                        const Value* json_root = nullptr) {
   if (auto p = build_dynamics(name, params)) return p;
   if (auto p = build_eq(name, params)) return p;
-  if (auto p = build_saturation(name, params, json_params)) return p;
+  if (auto p = build_saturation(name, params, json_root)) return p;
   if (auto p = build_spectral(name, params)) return p;
   if (auto p = build_stereo(name, params)) return p;
   if (auto p = build_maximizer(name, params)) return p;
   if (auto p = build_multiband(name, params)) return p;
 #ifdef SONARE_HAVE_FX
-  if (auto p = build_effects(name, params, json_params)) return p;
+  if (auto p = build_effects(name, params, json_root)) return p;
 #endif
   return nullptr;
 }
 
 }  // namespace
 
-std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
-                                                       const std::string& json_params,
-                                                       std::vector<std::string>* out_unknown_keys) {
-  const std::vector<Param> param_list = parse_insert_params_json(json_params, name);
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
+    const std::string& name, const std::string& json_params,
+    std::vector<std::string>* out_unknown_keys,
+    const sonare::resource::ProjectImportResourceLimits& limits) {
+  // One budget, one admission, one document: every reader below works off the
+  // same parsed value, so the call's parse cost is the cost of this admission.
+  ParseBudget budget(limits);
+  Value root;
+  const Value* json_root = budget.admit(json_params, &root) ? &root : nullptr;
+  const std::vector<Param> param_list = insert_params_from_root(json_root, name);
   const ParamMap params = detail::make_map(param_list);
-  auto processor = build_insert(name, params, &json_params);
+  auto processor = build_insert(name, params, json_root);
   // Only report ignored keys for a recognized processor: build_insert() probes
   // every key the processor reads (even absent ones), so any supplied key it
   // never touched took no effect. An unknown name is surfaced as a hard error by
@@ -923,10 +963,9 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
   return build_insert(name, params);
 }
 
-std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string& name,
-                                                               const std::string& json_params,
-                                                               const float* impulse_response,
-                                                               int ir_num_samples) {
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
+    const std::string& name, const std::string& json_params, const float* impulse_response,
+    int ir_num_samples, const sonare::resource::ProjectImportResourceLimits& limits) {
   if (ir_num_samples < 0 || (ir_num_samples > 0 && impulse_response == nullptr)) {
     throw SonareException(ErrorCode::InvalidParameter, "make_insert_with_ir: invalid IR");
   }
@@ -935,7 +974,10 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string
     // Validate params for malformed JSON parity with make_insert(), then build a
     // real, IR-loaded convolution insert. load_ir() stores the IR and is safe to
     // call before prepare(); prepare() reapplies it to the FFT convolvers.
-    const std::vector<Param> param_list = parse_insert_params_json(json_params, name);
+    ParseBudget budget(limits);
+    Value root;
+    const Value* json_root = budget.admit(json_params, &root) ? &root : nullptr;
+    const std::vector<Param> param_list = insert_params_from_root(json_root, name);
     const ParamMap params = detail::make_map(param_list);
     effects::reverb::ConvolutionReverbConfig config;
     config.dry_wet = f(params, "dryWet", config.dry_wet);
@@ -948,14 +990,14 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string
     // The amp sim's cabinet takes the same IR channel. load_cab_ir() stores it
     // and is safe before prepare(), which sizes the history from whatever is
     // loaded by then. An explicit IR wins over one carried in the param bag.
-    auto amp = make_insert(name, json_params);
+    auto amp = make_insert(name, json_params, nullptr, limits);
     if (amp != nullptr && ir_num_samples > 0) {
       static_cast<saturation::AmpSim*>(amp.get())->load_cab_ir(impulse_response, ir_num_samples);
     }
     return amp;
   }
   // Every other insert ignores the IR and falls back to the standard factory.
-  return make_insert(name, json_params);
+  return make_insert(name, json_params, nullptr, limits);
 }
 
 std::vector<std::string> insert_factory_names() {

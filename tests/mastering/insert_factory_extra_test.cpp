@@ -12,6 +12,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -27,6 +28,7 @@
 #include "rt/processor_base.h"
 #include "util/exception.h"
 #include "util/json.h"
+#include "util/resource_limits.h"
 
 #ifdef SONARE_WITH_FX
 #include "effects/reverb/convolution_reverb.h"
@@ -51,6 +53,7 @@ using sonare::mastering::api::make_insert_with_ir;
 using sonare::mastering::api::MasteringChainConfig;
 using sonare::mastering::api::Preset;
 using sonare::mastering::api::preset_config;
+using sonare::resource::ProjectImportResourceLimits;
 
 bool ListContains(const std::vector<std::string>& names, const std::string& target) {
   for (const auto& name : names) {
@@ -59,12 +62,9 @@ bool ListContains(const std::vector<std::string>& names, const std::string& targ
   return false;
 }
 
-// The base64 helpers exist to feed the convolution reverb an inline IR. Their
-// only call site sits inside the room-simulation block further down, so they
-// carry both of that site's conditions -- ungated they would have no callers
-// whenever either feature is off, which the build rejects as unused functions.
-#if defined(SONARE_WITH_FX) && defined(SONARE_WITH_ACOUSTIC_SIM)
-
+// The base64 helpers feed an inline IR to the convolution reverb and to the amp
+// sim's cabinet. The amp sim ships in every configuration, so they are always
+// compiled and always have a caller.
 std::string Base64Encode(const std::vector<uint8_t>& bytes) {
   static constexpr char kAlphabet[] =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -113,7 +113,33 @@ std::string F32Base64(std::initializer_list<float> samples) {
   return Base64Encode(bytes);
 }
 
-#endif  // SONARE_WITH_FX && SONARE_WITH_ACOUSTIC_SIM
+// A parse budget scaled down to the documents under test. Only the three axes
+// the insert params parse reads are lowered; the rest keep the import defaults.
+ProjectImportResourceLimits ParamsBudget(std::size_t bytes, std::size_t nodes,
+                                         std::size_t string_bytes) {
+  ProjectImportResourceLimits limits = sonare::resource::kDefaultProjectImportResourceLimits;
+  limits.max_json_bytes = bytes;
+  limits.max_json_nodes = nodes;
+  limits.max_string_bytes = string_bytes;
+  return limits;
+}
+
+// Impulse response of a freshly built insert, for comparing two builds of the
+// same params.
+std::vector<float> RenderInsert(const std::string& name, const std::string& params,
+                                const ProjectImportResourceLimits& limits) {
+  auto processor = make_insert(name, params, nullptr, limits);
+  REQUIRE(processor != nullptr);
+  constexpr int kBlock = 256;
+  processor->prepare(48000.0, kBlock);
+  std::vector<float> buf(static_cast<size_t>(kBlock) * 4, 0.0f);
+  buf[0] = 1.0f;
+  for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(kBlock)) {
+    float* blk = buf.data() + off;
+    processor->process(&blk, 1, kBlock);
+  }
+  return buf;
+}
 
 }  // namespace
 
@@ -1376,3 +1402,148 @@ TEST_CASE("eq.dynamic accepts detectorDelayMs and its former lookaheadMs spellin
   REQUIRE(dyn_both != nullptr);
   REQUIRE(dyn_both->band(0).detector_delay_ms == 12.0f);
 }
+
+// ---------------------------------------------------------------------------
+// Params parse budget
+//
+// An insert's params_json is a string lifted out of an already-admitted project
+// document, so parsing it is a second expansion of caller-controlled text. It
+// runs under the budget that admitted the enclosing document, as a total for
+// the whole make_insert call rather than one ceiling per reader of the same
+// text. The budget is overridable so these cases reach the exact boundary with
+// documents small enough to read.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("insert params are admitted under a byte, node and string-byte budget",
+          "[mastering][insert_factory][resource]") {
+  // Twenty-six bytes, three nodes (the object plus its two numbers) and
+  // thirteen string bytes (the two keys; there are no string values).
+  const std::string params = R"({"tiltDb":3,"pivotHz":800})";
+  const std::size_t string_bytes = std::strlen("tiltDb") + std::strlen("pivotHz");
+  const ProjectImportResourceLimits exact = ParamsBudget(params.size(), 3, string_bytes);
+
+  // Positive control: at a budget with nothing to spare the insert still builds
+  // and renders exactly as it does under the production budget.
+  REQUIRE(RenderInsert("eq.tilt", params, exact) ==
+          RenderInsert("eq.tilt", params, sonare::resource::kDefaultProjectImportResourceLimits));
+
+  // One short on each axis in turn, so each budget is shown to be the one
+  // deciding rather than riding on a neighbour.
+  for (const ProjectImportResourceLimits& limits :
+       {ParamsBudget(params.size() - 1, 3, string_bytes),
+        ParamsBudget(params.size(), 2, string_bytes),
+        ParamsBudget(params.size(), 3, string_bytes - 1)}) {
+    try {
+      auto processor = make_insert("eq.tilt", params, nullptr, limits);
+      (void)processor;
+      FAIL("an over-budget params document was accepted");
+    } catch (const sonare::SonareException& error) {
+      const std::string message = error.what();
+      INFO(message);
+      REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+      REQUIRE(message.find("json_params") != std::string::npos);
+    }
+  }
+}
+
+TEST_CASE("the insert's string re-reads spend the params budget once, not once per reader",
+          "[mastering][insert_factory][resource]") {
+  // saturation.ampSim reads the same document three times over: the flat param
+  // map, the `preset` name and the base64 cabinet IR. A budget that admits the
+  // document exactly must still serve all three, which it can only do if the
+  // call parses the text once instead of once per reader.
+  const std::string ir = F32Base64({0.0f, 1.0f});
+  const auto document = [](const std::string& preset, const std::string& cab_ir) {
+    return R"({"preset":")" + preset + R"(","cabIrF32Base64":")" + cab_ir + R"("})";
+  };
+  // Three nodes (the object plus its two string values); the string bytes are
+  // the two keys plus the two values.
+  const auto exact_budget = [&document](const std::string& preset, const std::string& cab_ir) {
+    return ParamsBudget(
+        document(preset, cab_ir).size(), 3,
+        std::strlen("preset") + preset.size() + std::strlen("cabIrF32Base64") + cab_ir.size());
+  };
+
+  const std::string params = document("tweedGrind", ir);
+  REQUIRE(RenderInsert("saturation.ampSim", params, exact_budget("tweedGrind", ir)) ==
+          RenderInsert("saturation.ampSim", params,
+                       sonare::resource::kDefaultProjectImportResourceLimits));
+
+  // Non-vacuity, and the part a per-reader ceiling cannot pass: each string
+  // reader must reach its own value and report its own complaint about it. A
+  // reader whose read had been charged the ceiling a second time would report
+  // the budget instead.
+  struct Malformed {
+    std::string preset;
+    std::string cab_ir;
+    const char* expected;
+  };
+  const Malformed cases[] = {{"notAnAmpAtAll", ir, "unknown amp preset"},
+                             {"tweedGrind", "!!!", "cabIrF32Base64"}};
+  for (const auto& bad : cases) {
+    try {
+      auto processor = make_insert("saturation.ampSim", document(bad.preset, bad.cab_ir), nullptr,
+                                   exact_budget(bad.preset, bad.cab_ir));
+      (void)processor;
+      FAIL("a malformed string option was accepted");
+    } catch (const sonare::SonareException& error) {
+      const std::string message = error.what();
+      INFO(message);
+      REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+      REQUIRE(message.find(bad.expected) != std::string::npos);
+      REQUIRE(message.find("budget") == std::string::npos);
+    }
+  }
+}
+
+TEST_CASE("an empty, non-object or rejected params document leaves the next call's budget intact",
+          "[mastering][insert_factory][resource]") {
+  const std::string params = R"({"tiltDb":3,"pivotHz":800})";
+  const ProjectImportResourceLimits exact =
+      ParamsBudget(params.size(), 3, std::strlen("tiltDb") + std::strlen("pivotHz"));
+
+  // Empty params parse nothing and allocate nothing, so they cost nothing: the
+  // zero budget a fully-spent call would leave behind still admits them.
+  REQUIRE(make_insert("eq.tilt", "", nullptr, ParamsBudget(0, 0, 0)) != nullptr);
+  REQUIRE(make_insert("eq.tilt", params, nullptr, exact) != nullptr);
+
+  // Every exit path that is not an ordinary return runs between two identical
+  // accepted calls. A budget that survived one of them -- spent by an early
+  // return, or left charged by an exception -- refuses the call after it.
+  struct Rejected {
+    const char* name;
+    const char* params;
+  };
+  const Rejected cases[] = {
+      {"eq.tilt", "[]"},                              // admitted, not an object
+      {"eq.tilt", "5"},                               // admitted, not an object
+      {"eq.tilt", "{"},                               // malformed
+      {"eq.tilt", R"({"tiltDb":3,"tiltDb":4})"},      // duplicate key
+      {"eq.tilt", R"({"tiltDb":"loud"})"},            // rejected while reading the params
+      {"saturation.ampSim", R"({"preset":"nope"})"},  // rejected during construction
+  };
+  for (const auto& rejected : cases) {
+    INFO(rejected.params);
+    REQUIRE_THROWS_AS(
+        make_insert(rejected.name, rejected.params, nullptr, ParamsBudget(64, 16, 32)),
+        sonare::SonareException);
+    REQUIRE(make_insert("eq.tilt", "", nullptr, ParamsBudget(0, 0, 0)) != nullptr);
+    REQUIRE(make_insert("eq.tilt", params, nullptr, exact) != nullptr);
+  }
+}
+
+#ifdef SONARE_WITH_FX
+TEST_CASE("make_insert_with_ir admits its params under the same budget",
+          "[mastering][insert_factory][resource][reverb]") {
+  // The convolution insert's own entry point parses params without going
+  // through make_insert, so it carries the budget itself.
+  const float ir[] = {0.0f, 1.0f};
+  const std::string params = R"({"dryWet":0.0})";
+  const std::size_t string_bytes = std::strlen("dryWet");
+  REQUIRE(make_insert_with_ir("effects.reverb.convolution", params, ir, 2,
+                              ParamsBudget(params.size(), 2, string_bytes)) != nullptr);
+  REQUIRE_THROWS_AS(make_insert_with_ir("effects.reverb.convolution", params, ir, 2,
+                                        ParamsBudget(params.size() - 1, 2, string_bytes)),
+                    sonare::SonareException);
+}
+#endif  // SONARE_WITH_FX

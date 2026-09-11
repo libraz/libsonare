@@ -15,6 +15,7 @@
 
 #include "mastering/api/named_processor.h"
 #include "rt/processor_base.h"
+#include "util/resource_limits.h"
 
 namespace sonare::mastering::api {
 
@@ -28,13 +29,22 @@ namespace sonare::mastering::api {
 ///             the supplied param keys that the processor did not read (silently
 ///             ignored). Sorted; empty when every key took effect. Left
 ///             untouched for an unknown @p name (which returns nullptr).
+/// @param limits Budget @p json_params is parsed under, as a total for the whole
+///             call rather than per reader. The default is the budget that
+///             admitted the enclosing project document, since an insert's params
+///             are a string lifted out of one. Overridable so the exact boundary
+///             can be exercised without building a document of the production
+///             size.
 /// @return A heap-allocated processor, or nullptr if @p name is not a known
 ///         block-processor insert.
-/// @throws sonare::SonareException (InvalidParameter) only when @p json_params
-///         is malformed. Unknown names return nullptr rather than throwing.
+/// @throws sonare::SonareException (InvalidParameter) when @p json_params is
+///         malformed or does not fit @p limits. Unknown names return nullptr
+///         rather than throwing.
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
     const std::string& name, const std::string& json_params,
-    std::vector<std::string>* out_unknown_keys = nullptr);
+    std::vector<std::string>* out_unknown_keys = nullptr,
+    const resource::ProjectImportResourceLimits& limits =
+        resource::kDefaultProjectImportResourceLimits);
 
 /// @brief Same as make_insert() but takes an already-parsed Param list instead
 ///        of a JSON string. Used by the offline named-processor path so it can
@@ -54,14 +64,17 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
 /// @param impulse_response IR samples to load (may be empty, which leaves a
 ///             passthrough convolver until an IR is provided).
 /// @param ir_num_samples Number of samples in @p impulse_response.
+/// @param limits Parse budget for @p json_params (see make_insert()).
 /// @return A heap-allocated processor, or nullptr if @p name is unknown (or if
 ///         @p name is the convolution insert but the build lacks FX support).
 /// @throws sonare::SonareException (InvalidParameter) when @p json_params is
-///         malformed or the IR pointer/size is inconsistent.
-std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string& name,
-                                                               const std::string& json_params,
-                                                               const float* impulse_response,
-                                                               int ir_num_samples);
+///         malformed, does not fit @p limits, or the IR pointer/size is
+///         inconsistent.
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
+    const std::string& name, const std::string& json_params, const float* impulse_response,
+    int ir_num_samples,
+    const resource::ProjectImportResourceLimits& limits =
+        resource::kDefaultProjectImportResourceLimits);
 
 /// @brief Names that make_insert() can build (a stable, sorted list).
 std::vector<std::string> insert_factory_names();
