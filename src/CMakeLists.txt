@@ -171,6 +171,10 @@ set(SONARE_SOURCES
   # dependency that does not exist.
   editing/event_model/event_extractor.cpp
   editing/event_model/event_renderer.cpp
+  # Multiple-F0 estimation reaches only for the STFT, which is here, so gating it
+  # alongside the pitch editor would declare a dependency that does not exist.
+  editing/polyphony/f0_salience.cpp
+  editing/polyphony/multi_f0.cpp
   streaming/stream_analyzer.cpp
   streaming/stream_analyzer_features.cpp
   streaming/stream_analyzer_output.cpp
