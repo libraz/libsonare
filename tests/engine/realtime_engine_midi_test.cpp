@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "engine/realtime_engine.h"
@@ -178,6 +179,27 @@ class FractionalLatencyInstrument final : public MidiInstrument {
 
  private:
   int latency_q8_;
+};
+
+// Exposes one automatable parameter ("level") and records the value the engine
+// pushed, so a test can watch a destination's automation slots across a bind.
+class AutomatableInstrument final : public MidiInstrument {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  void on_event(uint32_t, const MidiEvent&) noexcept override {}
+
+  int parameter_id_for_key(const std::string& key) const noexcept override {
+    return key == "level" ? 0 : -1;
+  }
+  bool apply_parameter(unsigned int param_id, float value) noexcept override {
+    if (param_id != 0) return false;
+    level = value;
+    return true;
+  }
+
+  float level = 0.0f;
 };
 
 // A note-on at frame 0 (no note-off in range), routed to destination 0.
@@ -1527,4 +1549,114 @@ TEST_CASE("a bind whose compensation cannot be allocated is refused, not left ha
   REQUIRE(engine.set_midi_instrument(7, &instrument));
   REQUIRE(engine.midi_instrument_count() == 1);
   engine.set_midi_instrument(7, nullptr);
+}
+
+TEST_CASE("a failed rebind leaves the destination's previous instrument bound",
+          "[engine][midi][pdc]") {
+  // The refusal above had nothing to lose: the destination was empty. A swap
+  // does -- reporting false after clearing the destination would silence an
+  // instrument the host was just told is still its own to keep.
+  constexpr int kBoundLatency = 1024;
+  constexpr int kIncomingLatency = 300000;
+  constexpr std::size_t kFailFromBytes = 1u << 20;
+
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 512);
+  LatencyImpulseInstrument bound_instrument(kBoundLatency);
+  LatencyImpulseInstrument incoming(kIncomingLatency);
+
+  REQUIRE(engine.set_midi_instrument(7, &bound_instrument));
+  REQUIRE(engine.midi_instrument(7) == &bound_instrument);
+
+  bool rebound = true;
+  {
+    sonare::test::AllocationFailureGuard fail_large_allocations(kFailFromBytes);
+    rebound = engine.set_midi_instrument(7, &incoming);
+  }
+  REQUIRE_FALSE(rebound);
+
+  // The pointer is what discriminates: the count reads 1 whichever of the two
+  // the destination ended up driving, and the incoming one is about to be
+  // freed by the caller that was handed the false.
+  REQUIRE(engine.midi_instrument(7) == &bound_instrument);
+  REQUIRE(engine.midi_instrument_count() == 1);
+
+  // The engine is not wedged by the refusal: the same swap takes once the
+  // allocation can be served, and then the destination really has moved.
+  REQUIRE(engine.set_midi_instrument(7, &incoming));
+  REQUIRE(engine.midi_instrument(7) == &incoming);
+  engine.set_midi_instrument(7, nullptr);
+}
+
+TEST_CASE("a failed rebind leaves the destination's automation slots assigned",
+          "[engine][midi][pdc][automation]") {
+  // The other half of the same refusal: a swap retires the destination's
+  // automation smoothers, which must not happen for a swap that did not take.
+  constexpr int kBlock = 256;
+  constexpr int kIncomingLatency = 300000;
+  constexpr std::size_t kFailFromBytes = 1u << 20;
+  constexpr uint32_t kDestination = 5;
+  constexpr float kSettled = 0.5f;
+
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  AutomatableInstrument bound_instrument;
+  LatencyImpulseInstrument incoming(kIncomingLatency);
+
+  REQUIRE(engine.set_midi_instrument(kDestination, &bound_instrument));
+  const int64_t level_id = engine.resolve_instrument_automation_id(kDestination, "level");
+  REQUIRE(level_id >= 0);
+  push_play(engine);
+
+  std::vector<float> left(static_cast<size_t>(kBlock), 0.0f);
+  std::vector<float> right(static_cast<size_t>(kBlock), 0.0f);
+  auto render_blocks = [&](int blocks) {
+    for (int b = 0; b < blocks; ++b) {
+      std::fill(left.begin(), left.end(), 0.0f);
+      std::fill(right.begin(), right.end(), 0.0f);
+      float* io[] = {left.data(), right.data()};
+      engine.process(io, 2, kBlock);
+    }
+  };
+  auto drive_level = [&](float value) {
+    sonare::rt::Command set{};
+    set.type = sonare::rt::CommandType::kSetParam;
+    set.target_id = static_cast<uint32_t>(level_id);
+    set.arg.f = value;
+    set.sample_time = -1;
+    REQUIRE(engine.push_command(set));
+  };
+
+  // Park the slot at a value. A slot claimed fresh snaps to its first target
+  // within one block, which is also what a retired slot would read at the
+  // probe below, so this is the reference that probe is read against.
+  drive_level(kSettled);
+  render_blocks(1);
+  REQUIRE(bound_instrument.level == kSettled);
+
+  bool rebound = true;
+  {
+    sonare::test::AllocationFailureGuard fail_large_allocations(kFailFromBytes);
+    rebound = engine.set_midi_instrument(kDestination, &incoming);
+  }
+  REQUIRE_FALSE(rebound);
+  REQUIRE(engine.midi_instrument(kDestination) == &bound_instrument);
+
+  // The id proves nothing on its own: it is minted from the destination table,
+  // which retiring a slot never touches, so it matches either way.
+  REQUIRE(engine.resolve_instrument_automation_id(kDestination, "level") == level_id);
+
+  // The two bounds rule out the two ways this can go wrong: a retired slot is
+  // claimed fresh and snaps to the target, an unbound destination applies
+  // nothing at all, and only a surviving smoother lands between.
+  drive_level(0.0f);
+  render_blocks(1);
+  REQUIRE(bound_instrument.level > 0.0f);
+  REQUIRE(bound_instrument.level < kSettled);
+
+  // It is live rather than merely stuck part-way: the ramp still converges.
+  render_blocks(16);
+  REQUIRE(bound_instrument.level == Catch::Approx(0.0f).margin(1.0e-3));
+
+  engine.set_midi_instrument(kDestination, nullptr);
 }
