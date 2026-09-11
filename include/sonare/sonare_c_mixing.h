@@ -108,9 +108,16 @@ typedef struct {
   float distance;
 } SonareSurroundPan;
 
+// Returns NULL on an invalid argument or an allocation failure. A non-NULL
+// handle is owned by the caller and stays valid until sonare_mixer_destroy,
+// which must be called exactly once.
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
 // Adds a strip carrying the full meter configuration (LUFS + true peak at 4x).
 // Equivalent to sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0).
+//
+// Returns NULL on failure. A non-NULL strip is owned by the mixer, NOT the
+// caller: it stays valid until sonare_mixer_destroy and must never be freed
+// separately.
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
 // Adds a strip whose pre/post meters are configured up front.
 //
@@ -294,6 +301,9 @@ SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t s
 // capacity condition).
 SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t send_index,
                                                   int64_t sample_pos, float db, int curve);
+// Returns NULL when the scene JSON is malformed or a strip cannot be built; the
+// parse-failure message is available from sonare_last_error_message. A non-NULL
+// handle is owned by the caller and stays valid until sonare_mixer_destroy.
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);
 // Rebuilds and compiles the internal routing graph from the current topology
@@ -338,6 +348,10 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
 // with input_count=0 and NULL input arrays, but explicit for offline renderers.
 SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_left,
                                            float* output_right, size_t num_samples);
+// Returns the built-in mixing-scene preset names, separated by '\n'. Same
+// storage contract as sonare_mixing_assistant_source_class_names: thread-local,
+// rebuilt on every call, so the pointer is valid only until the next call to
+// this function on the same thread. Copy it to hold it; never free it.
 const char* sonare_mixing_scene_preset_names(void);
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out);
 void sonare_mixer_destroy(SonareMixer* mixer);
@@ -409,9 +423,11 @@ SonareError sonare_mixing_assistant_suggest_scene_json(
     int sample_rate, const SonareMasteringParam* params, size_t param_count, char** json_out);
 
 // Returns the source-class identifiers the assistant can report, separated by
-// '\n'. Backed by thread-local storage filled on first use; the pointer stays
-// valid for the calling thread's lifetime. Do NOT cache it across threads or
-// free it.
+// '\n'. Backed by thread-local storage REBUILT ON EVERY CALL, so the pointer is
+// valid only until the next call to this function on the same thread — unlike
+// the mastering *_names getters, whose storage is built once and stays valid
+// for the thread's lifetime. Copy the string if you need to hold it across
+// another call. Do NOT cache it across threads or free it.
 const char* sonare_mixing_assistant_source_class_names(void);
 
 // Resolves a source-class identifier to its enum value, or -1 when unknown.

@@ -84,6 +84,12 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
   if (mixer->buses.size() == before) {
     return SONARE_ERROR_INVALID_PARAMETER;  // no such bus
   }
+  // The declaration and its DSP are one unit, so the record goes with it rather
+  // than lingering to be re-adopted by a later bus that reuses the id.
+  mixer->bus_dsp.erase(
+      std::remove_if(mixer->bus_dsp.begin(), mixer->bus_dsp.end(),
+                     [&](const std::unique_ptr<SonareBusDsp>& dsp) { return dsp->id == bus_id; }),
+      mixer->bus_dsp.end());
   // Drop any connection that referenced the removed bus; otherwise the next
   // compile would try to wire an edge to/from a node that no longer exists.
   mixer->connections.erase(std::remove_if(mixer->connections.begin(), mixer->connections.end(),
@@ -394,6 +400,32 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     }
     if (!has_master) {
       mixer->buses.push_back({"master", "master"});
+    }
+
+    // Bus inserts are built here, at the same lifecycle stage as strip inserts
+    // above, and live in SonareMixer::bus_dsp for the mixer's lifetime. They used
+    // to be constructed inside build_and_compile, which runs again on every
+    // unrelated topology edit and so discarded each insert's state (reverb tail,
+    // delay line, envelope follower) one block after any strip change.
+    for (const auto& bus : mixer->buses) {
+      auto dsp = std::make_unique<SonareBusDsp>();
+      dsp->id = bus.id;
+      // Prepare before adding inserts, the same order sonare_mixer_add_strip_ex
+      // uses: add_insert prepares each processor as it arrives only once the
+      // container itself knows its block size, and BusNode::prepare will not
+      // prepare this bus again on a later compile.
+      dsp->fx.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+      for (const auto& insert : bus.inserts) {
+        auto processor =
+            sonare::mastering::api::make_insert(insert.processor_name, insert.params_json);
+        if (!processor) {
+          throw sonare::SonareException(
+              sonare::ErrorCode::InvalidParameter,
+              "unknown bus insert processor: " + insert.processor_name + " (bus " + bus.id + ")");
+        }
+        dsp->fx.add_insert(std::move(processor));
+      }
+      mixer->bus_dsp.push_back(std::move(dsp));
     }
 
     // VCA group offsets (control-only). A strip may belong to several VCA

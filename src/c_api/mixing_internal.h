@@ -40,11 +40,32 @@ struct SonareStrip {
   SonareMixer* owner = nullptr;
 };
 
+// The persistent half of a bus, mirroring what SonareStrip is for a strip: the
+// scene declaration lives in SonareMixer::buses, the DSP that carries state
+// across a graph rebuild lives here. Buses used to have no such record, so
+// build_and_compile constructed a throwaway FxBus and re-ran make_insert on
+// every compile -- and a compile is triggered by unrelated strip edits, which
+// discarded every bus insert's reverb tail, delay line and envelope state.
+//
+// There is deliberately no invalidation: sonare_mixer_from_scene_json is the
+// only path that establishes a bus insert chain and it always builds a fresh
+// mixer, while sonare_mixer_add_bus takes only an id and a role. A bus's
+// inserts therefore cannot change after the chain is built, so a cache-staleness
+// branch here could never fire.
+struct SonareBusDsp {
+  std::string id;
+  sonare::mixing::FxBus fx;
+};
+
 struct SonareMixer {
   int sample_rate = 48000;
   int max_block_size = 0;
   std::vector<std::unique_ptr<SonareStrip>> strips;
   std::vector<sonare::mixing::api::Bus> buses;
+  // Keyed by bus id, including the implicit master and the aux buses a send
+  // destination creates. Held by pointer so a BusNode can borrow one the way a
+  // StripNode borrows its ChannelStrip.
+  std::vector<std::unique_ptr<SonareBusDsp>> bus_dsp;
   std::vector<sonare::mixing::api::VcaGroup> vca_groups;
   std::vector<sonare::mixing::api::Connection> connections;
   std::string master_id;

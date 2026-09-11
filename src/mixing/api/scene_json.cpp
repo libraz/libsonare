@@ -301,7 +301,11 @@ Bus bus_from_value(const JsonValue& object) {
   bus.layout = channel_layout_or(object, "layout", bus.layout);
   bus.input_trim_db = number_or_legacy(object, "inputTrimDb", "input_trim_db", bus.input_trim_db,
                                        "scene.buses[].inputTrimDb");
-  bus.width = number_or(object, "width", bus.width, "scene.buses[].width");
+  // Through the same clamp as scene.strips[].width above, and for the same
+  // reason: BusNode owns a StereoWidthProcessor, which clamps to [0, 2] on
+  // construction and on set_width, so storing the raw request made the
+  // round-trip report a width the bus is not running.
+  bus.width = clamp_width(number_or(object, "width", bus.width, "scene.buses[].width"));
   bus.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
                                             bus.polarity_invert_left);
   bus.polarity_invert_right = bool_or_legacy(object, "polarityInvertRight", "polarity_invert_right",

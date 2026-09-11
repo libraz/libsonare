@@ -643,4 +643,88 @@ TEST_CASE("C-API fader automation changes the strip's effective gain",
   sonare_mixer_destroy(mixer);
 }
 
+// A recompile is a topology refresh, not an audio reset. Strip DSP state
+// already survives one -- StripNode is built around a pointer into the
+// persistently-owned ChannelStrip -- but every bus got a brand-new FxBus and a
+// fresh make_insert() on each compile, so the in-flight contents of a bus
+// insert were discarded. The trigger is what makes it reachable: a strip-only
+// edit marks the graph dirty, and the next processed block silently rebuilds
+// every bus chain.
+//
+// A single compile cannot see this: the state has to be put in, a second
+// compile forced, and the state observed afterwards.
+TEST_CASE("recompiling for a strip edit keeps bus insert state", "[mixing][routing]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlock = 64;
+  // Longer than one block, so the impulse is still inside the aux delay line
+  // when the recompile happens rather than already emitted.
+  const char* aux_params = R"({"delayTimeLMs":10,"delayTimeRMs":10,"feedback":0,"dryWet":1})";
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip source;
+  source.id = "source";
+  source.sends.push_back({"to-aux", "aux", 0.0f, sonare::mixing::api::SendTiming::PostFader});
+  scene.strips.push_back(std::move(source));
+  sonare::mixing::api::Bus aux{"aux", "aux"};
+  aux.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "effects.delay.stereo", aux_params});
+  scene.buses.push_back(std::move(aux));
+  scene.buses.push_back({"master", "master"});
+  scene.connections.push_back({"aux", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+
+  // Renders an impulse through the mixer, optionally forcing a recompile with a
+  // strip-only edit after the first block, and returns the summed output energy
+  // after that point. The two runs differ only in whether the recompile happens.
+  auto render = [&](bool recompile_midway) {
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSampleRate, kBlock);
+    REQUIRE(mixer != nullptr);
+    std::vector<float> input_l(kBlock, 0.0f);
+    std::vector<float> input_r(kBlock, 0.0f);
+    input_l[0] = 1.0f;
+    input_r[0] = 1.0f;
+    const float* inputs_l[] = {input_l.data()};
+    const float* inputs_r[] = {input_r.data()};
+    std::vector<float> out_l(kBlock, 0.0f);
+    std::vector<float> out_r(kBlock, 0.0f);
+
+    // Block 1 carries the impulse in; the 10 ms delay holds it.
+    REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                        kBlock) == SONARE_OK);
+
+    if (recompile_midway) {
+      SonareStrip* strip = sonare_mixer_strip_by_id(mixer, "source");
+      REQUIRE(strip != nullptr);
+      // Touches nothing about any bus, but marks the graph dirty so the next
+      // processed block recompiles.
+      REQUIRE(sonare_strip_set_channel_delay_samples(strip, 3) == SONARE_OK);
+    }
+
+    // Silence from here: everything that comes out is the delay line emptying.
+    std::fill(input_l.begin(), input_l.end(), 0.0f);
+    std::fill(input_r.begin(), input_r.end(), 0.0f);
+    double energy = 0.0;
+    const int blocks = (kSampleRate / 1000 * 10) / kBlock + 4;
+    for (int block = 0; block < blocks; ++block) {
+      REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                          kBlock) == SONARE_OK);
+      for (int i = 0; i < kBlock; ++i) {
+        energy += static_cast<double>(out_l[i]) * out_l[i];
+      }
+    }
+    sonare_mixer_destroy(mixer);
+    return energy;
+  };
+
+  const double undisturbed = render(false);
+  // Non-vacuity: the impulse really does come back out of the aux delay, so an
+  // empty result below would mean lost state rather than a silent fixture.
+  REQUIRE(undisturbed > 1e-6);
+
+  const double after_recompile = render(true);
+  REQUIRE(after_recompile > 1e-6);
+  REQUIRE_THAT(after_recompile, WithinAbs(undisturbed, undisturbed * 0.01));
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

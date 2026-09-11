@@ -76,19 +76,27 @@ class BusNode final : public sonare::rt::ProcessorBase {
     int right_port = 0;
   };
 
-  BusNode(std::unique_ptr<sonare::mixing::FxBus> bus, float input_trim_db, float width,
-          bool polarity_invert_left, bool polarity_invert_right,
-          std::vector<SidechainInput> sidechain_inputs = {})
-      : bus_(std::move(bus)),
+  // @p bus is borrowed, not owned: it lives in SonareMixer::bus_dsp and outlives
+  // every graph rebuild, exactly as StripNode borrows its ChannelStrip. The
+  // trim/width/polarity members below are per-compile like StripNode's own, and
+  // carry no state the invariant covers.
+  BusNode(sonare::mixing::FxBus* bus, float input_trim_db, float width, bool polarity_invert_left,
+          bool polarity_invert_right, std::vector<SidechainInput> sidechain_inputs = {})
+      : bus_(bus),
         input_trim_({input_trim_db, 5.0f}),
         width_(width, 5.0f),
         polarity_left_(polarity_invert_left ? -1.0f : 1.0f),
         polarity_right_(polarity_invert_right ? -1.0f : 1.0f),
         sidechain_inputs_(std::move(sidechain_inputs)) {}
 
+  // The borrowed FxBus is deliberately NOT prepared here, mirroring
+  // StripNode::prepare: BusProcessor::prepare re-prepares every insert, which
+  // clears the delay lines and filter state this node exists to preserve. The
+  // bus is prepared once where its record is created, before its inserts are
+  // added, exactly as a strip is prepared in sonare_mixer_add_strip_ex. Only the
+  // per-compile members below are prepared.
   void prepare(double sample_rate, int max_block_size) override {
     input_trim_.prepare(sample_rate, max_block_size);
-    bus_->prepare(sample_rate, max_block_size);
     width_.prepare(sample_rate, max_block_size);
   }
 
@@ -126,7 +134,7 @@ class BusNode final : public sonare::rt::ProcessorBase {
   }
 
  private:
-  std::unique_ptr<sonare::mixing::FxBus> bus_;
+  sonare::mixing::FxBus* bus_;  // borrowed; owned by SonareMixer::bus_dsp
   sonare::mixing::GainProcessor input_trim_;
   sonare::mixing::StereoWidthProcessor width_;
   float polarity_left_;
@@ -160,6 +168,23 @@ void apply_solo_mutes(SonareMixer* mixer) {
     strip->strip.set_implied_mute(sonare::mixing::solo_implies_mute(any_solo, strip->strip.soloed(),
                                                                     strip->strip.solo_safe()));
   }
+}
+
+// The persistent DSP for @p bus_id, created empty on first use. A declared bus
+// already has its record with its inserts built; this creates one for the
+// implicit master and for an aux bus a send destination names, neither of which
+// can carry inserts.
+sonare::mixing::FxBus& bus_dsp_for(SonareMixer* mixer, const std::string& bus_id) {
+  for (const auto& entry : mixer->bus_dsp) {
+    if (entry->id == bus_id) return entry->fx;
+  }
+  auto entry = std::make_unique<SonareBusDsp>();
+  entry->id = bus_id;
+  // Prepared once, here, because BusNode::prepare deliberately leaves it alone.
+  entry->fx.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+  sonare::mixing::FxBus& fx = entry->fx;
+  mixer->bus_dsp.push_back(std::move(entry));
+  return fx;
 }
 
 // Rebuilds the routing graph from the mixer's stored strips/buses/connections,
@@ -233,17 +258,12 @@ void build_and_compile(SonareMixer* mixer) {
   std::unordered_map<std::string, std::vector<BusNode::SidechainInput>> bus_sidechain_inputs_by_id;
   std::unordered_map<std::string, std::vector<std::string>> bus_sidechain_keys_by_id;
   for (const auto& bus : buses) {
-    auto fx_bus = std::make_unique<sonare::mixing::FxBus>();
-    for (const auto& insert : bus.inserts) {
-      auto processor =
-          sonare::mastering::api::make_insert(insert.processor_name, insert.params_json);
-      if (!processor) {
-        throw SonareException(
-            ErrorCode::InvalidParameter,
-            "unknown bus insert processor: " + insert.processor_name + " (bus " + bus.id + ")");
-      }
-      fx_bus->add_insert(std::move(processor));
-    }
+    // The DSP is looked up, never rebuilt: its inserts were constructed once at
+    // scene-apply time (sonare_mixer_from_scene_json), and an implicit bus -- the
+    // synthesized master, or an aux a send destination created -- gets an empty
+    // record here. Constructing it in this loop is what used to throw away every
+    // bus insert's state on an unrelated strip edit.
+    sonare::mixing::FxBus& fx_bus = bus_dsp_for(mixer, bus.id);
     int next_sidechain_port = 2;
     std::vector<BusNode::SidechainInput> sidechain_inputs;
     std::vector<std::string> sidechain_keys;
@@ -259,9 +279,9 @@ void build_and_compile(SonareMixer* mixer) {
     }
     bus_sidechain_inputs_by_id[bus.id] = sidechain_inputs;
     bus_sidechain_keys_by_id[bus.id] = sidechain_keys;
-    auto node = std::make_unique<BusNode>(std::move(fx_bus), bus.input_trim_db, bus.width,
-                                          bus.polarity_invert_left, bus.polarity_invert_right,
-                                          std::move(sidechain_inputs));
+    auto node =
+        std::make_unique<BusNode>(&fx_bus, bus.input_trim_db, bus.width, bus.polarity_invert_left,
+                                  bus.polarity_invert_right, std::move(sidechain_inputs));
     if (!graph.add_node(bus.id, std::move(node), next_sidechain_port)) {
       throw SonareException(ErrorCode::InvalidParameter, "duplicate or invalid bus id: " + bus.id);
     }

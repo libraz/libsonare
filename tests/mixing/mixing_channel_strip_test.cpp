@@ -932,6 +932,43 @@ TEST_CASE("ChannelStrip segmented path reports block-max gain reduction", "[mixi
   REQUIRE_THAT(strip.meter_snapshot().gain_reduction_db, WithinAbs(-10.0f, 0.0001f));
 }
 
+// The meter reports what the block did, so an insert that did not run
+// contributes nothing. InsertChain skips a bypassed insert's process(), which
+// leaves last_gain_reduction_db() holding the last active block's value, and the
+// aggregate folded that in unconditionally -- so a bypassed compressor's frozen
+// reading stayed in the strip snapshot for as long as it was bypassed.
+//
+// Engaging bypass is the operation, so a single block cannot see it: the value
+// has to be established first, then bypass engaged, then the meter read again.
+TEST_CASE("ChannelStrip drops a bypassed insert from the gain-reduction meter", "[mixing]") {
+  std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> right = left;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<PeakGainReductionProcessor>());
+  strip.prepare(48000.0, 4);
+
+  strip.process(channels, 2, 4);
+  // Non-vacuity: the insert really is reporting reduction, so the 0 below means
+  // the bypass was honoured rather than that nothing ever registered.
+  REQUIRE(strip.meter_snapshot().gain_reduction_db < -1.0f);
+
+  REQUIRE(strip.set_insert_bypassed(0, true));
+  left = {1.0f, 1.0f, 1.0f, 1.0f};
+  right = left;
+  strip.process(channels, 2, 4);
+  REQUIRE_THAT(strip.meter_snapshot().gain_reduction_db, WithinAbs(0.0f, 0.0001f));
+
+  // Un-bypassing brings it back, so the insert is dropped from the aggregate
+  // rather than permanently zeroed.
+  REQUIRE(strip.set_insert_bypassed(0, false));
+  left = {1.0f, 1.0f, 1.0f, 1.0f};
+  right = left;
+  strip.process(channels, 2, 4);
+  REQUIRE(strip.meter_snapshot().gain_reduction_db < -1.0f);
+}
+
 TEST_CASE("ChannelStrip reset clears pending automation lanes", "[mixing]") {
   std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
   std::array<float, 4> right = left;

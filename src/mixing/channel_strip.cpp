@@ -56,10 +56,18 @@ int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inse
   return total;
 }
 
+// The meter reports the reduction the block actually took, so a bypassed insert
+// contributes nothing. InsertChain skips its process(), which leaves
+// last_gain_reduction_db() holding whatever the last active block cached, and
+// folding that in kept a bypassed compressor's frozen reading in the strip
+// snapshot indefinitely. Same rule the mute path already applies, where a strip
+// that is not processing forces its meters to 0 dB rather than letting the last
+// value stand.
 float aggregate_gain_reduction_db(
     const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
   float reduction_db = 0.0f;
   for (const auto& insert : inserts) {
+    if (insert->bypassed()) continue;
     reduction_db = std::min(reduction_db, insert->last_gain_reduction_db());
   }
   return reduction_db;

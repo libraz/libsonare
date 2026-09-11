@@ -1,7 +1,12 @@
 #pragma once
 
 /// @file goniometer_buffer.h
-/// @brief Small best-effort ring for decimated stereo scope points.
+/// @brief Small best-effort ring for stereo scope points.
+///
+/// push() writes one point per call and decimates nothing; ChannelStrip calls it
+/// once per sample, so the ring turns over at the sample rate and a reader sees
+/// only the most recent Capacity points. Thinning for display is the consumer's
+/// choice, made from what read_latest() returns.
 ///
 /// The writer publishes a monotonically increasing index, but individual point
 /// slots are not seqlock-protected. UI consumers may observe a torn point during

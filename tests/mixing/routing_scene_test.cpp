@@ -472,6 +472,41 @@ TEST_CASE("Scene clamps out-of-range scalars to what the runtime uses", "[mixing
   CHECK(restored.strips[0].surround_pan.azimuth == 180.0f);
 }
 
+// A bus carries a width too, through a StereoWidthProcessor that clamps exactly
+// as the strip's does, so the scene walker owed it the same treatment. It did
+// not have it: the parsed struct kept the raw request and scene_to_json echoed a
+// width the bus was not running.
+TEST_CASE("Scene clamps a bus width to what the bus runs", "[mixing][routing]") {
+  const auto scene = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"buses":[{"id":"wide","width":4.0},{"id":"narrow","width":-1.0}]})");
+  REQUIRE(scene.buses.size() == 2);
+  CHECK(scene.buses[0].width == 2.0f);
+  CHECK(scene.buses[1].width == 0.0f);
+
+  // ...and those are the values the processor the bus owns stores for the same
+  // input, which is what makes the scene a report of the mix rather than of the
+  // request.
+  sonare::mixing::StereoWidthProcessor live;
+  live.set_width(4.0f);
+  CHECK(scene.buses[0].width == live.width());
+  live.set_width(-1.0f);
+  CHECK(scene.buses[1].width == live.width());
+
+  // Legal already, so the round-trip does not move them again.
+  const auto restored =
+      sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene));
+  REQUIRE(restored.buses.size() == 2);
+  CHECK(restored.buses[0].width == 2.0f);
+  CHECK(restored.buses[1].width == 0.0f);
+
+  // A width inside the range is still carried through untouched, so the clamp
+  // cannot be satisfied by always returning a bound.
+  const auto inside = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"buses":[{"id":"shaped","width":1.5}]})");
+  REQUIRE(inside.buses.size() == 1);
+  CHECK(inside.buses[0].width == 1.5f);
+}
+
 // A strip's meters size their buffers when the strip is built, so the scene is
 // where the choice has to travel. Absent means the full historical default and
 // serializes nothing, so existing scenes are byte-identical.

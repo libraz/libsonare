@@ -771,4 +771,89 @@ TEST_CASE("Settled insert automation slots retire and serve more than table capa
   REQUIRE(mixer.insert_automation_overflow_count() == 0u);
 }
 
+namespace {
+
+// Captures the sidechain key it is handed, so a test can read the key itself
+// rather than infer it from a detector's behaviour.
+class KeyCaptureProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override { key.clear(); }
+  void set_sidechain(const float* const* channels, int num_channels, int num_samples) override {
+    key.assign(num_samples, 0.0f);
+    if (channels != nullptr && num_channels > 0 && channels[0] != nullptr) {
+      key.assign(channels[0], channels[0] + num_samples);
+    }
+  }
+  void clear_sidechain() override { key.clear(); }
+  std::vector<float> key;
+};
+
+}  // namespace
+
+TEST_CASE("Lane sidechain key never carries a longer sub-block's tail", "[mixing][sidechain]") {
+  // process() is split into sub-blocks of differing lengths, and a source lane
+  // snapshots its key at ITS length. A short snapshot followed by a longer
+  // consume used to leave the older, longer sub-block's audio in the tail. One
+  // block cannot see this; it needs a long block, then a short one, then a long
+  // one.
+  constexpr int kBlock = 64;
+  constexpr int kShort = 16;
+  constexpr double kSr = 48000.0;
+
+  std::array<float, kBlock> loud{};
+  std::array<float, kBlock> quiet{};
+  loud.fill(1.0f);
+  quiet.fill(0.0f);
+  const float* loud_channels[] = {loud.data()};
+  const float* quiet_channels[] = {quiet.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(kSr, kBlock);
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(kSr, kBlock);
+  // Lane 10 consumes, lane 20 is the key source. 20 sorts after 10, which is
+  // the ordering that makes the consumer read the PREVIOUS snapshot.
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  auto* probe = new KeyCaptureProcessor();
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::unique_ptr<sonare::rt::ProcessorBase>(probe));
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+  REQUIRE(mixer.set_lane_sidechain(10, 0, 20));
+
+  std::array<float, kBlock> out{};
+  float* io[] = {out.data()};
+  const auto run = [&](const float* const* key_source, int frames) {
+    player.set_clips(
+        {dc_clip(1, 10, key_source, 1, frames), dc_clip(2, 20, key_source, 1, frames)});
+    out.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, io, 1, frames, 0));
+  };
+
+  // A full-length block with a loud key fills the whole key plane.
+  run(loud_channels, kBlock);
+  // Then a short sub-block, which only refreshes the first kShort frames.
+  run(loud_channels, kShort);
+  // Then a full-length block. Lane 20 sorts after lane 10, so lane 10 reads the
+  // PREVIOUS snapshot — the short one — which is the design's one block of key
+  // latency.
+  run(quiet_channels, kBlock);
+
+  REQUIRE(probe->key.size() == static_cast<size_t>(kBlock));
+  // Head: the short snapshot's own audio, which the consumer is entitled to.
+  for (int i = 0; i < kShort; ++i) {
+    INFO("head frame " << i);
+    REQUIRE(probe->key[static_cast<size_t>(i)] == 1.0f);
+  }
+  // Tail: beyond what that snapshot covered. Silence, not the first, longer
+  // block's audio still sitting in the buffer.
+  for (int i = kShort; i < kBlock; ++i) {
+    INFO("tail frame " << i);
+    REQUIRE(probe->key[static_cast<size_t>(i)] == 0.0f);
+  }
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
