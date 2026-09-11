@@ -13,6 +13,8 @@
 
 namespace sonare {
 
+class Spectrogram;
+
 /// @brief Detected section with classification.
 struct Section {
   SectionType type;    ///< Section type (Intro, Verse, Chorus, etc.)
@@ -105,6 +107,8 @@ class SectionAnalyzer {
   /// built-in labeller consumes — exposed so callers can apply their own
   /// repetition thresholds / clustering instead of the fixed heuristic. Returns
   /// an empty vector when there are no sections.
+  /// @details Reuses the descriptors the labeller already built, so reading this
+  /// alongside @ref sections() costs one analysis rather than two.
   std::vector<float> section_self_similarity() const;
 
  private:
@@ -117,15 +121,16 @@ class SectionAnalyzer {
   /// repetitions of each other and drive a full song form out of material that
   /// never changed. Collapsing them first means the labeller sees the structure
   /// the audio has rather than the structure the peak picker found.
-  void merge_indistinct_sections();
+  /// @param spec The analyzer's STFT, shared with @ref build_descriptors.
+  void merge_indistinct_sections(const Spectrogram& spec);
 
   /// @brief L2-normalized mean chroma of each current section.
   /// @details The harmonic half of @ref build_descriptors, computed on its own
-  /// so the merge pass does not also pay for a spectrogram and a flatness curve
-  /// that classification recomputes moments later.
-  std::vector<std::array<float, 12>> section_mean_chromas() const;
+  /// so the merge pass does not also pay for the flatness curve and the band
+  /// energies that classification needs and it does not.
+  std::vector<std::array<float, 12>> section_mean_chromas(const Spectrogram& spec) const;
 
-  void classify_sections();
+  void classify_sections(const Spectrogram& spec);
   float compute_section_energy(float start, float end) const;
 
   /// @brief Per-section descriptor used for self-similarity classification.
@@ -136,14 +141,17 @@ class SectionAnalyzer {
   };
 
   /// @brief Builds per-section chroma / energy / vocal-likelihood descriptors.
-  /// @details Computes a chromagram and spectrogram once, then aggregates the
-  /// per-frame features inside each section's time span.
-  std::vector<SectionDescriptor> build_descriptors() const;
+  /// @details Derives the chromagram and the per-frame flatness curve from @p spec,
+  /// then aggregates them inside each section's time span.
+  std::vector<SectionDescriptor> build_descriptors(const Spectrogram& spec) const;
 
   /// @brief Computes the section-level self-similarity matrix (cosine of chroma).
   std::vector<float> self_similarity(const std::vector<SectionDescriptor>& descriptors) const;
 
   std::vector<Section> sections_;
+  /// @brief Descriptors of the final sections, kept from classification so the
+  /// public self-similarity accessor does not rebuild them.
+  std::vector<SectionDescriptor> descriptors_;
   std::vector<float> energy_curve_;
   std::vector<float> boundaries_;
   Audio audio_;

@@ -12,8 +12,10 @@
 #include <utility>
 #include <vector>
 
+#include "feature/chroma.h"
 #include "support/section_form.h"
 #include "util/constants.h"
+#include "util/math_utils.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -449,4 +451,62 @@ TEST_CASE("SectionAnalyzer does not invent structure in uniform material", "[sec
   const std::string form = analyzer.form();
   REQUIRE(form.find('A') == std::string::npos);
   REQUIRE(form.find('B') == std::string::npos);
+}
+
+TEST_CASE("the self-similarity matrix is the one the labeller used", "[analysis][section][reuse]") {
+  // The analyzer keeps the descriptors classification built rather than running the chroma
+  // analysis again when this accessor is read, and it derives that chromagram from the STFT it
+  // already computed for the rest of the pass. Both are only correct if the result is the same
+  // floats a standalone chromagram over the reported section spans produces, so the oracle
+  // rebuilds exactly that and compares without a tolerance.
+  const int sr = 22050;
+  const Audio audio = create_sectioned_audio(sr);
+  const SectionAnalyzer analyzer(audio);
+
+  const size_t n = analyzer.count();
+  REQUIRE(n > 1);
+
+  const SectionConfig section_config;
+  ChromaConfig chroma_config;
+  chroma_config.n_fft = section_config.n_fft;
+  chroma_config.hop_length = section_config.hop_length;
+  const Chroma chroma = Chroma::compute(audio, chroma_config);
+
+  // The analysis rate is the input rate here: section analysis only resamples above 22.05 kHz.
+  const float hop_duration = static_cast<float>(section_config.hop_length) / static_cast<float>(sr);
+  std::vector<std::array<float, 12>> expected(n);
+  for (size_t s = 0; s < n; ++s) {
+    const Section& section = analyzer.sections()[s];
+    const int start = std::clamp(static_cast<int>(section.start / hop_duration), 0,
+                                 std::max(0, chroma.n_frames()));
+    const int end =
+        std::clamp(static_cast<int>(section.end / hop_duration), start, chroma.n_frames());
+    int count = 0;
+    for (int f = start; f < end; ++f) {
+      for (int c = 0; c < chroma.n_chroma() && c < 12; ++c) {
+        expected[s][static_cast<size_t>(c)] += chroma.at(c, f);
+      }
+      ++count;
+    }
+    if (count > 0) {
+      for (float& value : expected[s]) value /= static_cast<float>(count);
+    }
+    normalize_l2(expected[s].data(), expected[s].size());
+  }
+
+  const std::vector<float> similarity = analyzer.section_self_similarity();
+  REQUIRE(similarity.size() == n * n);
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t j = 0; j < n; ++j) {
+      float dot = 0.0f;
+      for (size_t c = 0; c < 12; ++c) {
+        dot += expected[i][c] * expected[j][c];
+      }
+      CAPTURE(i, j);
+      REQUIRE(similarity[i * n + j] == std::clamp(dot, 0.0f, 1.0f));
+    }
+  }
+
+  // Reading it twice must not depend on having read it once: the descriptors are state now.
+  REQUIRE(analyzer.section_self_similarity() == similarity);
 }

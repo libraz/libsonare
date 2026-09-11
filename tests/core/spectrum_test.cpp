@@ -6,6 +6,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
+#include <cstdint>
 #include <numeric>
 #include <vector>
 
@@ -1052,4 +1054,57 @@ TEST_CASE("reassignment helpers reject non-positive STFT dimensions", "[spectrum
     config.hop_length = 0;
     REQUIRE_THROWS_AS(reassign_times(audio, config), SonareException);
   }
+}
+
+TEST_CASE("the magnitude and power caches derive from whichever was filled first",
+          "[spectrum][cache]") {
+  // Both caches are lazy, and each is built from the other when that one already exists, so the
+  // accessor called first decides which is computed from the complex spectrum and which is a
+  // derivation of it. One Spectrogram shared between a magnitude consumer and a power consumer
+  // therefore cannot give both the direct form; an analyzer that needs both takes its magnitude
+  // from complex_data() instead, which is what the first assertion here pins.
+  const int sr = 22050;
+  std::vector<float> samples(4096);
+  uint32_t state = 22695477u;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    samples[i] = 2.0f * unit - 1.0f;
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  StftConfig config;
+  config.n_fft = 256;
+  config.hop_length = 64;
+
+  const Spectrogram magnitude_first = Spectrogram::compute(audio, config);
+  const std::vector<float> direct_magnitude = magnitude_first.magnitude();
+  const std::vector<float> derived_power = magnitude_first.power();
+
+  const Spectrogram power_first = Spectrogram::compute(audio, config);
+  const std::vector<float> direct_power = power_first.power();
+  const std::vector<float> derived_magnitude = power_first.magnitude();
+
+  REQUIRE(direct_magnitude.size() == derived_magnitude.size());
+  REQUIRE(direct_power.size() == derived_power.size());
+  REQUIRE_FALSE(direct_magnitude.empty());
+
+  const std::complex<float>* spectrum = magnitude_first.complex_data();
+  size_t magnitude_differs = 0;
+  size_t power_differs = 0;
+  for (size_t i = 0; i < direct_magnitude.size(); ++i) {
+    CAPTURE(i);
+    // The direct magnitude is abs(z), so reading complex_data() reproduces it exactly.
+    REQUIRE(direct_magnitude[i] == std::abs(spectrum[i]));
+    // The derived forms are the other formula for the same quantity, pinned rather than
+    // assumed equal to the direct one.
+    REQUIRE(derived_magnitude[i] == std::sqrt(direct_power[i]));
+    REQUIRE(derived_power[i] == direct_magnitude[i] * direct_magnitude[i]);
+    if (derived_magnitude[i] != direct_magnitude[i]) ++magnitude_differs;
+    if (derived_power[i] != direct_power[i]) ++power_differs;
+  }
+  // Not asserted as non-zero: the two formulas agreeing everywhere would make the workaround
+  // unnecessary rather than wrong. Reported so the margin is visible when this is read.
+  CAPTURE(direct_magnitude.size(), magnitude_differs, power_differs);
+  SUCCEED();
 }

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
+#include <vector>
 
 #include "core/resample.h"
 #include "core/spectrum.h"
@@ -50,6 +52,17 @@ constexpr float kInstrumentalVocalThreshold = 0.40f;
 constexpr float kVocalBandLowHz = 300.0f;
 /// @brief Upper edge of the vocal energy band in Hz.
 constexpr float kVocalBandHighHz = 3400.0f;
+
+/// @brief The one chroma geometry every pass in this analyzer shares.
+/// @details Both the STFT the analyzer computes and the filterbank the chroma applies come
+///          from this, so the framing the descriptors read cannot drift from the framing they
+///          were built with.
+ChromaConfig section_chroma_config(const SectionConfig& config) {
+  ChromaConfig chroma_config;
+  chroma_config.n_fft = config.n_fft;
+  chroma_config.hop_length = config.hop_length;
+  return chroma_config;
+}
 
 Audio section_analysis_audio(const Audio& audio) {
   constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
@@ -170,12 +183,16 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
     sections_.push_back(section);
   }
 
+  // One STFT for the whole pass: the merge and the descriptors both read it.
+  const Spectrogram spec =
+      Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config());
+
   merge_short_sections();
-  merge_indistinct_sections();
+  merge_indistinct_sections(spec);
   add_fallback_section(sections_, audio_duration);
 
   // Classify sections
-  classify_sections();
+  classify_sections(spec);
 }
 
 void SectionAnalyzer::analyze() {
@@ -217,12 +234,16 @@ void SectionAnalyzer::analyze() {
     sections_.push_back(section);
   }
 
+  // One STFT for the whole pass: the merge and the descriptors both read it.
+  const Spectrogram spec =
+      Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config());
+
   merge_short_sections();
-  merge_indistinct_sections();
+  merge_indistinct_sections(spec);
   add_fallback_section(sections_, audio_duration);
 
   // Classify sections
-  classify_sections();
+  classify_sections(spec);
 }
 
 void SectionAnalyzer::merge_short_sections() {
@@ -248,16 +269,15 @@ void SectionAnalyzer::merge_short_sections() {
   }
 }
 
-std::vector<std::array<float, 12>> SectionAnalyzer::section_mean_chromas() const {
+std::vector<std::array<float, 12>> SectionAnalyzer::section_mean_chromas(
+    const Spectrogram& spec) const {
   std::vector<std::array<float, 12>> chromas(sections_.size());
   if (sections_.empty()) {
     return chromas;
   }
 
-  ChromaConfig chroma_config;
-  chroma_config.n_fft = config_.n_fft;
-  chroma_config.hop_length = config_.hop_length;
-  const Chroma chroma = Chroma::compute(audio_, chroma_config);
+  const Chroma chroma =
+      Chroma::from_spectrogram(spec, sr_, section_chroma_config(config_).to_chroma_filter_config());
   const float hop_duration = static_cast<float>(hop_length_) / static_cast<float>(sr_);
 
   for (size_t s = 0; s < sections_.size(); ++s) {
@@ -275,19 +295,18 @@ std::vector<std::array<float, 12>> SectionAnalyzer::section_mean_chromas() const
   return chromas;
 }
 
-void SectionAnalyzer::merge_indistinct_sections() {
+void SectionAnalyzer::merge_indistinct_sections(const Spectrogram& spec) {
   if (sections_.size() < 2) return;
 
   // Chroma only, not the full descriptor set: the comparison needs the harmonic
-  // content and nothing else, and build_descriptors also computes a spectrogram
-  // and a per-frame flatness curve that classify_sections will compute again a
-  // moment later anyway.
+  // content and nothing else, and build_descriptors also derives a per-frame
+  // flatness curve and band energies that this decision never reads.
   //
   // The descriptors are taken over the original segmentation and not re-derived
   // as pairs merge. What matters is whether the two stretches of music the
   // segmenter found are distinguishable; recomputing a chromagram per merge
   // would cost an analysis pass per boundary for a decision these already settle.
-  const std::vector<std::array<float, 12>> chromas = section_mean_chromas();
+  const std::vector<std::array<float, 12>> chromas = section_mean_chromas(spec);
   if (chromas.size() != sections_.size()) return;
 
   std::vector<Section> merged;
@@ -343,23 +362,26 @@ float SectionAnalyzer::compute_section_energy(float start, float end) const {
   return sum / (end_frame - start_frame);
 }
 
-std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descriptors() const {
+std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descriptors(
+    const Spectrogram& spec) const {
   std::vector<SectionDescriptor> descriptors(sections_.size());
   if (sections_.empty()) {
     return descriptors;
   }
 
-  // Compute a chromagram and a magnitude spectrogram once for the whole signal.
-  ChromaConfig chroma_config;
-  chroma_config.n_fft = config_.n_fft;
-  chroma_config.hop_length = config_.hop_length;
-  Chroma chroma = Chroma::compute(audio_, chroma_config);
+  const Chroma chroma =
+      Chroma::from_spectrogram(spec, sr_, section_chroma_config(config_).to_chroma_filter_config());
 
-  Spectrogram spec =
-      Spectrogram::compute(audio_, make_stft_config(config_.n_fft, config_.hop_length));
-  const std::vector<float>& mag = spec.magnitude();
   const int n_bins = spec.n_bins();
   const int n_spec_frames = spec.n_frames();
+  // Taken from the complex spectrum rather than spec.magnitude(): the chroma pass above fills
+  // the power cache, and the lazy magnitude cache is sqrt(power) once that exists rather than
+  // abs(z), which differs in the last bit for about one cell in seven.
+  std::vector<float> mag(static_cast<size_t>(n_bins) * static_cast<size_t>(n_spec_frames));
+  const std::complex<float>* spectrum = spec.complex_data();
+  for (size_t i = 0; i < mag.size(); ++i) {
+    mag[i] = std::abs(spectrum[i]);
+  }
 
   const float hop_duration = static_cast<float>(hop_length_) / static_cast<float>(sr_);
   const float bin_hz = static_cast<float>(sr_) / static_cast<float>(config_.n_fft);
@@ -443,7 +465,7 @@ std::vector<float> SectionAnalyzer::self_similarity(
   return sim;
 }
 
-void SectionAnalyzer::classify_sections() {
+void SectionAnalyzer::classify_sections(const Spectrogram& spec) {
   if (sections_.empty()) {
     return;
   }
@@ -461,8 +483,11 @@ void SectionAnalyzer::classify_sections() {
     }
   }
 
-  // Build chroma / energy / vocal descriptors and the self-similarity matrix.
-  const std::vector<SectionDescriptor> descriptors = build_descriptors();
+  // Build chroma / energy / vocal descriptors and the self-similarity matrix. The descriptors
+  // are kept: they describe the sections as they now stand, and the public self-similarity
+  // accessor reads them instead of running the analysis a second time.
+  descriptors_ = build_descriptors(spec);
+  const std::vector<SectionDescriptor>& descriptors = descriptors_;
   const std::vector<float> sim = self_similarity(descriptors);
 
   // For each section, count how many *other* sections it repeats (cosine >= threshold)
@@ -609,7 +634,7 @@ std::vector<float> SectionAnalyzer::boundary_times() const { return boundaries_;
 
 std::vector<float> SectionAnalyzer::section_self_similarity() const {
   if (sections_.empty()) return {};
-  return self_similarity(build_descriptors());
+  return self_similarity(descriptors_);
 }
 
 }  // namespace sonare

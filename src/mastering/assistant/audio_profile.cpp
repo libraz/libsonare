@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <numeric>
 #include <utility>
@@ -285,11 +286,32 @@ namespace {
 // block, keeping mono and stereo profiles comparable field by field.
 void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
                        AudioProfile& profile) {
+  // Detrend (DC-remove) the onset envelope so the attack-density peak picking
+  // discriminates transient bursts from steady energy. This consumer opts in
+  // explicitly; the public OnsetConfig default is detrend=false (librosa).
+  OnsetConfig onset_config;
+  onset_config.detrend = true;
+
   StftConfig stft_config;
   stft_config.n_fft = config.n_fft;
   stft_config.hop_length = config.hop_length;
-  Spectrogram spec = Spectrogram::compute(audio, stft_config);
-  const auto& mag = spec.magnitude();
+  // One STFT feeds both the spectral block and the onset envelope below, so the framing the
+  // onset path asks for is the framing this spectrogram is built with rather than a second
+  // default that happens to agree.
+  onset_config.center = stft_config.center;
+  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+
+  const int n_bins = spec.n_bins();
+  const int n_frames = spec.n_frames();
+  // Taken from the complex spectrum rather than spec.magnitude(): the mel pass below fills the
+  // power cache, and the lazy magnitude cache is sqrt(power) once that exists rather than
+  // abs(z), which differs in the last bit for about one cell in seven.
+  std::vector<float> mag(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
+  const std::complex<float>* spectrum = spec.complex_data();
+  for (size_t i = 0; i < mag.size(); ++i) {
+    mag[i] = std::abs(spectrum[i]);
+  }
+
   profile.spectral.sub_rms_db =
       band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(), audio.sample_rate(), 20, 60);
   profile.spectral.low_rms_db =
@@ -305,9 +327,11 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
   profile.spectral.air_rms_db =
       band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(), audio.sample_rate(), 12000,
                   static_cast<float>(audio.sample_rate()) * 0.5f + 1.0f);
-  profile.spectral.centroid_hz = mean_finite(spectral_centroid(spec, audio.sample_rate()));
-  profile.spectral.flatness = mean_finite(spectral_flatness(spec));
-  profile.spectral.rolloff_hz = mean_finite(spectral_rolloff(spec, audio.sample_rate()));
+  profile.spectral.centroid_hz = mean_finite(
+      spectral_centroid(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
+  profile.spectral.flatness = mean_finite(spectral_flatness(mag.data(), n_bins, n_frames));
+  profile.spectral.rolloff_hz = mean_finite(
+      spectral_rolloff(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
 
   const auto short_term = metering::short_term_lufs(audio);
   profile.dynamics.short_term_lufs_std = stddev_finite(short_term);
@@ -315,12 +339,14 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
   MelConfig mel_config;
   mel_config.n_fft = config.n_fft;
   mel_config.hop_length = config.hop_length;
-  // Detrend (DC-remove) the onset envelope so the attack-density peak picking
-  // discriminates transient bursts from steady energy. This consumer opts in
-  // explicitly; the public OnsetConfig default is detrend=false (librosa).
-  OnsetConfig onset_config;
-  onset_config.detrend = true;
-  const auto onset = compute_onset_strength(audio, mel_config, onset_config);
+  // The Audio overload of compute_onset_strength would run its own STFT of this same geometry;
+  // splitting it at the Mel spectrogram reuses the one above and keeps the trailing alignment
+  // step the overload applies.
+  const MelSpectrogram mel = MelSpectrogram::from_spectrogram(spec, audio.sample_rate(),
+                                                              mel_config.to_mel_filter_config());
+  const auto onset =
+      center_onset_strength(compute_onset_strength(mel, onset_config), stft_config.n_fft,
+                            stft_config.hop_length, onset_config.center);
   profile.dynamics.attack_density = attack_density(onset, profile.duration_sec);
   profile.dynamics.sustain_ratio =
       sustain_ratio(rms_energy(audio, config.n_fft, config.hop_length));
