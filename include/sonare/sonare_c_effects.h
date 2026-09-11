@@ -174,26 +174,67 @@ typedef struct {
 } SonareNoteExtractorConfig;
 
 /// @brief Versioned configuration for @ref sonare_render_notes.
-/// @details Zero-initialize for the default 5 ms fade. @c struct_version 0 and 1
-///          both select the version-1 layout.
+/// @details Zero-initialize for the defaults (5 ms fade, 3 Hz vibrato cutoff).
+///          @c struct_version 0 and 1 both select the version-1 layout.
 typedef struct {
   int32_t struct_version;
   /// Equal-power cross-fade at each edited note's edges. 0 keeps the default
   /// 5 ms; a hard cut is deliberately not selectable, because the seam it
   /// leaves behind is a click.
   float fade_ms;
+  /// Boundary between the drift and the vibrato that @c vibrato_depth_change
+  /// and @c drift_change act on, in Hz. 0 keeps the default 3 Hz.
+  ///
+  /// Pass whatever @ref sonare_decompose_note_pitch was called with. A host
+  /// that draws the vibrato at one cutoff and edits it at another edits a
+  /// curve it never showed anyone.
+  float vibrato_cutoff_hz;
 } SonareNoteRenderConfig;
 
 /// @brief A pending, non-destructive change to one note.
 /// @details Zero-initializing gives the identity edit: @c time_stretch_ratio 0
-///          reads as 1, so a zeroed struct changes nothing.
+///          reads as 1 and an envelope of zero length is no envelope, so a
+///          zeroed struct changes nothing.
 typedef struct {
   /// Moves the note along the timeline. Negative moves it earlier.
   int64_t time_offset_samples;
+  /// Index of this note's amplitude envelope in the envelope array that travels
+  /// with the note set -- @c envelopes on a result, the @c envelopes argument
+  /// on @ref sonare_render_notes. Ignored when @c envelope_count is 0.
+  ///
+  /// An offset rather than a pointer so that the field means the same thing on
+  /// the way in and on the way out: the caller owns the array it passes, the
+  /// library owns the one it returns, and neither ever frees the other's.
+  int64_t envelope_offset;
+  /// Number of envelope points, or 0 for no envelope.
+  ///
+  /// Per-frame linear gain over the note's span, on top of @c gain_db. It is a
+  /// set of gain points rather than a signal: it is stretched over whatever
+  /// length the note renders at, so it survives a time stretch and need not
+  /// match the note's frame count. One entry is a constant gain.
+  size_t envelope_count;
   float pitch_shift_semitones;
   float gain_db;
   /// >1 lengthens the note, <1 shortens it; pitch is preserved. 0 reads as 1.
   float time_stretch_ratio;
+  /// Moves the spectral envelope, in semitones, on top of whatever the pitch
+  /// shift already did to it.
+  ///
+  /// 0 runs no warp at all, so a pitch-only edit is not charged for an LPC
+  /// analysis-resynthesis round it did not ask for. A pitch shift drags the
+  /// formants with it, so holding them still is -@c pitch_shift_semitones and
+  /// the chipmunk is the default. Saturates near -10.3 and +8.7 semitones
+  /// rather than being rejected.
+  float formant_shift_semitones;
+  /// Scales the vibrato measured over the note, stated as a change from it:
+  /// 0 keeps it, -1 flattens it, +1 doubles it.
+  ///
+  /// Applying it needs a pitch curve, so a note carrying none is rejected
+  /// rather than left alone. The curve is split at
+  /// @c SonareNoteRenderConfig::vibrato_cutoff_hz.
+  float vibrato_depth_change;
+  /// The same, for the slow drift around the note's centre pitch.
+  float drift_change;
   /// Non-zero silences the note's span; the other fields then do not apply.
   int32_t muted;
 } SonareNoteEdit;
@@ -232,6 +273,12 @@ typedef struct {
   size_t count;
   float* amplitude;
   size_t amplitude_count;
+  /// Amplitude envelopes the notes' edits index through @c envelope_offset.
+  /// NULL unless an entry point carried envelopes in: extraction produces
+  /// identity edits, so only @ref sonare_split_note and @ref sonare_merge_notes
+  /// ever fill this.
+  float* envelopes;
+  size_t envelope_count;
 } SonareNoteObjectsResult;
 
 /// @brief Extract editable note objects from audio and an F0 track.
@@ -258,9 +305,11 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
 void sonare_free_note_objects(SonareNoteObjectsResult* result);
 
 /// @brief Render edited note objects over their source audio.
-/// @details Reads only each note's sample span and its @c edit; the frame
-///          bounds, medians, metrics and amplitude offset are ignored, so a
-///          host may pass back exactly what @ref sonare_extract_notes produced.
+/// @details Reads each note's sample span and its @c edit, plus the frame
+///          bounds whenever @p f0_hz is given and @c median_hz when a curve
+///          edit needs it; the metrics and the amplitude offset are ignored, so
+///          a host may pass back exactly what @ref sonare_extract_notes
+///          produced.
 ///          A note whose edit is the identity is not resynthesized, so a set
 ///          whose edits are all identity reproduces the input bit for bit.
 ///
@@ -268,15 +317,144 @@ void sonare_free_note_objects(SonareNoteObjectsResult* result);
 ///          @c time_offset_samples lands a note is not, and a note lengthened
 ///          past its own span writes into its neighbours' samples, so two moved
 ///          or stretched notes may be written over each other.
+///          Per note the order is: pitch curve, time stretch, pitch shift,
+///          formant warp, amplitude envelope, then gain.
 /// @param notes May be NULL when @p note_count is 0.
+/// @param envelopes Amplitude envelope points the notes' edits index into, or
+///        NULL when no note carries one. Caller-owned and only read here. Every
+///        value must be finite and non-negative, and every note's
+///        @c [envelope_offset, envelope_offset + envelope_count) must lie
+///        inside @p envelope_count.
+/// @param envelope_count Number of entries in @p envelopes.
+/// @param f0_hz The F0 track the notes were extracted from, or NULL. Required
+///        only by @c vibrato_depth_change and @c drift_change, which act on the
+///        note's own pitch curve; every other edit ignores it. The curve is not
+///        carried on @ref SonareNoteObject for the same reason it is not carried
+///        on a result -- it is this array sliced by @c [frame_start,
+///        frame_end), which the caller already holds.
+///
+///        Given one, every note is sliced and so every note's bounds are
+///        checked, whatever its edit does with the result: an out-of-range
+///        @c frame_end is rejected rather than read past the end of the track.
+/// @param n_frames Number of F0 frames, or 0 when @p f0_hz is NULL.
+/// @param frame_rate F0 frames per second; must be finite and > 0 when @p f0_hz
+///        is given.
 /// @param config Optional versioned configuration; NULL selects the defaults.
 /// @param out Receives the rendered audio, which has the input's length.
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.
 SonareError sonare_render_notes(const float* samples, size_t length, int sample_rate,
                                 const SonareNoteObject* notes, size_t note_count,
+                                const float* envelopes, size_t envelope_count, const float* f0_hz,
+                                size_t n_frames, float frame_rate,
                                 const SonareNoteRenderConfig* config, float** out,
                                 size_t* out_length);
+
+/// One note's pitch curve split into a centre, a slow drift and a vibrato.
+/// Release with @ref sonare_free_pitch_decomposition.
+typedef struct {
+  /// The note's steady pitch in Hz. 0 when the note carries no usable pitch,
+  /// and then both curves are empty.
+  float centre_hz;
+  /// Slow deviation from @c centre_hz in cents, @c count entries.
+  float* drift_cents;
+  /// Fast deviation in cents, over the same frames.
+  float* vibrato_cents;
+  size_t count;
+} SonarePitchDecompositionResult;
+
+/// @brief Split one note's pitch curve into a centre, a drift and a vibrato.
+/// @details @c drift_cents[i] + @c vibrato_cents[i] is the note's own pitch at
+///          frame i, in cents above @c centre_hz, to within float rounding, so
+///          the three parts reconstruct the curve. The drift filter is zero
+///          phase, so neither curve is shifted in time against the audio.
+///
+///          Frames whose F0 is unusable carry no measurement, so the curve is
+///          held at the nearest usable neighbour across them. Both curves
+///          therefore have an entry everywhere; a host marking the held ones
+///          reads them off @p f0_hz, which is exact.
+///
+///          The note's own F0 curve is not returned by
+///          @ref sonare_extract_notes, so pass the caller's own @c f0_hz sliced
+///          by the note's @c [frame_start, frame_end) together with its
+///          @c median_hz.
+/// @param f0_hz The note's slice of the F0 track, @p n_frames entries. Every
+///        value must be finite and non-negative; zero denotes an unvoiced
+///        frame.
+/// @param frame_rate F0 frames per second; must be finite and > 0.
+/// @param median_hz The note's @c median_hz; must be finite and non-negative.
+///        A note with no pitch is spelled 0, so a negative or non-finite value
+///        is a caller bug rather than a second way of saying that.
+/// @param vibrato_cutoff_hz Boundary between the two curves; must be finite and
+///        non-negative. 0 keeps the default 3 Hz. Hand the same value to
+///        @ref sonare_render_notes.
+/// @param out Receives a heap-owned result, cleared before validation. A note
+///        with no usable pitch is reported as a zero centre and NULL curves
+///        rather than as an error.
+SonareError sonare_decompose_note_pitch(const float* f0_hz, size_t n_frames, float frame_rate,
+                                        float median_hz, float vibrato_cutoff_hz,
+                                        SonarePitchDecompositionResult* out);
+void sonare_free_pitch_decomposition(SonarePitchDecompositionResult* result);
+
+/// @brief Split one note in two at a track frame.
+/// @details Both halves are re-derived from the audio and the track the way
+///          @ref sonare_extract_notes derives its own, rather than by patching
+///          the fields of the note they replace.
+///
+///          Both inherit the source note's edit, and its amplitude envelope is
+///          cut at the same proportion so each half keeps its own part of it,
+///          which means a note whose edit is the identity still renders bit for
+///          bit after being split. A one-entry envelope is a constant over the
+///          span, so both halves get that same entry.
+///          Every note in the set -- not just the two halves -- has its spans,
+///          curves, medians and stability re-derived from @p samples and the
+///          track, because @ref SonareNoteObject carries no curves for this
+///          call to copy through. The frame bounds are therefore what a note is
+///          identified by here, and the audio and track arguments must be the
+///          ones the set was extracted from or the whole set is re-measured
+///          against something else.
+/// @param notes The current note set. Each note's @c [frame_start, frame_end)
+///        must be non-empty and inside the track.
+/// @param envelopes The envelope array @p notes index into, or NULL.
+/// @param index Note to split.
+/// @param frame Track frame to cut at, strictly inside the note's own span.
+/// @param out Receives the whole new note set, cleared before validation, with
+///        its own @c envelopes array.
+SonareError sonare_split_note(const float* samples, size_t length, int sample_rate,
+                              const float* f0_hz, const float* voiced_prob, const int32_t* voiced,
+                              size_t n_frames, float frame_rate,
+                              const SonareNoteExtractorConfig* config,
+                              const SonareNoteObject* notes, size_t note_count,
+                              const float* envelopes, size_t envelope_count, size_t index,
+                              int32_t frame, SonareNoteObjectsResult* out);
+
+/// @brief Join a run of notes into one.
+/// @details The result spans from the first note's onset to the last note's
+///          offset, including whatever the segmenter cut out between them, and
+///          its measured fields are derived over that whole span -- the pitch
+///          and amplitude of an unvoiced gap live in the track and the audio,
+///          not in either neighbour.
+///
+///          It takes @p notes[first]'s edit, envelope included. Notes carrying
+///          different edits have no single correct answer here, so the rule is
+///          stated rather than guessed at; a host that cares sets the edit
+///          afterwards.
+///
+///          Every note in the set is re-derived from @p samples and the track,
+///          exactly as @ref sonare_split_note describes.
+/// @param notes The current note set. Each note's @c [frame_start, frame_end)
+///        must be non-empty and inside the track.
+/// @param first Index of the first note to join; must be < @p last.
+/// @param last Index of the last note to join, inclusive.
+/// @param out Receives the whole new note set, cleared before validation, with
+///        its own @c envelopes array.
+SonareError sonare_merge_notes(const float* samples, size_t length, int sample_rate,
+                               const float* f0_hz, const float* voiced_prob, const int32_t* voiced,
+                               size_t n_frames, float frame_rate,
+                               const SonareNoteExtractorConfig* config,
+                               const SonareNoteObject* notes, size_t note_count,
+                               const float* envelopes, size_t envelope_count, size_t first,
+                               size_t last, SonareNoteObjectsResult* out);
 
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,

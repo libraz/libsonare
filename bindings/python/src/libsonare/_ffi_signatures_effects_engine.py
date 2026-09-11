@@ -216,9 +216,64 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(SonareNoteObject),
             ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_float,
             ctypes.POINTER(SonareNoteRenderConfig),
             ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
             ctypes.POINTER(ctypes.c_size_t),
+        ]
+
+    # sonare_decompose_note_pitch + sonare_free_pitch_decomposition
+    if hasattr(lib, "sonare_decompose_note_pitch"):
+        lib.sonare_decompose_note_pitch.restype = ctypes.c_int32
+        lib.sonare_decompose_note_pitch.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.POINTER(SonarePitchDecompositionResult),
+        ]
+        lib.sonare_free_pitch_decomposition.restype = None
+        lib.sonare_free_pitch_decomposition.argtypes = [
+            ctypes.POINTER(SonarePitchDecompositionResult),
+        ]
+
+    # sonare_split_note + sonare_merge_notes. The two take the same arguments
+    # apart from the cut they describe, so only the tail differs.
+    _note_set_edit_argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.c_float,
+        ctypes.POINTER(SonareNoteExtractorConfig),
+        ctypes.POINTER(SonareNoteObject),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+    ]
+    if hasattr(lib, "sonare_split_note"):
+        lib.sonare_split_note.restype = ctypes.c_int32
+        lib.sonare_split_note.argtypes = [
+            *_note_set_edit_argtypes,
+            ctypes.c_size_t,
+            ctypes.c_int32,
+            ctypes.POINTER(SonareNoteObjectsResult),
+        ]
+    if hasattr(lib, "sonare_merge_notes"):
+        lib.sonare_merge_notes.restype = ctypes.c_int32
+        lib.sonare_merge_notes.argtypes = [
+            *_note_set_edit_argtypes,
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareNoteObjectsResult),
         ]
 
     # sonare_voice_change

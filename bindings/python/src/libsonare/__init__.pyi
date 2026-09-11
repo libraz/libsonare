@@ -33,6 +33,9 @@ from .analyzer import (
     NoteObject as NoteObject,
 )
 from .analyzer import (
+    PitchDecomposition as PitchDecomposition,
+)
+from .analyzer import (
     RealtimeVoiceChanger as RealtimeVoiceChanger,
 )
 from .analyzer import (
@@ -127,6 +130,9 @@ from .analyzer import (
 )
 from .analyzer import (
     decompose as decompose,
+)
+from .analyzer import (
+    decompose_note_pitch as decompose_note_pitch,
 )
 from .analyzer import (
     decompose_stems as decompose_stems,
@@ -341,6 +347,7 @@ from .analyzer import (
     mel_to_hz as mel_to_hz,
 )
 from .analyzer import mel_to_stft as mel_to_stft
+from .analyzer import merge_notes as merge_notes
 from .analyzer import metering_crest_factor_db as metering_crest_factor_db
 from .analyzer import metering_crest_factor_db_stereo as metering_crest_factor_db_stereo
 from .analyzer import metering_dc_offset as metering_dc_offset
@@ -542,6 +549,9 @@ from .analyzer import (
 )
 from .analyzer import (
     spectral_rolloff as spectral_rolloff,
+)
+from .analyzer import (
+    split_note as split_note,
 )
 from .analyzer import (
     split_silence as split_silence,

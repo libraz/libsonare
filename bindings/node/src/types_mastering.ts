@@ -186,21 +186,64 @@ export interface NoteEdit {
    * lands is not bounds-checked, so a moved note may overwrite a neighbour.
    */
   timeOffsetSamples: number;
+  /**
+   * Per-frame linear gain over the note's span, on top of `gainDb`. Empty for no
+   * envelope.
+   *
+   * A set of gain points rather than a signal: it is stretched over whatever
+   * length the note renders at, so it survives a time stretch and need not match
+   * the note's frame count. One entry is a constant gain. Every value must be
+   * finite and non-negative.
+   *
+   * The gain this edit applies, as against `NoteObject.amplitude`, which is the
+   * level the note was measured at. Both are `Float32Array`, which is what the
+   * core holds them as.
+   */
+  amplitudeEnvelope: Float32Array;
   /** Transpose applied to the note's span. */
   pitchShiftSemitones: number;
   /** Level change applied to the note's span. */
   gainDb: number;
   /** `>1` lengthens the note, `<1` shortens it; pitch is preserved. */
   timeStretchRatio: number;
+  /**
+   * Moves the spectral envelope, in semitones, on top of whatever the pitch
+   * shift already did to it.
+   *
+   * 0 runs no warp at all, so a pitch-only edit is not charged for an LPC
+   * analysis-resynthesis round it did not ask for. A pitch shift drags the
+   * formants with it, so holding them still is `-pitchShiftSemitones` and the
+   * chipmunk is the default. Saturates near -10.3 and +8.7 semitones rather than
+   * being rejected.
+   */
+  formantShiftSemitones: number;
+  /**
+   * Scales the vibrato measured over the note, stated as a change from it: 0
+   * keeps it, -1 flattens it, +1 doubles it.
+   *
+   * Applying it needs the note's pitch curve, so {@link renderNotes} requires
+   * `f0Hz` and the note's `frameStart` / `frameEnd` / `medianHz`; a note carrying
+   * none is rejected rather than left alone. The curve is split at the request's
+   * `vibratoCutoffHz`.
+   */
+  vibratoDepthChange: number;
+  /** The same, for the slow drift around the note's centre pitch. */
+  driftChange: number;
   /** Silences the note's span; the other fields then do not apply. */
   muted: boolean;
 }
 
 /**
- * A {@link NoteEdit} as supplied to {@link renderNotes}. Every field is optional
- * and an omitted one is the identity, so `{}` leaves the note untouched.
+ * A {@link NoteEdit} as supplied to {@link renderNotes}, {@link splitNote} and
+ * {@link mergeNotes}. Every field is optional and an omitted one is the
+ * identity, so `{}` leaves the note untouched.
+ *
+ * `amplitudeEnvelope` additionally accepts a plain number array, so a curve
+ * written out by hand needs no conversion; it comes back as a `Float32Array`.
  */
-export type NoteEditInput = Partial<NoteEdit>;
+export type NoteEditInput = Partial<Omit<NoteEdit, 'amplitudeEnvelope'>> & {
+  amplitudeEnvelope?: readonly number[] | Float32Array;
+};
 
 /**
  * One editable note returned by {@link extractNotes}.
@@ -240,17 +283,57 @@ export interface NoteObject {
 }
 
 /**
- * A note handed to {@link renderNotes}. Only the span and the edit are read, so
- * a {@link NoteObject} straight from {@link extractNotes} can be passed back
- * with its `edit` changed and nothing else.
+ * A note handed to {@link renderNotes}. The span, the edit, and — for a curve
+ * edit — the frame bounds and median pitch are read, so a {@link NoteObject}
+ * straight from {@link extractNotes} can be passed back with its `edit` changed
+ * and nothing else.
  */
 export interface NoteObjectInput {
   /** First sample of the note's span. */
   onsetSample: number;
   /** One past the last sample of the span. */
   offsetSample: number;
+  /**
+   * First frame of the span in the request's `f0Hz`. Read only by a
+   * `vibratoDepthChange` / `driftChange` edit, which slices the track with it.
+   */
+  frameStart?: number;
+  /** One past the last frame of the span; read under the same condition. */
+  frameEnd?: number;
+  /** The note's centre pitch, which a curve edit measures its cents against. */
+  medianHz?: number;
   /** Omit for the identity edit. */
   edit?: NoteEditInput;
+}
+
+/**
+ * A note handed to {@link splitNote} or {@link mergeNotes}. Both re-derive every
+ * note in the set from the audio and the track, so a note is identified by its
+ * frame bounds alone and only its edit travels through unchanged.
+ */
+export interface NoteSetEntry {
+  /** First frame of the span in the request's `f0Hz`. */
+  frameStart: number;
+  /** One past the last frame of the span; must be greater than `frameStart`. */
+  frameEnd: number;
+  /** Omit for the identity edit. */
+  edit?: NoteEditInput;
+}
+
+/**
+ * One note's pitch curve split into a centre, a slow drift and a vibrato, as
+ * returned by {@link decomposeNotePitch}.
+ *
+ * `driftCents[i] + vibratoCents[i]` is the note's own pitch at frame `i`, in
+ * cents above `centreHz`, so the three parts reconstruct the curve.
+ */
+export interface PitchDecompositionResult {
+  /** The note's steady pitch in Hz, or 0 when it carries no usable pitch. */
+  centreHz: number;
+  /** Slow deviation from `centreHz` in cents, one entry per frame. */
+  driftCents: Float32Array;
+  /** Fast deviation in cents, over the same frames. */
+  vibratoCents: Float32Array;
 }
 
 /** Options for {@link noteMove}. */

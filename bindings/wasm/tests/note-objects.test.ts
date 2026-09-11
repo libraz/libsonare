@@ -1,21 +1,28 @@
 /**
- * Note-object extraction and rendering on the WASM surface.
+ * Note-object extraction, rendering and reshaping on the WASM surface.
  *
  * The editing model rests on one property: a set of notes whose edits are all
  * identity renders back to the input bit for bit. Everything else here is an
  * edit applied to exactly one note's span, checked against the untouched
  * neighbour.
+ *
+ * The reshaping and curve fixtures are hand-built at 16 kHz with 10 ms frames
+ * rather than measured with `pitchPyin`, so every expected span, median and
+ * curve value is predictable.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  decomposeNotePitch,
   ErrorCode,
   extractNotes,
   init,
   isSonareError,
+  mergeNotes,
   type NoteObject,
   type NoteObjectInput,
   renderNotes,
+  splitNote,
 } from '../src/index';
 
 const sampleRate = 22050;
@@ -24,6 +31,12 @@ const frameCount = 43;
 const splitFrame = 22;
 const frameRate = sampleRate / hopLength;
 const totalSamples = frameCount * hopLength;
+
+/** The hand-built fixtures' rate: 400 Hz is 40 samples a period, a frame four of them. */
+const fixtureRate = 16000;
+const fixtureFrameRate = 100;
+const samplesPerFrame = 160;
+const fixtureFrames = 40;
 
 /** Two sustained tones a fifth apart, switching at `splitFrame`. */
 function twoNoteSignal(): Float32Array {
@@ -48,6 +61,148 @@ function voicedFlags(value: boolean): Int32Array {
   return new Int32Array(frameCount).fill(value ? 1 : 0);
 }
 
+function sine(hz: number, amplitude: number, n: number): Float32Array {
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    out[i] = amplitude * Math.sin((2 * Math.PI * hz * i) / fixtureRate);
+  }
+  return out;
+}
+
+/**
+ * A sine whose pitch swings `depthCents` either side of `centreHz` at `rateHz`,
+ * so a note taken from it carries a vibrato a curve edit can act on.
+ */
+function fmTone(
+  centreHz: number,
+  depthCents: number,
+  rateHz: number,
+  amplitude: number,
+  n: number,
+): Float32Array {
+  const out = new Float32Array(n);
+  let phase = 0;
+  for (let i = 0; i < n; i++) {
+    out[i] = amplitude * Math.sin(phase);
+    const cents = depthCents * Math.sin((2 * Math.PI * rateHz * i) / fixtureRate);
+    phase += (2 * Math.PI * centreHz * 2 ** (cents / 1200)) / fixtureRate;
+  }
+  return out;
+}
+
+/** The F0 track describing {@link fmTone} frame by frame. */
+function fmTrack(
+  centreHz: number,
+  depthCents: number,
+  rateHz: number,
+  frames: number,
+): Float32Array {
+  const out = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    const cents = depthCents * Math.sin((2 * Math.PI * rateHz * i) / fixtureFrameRate);
+    out[i] = centreHz * 2 ** (cents / 1200);
+  }
+  return out;
+}
+
+/**
+ * Harmonics of `f0Hz` under a fixed resonance. A bare sine carries no spectral
+ * envelope, so a formant warp needs a source that has one.
+ */
+function vowelTone(f0Hz: number, formantHz: number, amplitude: number, n: number): Float32Array {
+  const bandwidthHz = 500;
+  const out = new Float32Array(n);
+  for (let h = 1; h * f0Hz < fixtureRate / 2; h++) {
+    const harmonicHz = h * f0Hz;
+    const weight = 1 / (1 + ((harmonicHz - formantHz) / bandwidthHz) ** 2);
+    const partial = sine(harmonicHz, amplitude * weight, n);
+    for (let i = 0; i < n; i++) {
+      out[i] += partial[i];
+    }
+  }
+  return out;
+}
+
+/**
+ * A 400 Hz tone whose amplitude steps up once per frame, so each frame's RMS is
+ * distinct — which is what a per-note amplitude comparison needs to be able to
+ * fail. On a flat tone a curve belonging to a neighbour reads correct.
+ */
+function steppedTone(frames: number): Float32Array {
+  const out = new Float32Array(frames * samplesPerFrame);
+  for (let frame = 0; frame < frames; frame++) {
+    const amplitude = 0.1 + 0.02 * frame;
+    for (let k = 0; k < samplesPerFrame; k++) {
+      const i = frame * samplesPerFrame + k;
+      out[i] = amplitude * Math.sin((2 * Math.PI * 400 * i) / fixtureRate);
+    }
+  }
+  return out;
+}
+
+/** F0 values whose cents against `centreHz` are exactly the sum of `components`. */
+function injectedF0(
+  centreHz: number,
+  frames: number,
+  components: readonly { hz: number; cents: number }[],
+): Float32Array {
+  const out = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    let cents = 0;
+    for (const component of components) {
+      cents += component.cents * Math.sin((2 * Math.PI * component.hz * i) / fixtureFrameRate);
+    }
+    out[i] = centreHz * 2 ** (cents / 1200);
+  }
+  return out;
+}
+
+function centsAbove(hz: number, centreHz: number): number {
+  return 1200 * Math.log2(hz / centreHz);
+}
+
+function rms(data: Float32Array, lo: number, hi: number): number {
+  let sum = 0;
+  for (let i = lo; i < hi; i++) {
+    sum += data[i] * data[i];
+  }
+  return Math.sqrt(sum / (hi - lo));
+}
+
+function peak(data: Float32Array): number {
+  let highest = 0;
+  for (const value of data) {
+    highest = Math.max(highest, Math.abs(value));
+  }
+  return highest;
+}
+
+function maxDifference(a: Float32Array, b: Float32Array): number {
+  let worst = 0;
+  for (let i = 0; i < a.length; i++) {
+    worst = Math.max(worst, Math.abs(a[i] - b[i]));
+  }
+  return worst;
+}
+
+/**
+ * Asserts that an edit meant to change the sound did: the output moved away from
+ * `source`, and it is still a signal. The amplitude band is what a bare
+ * difference check misses — silence differs from the source by its own peak, so
+ * it passes one, and a blow-up passes it too.
+ */
+function expectEdited(out: Float32Array, source: Float32Array): void {
+  expect(maxDifference(source, out)).toBeGreaterThan(0.05);
+  const sourcePeak = peak(source);
+  expect(peak(out)).toBeGreaterThan(0.5 * sourcePeak);
+  expect(peak(out)).toBeLessThan(2 * sourcePeak);
+}
+
+/** Asserts `actual` is within `rel` of `expected`, relative to `expected`. */
+function expectWithinRel(actual: number, expected: number, rel: number): void {
+  expect(Math.abs(actual - expected)).toBeLessThanOrEqual(Math.abs(expected) * rel);
+}
+
 /** Asserts that @p action throws a SonareError carrying InvalidParameter. */
 function expectInvalidParameter(action: () => void): void {
   let caught: unknown;
@@ -60,6 +215,50 @@ function expectInvalidParameter(action: () => void): void {
   if (isSonareError(caught)) {
     expect(caught.code).toBe(ErrorCode.InvalidParameter);
   }
+}
+
+/** A renderable note carrying nothing but its span, its frames and its centre. */
+function handNote(
+  onsetSample: number,
+  offsetSample: number,
+  medianHz = 440,
+): NoteObjectInput & { medianHz: number } {
+  return {
+    onsetSample,
+    offsetSample,
+    frameStart: onsetSample / samplesPerFrame,
+    frameEnd: offsetSample / samplesPerFrame,
+    medianHz,
+  };
+}
+
+/** One voiced run over the whole reshaping fixture. */
+function plainSource() {
+  return {
+    samples: steppedTone(fixtureFrames),
+    f0Hz: new Float32Array(fixtureFrames).fill(400),
+    voiced: new Int32Array(fixtureFrames).fill(1),
+    sampleRate: fixtureRate,
+    frameRate: fixtureFrameRate,
+  };
+}
+
+/**
+ * Two unvoiced gaps, so the segmenter emits three notes of 10, 13 and 13 frames
+ * with two frames between each pair.
+ */
+function gappedSource() {
+  const source = plainSource();
+  for (const [lo, hi] of [
+    [10, 12],
+    [25, 27],
+  ]) {
+    for (let i = lo; i < hi; i++) {
+      source.f0Hz[i] = 0;
+      source.voiced[i] = 0;
+    }
+  }
+  return source;
 }
 
 let samples: Float32Array;
@@ -114,9 +313,9 @@ describe('extractNotes', () => {
     for (const note of notes) {
       expect(note.amplitude).toBeInstanceOf(Float32Array);
       expect(note.amplitude.length).toBe(note.frameEnd - note.frameStart);
-      for (const rms of note.amplitude) {
+      for (const value of note.amplitude) {
         // A half-amplitude sine measures 0.5 / sqrt(2) per frame.
-        expect(rms).toBeCloseTo(0.354, 1);
+        expect(value).toBeCloseTo(0.354, 1);
       }
     }
   });
@@ -128,7 +327,11 @@ describe('extractNotes', () => {
         pitchShiftSemitones: 0,
         gainDb: 0,
         timeStretchRatio: 1,
+        formantShiftSemitones: 0,
+        vibratoDepthChange: 0,
+        driftChange: 0,
         muted: false,
+        amplitudeEnvelope: new Float32Array(0),
       });
     }
   });
@@ -277,5 +480,637 @@ describe('renderNotes', () => {
       }),
     );
     expect(() => renderNotes({ samples, sampleRate: 7999, notes })).toThrow(RangeError);
+  });
+});
+
+describe('renderNotes amplitude envelope', () => {
+  // 400 Hz at 16 kHz is 40 samples a period, so each window below holds a whole
+  // number of them and the source's RMS is the same in all four.
+  const source = sine(400, 0.5, 6400);
+
+  it("applies each note's own envelope and leaves a note without one flat", () => {
+    const edited: NoteObjectInput[] = [
+      { ...handNote(0, 3200), edit: { amplitudeEnvelope: new Float32Array([0.25, 1]) } },
+      // -6.0206 dB is exactly half, flat across the whole span.
+      { ...handNote(3200, 6400), edit: { gainDb: -6.0206 } },
+    ];
+    const rendered = renderNotes({ samples: source, sampleRate: fixtureRate, notes: edited });
+    expect(rendered).toHaveLength(source.length);
+
+    // Inset past the 5 ms (80-sample) cross-fade at each span edge.
+    const headSource = rms(source, 160, 800);
+    const tailSource = rms(source, 2400, 3040);
+    expect(headSource).toBeGreaterThan(0);
+    expectWithinRel(tailSource, headSource, 1e-4);
+
+    // 0.25 -> 1.0 stretched over the note leaves the envelope at 0.3625 and
+    // 0.8875 at these two windows' centres; a window's RMS sits slightly above
+    // its centre value because the ramp is squared into it. A one-point read, or
+    // an envelope applied to the wrong note, would put the same number at both.
+    expectWithinRel(rms(rendered, 160, 800) / headSource, 0.36508, 0.02);
+    expectWithinRel(rms(rendered, 2400, 3040) / tailSource, 0.88856, 0.02);
+
+    // The second note is half throughout, not a ramp, so the first note's
+    // envelope did not leak into it.
+    expectWithinRel(rms(rendered, 3360, 4000) / rms(source, 3360, 4000), 0.5, 0.01);
+    expectWithinRel(rms(rendered, 5600, 6240) / rms(source, 5600, 6240), 0.5, 0.01);
+  });
+
+  it('reads a plain number array exactly as it reads a Float32Array', () => {
+    // The points are copied into WASM memory either way, so the two spellings
+    // are the same envelope rather than merely similar ones.
+    const rendered = (amplitudeEnvelope: Float32Array | readonly number[]): Float32Array =>
+      renderNotes({
+        samples: source,
+        sampleRate: fixtureRate,
+        notes: [{ ...handNote(1920, 6080), edit: { amplitudeEnvelope } }],
+      });
+    const fromTyped = rendered(new Float32Array([0.25, 1]));
+    expect(rendered([0.25, 1])).toEqual(fromTyped);
+    // Non-vacuity: the envelope was read at all, so the equality above is not
+    // two identical pass-throughs.
+    expect(fromTyped).not.toEqual(source);
+  });
+
+  it('treats a one-entry envelope as a constant gain', () => {
+    const edited: NoteObjectInput[] = [
+      { ...handNote(0, 6400), edit: { amplitudeEnvelope: new Float32Array([0.5]) } },
+    ];
+    const rendered = renderNotes({ samples: source, sampleRate: fixtureRate, notes: edited });
+    for (const [lo, hi] of [
+      [160, 800],
+      [3000, 3640],
+      [5600, 6240],
+    ]) {
+      expectWithinRel(rms(rendered, lo, hi) / rms(source, lo, hi), 0.5, 0.01);
+    }
+  });
+
+  it('rejects an envelope value that is not a usable linear gain', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
+      expectInvalidParameter(() =>
+        renderNotes({
+          samples: source,
+          sampleRate: fixtureRate,
+          notes: [
+            { ...handNote(1920, 6080), edit: { amplitudeEnvelope: new Float32Array([1, bad]) } },
+          ],
+        }),
+      );
+    }
+    // Positive control: the same note under a usable envelope renders.
+    expect(
+      renderNotes({
+        samples: source,
+        sampleRate: fixtureRate,
+        notes: [
+          { ...handNote(1920, 6080), edit: { amplitudeEnvelope: new Float32Array([1, 0.25]) } },
+        ],
+      }),
+    ).toHaveLength(source.length);
+  });
+});
+
+describe('renderNotes formant shift', () => {
+  const source = vowelTone(200, 1200, 0.1, 6400);
+
+  const renderedWith = (formantShiftSemitones: number, gainDb: number): Float32Array =>
+    renderNotes({
+      samples: source,
+      sampleRate: fixtureRate,
+      notes: [{ ...handNote(0, 6400, 200), edit: { formantShiftSemitones, gainDb } }],
+    });
+
+  it('runs no warp at all at 0, so the edit is still the identity', () => {
+    // An LPC analysis-resynthesis round at factor 1 would not come back bit for
+    // bit, so this is the warp being skipped rather than being harmless.
+    expect(renderedWith(0, 0)).toEqual(source);
+  });
+
+  it('warps the spectral envelope when the shift is set', () => {
+    expectEdited(renderedWith(2, 0), source);
+  });
+
+  it('is read on a note the renderer was resynthesizing anyway', () => {
+    // Without this the field could merely be deciding whether any work happens.
+    expectEdited(renderedWith(2, -3), renderedWith(0, -3));
+  });
+});
+
+describe('renderNotes pitch curve edits', () => {
+  const source = fmTone(220, 30, 5.5, 0.4, fixtureFrames * samplesPerFrame);
+  const track = fmTrack(220, 30, 5.5, fixtureFrames);
+
+  it('rejects a curve edit with no track and applies it with one', () => {
+    for (const edit of [{ vibratoDepthChange: -1 }, { driftChange: 1 }]) {
+      const note = { ...handNote(0, 6400, 220), edit };
+      // The curve the edit acts on is the caller's own track, and there is none.
+      expectInvalidParameter(() =>
+        renderNotes({ samples: source, sampleRate: fixtureRate, notes: [note] }),
+      );
+
+      // Its companion: the same edit with the track renders and moves the audio,
+      // which is what makes the rejection about the track rather than the field.
+      const rendered = renderNotes({
+        samples: source,
+        sampleRate: fixtureRate,
+        notes: [note],
+        f0Hz: track,
+        frameRate: fixtureFrameRate,
+      });
+      expect(rendered).toHaveLength(source.length);
+      expectEdited(rendered, source);
+    }
+  });
+
+  it('rejects a track that does not cover the notes it is given', () => {
+    const note = { ...handNote(0, 6400, 220), edit: { vibratoDepthChange: -1 } };
+    // A note whose frames run past the end of the track: the curve it would be
+    // edited on is not there to slice.
+    expectInvalidParameter(() =>
+      renderNotes({
+        samples: source,
+        sampleRate: fixtureRate,
+        notes: [{ ...note, frameEnd: fixtureFrames + 5 }],
+        f0Hz: track,
+        frameRate: fixtureFrameRate,
+      }),
+    );
+    for (const badRate of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expectInvalidParameter(() =>
+        renderNotes({
+          samples: source,
+          sampleRate: fixtureRate,
+          notes: [note],
+          f0Hz: track,
+          frameRate: badRate,
+        }),
+      );
+    }
+    // Positive control: a note ending exactly at the track's last frame is
+    // inside it, so none of the above passes by rejecting every curve edit.
+    expect(note.frameEnd).toBe(fixtureFrames);
+    expect(
+      renderNotes({
+        samples: source,
+        sampleRate: fixtureRate,
+        notes: [note],
+        f0Hz: track,
+        frameRate: fixtureFrameRate,
+      }),
+    ).toHaveLength(source.length);
+  });
+
+  it('cuts the curve where vibratoCutoffHz says, defaulting at 0', () => {
+    const renderedAt = (vibratoCutoffHz?: number): Float32Array =>
+      renderNotes({
+        samples: source,
+        sampleRate: fixtureRate,
+        notes: [{ ...handNote(0, 6400, 220), edit: { vibratoDepthChange: -1 } }],
+        f0Hz: track,
+        frameRate: fixtureFrameRate,
+        vibratoCutoffHz,
+      });
+
+    // 0 and absent both keep the default 3 Hz.
+    const fromDefault = renderedAt();
+    expect(renderedAt(0)).toEqual(fromDefault);
+    expect(renderedAt(3)).toEqual(fromDefault);
+
+    // 5.5 Hz sits above a 3 Hz cut and below an 8 Hz one, so flattening the
+    // vibrato takes most of the swing at 3 and little of it at 8. A cutoff that
+    // was never read would render these two the same.
+    const fromWide = renderedAt(8);
+    expectEdited(fromWide, fromDefault);
+
+    // And in the direction the filter dictates: at a 3 Hz cut the 5.5 Hz swing
+    // is vibrato and flattening takes it, at 8 Hz it is mostly drift and
+    // survives, so the 3 Hz render is the one that moved further from the
+    // source. Wired backwards this inverts rather than merely shrinking.
+    expect(maxDifference(source, fromDefault)).toBeGreaterThan(
+      1.5 * maxDifference(source, fromWide),
+    );
+  });
+
+  it('rejects a cutoff that cannot be one', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
+      expectInvalidParameter(() =>
+        renderNotes({
+          samples: source,
+          sampleRate: fixtureRate,
+          notes: [{ ...handNote(0, 6400, 220), edit: { vibratoDepthChange: -1 } }],
+          f0Hz: track,
+          frameRate: fixtureFrameRate,
+          vibratoCutoffHz: bad,
+        }),
+      );
+    }
+  });
+
+  it('is still the identity once the edit carries the envelope and curve fields', () => {
+    const extracted = extractNotes({
+      samples: source,
+      sampleRate: fixtureRate,
+      f0Hz: track,
+      voiced: new Int32Array(fixtureFrames).fill(1),
+      frameRate: fixtureFrameRate,
+    });
+    expect(extracted.length).toBeGreaterThan(0);
+
+    // The track is handed in, so the identity has to survive the path that reads
+    // it rather than only the one that never looks.
+    const withTrack = {
+      samples: source,
+      sampleRate: fixtureRate,
+      f0Hz: track,
+      frameRate: fixtureFrameRate,
+    };
+    expect(renderNotes({ ...withTrack, notes: extracted })).toEqual(source);
+
+    // Non-vacuity, one new field at a time: each moves the output off the
+    // source, so the equality above is the identity rather than an edit nobody
+    // read.
+    for (const edit of [
+      { formantShiftSemitones: 2 },
+      { vibratoDepthChange: -1 },
+      { driftChange: 1 },
+      { amplitudeEnvelope: new Float32Array([0.25, 1]) },
+    ]) {
+      const moved = extracted.map((note, index) => (index === 0 ? { ...note, edit } : note));
+      expectEdited(renderNotes({ ...withTrack, notes: moved }), source);
+    }
+  });
+});
+
+describe('decomposeNotePitch', () => {
+  const centreHz = 196;
+  const curveFrames = 400;
+  const components = [
+    { hz: 0.5, cents: 60 },
+    { hz: 5.5, cents: 40 },
+  ];
+  const curve = injectedF0(centreHz, curveFrames, components);
+
+  it('splits a curve into two parts that add back up to it', () => {
+    const split = decomposeNotePitch({
+      f0Hz: curve,
+      frameRate: fixtureFrameRate,
+      medianHz: centreHz,
+      vibratoCutoffHz: 3,
+    });
+    expect(split.centreHz).toBe(centreHz);
+    expect(split.driftCents).toHaveLength(curveFrames);
+    expect(split.vibratoCents).toHaveLength(curveFrames);
+
+    let worst = 0;
+    let driftPeak = 0;
+    let vibratoPeak = 0;
+    for (let i = 0; i < curveFrames; i++) {
+      const cents = centsAbove(curve[i], centreHz);
+      worst = Math.max(worst, Math.abs(split.driftCents[i] + split.vibratoCents[i] - cents));
+      driftPeak = Math.max(driftPeak, Math.abs(split.driftCents[i]));
+      vibratoPeak = Math.max(vibratoPeak, Math.abs(split.vibratoCents[i]));
+    }
+    expect(worst).toBeLessThan(1e-3);
+
+    // Two zero curves satisfy the sum as well, so both have to carry something.
+    // 0.5 Hz and 5.5 Hz sit either side of the 3 Hz cut, so each does.
+    expect(driftPeak).toBeGreaterThan(10);
+    expect(vibratoPeak).toBeGreaterThan(10);
+  });
+
+  it('takes the cutoff default at 0 and at absent', () => {
+    const at = (vibratoCutoffHz?: number) =>
+      decomposeNotePitch({
+        f0Hz: curve,
+        frameRate: fixtureFrameRate,
+        medianHz: centreHz,
+        vibratoCutoffHz,
+      });
+    const explicitDefault = at(3);
+    expect(at()).toEqual(explicitDefault);
+    expect(at(0)).toEqual(explicitDefault);
+    // Non-vacuity: the cutoff does decide the split, so the equality above is
+    // the default being applied rather than an argument nobody reads.
+    expect(at(8)).not.toEqual(explicitDefault);
+  });
+
+  it('reports a note with no usable pitch as an empty result', () => {
+    // A measurement that came up empty is not a bad argument, so it is reported
+    // rather than rejected.
+    const expectEmpty = (f0: Float32Array, medianHz: number): void => {
+      const split = decomposeNotePitch({ f0Hz: f0, frameRate: fixtureFrameRate, medianHz });
+      expect(split.centreHz).toBe(0);
+      expect(split.driftCents).toHaveLength(0);
+      expect(split.vibratoCents).toHaveLength(0);
+    };
+    // Not one usable frame to hold anything from.
+    expectEmpty(new Float32Array(curveFrames), centreHz);
+    // A curve, but no centre to measure it against.
+    expectEmpty(curve, 0);
+
+    // The same curve with a centre is not an empty measurement, so neither of
+    // the two above passes by emptying every call.
+    const usable = decomposeNotePitch({
+      f0Hz: curve,
+      frameRate: fixtureFrameRate,
+      medianHz: centreHz,
+    });
+    expect(usable.centreHz).toBe(centreHz);
+    expect(usable.driftCents).toHaveLength(curveFrames);
+  });
+
+  it('rejects malformed arguments', () => {
+    const base = { f0Hz: curve, frameRate: fixtureFrameRate, medianHz: centreHz };
+    expectInvalidParameter(() => decomposeNotePitch({ ...base, f0Hz: new Float32Array(0) }));
+    for (const badF0 of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
+      const poisoned = Float32Array.from(curve);
+      poisoned[7] = badF0;
+      expectInvalidParameter(() => decomposeNotePitch({ ...base, f0Hz: poisoned }));
+    }
+    for (const badRate of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expectInvalidParameter(() => decomposeNotePitch({ ...base, frameRate: badRate }));
+    }
+    // 0 is the no-pitch spelling and 0 is the default cutoff, so only a value
+    // that cannot be either at all is rejected.
+    for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expectInvalidParameter(() => decomposeNotePitch({ ...base, medianHz: bad }));
+      expectInvalidParameter(() => decomposeNotePitch({ ...base, vibratoCutoffHz: bad }));
+    }
+    // Positive control: the same call with nothing poisoned succeeds.
+    expect(decomposeNotePitch(base).driftCents).toHaveLength(curveFrames);
+  });
+});
+
+describe('splitNote', () => {
+  it('keeps every note pointing at its own frames', () => {
+    const source = gappedSource();
+    const before = extractNotes(source);
+    expect(before).toHaveLength(3);
+    expect(before.map((note) => [note.frameStart, note.frameEnd])).toEqual([
+      [0, 10],
+      [12, 25],
+      [27, 40],
+    ]);
+    // No two amplitude values agree, so comparing a curve against the wrong one
+    // cannot pass.
+    const everyValue = before.flatMap((note) => [...note.amplitude]).sort((a, b) => a - b);
+    for (let i = 1; i < everyValue.length; i++) {
+      expect(everyValue[i] - everyValue[i - 1]).toBeGreaterThan(1e-4);
+    }
+
+    const split = splitNote({ ...source, notes: before, index: 1, frame: 18 });
+    expect(split).toHaveLength(4);
+
+    // The cut lands where it was asked for and the spans stay contiguous.
+    expect(split[1].frameStart).toBe(12);
+    expect(split[1].frameEnd).toBe(18);
+    expect(split[2].frameStart).toBe(18);
+    expect(split[2].frameEnd).toBe(25);
+    expect(split[1].offsetSample).toBe(split[2].onsetSample);
+    expect(split[1].onsetSample).toBe(before[1].onsetSample);
+    expect(split[2].offsetSample).toBe(before[1].offsetSample);
+
+    // Every note, the untouched ones included, holds its own values — a wrapper
+    // that cannot supply a pass-through note's curve produces spans that look
+    // right over a neighbour's data, which only the values catch.
+    expect(split[0].amplitude).toEqual(before[0].amplitude);
+    expect(split[3].amplitude).toEqual(before[2].amplitude);
+    expect(Float32Array.from([...split[1].amplitude, ...split[2].amplitude])).toEqual(
+      before[1].amplitude,
+    );
+
+    // The untouched notes are re-derived rather than copied, and come back equal.
+    for (const [after, original] of [
+      [split[0], before[0]],
+      [split[3], before[2]],
+    ] as const) {
+      expect(after.onsetSample).toBe(original.onsetSample);
+      expect(after.offsetSample).toBe(original.offsetSample);
+      expect(after.medianHz).toBe(original.medianHz);
+      expect(after.medianCents).toBe(original.medianCents);
+      expect(after.f0Stability).toBe(original.f0Stability);
+    }
+
+    // No note carried an envelope in, so none comes back with one.
+    for (const note of split) {
+      expect(note.edit.amplitudeEnvelope).toHaveLength(0);
+    }
+  });
+
+  it('normalizes a timeStretchRatio of 0 to 1', () => {
+    const source = plainSource();
+    const before = extractNotes(source);
+    expect(before).toHaveLength(1);
+
+    // The identity ratio is spelled 0 on the way in, and the split re-derives
+    // its notes, so what comes back is the 1.0 spelling of the same edit.
+    const zeroed = [{ ...before[0], edit: { timeStretchRatio: 0 } }];
+    const split = splitNote({ ...source, notes: zeroed, index: 0, frame: 20 });
+    expect(split).toHaveLength(2);
+    for (const half of split) {
+      expect(half.edit.timeStretchRatio).toBe(1);
+      expect(half.edit.gainDb).toBe(0);
+      expect(half.edit.muted).toBe(false);
+      expect(half.edit.amplitudeEnvelope).toHaveLength(0);
+    }
+  });
+
+  it("cuts the source note's envelope at the same proportion as the span", () => {
+    const source = plainSource();
+    const before = extractNotes(source);
+    expect(before[0].frameStart).toBe(0);
+    expect(before[0].frameEnd).toBe(40);
+
+    const withEnvelope = [
+      { ...before[0], edit: { amplitudeEnvelope: new Float32Array([0.25, 1]) } },
+    ];
+    const split = splitNote({ ...source, notes: withEnvelope, index: 0, frame: 20 });
+    expect(split).toHaveLength(2);
+    const first = split[0].edit.amplitudeEnvelope;
+    const second = split[1].edit.amplitudeEnvelope;
+    expect(first.length).toBeGreaterThan(0);
+    expect(second.length).toBeGreaterThan(0);
+
+    // The cut is at the note's midpoint, so a 0.25 -> 1.0 ramp parts at 0.625.
+    expect(first[0]).toBeCloseTo(0.25, 4);
+    expect(first[first.length - 1]).toBeCloseTo(0.625, 1);
+    expect(second[0]).toBeCloseTo(first[first.length - 1], 4);
+    expect(second[second.length - 1]).toBeCloseTo(1, 4);
+    // Nothing outside the source note's own two points reached either half.
+    for (const value of [...first, ...second]) {
+      expect(value).toBeGreaterThanOrEqual(0.25 - 1e-5);
+      expect(value).toBeLessThanOrEqual(1 + 1e-5);
+    }
+  });
+
+  it('gives both halves a one-entry envelope unchanged, because it is a constant', () => {
+    const source = plainSource();
+    const before = extractNotes(source);
+    const withEnvelope = [{ ...before[0], edit: { amplitudeEnvelope: new Float32Array([0.5]) } }];
+    const split = splitNote({ ...source, notes: withEnvelope, index: 0, frame: 20 });
+    for (const half of split) {
+      expect(half.edit.amplitudeEnvelope).toEqual(new Float32Array([0.5]));
+    }
+  });
+
+  it('rejects an out-of-range index and a frame outside the note', () => {
+    const source = gappedSource();
+    const before = extractNotes(source);
+    expect(before).toHaveLength(3);
+
+    for (const index of [before.length, before.length + 4]) {
+      expectInvalidParameter(() => splitNote({ ...source, notes: before, index, frame: 18 }));
+    }
+    expectInvalidParameter(() => splitNote({ ...source, notes: [], index: 0, frame: 18 }));
+
+    // Strictly inside the note's own span, so neither of its boundaries is a
+    // legal cut and neither is a frame belonging to another note.
+    for (const frame of [12, 25, 5, 30, -1, 100]) {
+      expectInvalidParameter(() => splitNote({ ...source, notes: before, index: 1, frame }));
+    }
+
+    // A note the set cannot describe: an empty span, and one running past the
+    // track the whole set is re-derived against.
+    const emptySpan = before.map((note, index) =>
+      index === 1 ? { ...note, frameEnd: note.frameStart } : note,
+    );
+    expectInvalidParameter(() => splitNote({ ...source, notes: emptySpan, index: 0, frame: 5 }));
+    const beyond = before.map((note, index) =>
+      index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
+    );
+    expectInvalidParameter(() => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }));
+
+    // The track arguments extraction itself rejects.
+    expectInvalidParameter(() =>
+      splitNote({ ...source, voiced: undefined, notes: before, index: 1, frame: 18 }),
+    );
+    expectInvalidParameter(() =>
+      splitNote({ ...source, frameRate: 0, notes: before, index: 1, frame: 18 }),
+    );
+    expectInvalidParameter(() =>
+      splitNote({
+        ...source,
+        notes: before.map((note) => ({
+          ...note,
+          edit: { amplitudeEnvelope: new Float32Array([1, -1]) },
+        })),
+        index: 1,
+        frame: 18,
+      }),
+    );
+
+    // Positive controls: one frame in from either end of the note is legal, and
+    // both halves keep a span.
+    for (const frame of [13, 24]) {
+      const split = splitNote({ ...source, notes: before, index: 1, frame });
+      expect(split).toHaveLength(4);
+      expect(split[1].frameEnd).toBe(frame);
+      expect(split[2].frameStart).toBe(frame);
+    }
+  });
+});
+
+describe('mergeNotes', () => {
+  it('spans the gap it joins over and keeps every note aligned', () => {
+    const source = gappedSource();
+    const before = extractNotes(source);
+    expect(before).toHaveLength(3);
+
+    const merged = mergeNotes({ ...source, notes: before, first: 0, last: 1 });
+    // last - first notes go away, so the count drops by exactly one here.
+    expect(merged).toHaveLength(2);
+    expect(merged[0].frameStart).toBe(0);
+    expect(merged[0].frameEnd).toBe(25);
+    expect(merged[0].onsetSample).toBe(before[0].onsetSample);
+    expect(merged[0].offsetSample).toBe(before[1].offsetSample);
+    expect(merged[1].amplitude).toEqual(before[2].amplitude);
+
+    // The merged note's curve covers the gap the segmenter cut at, so it holds
+    // the two frames neither neighbour carried.
+    const joined = merged[0].amplitude;
+    expect(joined).toHaveLength(25);
+    expect(Float32Array.from(joined.subarray(0, 10))).toEqual(before[0].amplitude);
+    expect(Float32Array.from(joined.subarray(12))).toEqual(before[1].amplitude);
+    // The gap's own amplitude lives in the audio, not in either neighbour.
+    expect(joined[10]).toBeGreaterThan(0);
+    expect(joined[11]).toBeGreaterThan(0);
+  });
+
+  it("takes the first note's edit", () => {
+    const source = gappedSource();
+    const before = extractNotes(source);
+    const edits = [{ gainDb: -3, pitchShiftSemitones: 2 }, { gainDb: 9, muted: true }, undefined];
+    const edited = before.map((note, index) =>
+      edits[index] ? { ...note, edit: edits[index] } : note,
+    );
+
+    const merged = mergeNotes({ ...source, notes: edited, first: 0, last: 1 });
+    expect(merged).toHaveLength(2);
+    expect(merged[0].edit.gainDb).toBe(-3);
+    expect(merged[0].edit.pitchShiftSemitones).toBe(2);
+    // The second note's edit does not survive: the rule is the first note's
+    // edit, not a merge of the two.
+    expect(merged[0].edit.muted).toBe(false);
+  });
+
+  it('undoes a split, returning the spans and the curves it started from', () => {
+    const source = gappedSource();
+    const before = extractNotes(source);
+    const split = splitNote({ ...source, notes: before, index: 1, frame: 18 });
+    expect(split).toHaveLength(4);
+
+    const rejoined = mergeNotes({ ...source, notes: split, first: 1, last: 2 });
+    expect(rejoined).toHaveLength(before.length);
+    for (let i = 0; i < rejoined.length; i++) {
+      expect(rejoined[i].onsetSample).toBe(before[i].onsetSample);
+      expect(rejoined[i].offsetSample).toBe(before[i].offsetSample);
+      expect(rejoined[i].frameStart).toBe(before[i].frameStart);
+      expect(rejoined[i].frameEnd).toBe(before[i].frameEnd);
+      expect(rejoined[i].medianHz).toBe(before[i].medianHz);
+      expect(rejoined[i].amplitude).toEqual(before[i].amplitude);
+    }
+  });
+
+  it('rejects a first/last pair that is not an ascending in-range run', () => {
+    const source = gappedSource();
+    const before = extractNotes(source);
+    expect(before).toHaveLength(3);
+
+    // A run of one is not a merge, and a run cannot run backwards.
+    for (const [first, last] of [
+      [1, 1],
+      [2, 1],
+      [0, before.length],
+      [before.length, before.length + 1],
+    ]) {
+      expectInvalidParameter(() => mergeNotes({ ...source, notes: before, first, last }));
+    }
+    expectInvalidParameter(() => mergeNotes({ ...source, notes: [], first: 0, last: 1 }));
+
+    // A note the set cannot describe, the same two ways a split rejects.
+    const emptySpan = before.map((note, index) =>
+      index === 2 ? { ...note, frameEnd: note.frameStart } : note,
+    );
+    expectInvalidParameter(() => mergeNotes({ ...source, notes: emptySpan, first: 0, last: 1 }));
+    const beyond = before.map((note, index) =>
+      index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
+    );
+    expectInvalidParameter(() => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }));
+
+    // The track arguments extraction itself rejects.
+    expectInvalidParameter(() =>
+      mergeNotes({ ...source, voiced: undefined, notes: before, first: 0, last: 1 }),
+    );
+    expectInvalidParameter(() =>
+      mergeNotes({ ...source, frameRate: 0, notes: before, first: 0, last: 1 }),
+    );
+
+    // Positive control: merging the whole run collapses the list to one note
+    // over the whole span, so none of the above passes by rejecting every merge.
+    const all = mergeNotes({ ...source, notes: before, first: 0, last: 2 });
+    expect(all).toHaveLength(1);
+    expect(all[0].frameStart).toBe(before[0].frameStart);
+    expect(all[0].frameEnd).toBe(before[2].frameEnd);
   });
 });

@@ -106,6 +106,13 @@ _SCALAR_ARGS: dict[str, Any] = {
     "k": 1,
     "n_components": 1,
     "frame_rate": 100.0,
+    "median_hz": 220.0,
+    # The note a split cuts and the run a merge joins. Both are rejected for
+    # other reasons on this probe, which is fine: the guard fires first.
+    "index": 0,
+    "frame": 0,
+    "first": 0,
+    "last": 1,
     "win": 3,
     "pre_max": 1,
     "post_max": 1,

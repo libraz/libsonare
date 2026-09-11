@@ -191,6 +191,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("noteMove", Napi::Function::New(env, &SonareWrap::NoteMove, "noteMove"));
   exports.Set("extractNotes", Napi::Function::New(env, &SonareWrap::ExtractNotes, "extractNotes"));
   exports.Set("renderNotes", Napi::Function::New(env, &SonareWrap::RenderNotes, "renderNotes"));
+  exports.Set("decomposeNotePitch",
+              Napi::Function::New(env, &SonareWrap::DecomposeNotePitch, "decomposeNotePitch"));
+  exports.Set("splitNote", Napi::Function::New(env, &SonareWrap::SplitNote, "splitNote"));
+  exports.Set("mergeNotes", Napi::Function::New(env, &SonareWrap::MergeNotes, "mergeNotes"));
   exports.Set("voiceChange", Napi::Function::New(env, &SonareWrap::VoiceChange, "voiceChange"));
   exports.Set("voiceChangeRealtime",
               Napi::Function::New(env, &SonareWrap::VoiceChangeRealtime, "voiceChangeRealtime"));

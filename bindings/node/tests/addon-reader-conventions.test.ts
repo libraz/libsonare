@@ -39,6 +39,7 @@ import {
   masteringRepairDereverbClassical,
   masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
+  mergeNotes,
   mixStereo,
   noteSegments,
   Project,
@@ -50,6 +51,7 @@ import {
   SampleBank,
   StreamingEqualizer,
   spectralEdit,
+  splitNote,
   synthesizeRir,
 } from '../src/index.js';
 import {
@@ -238,6 +240,42 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           notes: [{ ...o, onsetSample: 512, offsetSample: 2048, edit: { ...o, gainDb: -6 } }],
         }),
       ),
+  },
+  {
+    jsName: 'splitNote',
+    invoke: (o) => {
+      const frames = 40;
+      const track = {
+        samples: sine(frames * 512, 441),
+        sampleRate: SR,
+        f0Hz: new Float32Array(frames).fill(441),
+        voicedProb: new Float32Array(frames).fill(0.9),
+        frameRate: SR / 512,
+      };
+      return splitNote({ ...o, ...track, notes: extractNotes(track), index: 0, frame: 20 });
+    },
+  },
+  {
+    jsName: 'mergeNotes',
+    invoke: (o) => {
+      // Two unvoiced frames, so the track segments into the two notes a merge
+      // needs; one note is a run of one, which the C ABI rejects.
+      const frames = 40;
+      const f0Hz = new Float32Array(frames).fill(441);
+      const voicedProb = new Float32Array(frames).fill(0.9);
+      for (let frame = 10; frame < 12; frame += 1) {
+        f0Hz[frame] = 0;
+        voicedProb[frame] = 0;
+      }
+      const track = {
+        samples: sine(frames * 512, 441),
+        sampleRate: SR,
+        f0Hz,
+        voicedProb,
+        frameRate: SR / 512,
+      };
+      return mergeNotes({ ...o, ...track, notes: extractNotes(track), first: 0, last: 1 });
+    },
   },
   {
     jsName: 'midiRouteEvents',

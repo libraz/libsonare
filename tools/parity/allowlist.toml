@@ -453,6 +453,14 @@ python = [
 # options-fold + array-length derivation already accepted for
 # pitch_correct_timevarying, whose C signature this one mirrors. Remapped to C
 # order in the ctypes wrapper. Not order drift.
+# render_notes / decompose_note_pitch / split_note / merge_notes (python): the
+# same two folds as extract_notes, on the four entry points that carry a note
+# set. Each DERIVES `n_frames` from the f0_hz array length and folds the
+# SonareNoteExtractorConfig fields and the voiced / voiced_prob companions into
+# keyword args. The three that take a note set also drop `envelopes`: the C
+# signature passes one pooled array because SonareNoteEdit indexes it by offset,
+# while the facade hands each note its own envelope, so there is no pool for the
+# argument to name. Same fold recorded for note_edit under [record].
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -513,6 +521,10 @@ python = [
   "midi_route_events",
   "spectral_edit",
   "extract_notes",
+  "render_notes",
+  "decompose_note_pitch",
+  "split_note",
+  "merge_notes",
   "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
   "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
@@ -718,6 +730,20 @@ fields = [
   # keeps the C shape, so Python is not affected.
   "note_object.amplitude_offset",
   "note_object.amplitude",
+
+  # --- category 1: the same fold, on the edit a caller writes ---
+  # An amplitude envelope travels the same way: `SonareNoteEdit` names a slice of
+  # a pool shared by the note set, so it carries `envelope_offset` and
+  # `envelope_count`. The pool exists because the C field has to mean the same
+  # thing in both directions — a caller owns the array it passes to
+  # sonare_render_notes, the library owns the one sonare_split_note returns, and
+  # a bare pointer would give one field two ownership rules. Neither JS facade
+  # has that problem, so both hand each edit its own `amplitudeEnvelope` and the
+  # offset has nothing left to index. The ctypes mirror keeps the C shape, so
+  # Python is not affected.
+  "note_edit.envelope_offset",
+  "note_edit.envelope_count",
+  "note_edit.amplitude_envelope",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model

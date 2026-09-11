@@ -109,6 +109,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value NoteMove(const Napi::CallbackInfo& info);
   static Napi::Value ExtractNotes(const Napi::CallbackInfo& info);
   static Napi::Value RenderNotes(const Napi::CallbackInfo& info);
+  static Napi::Value DecomposeNotePitch(const Napi::CallbackInfo& info);
+  static Napi::Value SplitNote(const Napi::CallbackInfo& info);
+  static Napi::Value MergeNotes(const Napi::CallbackInfo& info);
   static Napi::Value VoiceChange(const Napi::CallbackInfo& info);
   static Napi::Value VoiceChangeRealtime(const Napi::CallbackInfo& info);
   static Napi::Value VoiceCharacterPresetId(const Napi::CallbackInfo& info);

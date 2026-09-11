@@ -228,6 +228,7 @@ class SonareNoteRenderConfig(ctypes.Structure):
     _fields_ = [
         ("struct_version", ctypes.c_int32),
         ("fade_ms", ctypes.c_float),
+        ("vibrato_cutoff_hz", ctypes.c_float),
     ]
 
 
@@ -236,9 +237,14 @@ class SonareNoteEdit(ctypes.Structure):
 
     _fields_ = [
         ("time_offset_samples", ctypes.c_int64),
+        ("envelope_offset", ctypes.c_int64),
+        ("envelope_count", ctypes.c_size_t),
         ("pitch_shift_semitones", ctypes.c_float),
         ("gain_db", ctypes.c_float),
         ("time_stretch_ratio", ctypes.c_float),
+        ("formant_shift_semitones", ctypes.c_float),
+        ("vibrato_depth_change", ctypes.c_float),
+        ("drift_change", ctypes.c_float),
         ("muted", ctypes.c_int32),
     ]
 
@@ -267,4 +273,17 @@ class SonareNoteObjectsResult(ctypes.Structure):
         ("count", ctypes.c_size_t),
         ("amplitude", ctypes.POINTER(ctypes.c_float)),
         ("amplitude_count", ctypes.c_size_t),
+        ("envelopes", ctypes.POINTER(ctypes.c_float)),
+        ("envelope_count", ctypes.c_size_t),
+    ]
+
+
+class SonarePitchDecompositionResult(ctypes.Structure):
+    """Maps to SonarePitchDecompositionResult in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("centre_hz", ctypes.c_float),
+        ("drift_cents", ctypes.POINTER(ctypes.c_float)),
+        ("vibrato_cents", ctypes.POINTER(ctypes.c_float)),
+        ("count", ctypes.c_size_t),
     ]

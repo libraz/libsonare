@@ -452,72 +452,148 @@ Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
+namespace {
 
-  // (samples, sampleRate, f0Hz, frameRate, options?)
-  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, f0Hz Float32Array, frameRate)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+/// Releases a note-object result however the marshalling below leaves scope.
+struct OwnedNoteObjects {
+  SonareNoteObjectsResult value{};
+  ~OwnedNoteObjects() { sonare_free_note_objects(&value); }
+};
 
-  SONARE_NODE_TRY
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
-  auto f0 = info[2].As<Napi::Float32Array>();
-  const size_t n_frames = f0.ElementLength();
-  const float frame_rate = info[3].As<Napi::Number>().FloatValue();
+/// Releases a pitch decomposition however the marshalling below leaves scope.
+struct OwnedPitchDecomposition {
+  SonarePitchDecompositionResult value{};
+  ~OwnedPitchDecomposition() { sonare_free_pitch_decomposition(&value); }
+};
 
+/// The options bag extraction, split and merge share: the segmentation knobs
+/// plus the voicing arrays the track is thresholded with.
+struct NoteTrackOptions {
   SonareNoteExtractorConfig config{};
-  config.struct_version = 1;
   std::vector<int32_t> voiced;
   std::vector<float> voiced_prob;
   const int32_t* voiced_ptr = nullptr;
   const float* prob_ptr = nullptr;
-  if (info.Length() > 4 && info[4].IsObject()) {
-    Napi::Object opts = info[4].As<Napi::Object>();
-    // Effects options bag: the type-checked reader family, so an explicit
-    // `undefined` (or any non-number) reads as the documented default.
-    config.segmentation_threshold_cents =
-        node_float_option(opts, "segmentationThresholdCents", 0.0f);
-    config.min_note_ms = node_float_option(opts, "minNoteMs", 0.0f);
-    config.reference_hz = node_float_option(opts, "referenceHz", 0.0f);
-    config.voiced_threshold = node_float_option(opts, "voicedThreshold", 0.0f);
-    const Napi::Value voiced_value = opts.Get("voiced");
-    if (IsInt32Array(voiced_value)) {
-      auto arr = voiced_value.As<Napi::Int32Array>();
-      if (arr.ElementLength() != n_frames) {
-        Napi::RangeError::New(env, "voiced must match f0Hz length").ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      voiced.assign(arr.Data(), arr.Data() + arr.ElementLength());
-      voiced_ptr = voiced.data();
-    }
-    const Napi::Value prob_value = opts.Get("voicedProb");
-    if (IsFloat32Array(prob_value)) {
-      auto arr = prob_value.As<Napi::Float32Array>();
-      if (arr.ElementLength() != n_frames) {
-        Napi::RangeError::New(env, "voicedProb must match f0Hz length")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      voiced_prob.assign(arr.Data(), arr.Data() + arr.ElementLength());
-      prob_ptr = voiced_prob.data();
-    }
-  }
+};
 
-  SonareNoteObjectsResult result{};
-  const SonareError err = sonare_extract_notes(data, length, sr, f0.Data(), prob_ptr, voiced_ptr,
-                                               n_frames, frame_rate, &config, &result);
-  if (err != SONARE_OK) {
-    ThrowIfError(env, err);
-    return env.Undefined();
+Napi::Float32Array CopyToFloat32(Napi::Env env, const float* values, size_t count) {
+  auto array = Napi::Float32Array::New(env, count);
+  if (count > 0 && values != nullptr) {
+    std::memcpy(array.Data(), values, count * sizeof(float));
   }
+  return array;
+}
 
+/// Reads the shared options bag, which may be absent. A voicing array that does
+/// not match the track leaves a RangeError pending, so the caller must bail out
+/// on a false return before its C-ABI call.
+bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_frames,
+                          NoteTrackOptions* out) {
+  out->config.struct_version = 1;
+  if (!value.IsObject()) {
+    return true;
+  }
+  Napi::Object opts = value.As<Napi::Object>();
+  // Effects options bag: the type-checked reader family, so an explicit
+  // `undefined` (or any non-number) reads as the documented default.
+  out->config.segmentation_threshold_cents =
+      node_float_option(opts, "segmentationThresholdCents", 0.0f);
+  out->config.min_note_ms = node_float_option(opts, "minNoteMs", 0.0f);
+  out->config.reference_hz = node_float_option(opts, "referenceHz", 0.0f);
+  out->config.voiced_threshold = node_float_option(opts, "voicedThreshold", 0.0f);
+
+  const Napi::Value voiced_value = opts.Get("voiced");
+  if (IsInt32Array(voiced_value)) {
+    auto arr = voiced_value.As<Napi::Int32Array>();
+    if (arr.ElementLength() != n_frames) {
+      Napi::RangeError::New(env, "voiced must match f0Hz length").ThrowAsJavaScriptException();
+      return false;
+    }
+    out->voiced.assign(arr.Data(), arr.Data() + arr.ElementLength());
+    out->voiced_ptr = out->voiced.data();
+  }
+  const Napi::Value prob_value = opts.Get("voicedProb");
+  if (IsFloat32Array(prob_value)) {
+    auto arr = prob_value.As<Napi::Float32Array>();
+    if (arr.ElementLength() != n_frames) {
+      Napi::RangeError::New(env, "voicedProb must match f0Hz length").ThrowAsJavaScriptException();
+      return false;
+    }
+    out->voiced_prob.assign(arr.Data(), arr.Data() + arr.ElementLength());
+    out->prob_ptr = out->voiced_prob.data();
+  }
+  return true;
+}
+
+/// Reads a note's optional `edit`. A zeroed SonareNoteEdit is the identity, so
+/// an omitted edit, and an omitted key within one, is a no-op.
+///
+/// The envelope is appended to @p envelopes and addressed by offset, because
+/// that is how the C ABI keeps the pool's ownership straight; on this surface
+/// every note carries its own points and never sees an offset.
+void ReadNoteEdit(const char* fn, const Napi::Object& note, std::vector<float>* envelopes,
+                  SonareNoteEdit* out) {
+  const Napi::Value edit_value = note.Get("edit");
+  if (edit_value.IsUndefined() || edit_value.IsNull()) {
+    return;
+  }
+  if (!edit_value.IsObject() || edit_value.IsArray()) {
+    throw std::runtime_error(std::string(fn) + ": note.edit must be a plain object");
+  }
+  Napi::Object edit = edit_value.As<Napi::Object>();
+  out->time_offset_samples = node_int64_option(edit, "timeOffsetSamples", 0);
+  out->pitch_shift_semitones = node_float_option(edit, "pitchShiftSemitones", 0.0f);
+  out->gain_db = node_float_option(edit, "gainDb", 0.0f);
+  out->time_stretch_ratio = node_float_option(edit, "timeStretchRatio", 0.0f);
+  out->formant_shift_semitones = node_float_option(edit, "formantShiftSemitones", 0.0f);
+  out->vibrato_depth_change = node_float_option(edit, "vibratoDepthChange", 0.0f);
+  out->drift_change = node_float_option(edit, "driftChange", 0.0f);
+  out->muted = node_bool_option(edit, "muted", false) ? 1 : 0;
+
+  const std::vector<float> envelope = FloatArrayProperty(edit, "amplitudeEnvelope");
+  out->envelope_offset = static_cast<int64_t>(envelopes->size());
+  out->envelope_count = envelope.size();
+  envelopes->insert(envelopes->end(), envelope.begin(), envelope.end());
+}
+
+/// Reads a JS note array onto the C structs, plus the envelope pool their edits
+/// index into. A render reads the sample spans and a curve edit the frame
+/// bounds; split and merge re-derive both from the frame bounds alone, so all
+/// of them are read here and the entry point decides what it needs.
+void ReadNotes(const char* fn, const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes,
+               std::vector<float>* envelopes) {
+  const uint32_t count = js_notes.Length();
+  notes->assign(count, SonareNoteObject{});
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Value item = js_notes.Get(i);
+    if (!item.IsObject() || item.IsArray()) {
+      throw std::runtime_error(std::string(fn) + ": each note must be a plain object");
+    }
+    Napi::Object note = item.As<Napi::Object>();
+    SonareNoteObject& row = (*notes)[i];
+    row.onset_sample = node_int64_option(note, "onsetSample", 0);
+    row.offset_sample = node_int64_option(note, "offsetSample", 0);
+    row.frame_start = node_int_option(note, "frameStart", 0);
+    row.frame_end = node_int_option(note, "frameEnd", 0);
+    row.median_hz = node_float_option(note, "medianHz", 0.0f);
+    ReadNoteEdit(fn, note, envelopes, &row.edit);
+  }
+}
+
+/// Bounds-checks a note's slice of one of a result's shared pools. Only
+/// reachable if the C ABI contradicted itself; say so, because an empty slice
+/// here would read like a short note and hide the inconsistency.
+void RequireSliceInRange(const char* fn, const char* field, int64_t offset, int64_t span,
+                         size_t pool_count) {
+  if (span < 0 || offset < 0 ||
+      static_cast<uint64_t>(offset) + static_cast<uint64_t>(span) > pool_count) {
+    throw std::runtime_error(std::string(fn) + ": " + field + " slice out of range");
+  }
+}
+
+/// Marshals a heap-owned result into the JS note array, giving every note its
+/// own copy of its amplitude and envelope slices.
+Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjectsResult& result) {
   Napi::Array notes = Napi::Array::New(env, result.count);
   for (size_t i = 0; i < result.count; ++i) {
     const SonareNoteObject& note = result.notes[i];
@@ -538,31 +614,66 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
     edit.Set("pitchShiftSemitones", Napi::Number::New(env, note.edit.pitch_shift_semitones));
     edit.Set("gainDb", Napi::Number::New(env, note.edit.gain_db));
     edit.Set("timeStretchRatio", Napi::Number::New(env, note.edit.time_stretch_ratio));
+    edit.Set("formantShiftSemitones", Napi::Number::New(env, note.edit.formant_shift_semitones));
+    edit.Set("vibratoDepthChange", Napi::Number::New(env, note.edit.vibrato_depth_change));
+    edit.Set("driftChange", Napi::Number::New(env, note.edit.drift_change));
     edit.Set("muted", Napi::Boolean::New(env, note.edit.muted != 0));
+
+    // Each note carries its own points, so the pool's offsets never reach JS.
+    const size_t envelope_count = note.edit.envelope_count;
+    RequireSliceInRange(fn, "amplitudeEnvelope", note.edit.envelope_offset,
+                        static_cast<int64_t>(envelope_count), result.envelope_count);
+    edit.Set("amplitudeEnvelope",
+             CopyToFloat32(env, result.envelopes + note.edit.envelope_offset, envelope_count));
     row.Set("edit", edit);
 
-    // Each note carries its own slice, so amplitudeOffset never reaches JS.
+    // The same for the amplitude curve, so amplitudeOffset never reaches JS.
     const int64_t span = note.frame_end - note.frame_start;
-    const int64_t offset = note.amplitude_offset;
-    if (span < 0 || offset < 0 || static_cast<size_t>(offset + span) > result.amplitude_count) {
-      // Only reachable if the C ABI contradicted itself. Say so: an empty curve
-      // here would read like a short note and hide the inconsistency.
-      sonare_free_note_objects(&result);
-      Napi::Error::New(env, "extractNotes: amplitude slice out of range")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    auto amplitude = Napi::Float32Array::New(env, static_cast<size_t>(span));
-    if (span > 0) {
-      std::memcpy(amplitude.Data(), result.amplitude + offset,
-                  static_cast<size_t>(span) * sizeof(float));
-    }
-    row.Set("amplitude", amplitude);
+    RequireSliceInRange(fn, "amplitude", note.amplitude_offset, span, result.amplitude_count);
+    row.Set("amplitude", CopyToFloat32(env, result.amplitude + note.amplitude_offset,
+                                       static_cast<size_t>(span)));
 
     notes.Set(static_cast<uint32_t>(i), row);
   }
-  sonare_free_note_objects(&result);
   return notes;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, f0Hz, frameRate, options?)
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
+      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, f0Hz Float32Array, frameRate)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  const size_t length = typed.ElementLength();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  auto f0 = info[2].As<Napi::Float32Array>();
+  const size_t n_frames = f0.ElementLength();
+  const float frame_rate = info[3].As<Napi::Number>().FloatValue();
+
+  NoteTrackOptions options;
+  if (!ReadNoteTrackOptions(env, info[4], n_frames, &options)) {
+    return env.Undefined();
+  }
+
+  OwnedNoteObjects result;
+  const SonareError err =
+      sonare_extract_notes(data, length, sr, f0.Data(), options.prob_ptr, options.voiced_ptr,
+                           n_frames, frame_rate, &options.config, &result.value);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  return NoteObjectsToJs(env, "extractNotes", result.value);
   SONARE_NODE_CATCH(env)
 }
 
@@ -585,53 +696,177 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
 
   SonareNoteRenderConfig config{};
   config.struct_version = 1;
-  if (info.Length() >= 4 && info[3].IsObject()) {
+  // The track a curve edit acts on rides in the same bag; the C ABI's frame
+  // count is derived from its length rather than taken separately.
+  Napi::Float32Array f0;
+  const float* f0_data = nullptr;
+  size_t n_frames = 0;
+  float frame_rate = 0.0f;
+  if (info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
     config.fade_ms = node_float_option(opts, "fadeMs", 0.0f);
-  }
-
-  // A zeroed SonareNoteObject is the identity edit, so an omitted key is a no-op.
-  auto js_notes = info[2].As<Napi::Array>();
-  const uint32_t note_count = js_notes.Length();
-  std::vector<SonareNoteObject> notes(note_count);
-  for (uint32_t i = 0; i < note_count; ++i) {
-    Napi::Value item = js_notes.Get(i);
-    if (!item.IsObject() || item.IsArray()) {
-      throw std::runtime_error("renderNotes: each note must be a plain object");
-    }
-    Napi::Object note = item.As<Napi::Object>();
-    notes[i].onset_sample = node_int64_option(note, "onsetSample", 0);
-    notes[i].offset_sample = node_int64_option(note, "offsetSample", 0);
-
-    const Napi::Value edit_value = note.Get("edit");
-    if (!edit_value.IsUndefined() && !edit_value.IsNull()) {
-      if (!edit_value.IsObject() || edit_value.IsArray()) {
-        throw std::runtime_error("renderNotes: note.edit must be a plain object");
-      }
-      Napi::Object edit = edit_value.As<Napi::Object>();
-      notes[i].edit.time_offset_samples = node_int64_option(edit, "timeOffsetSamples", 0);
-      notes[i].edit.pitch_shift_semitones = node_float_option(edit, "pitchShiftSemitones", 0.0f);
-      notes[i].edit.gain_db = node_float_option(edit, "gainDb", 0.0f);
-      notes[i].edit.time_stretch_ratio = node_float_option(edit, "timeStretchRatio", 0.0f);
-      notes[i].edit.muted = node_bool_option(edit, "muted", false) ? 1 : 0;
+    config.vibrato_cutoff_hz = node_float_option(opts, "vibratoCutoffHz", 0.0f);
+    frame_rate = node_float_option(opts, "frameRate", 0.0f);
+    const Napi::Value f0_value = opts.Get("f0Hz");
+    if (IsFloat32Array(f0_value)) {
+      f0 = f0_value.As<Napi::Float32Array>();
+      f0_data = f0.Data();
+      n_frames = f0.ElementLength();
     }
   }
+
+  std::vector<SonareNoteObject> notes;
+  std::vector<float> envelopes;
+  ReadNotes("renderNotes", info[2].As<Napi::Array>(), &notes, &envelopes);
 
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError err =
-      sonare_render_notes(data, length, sr, note_count > 0 ? notes.data() : nullptr, note_count,
-                          &config, &out, &out_length);
+      sonare_render_notes(data, length, sr, notes.empty() ? nullptr : notes.data(), notes.size(),
+                          envelopes.empty() ? nullptr : envelopes.data(), envelopes.size(), f0_data,
+                          n_frames, frame_rate, &config, &out, &out_length);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);
     return env.Undefined();
   }
-  auto result = Napi::Float32Array::New(env, out_length);
-  if (out_length > 0 && out != nullptr) {
-    std::memcpy(result.Data(), out, out_length * sizeof(float));
-  }
+  auto result = CopyToFloat32(env, out, out_length);
   sonare_free_floats(out);
   return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (f0Hz, frameRate, medianHz, vibratoCutoffHz)
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
+      !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (f0Hz Float32Array, frameRate, medianHz, vibratoCutoffHz)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto f0 = info[0].As<Napi::Float32Array>();
+  const float frame_rate = info[1].As<Napi::Number>().FloatValue();
+  const float median_hz = info[2].As<Napi::Number>().FloatValue();
+  const float vibrato_cutoff_hz = info[3].As<Napi::Number>().FloatValue();
+
+  OwnedPitchDecomposition decomposition;
+  const SonareError err =
+      sonare_decompose_note_pitch(f0.Data(), f0.ElementLength(), frame_rate, median_hz,
+                                  vibrato_cutoff_hz, &decomposition.value);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("centreHz", Napi::Number::New(env, decomposition.value.centre_hz));
+  // A note with no usable pitch comes back as a zero centre and NULL curves,
+  // which marshal to two empty arrays rather than to an error.
+  out.Set("driftCents",
+          CopyToFloat32(env, decomposition.value.drift_cents, decomposition.value.count));
+  out.Set("vibratoCents",
+          CopyToFloat32(env, decomposition.value.vibrato_cents, decomposition.value.count));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, f0Hz, frameRate, notes, index, frame, options?)
+  if (info.Length() < 7 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
+      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsArray() ||
+      !info[5].IsNumber() || !info[6].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array, sampleRate, f0Hz Float32Array, frameRate, "
+                         "notes: object[], index, frame)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  const size_t length = typed.ElementLength();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  auto f0 = info[2].As<Napi::Float32Array>();
+  const size_t n_frames = f0.ElementLength();
+  const float frame_rate = info[3].As<Napi::Number>().FloatValue();
+  // A negative index arrives as a size_t past every note, which the C ABI
+  // rejects as the out-of-range index it is.
+  const size_t index = static_cast<size_t>(info[5].As<Napi::Number>().Int64Value());
+  const int32_t frame = info[6].As<Napi::Number>().Int32Value();
+
+  NoteTrackOptions options;
+  if (!ReadNoteTrackOptions(env, info[7], n_frames, &options)) {
+    return env.Undefined();
+  }
+
+  std::vector<SonareNoteObject> notes;
+  std::vector<float> envelopes;
+  ReadNotes("splitNote", info[4].As<Napi::Array>(), &notes, &envelopes);
+
+  OwnedNoteObjects result;
+  const SonareError err =
+      sonare_split_note(data, length, sr, f0.Data(), options.prob_ptr, options.voiced_ptr, n_frames,
+                        frame_rate, &options.config, notes.empty() ? nullptr : notes.data(),
+                        notes.size(), envelopes.empty() ? nullptr : envelopes.data(),
+                        envelopes.size(), index, frame, &result.value);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  return NoteObjectsToJs(env, "splitNote", result.value);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, f0Hz, frameRate, notes, first, last, options?)
+  if (info.Length() < 7 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
+      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsArray() ||
+      !info[5].IsNumber() || !info[6].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array, sampleRate, f0Hz Float32Array, frameRate, "
+                         "notes: object[], first, last)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  const size_t length = typed.ElementLength();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  auto f0 = info[2].As<Napi::Float32Array>();
+  const size_t n_frames = f0.ElementLength();
+  const float frame_rate = info[3].As<Napi::Number>().FloatValue();
+  const size_t first = static_cast<size_t>(info[5].As<Napi::Number>().Int64Value());
+  const size_t last = static_cast<size_t>(info[6].As<Napi::Number>().Int64Value());
+
+  NoteTrackOptions options;
+  if (!ReadNoteTrackOptions(env, info[7], n_frames, &options)) {
+    return env.Undefined();
+  }
+
+  std::vector<SonareNoteObject> notes;
+  std::vector<float> envelopes;
+  ReadNotes("mergeNotes", info[4].As<Napi::Array>(), &notes, &envelopes);
+
+  OwnedNoteObjects result;
+  const SonareError err = sonare_merge_notes(
+      data, length, sr, f0.Data(), options.prob_ptr, options.voiced_ptr, n_frames, frame_rate,
+      &options.config, notes.empty() ? nullptr : notes.data(), notes.size(),
+      envelopes.empty() ? nullptr : envelopes.data(), envelopes.size(), first, last, &result.value);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  return NoteObjectsToJs(env, "mergeNotes", result.value);
   SONARE_NODE_CATCH(env)
 }
 

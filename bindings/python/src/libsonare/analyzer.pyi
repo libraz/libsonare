@@ -596,6 +596,10 @@ class NoteEdit:
     gain_db: float
     time_stretch_ratio: float
     muted: bool
+    formant_shift_semitones: float
+    vibrato_depth_change: float
+    drift_change: float
+    amplitude_envelope: np.ndarray[Any, Any]
     def __init__(
         self,
         time_offset_samples: int = 0,
@@ -603,6 +607,10 @@ class NoteEdit:
         gain_db: float = 0.0,
         time_stretch_ratio: float = 1.0,
         muted: bool = False,
+        formant_shift_semitones: float = 0.0,
+        vibrato_depth_change: float = 0.0,
+        drift_change: float = 0.0,
+        amplitude_envelope: np.ndarray[Any, Any] = ...,
     ) -> None: ...
 
 class NoteObject:
@@ -646,8 +654,62 @@ def render_notes(
     sample_rate: int,
     notes: Sequence[NoteObject],
     *,
+    f0_hz: FloatSamples | None = None,
+    frame_rate: float | None = None,
     fade_ms: float | None = None,
+    vibrato_cutoff_hz: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
+
+class PitchDecomposition:
+    centre_hz: float
+    drift_cents: np.ndarray[Any, Any]
+    vibrato_cents: np.ndarray[Any, Any]
+    def __init__(
+        self,
+        centre_hz: float = 0.0,
+        drift_cents: np.ndarray[Any, Any] = ...,
+        vibrato_cents: np.ndarray[Any, Any] = ...,
+    ) -> None: ...
+
+def decompose_note_pitch(
+    f0_hz: FloatSamples,
+    frame_rate: float,
+    median_hz: float,
+    *,
+    vibrato_cutoff_hz: float | None = None,
+) -> PitchDecomposition: ...
+def split_note(
+    samples: FloatSamples,
+    sample_rate: int,
+    f0_hz: FloatSamples,
+    frame_rate: float,
+    notes: Sequence[NoteObject],
+    index: int,
+    frame: int,
+    *,
+    voiced: IntSamples | None = None,
+    voiced_prob: FloatSamples | None = None,
+    segmentation_threshold_cents: float | None = None,
+    min_note_ms: float | None = None,
+    reference_hz: float | None = None,
+    voiced_threshold: float | None = None,
+) -> list[NoteObject]: ...
+def merge_notes(
+    samples: FloatSamples,
+    sample_rate: int,
+    f0_hz: FloatSamples,
+    frame_rate: float,
+    notes: Sequence[NoteObject],
+    first: int,
+    last: int,
+    *,
+    voiced: IntSamples | None = None,
+    voiced_prob: FloatSamples | None = None,
+    segmentation_threshold_cents: float | None = None,
+    min_note_ms: float | None = None,
+    reference_hz: float | None = None,
+    voiced_threshold: float | None = None,
+) -> list[NoteObject]: ...
 
 class SpectralRegionOp:
     start_sample: int

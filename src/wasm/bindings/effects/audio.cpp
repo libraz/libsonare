@@ -10,6 +10,8 @@
 #include "c_api/sonare_c_error_mapping.h"
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_renderer.h"
+#include "editing/note_model/note_split_merge.h"
+#include "editing/note_model/pitch_decomposition.h"
 #include "util/constants.h"
 #include "wasm/bindings/common/common.h"
 
@@ -302,7 +304,8 @@ namespace {
 
 // Every field takes its default at 0 or absent, mirroring
 // SonareNoteExtractorConfig.
-editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options) {
+editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options,
+                                                                    const char* entry_point) {
   editing::note_model::NoteExtractorConfig config;
   const float threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
   const float min_note_ms = floatProperty(options, "minNoteMs", 0.0f);
@@ -313,8 +316,9 @@ editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options)
       min_note_ms < 0.0f || reference_hz < 0.0f || voiced_threshold < 0.0f ||
       voiced_threshold > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "extractNotes: config values must be finite and non-negative, and "
-                          "voicedThreshold must be in [0, 1]");
+                          std::string(entry_point) +
+                              ": config values must be finite and non-negative, and "
+                              "voicedThreshold must be in [0, 1]");
   }
   if (threshold_cents > 0.0f) config.segmenter.segmentation_threshold_cents = threshold_cents;
   if (min_note_ms > 0.0f) config.segmenter.min_note_ms = min_note_ms;
@@ -323,82 +327,67 @@ editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options)
   return config;
 }
 
-// Reads one note's span and pending edit; every other field of a JS note object
-// is ignored, exactly as render_notes ignores the rest of a NoteObject.
-editing::note_model::NoteObject renderableNoteFromVal(const val& row) {
-  editing::note_model::NoteObject note;
-  note.onset_sample =
-      static_cast<int64_t>(requireNumberProperty(row, "onsetSample", "renderNotes note"));
-  note.offset_sample =
-      static_cast<int64_t>(requireNumberProperty(row, "offsetSample", "renderNotes note"));
-  const val edit = objectProperty(row, "edit");
-  if (hasProperty(edit, "timeOffsetSamples")) {
-    note.edit.time_offset_samples = static_cast<int64_t>(
-        requireNumberProperty(edit, "timeOffsetSamples", "renderNotes note.edit"));
+// A frame index that arrived as a bare JS number. wasmCountArg cannot serve: a
+// frame outside its note is rejected downstream for being outside it, so a
+// negative one has to survive the conversion to be rejected for what it is.
+int noteFrameArg(double value, const char* subject) {
+  constexpr double kLowest = static_cast<double>(std::numeric_limits<int>::lowest());
+  constexpr double kHighest = static_cast<double>(std::numeric_limits<int>::max());
+  if (!std::isfinite(value) || std::floor(value) != value || value < kLowest || value > kHighest) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " must be an integer frame index");
   }
-  note.edit.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
-  note.edit.gain_db = floatProperty(edit, "gainDb", 0.0f);
-  const float stretch_ratio = floatProperty(edit, "timeStretchRatio", 0.0f);
-  // A zeroed edit must be the identity, so 0 reads as 1 (SonareNoteEdit).
-  note.edit.time_stretch_ratio = stretch_ratio == 0.0f ? 1.0f : stretch_ratio;
-  note.edit.muted = boolProperty(edit, "muted", false);
-  return note;
+  return static_cast<int>(value);
 }
 
-}  // namespace
-
-// Note objects: editable notes extracted from audio plus a caller-supplied F0
-// track, and the render pass that writes an edited set back over that audio.
-// Field names and defaults mirror the C ABI (sonare_extract_notes /
-// sonare_render_notes) with two deliberate differences: the per-note F0 curve is
-// not surfaced, because it is the caller's own f0Hz sliced by [frameStart,
-// frameEnd), and each note carries its own amplitude array instead of an
-// amplitudeOffset into one concatenated buffer, which is a C-ABI memory-layout
-// detail with no meaning here.
-val js_extract_notes(val samples, int sample_rate, val f0_hz, val voiced_prob, val voiced,
-                     float frame_rate, val options) {
+// The F0 track every extraction-shaped note entry point is measured against.
+// Mirrors the C ABI's validate_track_args and make_track: one of the two voicing
+// inputs is required, and voicedProb is read only when voiced is absent.
+editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_rate,
+                                                const val& f0_hz, const val& voiced_prob,
+                                                const val& voiced, float frame_rate,
+                                                float voiced_threshold, const char* entry_point,
+                                                std::size_t* cumulative_count) {
+  const std::string prefix = std::string(entry_point) + ": ";
+  const std::string budget = std::string(entry_point) + " input";
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
   if (!has_voiced && !has_prob) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "extractNotes: voiced or voicedProb is required");
+    throw SonareException(ErrorCode::InvalidParameter, prefix + "voiced or voicedProb is required");
   }
   if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "extractNotes: frameRate must be a finite positive number");
+                          prefix + "frameRate must be a finite positive number");
   }
-  std::size_t cumulative_count = 0;
-  accumulateWasmFloat32ArrayLength(samples, "samples", "extractNotes input", &cumulative_count);
-  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "extractNotes input", &cumulative_count);
+  accumulateWasmFloat32ArrayLength(samples, "samples", budget.c_str(), cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", budget.c_str(), cumulative_count);
   if (has_voiced) {
-    accumulateWasmFloat32ArrayLength(voiced, "voiced", "extractNotes input", &cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", budget.c_str(), cumulative_count);
   }
   if (has_prob) {
-    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", "extractNotes input",
-                                     &cumulative_count);
+    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", budget.c_str(), cumulative_count);
   }
 
-  const editing::note_model::NoteExtractorConfig config = noteExtractorConfigFromVal(options);
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   const size_t n_frames = f0.size();
   if (n_frames == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "extractNotes: f0Hz must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, prefix + "f0Hz must not be empty");
   }
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
   if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "extractNotes: voiced and voicedProb must match f0Hz length");
+                          prefix + "voiced and voicedProb must match f0Hz length");
   }
   for (size_t i = 0; i < n_frames; ++i) {
     if (!std::isfinite(f0[i]) || f0[i] < 0.0f) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "extractNotes: f0Hz values must be finite and non-negative");
+                            prefix + "f0Hz values must be finite and non-negative");
     }
     // voicedProb is read only when voiced is absent, so it is validated only then.
     if (!has_voiced && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "extractNotes: voicedProb values must be in [0, 1]");
+                            prefix + "voicedProb values must be in [0, 1]");
     }
   }
 
@@ -408,39 +397,215 @@ val js_extract_notes(val samples, int sample_rate, val f0_hz, val voiced_prob, v
   // the rate the caller actually stated.
   track.hop_length = 0;
   track.frame_rate_hz = frame_rate;
-  track.f0_hz = f0;
+  track.f0_hz = std::move(f0);
   track.voiced.resize(n_frames);
   for (size_t i = 0; i < n_frames; ++i) {
-    track.voiced[i] = has_voiced ? voiced_vec[i] != 0.0f : prob_vec[i] >= config.voiced_threshold;
+    track.voiced[i] = has_voiced ? voiced_vec[i] != 0.0f : prob_vec[i] >= voiced_threshold;
   }
+  return track;
+}
 
-  Audio audio = loadValidatedAudio(samples, sample_rate);
-  const std::vector<editing::note_model::NoteObject> notes =
-      editing::note_model::extract_notes(audio, track, config);
+// One note's own amplitude envelope. The C ABI's envelope_offset into a shared
+// pool is an ownership device, so it does not cross here; each note carries the
+// points it owns.
+std::vector<float> noteEnvelopeFromVal(const val& edit, const char* budget_subject,
+                                       std::size_t* cumulative_count) {
+  const val envelope = objectProperty(edit, "amplitudeEnvelope");
+  if (envelope.isUndefined()) return {};
+  accumulateWasmFloat32ArrayLength(envelope, "amplitudeEnvelope", budget_subject, cumulative_count);
+  return float32ArrayToVector(envelope);
+}
 
-  val out = val::array();
-  for (const editing::note_model::NoteObject& note : notes) {
-    val row = val::object();
-    // Sample positions cross as plain JS numbers rather than BigInt, matching
-    // every other int64 field on this surface.
-    row.set("onsetSample", static_cast<double>(note.onset_sample));
-    row.set("offsetSample", static_cast<double>(note.offset_sample));
-    row.set("frameStart", note.frame_start);
-    row.set("frameEnd", note.frame_end);
-    row.set("medianHz", note.median_hz);
-    row.set("medianCents", note.median_cents);
-    row.set("f0Stability", note.f0_stability);
-    row.set("amplitude", vectorToFloat32Array(note.amplitude.values));
-    val edit = val::object();
-    edit.set("timeOffsetSamples", static_cast<double>(note.edit.time_offset_samples));
-    edit.set("pitchShiftSemitones", note.edit.pitch_shift_semitones);
-    edit.set("gainDb", note.edit.gain_db);
-    edit.set("timeStretchRatio", note.edit.time_stretch_ratio);
-    edit.set("muted", note.edit.muted);
-    row.set("edit", edit);
-    out.call<void>("push", row);
+// The pending edit on a JS note object. An absent field is its own identity
+// spelling, so `{}` and an omitted `edit` both leave the note untouched.
+editing::note_model::NoteEdit noteEditFromVal(const val& row, const char* entry_point,
+                                              std::size_t* cumulative_count) {
+  const std::string subject = std::string(entry_point) + " note.edit";
+  const std::string budget = std::string(entry_point) + " input";
+  const val edit = objectProperty(row, "edit");
+  editing::note_model::NoteEdit out;
+  if (hasProperty(edit, "timeOffsetSamples")) {
+    out.time_offset_samples =
+        static_cast<int64_t>(requireNumberProperty(edit, "timeOffsetSamples", subject.c_str()));
+  }
+  out.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
+  out.gain_db = floatProperty(edit, "gainDb", 0.0f);
+  const float stretch_ratio = floatProperty(edit, "timeStretchRatio", 0.0f);
+  // A zeroed edit must be the identity, so 0 reads as 1 (SonareNoteEdit).
+  out.time_stretch_ratio = stretch_ratio == 0.0f ? 1.0f : stretch_ratio;
+  out.formant_shift_semitones = floatProperty(edit, "formantShiftSemitones", 0.0f);
+  out.vibrato_depth_change = floatProperty(edit, "vibratoDepthChange", 0.0f);
+  out.drift_change = floatProperty(edit, "driftChange", 0.0f);
+  out.muted = boolProperty(edit, "muted", false);
+  out.amplitude_envelope = noteEnvelopeFromVal(edit, budget.c_str(), cumulative_count);
+  return out;
+}
+
+// Reads one note's span and pending edit, plus the frame bounds and the centre a
+// curve edit is measured through when the caller handed a track in; every other
+// field of a JS note object is ignored, exactly as render_notes ignores the rest
+// of a NoteObject.
+editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std::vector<float>& f0,
+                                                      float frame_rate, bool has_track,
+                                                      std::size_t* cumulative_count) {
+  editing::note_model::NoteObject note;
+  note.onset_sample =
+      static_cast<int64_t>(requireNumberProperty(row, "onsetSample", "renderNotes note"));
+  note.offset_sample =
+      static_cast<int64_t>(requireNumberProperty(row, "offsetSample", "renderNotes note"));
+  note.edit = noteEditFromVal(row, "renderNotes", cumulative_count);
+
+  if (has_track) {
+    // The note's pitch curve is the caller's own track sliced by its bounds.
+    const int frame_start =
+        noteFrameArg(hasProperty(row, "frameStart")
+                         ? requireNumberProperty(row, "frameStart", "renderNotes note")
+                         : 0.0,
+                     "renderNotes note.frameStart");
+    const int frame_end = noteFrameArg(
+        hasProperty(row, "frameEnd") ? requireNumberProperty(row, "frameEnd", "renderNotes note")
+                                     : 0.0,
+        "renderNotes note.frameEnd");
+    if (frame_start < 0 || frame_end < frame_start ||
+        static_cast<std::size_t>(frame_end) > f0.size()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "renderNotes: every note's frame span must lie inside f0Hz");
+    }
+    note.median_hz = static_cast<float>(
+        hasProperty(row, "medianHz") ? requireNumberProperty(row, "medianHz", "renderNotes note")
+                                     : 0.0);
+    note.f0_hz.values.assign(f0.begin() + frame_start, f0.begin() + frame_end);
+    note.f0_hz.frame_rate_hz = frame_rate;
+    note.f0_hz.frame_offset = frame_start;
+  } else if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
+    // A curve edit with no track has nothing to act on.
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "renderNotes: vibratoDepthChange and driftChange need f0Hz");
+  }
+  return note;
+}
+
+// All a JS note set states: the frame span identifying each note and the edit
+// riding on it. Every other field of a NoteObject is measured from the audio and
+// the track, so it is re-derived rather than carried across the boundary.
+struct NoteSetEntry {
+  int frame_start = 0;
+  int frame_end = 0;
+  editing::note_model::NoteEdit edit;
+};
+
+// Reads the note set split and merge reshape. Neither ever renders, so the
+// envelope values the renderer would have rejected are checked here instead
+// (sonare_c_daw.cpp's to_core_edit_checked). Nothing here touches the audio: a
+// malformed edit is a bad argument rather than a measurement, so it is rejected
+// before any audio work.
+std::vector<NoteSetEntry> noteSetFromVal(const val& notes, const char* entry_point,
+                                         std::size_t* cumulative_count) {
+  const std::string subject = std::string(entry_point) + " note";
+  const std::string list_subject = subject + "s";
+  const std::size_t count = wasmArrayLikeLength(notes, list_subject.c_str());
+  std::vector<NoteSetEntry> out;
+  out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
+  for (std::size_t i = 0; i < count; ++i) {
+    const val row = notes[i];
+    NoteSetEntry entry;
+    entry.frame_start = noteFrameArg(requireNumberProperty(row, "frameStart", subject.c_str()),
+                                     (subject + ".frameStart").c_str());
+    entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", subject.c_str()),
+                                   (subject + ".frameEnd").c_str());
+    entry.edit = noteEditFromVal(row, entry_point, cumulative_count);
+    for (const float value : entry.edit.amplitude_envelope) {
+      if (!std::isfinite(value) || value < 0.0f) {
+        throw SonareException(
+            ErrorCode::InvalidParameter,
+            subject + ".edit.amplitudeEnvelope values must be finite and non-negative");
+      }
+    }
+    out.push_back(std::move(entry));
   }
   return out;
+}
+
+// Rebuilds the whole set from the audio and the track, exactly as extraction
+// derived it, and hands each note its own edit back.
+//
+// Every note is re-derived, with no separate path for the one being reshaped:
+// split and merge copy the notes they do not touch straight through, so a
+// pass-through note would otherwise reach the result carrying no spans and no
+// curves. Deriving is also the only way these cannot go stale, since a caller
+// round-tripping them could hand back values measured against other audio.
+// make_note validates the frame span, which is what these two cut on
+// (sonare_c_daw.cpp's run_note_set_edit).
+std::vector<editing::note_model::NoteObject> deriveNoteSet(
+    const Audio& audio, const editing::pitch_editor::F0Track& track,
+    std::vector<NoteSetEntry>& entries, const editing::note_model::NoteExtractorConfig& config) {
+  std::vector<editing::note_model::NoteObject> out;
+  out.reserve(entries.size());
+  for (NoteSetEntry& entry : entries) {
+    out.push_back(
+        editing::note_model::make_note(audio, track, entry.frame_start, entry.frame_end, config));
+    out.back().edit = std::move(entry.edit);
+  }
+  return out;
+}
+
+// One note as a JS object. Field names and defaults mirror the C ABI
+// (sonare_extract_notes / sonare_render_notes) with two deliberate differences:
+// the per-note F0 curve is not surfaced, because it is the caller's own f0Hz
+// sliced by [frameStart, frameEnd), and each note carries its own amplitude and
+// envelope arrays instead of an offset into one concatenated buffer, which is a
+// C-ABI memory-layout detail with no meaning here.
+val noteObjectToVal(const editing::note_model::NoteObject& note) {
+  val row = val::object();
+  // Sample positions cross as plain JS numbers rather than BigInt, matching
+  // every other int64 field on this surface.
+  row.set("onsetSample", static_cast<double>(note.onset_sample));
+  row.set("offsetSample", static_cast<double>(note.offset_sample));
+  row.set("frameStart", note.frame_start);
+  row.set("frameEnd", note.frame_end);
+  row.set("medianHz", note.median_hz);
+  row.set("medianCents", note.median_cents);
+  row.set("f0Stability", note.f0_stability);
+  row.set("amplitude", vectorToFloat32Array(note.amplitude.values));
+  val edit = val::object();
+  edit.set("timeOffsetSamples", static_cast<double>(note.edit.time_offset_samples));
+  edit.set("pitchShiftSemitones", note.edit.pitch_shift_semitones);
+  edit.set("gainDb", note.edit.gain_db);
+  edit.set("timeStretchRatio", note.edit.time_stretch_ratio);
+  edit.set("formantShiftSemitones", note.edit.formant_shift_semitones);
+  edit.set("vibratoDepthChange", note.edit.vibrato_depth_change);
+  edit.set("driftChange", note.edit.drift_change);
+  edit.set("muted", note.edit.muted);
+  edit.set("amplitudeEnvelope", vectorToFloat32Array(note.edit.amplitude_envelope));
+  row.set("edit", edit);
+  return row;
+}
+
+val noteObjectsToVal(const std::vector<editing::note_model::NoteObject>& notes) {
+  val out = val::array();
+  for (const editing::note_model::NoteObject& note : notes) {
+    out.call<void>("push", noteObjectToVal(note));
+  }
+  return out;
+}
+
+}  // namespace
+
+// Note objects: editable notes extracted from audio plus a caller-supplied F0
+// track, the render pass that writes an edited set back over that audio, the
+// split of one note's pitch curve into the parts an edit acts on, and the two
+// calls that reshape the set itself.
+val js_extract_notes(val samples, int sample_rate, val f0_hz, val voiced_prob, val voiced,
+                     float frame_rate, val options) {
+  const editing::note_model::NoteExtractorConfig config =
+      noteExtractorConfigFromVal(options, "extractNotes");
+  std::size_t cumulative_count = 0;
+  const editing::pitch_editor::F0Track track =
+      noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
+                       config.voiced_threshold, "extractNotes", &cumulative_count);
+
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  return noteObjectsToVal(editing::note_model::extract_notes(audio, track, config));
 }
 
 val js_render_notes(val samples, int sample_rate, val notes, val options) {
@@ -451,18 +616,144 @@ val js_render_notes(val samples, int sample_rate, val notes, val options) {
                           "renderNotes: fadeMs must be finite and non-negative");
   }
   if (fade_ms > 0.0f) config.fade_ms = fade_ms;
+  const float vibrato_cutoff_hz = floatProperty(options, "vibratoCutoffHz", 0.0f);
+  if (!std::isfinite(vibrato_cutoff_hz) || vibrato_cutoff_hz < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "renderNotes: vibratoCutoffHz must be finite and non-negative");
+  }
+  if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;
+
+  std::size_t cumulative_count = 0;
+  accumulateWasmFloat32ArrayLength(samples, "samples", "renderNotes input", &cumulative_count);
+
+  // The track is optional; only a vibrato or drift edit reads it.
+  const val f0_hz = objectProperty(options, "f0Hz");
+  const bool has_track = !f0_hz.isUndefined();
+  const float frame_rate = floatProperty(options, "frameRate", 0.0f);
+  std::vector<float> f0;
+  if (has_track) {
+    if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          "renderNotes: frameRate must be a finite positive number when f0Hz is given");
+    }
+    accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "renderNotes input", &cumulative_count);
+    f0 = float32ArrayToVector(f0_hz);
+    if (f0.empty()) {
+      throw SonareException(ErrorCode::InvalidParameter, "renderNotes: f0Hz must not be empty");
+    }
+    for (const float hz : f0) {
+      if (!std::isfinite(hz) || hz < 0.0f) {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "renderNotes: f0Hz values must be finite and non-negative");
+      }
+    }
+  }
 
   const std::size_t count = wasmArrayLikeLength(notes, "renderNotes notes");
   std::vector<editing::note_model::NoteObject> core_notes;
   core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (std::size_t i = 0; i < count; ++i) {
-    core_notes.push_back(renderableNoteFromVal(notes[i]));
+    core_notes.push_back(
+        renderableNoteFromVal(notes[i], f0, frame_rate, has_track, &cumulative_count));
   }
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = editing::note_model::render_notes(audio, core_notes, config);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
+}
+
+val js_decompose_note_pitch(val f0_hz, float frame_rate, float median_hz, float vibrato_cutoff_hz) {
+  // A note with no pitch is spelled 0, so only a value that cannot be a centre
+  // or a cutoff at all is rejected.
+  if (!std::isfinite(median_hz) || median_hz < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "decomposeNotePitch: medianHz must be finite and non-negative");
+  }
+  if (!std::isfinite(vibrato_cutoff_hz) || vibrato_cutoff_hz < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "decomposeNotePitch: vibratoCutoffHz must be finite and non-negative");
+  }
+  if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "decomposeNotePitch: frameRate must be a finite positive number");
+  }
+  std::size_t cumulative_count = 0;
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "decomposeNotePitch input", &cumulative_count);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  if (f0.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "decomposeNotePitch: f0Hz must not be empty");
+  }
+  for (const float hz : f0) {
+    if (!std::isfinite(hz) || hz < 0.0f) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "decomposeNotePitch: f0Hz values must be finite and non-negative");
+    }
+  }
+
+  editing::note_model::NoteObject note;
+  note.median_hz = median_hz;
+  note.f0_hz.values = std::move(f0);
+  note.f0_hz.frame_rate_hz = frame_rate;
+  editing::note_model::PitchDecompositionConfig config;
+  if (vibrato_cutoff_hz > 0.0f) config.vibrato_cutoff_hz = vibrato_cutoff_hz;
+
+  const editing::note_model::PitchDecomposition split =
+      editing::note_model::decompose_pitch(note, config);
+  // A note with no usable pitch comes back with a zero centre and two empty
+  // curves, which needs no special case here.
+  val out = val::object();
+  out.set("centreHz", split.centre_hz);
+  out.set("driftCents", vectorToFloat32Array(split.drift));
+  out.set("vibratoCents", vectorToFloat32Array(split.vibrato));
+  return out;
+}
+
+val js_split_note(val samples, int sample_rate, val f0_hz, val voiced_prob, val voiced,
+                  float frame_rate, val notes, double index, double frame, val options) {
+  const std::size_t note_index = wasmCountArg(index, "splitNote index");
+  const int cut_frame = noteFrameArg(frame, "splitNote frame");
+  const editing::note_model::NoteExtractorConfig config =
+      noteExtractorConfigFromVal(options, "splitNote");
+  std::size_t cumulative_count = 0;
+  const editing::pitch_editor::F0Track track =
+      noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
+                       config.voiced_threshold, "splitNote", &cumulative_count);
+  std::vector<NoteSetEntry> entries = noteSetFromVal(notes, "splitNote", &cumulative_count);
+  if (note_index >= entries.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, "splitNote: index is outside the note set");
+  }
+
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  const std::vector<editing::note_model::NoteObject> core_notes =
+      deriveNoteSet(audio, track, entries, config);
+  return noteObjectsToVal(
+      editing::note_model::split_note(audio, track, core_notes, note_index, cut_frame, config));
+}
+
+val js_merge_notes(val samples, int sample_rate, val f0_hz, val voiced_prob, val voiced,
+                   float frame_rate, val notes, double first, double last, val options) {
+  const std::size_t first_index = wasmCountArg(first, "mergeNotes first");
+  const std::size_t last_index = wasmCountArg(last, "mergeNotes last");
+  const editing::note_model::NoteExtractorConfig config =
+      noteExtractorConfigFromVal(options, "mergeNotes");
+  std::size_t cumulative_count = 0;
+  const editing::pitch_editor::F0Track track =
+      noteTrackFromVal(samples, sample_rate, f0_hz, voiced_prob, voiced, frame_rate,
+                       config.voiced_threshold, "mergeNotes", &cumulative_count);
+  std::vector<NoteSetEntry> entries = noteSetFromVal(notes, "mergeNotes", &cumulative_count);
+  if (!(first_index < last_index) || last_index >= entries.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mergeNotes: first and last must be an ascending run inside the set");
+  }
+
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  const std::vector<editing::note_model::NoteObject> core_notes =
+      deriveNoteSet(audio, track, entries, config);
+  return noteObjectsToVal(
+      editing::note_model::merge_notes(audio, track, core_notes, first_index, last_index, config));
 }
 
 val js_voice_change(val samples, int sample_rate, float pitch_semitones, float formant_factor) {
@@ -894,6 +1185,9 @@ void registerEffectsAudioBindings() {
   function("noteMove", &js_note_move);
   function("extractNotes", &js_extract_notes);
   function("renderNotes", &js_render_notes);
+  function("decomposeNotePitch", &js_decompose_note_pitch);
+  function("splitNote", &js_split_note);
+  function("mergeNotes", &js_merge_notes);
   function("voiceChange", &js_voice_change);
   function("voiceChangeRealtime", &js_voice_change_realtime);
   function("decompose", &js_decompose);

@@ -10,6 +10,8 @@
 import type {
   NoteObject,
   NoteObjectInput,
+  NoteSetEntry,
+  PitchDecompositionResult,
   ProgressCallback,
   SonareCapabilities,
   SpectralRegionOp,
@@ -1837,8 +1839,53 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     notes: readonly NoteObjectInput[],
-    options: { fadeMs?: number },
+    options: {
+      fadeMs?: number;
+      f0Hz?: Float32Array;
+      frameRate?: number;
+      vibratoCutoffHz?: number;
+    },
   ) => Float32Array;
+  decomposeNotePitch: (
+    f0Hz: Float32Array,
+    frameRate: number,
+    medianHz: number,
+    vibratoCutoffHz: number,
+  ) => PitchDecompositionResult;
+  splitNote: (
+    samples: Float32Array,
+    sampleRate: number,
+    f0Hz: Float32Array,
+    voicedProb: Float32Array | undefined,
+    voiced: Float32Array | undefined,
+    frameRate: number,
+    notes: readonly NoteSetEntry[],
+    index: number,
+    frame: number,
+    options: {
+      segmentationThresholdCents?: number;
+      minNoteMs?: number;
+      referenceHz?: number;
+      voicedThreshold?: number;
+    },
+  ) => NoteObject[];
+  mergeNotes: (
+    samples: Float32Array,
+    sampleRate: number,
+    f0Hz: Float32Array,
+    voicedProb: Float32Array | undefined,
+    voiced: Float32Array | undefined,
+    frameRate: number,
+    notes: readonly NoteSetEntry[],
+    first: number,
+    last: number,
+    options: {
+      segmentationThresholdCents?: number;
+      minNoteMs?: number;
+      referenceHz?: number;
+      voicedThreshold?: number;
+    },
+  ) => NoteObject[];
   voiceChange: (
     samples: Float32Array,
     sampleRate: number,

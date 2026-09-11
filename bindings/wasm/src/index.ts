@@ -95,6 +95,7 @@ export type {
   VoiceChangeRequest,
 } from './effects_mastering';
 export {
+  decomposeNotePitch,
   extractNotes,
   harmonic,
   hpss,
@@ -139,6 +140,7 @@ export {
   masteringStereoAnalyze,
   masteringStreamingPreview,
   masteringStreamingPreviewStereo,
+  mergeNotes,
   mixingScenePresetJson,
   mixingScenePresetNames,
   mixStereo,
@@ -152,14 +154,17 @@ export {
   pitchShift,
   renderNotes,
   spectralEdit,
+  splitNote,
   timeStretch,
   voiceChange,
   voiceChangeRealtime,
 } from './effects_mastering';
 export type {
+  DecomposeNotePitchRequest,
   ExtractNotesRequest,
   HarmonicRequest,
   HpssRequest,
+  MergeNotesRequest,
   NormalizeMode,
   NormalizeRequest,
   NoteMoveRequest,
@@ -171,6 +176,7 @@ export type {
   PitchShiftRequest,
   RenderNotesRequest,
   SpectralEditRequest,
+  SplitNoteRequest,
   TimeStretchRequest,
 } from './effects_transform';
 export { ErrorCode, isSonareError, SonareError } from './errors';
@@ -588,6 +594,7 @@ export type {
   NoteObject,
   NoteObjectInput,
   NoteSegment,
+  NoteSetEntry,
   NoteStretchOptions,
   PairAnalysis,
   PairProcessor,
@@ -596,6 +603,7 @@ export type {
   PanLawName,
   PanMode,
   PitchCorrectOptions,
+  PitchDecompositionResult,
   PitchResult,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,

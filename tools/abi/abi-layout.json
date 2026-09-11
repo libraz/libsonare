@@ -3837,31 +3837,61 @@
         "size": 8
       },
       {
+        "kind": "signed",
+        "name": "envelope_offset",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "envelope_count",
+        "offset": 16,
+        "size": 8
+      },
+      {
         "kind": "float",
         "name": "pitch_shift_semitones",
-        "offset": 8,
+        "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
         "name": "gain_db",
-        "offset": 12,
+        "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
         "name": "time_stretch_ratio",
-        "offset": 16,
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "formant_shift_semitones",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vibrato_depth_change",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "drift_change",
+        "offset": 44,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "muted",
-        "offset": 20,
+        "offset": 48,
         "size": 4
       }
     ],
-    "size": 24
+    "size": 56
   },
   "SonareNoteExtractorConfig": {
     "align": 4,
@@ -3954,10 +3984,10 @@
         "kind": "aggregate",
         "name": "edit",
         "offset": 48,
-        "size": 24
+        "size": 56
       }
     ],
-    "size": 72
+    "size": 104
   },
   "SonareNoteObjectsResult": {
     "align": 8,
@@ -3985,9 +4015,21 @@
         "name": "amplitude_count",
         "offset": 24,
         "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "envelopes",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "envelope_count",
+        "offset": 40,
+        "size": 8
       }
     ],
-    "size": 32
+    "size": 48
   },
   "SonareNotePairValidation": {
     "align": 4,
@@ -4027,9 +4069,15 @@
         "name": "fade_ms",
         "offset": 4,
         "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vibrato_cutoff_hz",
+        "offset": 8,
+        "size": 4
       }
     ],
-    "size": 8
+    "size": 12
   },
   "SonareNoteSegment": {
     "align": 4,
@@ -4378,6 +4426,36 @@
       }
     ],
     "size": 36
+  },
+  "SonarePitchDecompositionResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "centre_hz",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "drift_cents",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "vibrato_cents",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "count",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
   },
   "SonarePitchResult": {
     "align": 8,

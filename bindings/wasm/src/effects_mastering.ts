@@ -1,7 +1,9 @@
 export {
+  decomposeNotePitch,
   extractNotes,
   harmonic,
   hpss,
+  mergeNotes,
   normalize,
   noteMove,
   noteStretch,
@@ -12,6 +14,7 @@ export {
   pitchShift,
   renderNotes,
   spectralEdit,
+  splitNote,
   timeStretch,
 } from './effects_transform';
 export type {
