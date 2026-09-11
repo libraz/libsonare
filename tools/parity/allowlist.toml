@@ -26,6 +26,11 @@ any = [
   "assert_finite_samples",
   "assert_finite_scalar",
   "assert_non_empty_samples",
+  # Same family, and one-sided for a reason C cannot have: they reject a value
+  # the JS-to-int narrowing would WRAP into a different in-domain value, which
+  # no C entry point can see because the wrapped value reaches it looking valid.
+  "assert_int32",
+  "assert_hpss_kernels",
   "mastering",
   "mastering_pair_analyze",
   "mastering_pair_process",
