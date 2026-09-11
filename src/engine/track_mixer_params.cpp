@@ -451,9 +451,19 @@ void TrackMixerRuntime::deliver_lane_sidechains(size_t lane_index, int num_chann
     // The source lane's key snapshot holds its most recent post-strip,
     // pre-fader audio: the current block when the source renders before this
     // lane, the previous block otherwise (one block of key latency).
+    //
+    // That snapshot was taken at ITS sub-block's length, which may be shorter
+    // than this one. Silence the shortfall so the key never carries audio from
+    // an older, longer sub-block; the snapshot length is then this length, so a
+    // second consumer of the same source does not repeat the clear.
+    int& source_frames = key_frames_[static_cast<size_t>(source_index)];
+    const int stale = num_samples - source_frames;
     for (int ch = 0; ch < num_channels && ch < kMaxLaneChannels; ++ch) {
-      key[static_cast<size_t>(ch)] = key_channel(static_cast<size_t>(source_index), ch);
+      float* plane = key_channel(static_cast<size_t>(source_index), ch);
+      if (stale > 0) std::fill(plane + source_frames, plane + num_samples, 0.0f);
+      key[static_cast<size_t>(ch)] = plane;
     }
+    if (stale > 0) source_frames = num_samples;
     lane.strip->set_insert_sidechain(binding.insert_index.load(std::memory_order_acquire),
                                      key.data(), std::min(num_channels, kMaxLaneChannels),
                                      num_samples);
@@ -480,6 +490,7 @@ void TrackMixerRuntime::snapshot_sidechain_key(size_t lane_index, int num_channe
     const float* src = lane_channel(lane_index, ch);
     std::copy(src, src + num_samples, key_channel(lane_index, ch));
   }
+  key_frames_[lane_index] = num_samples;
 }
 
 }  // namespace sonare::engine

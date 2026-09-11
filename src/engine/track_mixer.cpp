@@ -332,6 +332,9 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   bus_scratch_.assign(kMaxBusLanes * kMaxBusChannels * static_cast<size_t>(max_block_size_), 0.0f);
   key_scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_),
                       0.0f);
+  // No lane has snapshotted yet, so every key plane reads as silence until one
+  // does rather than as whatever the previous prepare() left.
+  key_frames_.fill(0);
   // Rests at unity so a lane whose gain ramp has not been advanced yet (a strip
   // rendered outside the finish_block sequence) contributes its dry signal
   // rather than silence.
@@ -341,6 +344,12 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
     lane.gate.prepare(sample_rate_, 10.0f);
+    // Same time constant as the stereo pan smoother, so a surround placement
+    // glides over the same interval a stereo pan does.
+    for (rt::ParamSmoother& plane_gain : lane.surround_gain) {
+      plane_gain.prepare(sample_rate_, 5.0f);
+      plane_gain.reset(0.0f);
+    }
     lane.fader_gain.reset(1.0f);
     lane.pan.reset(0.0f);
     lane.gate.reset(1.0f);
@@ -420,6 +429,12 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     lane.fader_gain.reset(lane.fader_gain.target());
     lane.pan.reset(lane.pan.target());
     lane.gate.reset(lane.gate.target());
+    // The surround scatter gains are smoothers too now, so a pre-roll settle
+    // has to quiesce them for the same reason it quiesces the fader: otherwise
+    // the first audible block glides into placement instead of opening at it.
+    for (rt::ParamSmoother& plane_gain : lane.surround_gain) {
+      plane_gain.reset(plane_gain.target());
+    }
     // Quiesce the lane's channel-strip gain stages too so the first rendered
     // block opens without an insert/fader ramp-in.
     if (lane.strip != nullptr) lane.strip->settle();
@@ -589,6 +604,9 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
     lane.gate.prepare(sample_rate_, 10.0f);
+    for (rt::ParamSmoother& plane_gain : lane.surround_gain) {
+      plane_gain.prepare(sample_rate_, 5.0f);
+    }
     lane.fader_gain.reset(1.0f);
     lane.pan.reset(0.0f);
     lane.gate.reset(1.0f);
@@ -596,7 +614,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.mute = false;
     lane.monitor_mode = TrackMonitorMode::kOff;
     lane.strip = nullptr;
-    lane.surround_gain.fill(0.0f);
+    for (rt::ParamSmoother& plane_gain : lane.surround_gain) plane_gain.reset(0.0f);
     lane.surround_primed = false;
   };
 

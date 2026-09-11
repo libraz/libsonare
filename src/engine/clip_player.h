@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "engine/warp_stretch.h"
+#include "rt/overflow_counter.h"
 #include "rt/pan_law.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
@@ -75,6 +76,10 @@ struct ClipPageRequest {
   uint32_t clip_id = 0;
   uint32_t channel = 0;
   int64_t sample = 0;
+  /// True when the audio thread already read this page and got silence; false
+  /// when the look-ahead pass reported it before the read. Only the first is a
+  /// dropout — a sink that raises an underrun must gate on this.
+  bool read_miss = true;
 };
 
 static_assert(std::is_trivially_copyable_v<ClipPageRequest>,
@@ -236,7 +241,7 @@ class ClipPlayer final : public rt::ProcessorBase {
   /// Number of blocks in which a @c WarpMode::kTimeStretch clip could not be
   /// given a stretcher voice and fell back to resampling. Monotonic; read from
   /// the control thread for telemetry.
-  uint32_t warp_stretch_overflow_count() const noexcept { return stretch_overflow_count_; }
+  uint32_t warp_stretch_overflow_count() const noexcept { return stretch_overflow_count_.load(); }
 
  private:
   // Curves come from the clip itself (fade_in_curve / fade_out_curve), so no
@@ -257,7 +262,8 @@ class ClipPlayer final : public rt::ProcessorBase {
   static LoopRead resolve_loop_read(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
   static int source_channel_count(const ClipSchedule& clip) noexcept;
   static int64_t source_sample_count(const ClipSchedule& clip) noexcept;
-  void notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept;
+  void notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample,
+                        bool read_miss) noexcept;
   /// Reports the pages this clip will read over the look-ahead window that are
   /// not resident yet. Runs after the block is rendered, so its requests land
   /// behind this block's genuine misses in the queue and a host that keeps only
@@ -303,7 +309,10 @@ class ClipPlayer final : public rt::ProcessorBase {
   std::array<WarpStretchVoice, kMaxWarpedClips> stretch_voices_{};
   std::array<std::vector<float>, WarpStretchVoice::kMaxChannels> stretch_scratch_{};
   int stretch_scratch_capacity_ = 0;
-  uint32_t stretch_overflow_count_ = 0;
+  // Bumped on the audio thread by acquire_stretch_voice and read from the
+  // control thread by the accessor above, so it is atomic rather than a plain
+  // counter — the requirement overflow_counter.h states for exactly this pair.
+  rt::OverflowCounter stretch_overflow_count_{};
 
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

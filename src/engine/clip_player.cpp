@@ -68,7 +68,7 @@ void ClipPlayer::prepare(double sample_rate, int max_block_size) {
   for (auto& voice : stretch_voices_) {
     voice.prepare(max_block_size_, WarpStretchVoice::kMaxChannels);
   }
-  stretch_overflow_count_ = 0;
+  stretch_overflow_count_.reset();
 }
 
 void ClipPlayer::process(float* const* channels, int num_channels, int num_samples) {
@@ -456,7 +456,7 @@ WarpStretchVoice* ClipPlayer::acquire_stretch_voice(uint32_t clip_id) noexcept {
   // still streaming would swap two clips' overlap state mid-note, which is a
   // far worse artefact than the resampling fallback.
   if (oldest && oldest->idle_blocks() > 0) return oldest;
-  ++stretch_overflow_count_;
+  stretch_overflow_count_.bump();
   return nullptr;
 }
 
@@ -511,7 +511,8 @@ bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channe
   return true;
 }
 
-void ClipPlayer::notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept {
+void ClipPlayer::notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample,
+                                  bool read_miss) noexcept {
   if (!page_request_sink_ || !clip.page_provider) return;
   const int64_t frames = std::max<int64_t>(clip.page_provider->page_frames(), 1);
   const int64_t page_index = sample >= 0 ? sample / frames : sample;
@@ -529,7 +530,7 @@ void ClipPlayer::notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t 
       page_miss_cache_overflowed_ = true;
     }
   }
-  page_request_sink_->on_clip_page_miss({clip.id, channel, sample});
+  page_request_sink_->on_clip_page_miss({clip.id, channel, sample, read_miss});
 }
 
 void ClipPlayer::prefetch_pages(const ClipSchedule& clip, int64_t block_end_sample) noexcept {
@@ -570,8 +571,11 @@ void ClipPlayer::prefetch_pages(const ClipSchedule& clip, int64_t block_end_samp
       // One request per page, not per channel: a provider page carries every
       // channel, so a per-channel fan-out would only multiply identical
       // requests. Channel 0 shares the dedupe cache with genuine misses, so a
-      // page already requested this block is not requested twice.
-      notify_page_miss(clip, 0, sample);
+      // page already requested this block is not requested twice — and because
+      // this pass runs after the block's own reads, a boundary page that really
+      // missed is already queued as a read miss and this probe is the one
+      // dropped, not the other way round.
+      notify_page_miss(clip, 0, sample, /*read_miss=*/false);
     }
     last_page = page_index;
     if (timeline >= window_end - 1) break;
@@ -590,7 +594,7 @@ float ClipPlayer::sample_channel(const ClipSchedule& clip, int src_ch, double so
       if (out && clip.page_provider->sample_at(src_ch, sample, out)) {
         return true;
       }
-      notify_page_miss(clip, src_ch, sample);
+      notify_page_miss(clip, src_ch, sample, /*read_miss=*/true);
       return false;
     }
     if (!out || !clip.buffer.channels || !clip.buffer.channels[src_ch]) return false;

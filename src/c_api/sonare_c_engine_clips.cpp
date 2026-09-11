@@ -276,6 +276,22 @@ SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
   return SONARE_OK;
 }
 
+SonareError sonare_engine_clip_page_request_overflow_count(SonareRealtimeEngine* engine,
+                                                           uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = engine->engine.clip_page_request_overflow_count();
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_warp_stretch_overflow_count(SonareRealtimeEngine* engine,
+                                                      uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = engine->engine.warp_stretch_overflow_count();
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_set_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
                                                         int64_t frames) {
   SONARE_C_API_ENTRY;

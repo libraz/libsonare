@@ -241,7 +241,7 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
     slot.smoother.prepare(sample_rate_, 5.0f);
     slot.smoother.reset(0.0f);
   }
-  instrument_automation_overflow_count_ = 0;
+  instrument_automation_overflow_count_.reset();
   // The destination table is NOT cleared here: reserved ids handed out before a
   // re-prepare must keep resolving to the destination they were minted for.
 #endif

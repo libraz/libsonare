@@ -216,6 +216,9 @@ SonareError sonare_engine_resolve_instrument_automation_id(SonareRealtimeEngine*
   if (!engine || !param_name || param_name[0] == '\0' || !out_id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Defined on every exit path, so an unresolved name and a feature-disabled
+  // build both leave the caller a readable id rather than uninitialised memory.
+  *out_id = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -631,7 +634,10 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t destination_id,
                                           const uint8_t* data, size_t size, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine || !data || size == 0 || size > 512) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || !data || size == 0 ||
+      size > sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)render_frame;
@@ -685,6 +691,7 @@ SonareError sonare_engine_external_midi_dropped_count(SonareRealtimeEngine* engi
   SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
+  *out_count = 0;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY

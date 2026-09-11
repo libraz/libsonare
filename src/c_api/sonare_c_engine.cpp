@@ -72,6 +72,10 @@ static_assert(SONARE_ENGINE_MAX_COMMAND_CAPACITY == engine::RealtimeEngine::kMax
               "SONARE_ENGINE_MAX_COMMAND_CAPACITY drift");
 static_assert(SONARE_ENGINE_MAX_TELEMETRY_CAPACITY == engine::RealtimeEngine::kMaxTelemetryCapacity,
               "SONARE_ENGINE_MAX_TELEMETRY_CAPACITY drift");
+// sonare_engine_push_midi_sysex's doc promises a 1..512 byte payload and the
+// guard spells that ceiling as the engine constant; this pins the prose to it.
+static_assert(engine::RealtimeEngine::kMaxSysExPayloadBytes == 512,
+              "sonare_engine_push_midi_sysex documents a 1..512 byte SysEx payload");
 
 // The engine multiplies telemetry_capacity by the metered lane count before
 // reserving, so an unchecked capacity is an unbounded allocation (and, far
@@ -133,7 +137,8 @@ SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, do
   SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(sample_rate) || sample_rate < kMinSampleRate ||
       sample_rate > kMaxSampleRate || max_block_size <= 0 || max_channels <= 0 ||
-      max_channels > 64 || !capacities_in_range(command_capacity, telemetry_capacity)) {
+      static_cast<size_t>(max_channels) > engine::RealtimeEngine::kMaxAudioChannels ||
+      !capacities_in_range(command_capacity, telemetry_capacity)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -225,6 +230,9 @@ SonareError sonare_engine_set_tempo_segments(SonareRealtimeEngine* engine,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<transport::TempoSegment> out;
+  // The staging vector is sized from a caller-supplied count, so its allocation
+  // has to sit inside the try or a bad_alloc crosses the extern "C" boundary.
+  SONARE_C_TRY
   out.reserve(segment_count);
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTempoSegment& in = segments[i];
@@ -239,7 +247,6 @@ SonareError sonare_engine_set_tempo_segments(SonareRealtimeEngine* engine,
     seg.end_bpm = in.end_bpm;
     out.push_back(seg);
   }
-  SONARE_C_TRY
   engine->engine.set_tempo_segments(std::move(out));
   return SONARE_OK;
   SONARE_C_CATCH
@@ -253,6 +260,9 @@ SonareError sonare_engine_set_time_signature_segments(
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<transport::TimeSignatureSegment> out;
+  // Same reason as sonare_engine_set_tempo_segments: a caller-sized allocation
+  // must not throw outside the try.
+  SONARE_C_TRY
   out.reserve(segment_count);
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTimeSignatureSegment& in = segments[i];
@@ -266,7 +276,6 @@ SonareError sonare_engine_set_time_signature_segments(
     seg.time_sig.denominator = in.denominator;
     out.push_back(seg);
   }
-  SONARE_C_TRY
   engine->engine.set_time_signature_segments(std::move(out));
   return SONARE_OK;
   SONARE_C_CATCH

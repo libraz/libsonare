@@ -60,7 +60,7 @@ bool RealtimeEngine::route_instrument_param_smoothed(uint32_t destination_id, un
     return true;
   }
   if (free_slot == nullptr) {
-    ++instrument_automation_overflow_count_;
+    instrument_automation_overflow_count_.bump();
     return false;
   }
   free_slot->active = true;

@@ -373,6 +373,21 @@ SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, in
 SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
                                                 SonareClipPageRequest* out_request,
                                                 int* out_has_request);
+/// @brief Number of clip-page requests dropped because the bounded queue was full.
+/// @details Advisory telemetry; monotonic within a prepared session and reset by
+///   @ref sonare_engine_prepare. A non-zero count means the host is draining
+///   @ref sonare_engine_pop_clip_page_request too slowly and some pages were
+///   never asked for, so their reads produced silence.
+SonareError sonare_engine_clip_page_request_overflow_count(SonareRealtimeEngine* engine,
+                                                           uint32_t* out_count);
+/// @brief Number of blocks in which a time-stretched clip fell back to resampling.
+/// @details Advisory telemetry; monotonic within a prepared session and reset by
+///   @ref sonare_engine_prepare. Only a fixed number of stretcher voices exist,
+///   so a project with more overlapping @c kTimeStretch clips than voices plays
+///   some of them pitch-shifted instead. A non-zero count is the only way to
+///   detect that degradation.
+SonareError sonare_engine_warp_stretch_overflow_count(SonareRealtimeEngine* engine,
+                                                      uint32_t* out_count);
 /// @brief Sets the clip-page look-ahead window in timeline frames.
 /// @details The clip player reports the pages it is ABOUT TO read that are not
 ///   resident yet, so a streaming host can service them before the audio thread

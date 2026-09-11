@@ -17,6 +17,7 @@
 #include "engine/metronome.h"
 #include "engine/telemetry.h"
 #include "rt/command.h"
+#include "rt/overflow_counter.h"
 #include "rt/param_smoother.h"
 #include "rt/rt_publisher.h"
 #include "rt/seqlock_cell.h"
@@ -133,6 +134,16 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// bound keeps a generous host request from turning into a multi-gigabyte
   /// reserve, and keeps the fan-out multiply well inside size_t.
   static constexpr size_t kMaxTelemetryCapacity = 16384;
+  /// @brief Largest @p max_channels @ref prepare accepts, and the width of every
+  /// pre-allocated channel-pointer scratch row. Distinct from
+  /// @c kMaxClipPageChannels, which currently holds the same value for an
+  /// unrelated reason.
+  static constexpr size_t kMaxAudioChannels = 64;
+  /// @brief Largest SysEx frame @ref push_midi_sysex accepts, in bytes.
+  /// @details Sizes the bounded, allocation-free payload slot the control thread
+  /// copies into, so it is also the ceiling the C ABI rejects against rather
+  /// than a second hand-copied limit.
+  static constexpr size_t kMaxSysExPayloadBytes = 512;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   class MidiSyncSink {
@@ -259,6 +270,15 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// Reset by prepare(). The audio thread increments this without allocating or blocking.
   uint32_t clip_page_request_overflow_count() const noexcept {
     return clip_page_request_overflow_count_.load(std::memory_order_relaxed);
+  }
+  /// Cumulative number of blocks in which a time-stretched clip could not claim
+  /// a stretcher voice and fell back to resampled (pitch-shifted) playback.
+  /// Reset by prepare(). Only 8 voices exist, so a project with more overlapping
+  /// warped clips degrades silently without this count. Forwarded from the
+  /// player, which owns the counter; the audio thread increments it without
+  /// allocating or blocking.
+  uint32_t warp_stretch_overflow_count() const noexcept {
+    return clip_player_.warp_stretch_overflow_count();
   }
   /// Timeline frames of clip-page look-ahead. The player reports the pages it is
   /// about to read that are not resident yet, so a streaming host can service
@@ -449,7 +469,7 @@ class RealtimeEngine : private ClipPageRequestSink {
                                            const std::string& key) noexcept;
   /// Slot-table overflows for instrument-parameter automation since prepare().
   uint32_t instrument_automation_overflow_count() const noexcept {
-    return instrument_automation_overflow_count_;
+    return instrument_automation_overflow_count_.load();
   }
 #endif
   void set_capture_segment(CaptureSegment segment) noexcept;
@@ -875,7 +895,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   // rewriting mid-read (a burst deeper than kSysExPayloadSlots before the audio
   // thread drains it), so a torn payload is never fed to an instrument. SysEx is
   // a sparse control-rate message, so the ring depth is ample in practice.
-  static constexpr size_t kMaxSysExPayloadBytes = 512;
   static constexpr size_t kSysExPayloadSlots = 64;
   struct SysExPayloadSlot {
     // The generation seqlock (release/acquire) supplies all cross-thread
@@ -967,7 +986,14 @@ class RealtimeEngine : private ClipPageRequestSink {
   // always fully written before the count makes it reachable.
   std::atomic<size_t> instrument_auto_destination_count_{0};
   std::array<InstrumentAutoSlot, kMaxInstrumentAutomations> instrument_auto_slots_{};
-  uint32_t instrument_automation_overflow_count_ = 0;
+  // Bumped on the audio thread by route_instrument_param_smoothed. Atomic is
+  // PRECAUTIONARY rather than required: no cross-thread reader exists in tree
+  // today, so the strict audio-write/other-thread-read rule does not reach it.
+  // A public accessor on an audio-thread counter is the anomaly (the purely
+  // internal telemetry_overflow_count_ has none), and a relaxed atomic costs
+  // nothing, so back the accessor rather than leave a sibling of the same
+  // shape raw.
+  rt::OverflowCounter instrument_automation_overflow_count_{};
 #endif
   CaptureSink capture_sink_{};
   std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};
@@ -1030,7 +1056,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Pre-allocated channel pointer scratch reused by render_offline so the
   // per-block loop performs no heap allocation.
   std::vector<float*> render_block_channels_{};
-  static constexpr size_t kMaxAudioChannels = 64;
   int prepared_channels_ = static_cast<int>(kMaxAudioChannels);
   std::vector<float> input_capture_storage_{};
   std::array<float*, kMaxAudioChannels> input_capture_channels_{};

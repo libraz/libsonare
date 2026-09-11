@@ -365,6 +365,9 @@ SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngin
   if (!engine || track_id == 0 || !param_name || param_name[0] == '\0' || !out_id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Defined on every exit path, so an unresolved name and a feature-disabled
+  // build both leave the caller a readable id rather than uninitialised memory.
+  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)track_id;
   (void)insert_index;
@@ -388,6 +391,8 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareRealtimeEngi
   if (!engine || !param_name || param_name[0] == '\0' || !out_id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Defined on every exit path, as in the track and bus resolvers.
+  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)insert_index;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -410,6 +415,8 @@ SonareError sonare_engine_resolve_bus_insert_automation_id(SonareRealtimeEngine*
   if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0' || !out_id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Defined on every exit path, as in the track and master resolvers.
+  *out_id = 0;
 #if !defined(SONARE_WITH_MIXING)
   (void)bus_id;
   (void)insert_index;

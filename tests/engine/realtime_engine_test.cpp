@@ -1557,6 +1557,73 @@ TEST_CASE("RealtimeEngine drains paged clip requests and underrun telemetry",
   REQUIRE(left[3] == 0.0f);
 }
 
+TEST_CASE("RealtimeEngine look-ahead prefetch requests pages without reporting an underrun",
+          "[engine][realtime][clip_pages]") {
+  // Every read inside the block succeeds, so nothing produced silence; only the
+  // look-ahead pass reports pages, and those are fetch requests rather than
+  // dropouts. Nothing else installs a provider overriding page_resident(), so
+  // this is the only coverage of the prefetch path at the engine level.
+  class NonResidentProvider final : public sonare::engine::ClipPagedAudioProvider {
+   public:
+    int num_channels() const noexcept override { return 1; }
+    int64_t num_samples() const noexcept override { return 64; }
+    int64_t page_frames() const noexcept override { return 4; }
+
+    bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
+      if (channel != 0 || !out || sample < 0 || sample >= num_samples()) return false;
+      *out = 1.0f;
+      return true;
+    }
+
+    // Resident for the pages the block actually reads, absent beyond them, so
+    // the look-ahead pass has something to report and the reads never fail.
+    bool page_resident(int64_t page_index) const noexcept override { return page_index < 1; }
+  };
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 4, 16, 16);
+  engine.set_clip_page_prefetch_frames(32);
+
+  auto provider = std::make_shared<NonResidentProvider>();
+  sonare::engine::ClipSchedule clip{45, {}, 0.0, 0, 0, 64, false, 1.0f, 0, 0};
+  clip.page_provider = provider;
+  engine.set_clips({clip});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, 4> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, 4);
+
+  // The look-ahead pass reported at least one page, and every request it made
+  // is flagged as a prefetch rather than a read miss.
+  sonare::engine::ClipPageRequest request{};
+  int requests = 0;
+  while (engine.pop_clip_page_request(request)) {
+    REQUIRE(request.clip_id == 45);
+    REQUIRE_FALSE(request.read_miss);
+    ++requests;
+  }
+  REQUIRE(requests > 0);
+
+  // And no dropout was reported, because no read failed.
+  sonare::engine::Telemetry telemetry{};
+  int underrun_count = 0;
+  while (engine.pop_telemetry(telemetry)) {
+    if (telemetry.type == sonare::engine::TelemetryType::kError &&
+        telemetry.error == sonare::engine::TelemetryErrorCode::kClipPageUnderrun) {
+      ++underrun_count;
+    }
+  }
+  REQUIRE(underrun_count == 0);
+  // The audio the block did read is intact, confirming nothing was silenced.
+  REQUIRE(left[0] == 1.0f);
+  REQUIRE(left[3] == 1.0f);
+}
+
 TEST_CASE("RealtimeEngine counts paged clip requests dropped by its bounded queue",
           "[engine][realtime][clip_pages]") {
   class AlwaysMissingPagedProvider final : public sonare::engine::ClipPagedAudioProvider {

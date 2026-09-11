@@ -146,13 +146,161 @@ TEST_CASE("sonare_engine_graph_node/connection_count report feature availability
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("engine MIDI getters define their out-parameter on every exit path",
+          "[c_api][engine][midi]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  uint32_t dropped = 0xDEADBEEF;
+  uint32_t automation_id = 0xDEADBEEF;
+  size_t instrument_count = 123;
+  size_t pending_count = 456;
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_external_midi_dropped_count(engine, &dropped) == SONARE_OK);
+  // No instrument is bound to this destination, so the name cannot resolve.
+  REQUIRE(sonare_engine_resolve_instrument_automation_id(engine, 7, "cutoff", &automation_id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_midi_instrument_count(engine, &instrument_count) == SONARE_OK);
+  REQUIRE(sonare_engine_midi_input_pending_count(engine, &pending_count) == SONARE_OK);
+#else
+  REQUIRE(sonare_engine_external_midi_dropped_count(engine, &dropped) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_resolve_instrument_automation_id(engine, 7, "cutoff", &automation_id) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_midi_instrument_count(engine, &instrument_count) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_midi_input_pending_count(engine, &pending_count) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  REQUIRE(dropped == 0);
+  REQUIRE(automation_id == 0);
+  REQUIRE(instrument_count == 0);
+  REQUIRE(pending_count == 0);
+
+  // The rejected-buffer path writes the count before it validates max_events.
+  size_t drained = 789;
+  SonareExternalMidiEvent events[3] = {};
+  REQUIRE(sonare_engine_drain_external_midi(engine, events, 2, &drained) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(drained == 0);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_push_midi_sysex enforces the documented payload ceiling",
+          "[c_api][engine][midi]") {
+  // The header promises 1..512 bytes and the C-ABI guard spells that ceiling as
+  // the engine constant. Drive the boundary from the constant so a change to it
+  // that leaves the header prose behind fails here as well as at the
+  // static_assert in sonare_c_engine.cpp.
+  constexpr size_t ceiling = sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes;
+  REQUIRE(ceiling == 512);
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  std::vector<uint8_t> payload(ceiling + 1, 0x00);
+  payload.front() = 0xF0;
+  payload[ceiling - 1] = 0xF7;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 0, payload.data(), ceiling, -1) == SONARE_OK);
+#else
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 0, payload.data(), ceiling, -1) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 0, payload.data(), ceiling + 1, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 0, payload.data(), 0, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 0, nullptr, ceiling, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
+          "[c_api][engine][json]") {
+  // The shared parser raises one JsonError; the entry points used to map it to
+  // three different codes, including SONARE_ERROR_UNKNOWN. Syntactically
+  // malformed input is SONARE_ERROR_INVALID_FORMAT everywhere, and never
+  // UNKNOWN on any path.
+  const char* malformed[] = {
+      "not json", "{", "{\"a\":}", "{\"a\":1,}", "[1,", "", "{\"a\":1 \"b\":2}",
+  };
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  for (const char* json : malformed) {
+    INFO(json);
+#if defined(SONARE_WITH_ARRANGEMENT)
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, json) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_project_set_mixer_scene_json(project, json) == SONARE_ERROR_INVALID_FORMAT);
+#endif
+#if defined(SONARE_WITH_MIXING)
+    REQUIRE(sonare_engine_set_master_strip_json(engine, json) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_engine_set_track_strip_json(engine, 1, json) == SONARE_ERROR_INVALID_FORMAT);
+#endif
+#if defined(SONARE_WITH_MASTERING)
+    SonareEq* eq = sonare_eq_create(48000.0, 512);
+    REQUIRE(eq != nullptr);
+    REQUIRE(sonare_eq_set_band(eq, 0, json) == SONARE_ERROR_INVALID_FORMAT);
+    sonare_eq_destroy(eq);
+#endif
+  }
+
+  sonare_project_destroy(project);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine degradation counters are reachable through the C ABI",
+          "[c_api][engine][clip_pages]") {
+  // Both counters record a silent degradation: page requests the bounded queue
+  // could not retain, and time-stretched clips that fell back to resampling
+  // because no stretcher voice was free. Neither had a C-ABI entry point, so no
+  // host over the C ABI could detect either one.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  uint32_t pages = 0xDEADBEEFu;
+  uint32_t stretch = 0xDEADBEEFu;
+  REQUIRE(sonare_engine_clip_page_request_overflow_count(engine, &pages) == SONARE_OK);
+  REQUIRE(sonare_engine_warp_stretch_overflow_count(engine, &stretch) == SONARE_OK);
+  // prepare() resets both, so a freshly prepared engine reads zero on each -
+  // which is also what makes a later non-zero reading meaningful.
+  REQUIRE(pages == 0);
+  REQUIRE(stretch == 0);
+
+  // Both reject a null engine and a null out pointer, like every sibling getter.
+  REQUIRE(sonare_engine_clip_page_request_overflow_count(nullptr, &pages) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_clip_page_request_overflow_count(engine, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_warp_stretch_overflow_count(nullptr, &stretch) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_warp_stretch_overflow_count(engine, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1) == SONARE_OK);
 
-  const uint8_t sysex[513]{};
+  const uint8_t sysex[sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes + 1]{};
   REQUIRE(sonare_engine_push_midi_sysex(engine, 0, sysex, sizeof(sysex), -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_prepare(engine, std::numeric_limits<double>::quiet_NaN(), 128, 1, 1) ==
@@ -162,7 +310,11 @@ TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engin
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 2) == SONARE_OK);
   REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 65) ==
+  // Driven from the engine constant, so raising it moves the boundary here too.
+  constexpr int max_channels = static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, max_channels) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, max_channels + 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
 #if defined(SONARE_WITH_MIXING)
@@ -347,6 +499,49 @@ TEST_CASE("sonare_engine tempo and time-signature segments validate their input"
   REQUIRE(sonare_engine_set_time_signature_segments(engine, sig, 2) == SONARE_OK);
   const SonareProjectTimeSignatureSegment bad_sig[] = {{0.0, 0, 4}};
   REQUIRE(sonare_engine_set_time_signature_segments(engine, bad_sig, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("tempo and time-signature segment setters keep exceptions inside the C ABI",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // An above-bound count is refused by the non-throwing guard, so the staging
+  // vector is never sized from it.
+  const SonareProjectTempoSegment one_tempo[] = {{0.0, 120.0, 0.0, 0.0}};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, one_tempo, std::numeric_limits<size_t>::max()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTimeSignatureSegment one_sig[] = {{0.0, 4, 4}};
+  REQUIRE(sonare_engine_set_time_signature_segments(engine, one_sig,
+                                                    std::numeric_limits<size_t>::max()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // A count that really reaches reserve()/push_back(): the staging allocation
+  // and the per-segment validation both run inside the try block, so a rejected
+  // segment in the middle of a large list still leaves through a SonareError
+  // return rather than an unwind.
+  const size_t large_count = 100000;
+  std::vector<SonareProjectTempoSegment> tempo(large_count);
+  for (size_t i = 0; i < large_count; ++i) {
+    tempo[i] = {static_cast<double>(i), 120.0, 0.0, 0.0};
+  }
+  REQUIRE(sonare_engine_set_tempo_segments(engine, tempo.data(), tempo.size()) == SONARE_OK);
+  tempo[large_count / 2].bpm = -1.0;
+  REQUIRE(sonare_engine_set_tempo_segments(engine, tempo.data(), tempo.size()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  std::vector<SonareProjectTimeSignatureSegment> sig(large_count);
+  for (size_t i = 0; i < large_count; ++i) {
+    sig[i] = {static_cast<double>(i), 4, 4};
+  }
+  REQUIRE(sonare_engine_set_time_signature_segments(engine, sig.data(), sig.size()) == SONARE_OK);
+  sig[large_count / 2].numerator = 0;
+  REQUIRE(sonare_engine_set_time_signature_segments(engine, sig.data(), sig.size()) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
@@ -1209,13 +1404,16 @@ TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[
   REQUIRE(sonare_engine_set_bus_strip_insert_param_by_name(engine, 1, 0, "band0.gainDb", -3.0f) ==
           SONARE_OK);
 
-  // Unknown bus / insert / name are rejected and leave out_id untouched.
-  uint32_t untouched = 0xDEADBEEFu;
+  // An unknown bus / insert / name is rejected, and out_id is defined rather
+  // than left holding whatever the caller's local happened to contain.
+  uint32_t unresolved = 0xDEADBEEFu;
   REQUIRE(sonare_engine_resolve_bus_insert_automation_id(
-              engine, 9, 0, "band0.gainDb", &untouched) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(untouched == 0xDEADBEEFu);
-  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "nope", &untouched) ==
+              engine, 9, 0, "band0.gainDb", &unresolved) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(unresolved == 0);
+  unresolved = 0xDEADBEEFu;
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "nope", &unresolved) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(unresolved == 0);
   REQUIRE(sonare_engine_set_bus_strip_insert_param_by_name(engine, 9, 0, "band0.gainDb", 1.0f) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
@@ -1240,6 +1438,40 @@ TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[
   sonare_engine_destroy(engine);
 }
 #endif
+
+TEST_CASE("insert automation resolvers define out_id on every exit path",
+          "[c_api][engine][mixing]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // Nothing is bound to these targets, so a mixing-enabled build takes the
+  // id < 0 path and a mixing-off build takes the NOT_SUPPORTED branch. The
+  // caller's sentinel must be gone either way.
+#if defined(SONARE_WITH_MIXING)
+  const SonareError expected = SONARE_ERROR_INVALID_PARAMETER;
+#else
+  const SonareError expected = SONARE_ERROR_NOT_SUPPORTED;
+#endif
+
+  uint32_t track_id = 0xDEADBEEFu;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 7, 0, "cutoff", &track_id) ==
+          expected);
+  REQUIRE(track_id == 0);
+
+  uint32_t master_id = 0xDEADBEEFu;
+  REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "cutoff", &master_id) ==
+          expected);
+  REQUIRE(master_id == 0);
+
+  uint32_t bus_id = 0xDEADBEEFu;
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 7, 0, "cutoff", &bus_id) ==
+          expected);
+  REQUIRE(bus_id == 0);
+
+  sonare_engine_destroy(engine);
+}
 
 TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][engine]") {
   constexpr int kBlock = 256;
@@ -2098,6 +2330,23 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"chord_intervals\":[0,7.5]}") ==
           SONARE_ERROR_INVALID_PARAMETER);
+  // The three velocity-curve fields are narrowed to float from a full JSON
+  // double, so a value outside float range is refused rather than cast first
+  // and inspected as +inf afterwards.
+  for (const char* key : {"velocity_scale", "velocity_offset", "velocity_gamma"}) {
+    const std::string too_large = std::string("{\"") + key + "\":1e39}";
+    const std::string too_small = std::string("{\"") + key + "\":-1e39}";
+    INFO(key);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_large.c_str()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_small.c_str()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+  REQUIRE(
+      sonare_engine_set_midi_fx(
+          engine, 5, "{\"velocity_scale\":1.5,\"velocity_offset\":-4,\"velocity_gamma\":0.8}") ==
+      SONARE_OK);
+  REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
 #else
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") ==
           SONARE_ERROR_NOT_SUPPORTED);

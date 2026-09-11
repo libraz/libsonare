@@ -616,11 +616,13 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
   // pre-roll settle pass) and avoids a first-block click live.
   if (!lane.surround_primed) {
     for (int p = 0; p < planes; ++p) {
-      lane.surround_gain[static_cast<size_t>(p)] = target.gain[static_cast<size_t>(p)];
+      lane.surround_gain[static_cast<size_t>(p)].reset(target.gain[static_cast<size_t>(p)]);
     }
     lane.surround_primed = true;
   }
-  const float inv_n = num_samples > 0 ? 1.0f / static_cast<float>(num_samples) : 0.0f;
+  for (int p = 0; p < planes; ++p) {
+    lane.surround_gain[static_cast<size_t>(p)].set_target(target.gain[static_cast<size_t>(p)]);
+  }
   // Block-invariant, so it is resolved once instead of per sample per plane.
   const bool afl = lane.monitor_mode == TrackMonitorMode::kAfl && monitor_bus_ != nullptr;
   const int afl_planes = afl ? std::min(planes, monitor_bus_channel_count_) : 0;
@@ -639,21 +641,16 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
       // -6 dB stereo fold to a point source keeps a correlated centre at unity.
       src = 0.5f * (left + right);
     }
-    // Linearly ramp each plane's gain from last block's value to this block's
-    // target so a moving pan does not step.
-    const float t = static_cast<float>(i + 1) * inv_n;
+    // One smoother step per plane per sample: the glide is a sample-rate-derived
+    // time constant, so it is identical however process() split the block.
     for (int p = 0; p < planes; ++p) {
-      const float start = lane.surround_gain[static_cast<size_t>(p)];
-      const float g = start + (target.gain[static_cast<size_t>(p)] - start) * t;
+      const float g = lane.surround_gain[static_cast<size_t>(p)].process();
       const float sample = g * src;
       if (dest[p] != nullptr) dest[p][i] += sample;
       if (p < afl_planes && monitor_bus_[p] != nullptr) {
         monitor_bus_[p][i] += sample;
       }
     }
-  }
-  for (int p = 0; p < planes; ++p) {
-    lane.surround_gain[static_cast<size_t>(p)] = target.gain[static_cast<size_t>(p)];
   }
 }
 

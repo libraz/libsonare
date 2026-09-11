@@ -1001,6 +1001,73 @@ TEST_CASE("TrackMixerRuntime scatters a lane across a surround master",
   }
 }
 
+TEST_CASE("TrackMixerRuntime surround pan glide is independent of sub-block partitioning",
+          "[engine][track_mixer][surround]") {
+  // process() splits a block at automation / MIDI / clip boundaries, so
+  // consecutive sub-blocks differ in length. A scatter gain ramped to its target
+  // over "this sub-block" therefore glides for a different real duration
+  // depending on where the split fell -- the same gesture rendered live and in
+  // an offline bounce would not match. Driven from a sample-rate time constant
+  // it is identical either way: one 64-sample block must equal four 16-sample
+  // ones, sample for sample.
+  constexpr int kTotal = 64;
+  constexpr int kChunk = 16;
+  constexpr double kSr = 48000.0;
+
+  const auto run = [](int chunk) {
+    std::array<float, kTotal> src_l{};
+    std::array<float, kTotal> src_r{};
+    src_l.fill(1.0f);
+    src_r.fill(1.0f);
+
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(kSr, kTotal);
+    REQUIRE(mixer.set_track_lanes({{10}}));
+    sonare::mixing::api::Strip spec;
+    spec.id = "vox";
+    spec.surround_pan.azimuth = -110.0f;
+    REQUIRE(mixer.set_track_strip(10, spec));
+    mixer.settle_smoothers();
+
+    // Prime: the first surround block snaps to placement, so the glide under
+    // test starts from a settled position rather than from silence.
+    std::array<std::array<float, kTotal>, 6> prime{};
+    std::array<float*, 6> prime_out{};
+    for (int c = 0; c < 6; ++c)
+      prime_out[static_cast<size_t>(c)] = prime[static_cast<size_t>(c)].data();
+    float* prime_src[] = {src_l.data(), src_r.data()};
+    REQUIRE(mixer.mix_source(10, prime_src, prime_out.data(), 6, kChunk));
+
+    // Move the pan. set_track_strip's in-place path retargets the smoothers
+    // without rebuilding the strip, so surround_primed stays set and what
+    // follows is a genuine glide rather than another snap.
+    spec.surround_pan.azimuth = 110.0f;
+    REQUIRE(mixer.set_track_strip(10, spec));
+
+    std::array<std::array<float, kTotal>, 6> planes{};
+    for (auto& plane : planes) plane.fill(0.0f);
+    for (int offset = 0; offset < kTotal; offset += chunk) {
+      std::array<float*, 6> out{};
+      for (int c = 0; c < 6; ++c) {
+        out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data() + offset;
+      }
+      float* chunk_src[] = {src_l.data() + offset, src_r.data() + offset};
+      REQUIRE(mixer.mix_source(10, chunk_src, out.data(), 6, chunk));
+    }
+    return planes;
+  };
+
+  const auto single = run(kTotal);
+  const auto chunked = run(kChunk);
+  for (int c = 0; c < 6; ++c) {
+    for (int i = 0; i < kTotal; ++i) {
+      INFO("plane " << c << " sample " << i);
+      REQUIRE(std::abs(chunked[static_cast<size_t>(c)][static_cast<size_t>(i)] -
+                       single[static_cast<size_t>(c)][static_cast<size_t>(i)]) < 1.0e-5f);
+    }
+  }
+}
+
 TEST_CASE("TrackMixerRuntime stereo render ignores surround pan",
           "[engine][track_mixer][surround]") {
   constexpr int kBlock = 16;

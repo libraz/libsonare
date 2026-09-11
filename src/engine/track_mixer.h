@@ -293,7 +293,17 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     mixing::ChannelStrip* strip = nullptr;
     // Per-output-plane scatter gains carried block-to-block so a moving surround
     // pan ramps click-free. Unused on the stereo path.
-    std::array<float, kMaxBusChannels> surround_gain{};
+    //
+    // Smoothers, not a linear per-block ramp: a ramp completes within whatever
+    // sub-block length process() happened to split at, so the same automation
+    // gesture glided over 0.67 ms at a 32-frame split and over 10 ms at a 512
+    // one. These carry the stereo pan smoother's 5 ms time constant, which is
+    // derived from the sample rate, so the gain at an absolute sample position
+    // no longer depends on the block partitioning. NOTE the consequence: a
+    // one-pole asymptotes rather than arriving, so a block can now END mid-glide
+    // and `surround_gain[p] == target.gain[p]` at a block boundary — true of the
+    // old ramp — no longer holds.
+    std::array<rt::ParamSmoother, kMaxBusChannels> surround_gain{};
     // False until the first surround block has run: the first block snaps the
     // scatter gains to their target (no fade-in from silence) so a bounce is
     // deterministic regardless of the pre-roll settle pass, and a live first
@@ -466,6 +476,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Post-strip, pre-fader snapshots of sidechain SOURCE lanes (the lane
   // buffers themselves are mutated in place by the fader/gate/pan stage).
   std::vector<float> key_scratch_;
+  // Frames each lane's key snapshot actually holds. process() is split into
+  // sub-blocks of differing lengths, so a snapshot taken at a shorter length
+  // leaves an older, longer sub-block's audio in the tail; consumers zero that
+  // tail rather than reading it. Audio-thread only.
+  std::array<int, kMaxTrackLanes> key_frames_{};
   // One mono plane per lane holding this block's fader x gate ramp.
   std::vector<float> lane_gain_scratch_;
   // Two lane-wide banks (post-fader source, then pre-fader source) reused by

@@ -216,13 +216,6 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   if (!instrument_rack_.set(destination_id, instrument)) {
     return false;  // rack full: leave existing bindings untouched
   }
-  if (previous != instrument) {
-    // Retire this destination's automation smoothers. Param ids are per
-    // instrument implementation, so carrying a slot across a swap would push the
-    // outgoing instrument's value into an unrelated parameter of the incoming
-    // one. The host re-resolves and re-drives after a rebind.
-    release_instrument_automations(destination_id);
-  }
   // The sequencer's sink is the rack itself (set in prepare); no per-instrument
   // sink wiring is needed. Prepare the freshly-registered instrument to the
   // engine's sample rate / block size. prepare() may allocate, so this stays a
@@ -236,13 +229,30 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   if (!recompute_pdc()) {
     // Compensation could not be reallocated, so the engine has fallen back to
     // none at all and this binding would render misaligned against the clip bus.
-    // Undo it and report: leaving it bound while answering false would strand a
-    // raw pointer in the rack, which the C-ABI and WASM wrappers free as soon as
-    // they see the false.
-    instrument_rack_.set(destination_id, nullptr);
-    release_instrument_automations(destination_id);
+    // Undo it and report. The INCOMING pointer must not stay in the rack: the
+    // C-ABI and WASM wrappers free it as soon as they see the false, which would
+    // strand it. But the OUTGOING one was never the caller's to free, so restore
+    // it rather than clearing the destination — a failed swap that unbinds a
+    // working instrument is a silent capability loss, and the rack-full branch
+    // above already leaves existing bindings untouched. When there is no
+    // distinct outgoing instrument, previous IS the caller's pointer, so clear.
+    instrument_rack_.set(destination_id, previous != instrument ? previous : nullptr);
+    // Result deliberately discarded: this recompute targets the configuration
+    // that was already in place before the failed bind, so it asks for storage
+    // the engine has already held. Checking it would only offer a second
+    // failure with no better answer available — the binding is already back and
+    // the caller is already being told false.
     (void)recompute_pdc();
     return false;
+  }
+  if (previous != instrument) {
+    // Retire this destination's automation smoothers, but only now that the
+    // swap has actually taken: param ids are per instrument implementation, so
+    // carrying a slot across a swap would push the outgoing instrument's value
+    // into an unrelated parameter of the incoming one. Releasing before the PDC
+    // result was known left a failed swap with the previous instrument bound
+    // and its automation already retired. The host re-resolves after a rebind.
+    release_instrument_automations(destination_id);
   }
   return true;
 }
