@@ -96,16 +96,21 @@ void init_nndsvd(const float* S, std::vector<float>& W, std::vector<float>& H, i
 }
 
 /// @brief Computes WH = W * H into `out` [n_features x n_frames].
+/// @details Component-major inner pass: a component is one contiguous row of H and the
+///          output row is written contiguously. Each output cell takes its terms in
+///          component order, which the multiplicative updates need -- a last-bit difference
+///          here compounds over n_iter.
 void multiply_WH(const std::vector<float>& W, const std::vector<float>& H, int n_features,
                  int n_components, int n_frames, std::vector<float>& out) {
   out.assign(static_cast<size_t>(n_features) * n_frames, 0.0f);
   for (int f = 0; f < n_features; ++f) {
-    for (int t = 0; t < n_frames; ++t) {
-      float s = 0.0f;
-      for (int c = 0; c < n_components; ++c) {
-        s += W[f * n_components + c] * H[c * n_frames + t];
+    float* out_row = out.data() + static_cast<size_t>(f) * n_frames;
+    for (int c = 0; c < n_components; ++c) {
+      const float w = W[f * n_components + c];
+      const float* h_row = H.data() + static_cast<size_t>(c) * n_frames;
+      for (int t = 0; t < n_frames; ++t) {
+        out_row[t] += w * h_row[t];
       }
-      out[f * n_frames + t] = s;
     }
   }
 }

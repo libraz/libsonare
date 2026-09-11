@@ -300,18 +300,15 @@ void require_finite_non_negative(const DecomposeResult& r) {
   }
 }
 
-/// @brief decompose()'s MU loop with the H update in its original frame-major traversal.
-/// @details The inner loop over features strides num_feat and den_feat, which is the shape the
-///          library replaced with per-frame accumulators. Seeded from decompose(n_iter=0) so
-///          the oracle inherits the library's own initialisation -- including the NNDSVD
-///          singular vectors, which are not reproducible here. This is a reimplementation,
-///          not the library's code, so it is only compared at one update step; see the test
-///          case for why the iteration count is what decides that.
-DecomposeResult oracle_decompose(const float* S, int n_features, int n_frames, int n_components,
-                                 int n_iter, float beta, const std::string& init) {
+/// @brief decompose()'s MU loop from an explicit (W, H), in its original traversals.
+/// @details Two shapes the library replaced live here: `rebuild()` derives each WH cell with a
+///          reduction over components, and the H update's inner loop over features strides
+///          num_feat and den_feat. The seed is a parameter because comparing a second update
+///          step requires starting it from the library's own first-step output; see the test
+///          cases for why the iteration count is what decides the comparison.
+DecomposeResult oracle_mu_steps(const float* S, DecomposeResult out, int n_features, int n_frames,
+                                int n_components, int n_iter, float beta) {
   constexpr float kEps = constants::kAmpEpsilon;
-  DecomposeResult out =
-      decompose(S, n_features, n_frames, n_components, /*n_iter=*/0, "mu", beta, init);
 
   const float exp_num = beta - 2.0f;
   const float exp_den = beta - 1.0f;
@@ -368,6 +365,16 @@ DecomposeResult oracle_decompose(const float* S, int n_features, int n_frames, i
     }
   }
   return out;
+}
+
+/// @brief The same loop seeded from the library's own initialisation.
+/// @details decompose(n_iter=0) returns the seed, so the oracle inherits the NNDSVD singular
+///          vectors, which are not reproducible here.
+DecomposeResult oracle_decompose(const float* S, int n_features, int n_frames, int n_components,
+                                 int n_iter, float beta, const std::string& init) {
+  return oracle_mu_steps(
+      S, decompose(S, n_features, n_frames, n_components, /*n_iter=*/0, "mu", beta, init),
+      n_features, n_frames, n_components, n_iter, beta);
 }
 
 /// @brief nn_filter() with the column norms and the cosine similarities in their original
@@ -499,6 +506,40 @@ TEST_CASE("decompose matches a frame-major oracle on H at one update step", "[ut
           decompose(S.data(), n_features, n_frames, n_components, 1, "mu", beta, init);
       const DecomposeResult want =
           oracle_decompose(S.data(), n_features, n_frames, n_components, 1, beta, init);
+      require_bit_equal(got.H, want.H);
+      require_ulp_bounded(got.W, want.W, kMaxUlpsW);
+    }
+  }
+}
+
+TEST_CASE("decompose matches the oracle on a second update step", "[util][decompose]") {
+  // The first step cannot see a WH buffer that is accumulated into rather than overwritten:
+  // WH is constructed zero-filled, so the first product is right whether or not the buffer is
+  // reset, and H is updated from that first product alone. The defect appears at the second
+  // step and nowhere earlier. Measured: an accumulating buffer leaves H exact at one
+  // iteration and moves all 87 cells at two.
+  //
+  // Two steps are compared without inheriting the first step's drift by seeding the oracle
+  // from the library's own n_iter=1 result, which is exactly the state the library's second
+  // iteration begins from. What is left is one update step from a shared seed, which is the
+  // comparison the case above shows comes back exact; H is exact here for all four
+  // beta/init combinations. W is ulp-bounded for the reason given there.
+  constexpr long long kMaxUlpsW = 16;
+
+  const int n_features = 13;
+  const int n_frames = 29;
+  const int n_components = 3;
+  const std::vector<float> S = traversal_fixture(n_features, n_frames, 0x5eedu);
+
+  for (float beta : {2.0f, 1.0f}) {
+    for (const std::string& init : {std::string("nndsvd"), std::string("random")}) {
+      CAPTURE(beta, init);
+      const DecomposeResult seed =
+          decompose(S.data(), n_features, n_frames, n_components, 1, "mu", beta, init);
+      const DecomposeResult got =
+          decompose(S.data(), n_features, n_frames, n_components, 2, "mu", beta, init);
+      const DecomposeResult want =
+          oracle_mu_steps(S.data(), seed, n_features, n_frames, n_components, 1, beta);
       require_bit_equal(got.H, want.H);
       require_ulp_bounded(got.W, want.W, kMaxUlpsW);
     }
