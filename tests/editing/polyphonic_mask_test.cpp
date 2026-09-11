@@ -392,6 +392,28 @@ double recovery_tolerance(double inharmonicity, int harmonic) {
   return std::max(1e-5, 8.0 * static_cast<double>(kUlpAboveOne) / (inharmonicity * h * h));
 }
 
+/// @brief Adds a harmonic tone whose partials carry the documented stretch.
+/// @details The positions come from @ref partial_hz, which is the test's own
+///          arithmetic. That makes this a fixture generator holding the same
+///          relation the library holds, so routing it to the library would make
+///          the case that reads it vacuous in exactly the way an expected-value
+///          oracle would -- the formula has to stay on this side.
+void add_stretched_tone(std::vector<float>& into, float f0_hz, float inharmonicity, int n_partials,
+                        float amplitude) {
+  const double nyquist = 0.5 * kSampleRate;
+  for (int h = 1; h <= n_partials; ++h) {
+    const double hz = partial_hz(static_cast<double>(f0_hz), h, static_cast<double>(inharmonicity));
+    if (hz >= nyquist) break;
+    const double phase = 0.37 * static_cast<double>(h) * static_cast<double>(h);
+    const float level = amplitude / static_cast<float>(h);
+    for (size_t i = 0; i < into.size(); ++i) {
+      into[i] += level * static_cast<float>(std::sin(sonare::constants::kTwoPiD * hz *
+                                                         static_cast<double>(i) / kSampleRate +
+                                                     phase));
+    }
+  }
+}
+
 }  // namespace
 
 // --- Shape and numbering ---------------------------------------------------
@@ -1909,5 +1931,92 @@ TEST_CASE("the stretch recovered from the claims is the one the config asked for
     INFO("spread over the fifth partial and up: " << high / low);
     REQUIRE(low > 0.0);
     REQUIRE(high / low <= 1.001);
+  }
+}
+
+TEST_CASE("a claim lands on the partial it names", "[polyphony_mask]") {
+  // What this buys, and what it does not.
+  //
+  // It does not buy independence from the stretch relation: the fixture places
+  // its partials with the same arithmetic the library places its claims with, so
+  // a library and a fixture that drifted together would still agree. Nothing can
+  // be independent of the relation short of measuring a real instrument.
+  //
+  // What it buys is the one thing nothing else here asserts -- that a claim
+  // contains signal at all. Every other geometry check in this file is
+  // internally consistent inside one assumed convention: the test converts bins
+  // to hertz as b * sample_rate / n_fft, checks centre_hz against that, and
+  // checks the range brackets that. If the spectrogram's own indexing disagreed
+  // with that convention, every one of them would still pass while the claims
+  // sat beside the partials rather than on them. This is the only check that
+  // ties a claim's bin index to the content of the transform it indexes into.
+  constexpr float kF0 = 300.0f;
+  constexpr int kPartials = 20;
+  // Clear of the claim's own skirt at two bins either side, and far short of the
+  // 28-bin partial spacing, so the guard band is spectrum between partials.
+  constexpr int kGuardOffset = 6;
+
+  for (const float stretch : {0.0f, 5e-4f}) {
+    INFO("inharmonicity " << stretch);
+    std::vector<float> samples(static_cast<size_t>(kSampleRate / 2), 0.0f);
+    add_stretched_tone(samples, kF0, stretch, kPartials, 0.5f);
+    const sonare::Spectrogram spec = spectrogram_of(audio_of(std::move(samples)));
+
+    NoteMaskConfig config;
+    config.n_harmonics = kPartials;
+    config.inharmonicity = stretch;
+    const std::vector<PartialClaim> claims = partial_claims(spec, kF0, config);
+    REQUIRE(claims.size() == static_cast<size_t>(kPartials));
+
+    const int frame = spec.n_frames() / 2;
+    REQUIRE(frame > 2);
+    const std::vector<float>& magnitude = spec.magnitude();
+    const auto level_at = [&](int bin) {
+      return magnitude[static_cast<size_t>(bin) * static_cast<size_t>(spec.n_frames()) +
+                       static_cast<size_t>(frame)];
+    };
+
+    double worst_ratio = std::numeric_limits<double>::infinity();
+    int worst_harmonic = 0;
+    for (const PartialClaim& claim : claims) {
+      INFO("partial " << claim.harmonic << " claims bins [" << claim.first_bin << ", "
+                      << claim.last_bin << "]");
+      const int width = claim.last_bin - claim.first_bin + 1;
+
+      // The loudest bin in a neighbourhood four times the claim's width falls
+      // inside the claim. A claim displaced by three bins or more fails this,
+      // which is the gross-misplacement half.
+      const int from = std::max(0, claim.first_bin - 8);
+      const int to = std::min(spec.n_bins() - 1, claim.last_bin + 8);
+      int peak = from;
+      for (int bin = from; bin <= to; ++bin) {
+        if (level_at(bin) > level_at(peak)) peak = bin;
+      }
+      REQUIRE(peak >= claim.first_bin);
+      REQUIRE(peak <= claim.last_bin);
+
+      // And the claim holds far more than spectrum of the same width beside it,
+      // which is the quantitative half and says the peak it covers is a partial
+      // rather than the least quiet bin of a quiet neighbourhood.
+      REQUIRE(claim.last_bin + kGuardOffset + width < spec.n_bins());
+      double inside = 0.0;
+      double beside = 0.0;
+      for (int i = 0; i < width; ++i) {
+        inside += static_cast<double>(level_at(claim.first_bin + i));
+        beside += static_cast<double>(level_at(claim.last_bin + kGuardOffset + i));
+      }
+      REQUIRE(inside > 0.0);
+      const double ratio = inside / std::max(beside, 1e-30);
+      if (ratio < worst_ratio) {
+        worst_ratio = ratio;
+        worst_harmonic = claim.harmonic;
+      }
+      // The measured worst is around a thousand and a claim sitting on the guard
+      // band's position would read about one, so the bound sits well inside the
+      // gap rather than beside either end of it.
+      REQUIRE(ratio > 50.0);
+    }
+    INFO("worst claim-to-guard ratio " << worst_ratio << " at partial " << worst_harmonic);
+    REQUIRE(worst_harmonic > 0);
   }
 }
