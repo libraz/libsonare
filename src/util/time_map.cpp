@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 #include "util/exception.h"
@@ -54,6 +55,15 @@ double solve_output(const std::vector<TimeStretchSegment>& segments,
   }
   return output_start[index] + (target - static_cast<double>(segments[index].input_start)) /
                                    static_cast<double>(segments[index].rate);
+}
+
+/// Smallest float at or above @p value. A rate stored below the exact one
+/// lengthens the stretch region and costs a whole frame at the ceiling.
+float narrow_up(double value) {
+  const float narrowed = static_cast<float>(value);
+  return static_cast<double>(narrowed) < value
+             ? std::nextafterf(narrowed, std::numeric_limits<float>::infinity())
+             : narrowed;
 }
 
 }  // namespace
@@ -170,6 +180,59 @@ bool TimeStretchMap::agrees_through(const TimeStretchMap& other,
     if (!(next > x)) return true;
     x = next;
   }
+}
+
+std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds,
+                                             int input_frame_count, float target_rate) {
+  SONARE_CHECK(input_frame_count > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(target_rate), ErrorCode::InvalidParameter);
+
+  int64_t held = 0;
+  int cursor = 0;
+  for (const HoldRange& hold : holds) {
+    SONARE_CHECK(hold.frame_count > 0 && hold.first_frame >= cursor &&
+                     hold.first_frame + hold.frame_count <= input_frame_count,
+                 ErrorCode::InvalidParameter);
+    cursor = hold.first_frame + hold.frame_count;
+    held += hold.frame_count;
+  }
+
+  if (holds.empty()) {
+    return {TimeStretchSegment{0.0f, target_rate}};
+  }
+
+  const double n = input_frame_count;
+  const double h = static_cast<double>(held);
+  const double requested = n / static_cast<double>(target_rate);
+  // Two conditions, not one. With every frame held there is no stretch region
+  // and no rate changes the total, so only unity can be satisfied.
+  if (held == input_frame_count) {
+    SONARE_CHECK(target_rate == 1.0f, ErrorCode::InvalidParameter);
+    return {TimeStretchSegment{0.0f, 1.0f}};
+  }
+  SONARE_CHECK(requested > h, ErrorCode::InvalidParameter);
+  const float rate = narrow_up((n - h) / (requested - h));
+
+  std::vector<TimeStretchSegment> segments;
+  segments.reserve(2 * holds.size() + 1);
+  cursor = 0;
+  for (const HoldRange& hold : holds) {
+    // No stretch segment where a hold starts at 0 or abuts the previous one:
+    // a zero-width span would repeat an input_start and break strict increase.
+    if (hold.first_frame > cursor) {
+      segments.push_back(TimeStretchSegment{static_cast<float>(cursor), rate});
+    }
+    segments.push_back(TimeStretchSegment{static_cast<float>(hold.first_frame), 1.0f});
+    cursor = hold.first_frame + hold.frame_count;
+  }
+  if (cursor < input_frame_count) {
+    segments.push_back(TimeStretchSegment{static_cast<float>(cursor), rate});
+  }
+
+  // Validated through the path a map takes rather than by inspecting the result.
+  const TimeStretchMap validated{segments};
+  (void)validated;
+  return segments;
 }
 
 }  // namespace sonare

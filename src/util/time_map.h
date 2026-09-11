@@ -151,4 +151,53 @@ class TimeStretchMap {
   std::vector<double> output_start_;
 };
 
+/// A span of input frames to leave at unity while its neighbours stretch.
+struct HoldRange {
+  int first_frame = 0;
+  int frame_count = 0;
+};
+
+/// @brief Profile holding @p holds at unity and stretching the rest so the whole
+///        spans what @p target_rate asks of @p input_frame_count.
+/// @details Holding part of the input fixes part of the output, so the remainder
+///          has to absorb the difference: the rate outside the holds is
+///          `(N - H) / (N / target_rate - H)` for `H` held frames. It is not a
+///          free parameter and a caller cannot set both.
+///
+///          Contract:
+///          - Holds are on the **input** frame axis, sorted, non-overlapping,
+///            non-empty, and inside `[0, input_frame_count)`. Anything else
+///            throws `ErrorCode::InvalidParameter`, as does a non-positive
+///            `input_frame_count` or a non-finite, non-positive `target_rate`.
+///          - Satisfiable exactly when some positive rate solves
+///            `H + (N - H) / r == N / target_rate`. That is two conditions, not
+///            one: the held frames must be shorter than the requested output,
+///            **and** there must be a frame left to stretch — holds covering the
+///            whole input can only satisfy `target_rate == 1`, since with `N == H`
+///            no `r` changes anything. Otherwise it throws. The request is
+///            unsatisfiable rather than approximable, and silently returning a
+///            different rate than the caller asked for is worse than refusing.
+///          - The resulting map must give the same `output_frame_count` as
+///            `TimeStretchMap(target_rate)` on the same input. This does not come
+///            free from the algebra: `r` is stored as a `float`, so the cumulative
+///            end cannot be made exactly `N / target_rate`, and a stored `r` that
+///            rounds low overshoots and costs a whole frame at the ceiling.
+///            Round `r` toward `+inf` — the end must land at or below the target,
+///            and a larger `r` shortens `(N - H) / r`. Measured over a grid of
+///            round `N`, `H` and `target_rate`: 131 of 594 disagree without it,
+///            every one by exactly +1, and none with it.
+///          - An empty hold list returns the one-segment profile at
+///            `target_rate`, so the result is `constant()` and every existing
+///            output is reproduced exactly.
+std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds,
+                                             int input_frame_count, float target_rate);
+
+/// Frames to hold from a note onset, for a note whose attack is not measured.
+/// Reassigned-time concentration stays elevated three frames from the frame the
+/// pitch track starts on, measured at 22050 Hz with a 2048-sample window and a
+/// 512-sample hop, over attacks from 0 to 30 ms. The span is in frames and the
+/// attacks are in milliseconds, so another framing covers a different duration
+/// with the same count and the figure has to be re-derived rather than reused.
+inline constexpr int kDefaultHoldFrames = 3;
+
 }  // namespace sonare

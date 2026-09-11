@@ -581,3 +581,270 @@ TEST_CASE("assign does not accumulate across rewrites", "[time_map]") {
     require_same_positions(map, fresh_wide, 1200);
   }
 }
+
+// --- hold_profile ----------------------------------------------------------
+
+namespace {
+
+struct HoldCase {
+  int input_frames;
+  std::vector<HoldRange> holds;
+  float target_rate;
+};
+
+int held_frames(const std::vector<HoldRange>& holds) {
+  int total = 0;
+  for (const HoldRange& hold : holds) total += hold.frame_count;
+  return total;
+}
+
+}  // namespace
+
+TEST_CASE("a hold profile lands the whole signal where the target rate asks", "[time_map]") {
+  // The property, not the formula. The oracle is the scalar map through the same
+  // public API, so this checks the redistribution without trusting the algebra
+  // that produced it.
+  //
+  // Two fixtures below are here because they fail when the rate outside the holds
+  // is rounded to nearest rather than toward +inf: 1000 frames at 1.25 gives 801
+  // against 800, and 100 frames with one held at 1.25 gives 81 against 80. They
+  // are what makes the rounding clause load-bearing rather than merely true.
+  const std::vector<HoldCase> cases = {
+      {1000, {{0, 3}, {500, 3}}, 0.5f},
+      {1000, {{0, 3}, {500, 3}}, 1.25f},
+      {480, {{0, 3}}, 0.75f},
+      {480, {{0, 3}}, 1.5f},
+      {100, {{10, 10}}, 0.5f},
+      {100, {{10, 10}}, 2.0f},
+      {1024, {{64, 8}, {512, 8}}, 0.8f},
+      {200, {{0, 3}, {100, 3}}, 2.0f},
+      {100, {{1, 1}}, 1.25f},
+      {100, {{50, 50}}, 1.5f},
+      {100, {{0, 10}}, 1.6f},
+  };
+
+  std::size_t mismatches = 0;
+  for (const HoldCase& probe : cases) {
+    const std::vector<TimeStretchSegment> segments =
+        hold_profile(probe.holds, probe.input_frames, probe.target_rate);
+    REQUIRE(!segments.empty());
+    // The map requires this of any profile, so a hold at frame 0 must produce it
+    // rather than a leading stretch segment of zero length.
+    REQUIRE(segments.front().input_start == 0.0f);
+
+    const TimeStretchMap held(segments);
+    const TimeStretchMap scalar(probe.target_rate);
+    const int from_holds = held.output_frame_count(probe.input_frames);
+    const int from_scalar = scalar.output_frame_count(probe.input_frames);
+    if (from_holds != from_scalar) {
+      ++mismatches;
+      UNSCOPED_INFO("  input frames " << probe.input_frames << " held " << held_frames(probe.holds)
+                                      << " target " << probe.target_rate << ": hold profile "
+                                      << from_holds << ", scalar " << from_scalar);
+    }
+  }
+  INFO("hold profiles whose length differs from the scalar map: " << mismatches);
+  REQUIRE(mismatches == 0);
+}
+
+TEST_CASE("an empty hold list reproduces the scalar map exactly", "[time_map]") {
+  for (const float target : {0.5f, 1.0f, 1.25f, 2.0f}) {
+    INFO("target rate " << target);
+    const std::vector<TimeStretchSegment> segments = hold_profile({}, 1000, target);
+    REQUIRE(segments.size() == 1);
+    REQUIRE(segments.front().input_start == 0.0f);
+    REQUIRE(segments.front().rate == target);
+
+    const TimeStretchMap built(segments);
+    const TimeStretchMap scalar(target);
+    REQUIRE(built.constant());
+    REQUIRE(built.constant_rate() == target);
+    require_same_positions(built, scalar, 800);
+    REQUIRE(built.output_frame_count(1000) == scalar.output_frame_count(1000));
+  }
+}
+
+TEST_CASE("the feasibility boundary is where the holds fill the requested output", "[time_map]") {
+  // 100 input frames with 50 held. The requested output is 100 / target, so the
+  // holds fill it exactly at target 2.0 -- a round number, which is what puts it
+  // on the boundary rather than near it.
+  const std::vector<HoldRange> holds = {{25, 50}};
+  const int input_frames = 100;
+
+  SECTION("below the boundary the request is satisfiable") {
+    for (const float target : {0.5f, 1.0f, 1.5f, 1.9f}) {
+      INFO("target rate " << target);
+      const std::vector<TimeStretchSegment> segments = hold_profile(holds, input_frames, target);
+      REQUIRE(!segments.empty());
+      const TimeStretchMap held(segments);
+      REQUIRE(held.output_frame_count(input_frames) ==
+              TimeStretchMap(target).output_frame_count(input_frames));
+    }
+  }
+
+  SECTION("at the boundary the holds are exactly as long as the output") {
+    // 100 / 2.0 == 50 == the held frames. "At least as long" makes this a throw,
+    // which is where a > and a >= part company.
+    REQUIRE(code_of([&] { return hold_profile(holds, input_frames, 2.0f); }) ==
+            ErrorCode::InvalidParameter);
+  }
+
+  SECTION("above the boundary the request is refused rather than approximated") {
+    for (const float target : {2.1f, 2.5f, 4.0f, 100.0f}) {
+      INFO("target rate " << target);
+      REQUIRE(code_of([&] { return hold_profile(holds, input_frames, target); }) ==
+              ErrorCode::InvalidParameter);
+    }
+  }
+
+  SECTION("lengthening is satisfiable however much is held") {
+    for (const int count : {1, 50, 90, 99}) {
+      INFO("held frames " << count);
+      const std::vector<TimeStretchSegment> segments =
+          hold_profile({{0, count}}, input_frames, 0.5f);
+      REQUIRE(!segments.empty());
+    }
+  }
+}
+
+TEST_CASE("a hold at either end of the input still builds a usable profile", "[time_map]") {
+  const int input_frames = 100;
+
+  SECTION("a hold starting at frame zero") {
+    // The first segment is the hold, not the stretch, and the map still requires
+    // input_start 0.0f on it.
+    const std::vector<TimeStretchSegment> segments = hold_profile({{0, 10}}, input_frames, 1.6f);
+    REQUIRE(segments.front().input_start == 0.0f);
+    REQUIRE(segments.front().rate == 1.0f);
+    const TimeStretchMap held(segments);
+    REQUIRE(held.output_frame_count(input_frames) ==
+            TimeStretchMap(1.6f).output_frame_count(input_frames));
+  }
+
+  SECTION("a hold ending exactly at the last input frame") {
+    // No trailing stretch segment exists, so the profile's last segment is the
+    // hold and nothing follows it.
+    const std::vector<TimeStretchSegment> segments = hold_profile({{50, 50}}, input_frames, 1.5f);
+    REQUIRE(segments.front().input_start == 0.0f);
+    REQUIRE(segments.back().rate == 1.0f);
+    const TimeStretchMap held(segments);
+    REQUIRE(held.output_frame_count(input_frames) ==
+            TimeStretchMap(1.5f).output_frame_count(input_frames));
+  }
+
+  SECTION("a hold covering the whole input, at unity") {
+    // With N == H the equation reads N + 0/r == N / target, which holds for any
+    // positive r exactly when target is 1. There is no stretch region, and none
+    // is needed.
+    const std::vector<HoldRange> whole = {{0, input_frames}};
+    const std::vector<TimeStretchSegment> segments = hold_profile(whole, input_frames, 1.0f);
+    REQUIRE(!segments.empty());
+    REQUIRE(segments.front().input_start == 0.0f);
+    const TimeStretchMap held(segments);
+    REQUIRE(held.output_frame_count(input_frames) ==
+            TimeStretchMap(1.0f).output_frame_count(input_frames));
+  }
+
+  SECTION("a hold covering the whole input, at any other rate") {
+    // The same equation has no solution: no r moves a total that has no stretch
+    // region in it. The held frames being shorter than the requested output is
+    // not enough -- 100 held against 200 requested passes that and still cannot
+    // be satisfied.
+    const std::vector<HoldRange> whole = {{0, input_frames}};
+    for (const float target : {0.5f, 0.25f, 1.5f, 2.0f}) {
+      INFO("target rate " << target);
+      REQUIRE(code_of([&] { return hold_profile(whole, input_frames, target); }) ==
+              ErrorCode::InvalidParameter);
+    }
+  }
+}
+
+TEST_CASE("hold_profile rejects the hold sets and arguments the contract names", "[time_map]") {
+  const ErrorCode kInvalid = ErrorCode::InvalidParameter;
+  const int input_frames = 100;
+  const auto rejected = [&](const std::vector<HoldRange>& holds, const char* label) {
+    INFO(label);
+    REQUIRE(code_of([&] { return hold_profile(holds, input_frames, 1.0f); }) == kInvalid);
+  };
+
+  SECTION("hold sets") {
+    rejected({{10, 10}, {5, 5}}, "unsorted");
+    rejected({{10, 10}, {15, 5}}, "overlapping");
+    rejected({{10, 10}, {19, 5}}, "overlapping by one frame");
+    rejected({{10, 0}}, "empty");
+    rejected({{10, -5}}, "negative length");
+    rejected({{-1, 5}}, "starting before zero");
+    rejected({{100, 5}}, "starting at the input end");
+    rejected({{101, 5}}, "starting past the input end");
+    rejected({{95, 10}}, "running past the input end");
+    rejected({{10, 10}, {20, 10}, {15, 5}}, "sorted pair followed by an earlier one");
+  }
+
+  SECTION("input frame counts") {
+    for (const int frames : {0, -1, -1000}) {
+      INFO("input frames " << frames);
+      REQUIRE(code_of([frames] { return hold_profile({{0, 1}}, frames, 1.0f); }) == kInvalid);
+      REQUIRE(code_of([frames] { return hold_profile({}, frames, 1.0f); }) == kInvalid);
+    }
+  }
+
+  SECTION("target rates") {
+    for (const float target : rejected_rates()) {
+      INFO("target rate " << target);
+      REQUIRE(code_of([target] { return hold_profile({{10, 10}}, 100, target); }) == kInvalid);
+      REQUIRE(code_of([target] { return hold_profile({}, 100, target); }) == kInvalid);
+    }
+  }
+}
+
+TEST_CASE("the hold profile matches the scalar count across the measured grid", "[time_map]") {
+  // The grid the rounding clause was measured over, run against the shipped code
+  // rather than against the derivation that produced the number. Stated as axis
+  // ranges rather than as a point count, because a product says nothing about
+  // which regions it covers: input frames 100 to 8192, held frames 1 to 32,
+  // target rate 0.25 to 3.0, one hold placed at frame 1 so every point has a
+  // stretch segment on both sides of it.
+  //
+  // The two fixtures that fail under round-to-nearest live in the case above, not
+  // here, so narrowing this grid cannot take them with it.
+  const std::vector<int> input_counts = {100, 256, 480, 512, 1000, 1024, 2000, 4410, 8192};
+  const std::vector<int> hold_counts = {1, 3, 6, 8, 16, 32};
+  const std::vector<float> targets = {0.25f, 0.5f, 0.75f, 0.8f, 1.0f, 1.25f,
+                                      1.5f,  1.6f, 2.0f,  2.5f, 3.0f};
+
+  std::size_t checked = 0;
+  std::size_t skipped = 0;
+  std::size_t mismatches = 0;
+  for (const int frames : input_counts) {
+    for (const int held : hold_counts) {
+      for (const float target : targets) {
+        const std::vector<HoldRange> holds = {{1, held}};
+        std::vector<TimeStretchSegment> segments;
+        if (code_of([&] { segments = hold_profile(holds, frames, target); }) != ErrorCode::Ok) {
+          ++skipped;
+          continue;
+        }
+        ++checked;
+        const TimeStretchMap held_map(segments);
+        const int from_holds = held_map.output_frame_count(frames);
+        const int from_scalar = TimeStretchMap(target).output_frame_count(frames);
+        if (from_holds == from_scalar) continue;
+        ++mismatches;
+        if (mismatches <= 8) {
+          UNSCOPED_INFO("  input frames " << frames << " held " << held << " target " << target
+                                          << ": hold profile " << from_holds << ", scalar "
+                                          << from_scalar);
+        }
+      }
+    }
+  }
+
+  INFO("checked " << checked << ", skipped as unsatisfiable " << skipped << ", mismatched "
+                  << mismatches);
+  // A sweep that skipped its way to an empty population would assert nothing. The
+  // floor is far under the grid's size and far over zero, so it catches a
+  // feasibility rule that rejects most of the grid without pinning one that
+  // accepts all of it.
+  REQUIRE(checked > 400);
+  REQUIRE(mismatches == 0);
+}
