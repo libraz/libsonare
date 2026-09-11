@@ -153,12 +153,18 @@ void Sf2Player::choke_exclusive_group(uint8_t part, uint8_t group, uint64_t sf2_
   for (Sf2Voice& v : pool_) {
     if (v.active && v.age < sf2_age_gate && v.channel == part &&
         v.params.exclusive_class == group) {
-      v.release();
+      // Terminated rather than released: SoundFont 2.04 section 8.1.2 ends the
+      // previous voice, and an instrument's own release leaves a sustaining
+      // sample ringing straight through the strike that was meant to cut it.
+      v.choke(sample_rate_);
     }
   }
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == part && v.patch != nullptr && v.exclusive_class == group) {
-      v.choke();
+      // choke_fast, not choke: the latter falls back to the patch's own release,
+      // which on a modelled hi-hat rings on well past the strike meant to cut it
+      // and leaves the two pools terminating at visibly different speeds.
+      v.choke_fast(sample_rate_);
     }
   }
 }

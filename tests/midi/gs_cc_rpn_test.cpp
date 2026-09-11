@@ -676,8 +676,25 @@ TEST_CASE("Reset All Controllers returns every RP-015 controller to rest", "[mid
   render(player, 4800);
 
   cc(player, 0, 121, 0);  // Reset All Controllers
+  // The damper was among the controllers set, so the earlier note is still held
+  // and only starts releasing now. Let that finish: otherwise its tail lands on
+  // top of the comparison note and no reset could make the two agree.
+  render(player, 48000);
+  REQUIRE(peak_abs(render(player, 4800)) < 0.01f);
+
   note_on(player, 0, kNoteC4);
-  REQUIRE(render(player, 4800) == baseline);
+  const std::vector<float> after_reset = render(player, 4800);
+  REQUIRE(after_reset.size() == baseline.size());
+  // Compared within a tolerance rather than bit for bit. RP-015 returns the
+  // controllers to rest; it does not promise that a part which has already
+  // sounded renders the next note identically to one that has not. Any
+  // controller left set -- expression at 40, modulation at full, the pressure
+  // routing above -- moves the output by far more than this bound.
+  float largest = 0.0f;
+  for (size_t i = 0; i < baseline.size(); ++i) {
+    largest = std::max(largest, std::abs(after_reset[i] - baseline[i]));
+  }
+  REQUIRE(largest < 0.01f * peak_abs(baseline));
 }
 
 TEST_CASE("Reset All Controllers turns portamento off", "[midi][sf2][gs]") {

@@ -109,14 +109,34 @@ std::vector<float> render(Sf2Player& player, int num_samples) {
   return left;
 }
 
-/// Peak of what @p first leaves ringing after @p second is struck, relative to
-/// what it leaves ringing when nothing follows it. A choke drives this to ~0.
-float ringing_after(uint8_t first, uint8_t second) {
+/// Renders the window following a strike of @p second, optionally with @p first
+/// left ringing into it. A negative @p first strikes @p second on its own.
+std::vector<float> strike_over(int first, uint8_t second) {
   Sf2Player player = make_player();
-  note_on(player, first);
-  render(player, 2048);  // let it establish
+  if (first >= 0) note_on(player, static_cast<uint8_t>(first));
+  render(player, 2048);  // let the first voice establish
   note_on(player, second);
-  return peak_abs(render(player, 2048));
+  return render(player, 2048);
+}
+
+/// What @p first still contributes once @p second is struck, relative to that
+/// strike on its own. A choke drives this to ~0.
+///
+/// Two things this has to avoid measuring. The peak of the window itself is
+/// dominated by the second strike's own attack whether or not the first voice
+/// was silenced, so the comparison is against that same strike alone. And a
+/// termination is a short fade rather than a cut, so the difference at the
+/// instant of the strike is the first voice's full amplitude however fast the
+/// fade is -- measuring across it reports ~1.0 for a working choke. Only the
+/// second half of the window, well past any termination ramp, answers the
+/// question asked.
+float residual(uint8_t first, uint8_t second) {
+  const std::vector<float> over = strike_over(static_cast<int>(first), second);
+  const std::vector<float> alone = strike_over(-1, second);
+  const size_t settled = over.size() / 2;
+  std::vector<float> difference(over.size() - settled, 0.0f);
+  for (size_t i = settled; i < over.size(); ++i) difference[i - settled] = over[i] - alone[i];
+  return peak_abs(difference) / std::max(peak_abs(alone), 1e-9f);
 }
 
 float ringing_alone(uint8_t first) {
@@ -141,20 +161,20 @@ TEST_CASE("A modelled strike chokes a ringing sampled voice of the same group",
           "[midi][sf2][drums]") {
   // 46 is sampled, 42 is modelled. Before the cross-pool walk the modelled
   // strike could not reach the sampled voice and the open hat rang on.
-  REQUIRE(ringing_after(kOpenHat, kClosedHat) < 0.01f * ringing_alone(kOpenHat));
+  REQUIRE(residual(kOpenHat, kClosedHat) < 0.01f);
 }
 
 TEST_CASE("A sampled strike chokes a ringing modelled voice of the same group",
           "[midi][sf2][drums]") {
   // The other direction, which the finding's user-impact paragraph does not
   // describe and an author would not naturally test.
-  REQUIRE(ringing_after(kClosedHat, kOpenHat) < 0.01f * ringing_alone(kClosedHat));
+  REQUIRE(residual(kClosedHat, kOpenHat) < 0.01f);
 }
 
 TEST_CASE("Same-pool choking still works in both pools", "[midi][sf2][drums]") {
   // The positive control: a cross-pool fix that broke either existing
   // within-pool loop would still pass the two cases above.
-  REQUIRE(ringing_after(kOpenHat, kPedalHat) < 0.01f * ringing_alone(kOpenHat));
+  REQUIRE(residual(kOpenHat, kPedalHat) < 0.01f);
 
   Sf2Player player = make_player();
   note_on(player, kClosedHat);

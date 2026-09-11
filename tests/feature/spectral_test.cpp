@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -706,7 +707,7 @@ std::vector<float> descriptor_fixture(int n_bins, int n_frames) {
 
 }  // namespace
 
-TEST_CASE("spectral descriptors match a frame-major oracle exactly", "[spectral]") {
+TEST_CASE("spectral descriptors match a frame-major oracle", "[spectral]") {
   // n_frames is deliberately not a multiple of any plausible blocking factor.
   const int n_bins = 37;
   const int n_frames = 301;
@@ -730,7 +731,11 @@ TEST_CASE("spectral descriptors match a frame-major oracle exactly", "[spectral]
   REQUIRE(bandwidth.size() == bandwidth_ref.size());
   for (size_t i = 0; i < bandwidth.size(); ++i) {
     CAPTURE(i);
-    REQUIRE(bandwidth[i] == bandwidth_ref[i]);
+    // Not bit-compared: the library and this oracle are separate translation
+    // units, so floating-point contraction may fuse the accumulate in one and
+    // not the other. A tiling or traversal error is orders of magnitude larger
+    // than the one-unit-in-the-last-place that leaves.
+    REQUIRE(bandwidth[i] == Catch::Approx(bandwidth_ref[i]).epsilon(1.0e-6));
   }
 
   for (float roll_percent : {0.15f, 0.5f, 0.85f, 0.99f}) {
@@ -759,7 +764,7 @@ TEST_CASE("spectral_rolloff stops at the first bin to reach the threshold", "[sp
   REQUIRE(rolloff[0] == 125.0f);
 }
 
-TEST_CASE("spectral_contrast does not depend on how many frames it is given", "[spectral]") {
+TEST_CASE("spectral_contrast does not depend on where a frame lands in a tile", "[spectral]") {
   // Every contrast frame is computed from that frame's bins alone, so a prefix of the
   // input must produce a prefix of the output. This is what fails if the frame blocking
   // inside the band loop miscomputes an offset -- and the sizes straddle the block size.
@@ -800,15 +805,30 @@ TEST_CASE("spectral_contrast does not depend on how many frames it is given", "[
   const std::vector<float> reference = contrast_of(n_frames_full);
   REQUIRE(reference.size() == static_cast<size_t>((n_bands + 1) * n_frames_full));
 
-  for (int n_frames : {1, 255, 256, 257, 512, 513}) {
-    CAPTURE(n_frames);
-    const std::vector<float> prefix = contrast_of(n_frames);
-    REQUIRE(prefix.size() == static_cast<size_t>((n_bands + 1) * n_frames));
+  // Frame COUNT is not an invariant here and must not be asserted as one: the dB
+  // conversion clamps against the maximum of the whole matrix, so a shorter run
+  // legitimately moves the floor. Frame ORDER is the invariant -- a rotation
+  // leaves that maximum untouched while moving every frame to a different offset
+  // inside its staging tile, which is what a tiling error is sensitive to.
+  for (int rotation : {1, 127, 255, 256, 257}) {
+    CAPTURE(rotation);
+    std::vector<std::complex<float>> rotated(full.size());
+    for (int k = 0; k < n_bins; ++k) {
+      for (int t = 0; t < n_frames_full; ++t) {
+        rotated[static_cast<size_t>(k * n_frames_full + t)] =
+            full[static_cast<size_t>(k * n_frames_full + (t + rotation) % n_frames_full)];
+      }
+    }
+    Spectrogram spec = Spectrogram::from_complex(rotated.data(), n_bins, n_frames_full, n_fft,
+                                                 hop_length, sr, WindowType::Hann,
+                                                 /*center=*/true);
+    const std::vector<float> turned = spectral_contrast(spec, sr, n_bands, fmin, quantile);
+    REQUIRE(turned.size() == reference.size());
     for (int b = 0; b <= n_bands; ++b) {
-      for (int t = 0; t < n_frames; ++t) {
+      for (int t = 0; t < n_frames_full; ++t) {
         CAPTURE(b, t);
-        REQUIRE(prefix[static_cast<size_t>(b * n_frames + t)] ==
-                reference[static_cast<size_t>(b * n_frames_full + t)]);
+        REQUIRE(turned[static_cast<size_t>(b * n_frames_full + t)] ==
+                reference[static_cast<size_t>(b * n_frames_full + (t + rotation) % n_frames_full)]);
       }
     }
   }
