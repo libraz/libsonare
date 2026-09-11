@@ -41,14 +41,23 @@ struct NoteMaskConfig {
   /// is @c 4 * n_fft / win_length bins wide, so one lobe reaches half of that
   /// either side of the partial -- counting in lobes rather than in bins is what
   /// makes the value travel across zero padding instead of describing one
-  /// framing. Measured at the worst bin offset, one lobe captures 0.9995 of a
-  /// partial's energy and two capture 0.99993, so the second buys 4e-4 while
-  /// widening every overlap.
+  /// framing. Zero padding is the axis it is invariant on and the only one: the
+  /// width in Hz works out to @c 2 * claim_lobes * sample_rate / win_length, so
+  /// it does not depend on @c n_fft at all, and halving the window doubles it --
+  /// which is the window's own main lobe widening, not a defect.
   ///
-  /// Overlap is the normal case and not an edge: at 20 partials each, an octave
-  /// puts ten of the lower note's twenty partials in the same bin as one of the
-  /// upper note's, a fifth six, and a major third, a semitone and a tritone each
-  /// still put six to nine within five bins.
+  /// Measured at a Hann window, @c win_length equal to @c n_fft, and a partial
+  /// halfway between two bins, which is the worst offset: one lobe captures
+  /// 0.9995 of that partial's energy and two capture 0.99993, so the second buys
+  /// 4e-4 while widening every overlap. A claim tapered rather than flat keeps
+  /// 0.88 of it at the same width, which is the wrong trade against a leak
+  /// already under 1e-4.
+  ///
+  /// Overlap is the normal case and not an edge. Counting partial positions at
+  /// 20 partials a note, @c n_fft 4096 and 44.1 kHz: an octave puts ten of the
+  /// lower note's twenty in the same bin as one of the upper note's, a fifth
+  /// six, and a major third, a semitone and a tritone each still put six to nine
+  /// within five bins.
   float claim_lobes = 1.0f;
 
   /// B in @c f_h = h * f0 * sqrt(1 + B * h^2), the same stretch the salience
@@ -61,16 +70,21 @@ struct NoteMaskConfig {
 ///          <tt>[frame_offset[f], frame_offset[f + 1])</tt> of @ref bins and
 ///          @ref weights, and @ref bins is ascending within a frame. A frame the
 ///          note spans may still be empty, which is a note whose every partial
-///          fell outside the spectrum.
+///          fell outside the spectrum, and so may the whole mask.
 ///
 ///          Every function taking one checks that shape before it allocates
 ///          against it, because a hand-built mask is otherwise a write outside
-///          its own arrays rather than a rejected input.
+///          its own arrays rather than a rejected input. The weights are checked
+///          against their own range too: a weight of zero or two is not a shape
+///          error and would break the total and the residual without any call
+///          failing, which is a worse outcome than a rejection.
 struct NoteMask {
   /// Index into the track's ridges, so a mask can be traced back to the pitch
   /// that produced it.
   int ridge_index = 0;
-  /// First frame of the span, in the spectrogram's frames.
+  /// First frame of the span, in the spectrogram's frames. A built mask spans
+  /// exactly the frames its ridge does -- neither clipped nor padded, so a ridge
+  /// and its mask can be indexed by the same frame.
   int frame_start = 0;
   int n_frames = 0;
 
@@ -96,10 +110,9 @@ struct NoteMaskSet {
 };
 
 /// @brief Builds one mask per ridge over @p spec.
-/// @details The claim of a partial is flat across its width. A taper was
-///          measured against it and keeps 12% less of the note's own energy to
-///          reduce a leak that is already under 1e-4, which is the wrong trade at
-///          every width tested.
+/// @details The claim of a partial is flat across its width, and a claim running
+///          off either end of the spectrum is clamped to it rather than dropped,
+///          so a partial near Nyquist keeps the part of its width that fits.
 ///
 ///          Where two notes claim one bin they take equal shares. That is a
 ///          neutral division and not a good one: an octave's lower note loses
@@ -133,7 +146,9 @@ Spectrogram apply_note_mask(const Spectrogram& spec, const NoteMask& mask);
 ///          and it is played back unedited. An empty residual is not the goal --
 ///          energy forced into a note is energy that breaks when the note moves.
 /// @throws SonareException(InvalidParameter) when @p masks does not describe
-///         @p spec's shape.
+///         @p spec -- its @c n_bins, @c n_frames, @c hop_length and
+///         @c sample_rate must all match, because a set carrying another
+///         framing's hop indexes the same array while meaning different times.
 Spectrogram residual_spectrum(const Spectrogram& spec, const NoteMaskSet& masks);
 
 /// @brief Total weight the notes place on each bin, @c [n_bins x n_frames] in

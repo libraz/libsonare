@@ -61,6 +61,12 @@ void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames) {
   for (const int32_t bin : mask.bins) {
     SONARE_CHECK(bin >= 0 && bin < n_bins, ErrorCode::InvalidParameter);
   }
+  // Out of range is not a shape error and would leave the total and the residual
+  // wrong with no call having failed, which is worse than a rejection.
+  for (const float weight : mask.weights) {
+    SONARE_CHECK(std::isfinite(weight) && weight > 0.0f && weight <= 1.0f,
+                 ErrorCode::InvalidParameter);
+  }
 }
 
 void check_set_shape(const NoteMaskSet& masks) {
@@ -205,7 +211,10 @@ Spectrogram apply_note_mask(const Spectrogram& spec, const NoteMask& mask) {
 
 Spectrogram residual_spectrum(const Spectrogram& spec, const NoteMaskSet& masks) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(masks.n_bins == spec.n_bins() && masks.n_frames == spec.n_frames(),
+  // The hop and the rate as well as the sizes: a set from another framing indexes
+  // the same array while meaning different times.
+  SONARE_CHECK(masks.n_bins == spec.n_bins() && masks.n_frames == spec.n_frames() &&
+                   masks.hop_length == spec.hop_length() && masks.sample_rate == spec.sample_rate(),
                ErrorCode::InvalidParameter);
   check_set_shape(masks);
 
