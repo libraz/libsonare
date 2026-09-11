@@ -552,6 +552,9 @@ TEST_CASE("chroma-DTW recovers a known time shift within tolerance", "[.][slow][
     if (std::abs(r.path[i].first - mid_ref) < std::abs(r.path[best].first - mid_ref)) best = i;
   }
   const double observed_offset = r.path[best].second - r.path[best].first;
+  // A stationary tone has constant chroma, so the cost surface carries no alignment
+  // information and the path wanders the full band: the offset reads 0 to 12 along it and
+  // 5.0 at the midpoint sampled here, against an expected 10.77 -- 5.77 of the 6.0 allowed.
   REQUIRE(std::abs(observed_offset - expected_offset_frames) <= 6.0);
 }
 
@@ -581,7 +584,10 @@ TEST_CASE("chroma-DTW recovers a known time stretch within tolerance", "[.][slow
   const double dref = std::max(1, b.first - a.first);
   const double dtgt = b.second - a.second;
   const double observed_slope = dtgt / dref;
-  REQUIRE(observed_slope == Catch::Approx(stretch).margin(0.2));
+  // Path endpoints are whole frames, so the slope resolves to 1/dref = 0.023 at this size and
+  // the observed 1.488 is the closest the grid comes to 1.5, half a frame out. The margin
+  // admits two frames of endpoint quantization.
+  REQUIRE(observed_slope == Catch::Approx(stretch).margin(0.05));
 }
 
 TEST_CASE("TSM hits exact target length and is deterministic", "[mir]") {

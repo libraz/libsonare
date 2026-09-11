@@ -394,11 +394,13 @@ TEST_CASE("pyin - 5 second 440Hz tone (flat-vector Viterbi regression)", "[pitch
 
   REQUIRE(result.n_frames() > 100);
 
-  // Median is robust to occasional edge / unvoiced frames.
   float median_f0 = result.median_f0();
-  REQUIRE_THAT(median_f0, WithinRel(440.0f, 0.01f));
+  // The pitch grid is 10 cents wide and 440 Hz falls exactly between two of its bins, so the
+  // median lands 5.0 cents high at 441.27 Hz -- half a bin, the largest error the grid can
+  // produce. The tolerance admits that pair and excludes the next bin out.
+  REQUIRE_THAT(median_f0, WithinRel(440.0f, 0.004f));
 
-  // Vast majority of frames should be voiced and within 2% of 440 Hz.
+  // Count voiced frames and how many of them land within 2% of 440 Hz.
   int voiced_in_band = 0;
   int voiced_total = 0;
   for (int i = 0; i < result.n_frames(); ++i) {
@@ -410,8 +412,10 @@ TEST_CASE("pyin - 5 second 440Hz tone (flat-vector Viterbi regression)", "[pitch
       }
     }
   }
-  REQUIRE(voiced_total > result.n_frames() * 8 / 10);
-  REQUIRE(voiced_in_band > voiced_total * 9 / 10);
+  // A stationary tone resolves to one grid bin for every frame: all 216 frames come back
+  // voiced and all 216 carry the same f0, so neither count has any slack to give.
+  REQUIRE(voiced_total == result.n_frames());
+  REQUIRE(voiced_in_band == voiced_total);
 }
 
 TEST_CASE("pyin - stepped pitch tracking (Viterbi follows discontinuities)", "[pitch]") {
