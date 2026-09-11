@@ -101,12 +101,15 @@ struct SharedBinConfig {
   /// window before averaging: clamping first moves the angle of the average,
   /// which is the one quantity the clamp exists to preserve.
   ///
-  /// That ordering is unverified, and not for want of a case. Separating the two
-  /// orders needs material on which per-window fits disagree; a sum of decaying
-  /// sinusoids is exactly what the pole model fits, so every window is exact and
-  /// the orders are identically equal. Noise, vibrato, or a third partial in the
-  /// bin would separate them, and each of those fights the clean population the
-  /// ceiling above needs -- which is why no one signal exercises both.
+  /// The mechanism is arithmetic rather than conjecture: clamping one window's
+  /// weight and not the other's changes what each contributes, so a pair at a
+  /// 55:1 modulus ratio averages as 1:1 and the mean's angle moves by up to 87
+  /// degrees. What is unverified is the choice -- whether holding that angle
+  /// separates better on real material -- and no signal here can settle it. A
+  /// sum of decaying sinusoids is exactly what the pole model fits, so every
+  /// window is exact, both orders agree identically, and the clamp fires on both
+  /// or on neither. Deciding it needs noise, vibrato, or a third partial in the
+  /// bin, each of which fights the clean population the ceiling above needs.
   ///
   /// It also bounds how loud the residual can get, and that axis is not what set
   /// the default. @ref mask_total runs to roughly this value where a bin is
