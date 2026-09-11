@@ -380,6 +380,18 @@ std::vector<int> claimed_bins(const std::vector<PartialClaim>& claims) {
   return bins;
 }
 
+/// @brief Relative tolerance on a stretch recovered back out of a float centre.
+/// @details The recovery subtracts one from a ratio just above one, so it loses
+///          exactly the digits that cancel: the surviving relative error runs at
+///          about @c ulp(1) / (B * h^2), worst at the lowest harmonic of the
+///          smallest stretch and negligible at the top. Taking the bound from
+///          that mechanism keeps the high harmonics sharp instead of handing
+///          every one of them the worst case's slack.
+double recovery_tolerance(double inharmonicity, int harmonic) {
+  const double h = static_cast<double>(harmonic);
+  return std::max(1e-5, 8.0 * static_cast<double>(kUlpAboveOne) / (inharmonicity * h * h));
+}
+
 }  // namespace
 
 // --- Shape and numbering ---------------------------------------------------
@@ -1819,5 +1831,83 @@ TEST_CASE("a partial at Nyquist is kept and one above it is dropped even when it
     const std::vector<int> bins = frame_bins(masks.notes[0], masks.notes[0].n_frames / 2);
     REQUIRE(!bins.empty());
     REQUIRE(std::find(bins.begin(), bins.end(), last_bin) == bins.end());
+  }
+}
+
+TEST_CASE("the stretch recovered from the claims is the one the config asked for",
+          "[polyphony_mask]") {
+  const sonare::Spectrogram spec = spectrogram_of(tone_audio(300.0f));
+  const float f0 = 300.0f;
+
+  // This case evaluates no formula. B_hat below is arithmetic on the library's
+  // own outputs, compared against the value the config carried in, so there is
+  // no expected centre for a later de-duplication to fold into the library --
+  // which is the one way every other geometry check in this file could be
+  // defeated without going red. The relation c_h = h*f0*sqrt(1 + B*h^2) read
+  // backwards gives ((c_h / (h*f0))^2 - 1) / h^2 == B for every h.
+  //
+  // Three stretches rather than one, because a single value cannot tell a
+  // recovery that tracks the config from one that always returns the same
+  // number: a library ignoring the config and using 5e-4 throughout passes at
+  // 5e-4 and fails at both of the others.
+  for (const float stretch : {0.0f, 1e-4f, 5e-4f}) {
+    INFO("inharmonicity " << stretch);
+    NoteMaskConfig config;
+    config.n_harmonics = 20;
+    config.inharmonicity = stretch;
+
+    const std::vector<PartialClaim> claims = partial_claims(spec, f0, config);
+    REQUIRE(claims.size() == 20);
+
+    std::vector<double> recovered;
+    for (const PartialClaim& claim : claims) {
+      const double h = static_cast<double>(claim.harmonic);
+      const double ratio = static_cast<double>(claim.centre_hz) / (static_cast<double>(f0) * h);
+      const double b_hat = (ratio * ratio - 1.0) / (h * h);
+      recovered.push_back(b_hat);
+      INFO("partial " << claim.harmonic << " recovers the stretch as " << b_hat);
+      if (stretch == 0.0f) {
+        // Exactly zero is what this should be: every h*f0 from 300 to 6000 is
+        // exactly representable, so the ratio is exactly one and nothing
+        // cancels. The bound allows an ulp rather than asserting the
+        // representation, and still sits two orders under the smallest stretch
+        // the loop tests.
+        REQUIRE_THAT(b_hat, WithinAbs(0.0, 1e-6));
+      } else {
+        REQUIRE_THAT(b_hat,
+                     WithinRel(static_cast<double>(stretch),
+                               recovery_tolerance(static_cast<double>(stretch), claim.harmonic)));
+      }
+    }
+
+    if (stretch == 0.0f) continue;
+
+    // The overdetermined half, and the one a per-point comparison cannot do:
+    // twenty outputs constrain one parameter, so the spread across the
+    // harmonics tests the functional form rather than the value. Both halves
+    // are needed and neither subsumes the other -- a linearised 1 + B*h^2
+    // spreads only 1.09 here, which reads as noise, while its value is twice
+    // what was asked for; sqrt(1 + B*h) spreads 4.0 while passing nothing.
+    //
+    // Read from the fifth partial up, where the cancellation above has died
+    // away. The worst spread a correct recovery shows over that range is
+    // 1.00003, at the smallest stretch tested.
+    double low = 0.0;
+    double high = 0.0;
+    bool seen = false;
+    for (size_t i = 0; i < claims.size(); ++i) {
+      if (claims[i].harmonic < 5) continue;
+      if (!seen) {
+        low = recovered[i];
+        high = recovered[i];
+        seen = true;
+      }
+      low = std::min(low, recovered[i]);
+      high = std::max(high, recovered[i]);
+    }
+    REQUIRE(seen);
+    INFO("spread over the fifth partial and up: " << high / low);
+    REQUIRE(low > 0.0);
+    REQUIRE(high / low <= 1.001);
   }
 }
