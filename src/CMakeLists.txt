@@ -175,6 +175,7 @@ set(SONARE_SOURCES
   # alongside the pitch editor would declare a dependency that does not exist.
   editing/polyphony/f0_salience.cpp
   editing/polyphony/multi_f0.cpp
+  editing/polyphony/note_mask.cpp
   streaming/stream_analyzer.cpp
   streaming/stream_analyzer_features.cpp
   streaming/stream_analyzer_output.cpp
