@@ -70,7 +70,11 @@ struct NoteMaskConfig {
 ///          <tt>[frame_offset[f], frame_offset[f + 1])</tt> of @ref bins and
 ///          @ref weights, and @ref bins is ascending within a frame. A frame the
 ///          note spans may still be empty, which is a note whose every partial
-///          fell outside the spectrum, and so may the whole mask.
+///          fell outside the spectrum, and so may the whole mask -- but a mask of
+///          no frames still carries the one @c frame_offset entry the rule asks
+///          for. A default-constructed one has none and is rejected: the default
+///          exists so the struct is an aggregate, not so a zeroed one means an
+///          empty mask.
 ///
 ///          Every function taking one checks that shape before it allocates
 ///          against it, because a hand-built mask is otherwise a write outside

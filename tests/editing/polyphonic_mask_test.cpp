@@ -1028,6 +1028,32 @@ TEST_CASE("residual_spectrum and mask_total reject a set that describes nothing"
     REQUIRE(code_of([&] { return residual_spectrum(spec, unset); }) == kInvalid);
   }
 
+  SECTION("residual_spectrum wants the framing too, and mask_total cannot want it") {
+    // A set carrying another framing's hop indexes the same array while meaning
+    // different times, so the two fields that are not sizes are checked as well.
+    for (const int bad : {kHopLength + 1, kHopLength / 2, 0, -1}) {
+      INFO("hop_length " << bad);
+      NoteMaskSet wrong = masks;
+      wrong.hop_length = bad;
+      REQUIRE(code_of([&] { return residual_spectrum(spec, wrong); }) == kInvalid);
+    }
+    for (const int bad : {kSampleRate + 1, 48000, 0, -1}) {
+      INFO("sample_rate " << bad);
+      NoteMaskSet wrong = masks;
+      wrong.sample_rate = bad;
+      REQUIRE(code_of([&] { return residual_spectrum(spec, wrong); }) == kInvalid);
+    }
+
+    // mask_total is handed no spectrogram to check a framing against, so the two
+    // are deliberately not symmetric here and the same set passes it. Asserted
+    // rather than left out, because a symmetry that does not exist is exactly
+    // what a reader would otherwise assume from the pair above.
+    NoteMaskSet other_framing = masks;
+    other_framing.hop_length = kHopLength * 2;
+    other_framing.sample_rate = 48000;
+    REQUIRE_NOTHROW(mask_total(other_framing));
+  }
+
   SECTION("mask_total wants a shape") {
     const NoteMaskSet unset;
     REQUIRE(unset.n_bins == 0);
@@ -1316,4 +1342,123 @@ TEST_CASE("every entry point rejects a hand-built mask whose sparse shape is bro
   under.notes[0].frame_start = -1;
   REQUIRE(code_of([&] { return residual_spectrum(spec, under); }) == kInvalid);
   REQUIRE(code_of([&] { return mask_total(under); }) == kInvalid);
+}
+
+TEST_CASE("a mask of no frames is accepted and a default-constructed one is not",
+          "[polyphony_mask]") {
+  const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
+  const sonare::Spectrogram spec = spectrogram_of(tone_audio(330.0f));
+
+  // The two readings of an empty mask, pinned apart: no frames still carries the
+  // one frame_offset entry the n_frames + 1 rule asks for, and a zeroed struct
+  // has none. The default exists so the struct is an aggregate, not so a zeroed
+  // one means an empty mask.
+  NoteMask empty;
+  empty.frame_start = 0;
+  empty.n_frames = 0;
+  empty.frame_offset = {0};
+
+  const NoteMask zeroed;
+  REQUIRE(zeroed.frame_offset.empty());
+
+  REQUIRE_NOTHROW(apply_note_mask(spec, empty));
+  REQUIRE(code_of([&] { return apply_note_mask(spec, zeroed); }) == kInvalid);
+
+  // An empty span inside the framing rather than at its start, so the acceptance
+  // is not resting on frame_start being zero.
+  NoteMask mid = empty;
+  mid.frame_start = 3;
+  REQUIRE(mid.frame_end() == 3);
+  REQUIRE_NOTHROW(apply_note_mask(spec, mid));
+
+  // It names no bin, so its share of the spectrum is silence.
+  const sonare::Spectrogram masked = apply_note_mask(spec, empty);
+  REQUIRE(masked.n_bins() == spec.n_bins());
+  REQUIRE(masked.n_frames() == spec.n_frames());
+  size_t sounding = 0;
+  for (int bin = 0; bin < spec.n_bins(); ++bin) {
+    for (int frame = 0; frame < spec.n_frames(); ++frame) {
+      if (masked.at(bin, frame) != std::complex<float>(0.0f, 0.0f)) ++sounding;
+    }
+  }
+  REQUIRE(sounding == 0);
+
+  NoteMaskSet set;
+  set.n_bins = spec.n_bins();
+  set.n_frames = spec.n_frames();
+  set.hop_length = spec.hop_length();
+  set.sample_rate = spec.sample_rate();
+  set.notes = {empty, mid};
+  set.notes[1].ridge_index = 1;
+
+  REQUIRE_NOTHROW(residual_spectrum(spec, set));
+  REQUIRE_NOTHROW(mask_total(set));
+  // Claiming nothing is not the same as being absent: the set is valid, its
+  // total is zero throughout, and the residual is the input.
+  for (const float weight : mask_total(set)) REQUIRE(weight == 0.0f);
+  const sonare::Spectrogram residual = residual_spectrum(spec, set);
+  size_t moved = 0;
+  for (int bin = 0; bin < spec.n_bins(); ++bin) {
+    for (int frame = 0; frame < spec.n_frames(); ++frame) {
+      if (residual.at(bin, frame) != spec.at(bin, frame)) ++moved;
+    }
+  }
+  REQUIRE(moved == 0);
+
+  NoteMaskSet with_zeroed = set;
+  with_zeroed.notes[1] = zeroed;
+  REQUIRE(code_of([&] { return residual_spectrum(spec, with_zeroed); }) == kInvalid);
+  REQUIRE(code_of([&] { return mask_total(with_zeroed); }) == kInvalid);
+}
+
+TEST_CASE("every entry point rejects a weight outside (0, 1] and accepts the whole share",
+          "[polyphony_mask]") {
+  const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
+  const sonare::Spectrogram spec = spectrogram_of(tone_audio(330.0f));
+  const NoteMaskSet built = build_note_masks(spec, single_note_track(spec, 330.0f));
+  require_well_formed(built);
+  const NoteMask good = built.notes[0];
+  REQUIRE(good.weights.size() > 4);
+
+  // A weight out of range is not a shape error and would break the total and the
+  // residual with no call failing, which is why it is checked in the same pass
+  // as the bins rather than trusted.
+  for (const float bad : {0.0f, -0.5f, -1.0f, 2.0f, 1.5f, kNaN, kInf, -kInf}) {
+    INFO("weight " << bad);
+    for (const size_t at : {size_t{0}, good.weights.size() / 2, good.weights.size() - 1}) {
+      NoteMask broken = good;
+      broken.weights[at] = bad;
+      REQUIRE(code_of([&] { return apply_note_mask(spec, broken); }) == kInvalid);
+
+      NoteMaskSet first = built;
+      first.notes[0] = broken;
+      REQUIRE(code_of([&] { return residual_spectrum(spec, first); }) == kInvalid);
+      REQUIRE(code_of([&] { return mask_total(first); }) == kInvalid);
+
+      // And in the second note of a set, which a check reading only the first
+      // would miss.
+      NoteMaskSet second = built;
+      second.notes.push_back(broken);
+      second.notes[1].ridge_index = 1;
+      REQUIRE(code_of([&] { return residual_spectrum(spec, second); }) == kInvalid);
+      REQUIRE(code_of([&] { return mask_total(second); }) == kInvalid);
+    }
+  }
+
+  // One is the inclusive end of the range, and it is load-bearing rather than a
+  // formality: a whole share is what an unshared bin carries, and it is what the
+  // over-claiming set that shows the residual is unclamped is built from. A
+  // guard written with the wrong comparison at this end takes every unshared
+  // bin with it.
+  for (const float good_weight : {1.0f, 0.5f, 1e-6f}) {
+    INFO("weight " << good_weight);
+    NoteMask edge = good;
+    edge.weights[edge.weights.size() / 2] = good_weight;
+    REQUIRE_NOTHROW(apply_note_mask(spec, edge));
+
+    NoteMaskSet set = built;
+    set.notes[0] = edge;
+    REQUIRE_NOTHROW(residual_spectrum(spec, set));
+    REQUIRE_NOTHROW(mask_total(set));
+  }
 }
