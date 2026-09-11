@@ -28,6 +28,7 @@ import {
   decomposeStems,
   estimateMeter,
   extractNotes,
+  extractPercussiveEvents,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
@@ -47,6 +48,7 @@ import {
   pitchCorrectTimevarying,
   RealtimeEngine,
   renderNotes,
+  renderPercussiveEvents,
   roomMorph,
   SampleBank,
   StreamingEqualizer,
@@ -276,6 +278,22 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       };
       return mergeNotes({ ...o, ...track, notes: extractNotes(track), first: 0, last: 1 });
     },
+  },
+  {
+    jsName: 'extractPercussiveEvents',
+    invoke: (o) => extractPercussiveEvents({ ...o, samples: sine(4096, 220), sampleRate: SR }),
+  },
+  {
+    jsName: 'renderPercussiveEvents',
+    invoke: (o) =>
+      Array.from(
+        renderPercussiveEvents({
+          ...o,
+          samples: sine(4096, 220),
+          sampleRate: SR,
+          events: [{ ...o, onsetSample: 512, offsetSample: 2048, edit: { ...o, gainDb: -6 } }],
+        }),
+      ),
   },
   {
     jsName: 'midiRouteEvents',

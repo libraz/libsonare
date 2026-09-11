@@ -11,6 +11,8 @@ import type {
   NoteObject,
   NoteObjectInput,
   NoteSetEntry,
+  PercussiveEvent,
+  PercussiveEventInput,
   PitchDecompositionResult,
   ProgressCallback,
   SonareCapabilities,
@@ -1886,6 +1888,32 @@ export interface SonareModule {
       voicedThreshold?: number;
     },
   ) => NoteObject[];
+  extractPercussiveEvents: (
+    samples: Float32Array | readonly number[],
+    sampleRate: number,
+    options: {
+      nFft?: number;
+      hopLength?: number;
+      hpssKernelHarmonic?: number;
+      hpssKernelPercussive?: number;
+      onsetWait?: number;
+      onsetDelta?: number;
+      maxEventMs?: number;
+      minPercussiveRatio?: number;
+    },
+  ) => PercussiveEvent[];
+  renderPercussiveEvents: (
+    samples: Float32Array | readonly number[],
+    sampleRate: number,
+    events: readonly PercussiveEventInput[],
+    options: {
+      nFft?: number;
+      hopLength?: number;
+      hpssKernelHarmonic?: number;
+      hpssKernelPercussive?: number;
+      fadeMs?: number;
+    },
+  ) => Float32Array;
   voiceChange: (
     samples: Float32Array,
     sampleRate: number,

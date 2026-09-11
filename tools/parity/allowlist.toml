@@ -461,6 +461,13 @@ python = [
 # signature passes one pooled array because SonareNoteEdit indexes it by offset,
 # while the facade hands each note its own envelope, so there is no pool for the
 # argument to name. Same fold recorded for note_edit under [record].
+# render_percussive_events (python): C is (events, count, config). The facade
+# exposes (events, ...) and DERIVES `count` from the events sequence length, then
+# folds the SonarePercussiveRenderConfig fields into keyword args. Only this one
+# of the pair flags: extract takes no companion count, so its C shape already
+# matches. There is no pooled array here -- an event carries three scalars and no
+# per-frame curve -- so the envelope fold the note set needed has no counterpart.
+# Remapped to C order in the ctypes wrapper. Not order drift.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -525,6 +532,7 @@ python = [
   "decompose_note_pitch",
   "split_note",
   "merge_notes",
+  "render_percussive_events",
   "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
   "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims

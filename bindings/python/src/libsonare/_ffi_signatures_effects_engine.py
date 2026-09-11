@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ctypes
+from typing import Any
 
 from ._ffi_types import *  # noqa: F403,F405
 
@@ -226,6 +227,33 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    # sonare_extract_percussive_events + sonare_free_percussive_events
+    # + sonare_render_percussive_events
+    if hasattr(lib, "sonare_extract_percussive_events"):
+        lib.sonare_extract_percussive_events.restype = ctypes.c_int32
+        lib.sonare_extract_percussive_events.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonarePercussiveEventConfig),
+            ctypes.POINTER(SonarePercussiveEventsResult),
+        ]
+        lib.sonare_free_percussive_events.restype = None
+        lib.sonare_free_percussive_events.argtypes = [
+            ctypes.POINTER(SonarePercussiveEventsResult),
+        ]
+        lib.sonare_render_percussive_events.restype = ctypes.c_int32
+        lib.sonare_render_percussive_events.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonarePercussiveEvent),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonarePercussiveRenderConfig),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     # sonare_decompose_note_pitch + sonare_free_pitch_decomposition
     if hasattr(lib, "sonare_decompose_note_pitch"):
         lib.sonare_decompose_note_pitch.restype = ctypes.c_int32
@@ -244,7 +272,7 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
 
     # sonare_split_note + sonare_merge_notes. The two take the same arguments
     # apart from the cut they describe, so only the tail differs.
-    _note_set_edit_argtypes = [
+    _note_set_edit_argtypes: list[Any] = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,

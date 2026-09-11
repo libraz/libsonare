@@ -460,6 +460,12 @@ struct OwnedNoteObjects {
   ~OwnedNoteObjects() { sonare_free_note_objects(&value); }
 };
 
+/// Releases a percussive-event result however the marshalling below leaves scope.
+struct OwnedPercussiveEvents {
+  SonarePercussiveEventsResult value{};
+  ~OwnedPercussiveEvents() { sonare_free_percussive_events(&value); }
+};
+
 /// Releases a pitch decomposition however the marshalling below leaves scope.
 struct OwnedPitchDecomposition {
   SonarePitchDecompositionResult value{};
@@ -636,6 +642,114 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjec
     notes.Set(static_cast<uint32_t>(i), row);
   }
   return notes;
+}
+
+/// Reads the four separation keys both percussive-event entry points share. The
+/// framing is one input, not a knob each side restates, so neither can lift a
+/// signal out on a framing the other did not measure on.
+void ReadPercussiveSeparation(const Napi::Object& opts, int32_t* n_fft, int32_t* hop_length,
+                              int32_t* kernel_harmonic, int32_t* kernel_percussive) {
+  *n_fft = node_int_option(opts, "nFft", 0);
+  *hop_length = node_int_option(opts, "hopLength", 0);
+  *kernel_harmonic = node_int_option(opts, "hpssKernelHarmonic", 0);
+  *kernel_percussive = node_int_option(opts, "hpssKernelPercussive", 0);
+}
+
+/// Reads the extraction options bag, which may be absent. Every field takes its
+/// default at 0 on the C side, so an omitted bag and an all-zero one agree.
+void ReadPercussiveEventConfig(const Napi::Value& value, SonarePercussiveEventConfig* out) {
+  out->struct_version = 1;
+  if (!value.IsObject()) {
+    return;
+  }
+  Napi::Object opts = value.As<Napi::Object>();
+  // Effects options bag: the type-checked reader family, so an explicit
+  // `undefined` (or any non-number) reads as the documented default.
+  ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
+                           &out->hpss_kernel_percussive);
+  out->onset_wait = node_int_option(opts, "onsetWait", 0);
+  out->onset_delta = node_float_option(opts, "onsetDelta", 0.0f);
+  out->max_event_ms = node_float_option(opts, "maxEventMs", 0.0f);
+  // 0 is this field's own meaning as well as its default, and the C ABI assigns
+  // it as-is, so "keep everything" stays reachable from here.
+  out->min_percussive_ratio = node_float_option(opts, "minPercussiveRatio", 0.0f);
+}
+
+/// Reads the render options bag, under the same rule.
+void ReadPercussiveRenderConfig(const Napi::Value& value, SonarePercussiveRenderConfig* out) {
+  out->struct_version = 1;
+  if (!value.IsObject()) {
+    return;
+  }
+  Napi::Object opts = value.As<Napi::Object>();
+  ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
+                           &out->hpss_kernel_percussive);
+  out->fade_ms = node_float_option(opts, "fadeMs", 0.0f);
+}
+
+/// Reads an event's optional `edit`. A zeroed SonarePercussiveEventEdit is the
+/// identity, so an omitted edit, and an omitted key within one, is a no-op.
+void ReadPercussiveEventEdit(const char* fn, const Napi::Object& event,
+                             SonarePercussiveEventEdit* out) {
+  const Napi::Value edit_value = event.Get("edit");
+  if (edit_value.IsUndefined() || edit_value.IsNull()) {
+    return;
+  }
+  if (!edit_value.IsObject() || edit_value.IsArray()) {
+    throw std::runtime_error(std::string(fn) + ": event.edit must be a plain object");
+  }
+  Napi::Object edit = edit_value.As<Napi::Object>();
+  out->time_offset_samples = node_int64_option(edit, "timeOffsetSamples", 0);
+  out->gain_db = node_float_option(edit, "gainDb", 0.0f);
+  out->muted = node_bool_option(edit, "muted", false) ? 1 : 0;
+}
+
+/// Reads a JS event array onto the C structs. Only the span and the edit are
+/// read: rendering ignores the measured figures, so an event straight from an
+/// extraction round-trips without them having to survive the trip.
+void ReadPercussiveEvents(const char* fn, const Napi::Array& js_events,
+                          std::vector<SonarePercussiveEvent>* events) {
+  const uint32_t count = js_events.Length();
+  events->assign(count, SonarePercussiveEvent{});
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Value item = js_events.Get(i);
+    if (!item.IsObject() || item.IsArray()) {
+      throw std::runtime_error(std::string(fn) + ": each event must be a plain object");
+    }
+    Napi::Object event = item.As<Napi::Object>();
+    SonarePercussiveEvent& row = (*events)[i];
+    row.onset_sample = node_int64_option(event, "onsetSample", 0);
+    row.offset_sample = node_int64_option(event, "offsetSample", 0);
+    ReadPercussiveEventEdit(fn, event, &row.edit);
+  }
+}
+
+/// Marshals a heap-owned result into the JS event array. One allocation, unlike
+/// the note objects: an event carries three scalars and nothing per frame, so
+/// there is no pool to slice.
+Napi::Array PercussiveEventsToJs(Napi::Env env, const SonarePercussiveEventsResult& result) {
+  Napi::Array events = Napi::Array::New(env, result.count);
+  for (size_t i = 0; i < result.count; ++i) {
+    const SonarePercussiveEvent& event = result.events[i];
+    Napi::Object row = Napi::Object::New(env);
+    // No int64 in N-API: sample positions marshal as JS numbers, exact up to
+    // Number.MAX_SAFE_INTEGER (2^53-1 samples, millennia of audio).
+    row.Set("onsetSample", Napi::Number::New(env, static_cast<double>(event.onset_sample)));
+    row.Set("offsetSample", Napi::Number::New(env, static_cast<double>(event.offset_sample)));
+    row.Set("strength", Napi::Number::New(env, event.strength));
+    row.Set("peakAmplitude", Napi::Number::New(env, event.peak_amplitude));
+    row.Set("percussiveRatio", Napi::Number::New(env, event.percussive_ratio));
+
+    Napi::Object edit = Napi::Object::New(env);
+    edit.Set("timeOffsetSamples",
+             Napi::Number::New(env, static_cast<double>(event.edit.time_offset_samples)));
+    edit.Set("gainDb", Napi::Number::New(env, event.edit.gain_db));
+    edit.Set("muted", Napi::Boolean::New(env, event.edit.muted != 0));
+    row.Set("edit", edit);
+
+    events.Set(static_cast<uint32_t>(i), row);
+  }
+  return events;
 }
 
 }  // namespace
@@ -867,6 +981,76 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return NoteObjectsToJs(env, "mergeNotes", result.value);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::ExtractPercussiveEvents(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, options?)
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?: object)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  const size_t length = typed.ElementLength();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+
+  SonarePercussiveEventConfig config{};
+  ReadPercussiveEventConfig(info[2], &config);
+
+  OwnedPercussiveEvents result;
+  const SonareError err =
+      sonare_extract_percussive_events(data, length, sr, &config, &result.value);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  // Audio in which nothing was detected comes back as a NULL pointer and a zero
+  // count, which marshals to an empty array rather than to an error.
+  return PercussiveEventsToJs(env, result.value);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, events, options?)
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array, sampleRate, events: object[], options?: object)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  const size_t length = typed.ElementLength();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+
+  SonarePercussiveRenderConfig config{};
+  ReadPercussiveRenderConfig(info[3], &config);
+
+  std::vector<SonarePercussiveEvent> events;
+  ReadPercussiveEvents("renderPercussiveEvents", info[2].As<Napi::Array>(), &events);
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError err =
+      sonare_render_percussive_events(data, length, sr, events.empty() ? nullptr : events.data(),
+                                      events.size(), &config, &out, &out_length);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  auto result = CopyToFloat32(env, out, out_length);
+  sonare_free_floats(out);
+  return result;
   SONARE_NODE_CATCH(env)
 }
 

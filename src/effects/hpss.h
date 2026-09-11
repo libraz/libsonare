@@ -15,8 +15,8 @@ namespace sonare {
 ///          components using median filtering. Horizontal filtering enhances
 ///          harmonics, vertical filtering enhances percussives.
 struct HpssConfig {
-  int kernel_size_harmonic = 31;    ///< Horizontal median filter size (must be odd, >= 3)
-  int kernel_size_percussive = 31;  ///< Vertical median filter size (must be odd, >= 3)
+  int kernel_size_harmonic = 31;    ///< Horizontal median filter size (must be odd and positive)
+  int kernel_size_percussive = 31;  ///< Vertical median filter size (must be odd and positive)
   float power = 2.0f;               ///< Exponent for mask computation (typically 1.0-2.0)
   float margin_harmonic = 1.0f;     ///< Weight for harmonic mask (> 1.0 favors harmonic)
   float margin_percussive = 1.0f;   ///< Weight for percussive mask (> 1.0 favors percussive)

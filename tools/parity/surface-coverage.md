@@ -9,7 +9,7 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 | domain | C entry points | Python | Node | WASM | CLI |
 |---|---:|---:|---:|---:|---:|
 | core (analysis, IO, conversion) | 56 | 46/56 | 46/56 | 44/56 | 17/56 |
-| creative effects | 37 | 36/37 | 36/37 | 36/37 | 14/37 |
+| creative effects | 40 | 39/40 | 39/40 | 39/40 | 15/40 |
 | feature extraction | 135 | 119/135 | 119/135 | 119/135 | 48/135 |
 | mastering | 78 | 68/78 | 68/78 | 70/78 | 8/78 |
 | metering | 28 | 28/28 | 26/28 | 28/28 | 7/28 |
@@ -20,4 +20,4 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 | sample bank | 5 | 5/5 | 5/5 | 5/5 | 1/5 |
 | streaming | 33 | 31/33 | 31/33 | 31/33 | 7/33 |
 | voice changer | 18 | 18/18 | 18/18 | 17/18 | 3/18 |
-| **all domains** | **708** | **660/708** | **657/708** | **658/708** | **127/708** |
+| **all domains** | **711** | **663/711** | **660/711** | **661/711** | **128/711** |

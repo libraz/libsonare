@@ -456,6 +456,205 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                                const float* envelopes, size_t envelope_count, size_t first,
                                size_t last, SonareNoteObjectsResult* out);
 
+// ============================================================================
+// Effects - Percussive events
+// ============================================================================
+
+/// @brief Versioned configuration for @ref sonare_extract_percussive_events.
+/// @details Zero-initialize for the defaults (2048-point FFT, 512 hop, 31-frame
+///          median kernels, onset delta 0.06, one frame of minimum spacing, a
+///          500 ms span cap and no ratio filter). @c struct_version 0 and 1 both
+///          select the version-1 layout. Every field takes its default at 0, so
+///          a zeroed struct and a NULL pointer behave alike.
+typedef struct {
+  int32_t struct_version;
+  /// FFT size and hop the separation and the onset detector share. They cannot
+  /// be set apart: an event measured on one framing and lifted out on another is
+  /// not the same signal. 0 keeps 2048 and 512. The pair must overlap-add --
+  /// @c n_fft even and at least 2, @c hop_length no more than half of it --
+  /// because the separation inverts an STFT. A negative value is rejected on its
+  /// own, before the zero-is-default rule could swallow it.
+  int32_t n_fft;
+  int32_t hop_length;
+  /// Median filter lengths the separation runs, along time and along frequency.
+  /// A longer harmonic kernel calls more of a sustained sound harmonic. 0 keeps
+  /// the default 31; any other value must be odd and positive, so an even one is
+  /// rejected rather than rounded. 1 is legal and degenerate -- a length-1
+  /// median is the identity, so both components come back as the source.
+  int32_t hpss_kernel_harmonic;
+  int32_t hpss_kernel_percussive;
+  /// Minimum frames between consecutive onsets. 0 keeps the default 1; negative
+  /// is rejected.
+  int32_t onset_wait;
+  /// Offset added to the detector's adaptive threshold; raising it finds fewer,
+  /// stronger hits and lowering it finds more. 0 keeps the default 0.06, so
+  /// exactly zero is the one value not selectable from here -- a negative one is
+  /// accepted and puts the threshold below the default, which is the direction
+  /// a caller reaching for zero wanted anyway.
+  ///
+  /// It is in the units of @c SonarePercussiveEvent::strength, which is the
+  /// onset envelope's own scale and is not normalized -- three isolated hits
+  /// measured 37 to 51 on one fixture, where the 0.06 default selects nothing at
+  /// all. So read a useful value off the strengths a default extraction returns
+  /// rather than guessing one; a number chosen on the assumption that the scale
+  /// is around 1 will look like a knob that does nothing.
+  float onset_delta;
+  /// Caps a span that no onset follows. It binds at the end of a phrase and at
+  /// the end of the track; anywhere else the next onset closes the span first.
+  /// 0 keeps the default 500 ms.
+  float max_event_ms;
+  /// Drops an event whose @c percussive_ratio falls below this; must be in
+  /// [0, 1]. 0 is both the default and the meaningful "keep everything", so
+  /// nothing is lost here to the rule that 0 selects the default. Raising it is
+  /// useful on material that is mostly drums and wrong on a dense mix, where it
+  /// also drops real hits sitting over a loud sustain.
+  float min_percussive_ratio;
+} SonarePercussiveEventConfig;
+
+/// @brief Versioned configuration for @ref sonare_render_percussive_events.
+/// @details Zero-initialize for the defaults (2048-point FFT, 512 hop, 31-frame
+///          median kernels, 5 ms fade). @c struct_version 0 and 1 both select
+///          the version-1 layout.
+typedef struct {
+  int32_t struct_version;
+  /// The separation the events were measured against. Pass back what
+  /// @ref sonare_extract_percussive_events was called with: a different
+  /// separation lifts a different signal out of the span than the one the
+  /// events describe. Validated even when every edit is the identity and no
+  /// separation runs, so an unusable framing is an error on every set.
+  int32_t n_fft;
+  int32_t hop_length;
+  int32_t hpss_kernel_harmonic;
+  int32_t hpss_kernel_percussive;
+  /// Fade-out at the tail of each lifted span. 0 keeps the default 5 ms, so a
+  /// zero-length fade is unreachable from here rather than rejected -- a zeroed
+  /// struct has to mean the defaults, and that outranks passing the core's own
+  /// refusal through. A hard cut is not a thing to want anyway: what the fade
+  /// shapes is the signal being subtracted, so squaring it off leaves a step.
+  ///
+  /// There is deliberately no matching fade-in: a span opens in front of its
+  /// transient, where the percussive component is near-silent, so cutting square
+  /// there costs nothing and keeps a muted hit's attack from surviving inside a
+  /// fade.
+  float fade_ms;
+} SonarePercussiveRenderConfig;
+
+/// @brief A pending, non-destructive change to one percussive event.
+/// @details Zero-initializing gives the identity edit. A struck sound has no
+///          steady pitch to edit, so the axes are time and amplitude and there
+///          is deliberately nothing else here.
+typedef struct {
+  /// Moves the hit along the timeline. Negative moves it earlier.
+  int64_t time_offset_samples;
+  float gain_db;
+  /// Non-zero silences the hit; the other fields then do not apply.
+  int32_t muted;
+} SonarePercussiveEventEdit;
+
+/// One editable percussive event. Sample bounds are half-open into the source
+/// audio.
+/// @details It carries no pitch and is never associated with a note object: the
+///          two models are produced by separate calls and do not refer to each
+///          other. The signal an edit acts on is the percussive component of the
+///          span rather than the span itself, which is why the three measured
+///          figures are taken on that component.
+typedef struct {
+  int64_t onset_sample;
+  int64_t offset_sample;
+  /// Detector strength at the onset, on the onset envelope's own scale. It
+  /// orders events against each other and carries no absolute meaning.
+  float strength;
+  /// Peak absolute sample of the percussive component over the span, linear.
+  /// Measured on the signal @c gain_db scales rather than on the source.
+  float peak_amplitude;
+  /// Share of the span's energy the separation assigned to percussion, in
+  /// [0, 1]. 0 when the span is silent.
+  ///
+  /// It describes the span rather than the onset that opened it. An isolated hit
+  /// sits near 1, but a real hit over a loud sustain sits near 0, because the
+  /// sustain owns the span's energy. So it separates a hit from a note attack
+  /// only where nothing is sustaining through both, and it is not a test for
+  /// whether a hit is there.
+  float percussive_ratio;
+  SonarePercussiveEventEdit edit;
+} SonarePercussiveEvent;
+
+/// Heap-owned percussive-event output. Release with
+/// @ref sonare_free_percussive_events.
+/// @details One allocation, unlike @ref SonareNoteObjectsResult: an event
+///          carries three scalars and nothing per frame, so there is no
+///          companion curve array to travel with the set.
+typedef struct {
+  SonarePercussiveEvent* events;
+  size_t count;
+} SonarePercussiveEventsResult;
+
+/// @brief Extract editable percussive events from audio.
+/// @details Onsets are detected on the percussive component rather than on the
+///          source, so a harmonic attack is attenuated before the detector sees
+///          it instead of being filtered out afterwards. Each onset opens a span
+///          that the next one closes, and every returned event has the identity
+///          edit.
+///
+///          Each onset is backtracked to the transient's start, which is not
+///          optional and is why there is no knob for it here: peak-picking lands
+///          after the attack, and a span that opened there would report the next
+///          hit's peak and leave its own attack behind when muted.
+///
+///          Spans are fixed before @c min_percussive_ratio drops anything, so
+///          raising the threshold selects events without lengthening the ones
+///          that survive.
+/// @param samples Source audio; @p length must be non-zero.
+/// @param sample_rate Sample rate in Hz; must be > 0.
+/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param out Receives a heap-owned result, cleared before validation. Audio in
+///        which nothing was detected is returned as a NULL pointer and a zero
+///        count rather than as an error. Events come back in ascending sample
+///        order with no two spans overlapping and every span inside @p samples,
+///        so the set is renderable against the same audio without being sorted
+///        or repaired first.
+SonareError sonare_extract_percussive_events(const float* samples, size_t length, int sample_rate,
+                                             const SonarePercussiveEventConfig* config,
+                                             SonarePercussiveEventsResult* out);
+
+/// @brief Release a result from @ref sonare_extract_percussive_events.
+/// @details NULL-safe, and clears the struct it releases, so calling it twice on
+///          the same result is harmless. A result that came back empty owns
+///          nothing and may still be passed here.
+void sonare_free_percussive_events(SonarePercussiveEventsResult* result);
+
+/// @brief Render edited percussive events over their source audio.
+/// @details Per event the lifted signal is the percussive component over
+///          @c [onset_sample, offset_sample) under the tail fade. It is
+///          subtracted where it sits and, unless the event is muted, added back
+///          at the shifted position scaled by the gain. Only that signal moves,
+///          so muting a hit leaves the harmonic content under it sounding and
+///          moving one does not drag its neighbours' sustain along.
+///
+///          Reads each event's span and its @c edit; @c strength,
+///          @c peak_amplitude and @c percussive_ratio are ignored, so a host may
+///          pass back exactly what @ref sonare_extract_percussive_events
+///          produced. A set whose edits are all identity reproduces the input
+///          bit for bit and runs no separation at all.
+///
+///          Overlap is checked on the source spans only. Where
+///          @c time_offset_samples lands an event is not, so two moved events
+///          may be written over each other. A shift that pushes the signal past
+///          either end is truncated there rather than wrapped.
+/// @param events The event set; may be NULL when @p count is 0. Every span must
+///        be non-empty and inside @p samples, and no two may overlap. That is
+///        checked for every event including the ones whose edit is the identity:
+///        an unrenderable set is unrenderable whether or not this call would
+///        have touched the offending event.
+/// @param config Optional versioned configuration; NULL selects the defaults.
+/// @param out Receives the rendered audio, which has the input's length.
+/// @note The returned array is heap-allocated and MUST be released with
+///       @ref sonare_free_floats.
+SonareError sonare_render_percussive_events(const float* samples, size_t length, int sample_rate,
+                                            const SonarePercussiveEvent* events, size_t count,
+                                            const SonarePercussiveRenderConfig* config, float** out,
+                                            size_t* out_length);
+
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);
@@ -761,8 +960,8 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
 /// @param samples Input audio.
 /// @param length Number of samples.
 /// @param sample_rate Sample rate.
-/// @param kernel_harmonic Horizontal median filter size (odd, >= 3).
-/// @param kernel_percussive Vertical median filter size (odd, >= 3).
+/// @param kernel_harmonic Horizontal median filter size (odd and positive).
+/// @param kernel_percussive Vertical median filter size (odd and positive).
 /// @param out_harmonic Receives the harmonic signal.
 /// @param out_percussive Receives the percussive signal.
 /// @param out_residual Receives the residual signal.

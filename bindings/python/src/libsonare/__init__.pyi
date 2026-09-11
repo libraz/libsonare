@@ -33,6 +33,12 @@ from .analyzer import (
     NoteObject as NoteObject,
 )
 from .analyzer import (
+    PercussiveEvent as PercussiveEvent,
+)
+from .analyzer import (
+    PercussiveEventEdit as PercussiveEventEdit,
+)
+from .analyzer import (
     PitchDecomposition as PitchDecomposition,
 )
 from .analyzer import (
@@ -184,6 +190,9 @@ from .analyzer import (
 )
 from .analyzer import (
     extract_notes as extract_notes,
+)
+from .analyzer import (
+    extract_percussive_events as extract_percussive_events,
 )
 from .analyzer import (
     fix_frames as fix_frames,
@@ -512,6 +521,9 @@ from .analyzer import (
 )
 from .analyzer import (
     render_notes as render_notes,
+)
+from .analyzer import (
+    render_percussive_events as render_percussive_events,
 )
 from .analyzer import (
     resample as resample,

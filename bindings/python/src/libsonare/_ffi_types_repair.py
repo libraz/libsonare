@@ -278,6 +278,67 @@ class SonareNoteObjectsResult(ctypes.Structure):
     ]
 
 
+class SonarePercussiveEventConfig(ctypes.Structure):
+    """Maps to SonarePercussiveEventConfig in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("hpss_kernel_harmonic", ctypes.c_int32),
+        ("hpss_kernel_percussive", ctypes.c_int32),
+        ("onset_wait", ctypes.c_int32),
+        ("onset_delta", ctypes.c_float),
+        ("max_event_ms", ctypes.c_float),
+        ("min_percussive_ratio", ctypes.c_float),
+    ]
+
+
+class SonarePercussiveRenderConfig(ctypes.Structure):
+    """Maps to SonarePercussiveRenderConfig in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("hpss_kernel_harmonic", ctypes.c_int32),
+        ("hpss_kernel_percussive", ctypes.c_int32),
+        ("fade_ms", ctypes.c_float),
+    ]
+
+
+class SonarePercussiveEventEdit(ctypes.Structure):
+    """Maps to SonarePercussiveEventEdit in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("time_offset_samples", ctypes.c_int64),
+        ("gain_db", ctypes.c_float),
+        ("muted", ctypes.c_int32),
+    ]
+
+
+class SonarePercussiveEvent(ctypes.Structure):
+    """Maps to SonarePercussiveEvent in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("onset_sample", ctypes.c_int64),
+        ("offset_sample", ctypes.c_int64),
+        ("strength", ctypes.c_float),
+        ("peak_amplitude", ctypes.c_float),
+        ("percussive_ratio", ctypes.c_float),
+        ("edit", SonarePercussiveEventEdit),
+    ]
+
+
+class SonarePercussiveEventsResult(ctypes.Structure):
+    """Maps to SonarePercussiveEventsResult in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("events", ctypes.POINTER(SonarePercussiveEvent)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
 class SonarePitchDecompositionResult(ctypes.Structure):
     """Maps to SonarePitchDecompositionResult in sonare_c_effects.h."""
 

@@ -17,6 +17,10 @@
 #include <sonare/sonare_c.h>
 
 #include "core/audio.h"
+// Ungated: the percussive event model depends only on HPSS and the onset
+// analyzer, both of which are compiled in every configuration.
+#include "editing/event_model/event_extractor.h"
+#include "editing/event_model/event_renderer.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;
@@ -34,6 +38,50 @@ void clear_note_objects_result(SonareNoteObjectsResult& out) {
   out.amplitude_count = 0;
   out.envelopes = nullptr;
   out.envelope_count = 0;
+}
+
+/// The percussive event model reaches only for HPSS and the onset analyzer, so
+/// unlike everything else in this file it needs no feature gate.
+void clear_percussive_events_result(SonarePercussiveEventsResult& out) {
+  out.events = nullptr;
+  out.count = 0;
+}
+
+/// Resolves a versioned percussive-event config onto the core defaults. Every
+/// field takes its default at 0, matching the note-object configs.
+SonareError resolve_percussive_separation(int32_t n_fft, int32_t hop_length,
+                                          int32_t kernel_harmonic, int32_t kernel_percussive,
+                                          editing::event_model::PercussiveSeparationConfig& out) {
+  if (n_fft < 0 || hop_length < 0 || kernel_harmonic < 0 || kernel_percussive < 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (n_fft != 0) out.n_fft = n_fft;
+  if (hop_length != 0) out.hop_length = hop_length;
+  if (kernel_harmonic != 0) out.hpss.kernel_size_harmonic = kernel_harmonic;
+  if (kernel_percussive != 0) out.hpss.kernel_size_percussive = kernel_percussive;
+  return SONARE_OK;
+}
+
+SonareError fill_percussive_events_result(
+    const std::vector<editing::event_model::PercussiveEvent>& events,
+    SonarePercussiveEventsResult* out) {
+  if (events.empty()) return SONARE_OK;
+
+  auto* rows = new SonarePercussiveEvent[events.size()];
+  for (size_t i = 0; i < events.size(); ++i) {
+    const editing::event_model::PercussiveEvent& event = events[i];
+    rows[i].onset_sample = event.onset_sample;
+    rows[i].offset_sample = event.offset_sample;
+    rows[i].strength = event.strength;
+    rows[i].peak_amplitude = event.peak_amplitude;
+    rows[i].percussive_ratio = event.percussive_ratio;
+    rows[i].edit.time_offset_samples = event.edit.time_offset_samples;
+    rows[i].edit.gain_db = event.edit.gain_db;
+    rows[i].edit.muted = event.edit.muted ? 1 : 0;
+  }
+  out->events = rows;
+  out->count = events.size();
+  return SONARE_OK;
 }
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
@@ -686,6 +734,92 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                               frame_rate, config, notes, note_count, envelopes, envelope_count,
                               first, last, out);
 #endif
+}
+
+SonareError sonare_extract_percussive_events(const float* samples, size_t length, int sample_rate,
+                                             const SonarePercussiveEventConfig* config,
+                                             SonarePercussiveEventsResult* out) {
+  SONARE_C_API_ENTRY;
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  clear_percussive_events_result(*out);
+
+  editing::event_model::PercussiveEventExtractorConfig extractor_config;
+  if (config != nullptr) {
+    if (config->struct_version < 0 || config->struct_version > 1) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    const SonareError separation_error = resolve_percussive_separation(
+        config->n_fft, config->hop_length, config->hpss_kernel_harmonic,
+        config->hpss_kernel_percussive, extractor_config.separation);
+    if (separation_error != SONARE_OK) return separation_error;
+
+    if (!std::isfinite(config->onset_delta) || !std::isfinite(config->max_event_ms) ||
+        !std::isfinite(config->min_percussive_ratio) || config->onset_wait < 0 ||
+        config->max_event_ms < 0.0f || config->min_percussive_ratio < 0.0f ||
+        config->min_percussive_ratio > 1.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (config->onset_wait != 0) extractor_config.onset.wait = config->onset_wait;
+    if (config->onset_delta != 0.0f) extractor_config.onset.delta = config->onset_delta;
+    if (config->max_event_ms != 0.0f) extractor_config.max_event_ms = config->max_event_ms;
+    // Unlike the rest, 0 is this field's own meaning as well as its default, so
+    // it is assigned unconditionally rather than read as "leave the default".
+    extractor_config.min_percussive_ratio = config->min_percussive_ratio;
+  }
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    return fill_percussive_events_result(
+        editing::event_model::extract_percussive_events(audio, extractor_config), out);
+  });
+}
+
+void sonare_free_percussive_events(SonarePercussiveEventsResult* result) {
+  if (result == nullptr) return;
+  delete[] result->events;
+  clear_percussive_events_result(*result);
+}
+
+SonareError sonare_render_percussive_events(const float* samples, size_t length, int sample_rate,
+                                            const SonarePercussiveEvent* events, size_t count,
+                                            const SonarePercussiveRenderConfig* config, float** out,
+                                            size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if (events == nullptr && count != 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  editing::event_model::PercussiveEventRenderConfig render_config;
+  if (config != nullptr) {
+    if (config->struct_version < 0 || config->struct_version > 1) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    const SonareError separation_error = resolve_percussive_separation(
+        config->n_fft, config->hop_length, config->hpss_kernel_harmonic,
+        config->hpss_kernel_percussive, render_config.separation);
+    if (separation_error != SONARE_OK) return separation_error;
+
+    if (!std::isfinite(config->fade_ms) || config->fade_ms < 0.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (config->fade_ms != 0.0f) render_config.fade_ms = config->fade_ms;
+  }
+
+  std::vector<editing::event_model::PercussiveEvent> core_events(count);
+  for (size_t i = 0; i < count; ++i) {
+    core_events[i].onset_sample = events[i].onset_sample;
+    core_events[i].offset_sample = events[i].offset_sample;
+    // The measured figures are not copied: rendering reads the span and the
+    // edit, so a host may pass back exactly what extraction produced without
+    // those fields having to survive the round trip.
+    core_events[i].edit.time_offset_samples = events[i].edit.time_offset_samples;
+    core_events[i].edit.gain_db = events[i].edit.gain_db;
+    core_events[i].edit.muted = events[i].edit.muted != 0;
+  }
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    Audio result =
+        editing::event_model::render_percussive_events(audio, core_events, render_config);
+    return copy_audio_result(result, out, out_length);
+  });
 }
 
 SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,

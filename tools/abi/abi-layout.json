@@ -4301,6 +4301,192 @@
     ],
     "size": 104
   },
+  "SonarePercussiveEvent": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "onset_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "offset_sample",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "strength",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "peak_amplitude",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "percussive_ratio",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "edit",
+        "offset": 32,
+        "size": 16
+      }
+    ],
+    "size": 48
+  },
+  "SonarePercussiveEventConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hpss_kernel_harmonic",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hpss_kernel_percussive",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "onset_wait",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "onset_delta",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_event_ms",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_percussive_ratio",
+        "offset": 32,
+        "size": 4
+      }
+    ],
+    "size": 36
+  },
+  "SonarePercussiveEventEdit": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "time_offset_samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "gain_db",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "muted",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonarePercussiveEventsResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "events",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "count",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonarePercussiveRenderConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hpss_kernel_harmonic",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hpss_kernel_percussive",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fade_ms",
+        "offset": 20,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
   "SonarePhaseScopePoint": {
     "align": 4,
     "fields": [

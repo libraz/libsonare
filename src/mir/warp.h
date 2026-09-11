@@ -180,7 +180,7 @@ ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
 struct WarpTsmConfig {
   int n_fft = 2048;
   int hop_length = 512;
-  /// HPSS median-filter kernel sizes (odd, >= 3). Defaults match HpssConfig.
+  /// HPSS median-filter kernel sizes (odd and positive). Defaults match HpssConfig.
   int hpss_kernel_harmonic = 31;
   int hpss_kernel_percussive = 31;
 };

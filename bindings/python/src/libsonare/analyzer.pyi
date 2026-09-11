@@ -660,6 +660,59 @@ def render_notes(
     vibrato_cutoff_hz: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
 
+class PercussiveEventEdit:
+    time_offset_samples: int
+    gain_db: float
+    muted: bool
+    def __init__(
+        self,
+        time_offset_samples: int = 0,
+        gain_db: float = 0.0,
+        muted: bool = False,
+    ) -> None: ...
+
+class PercussiveEvent:
+    onset_sample: int
+    offset_sample: int
+    strength: float
+    peak_amplitude: float
+    percussive_ratio: float
+    edit: PercussiveEventEdit
+    def __init__(
+        self,
+        onset_sample: int = 0,
+        offset_sample: int = 0,
+        strength: float = 0.0,
+        peak_amplitude: float = 0.0,
+        percussive_ratio: float = 0.0,
+        edit: PercussiveEventEdit = ...,
+    ) -> None: ...
+
+def extract_percussive_events(
+    samples: FloatSamples,
+    sample_rate: int,
+    *,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    hpss_kernel_harmonic: int | None = None,
+    hpss_kernel_percussive: int | None = None,
+    onset_wait: int | None = None,
+    onset_delta: float | None = None,
+    max_event_ms: float | None = None,
+    min_percussive_ratio: float | None = None,
+) -> list[PercussiveEvent]: ...
+def render_percussive_events(
+    samples: FloatSamples,
+    sample_rate: int,
+    events: Sequence[PercussiveEvent],
+    *,
+    n_fft: int | None = None,
+    hop_length: int | None = None,
+    hpss_kernel_harmonic: int | None = None,
+    hpss_kernel_percussive: int | None = None,
+    fade_ms: float | None = None,
+) -> np.ndarray[Any, Any]: ...
+
 class PitchDecomposition:
     centre_hz: float
     drift_cents: np.ndarray[Any, Any]

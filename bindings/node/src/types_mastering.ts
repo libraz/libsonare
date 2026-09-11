@@ -321,6 +321,98 @@ export interface NoteSetEntry {
 }
 
 /**
+ * A pending, non-destructive change to one percussive event.
+ * {@link extractPercussiveEvents} attaches the identity edit (no move, unity
+ * gain, unmuted) to every event it returns; {@link renderPercussiveEvents}
+ * applies whatever the caller has changed.
+ *
+ * A struck sound has no steady pitch to edit, so the axes are time and amplitude
+ * and there is deliberately nothing else here.
+ */
+export interface PercussiveEventEdit {
+  /**
+   * Moves the hit along the timeline; negative moves it earlier. Where it lands
+   * is not bounds-checked against the other events, so two moved hits may be
+   * written over each other; a shift past either end is truncated there rather
+   * than wrapped.
+   */
+  timeOffsetSamples: number;
+  /**
+   * Level change applied to the hit. It scales the percussive component of the
+   * span — the signal `PercussiveEvent.peakAmplitude` is measured on — and not
+   * whatever else is sounding through it.
+   */
+  gainDb: number;
+  /** Silences the hit; the other fields then do not apply. */
+  muted: boolean;
+}
+
+/**
+ * A {@link PercussiveEventEdit} as supplied to {@link renderPercussiveEvents}.
+ * Every field is optional and an omitted one is the identity, so `{}` leaves the
+ * hit untouched.
+ */
+export type PercussiveEventEditInput = Partial<PercussiveEventEdit>;
+
+/**
+ * One editable percussive event returned by {@link extractPercussiveEvents}.
+ *
+ * Sample bounds are half-open into the source audio. `onsetSample` and
+ * `offsetSample` are 64-bit on the C side and arrive as JS numbers, which are
+ * exact up to `Number.MAX_SAFE_INTEGER`.
+ *
+ * It carries no pitch and is never associated with a {@link NoteObject}: the two
+ * models come from separate calls and do not refer to each other. The three
+ * measured figures are taken on the percussive component of the span, because
+ * that is the signal an edit acts on.
+ */
+export interface PercussiveEvent {
+  /** First sample of the hit's span, backtracked to in front of the transient. */
+  onsetSample: number;
+  /** One past the last sample of the span; the next onset, or the span cap. */
+  offsetSample: number;
+  /**
+   * Detector strength at the onset, on the onset envelope's own scale. It orders
+   * events against each other and carries no absolute meaning.
+   */
+  strength: number;
+  /**
+   * Peak absolute sample of the percussive component over the span, linear.
+   * Measured on the signal `edit.gainDb` scales rather than on the source, so a
+   * quiet hit under a loud sustain reads at its own level.
+   */
+  peakAmplitude: number;
+  /**
+   * Share of the span's energy the separation assigned to percussion, in
+   * `[0, 1]`; 0 when the span is silent.
+   *
+   * It describes the span rather than the onset that opened it. An isolated hit
+   * sits near 1, but a real hit over a loud sustain sits near 0, because the
+   * sustain owns the span's energy. So it separates a hit from a note attack
+   * only where nothing is sustaining through both, and it is not a test for
+   * whether a hit is there.
+   */
+  percussiveRatio: number;
+  /** This event's pending edit; the identity as returned. */
+  edit: PercussiveEventEdit;
+}
+
+/**
+ * An event handed to {@link renderPercussiveEvents}. Only the span and the edit
+ * are read — the measured figures are ignored — so a {@link PercussiveEvent}
+ * straight from {@link extractPercussiveEvents} can be passed back with its
+ * `edit` changed and nothing else.
+ */
+export interface PercussiveEventInput {
+  /** First sample of the hit's span. */
+  onsetSample: number;
+  /** One past the last sample of the span; must be greater than `onsetSample`. */
+  offsetSample: number;
+  /** Omit for the identity edit. */
+  edit?: PercussiveEventEditInput;
+}
+
+/**
  * One note's pitch curve split into a centre, a slow drift and a vibrato, as
  * returned by {@link decomposeNotePitch}.
  *

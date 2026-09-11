@@ -95,6 +95,7 @@ add_executable(sonare_tests
   analysis/melody_analyzer_test.cpp
   analysis/section_analyzer_test.cpp
   analysis/music_analyzer_test.cpp
+  editing/percussive_event_test.cpp
   streaming/stream_analyzer_core_test.cpp
   streaming/stream_analyzer_quantized_test.cpp
   streaming/stream_analyzer_integration_test.cpp
@@ -137,6 +138,7 @@ add_executable(sonare_tests
   api/sonare_c_effects_extra_test.cpp
   api/sonare_c_note_objects_test.cpp
   api/sonare_c_note_split_merge_test.cpp
+  api/sonare_c_percussive_events_test.cpp
   api/sonare_c_metering_extra_test.cpp
   conformance/public_input_conformance_test.cpp
   librosa/convert_test.cpp

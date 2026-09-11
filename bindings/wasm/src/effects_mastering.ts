@@ -1,6 +1,7 @@
 export {
   decomposeNotePitch,
   extractNotes,
+  extractPercussiveEvents,
   harmonic,
   hpss,
   mergeNotes,
@@ -13,6 +14,7 @@ export {
   pitchCorrectToMidiTimevarying,
   pitchShift,
   renderNotes,
+  renderPercussiveEvents,
   spectralEdit,
   splitNote,
   timeStretch,

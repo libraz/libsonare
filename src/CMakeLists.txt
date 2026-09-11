@@ -166,6 +166,11 @@ set(SONARE_SOURCES
   analysis/section_analyzer.cpp
   analysis/music_analyzer.cpp
   analysis/analysis_json.cpp
+  # Percussive events reach only for HPSS and the onset analyzer, both of which
+  # are here, so gating them alongside the pitch editor would declare a
+  # dependency that does not exist.
+  editing/event_model/event_extractor.cpp
+  editing/event_model/event_renderer.cpp
   streaming/stream_analyzer.cpp
   streaming/stream_analyzer_features.cpp
   streaming/stream_analyzer_output.cpp
