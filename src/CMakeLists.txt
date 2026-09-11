@@ -176,6 +176,7 @@ set(SONARE_SOURCES
   editing/polyphony/f0_salience.cpp
   editing/polyphony/multi_f0.cpp
   editing/polyphony/note_mask.cpp
+  editing/polyphony/shared_bins.cpp
   streaming/stream_analyzer.cpp
   streaming/stream_analyzer_features.cpp
   streaming/stream_analyzer_output.cpp

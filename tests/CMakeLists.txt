@@ -99,6 +99,7 @@ add_executable(sonare_tests
   editing/polyphonic_f0_test.cpp
   editing/polyphonic_f0_eval_test.cpp
   editing/polyphonic_mask_test.cpp
+  editing/polyphonic_shared_bins_test.cpp
   streaming/stream_analyzer_core_test.cpp
   streaming/stream_analyzer_quantized_test.cpp
   streaming/stream_analyzer_integration_test.cpp
