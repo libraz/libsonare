@@ -208,11 +208,13 @@ std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vect
 
 std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(lag >= 1, ErrorCode::InvalidParameter);
+  return spectral_flux(spec.magnitude().data(), spec.n_bins(), spec.n_frames(), lag);
+}
 
-  int n_bins = spec.n_bins();
-  int n_frames = spec.n_frames();
-  const std::vector<float>& magnitude = spec.magnitude();
+std::vector<float> spectral_flux(const float* magnitude, int n_bins, int n_frames, int lag) {
+  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(lag >= 1, ErrorCode::InvalidParameter);
 
   std::vector<float> flux(n_frames, 0.0f);
 
@@ -225,7 +227,7 @@ std::vector<float> spectral_flux(const Spectrogram& spec, int lag) {
     // bins in ascending order, so the flux is unchanged bit for bit.
     std::vector<float> sums(static_cast<size_t>(diff_frames), 0.0f);
     for (int b = 0; b < n_bins; ++b) {
-      const float* row = magnitude.data() + static_cast<size_t>(b) * n_frames;
+      const float* row = magnitude + static_cast<size_t>(b) * n_frames;
       for (int f = 0; f < diff_frames; ++f) {
         sums[f] += std::abs(row[f + lag] - row[f]);
       }

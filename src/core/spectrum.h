@@ -3,6 +3,7 @@
 /// @file spectrum.h
 /// @brief STFT/iSTFT and Spectrogram class.
 
+#include <algorithm>
 #include <complex>
 #include <cstddef>
 #include <functional>
@@ -35,6 +36,15 @@ void fill_magnitude_cache(const std::vector<std::complex<float>>& data,
 ///        from re² + im² otherwise.
 void fill_power_cache(const std::vector<std::complex<float>>& data,
                       const std::vector<float>& magnitude, std::vector<float>& power);
+
+/// @brief Writes magnitude for one contiguous run of @p count elements.
+/// @details The primitive @ref fill_magnitude_cache is expressed in terms of, so a
+///          caller producing a subrange takes the same code path rather than a copy
+///          of its branch. @p power is the cached power for the same run, or nullptr
+///          when there is none. Pure elementwise map with no accumulator and no
+///          multiply-add, so the result does not depend on @p count.
+void magnitude_run(const std::complex<float>* data, const float* power, std::size_t count,
+                   float* out);
 
 }  // namespace detail
 
@@ -225,6 +235,65 @@ class Spectrogram {
   /// @brief Returns power spectrum [n_bins x n_frames].
   /// @details Computed lazily and cached.
   const std::vector<float>& power() const;
+
+  /// @brief Runs @p fn over the magnitude spectrum in bounded frame tiles.
+  /// @details Lets a single-pass consumer read magnitude without materializing the
+  ///          whole [n_bins x n_frames] array, which for a full track is the larger
+  ///          of this object's two derived caches.
+  ///
+  ///          Three states, and the tile holds whatever @ref detail::magnitude_run
+  ///          would have written for the same frames -- the same code path over a
+  ///          subrange, not an expression equal to it:
+  ///            - magnitude already cached: one call with the whole cache. The memory
+  ///              is already spent, and a frame tile is not contiguous in a row-major
+  ///              [n_bins x n_frames] buffer, so tiling would copy an array we hold.
+  ///            - power cached: tiles of sqrt(power).
+  ///            - neither: tiles of abs(z).
+  ///
+  ///          @p overlap leading frames are repeated at the head of each tile for a
+  ///          consumer that needs the previous frame (spectral flux). @p fn receives
+  ///          (tile, tile_frames, discard): the tile is [n_bins x tile_frames]
+  ///          row-major and the first @p discard frames are overlap whose outputs the
+  ///          caller drops. Emitted frames are contiguous and ascending across calls.
+  ///
+  ///          Tiling changes a consumer's trip count. That is safe here because every
+  ///          consumer is elementwise across frames with a per-frame accumulator, so
+  ///          no reassociation is possible; it is *not* safe by that argument alone
+  ///          when a consumer's accumulate is a multiply-add, because the same
+  ///          statement can fuse in a vectorized body and not in the scalar epilogue.
+  ///          Verified for the consumers this is used by rather than assumed.
+  template <typename Fn>
+  void for_each_magnitude_tile(int tile_frames, int overlap, Fn&& fn) const {
+    if (n_bins_ <= 0 || n_frames_ <= 0 || data_.empty()) return;
+
+    if (!magnitude_cache_.empty()) {
+      fn(magnitude_cache_.data(), n_frames_, 0);
+      return;
+    }
+
+    // A tile must hold its overlap plus at least one emitted frame.
+    const int step = std::max(1, std::max(tile_frames, overlap + 1));
+    const int span = step + std::max(0, overlap);
+    const float* power = power_cache_.empty() ? nullptr : power_cache_.data();
+
+    std::vector<float> tile(static_cast<std::size_t>(n_bins_) * static_cast<std::size_t>(span));
+    for (int first = 0; first < n_frames_; first += step) {
+      const int lo = std::max(0, first - overlap);
+      const int hi = std::min(n_frames_, first + step);
+      const int len = hi - lo;
+      const int discard = first - lo;
+      for (int bin = 0; bin < n_bins_; ++bin) {
+        const std::size_t src =
+            static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames_) +
+            static_cast<std::size_t>(lo);
+        detail::magnitude_run(
+            data_.data() + src, power == nullptr ? nullptr : power + src,
+            static_cast<std::size_t>(len),
+            tile.data() + static_cast<std::size_t>(bin) * static_cast<std::size_t>(len));
+      }
+      fn(static_cast<const float*>(tile.data()), len, discard);
+    }
+  }
 
   /// @brief Returns magnitude in decibels [n_bins x n_frames].
   /// @param ref Reference value (default 1.0)

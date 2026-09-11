@@ -71,4 +71,18 @@ std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vect
 /// @return Spectral flux envelope [n_frames]
 std::vector<float> spectral_flux(const Spectrogram& spec, int lag = 1);
 
+/// @brief Spectral flux over a caller-supplied magnitude buffer.
+/// @details The pointer form its siblings in spectral.h already have, so a consumer
+///          holding a magnitude tile can run flux on it without a Spectrogram. Flux
+///          is the one descriptor that reads two frames, so a tiled caller must
+///          supply @p lag frames of overlap ahead of the frames it wants and drop
+///          that many leading outputs; frames [0, lag) of the result are zero by
+///          construction, which is correct only at the start of the signal.
+/// @param magnitude Magnitude spectrum [n_bins x n_frames], row-major
+/// @param n_bins Number of frequency bins
+/// @param n_frames Number of frames in @p magnitude
+/// @param lag Time lag for computing differences
+/// @return Spectral flux envelope [n_frames]
+std::vector<float> spectral_flux(const float* magnitude, int n_bins, int n_frames, int lag = 1);
+
 }  // namespace sonare

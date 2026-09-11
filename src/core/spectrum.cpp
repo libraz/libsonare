@@ -23,20 +23,28 @@ using sonare::constants::kTwoPi;
 
 namespace detail {
 
+void magnitude_run(const std::complex<float>* data, const float* power, size_t count, float* out) {
+  if (power != nullptr) {
+    // Derive magnitude from cached power via sqrt — cheaper than recomputing
+    // re²+im² + sqrt from the complex spectrum.
+    for (size_t i = 0; i < count; ++i) {
+      out[i] = std::sqrt(power[i]);
+    }
+    return;
+  }
+  for (size_t i = 0; i < count; ++i) {
+    out[i] = std::abs(data[i]);
+  }
+}
+
 void fill_magnitude_cache(const std::vector<std::complex<float>>& data,
                           const std::vector<float>& power, std::vector<float>& magnitude) {
   magnitude.resize(data.size());
   if (!power.empty()) {
-    // Derive magnitude from cached power via sqrt — cheaper than recomputing
-    // re²+im² + sqrt from the complex spectrum.
-    for (size_t i = 0; i < power.size(); ++i) {
-      magnitude[i] = std::sqrt(power[i]);
-    }
+    magnitude_run(data.data(), power.data(), power.size(), magnitude.data());
     return;
   }
-  for (size_t i = 0; i < data.size(); ++i) {
-    magnitude[i] = std::abs(data[i]);
-  }
+  magnitude_run(data.data(), nullptr, data.size(), magnitude.data());
 }
 
 void fill_power_cache(const std::vector<std::complex<float>>& data,

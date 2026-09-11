@@ -16,6 +16,7 @@ add_executable(sonare_tests
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_registry.cpp
   util/math_utils_test.cpp
   util/numeric_overflow_guard_test.cpp
+  util/time_map_test.cpp
   util/types_test.cpp
   util/lru_cache_test.cpp
   util/json_test.cpp
@@ -92,6 +93,7 @@ add_executable(sonare_tests
   metering/meter_basic_test.cpp
   analysis/rhythm_analyzer_test.cpp
   analysis/timbre_analyzer_test.cpp
+  analysis/timbre_tile_test.cpp
   analysis/melody_analyzer_test.cpp
   analysis/section_analyzer_test.cpp
   analysis/music_analyzer_test.cpp

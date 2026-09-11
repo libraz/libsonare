@@ -23,6 +23,11 @@ constexpr float kBrightnessCentroidRefHz = 8000.0f;
 /// @brief Frame lag used for the spectral flux behind roughness.
 /// @details One hop: roughness tracks the change between adjacent analysis frames.
 constexpr int kRoughnessFluxLag = 1;
+
+/// Frames per magnitude tile. Bounded so the descriptors read magnitude without a
+/// full [n_bins x n_frames] buffer, which for a full track is tens of megabytes
+/// held alongside the power cache it would be derived from.
+constexpr int kMagnitudeTileFrames = 256;
 /// @brief Relative spectral flux mapped to maximum roughness (1.0).
 /// @details The relative flux of a steady tone sits near zero while dense inharmonic
 ///          or noisy material reaches a few tenths; scaling by this factor spreads
@@ -70,48 +75,70 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
     return;
   }
 
-  // Compute spectral features
-  spectral_centroid_ = sonare::spectral_centroid(spec, sr_);
-  spectral_flatness_ = sonare::spectral_flatness(spec);
-  spectral_rolloff_ = sonare::spectral_rolloff(spec, sr_, 0.85f);
-  relative_flux_ = sonare::spectral_flux(spec, kRoughnessFluxLag);
+  const int n_bins = spec.n_bins();
+  const int n_fft = spec.n_fft();
+  // Bins strictly below the cutoff frequency: bin b maps to b * sr / n_fft Hz.
+  const int cutoff_bin =
+      (n_fft > 0)
+          ? std::clamp(static_cast<int>(std::ceil(kWarmthCutoffHz * static_cast<float>(n_fft) /
+                                                  static_cast<float>(sr_))),
+                       0, n_bins)
+          : 0;
 
-  // Precompute the per-frame low-frequency energy ratio here, where the full
-  // magnitude spectrogram is in scope, so warmth can be derived from actual
-  // low-band energy rather than a linear inverse of brightness. The ratio is the
-  // fraction of spectral power below kWarmthCutoffHz for each frame.
-  // The same pass accumulates each frame's L1 magnitude norm, which turns the raw
-  // flux into a scale-free ratio below.
+  spectral_centroid_.clear();
+  spectral_flatness_.clear();
+  spectral_rolloff_.clear();
+  relative_flux_.clear();
   low_band_ratio_.assign(static_cast<size_t>(n_frames_), 0.0f);
   std::vector<float> frame_l1(static_cast<size_t>(n_frames_), 0.0f);
-  {
-    const std::vector<float>& mag = spec.magnitude();
-    const int n_bins = spec.n_bins();
-    const int n_fft = spec.n_fft();
-    // Bins strictly below the cutoff frequency: bin b maps to b * sr / n_fft Hz.
-    const int cutoff_bin =
-        (n_fft > 0)
-            ? std::clamp(static_cast<int>(std::ceil(kWarmthCutoffHz * static_cast<float>(n_fft) /
-                                                    static_cast<float>(sr_))),
-                         0, n_bins)
-            : 0;
-    for (int f = 0; f < n_frames_; ++f) {
-      double low = 0.0;
-      double total = 0.0;
-      double l1 = 0.0;
-      for (int b = 0; b < n_bins; ++b) {
-        const float m =
-            mag[static_cast<size_t>(b) * static_cast<size_t>(n_frames_) + static_cast<size_t>(f)];
-        const double power = static_cast<double>(m) * static_cast<double>(m);
-        total += power;
-        l1 += m;
-        if (b < cutoff_bin) low += power;
-      }
-      low_band_ratio_[static_cast<size_t>(f)] =
-          total > 0.0 ? static_cast<float>(low / total) : 0.0f;
-      frame_l1[static_cast<size_t>(f)] = static_cast<float>(l1);
-    }
-  }
+
+  // All five descriptors read magnitude once, so they run together on one tile
+  // before it advances: the tile loop is outside and the consumers inside, which
+  // keeps the cost at one sqrt per cell -- the same as materializing the whole
+  // magnitude array, which is what this avoids. Inverting the nesting would pay
+  // that cost five times.
+  //
+  // Every descriptor here is elementwise across frames with its own per-frame
+  // accumulator, and the low-band pass reduces over bins within one frame, which
+  // the frame axis does not touch. kRoughnessFluxLag frames of overlap cover the
+  // one descriptor that reads two frames; its zero prefix is positional, so
+  // without the overlap a zero would appear at every tile boundary rather than
+  // only at the start.
+  int emitted = 0;
+  spec.for_each_magnitude_tile(
+      kMagnitudeTileFrames, kRoughnessFluxLag,
+      [&](const float* tile, int tile_frames, int discard) {
+        const auto append = [discard](std::vector<float>& dst, const std::vector<float>& src) {
+          dst.insert(dst.end(), src.begin() + discard, src.end());
+        };
+        append(spectral_centroid_,
+               sonare::spectral_centroid(tile, n_bins, tile_frames, sr_, n_fft));
+        append(spectral_flatness_, sonare::spectral_flatness(tile, n_bins, tile_frames));
+        append(spectral_rolloff_,
+               sonare::spectral_rolloff(tile, n_bins, tile_frames, sr_, n_fft, 0.85f));
+        append(relative_flux_, sonare::spectral_flux(tile, n_bins, tile_frames, kRoughnessFluxLag));
+
+        // The per-frame low-frequency energy ratio, so warmth comes from actual
+        // low-band energy rather than a linear inverse of brightness, plus each
+        // frame's L1 magnitude norm, which scales the raw flux below.
+        for (int f = discard; f < tile_frames; ++f) {
+          double low = 0.0;
+          double total = 0.0;
+          double l1 = 0.0;
+          for (int b = 0; b < n_bins; ++b) {
+            const float m = tile[static_cast<size_t>(b) * static_cast<size_t>(tile_frames) +
+                                 static_cast<size_t>(f)];
+            const double power = static_cast<double>(m) * static_cast<double>(m);
+            total += power;
+            l1 += m;
+            if (b < cutoff_bin) low += power;
+          }
+          const size_t out = static_cast<size_t>(emitted + f - discard);
+          low_band_ratio_[out] = total > 0.0 ? static_cast<float>(low / total) : 0.0f;
+          frame_l1[out] = static_cast<float>(l1);
+        }
+        emitted += tile_frames - discard;
+      });
 
   // Turn the raw flux into a scale-free ratio: the L1 magnitude change between two
   // frames divided by the combined L1 magnitude of those same two frames. Both
