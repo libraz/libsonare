@@ -11,6 +11,7 @@
 #include "core/audio.h"
 #include "core/fft.h"
 #include "core/spectrum.h"
+#include "util/time_map.h"
 
 namespace sonare {
 
@@ -77,6 +78,9 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
 ///          reserve() plus process_into()/finalize_into() provides a caller-owned
 ///          output path that is allocation-free after reservation; process() and
 ///          finalize() still return owning Audio chunks for offline callers.
+///          Binding a rate rewrites the held map in place, so the scalar path
+///          allocates nothing after reserve(); binding a profile with more
+///          segments than the map's reserved capacity grows it once.
 class StreamingPhaseVocoder {
  public:
   explicit StreamingPhaseVocoder(StreamingPhaseVocoderConfig config = {});
@@ -99,10 +103,11 @@ class StreamingPhaseVocoder {
 
  private:
   void bind_rate(float rate);
+  void bind_map(const TimeStretchMap& map);
   void ensure_stream_state();
   void analyze_available_frames(bool final);
   void synthesize_available_frames(bool final);
-  void synthesize_output_frame(int t_out, float rate);
+  void synthesize_output_frame(int t_out);
   Audio drain_available(bool final);
   size_t drain_into(bool final, float* out, size_t out_capacity);
   void compact_buffers();
@@ -114,7 +119,12 @@ class StreamingPhaseVocoder {
   size_t input_base_sample_ = 0;
   size_t ola_base_sample_ = 0;
   size_t emitted_output_samples_ = 0;
-  float active_rate_ = 0.0f;
+  /// Bound on the first call and re-bindable only where it agrees with what has
+  /// already been synthesized, because compact_buffers erases behind it. Held by
+  /// value and sized at construction so binding assigns into storage that already
+  /// exists: a profile with more segments than this one holds allocates once.
+  TimeStretchMap active_map_{1.0f};
+  bool map_bound_ = false;
   bool finalized_ = false;
 
   std::unique_ptr<FFT> fft_;

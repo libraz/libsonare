@@ -13,6 +13,7 @@
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/phase.h"
+#include "util/time_map.h"
 
 namespace sonare::engine {
 namespace {
@@ -57,12 +58,8 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
   const int input_frames =
       std::max(2, 1 + static_cast<int>((padded_length - static_cast<size_t>(n_fft)) /
                                        static_cast<size_t>(hop)));
-  size_t output_frame_count = 0;
-  SONARE_CHECK(
-      numeric::checked_projected_count(static_cast<size_t>(input_frames), rate,
-                                       std::min(kMaxAudioBufferSize, static_cast<size_t>(INT_MAX)),
-                                       &output_frame_count),
-      ErrorCode::InvalidParameter);
+  const TimeStretchMap map(rate);
+  const size_t output_frame_count = static_cast<size_t>(map.output_frame_count(input_frames));
   size_t spectrum_elements = 0;
   SONARE_CHECK(numeric::checked_size_product(static_cast<size_t>(n_bins), output_frame_count,
                                              kMaxAudioBufferSize, &spectrum_elements),
@@ -126,7 +123,7 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
   };
 
   for (int t_out = 0; t_out < output_frames; ++t_out) {
-    float t_in_f = static_cast<float>(t_out) * rate;
+    float t_in_f = map.input_position(t_out);
     int t_in = static_cast<int>(t_in_f);
     float frac = t_in_f - static_cast<float>(t_in);
     if (t_in >= input_frames - 1) {

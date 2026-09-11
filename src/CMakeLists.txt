@@ -78,6 +78,7 @@ set(SONARE_SOURCES
   util/sequence.cpp
   util/stereo_metrics.cpp
   util/tunable.cpp
+  util/time_map.cpp
   util/vector_normalize.cpp
   core/convert.cpp
   core/window.cpp

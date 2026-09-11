@@ -588,3 +588,66 @@ TEST_CASE("phase_vocoder short-signal rate change still produces finite output",
     for (float v : mag) REQUIRE(std::isfinite(v));
   }
 }
+
+TEST_CASE("StreamingPhaseVocoder push then process_into stays allocation-free",
+          "[phase_vocoder][streaming][rt]") {
+  /// The neighbouring case guards reserve() followed directly by process_into,
+  /// so it cannot see a construction that moved onto a path push() also reaches.
+  /// Pushing first pins the map's storage to reserve() rather than to whichever
+  /// lazy path happens to run first.
+  const int sr = 22050;
+  Audio audio = make_sine(200.0f, sr, 0.25f);
+
+  StreamingPhaseVocoderConfig config;
+  config.sample_rate = sr;
+  config.n_fft = 512;
+  config.hop_length = 128;
+
+  StreamingPhaseVocoder reference(config);
+  reference.push(audio);
+  Audio expected = reference.finish(0.8f);
+
+  StreamingPhaseVocoder streamer(config);
+  streamer.reserve(audio.size(), expected.size() + static_cast<size_t>(config.n_fft));
+  std::vector<float> out(expected.size() + static_cast<size_t>(config.n_fft), 0.0f);
+
+  size_t written = 0;
+  sonare::test::AllocationGuard guard;
+  streamer.push(audio.data(), audio.size());
+  written += streamer.process_into(nullptr, 0, 0.8f, out.data(), out.size());
+  written += streamer.finalize_into(0.8f, out.data() + written, out.size() - written);
+
+  REQUIRE(guard.count() == 0);
+  REQUIRE(written == expected.size());
+}
+
+TEST_CASE("StreamingPhaseVocoder rebinding a changed rate rewrites the map in place",
+          "[phase_vocoder][streaming][rt]") {
+  /// The held map starts at rate 1.0, so a stream at any other rate rebinds on
+  /// its first call. Building a map to rebind from would allocate; rewriting the
+  /// held one does not. reset() returns the stream to unbound while keeping the
+  /// storage, so a second rate exercises the same path again.
+  const int sr = 22050;
+  Audio audio = make_sine(200.0f, sr, 0.1f);
+
+  StreamingPhaseVocoderConfig config;
+  config.sample_rate = sr;
+  config.n_fft = 512;
+  config.hop_length = 128;
+
+  StreamingPhaseVocoder streamer(config);
+  streamer.reserve(audio.size(), audio.size() * 2 + static_cast<size_t>(config.n_fft));
+  std::vector<float> out(audio.size() * 2 + static_cast<size_t>(config.n_fft), 0.0f);
+
+  size_t count = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    streamer.process_into(audio.data(), audio.size(), 0.8f, out.data(), out.size());
+    streamer.finalize_into(0.8f, out.data(), out.size());
+    streamer.process_into(audio.data(), audio.size(), 1.7f, out.data(), out.size());
+    streamer.finalize_into(1.7f, out.data(), out.size());
+    count = guard.count();
+  }
+  INFO("allocations across two differing rate bindings " << count);
+  REQUIRE(count == 0);
+}

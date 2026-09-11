@@ -14,6 +14,7 @@
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/phase.h"
+#include "util/time_map.h"
 
 namespace sonare {
 
@@ -22,18 +23,9 @@ using sonare::constants::kTwoPiD;
 
 namespace {
 
-size_t checked_output_count(size_t input_count, float rate) {
-  size_t output_count = 0;
-  constexpr size_t kMaxOutputCount =
-      std::min<size_t>(kMaxAudioBufferSize, static_cast<size_t>(INT_MAX));
-  SONARE_CHECK(numeric::checked_projected_count(input_count, rate, kMaxOutputCount, &output_count),
-               ErrorCode::InvalidParameter);
-  return output_count;
-}
-
-int checked_output_frames(int n_bins, int input_frames, float rate) {
+int checked_output_frames(int n_bins, int input_frames, const TimeStretchMap& map) {
   SONARE_CHECK(n_bins > 0 && input_frames > 0, ErrorCode::InvalidParameter);
-  const size_t output_frames = checked_output_count(static_cast<size_t>(input_frames), rate);
+  const size_t output_frames = static_cast<size_t>(map.output_frame_count(input_frames));
   size_t output_elements = 0;
   SONARE_CHECK(numeric::checked_size_product(static_cast<size_t>(n_bins), output_frames,
                                              kMaxAudioBufferSize, &output_elements),
@@ -88,7 +80,7 @@ void StreamingPhaseVocoder::reset() {
   input_base_sample_ = 0;
   ola_base_sample_ = 0;
   emitted_output_samples_ = 0;
-  active_rate_ = 0.0f;
+  map_bound_ = false;
   finalized_ = false;
   analysis_frames_.clear();
   std::fill(phase_acc_.begin(), phase_acc_.end(), 0.0);
@@ -128,12 +120,30 @@ void StreamingPhaseVocoder::push(const Audio& audio) {
 int StreamingPhaseVocoder::latency_samples() const noexcept { return config_.n_fft / 2; }
 
 void StreamingPhaseVocoder::bind_rate(float rate) {
-  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
-  if (active_rate_ == 0.0f) {
-    active_rate_ = rate;
+  // Rewritten in place rather than assigned from a map built here: building one
+  // would allocate on a path documented as allocation-free after reserve().
+  if (active_map_.constant()) {
+    if (active_map_.constant_rate() == rate) {
+      map_bound_ = true;
+      return;
+    }
+    // Two constant maps' single pieces coincide only at the same rate, so a
+    // changed rate cannot agree over a frame already synthesized.
+    SONARE_CHECK(!map_bound_ || next_output_frame_ <= 0, ErrorCode::InvalidParameter);
+    active_map_.assign(rate);
+    map_bound_ = true;
     return;
   }
-  SONARE_CHECK(std::abs(active_rate_ - rate) <= 1.0e-6f, ErrorCode::InvalidParameter);
+  bind_map(TimeStretchMap(rate));
+}
+
+void StreamingPhaseVocoder::bind_map(const TimeStretchMap& map) {
+  // Frames already synthesized fix input the stream has discarded; above them
+  // the profile is still free.
+  SONARE_CHECK(!map_bound_ || active_map_.agrees_through(map, next_output_frame_ - 1),
+               ErrorCode::InvalidParameter);
+  active_map_ = map;
+  map_bound_ = true;
 }
 
 void StreamingPhaseVocoder::ensure_stream_state() {
@@ -202,21 +212,21 @@ void StreamingPhaseVocoder::analyze_available_frames(bool final) {
 void StreamingPhaseVocoder::synthesize_available_frames(bool final) {
   const int available_input_frames = next_analysis_frame_;
   if (available_input_frames - analysis_frame_base_ < 2) return;
-  bind_rate(active_rate_);
+  SONARE_CHECK(map_bound_, ErrorCode::InvalidParameter);
   int target_output_frames = final ? 0 : next_output_frame_;
   if (final) {
     target_output_frames =
-        checked_output_frames(config_.n_fft / 2 + 1, available_input_frames, active_rate_);
+        checked_output_frames(config_.n_fft / 2 + 1, available_input_frames, active_map_);
   } else {
     while (true) {
-      const int t_in = static_cast<int>(static_cast<float>(target_output_frames) * active_rate_);
+      const int t_in = static_cast<int>(active_map_.input_position(target_output_frames));
       if (t_in + 1 >= available_input_frames) break;
       ++target_output_frames;
     }
   }
 
   while (next_output_frame_ < target_output_frames) {
-    synthesize_output_frame(next_output_frame_, active_rate_);
+    synthesize_output_frame(next_output_frame_);
     ++next_output_frame_;
   }
 }
@@ -233,14 +243,14 @@ const std::complex<float>& StreamingPhaseVocoder::analysis_frame_at(int frame,
                           static_cast<size_t>(bin)];
 }
 
-void StreamingPhaseVocoder::synthesize_output_frame(int t_out, float rate) {
+void StreamingPhaseVocoder::synthesize_output_frame(int t_out) {
   ensure_stream_state();
   const int n_bins = config_.n_fft / 2 + 1;
   const int n_frames_in = next_analysis_frame_;
   const double time_step =
       static_cast<double>(config_.hop_length) / static_cast<double>(config_.sample_rate);
 
-  float t_in_f = static_cast<float>(t_out) * rate;
+  float t_in_f = active_map_.input_position(t_out);
   int t_in = static_cast<int>(t_in_f);
   float frac = t_in_f - static_cast<float>(t_in);
   if (t_in >= n_frames_in - 1) {
@@ -313,10 +323,10 @@ void StreamingPhaseVocoder::compact_buffers() {
   const int n_bins = config_.n_fft / 2 + 1;
   const int retained_frames =
       static_cast<int>(analysis_frames_.size() / static_cast<size_t>(n_bins));
-  if (retained_frames > 0 && active_rate_ > 0.0f) {
-    const int next_needed_input_frame = std::max(
-        analysis_frame_base_,
-        static_cast<int>(std::floor(static_cast<float>(next_output_frame_) * active_rate_)));
+  if (retained_frames > 0 && map_bound_) {
+    const int next_needed_input_frame =
+        std::max(analysis_frame_base_,
+                 static_cast<int>(std::floor(active_map_.input_position(next_output_frame_))));
     // Interpolation always reads t_in and t_in + 1. Keep the final two retained
     // frames even when a fast rate advances past them between drains.
     const int frames_to_drop = std::clamp(next_needed_input_frame - analysis_frame_base_, 0,
@@ -359,8 +369,8 @@ void StreamingPhaseVocoder::compact_buffers() {
 Audio StreamingPhaseVocoder::drain_available(bool final) {
   size_t stable_user_samples = 0;
   if (final) {
-    stable_user_samples =
-        std::max<size_t>(1, checked_output_count(input_base_sample_ + input_.size(), active_rate_));
+    stable_user_samples = std::max<size_t>(
+        1, active_map_.output_sample_count(input_base_sample_ + input_.size(), config_.hop_length));
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
@@ -384,8 +394,8 @@ Audio StreamingPhaseVocoder::drain_available(bool final) {
 size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capacity) {
   size_t stable_user_samples = 0;
   if (final) {
-    stable_user_samples =
-        std::max<size_t>(1, checked_output_count(input_base_sample_ + input_.size(), active_rate_));
+    stable_user_samples = std::max<size_t>(
+        1, active_map_.output_sample_count(input_base_sample_ + input_.size(), config_.hop_length));
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
@@ -472,7 +482,8 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
   validate_cola_geometry(n_fft, hop_length);
 
   /// Calculate output number of frames
-  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, rate);
+  const TimeStretchMap map(rate);
+  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, map);
 
   /// Get input complex spectrum
   const std::complex<float>* input = spec.complex_data();
@@ -489,7 +500,7 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
 
   for (int t_out = 0; t_out < n_frames_out; ++t_out) {
     /// Input time position
-    float t_in_f = static_cast<float>(t_out) * rate;
+    float t_in_f = map.input_position(t_out);
     int t_in = static_cast<int>(t_in_f);
     float frac = t_in_f - static_cast<float>(t_in);
 
@@ -558,7 +569,8 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
   int sample_rate = spec.sample_rate();
   validate_cola_geometry(n_fft, hop_length);
 
-  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, rate);
+  const TimeStretchMap map(rate);
+  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, map);
 
   const std::complex<float>* input = spec.complex_data();
   std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames_out);
@@ -578,7 +590,7 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
   std::vector<int> nearest_peak(n_bins, -1);
 
   for (int t_out = 0; t_out < n_frames_out; ++t_out) {
-    float t_in_f = static_cast<float>(t_out) * rate;
+    float t_in_f = map.input_position(t_out);
     int t_in = static_cast<int>(t_in_f);
     float frac = t_in_f - static_cast<float>(t_in);
 
