@@ -475,3 +475,60 @@ describe('percussive-event render separation kernel', () => {
     });
   }
 });
+
+/**
+ * The framing fields sit in the same options bag as the kernels, are read by
+ * the same narrowing reader, and share the "0 keeps the default" sentinel. A
+ * guard covering only the kernels leaves the two of them with the defect the
+ * kernels were fixed out of, on the same call.
+ */
+describe('percussive-event separation framing', () => {
+  const spans = (events: ReturnType<typeof extractPercussiveEvents>): string =>
+    JSON.stringify(events.map((event) => [event.onsetSample, event.offsetSample]));
+
+  const outcome = (framing: Record<string, number>): string => {
+    try {
+      return spans(extractPercussiveEvents({ samples: hits, sampleRate, ...framing }));
+    } catch {
+      return REFUSED;
+    }
+  };
+
+  for (const key of ['nFft', 'hopLength'] as const) {
+    // The sentinel this whole guard exists for. Asserted first because every
+    // claim below is about a value truncating onto it.
+    it(`reads a ${key} of 0 as the default rather than refusing it`, () => {
+      expect(outcome({ [key]: 0 })).toBe(outcome({}));
+      expect(outcome({})).not.toBe(REFUSED);
+    });
+
+    for (const passed of [0.5, -0.5, 1024.5]) {
+      it(`refuses a fractional ${key} of ${passed} for not being an integer`, () => {
+        const error = expectParameterRefusal(
+          capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed })),
+        );
+        expect(error.message).toContain(`${key} must be an integer`);
+        // -0.5 truncates to 0, so the module's own negativity check cannot see
+        // it; a refusal quoting that check would mean the integrality guard
+        // never ran.
+        expect(error.message).not.toContain('must not be negative');
+      });
+    }
+
+    it(`refuses a fractional ${key} on the render half too`, () => {
+      const events = extractPercussiveEvents({ samples: hits, sampleRate });
+      const error = expectParameterRefusal(
+        capture(() => renderPercussiveEvents({ samples: hits, sampleRate, events, [key]: 0.5 })),
+      );
+      expect(error.message).toContain(`${key} must be an integer`);
+    });
+  }
+
+  // Without this the refusals above are satisfied by a guard that rejects every
+  // framing, and nothing shows the field reaches the separation at all.
+  it('separates on a framing the caller chose', () => {
+    const chosen = outcome({ nFft: 1024, hopLength: 256 });
+    expect(chosen).not.toBe(REFUSED);
+    expect(chosen).not.toBe(outcome({}));
+  });
+});

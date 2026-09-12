@@ -19,7 +19,7 @@ import type {
 import type { ValidateOptions } from './validation';
 import {
   assertHpssKernels,
-  assertPercussiveSeparationKernels,
+  assertPercussiveSeparation,
   assertSampleRate,
   assertSamples,
 } from './validation';
@@ -1166,11 +1166,7 @@ export function extractPercussiveEvents(
 ): PercussiveEvent[] {
   assertSamples('extractPercussiveEvents', request.samples, request.validate !== false);
   assertSampleRate('extractPercussiveEvents', request.sampleRate);
-  assertPercussiveSeparationKernels(
-    'extractPercussiveEvents',
-    request.hpssKernelHarmonic,
-    request.hpssKernelPercussive,
-  );
+  assertPercussiveSeparation('extractPercussiveEvents', request);
   return requireModule().extractPercussiveEvents(request.samples, request.sampleRate, request);
 }
 
@@ -1223,11 +1219,7 @@ export function extractPercussiveEvents(
 export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
   assertSamples('renderPercussiveEvents', request.samples, request.validate !== false);
   assertSampleRate('renderPercussiveEvents', request.sampleRate);
-  assertPercussiveSeparationKernels(
-    'renderPercussiveEvents',
-    request.hpssKernelHarmonic,
-    request.hpssKernelPercussive,
-  );
+  assertPercussiveSeparation('renderPercussiveEvents', request);
   return requireModule().renderPercussiveEvents(
     request.samples,
     request.sampleRate,

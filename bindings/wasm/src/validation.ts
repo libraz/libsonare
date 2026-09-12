@@ -135,7 +135,7 @@ export function assertHpssKernels(
   assertInt32(fnName, kernelPercussive, 'kernelPercussive');
 }
 
-function assertIntegralKernel(fnName: string, value: number, argName: string): void {
+function assertIntegralField(fnName: string, value: number, argName: string): void {
   if (!Number.isInteger(value)) {
     throw new SonareError(
       ErrorCode.InvalidParameter,
@@ -146,29 +146,39 @@ function assertIntegralKernel(fnName: string, value: number, argName: string): v
 }
 
 /**
- * Check the percussive-event separation's HPSS kernels for integrality.
+ * Percussive-event separation fields, as the request objects carry them.
+ */
+export interface PercussiveSeparationFields {
+  nFft?: number;
+  hopLength?: number;
+  hpssKernelHarmonic?: number;
+  hpssKernelPercussive?: number;
+}
+
+/**
+ * Check the percussive-event separation's framing and kernels for integrality.
  *
- * The kernels reach the module as options-object fields, where the shared
- * reader already refuses a non-finite or out-of-range value by name — but it
- * narrows with a cast, so a fractional kernel truncates instead. 31.5 separates
- * on 31 and anything in `(-1, 0)` truncates to the 0 that the separation config
- * reads as "keep the default", so the call succeeds on a kernel the caller never
- * asked for. Range stays the reader's, which names the field it rejected;
+ * All four fields reach the module through one options-bag reader, which
+ * refuses a non-finite or out-of-range value by name — but it narrows with a
+ * cast, so a fractional value truncates instead. 31.5 separates on 31, and
+ * anything in `(-1, 0)` truncates to the 0 every one of these fields reads as
+ * "keep the default", so the call succeeds on a framing the caller never asked
+ * for. Range stays the reader's, which names the field it rejected;
  * integrality is what cannot be deferred to it.
  *
- * The fields are optional and absence means the default, so an omitted one is
- * not resolved to a value here.
+ * The fields are iterated rather than named at each call site so a new one is
+ * visible here. Absence means the default, so an omitted field is not resolved.
  */
-export function assertPercussiveSeparationKernels(
+export function assertPercussiveSeparation(
   fnName: string,
-  kernelHarmonic: number | undefined,
-  kernelPercussive: number | undefined,
+  options: PercussiveSeparationFields,
 ): void {
-  if (kernelHarmonic !== undefined) {
-    assertIntegralKernel(fnName, kernelHarmonic, 'hpssKernelHarmonic');
-  }
-  if (kernelPercussive !== undefined) {
-    assertIntegralKernel(fnName, kernelPercussive, 'hpssKernelPercussive');
+  const fields = ['nFft', 'hopLength', 'hpssKernelHarmonic', 'hpssKernelPercussive'] as const;
+  for (const field of fields) {
+    const value = options[field];
+    if (value !== undefined) {
+      assertIntegralField(fnName, value, field);
+    }
   }
 }
 
