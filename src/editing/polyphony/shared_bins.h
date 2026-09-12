@@ -18,6 +18,57 @@
 /// sum to one, so the part the model failed to explain flows to the residual
 /// rather than being pushed into a note that did not produce it.
 ///
+/// Which recovered pole belongs to which note is decided over the claimants as a
+/// set, by the assignment of lowest total **squared** distance between a pole's
+/// angle and a note's predicted rate -- never by taking each note's nearest pole
+/// in turn. Deciding in turn lets whichever note is asked first take a pole
+/// another note fits better, and claimant order is ridge order: measured on a
+/// fifth, swapping the two ridges moved the share in 16 of 44 frames of a bin
+/// holding two real partials, and in 36 of 44 of a bin holding one, while the
+/// recovered poles themselves were identical.
+///
+/// Squared rather than absolute, and the difference is not a preference. Summed
+/// absolute distance cannot decide this problem at all: for two claimants whose
+/// two poles both lie to one side of both predictions, the two assignments differ
+/// by `(p2 - p1) - (p2 - p1)` and tie **identically**, for every such
+/// configuration rather than by coincidence. Measured on a degenerate fixture
+/// before the objective was squared, 10 of 36 windows tied to the last bit.
+/// Squaring makes the difference `2*(p2 - p1)*(rA - rB)`, which is signed by
+/// whether the order of the poles matches the order of the predictions, so the
+/// objective prefers the monotone match and ties only where the predictions
+/// coincide. That derivation is on a line, and a rate is an angle: where the pair
+/// straddles the wrap the differences are not those of the unwrapped quantities
+/// and the monotone match is not implied. What holds without that condition is
+/// narrower and is what the contract rests on -- every permutation is enumerated,
+/// so the minimum found is the exact minimum of a quantity computed from the
+/// claimants as a set, which is order-independent whatever the geometry. Measured
+/// over one suite, the squared objective left 0 ties in 1509 assignments against
+/// 27 for the absolute one.
+///
+/// A tie is then refused rather than settled, because an order-independent result
+/// cannot come from an order-dependent tiebreak. Equality is exact, with no
+/// epsilon: an epsilon would be a width over which the refusal fires, and nothing
+/// measures how wide that should be.
+///
+/// What the assignment cannot do is keep a note off another note's partial. A bin
+/// may hold fewer real poles than it has claimants -- a claim is predicted from an
+/// f0 and a harmonic number and is never read from the spectrum, so a note claims
+/// bins its own partials never reached. The spare pole is then leakage at an
+/// arbitrary angle, and which assignment minimises the total is decided by where
+/// that angle fell: measured on a fifth, the note with no partial there took the
+/// larger share in 38 of 44 frames, identically in both ridge orders. So the
+/// misattribution is consistent rather than random, and it is not order.
+///
+/// **Restricting the assignment is the wrong place to fix it, and that is
+/// measured.** Admitting a pole to a note only where no other claimant is closer
+/// needs no threshold and looks free; it refused 95% of the cells of bins holding
+/// **two** real partials (408 of 431 between 0.24 and 0.72 rad/frame), because
+/// two partials close enough to need separating put both recovered poles nearest
+/// the same prediction. Worst error on a real shared bin went from 1.67 dB back to
+/// 6.88 and the bin the rule was aimed at came out 5.8 dB worse still. **The cases
+/// such a rule refuses are the ones this file exists for.** A fix belongs where the
+/// claim is made, not where it is divided.
+///
 /// Most of the value is in refusing. Solved everywhere, over a spread of
 /// intervals, this returns 0.6 dB over an equal split, because the bins it
 /// cannot do cost more than the bins it can do gain. Gated, the same material
@@ -173,10 +224,14 @@ enum class SharedBinOutcome {
   /// not make it @c TooFewFrames.
   Unshared,
   TooFewFrames,  ///< The span is shorter than @c window_frames.
-  /// More notes claim the bin than the window can fit poles for, which is
-  /// <tt>window_frames / 2</tt>: the Hankel of a @c window_frames trajectory has
-  /// that many rows to spare, so the order cannot exceed it however the matrix
-  /// is shaped.
+  /// More notes claim the bin than can be resolved, which is the lesser of two
+  /// ceilings. The fit's is <tt>window_frames / 2</tt>: the Hankel of a
+  /// @c window_frames trajectory has that many rows to spare, so the order cannot
+  /// exceed it however the matrix is shaped. The assignment's is 8, because it
+  /// enumerates the orders and a factorial turns one more claimant into a hang
+  /// rather than a slower answer -- at the validated ceiling of @c window_frames
+  /// the fit would otherwise admit 32 claimants and ask for 32! assignments.
+  /// 8 is unreachable at the default @c window_frames, which admits 4.
   TooManyClaimants,
   /// A claiming note's f0 could not be re-estimated, so the gap below cannot be
   /// computed for it. Determined before @c PartialsTooClose because it is that
@@ -197,23 +252,33 @@ enum class SharedBinOutcome {
   /// large, when in fact nothing got far enough to compute one. The separation is
   /// present and above its threshold, since reaching here means passing the gate.
   PolesNotFound,
-  /// Above @c max_fit_residual; not a sum of steady poles. A claim is predicted
-  /// from the f0 rather than found in the spectrum, so a bin claimed above the
-  /// note's highest actual partial holds only leakage and lands here -- correctly,
-  /// and at no cost, since the equal split it keeps divides almost nothing.
+  /// Above @c max_fit_residual; not a sum of steady poles.
+  ///
+  /// A claim above the note's own highest partial does **not** reliably land
+  /// here, and the residual does not separate that case from a genuine shared
+  /// bin: measured on a fifth of ten-partial tones, two bins carrying one real
+  /// partial against one empty claim read 0.0135 and 0.0144, while the bin
+  /// carrying two real partials read 0.0174 -- the higher of the three. Tightening
+  /// this threshold reaches the real shared bin first.
   FitDiverged,
+  /// Two claimants fit the recovered poles equally well, so which partial belongs
+  /// to which note is not decided by the data. Refused rather than broken by
+  /// claimant order, which is ridge order and carries no physical meaning.
+  AssignmentAmbiguous,
   /// A guard on @ref NoteMask's own invariant rather than a modelled failure:
   /// the fit passed and the weight it implies cannot be stored, because a mask
   /// weight must be finite and non-zero and a division can in principle produce
   /// neither. Alone among the refusals this one is not named for a signal --
   /// both read healthy, inside their thresholds, exactly as @c Solved does.
   ///
-  /// Nothing measured reaches it. A note claiming a bin where its own partial
-  /// was never rendered, while the other note's fills it, holds 1.9e-05 of that
-  /// bin -- 94 dB down, five orders inside "a component of zero" -- and is
-  /// solved, taking a weight of that order. That is the right answer: a note is
-  /// not handed a partial it does not have. So this is retained as a guard and
-  /// not as a case, and a caller should not write code expecting to see it.
+  /// Nothing measured reaches it, so it is retained as a guard and not as a case,
+  /// and a caller should not write code expecting to see it.
+  ///
+  /// It does not protect a note from being handed a partial it does not have. On a
+  /// fifth of ten-partial tones, the note whose own partial was never rendered
+  /// took a weight at or above one in every frame of both such bins, and the note
+  /// that owned the partial was left with as little as 8.5e-08 of it. What decides
+  /// that is @ref AssignmentAmbiguous's subject, not this guard.
   DegenerateWeight,
   Solved,  ///< A pole fit produced the weights.
 };
@@ -331,9 +396,10 @@ std::vector<float> refine_track_f0(const Spectrogram& spec, const MultiF0Track& 
 ///          claimants change and change back has two spans, and each is fitted
 ///          on its own. A span is where the model order is fixed,
 ///          which is what makes the order and @c TooManyClaimants consistent
-///          with each other. Where two poles must be matched to two notes, each
-///          note in turn takes the nearest unclaimed pole, which is the
-///          direction @ref track_f0_ridges already resolves its own ambiguity in.
+///          with each other. Matching the recovered poles to the claiming notes
+///          is decided over the claimants as a set, and the @c @file block above
+///          is where that is stated; @ref track_f0_ridges resolving its own
+///          ambiguity one ridge at a time is not a precedent for it.
 ///
 ///          The model order is the number of notes claiming the bin, not
 ///          anything read off the fit. The order fixes how many weights come out

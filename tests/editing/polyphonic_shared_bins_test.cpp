@@ -126,6 +126,8 @@ const char* name_of(SharedBinOutcome outcome) {
       return "PolesNotFound";
     case SharedBinOutcome::FitDiverged:
       return "FitDiverged";
+    case SharedBinOutcome::AssignmentAmbiguous:
+      return "AssignmentAmbiguous";
     case SharedBinOutcome::DegenerateWeight:
       return "DegenerateWeight";
   }
@@ -573,12 +575,14 @@ void require_solve_contract(const sonare::Spectrogram& spec, const NoteMaskSet& 
         REQUIRE(report.partial_separation[cell] >= config.min_partial_separation);
         REQUIRE(report.fit_residual[cell] > config.max_fit_residual);
         break;
+      case SharedBinOutcome::AssignmentAmbiguous:
       case SharedBinOutcome::DegenerateWeight:
       case SharedBinOutcome::Solved:
-        // A degenerate weight is a refusal whose signals read healthy -- the fit
-        // ran and both thresholds held; what failed was the weight it produced.
-        // So it stands with Solved here and with the refusals above, where the
-        // equal split is kept.
+        // Two refusals here read healthy in every signal the report carries --
+        // the fit ran and both thresholds held. A degenerate weight failed on the
+        // weight it produced; an ambiguous assignment failed on which note the
+        // weight belonged to, which no threshold measures. So both stand with
+        // Solved here and with the refusals above, where the equal split is kept.
         //
         // fit_residual is per window, so a solved frame carries the residual of
         // the window that solved it rather than the first covering window's --
@@ -1842,6 +1846,7 @@ TEST_CASE("a bin whose data is degenerate while its prediction is not", "[polyph
 
   size_t entries = 0;
   size_t solved_here = 0;
+  size_t undecided_here = 0;
   double worst_weight = 0.0;
   double worst_residual = 0.0;
   double separation = 0.0;
@@ -1850,6 +1855,7 @@ TEST_CASE("a bin whose data is degenerate while its prediction is not", "[polyph
     if (static_cast<double>(entry.bin) * bin_hz > 1350.0) continue;
     ++entries;
     if (report.outcome[entry.cell] == SharedBinOutcome::Solved) ++solved_here;
+    if (report.outcome[entry.cell] == SharedBinOutcome::AssignmentAmbiguous) ++undecided_here;
     worst_weight = std::max(
         worst_weight, static_cast<double>(std::abs(solved.notes[entry.note].weights[entry.at])));
     worst_residual = std::max(worst_residual, static_cast<double>(report.fit_residual[entry.cell]));
@@ -1863,17 +1869,24 @@ TEST_CASE("a bin whose data is degenerate while its prediction is not", "[polyph
                   << std::abs(spec.at(entry.bin, entry.frame)));
   }
 
-  INFO("entries " << entries << ", solved " << solved_here << ", largest |w| " << worst_weight
-                  << ", largest residual " << worst_residual << " against a gate of "
-                  << config.max_fit_residual << ", separation " << separation << " against "
-                  << config.min_partial_separation);
+  INFO("entries " << entries << ", solved " << solved_here << ", undecided " << undecided_here
+                  << ", largest |w| " << worst_weight << ", largest residual " << worst_residual
+                  << " against a gate of " << config.max_fit_residual << ", separation "
+                  << separation << " against " << config.min_partial_separation);
   REQUIRE(entries > 0);
 
   // The blind spot, stated as the outcome: nothing refuses. The prediction sees
   // two partials three hertz apart and the subspace captures the data, so every
-  // cell is solved on a trajectory whose two poles are a thousandth of a radian
-  // apart.
+  // cell reaches the fit on a trajectory whose two poles are a thousandth of a
+  // radian apart, and the assertions below this say every gate lets it.
+  //
+  // The assignment does not refuse it either, and that is asserted rather than
+  // left uncounted. Both permutations of two near-identical poles over two
+  // separated predictions total within that thousandth of each other, and the tie
+  // test is exact, so a near-tie resolves to a strict minimum that means nothing.
+  // What bounds the damage here is the weight magnitude below, not a refusal.
   REQUIRE(solved_here == entries);
+  REQUIRE(undecided_here == 0);
   REQUIRE(static_cast<double>(separation) >
           20.0 * static_cast<double>(config.min_partial_separation));
   REQUIRE(worst_residual < static_cast<double>(config.max_fit_residual));

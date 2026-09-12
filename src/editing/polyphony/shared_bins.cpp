@@ -30,6 +30,10 @@ using Complexd = std::complex<double>;
 constexpr int kMinWindowFrames = 4;
 constexpr int kMaxWindowFrames = 64;
 
+/// The assignment enumerates the orders, so one claimant past this is a hang and
+/// not a slower answer. The default window admits 4, so this is unreachable there.
+constexpr int kMaxAssignmentOrder = 8;
+
 double wrap_to_pi(double angle) {
   const double wrapped = std::fmod(angle + kPiD, kTwoPiD);
   return wrapped < 0.0 ? wrapped + kPiD : wrapped - kPiD;
@@ -315,29 +319,58 @@ bool fit_components(const std::vector<Complexd>& x, const std::vector<Complexd>&
   return true;
 }
 
-/// Each note takes the nearest unused pole in wrapped angle, notes in claim
-/// order, so a pole serves one note only.
-void assign_poles(const std::vector<Complexd>& poles, const std::vector<double>& predicted_rate,
-                  std::vector<char>& used, std::vector<int>& pole_of_note) {
+/// The claimant-to-pole bijection of lowest total squared wrapped-angle distance.
+/// @details Squared and not absolute because summed absolute distance ties
+///          identically wherever both poles lie to one side of both predictions,
+///          which decides nothing. There is one pole per claimant, so this is a
+///          square assignment and every permutation is enumerated -- the bound
+///          @c kMaxAssignmentOrder exists for that.
+/// @param distance Scratch, @c order x @c order, note @c i against pole @c p at
+///        <tt>i * order + p</tt>.
+/// @param permutation Scratch for the candidate being summed.
+/// @return false when two or more bijections reach the minimum total, which the
+///         data does not decide between. Compared exactly: an order-independent
+///         result cannot come from an order-dependent tiebreak, so a tie is
+///         refused rather than settled.
+bool assign_poles(const std::vector<Complexd>& poles, const std::vector<double>& predicted_rate,
+                  std::vector<double>& distance, std::vector<int>& permutation,
+                  std::vector<int>& pole_of_note) {
   const int order = static_cast<int>(poles.size());
-  used.assign(static_cast<size_t>(order), 0);
-  pole_of_note.assign(static_cast<size_t>(order), 0);
+  distance.assign(static_cast<size_t>(order) * static_cast<size_t>(order), 0.0);
   for (int note = 0; note < order; ++note) {
     const double rate = predicted_rate[static_cast<size_t>(note)];
-    int best = -1;
-    double best_distance = 0.0;
     for (int p = 0; p < order; ++p) {
-      if (used[static_cast<size_t>(p)] != 0) continue;
-      const double distance = std::abs(wrap_to_pi(std::arg(poles[static_cast<size_t>(p)]) - rate));
-      if (best < 0 || distance < best_distance) {
-        best = p;
-        best_distance = distance;
-      }
+      const double gap = wrap_to_pi(std::arg(poles[static_cast<size_t>(p)]) - rate);
+      distance[static_cast<size_t>(note) * static_cast<size_t>(order) + static_cast<size_t>(p)] =
+          gap * gap;
     }
-    if (best < 0) best = 0;
-    used[static_cast<size_t>(best)] = 1;
-    pole_of_note[static_cast<size_t>(note)] = best;
   }
+
+  permutation.resize(static_cast<size_t>(order));
+  for (int i = 0; i < order; ++i) permutation[static_cast<size_t>(i)] = i;
+  pole_of_note.assign(static_cast<size_t>(order), 0);
+
+  double best_total = 0.0;
+  bool have_best = false;
+  bool tied = false;
+  do {
+    double total = 0.0;
+    for (int note = 0; note < order; ++note) {
+      total += distance[static_cast<size_t>(note) * static_cast<size_t>(order) +
+                        static_cast<size_t>(permutation[static_cast<size_t>(note)])];
+    }
+    if (!have_best || total < best_total) {
+      have_best = true;
+      // A strictly better total retires the tie with it: tied describes the
+      // minimum as it now stands, not whether any two candidates ever agreed.
+      tied = false;
+      best_total = total;
+      pole_of_note.assign(permutation.begin(), permutation.end());
+    } else if (total == best_total) {
+      tied = true;
+    }
+  } while (std::next_permutation(permutation.begin(), permutation.end()));
+  return !tied;
 }
 
 std::complex<float> clamped_weight(Complexd weight, double limit) {
@@ -493,7 +526,9 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
   const int n_frames = spec.n_frames();
   const int window = config.window_frames;
   const int step = window / 2;
-  const int max_claimants = window / 2;
+  // The lesser of the two ceilings: what the fit can hold poles for, and what the
+  // assignment can enumerate.
+  const int max_claimants = std::min(window / 2, kMaxAssignmentOrder);
   const double sample_rate = spec.sample_rate();
   const double hop = spec.hop_length();
   const std::complex<float>* data = spec.complex_data();
@@ -512,7 +547,8 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
   std::vector<PartialClaim> partials;
   std::vector<double> predicted_hz;
   std::vector<double> predicted_rate;
-  std::vector<char> used;
+  std::vector<double> pole_distance;
+  std::vector<int> permutation;
   std::vector<int> pole_of_note;
 
   for (int bin = 0; bin < masks.n_bins; ++bin) {
@@ -620,8 +656,15 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
           }
         }
 
+        // Refused after the fit rather than before it, so the misfit it did
+        // measure is reported rather than the zero the earlier refusals carry.
+        if (solved &&
+            !assign_poles(poles, predicted_rate, pole_distance, permutation, pole_of_note)) {
+          solved = false;
+          outcome = SharedBinOutcome::AssignmentAmbiguous;
+        }
+
         if (solved) {
-          assign_poles(poles, predicted_rate, used, pole_of_note);
           for (int j = 0; j < span.n_notes; ++j) {
             const size_t pole = static_cast<size_t>(pole_of_note[static_cast<size_t>(j)]);
             for (int n = 0; n < window; ++n) {
