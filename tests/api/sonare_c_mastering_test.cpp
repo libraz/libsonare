@@ -3,8 +3,12 @@
 
 #include "c_api/eq_band_json.h"
 #include "core/audio.h"
+#include "mastering/api/audio_utils.h"
+#include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/loudness_optimize.h"
+#include "mastering/maximizer/true_peak_limiter.h"
 #include "sonare_c_test_helpers.h"
+#include "util/db.h"
 #include "util/json.h"
 
 #ifdef SONARE_WITH_MASTERING
@@ -1378,4 +1382,93 @@ TEST_CASE("an unrealizable dynamic EQ gain never reaches the audio as NaN",
 
   sonare_eq_destroy(eq);
 }
+TEST_CASE("the true-peak limiter's residual guard is channel-linked", "[mastering][maximizer]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+  constexpr float kCeilingDb = -1.0f;
+
+  // A burst out of silence with no lookahead: the smoothed gain can only catch up
+  // after the fact, so the post-gain sample still sits over the ceiling and the
+  // residual guard runs. The right channel is an eighth of the left and stays
+  // under the ceiling throughout, so a per-channel guard scales only the left and
+  // destroys the ratio while a linked one preserves it.
+  std::vector<float> left(kBlock, 0.0f);
+  std::vector<float> right(kBlock, 0.0f);
+  for (int i = 128; i < kBlock; ++i) {
+    const float phase = 2.0f * static_cast<float>(sonare::constants::kPi) * 1000.0f *
+                        static_cast<float>(i) / static_cast<float>(kSr);
+    left[static_cast<size_t>(i)] = 4.0f * std::sin(phase);
+    right[static_cast<size_t>(i)] = 0.125f * left[static_cast<size_t>(i)];
+  }
+
+  sonare::mastering::maximizer::TruePeakLimiterConfig config;
+  config.ceiling_db = kCeilingDb;
+  config.lookahead_ms = 0.0f;
+  sonare::mastering::maximizer::TruePeakLimiter limiter(config);
+  limiter.prepare(static_cast<double>(kSr), kBlock, 2);
+
+  float* channels[2] = {left.data(), right.data()};
+  limiter.process(channels, 2, kBlock);
+
+  // Exact ==: every gain factor is applied to both channels, and 0.125 scales a
+  // float without rounding, so a linked chain reproduces the input ratio bit for
+  // bit. A per-channel residual gain differs by whole dB, not by an ulp.
+  for (int i = 0; i < kBlock; ++i) {
+    CAPTURE(i);
+    CHECK(right[static_cast<size_t>(i)] == 0.125f * left[static_cast<size_t>(i)]);
+  }
+
+  // Non-vacuity at the assertion: a run where nothing was pulled to the ceiling
+  // would satisfy the ratio without ever exercising the guard.
+  const float ceiling = sonare::db_to_linear(kCeilingDb);
+  int at_ceiling = 0;
+  for (int i = 0; i < kBlock; ++i) {
+    if (std::abs(std::abs(left[static_cast<size_t>(i)]) - ceiling) < 1.0e-6f) ++at_ceiling;
+  }
+  CHECK(at_ceiling > 0);
+}
+
+TEST_CASE("planar stereo true peak matches the Audio-copy path exactly", "[mastering][loudness]") {
+  constexpr int kSr = 48000;
+  constexpr int kFrames = 2048;
+  constexpr int kOversample = 4;
+
+  std::vector<float> left(kFrames);
+  std::vector<float> right(kFrames);
+  for (int i = 0; i < kFrames; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kSr);
+    left[static_cast<size_t>(i)] =
+        0.8f * std::sin(2.0f * static_cast<float>(sonare::constants::kPi) * 997.0f * t);
+    // A quieter, differently phased right channel so the maximum comes from one
+    // channel rather than from both at once.
+    right[static_cast<size_t>(i)] =
+        0.3f * std::sin(2.0f * static_cast<float>(sonare::constants::kPi) * 311.0f * t + 0.7f);
+  }
+
+  const auto copied = [&](const std::vector<float>& l, const std::vector<float>& r) {
+    const sonare::Audio la = sonare::Audio::from_buffer(l.data(), l.size(), kSr);
+    const sonare::Audio ra = sonare::Audio::from_buffer(r.data(), r.size(), kSr);
+    return std::max(sonare::mastering::common::measure_true_peak_dbtp(la, kOversample),
+                    sonare::mastering::common::measure_true_peak_dbtp(ra, kOversample));
+  };
+
+  SECTION("loud program") {
+    CHECK(sonare::mastering::common::measure_true_peak_dbtp_stereo_planar(
+              left.data(), right.data(), left.size(), kOversample) == copied(left, right));
+    CHECK(sonare::mastering::api::detail::stereo_true_peak_dbtp(left, right, kSr, kOversample) ==
+          copied(left, right));
+  }
+
+  SECTION("the louder channel on either side") {
+    CHECK(sonare::mastering::common::measure_true_peak_dbtp_stereo_planar(
+              right.data(), left.data(), left.size(), kOversample) == copied(right, left));
+  }
+
+  SECTION("both channels under the silence floor report the shared dB floor") {
+    const std::vector<float> quiet(kFrames, 0.0f);
+    CHECK(sonare::mastering::common::measure_true_peak_dbtp_stereo_planar(
+              quiet.data(), quiet.data(), quiet.size(), kOversample) == copied(quiet, quiet));
+  }
+}
+
 #endif

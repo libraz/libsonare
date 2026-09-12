@@ -68,6 +68,17 @@ float measure_true_peak_dbtp(const Audio& audio, int oversample_factor) {
   return metering::true_peak_db(audio, oversample_factor);
 }
 
+float measure_true_peak_dbtp_stereo_planar(const float* left, const float* right,
+                                           std::size_t frames, int oversample_factor) {
+  if ((left == nullptr || right == nullptr) && frames != 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_true_peak_dbtp_stereo_planar: channel pointer is null with non-zero frames");
+  }
+  return true_peak_to_dbtp(std::max(metering::true_peak(left, frames, oversample_factor),
+                                    metering::true_peak(right, frames, oversample_factor)));
+}
+
 LufsAndTruePeak measure_lufs_and_true_peak(const Audio& audio, int true_peak_oversample) {
   LufsAndTruePeak result;
   result.integrated_lufs = metering::lufs(audio).integrated_lufs;

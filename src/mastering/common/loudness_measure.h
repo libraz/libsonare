@@ -86,6 +86,20 @@ float measure_lra_interleaved(const float* samples, std::size_t frames, int chan
 float measure_true_peak_dbtp(const Audio& audio,
                              int oversample_factor = kDefaultTruePeakOversample);
 
+/// @brief Stereo true peak in dBTP read straight from planar channel pointers.
+/// @details Same value as taking the maximum of @ref measure_true_peak_dbtp over
+///          the two channels, without the two track-length `Audio` copies that
+///          wrapping them would cost. The maximum is taken in the linear domain
+///          and converted once, which is equivalent because the conversion is
+///          monotonic and both channels share the same silence floor.
+/// @param left Pointer to the left channel (must not be null when @p frames > 0).
+/// @param right Pointer to the right channel (must not be null when @p frames > 0).
+/// @param frames Number of sample frames per channel.
+/// @param oversample_factor Oversampling ratio; must be >= 1.
+float measure_true_peak_dbtp_stereo_planar(const float* left, const float* right,
+                                           std::size_t frames,
+                                           int oversample_factor = kDefaultTruePeakOversample);
+
 /// @brief Measures integrated LUFS and true-peak in one call. Useful for
 ///        result-struct population paths that report both numbers.
 LufsAndTruePeak measure_lufs_and_true_peak(const Audio& audio,

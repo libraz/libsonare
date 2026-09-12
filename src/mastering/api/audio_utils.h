@@ -129,14 +129,18 @@ inline bool loudness_target_was_limited(float requested_gain_db, float applied_g
   return std::isfinite(achieved_lufs) && achieved_lufs < target_lufs - kLoudnessTargetToleranceLu;
 }
 
-// Measures the stereo true peak as the maximum across the two independent channels.
+// Measures the stereo true peak as the maximum across the two independent
+// channels, reading the caller's planar buffers rather than copying each into an
+// Audio: on a track-length master the two copies were the measurement's whole
+// allocation cost. @p sample_rate is unused because the meter is rate-agnostic.
 inline float stereo_true_peak_dbtp(const std::vector<float>& left, const std::vector<float>& right,
-                                   int sample_rate, int true_peak_oversample) {
-  Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-  Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-  return std::max(
-      sonare::mastering::common::measure_true_peak_dbtp(left_audio, true_peak_oversample),
-      sonare::mastering::common::measure_true_peak_dbtp(right_audio, true_peak_oversample));
+                                   int /*sample_rate*/, int true_peak_oversample) {
+  if (left.size() != right.size()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
+  }
+  return sonare::mastering::common::measure_true_peak_dbtp_stereo_planar(
+      left.data(), right.data(), left.size(), true_peak_oversample);
 }
 
 // Stereo convenience wrapper: measures LUFS with BS.1770 channel summing and the true peak.

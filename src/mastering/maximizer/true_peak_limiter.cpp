@@ -192,14 +192,26 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     for (int ch = 0; ch < num_channels; ++ch) {
       const float delayed = oversampled_lookahead_[static_cast<size_t>(ch)].process(
           sanitize_sample(oversampled_buffers_[static_cast<size_t>(ch)][os], ceiling));
-      float output = sanitize_sample(delayed * gain, ceiling);
-      const float abs_output = std::abs(output);
-      if (abs_output > ceiling && abs_output > 0.0f) {
-        const float hard_gain = ceiling / abs_output;
-        output *= hard_gain;
-        min_gain = std::min(min_gain, gain * hard_gain);
+      limited_oversampled_buffers_[static_cast<size_t>(ch)][os] =
+          sanitize_sample(delayed * gain, ceiling);
+    }
+
+    // The gain above lags the ideal one on a fast transient, so a post-lookahead
+    // sample can still sit over the ceiling. Pull it back channel-linked, the
+    // same way the decimated correction below does: a per-channel residual gain
+    // here would shift the stereo image on exactly the loudest transients.
+    float linked_output = 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      linked_output = std::max(linked_output,
+                               std::abs(limited_oversampled_buffers_[static_cast<size_t>(ch)][os]));
+    }
+    if (linked_output > ceiling && linked_output > 0.0f) {
+      const float hard_gain = ceiling / linked_output;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        limited_oversampled_buffers_[static_cast<size_t>(ch)][os] *= hard_gain;
       }
-      limited_oversampled_buffers_[static_cast<size_t>(ch)][os] = output;
+      min_gain = std::min(min_gain, gain * hard_gain);
     }
   }
 
@@ -311,14 +323,20 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
     for (int ch = 0; ch < num_channels; ++ch) {
       const float delayed =
           lookahead_[static_cast<size_t>(ch)].process(sanitize_sample(channels[ch][i], ceiling));
-      float output = sanitize_sample(delayed * gain, ceiling);
-      const float abs_output = std::abs(output);
-      if (abs_output > ceiling && abs_output > 0.0f) {
-        const float hard_gain = ceiling / abs_output;
-        output *= hard_gain;
-        min_gain = std::min(min_gain, gain * hard_gain);
+      channels[ch][i] = sanitize_sample(delayed * gain, ceiling);
+    }
+    // Channel-linked residual guard, matching the polyphase path.
+    float linked_output = 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      linked_output = std::max(linked_output, std::abs(channels[ch][i]));
+    }
+    if (linked_output > ceiling && linked_output > 0.0f) {
+      const float hard_gain = ceiling / linked_output;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        channels[ch][i] *= hard_gain;
       }
-      channels[ch][i] = output;
+      min_gain = std::min(min_gain, gain * hard_gain);
     }
   }
 
