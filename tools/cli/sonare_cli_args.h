@@ -132,6 +132,11 @@ class ArgParser {
  private:
   static bool try_parse_global_option(CliArgs& args, const std::string& arg, char* argv[], int& i,
                                       int argc);
+  /// Consumes a value written against its short option, as in `-oout.wav`.
+  /// Returns false for anything that is not a valued short option, so a bare
+  /// short flag and a negative number keep the handling they already had.
+  static bool try_parse_attached_short_option(CliArgs& args, const std::string& arg, char* argv[],
+                                              int& i, int argc);
   static void parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc,
                            const std::string* inline_value = nullptr);
 };

@@ -186,6 +186,14 @@ class _ContractArgumentParser(argparse.ArgumentParser):
     inherits them without opting in.
     """
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        # A unique prefix of a long option is not an accepted spelling. The
+        # native CLI matches option names exactly, and an abbreviation silently
+        # resolves to a different option once a longer one is added, so a script
+        # that was never edited starts doing something else.
+        kwargs.setdefault("allow_abbrev", False)
+        super().__init__(*args, **kwargs)
+
     def add_argument(self, *args: Any, **kwargs: Any) -> Any:
         if kwargs.get("type") is float:
             kwargs["type"] = _finite_float

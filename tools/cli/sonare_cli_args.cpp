@@ -302,6 +302,8 @@ CliArgs ArgParser::parse(int argc, char* argv[]) {
           const std::string value = arg.substr(equals + 1);
           parse_option(args, key, argv, i, argc, &value);
         }
+      } else if (!end_of_options && try_parse_attached_short_option(args, arg, argv, i, argc)) {
+        // Handled as a short option carrying its value.
       } else if (!end_of_options && arg.size() > 1 && arg[0] == '-') {
         record_option(args, arg, "true", CliOptionOccurrence::Kind::Flag);
       } else if (args.command.empty()) {
@@ -398,6 +400,27 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
   // this layer declares for a global option.
   record_option(args, spec->name, value, CliOptionOccurrence::Kind::Value);
   if (spec->name != "output") args.global_options.push_back(spec->name);
+  return true;
+}
+
+bool ArgParser::try_parse_attached_short_option(CliArgs& args, const std::string& arg, char* argv[],
+                                                int& i, int argc) {
+  if (arg.size() <= 2 || arg[0] != '-' || arg[1] == '-') return false;
+  const std::string letter = arg.substr(1, 1);
+  std::string value = arg.substr(2);
+  // `-o=out.wav` reaches the global handler first; a command-scoped short
+  // option written the same way arrives here with the separator still attached.
+  if (value.front() == '=') value.erase(0, 1);
+
+  const CliOptionSpec* global = lexical_option_for_spelling("-" + letter);
+  if (global != nullptr) {
+    if (global->arity == CliOptionArity::Flag) return false;
+    return try_parse_global_option(args, "-" + letter + "=" + value, argv, i, argc);
+  }
+  const CliOptionSpec* spec =
+      option_for_spec(cli_command_spec_for_path(command_path_for_args(args)), letter);
+  if (spec == nullptr || spec->arity == CliOptionArity::Flag) return false;
+  parse_option(args, letter, argv, i, argc, &value);
   return true;
 }
 
