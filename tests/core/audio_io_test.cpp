@@ -15,7 +15,13 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <tuple>
 #include <vector>
+
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 #include "core/audio.h"
 #include "support/audio_fixtures.h"
@@ -764,6 +770,52 @@ TEST_CASE("a path load is bounded by its own max_file_size and nothing else",
 
   std::remove(oversize.c_str());
 }
+
+#ifndef _WIN32
+TEST_CASE("a path load reads an input whose size cannot be probed", "[audio_io]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 100;
+  const std::vector<float> sine = generate_sine(samples, 440.0f, sr);
+  const std::vector<uint8_t> wav_data = create_wav_buffer(sine.data(), sine.size(), sr);
+
+  const std::filesystem::path dir = scratch_dir();
+  const std::filesystem::path fifo = dir / "unseekable.wav";
+  if (::mkfifo(fifo.c_str(), 0600) != 0) {
+    std::filesystem::remove_all(dir);
+    SUCCEED("platform cannot create a FIFO");
+    return;
+  }
+
+  // A FIFO reports no size at all, so the loader cannot derive an allocation
+  // from the probe: it must read the bytes as they arrive. The writer's open
+  // and the loader's open rendezvous, which is what makes the pipe readable.
+  std::thread writer([&] {
+    std::ofstream out(fifo, std::ios::binary);
+    if (!out.is_open()) return;
+    out.write(reinterpret_cast<const char*>(wav_data.data()),
+              static_cast<std::streamsize>(wav_data.size()));
+  });
+
+  std::vector<float> loaded;
+  int loaded_sr = 0;
+  std::string failure;
+  try {
+    std::tie(loaded, loaded_sr) = load_audio(fifo.string());
+  } catch (const std::exception& e) {
+    // std::exception, not SonareException: an allocation sized from the failed
+    // probe would escape as std::length_error, which the library's error-class
+    // contract forbids just as much as a wrong diagnostic.
+    failure = e.what();
+  }
+  writer.join();
+
+  CHECK(failure.empty());
+  CHECK(loaded_sr == sr);
+  CHECK(loaded.size() == static_cast<size_t>(samples));
+
+  std::filesystem::remove_all(dir);
+}
+#endif
 
 #ifdef SONARE_WITH_FFMPEG
 TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]") {

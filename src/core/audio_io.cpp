@@ -207,26 +207,46 @@ std::wstring utf8_to_wide_path(const std::string& path) {
 /// @param max_size Maximum allowed file size in bytes (0 = no limit)
 std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
 #ifdef _WIN32
-  std::ifstream file(utf8_to_wide_path(path), std::ios::binary | std::ios::ate);
+  std::ifstream file(utf8_to_wide_path(path), std::ios::binary);
 #else
-  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  std::ifstream file(path, std::ios::binary);
 #endif
   SONARE_CHECK_MSG(file.is_open(), ErrorCode::FileNotFound, "Cannot open file: " + path);
 
-  auto size = file.tellg();
-
-  // Check file size before allocating memory
-  if (max_size > 0) {
-    SONARE_CHECK_MSG(static_cast<size_t>(size) <= max_size, ErrorCode::InvalidParameter,
-                     "File too large: " + std::to_string(static_cast<size_t>(size)) +
+  // The seek/tell probe only sizes the reserve: a non-regular input (a FIFO, a
+  // character device) fails the seek and has no size to report at all, so a
+  // negative result means unknown rather than enormous. Clearing on both sides
+  // of the rewind keeps such an input readable from where it was opened.
+  file.seekg(0, std::ios::end);
+  const std::streamoff probed = file.tellg();
+  if (max_size > 0 && probed > 0) {
+    SONARE_CHECK_MSG(static_cast<uint64_t>(probed) <= static_cast<uint64_t>(max_size),
+                     ErrorCode::InvalidParameter,
+                     "File too large: " + std::to_string(probed) +
                          " bytes (max: " + std::to_string(max_size) + " bytes)");
   }
-
+  file.clear();
   file.seekg(0, std::ios::beg);
+  file.clear();
 
-  std::vector<uint8_t> buffer(static_cast<size_t>(size));
-  file.read(reinterpret_cast<char*>(buffer.data()), size);
-  SONARE_CHECK_MSG(file.good(), ErrorCode::DecodeFailed, "Failed to read file: " + path);
+  // The probe is a snapshot the read cannot rely on, so the ceiling is enforced
+  // on the bytes as they arrive and nothing past it is ever buffered.
+  constexpr size_t kReadChunkBytes = 64u * 1024u;
+  std::vector<uint8_t> buffer;
+  if (probed > 0) buffer.reserve(static_cast<size_t>(probed));
+  std::vector<char> chunk(kReadChunkBytes);
+  while (file) {
+    file.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+    const auto read_bytes = static_cast<size_t>(file.gcount());
+    if (read_bytes == 0) break;
+    // Subtraction rather than addition: the sum of two size_t operands can wrap
+    // where the remaining budget cannot.
+    SONARE_CHECK_MSG(max_size == 0 || read_bytes <= max_size - buffer.size(),
+                     ErrorCode::InvalidParameter,
+                     "File too large: exceeds " + std::to_string(max_size) + " bytes");
+    buffer.insert(buffer.end(), chunk.data(), chunk.data() + read_bytes);
+  }
+  SONARE_CHECK_MSG(!file.bad(), ErrorCode::DecodeFailed, "Failed to read file: " + path);
 
   return buffer;
 }
