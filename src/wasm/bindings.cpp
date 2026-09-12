@@ -163,9 +163,11 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
     message = base->what();
     if (const auto* se = dynamic_cast<const sonare::SonareException*>(base)) {
       switch (se->code()) {
+        // An exception carrying Ok is a programming error, not a success: code 0
+        // would rebuild a SonareError the caller reads as "the call worked".
         case sonare::ErrorCode::Ok:
-          code = 0;
-          code_name = "Ok";
+          code = 99;
+          code_name = "Unknown";
           break;
         case sonare::ErrorCode::FileNotFound:
           code = 1;

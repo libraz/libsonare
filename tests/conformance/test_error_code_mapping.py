@@ -17,13 +17,17 @@ every table, and a table that does not answer is the finding.  Asserting the
 current codes would pass forever after the next enumerator is added, which is
 exactly the moment the check is for.
 
-**Scope, stated because it is the checker's blind spot:** the comparison covers
-the enumerators reachable through a ``SonareException``, which is all of them
-except ``Ok``.  ``Ok`` is a non-error that the surfaces deliberately answer
-differently -- the addon turns an exception carrying it into ``Unknown``, the
-WASM module reports it as ``Ok`` -- and folding it in would assert a
-disagreement that is not drift.  Anything about ``Ok`` is outside what this
-test can see.
+``Ok`` is handled apart from the rest because it is not an error and has no
+entry in the C enum to compare against, but it is not exempt.  An exception
+carrying it is a programming error, and every surface that translates an
+exception answers ``Unknown`` / 99 for it.  The alternative -- reporting
+``(0, "Ok")`` -- rebuilds a ``SonareError`` the caller reads as success, which
+is the one answer that loses the failure rather than mislabelling it; that is
+why the two surfaces already saying ``Unknown`` are right, and not because
+there are two of them.  Making the value unconstructible was the other option
+and was declined: the check would have to live in an exception constructor,
+where an assertion disappears in a release build and a throw is worse than the
+thing it guards.
 
 **The second blind spot is the parser.** Every table is read by locating one
 named construct and matching ``case`` arms inside it.  A surface that stops
@@ -65,8 +69,12 @@ SOURCES = (
     PYTHON_RUNTIME,
 )
 
-# `Ok` is not reachable through an exception; see the module docstring.
+# `Ok` is not an error, so it is compared on its own terms; see the docstring.
 NOT_AN_ERROR = "Ok"
+
+# What every exception-translating surface must answer for `Ok`.
+NON_ERROR_C_SYMBOL = "SONARE_ERROR_UNKNOWN"
+NON_ERROR_ANSWER = (99, "Unknown")
 
 _COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/|^[ \t]*#[^\n]*", re.DOTALL | re.MULTILINE)
 
@@ -275,6 +283,34 @@ def inconsistencies(tables: Tables) -> list[str]:
     return problems
 
 
+def non_error_disagreements(tables: Tables) -> list[str]:
+    """Every surface that answers for `Ok` with something other than Unknown."""
+    problems: list[str] = []
+    for label, table in (
+        ("the C ABI mapping", tables.c_abi),
+        ("the Node addon mapping", tables.addon),
+    ):
+        answer = table.get(NOT_AN_ERROR)
+        if answer is None:
+            problems.append(
+                f"{NOT_AN_ERROR}: {label} has no case for it, so it answers by falling "
+                f"through rather than by saying so"
+            )
+        elif answer != NON_ERROR_C_SYMBOL:
+            problems.append(
+                f"{NOT_AN_ERROR}: {label} maps it to {answer}, not {NON_ERROR_C_SYMBOL}"
+            )
+
+    wasm = tables.wasm.get(NOT_AN_ERROR)
+    if wasm is None:
+        problems.append(f"{NOT_AN_ERROR}: the WASM mapping has no case for it")
+    elif wasm != NON_ERROR_ANSWER:
+        problems.append(
+            f"{NOT_AN_ERROR}: the WASM mapping says {wasm!r}, not {NON_ERROR_ANSWER!r}"
+        )
+    return problems
+
+
 class SourcePresenceTest(unittest.TestCase):
     """Each table must answer for the whole enumeration before it is compared.
 
@@ -314,6 +350,10 @@ class AgreementTest(unittest.TestCase):
         problems = inconsistencies(Tables(ROOT))
         self.assertEqual(problems, [], "\n".join(problems))
 
+    def test_a_non_error_carried_by_an_exception_is_unknown_everywhere(self) -> None:
+        problems = non_error_disagreements(Tables(ROOT))
+        self.assertEqual(problems, [], "\n".join(problems))
+
 
 class NonVacuityTest(unittest.TestCase):
     """Removing one enumerator's mapping must fail, naming that enumerator.
@@ -349,6 +389,46 @@ class NonVacuityTest(unittest.TestCase):
             path.write_text(text[: arm.start()] + text[arm.end() :], encoding="utf-8")
             problems = inconsistencies(Tables(root))
         self.assertEqual(problems, ["Cancelled: the WASM mapping has no case for it"])
+
+    def test_reporting_the_non_error_as_a_success_names_the_surface(self) -> None:
+        holder, root = self._copy()
+        with holder:
+            path = root / WASM_BINDINGS
+            text = path.read_text(encoding="utf-8")
+            arm = re.search(
+                r"(case sonare::ErrorCode::Ok:\n[ \t]*code = )99(;\n[ \t]*code_name = )"
+                r'"Unknown"(;)',
+                text,
+            )
+            self.assertIsNotNone(arm, "the WASM switch arm is no longer written this way")
+            assert arm is not None
+            path.write_text(
+                text[: arm.start()] + arm.expand(r'\g<1>0\g<2>"Ok"\g<3>') + text[arm.end() :],
+                encoding="utf-8",
+            )
+            problems = non_error_disagreements(Tables(root))
+        self.assertEqual(problems, ["Ok: the WASM mapping says (0, 'Ok'), not (99, 'Unknown')"])
+
+    def test_dropping_the_non_error_case_from_the_c_abi_names_it(self) -> None:
+        holder, root = self._copy()
+        with holder:
+            path = root / C_MAPPING
+            text = path.read_text(encoding="utf-8")
+            arm = re.search(
+                r"[ \t]*case sonare::ErrorCode::Ok:\n[ \t]*return SONARE_ERROR_UNKNOWN;\n",
+                text,
+            )
+            self.assertIsNotNone(arm, "the C ABI switch arm is no longer written this way")
+            assert arm is not None
+            path.write_text(text[: arm.start()] + text[arm.end() :], encoding="utf-8")
+            problems = non_error_disagreements(Tables(root))
+        self.assertEqual(
+            problems,
+            [
+                "Ok: the C ABI mapping has no case for it, so it answers by falling "
+                "through rather than by saying so"
+            ],
+        )
 
     def test_changing_one_numeric_code_names_the_surface_that_moved(self) -> None:
         holder, root = self._copy()

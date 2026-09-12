@@ -24,6 +24,12 @@ void clear_last_warning() { last_warning_storage().clear(); }
 
 SonareError map_sonare_exception(const SonareException& e) {
   switch (e.code()) {
+    // An exception carrying Ok is a programming error, and SONARE_OK would tell
+    // the caller the call succeeded. It answers like the addon and the WASM
+    // module rather than falling through to a default arm, so adding an
+    // enumerator without a case here stops compiling instead of arriving as 99.
+    case sonare::ErrorCode::Ok:
+      return SONARE_ERROR_UNKNOWN;
     case sonare::ErrorCode::FileNotFound:
       return SONARE_ERROR_FILE_NOT_FOUND;
     case sonare::ErrorCode::InvalidFormat:
@@ -42,9 +48,10 @@ SonareError map_sonare_exception(const SonareException& e) {
       return SONARE_ERROR_CANCELLED;
     case sonare::ErrorCode::EncodeFailed:
       return SONARE_ERROR_ENCODE_FAILED;
-    default:
-      return SONARE_ERROR_UNKNOWN;
   }
+  // A scoped enum can hold any value of its underlying type, so an out-of-range
+  // code still needs a landing place the switch cannot provide.
+  return SONARE_ERROR_UNKNOWN;
 }
 
 SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) {

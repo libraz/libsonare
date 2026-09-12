@@ -200,11 +200,27 @@ describe('the WASM exception decoder covers every core ErrorCode', () => {
     enumerators.forEach((enumerator, ordinal) => {
       const arm = arms.get(enumerator);
       expect(arm, enumerator).toBeDefined();
+      // Ok is the one enumerator whose ordinal is not its answer: an exception
+      // carrying it is a programming error, and code 0 would reach the caller
+      // as a success. Asserted on its own below.
+      if (enumerator === 'Ok') {
+        return;
+      }
       // The core's declaration order IS the C ABI's numbering, so an arm that
       // reports a different number has silently renumbered the surface.
       expect(arm?.code, enumerator).toBe(ordinal);
       expect(arm?.codeName, enumerator).toBe(nameForOrdinal.get(ordinal));
     });
+  });
+
+  it('answers Unknown for a non-error carried by an exception', () => {
+    const arm = wasmExceptionArms().get('Ok');
+    expect(arm).toBeDefined();
+    expect(arm?.code).toBe(99);
+    expect(arm?.codeName).toBe('Unknown');
+    // The value it must not report: a SonareError rebuilt from code 0 is
+    // indistinguishable from a call that succeeded.
+    expect(tsErrorCodeEnum('bindings/wasm/src/errors.ts').get('Ok')).toBe(0);
   });
 
   it('publishes one ErrorCode table across the C ABI, Node, WASM and Python', () => {

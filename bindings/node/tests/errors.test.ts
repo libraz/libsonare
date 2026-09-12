@@ -238,9 +238,17 @@ describe('the addon exception map covers every core ErrorCode', () => {
     for (const [enumerator, code] of oracle) {
       expect(addon.get(enumerator), enumerator).toBe(code);
     }
-    // `Ok` is not an error, so the oracle leaves it to its default arm; the
-    // addon spells it out because it carries no default.
-    expect(oracle.has('Ok')).toBe(false);
+    // `Ok` is not an error, and both spell it out rather than leaving it to a
+    // default arm: an exception carrying it is a programming error, so it is
+    // reported as Unknown instead of as the success its ordinal would mean.
+    expect(oracle.get('Ok')).toBe('SONARE_ERROR_UNKNOWN');
     expect(addon.get('Ok')).toBe('SONARE_ERROR_UNKNOWN');
+    expect([...oracle.keys()].sort()).toEqual([...addon.keys()].sort());
+  });
+
+  it('leaves no default: in the C ABI oracle either', () => {
+    const text = repoFile('src/c_api/sonare_c_internal.cpp');
+    const start = text.indexOf('SonareError map_sonare_exception(');
+    expect(text.slice(start, text.indexOf('\n}', start))).not.toMatch(/\bdefault\s*:/);
   });
 });
