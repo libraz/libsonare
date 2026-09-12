@@ -61,6 +61,9 @@ inline constexpr AcousticBandResourceLimits kDefaultAcousticBandResourceLimits{
     128u,  // likewise for third-octave analysis
 };
 
+// Where bytes are gated first (project_from_json, make_insert) and max_string_bytes >=
+// max_json_bytes, the string-byte axis refuses nothing the byte gate admits, because the parser
+// charges only decoded key and value bytes; it gates alone for a direct parse_with_limits caller.
 struct ProjectImportResourceLimits {
   std::size_t max_json_bytes;
   std::size_t max_json_nodes;
