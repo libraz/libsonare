@@ -9,8 +9,11 @@
 /// against the source audio, which is never mutated -- rendering a set whose
 /// edits are all identity reproduces the input exactly.
 ///
-/// Monophonic: notes do not overlap in time. The polyphonic case needs a
-/// per-note spectral mask and is not modelled here.
+/// Whether two notes may share samples is a renderer's rule and not the type's:
+/// the monophonic chain rejects overlapping spans, while the polyphonic one pairs
+/// each note with a spectral mask and expects them. The mask is not modelled
+/// here -- a note carries its span and its edit, and nothing about which of the
+/// two is rendering it.
 
 #include <cstdint>
 #include <vector>

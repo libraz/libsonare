@@ -26,6 +26,34 @@ struct NoteRenderConfig {
   PitchDecompositionConfig decomposition{};
 };
 
+/// @brief Validates one note's span and edit fields as @ref render_notes does.
+/// @details Exposed because the polyphonic chain makes the same per-note checks
+///          and has to make them before it inverts anything, while the
+///          disjointness check @ref render_notes also makes does not apply to it.
+/// @throws SonareException(InvalidParameter) on a span that is empty, reversed or
+///         starts before zero; a non-finite or non-positive edit field; a
+///         non-finite or negative envelope value; or a vibrato or drift edit on a
+///         note that carries no usable pitch curve to apply it to.
+void validate_note_for_render(const NoteObject& note);
+
+/// @brief Validates the config fields @ref render_notes checks before rendering.
+/// @details Covers only what that function checks up front. @c decomposition is
+///          validated where it is read, which is a note carrying a curve edit, so
+///          a call with no such note never reaches it.
+///
+///          The percussive event chain's identically shaped check is a different
+///          rule -- it rejects a @c fade_ms of 0 where this accepts one as a hard
+///          cut -- so the two cannot be folded together.
+///
+///          Exposed for the same reason as @ref validate_note_for_render, and for
+///          one more: the polyphonic chain can be handed an empty note list, and a
+///          config it never applies would otherwise go unchecked -- so a
+///          @c fade_ms of NaN would succeed on an empty set and throw on a
+///          populated one.
+/// @throws SonareException(InvalidParameter) on a @c fade_ms that is not finite or
+///         is negative.
+void validate_render_config(const NoteRenderConfig& config);
+
 /// @brief Renders @p notes over @p audio.
 /// @details The output has the input's length and sample rate; an edit that
 ///          pushes a note past either end is truncated there. A muted note

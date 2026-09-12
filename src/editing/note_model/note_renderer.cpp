@@ -171,33 +171,41 @@ void apply_pitch_curve(std::vector<float>& segment, const NoteObject& note, int 
 
 }  // namespace
 
+void validate_note_for_render(const NoteObject& note) {
+  SONARE_CHECK(note.onset_sample >= 0 && note.length_samples() > 0, ErrorCode::InvalidParameter);
+  const NoteEdit& edit = note.edit;
+  SONARE_CHECK(std::isfinite(edit.pitch_shift_semitones) && std::isfinite(edit.gain_db) &&
+                   std::isfinite(edit.time_stretch_ratio) && edit.time_stretch_ratio > 0.0f &&
+                   std::isfinite(edit.formant_shift_semitones) &&
+                   std::isfinite(edit.vibrato_depth_change) && std::isfinite(edit.drift_change),
+               ErrorCode::InvalidParameter);
+  // A pitch-curve edit with no curve to read is a wiring bug, not a no-op.
+  // The frames are scanned too: a median can outlive every frame that
+  // produced it, and decompose_pitch reports such a note as unmeasured.
+  if (edit.vibrato_depth_change != 0.0f || edit.drift_change != 0.0f) {
+    SONARE_CHECK(note.median_hz > 0.0f && note.f0_hz.frame_rate_hz > 0.0f &&
+                     has_usable_pitch(note.f0_hz.values),
+                 ErrorCode::InvalidParameter);
+  }
+  for (const float value : edit.amplitude_envelope) {
+    SONARE_CHECK(std::isfinite(value) && value >= 0.0f, ErrorCode::InvalidParameter);
+  }
+}
+
+void validate_render_config(const NoteRenderConfig& config) {
+  SONARE_CHECK(std::isfinite(config.fade_ms) && config.fade_ms >= 0.0f,
+               ErrorCode::InvalidParameter);
+}
+
 Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
                    const NoteRenderConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.fade_ms) && config.fade_ms >= 0.0f,
-               ErrorCode::InvalidParameter);
+  validate_render_config(config);
 
   bool all_identity = true;
   for (const NoteObject& note : notes) {
-    SONARE_CHECK(note.onset_sample >= 0 && note.length_samples() > 0, ErrorCode::InvalidParameter);
-    const NoteEdit& edit = note.edit;
-    SONARE_CHECK(std::isfinite(edit.pitch_shift_semitones) && std::isfinite(edit.gain_db) &&
-                     std::isfinite(edit.time_stretch_ratio) && edit.time_stretch_ratio > 0.0f &&
-                     std::isfinite(edit.formant_shift_semitones) &&
-                     std::isfinite(edit.vibrato_depth_change) && std::isfinite(edit.drift_change),
-                 ErrorCode::InvalidParameter);
-    // A pitch-curve edit with no curve to read is a wiring bug, not a no-op.
-    // The frames are scanned too: a median can outlive every frame that
-    // produced it, and decompose_pitch reports such a note as unmeasured.
-    if (edit.vibrato_depth_change != 0.0f || edit.drift_change != 0.0f) {
-      SONARE_CHECK(note.median_hz > 0.0f && note.f0_hz.frame_rate_hz > 0.0f &&
-                       has_usable_pitch(note.f0_hz.values),
-                   ErrorCode::InvalidParameter);
-    }
-    for (const float value : edit.amplitude_envelope) {
-      SONARE_CHECK(std::isfinite(value) && value >= 0.0f, ErrorCode::InvalidParameter);
-    }
-    all_identity = all_identity && edit.is_identity();
+    validate_note_for_render(note);
+    all_identity = all_identity && note.edit.is_identity();
   }
   check_disjoint_spans(notes);
 
