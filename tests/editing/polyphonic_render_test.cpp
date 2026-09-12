@@ -845,7 +845,7 @@ TEST_CASE("a muted note drops its span and keeps what its mask reaches outside i
   }
 
   SECTION("the mask's leakage outside the span is kept") {
-    for (const std::pair<size_t, size_t> window :
+    for (const std::pair<size_t, size_t>& window :
          {std::make_pair(reach_lo, leak_low_hi), std::make_pair(leak_high_lo, reach_hi)}) {
       INFO("window [" << window.first << ", " << window.second << ")");
       const Agreement kept = agreement(dropped, all, window.first, window.second);
