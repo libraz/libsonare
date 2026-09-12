@@ -362,6 +362,8 @@ SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEngine* engine,
                                                                 uint32_t track_id,
                                                                 int delay_samples);
+/// @note Release @p out_provider with @ref sonare_clip_page_provider_destroy; it is a handle, not a
+///       sonare_free_* buffer.
 SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
                                              int64_t page_frames,
                                              SonareClipPageProvider** out_provider);

@@ -80,6 +80,7 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
 // Core - Resample
 // ============================================================================
 
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_resample(const float* samples, size_t length, int src_sr, int target_sr,
                             float** out, size_t* out_length);
 

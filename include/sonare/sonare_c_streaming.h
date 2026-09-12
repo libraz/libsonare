@@ -226,6 +226,7 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config);
 /// @param config Construction config (must be non-null).
 /// @param out Receives the new handle (caller destroys with
 ///        sonare_stream_analyzer_destroy).
+/// @note @p out is a handle, not a sonare_free_* buffer.
 SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
                                           SonareStreamAnalyzer** out);
 

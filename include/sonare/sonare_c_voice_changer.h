@@ -52,6 +52,8 @@ SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChan
 
 /// @brief Same as @ref sonare_realtime_voice_changer_create_json but accepts
 ///        a flat POD config. Pass NULL to start from the neutral-monitor preset.
+/// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
+///       sonare_free_* buffer.
 SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChangerConfig* config,
                                                  int sample_rate, int max_block_size,
                                                  int num_channels,
@@ -77,7 +79,8 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
 ///          handle pre-allocates all internal buffers (including a planar
 ///          deinterleave scratch) so every subsequent process call is
 ///          realtime-safe.
-/// @note Release the handle with @ref sonare_realtime_voice_changer_destroy.
+/// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
+///       sonare_free_* buffer.
 SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_config_json,
                                                       int sample_rate, int max_block_size,
                                                       int num_channels,

@@ -91,6 +91,7 @@ static_assert(offsetof(SonareInstrumentBinding, callbacks) ==
 ///       function returns @ref SONARE_ERROR_NOT_SUPPORTED; use a zero-latency,
 ///       source-aware built-in / NativeSynth / SF2 binding, or one destination
 ///       per strip.
+/// @note Free @p out_interleaved with @ref sonare_free_floats.
 SonareError sonare_project_bounce_with_instruments(SonareProject* project,
                                                    const SonareProjectBounceOptions* options,
                                                    const SonareInstrumentBinding* instruments,
@@ -156,6 +157,7 @@ typedef struct {
 ///        A positive total_frames is used as-is and does not auto-extend for
 ///        mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
+/// @note Free @p out_interleaved with @ref sonare_free_floats.
 SonareError sonare_project_bounce_with_builtin_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
@@ -237,6 +239,7 @@ typedef struct {
 ///        A positive total_frames is used as-is and does not auto-extend for
 ///        mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
+/// @note Free @p out_interleaved with @ref sonare_free_floats.
 SonareError sonare_project_bounce_with_synth_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
@@ -342,6 +345,7 @@ typedef struct {
 ///        default SF2-first coverage; model-first bindings deliberately override
 ///        that report for their dedicated melodic families. Deterministic for a fixed project +
 ///        options + SoundFont + patch.
+/// @note Free @p out_interleaved with @ref sonare_free_floats.
 SonareError sonare_project_bounce_with_sf2_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,

@@ -421,6 +421,7 @@ SonareError sonare_mastering_apply_pair_processor_ex(
     size_t reference_length, int sample_rate, const SonareMasteringParam* params,
     size_t param_count, SonareMasteringResult* out);
 
+/// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
                                           const float* reference, size_t length, int sample_rate,
                                           const SonareMasteringParam* params, size_t param_count,
@@ -430,11 +431,13 @@ SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float
 /// reference lengths. See @ref sonare_mastering_apply_pair_processor_ex.
 /// @ref sonare_mastering_analyze_pair delegates here with
 /// reference_length == length.
+/// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_pair_ex(const char* analysis_name, const float* source,
                                              size_t source_length, const float* reference,
                                              size_t reference_length, int sample_rate,
                                              const SonareMasteringParam* params, size_t param_count,
                                              char** json_out);
+/// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,

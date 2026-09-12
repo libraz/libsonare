@@ -151,6 +151,8 @@ uint32_t sonare_project_abi_version(void);
 // ============================================================================
 
 /// @brief Creates an empty headless project handle.
+/// @note Release @p out with @ref sonare_project_destroy; it is a handle, not a
+///       sonare_free_* buffer.
 SonareError sonare_project_create(SonareProject** out);
 /// @brief Destroys a project handle. NULL is a safe no-op.
 void sonare_project_destroy(SonareProject* project);

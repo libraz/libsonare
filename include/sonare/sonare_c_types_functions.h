@@ -10,11 +10,17 @@ extern "C" {
 #endif
 
 // Audio functions
+/// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
+///       sonare_free_* buffer.
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out);
+/// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
+///       sonare_free_* buffer.
 SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareAudio** out);
 
 #ifndef __EMSCRIPTEN__
+/// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
+///       sonare_free_* buffer.
 SonareError sonare_audio_from_file(const char* path, SonareAudio** out);
 /// @brief Returns the positive source channel count reported by an audio file.
 /// @details @p out_channels is set to 0 immediately when it is non-NULL, before
@@ -42,10 +48,13 @@ int sonare_audio_sample_rate(const SonareAudio* audio);
 float sonare_audio_duration(const SonareAudio* audio);
 SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm);
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
+/// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times,
                                       size_t* out_count);
+/// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_times,
                                           size_t* out_count);
+/// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count);
 // Runs the full quick analysis pipeline and fills the flat C result. Use the
@@ -69,23 +78,29 @@ SonareError sonare_detect_key_with_extended_options(
     const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key);
+/// @note Free @p out_candidates with @ref sonare_free_key_candidates.
 SonareError sonare_detect_key_candidates(const float* samples, size_t length, int sample_rate,
                                          int n_fft, int hop_length, int use_hpss,
                                          int loudness_weighted, float high_pass_hz,
                                          SonareKeyCandidate** out_candidates, size_t* out_count);
+/// @note Free @p out_candidates with @ref sonare_free_key_candidates.
 SonareError sonare_detect_key_candidates_with_modes(
     const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyCandidate** out_candidates, size_t* out_count);
+/// @note Free @p out_candidates with @ref sonare_free_key_candidates.
 SonareError sonare_detect_key_candidates_with_extended_options(
     const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
     size_t* out_count);
+/// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_detect_beats(const float* samples, size_t length, int sample_rate,
                                 float** out_times, size_t* out_count);
+/// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_detect_downbeats(const float* samples, size_t length, int sample_rate,
                                     float** out_times, size_t* out_count);
+/// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
                                  float** out_times, size_t* out_count);
 
@@ -126,6 +141,7 @@ static_assert(offsetof(SonareOnsetDetectConfig, backtrack_range) == 40u,
 #endif
 
 /// @brief Detect onsets with explicit FFT, peak-picking, and backtracking settings.
+/// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sample_rate,
                                     const SonareOnsetDetectConfig* config, float** out_times,
                                     size_t* out_count);
@@ -197,11 +213,13 @@ typedef struct {
 } SonareMusicAnalyzeOptions;
 
 SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void);
+/// @note Free @p out_json with @ref sonare_free_string.
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareMusicAnalyzeOptions* options, char** out_json);
 
 /* Same as sonare_analyze_json but reports per-stage progress. A null callback
    runs silently. The callback fires on the calling thread before return. */
+/// @note Free @p out_json with @ref sonare_free_string.
 SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
                                               SonareAnalyzeProgressCallback callback,
                                               void* user_data, char** out_json);
@@ -246,15 +264,16 @@ SonareMeterOptions sonare_meter_options_default(void);
    Read "searched" before treating any field as a detection: a beat series too
    short to score any candidate reports a fixed fallback instead, and the
    confidence it carries is that fallback's own value.
-   Emits the schema documented on meter_result_to_json. *out_json is
-   heap-allocated and MUST be released with sonare_free_string; on any error it
-   is set to NULL, so a caller may check it instead of the return code. */
+   Emits the schema documented on meter_result_to_json. On any error *out_json
+   is set to NULL, so a caller may check it instead of the return code.
+   Free *out_json with sonare_free_string. */
 SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
                                        size_t beat_count, const SonareMeterOptions* options,
                                        char** out_json);
 
 /* Cancellation-capable equivalent of sonare_analyze_json_with_progress. When
    cancelled, returns SONARE_ERROR_CANCELLED and leaves *out_json NULL. */
+/// @note Free @p out_json with @ref sonare_free_string.
 SonareError sonare_analyze_json_with_progress_ex(
     const float* samples, size_t length, int sample_rate, SonareAnalyzeProgressCallback callback,
     void* user_data, char** out_json, SonareCancelCallback cancel_cb, void* cancel_user_data);

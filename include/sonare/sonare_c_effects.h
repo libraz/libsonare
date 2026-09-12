@@ -28,26 +28,34 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 ///                   sparser hop is rejected with
 ///                   SONARE_ERROR_INVALID_PARAMETER rather than returning a
 ///                   signal with periodic dropouts.
+/// @note Free @p out with @ref sonare_free_hpss_result and @p out_residual with
+///       @ref sonare_free_floats.
 SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
                            int kernel_harmonic, int kernel_percussive, int n_fft, int hop_length,
                            int use_soft_mask, int with_residual, SonareHpssResult* out,
                            float** out_residual);
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,
                             size_t* out_length);
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
                               size_t* out_length);
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length);
 /// @brief Native spectral time stretch with explicit FFT/hop configuration.
 /// @details @p n_fft must be an even integer >= 2 and @p hop_length must lie in
 ///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate, float rate,
                                    int n_fft, int hop_length, float** out, size_t* out_length);
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length);
 /// @brief Native spectral pitch shift with explicit FFT/hop configuration.
 /// @details @p n_fft must be an even integer >= 2 and @p hop_length must lie in
 ///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
                                   float semitones, int n_fft, int hop_length, float** out,
                                   size_t* out_length);
@@ -60,6 +68,7 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
 /// does not follow a time-varying melody. For
 /// contour-following correction use @ref sonare_pitch_correct_to_midi_timevarying
 /// with a caller-supplied per-frame F0 track.
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
                                          float current_midi, float target_midi, float** out,
                                          size_t* out_length);
@@ -143,10 +152,12 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              const int32_t* voiced, size_t n_frames, int hop_length,
                                              const SonarePitchCorrectionConfig* config, float** out,
                                              size_t* out_length);
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length);
 /// Move a note region to a new onset sample while preserving its duration.
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,
                              int offset_sample, int target_onset_sample, float** out,
                              size_t* out_length);
@@ -655,6 +666,7 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             const SonarePercussiveRenderConfig* config, float** out,
                                             size_t* out_length);
 
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);
@@ -782,14 +794,18 @@ uint32_t sonare_voice_changer_abi_version(void);
 
 /// @brief Peak-normalize mono audio. @p target_db must be finite and <= 0 dBFS;
 /// positive targets are rejected rather than hard-clipped.
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length);
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length);
 /// @brief RMS-normalize mono audio with hard clipping to [-1, 1].
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
                                  float target_db, float** out, size_t* out_length);
 /// @brief Trim leading/trailing silence using an absolute RMS dBFS threshold.
+/// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
                            int frame_length, int hop_length, float** out, size_t* out_length);
 

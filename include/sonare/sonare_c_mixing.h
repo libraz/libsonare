@@ -305,6 +305,7 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
 // parse-failure message is available from sonare_last_error_message. A non-NULL
 // handle is owned by the caller and stays valid until sonare_mixer_destroy.
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
+// Free *json_out with sonare_free_string.
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);
 // Rebuilds and compiles the internal routing graph from the current topology
 // (strips, sends, buses, connections). Call after manual topology changes
@@ -353,6 +354,7 @@ SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_lef
 // rebuilt on every call, so the pointer is valid only until the next call to
 // this function on the same thread. Copy it to hold it; never free it.
 const char* sonare_mixing_scene_preset_names(void);
+// Free *json_out with sonare_free_string.
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out);
 void sonare_mixer_destroy(SonareMixer* mixer);
 
@@ -417,6 +419,7 @@ SonareError sonare_mixing_assistant_suggest(
 // the same schema sonare_mixer_from_scene_json reads. Provided so a caller that
 // wants to apply a suggestion does not have to dig the scene out of the fuller
 // result document and re-serialise it.
+// Free *json_out with sonare_free_string.
 SonareError sonare_mixing_assistant_suggest_scene_json(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
     const char* const* track_names, const size_t* track_lengths, size_t input_count,
