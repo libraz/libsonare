@@ -59,6 +59,7 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
                                        size_t* out_count);
 // Runs the full quick analysis pipeline and fills the flat C result. Use the
 // single-purpose sonare_audio_detect_* helpers for cheaper queries.
+/// @param out Receives heap-owned arrays; free with sonare_free_result.
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
 
 // Quick detection functions
@@ -148,6 +149,7 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
 
 // Runs the full quick analysis pipeline and fills the flat C result. Use the
 // single-purpose sonare_detect_* helpers for cheaper queries.
+/// @param out Receives heap-owned arrays; free with sonare_free_result.
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out);
 
@@ -220,6 +222,8 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
 /* Same as sonare_analyze_json but reports per-stage progress. A null callback
    runs silently. The callback fires on the calling thread before return. */
 /// @note Free @p out_json with @ref sonare_free_string.
+/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
+///   call: nothing is stored once it returns.
 SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
                                               SonareAnalyzeProgressCallback callback,
                                               void* user_data, char** out_json);
@@ -274,6 +278,9 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
 /* Cancellation-capable equivalent of sonare_analyze_json_with_progress. When
    cancelled, returns SONARE_ERROR_CANCELLED and leaves *out_json NULL. */
 /// @note Free @p out_json with @ref sonare_free_string.
+/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
+///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
+///   calling thread and nothing is stored once it returns.
 SonareError sonare_analyze_json_with_progress_ex(
     const float* samples, size_t length, int sample_rate, SonareAnalyzeProgressCallback callback,
     void* user_data, char** out_json, SonareCancelCallback cancel_cb, void* cancel_user_data);

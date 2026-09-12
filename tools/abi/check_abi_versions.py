@@ -5,7 +5,7 @@ The C ABI carries several *independent* version counters, not one:
 
     SONARE_FEATURE_ABI_VERSION         (include/sonare/sonare_c_types.h)
     SONARE_PROJECT_ABI_VERSION         (include/sonare/sonare_c_project.h)
-    SONARE_VOICE_CHANGER_ABI_VERSION   (include/sonare/sonare_c_effects.h)
+    SONARE_VOICE_CHANGER_ABI_VERSION   (include/sonare/sonare_c_voice_changer.h)
     SONARE_ACOUSTIC_ABI_VERSION        (include/sonare/sonare_c_acoustic.h)
     kEngineAbiVersion                  (src/rt/command.h)
 
@@ -62,9 +62,9 @@ def c_source_of_truth() -> dict[str, int]:
         "sonare_c_project.h",
     )
     voice_changer = _find_int(
-        public_header("sonare_c_effects.h").read_text(),
+        public_header("sonare_c_voice_changer.h").read_text(),
         r"#define\s+SONARE_VOICE_CHANGER_ABI_VERSION\s+(\w+)",
-        "sonare_c_effects.h",
+        "sonare_c_voice_changer.h",
     )
     acoustic = _find_int(
         public_header("sonare_c_acoustic.h").read_text(),

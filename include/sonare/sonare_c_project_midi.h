@@ -150,8 +150,9 @@ SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint
                                 SonareMidiEventPod* out);
 
 /// @brief Returns the General MIDI Level 1 instrument name for @p program.
-/// @details The returned pointer is a static table entry owned by libsonare,
-///          valid for the program lifetime; never free it. NULL means EITHER
+/// @details The returned pointer is a static table entry owned by libsonare; it remains valid for
+///          the program lifetime, nothing invalidates it, and it must never be
+///          freed. NULL means EITHER
 ///          @p program is outside [0,127] OR this build has no arrangement
 ///          support, and a caller cannot tell the two apart from the return
 ///          value alone. To distinguish them, probe with a known-valid argument
@@ -161,41 +162,66 @@ const char* sonare_midi_gm_instrument_name(int program);
 /// @brief Reverse GM instrument lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_gm_program_for_name(const char* name);
 /// @brief Returns the GM family name for @p family [0,15], or NULL.
-/// @details Pointer lifetime and the two meanings of NULL are as in
-///          @ref sonare_midi_gm_instrument_name.
+/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
+///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
+///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
+///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
+///          apart.
 const char* sonare_midi_gm_family_name(int family);
 /// @brief Returns the first GM program in @p family [0,15], or -1.
 int sonare_midi_gm_family_first_program(int family);
 /// @brief Returns the GM2 melodic instrument name for bank LSB + program.
-/// @details Pointer lifetime and the two meanings of NULL are as in
-///          @ref sonare_midi_gm_instrument_name.
+/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
+///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
+///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
+///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
+///          apart.
 const char* sonare_midi_gm2_instrument_name(int bank_lsb, int program);
 /// @brief Returns the GM drum name for note [35,81], or NULL.
-/// @details Pointer lifetime and the two meanings of NULL are as in
-///          @ref sonare_midi_gm_instrument_name.
+/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
+///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
+///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
+///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
+///          apart.
 const char* sonare_midi_gm_drum_name(int note);
 /// @brief Reverse GM drum lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_gm_drum_note_for_name(const char* name);
 /// @brief Returns the GM2 drum set name for bank LSB, or NULL.
-/// @details Pointer lifetime and the two meanings of NULL are as in
-///          @ref sonare_midi_gm_instrument_name.
+/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
+///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
+///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
+///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
+///          apart.
 const char* sonare_midi_gm2_drum_set_name(int bank_lsb);
 /// @brief Returns the GM2 drum name for bank LSB + note, or NULL.
-/// @details Pointer lifetime and the two meanings of NULL are as in
-///          @ref sonare_midi_gm_instrument_name.
+/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
+///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
+///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
+///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
+///          apart.
 const char* sonare_midi_gm2_drum_name(int bank_lsb, int note);
 /// @brief Returns the standard MIDI CC name for controller [0,127], or NULL.
-/// @details Pointer lifetime and the two meanings of NULL are as in
-///          @ref sonare_midi_gm_instrument_name.
+/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
+///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
+///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
+///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
+///          apart.
 const char* sonare_midi_cc_name(int controller);
 /// @brief Reverse standard MIDI CC lookup. Returns -1 when @p name is NULL or unknown.
 int sonare_midi_cc_index_for_name(const char* name);
 /// @brief Returns a MIDI 2.0 registered per-note controller name, or NULL.
-/// @details Pointer lifetime and the two meanings of NULL are as in
-///          @ref sonare_midi_gm_instrument_name.
+/// @details A static table entry owned by libsonare; it remains valid for the program lifetime,
+///          nothing invalidates it, and it must never be freed. NULL means EITHER the table has no
+///          entry for the argument -- out of range, or in range and unnamed -- OR this build has
+///          no arrangement support; probe @c sonare_midi_gm_instrument_name(0) to tell the two
+///          apart.
 const char* sonare_midi_per_note_controller_name(int index);
 /// @brief Lowers a bank/program selection to MIDI 1.0 bank MSB, bank LSB,
 ///        program-change events at @p ppq.
+/// @param out_events Caller-owned array of at least @p out_capacity entries. Only the first
+///        @p out_count entries are written, and only on success: the array is left untouched on
+///        failure, so a rejected call cannot clobber events the caller already holds.
+/// @param out_count Always written, including on failure, where it is 0.
 SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel, int bank_msb,
                                      int bank_lsb, int program, SonareMidiEventPod* out_events,
                                      size_t out_capacity, size_t* out_count);
@@ -205,6 +231,9 @@ SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel,
 ///          the router fixed capacity or caller capacity is reported through
 ///          `out_overflowed` / `out_overflow_count` when those pointers are not
 ///          NULL. `out_count` is always required.
+/// @param out_events Caller-owned array. Only the first @p out_count entries are written, and only
+///        on success: the array is left untouched on failure.
+/// @param out_count Always written, including on failure, where it is 0.
 SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t count,
                                      const SonareMidiRouteConfig* config,
                                      SonareMidiEventPod* out_events, size_t out_capacity,
@@ -349,6 +378,8 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
 /// @param out_capacity Number of entries @p out_source_index can hold.
 /// @param out_count Optional. Receives the full transformed event count even
 ///        when it exceeds @p out_capacity, so a short buffer is detectable.
+///        Written only on success and untouched on failure, so a caller may
+///        keep its own value across a rejected call.
 ///
 /// Both output parameters are written only after the edit commits. Sizing the
 /// buffer without a destructive trial run is what
@@ -362,6 +393,8 @@ SonareError sonare_project_bake_midi_fx_ex(SonareProject* project, uint32_t clip
 /// @brief Reports how many events @ref sonare_project_bake_midi_fx_ex would
 ///        produce for @p clip_id under @p config_json, without mutating the
 ///        project. Intended for sizing the provenance buffer.
+/// @param out_count Written only on success and untouched on failure, matching
+///        @ref sonare_project_bake_midi_fx_ex.
 SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, uint32_t clip_id,
                                                  const char* config_json, size_t* out_count);
 

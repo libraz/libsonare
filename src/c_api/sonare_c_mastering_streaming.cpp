@@ -23,8 +23,8 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
                                                size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   *json_out = nullptr;
+  if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
@@ -49,10 +49,10 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
                                                size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
 
   SONARE_C_TRY
   const auto config = to_assistant_config(params, param_count);
@@ -68,10 +68,10 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
                                            char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
 
   SONARE_C_TRY
   const auto config = to_audio_profile_config(params, param_count);
@@ -111,10 +111,10 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       size_t platform_count, char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
   SonareError err = validate_stereo_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
 
   SONARE_C_TRY
   std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
@@ -143,10 +143,10 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
   SonareError err = validate_stereo_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
 
   SONARE_C_TRY
   const auto config = to_assistant_config(params, param_count);
@@ -164,10 +164,10 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
                                                   size_t param_count, char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
   SonareError err = validate_stereo_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
 
   SONARE_C_TRY
   const auto config = to_audio_profile_config(params, param_count);

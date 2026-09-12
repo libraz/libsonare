@@ -255,6 +255,7 @@ SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t
   *out_count = project->soundfont ? project->soundfont->presets().size() : 0;
   return SONARE_OK;
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
 }
@@ -279,6 +280,7 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out, max_entries, out_count);
 #endif
 }

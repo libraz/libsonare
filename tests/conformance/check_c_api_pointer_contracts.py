@@ -71,6 +71,7 @@ _DECLARATION = re.compile(
 )
 
 _BANNER = re.compile(r"={6,}|-{20,}")
+_ARRAY_EXTENT = re.compile(r"\[[^\]]*\]")
 
 CLASS_OWNED_RETURN = "library-owned-return"
 CLASS_ALLOCATED_OUT = "library-allocated-out-param"
@@ -79,7 +80,7 @@ CLASS_RETAINED_INPUT = "caller-pointer-retained"
 # What each class's doc block has to say.  Every phrase is a contract a caller
 # can act on, not a keyword: "NULL" alone answers a different question from
 # "overwritten by the next call".
-_RELEASE_CALL = re.compile(r"\bsonare_(?:free|release|destroy)_?\w*", re.IGNORECASE)
+_RELEASE_CALL = re.compile(r"\bsonare_\w*?(?:free|release|destroy)\w*", re.IGNORECASE)
 _NO_RELEASE = re.compile(
     r"must not be freed|do not free|does not transfer ownership|never free|"
     r"owned by the library|not the caller's to free",
@@ -150,8 +151,20 @@ def doc_block_before(text: str, offset: int) -> str:
     """
     lines = text[:offset].split("\n")
     collected: list[str] = []
+    in_block = False
     for line in reversed(lines[:-1]):
         stripped = line.strip()
+        if in_block:
+            # Inside a /* */ block, an interior line carries no leading marker,
+            # so collect unconditionally until the opener.
+            collected.append(stripped)
+            if "/*" in stripped:
+                in_block = False
+            continue
+        if stripped.endswith("*/") and "/*" not in stripped:
+            in_block = True
+            collected.append(stripped)
+            continue
         if stripped.startswith(("///", "//", "*", "/*")) or stripped.endswith("*/"):
             collected.append(stripped)
             continue
@@ -181,7 +194,10 @@ def pointer_structs_and_docs(header_dir: Path) -> tuple[set[str], dict[str, str]
                     if depth == 0:
                         end = index
                         break
-            body = code[open_at + 1 : end]
+            # Array extents carry arithmetic, so a `*` inside one is not a
+            # pointer member: `float bands[N * 2]` must not make the struct a
+            # candidate.
+            body = _ARRAY_EXTENT.sub("", code[open_at + 1 : end])
             tail = code[end + 1 :].split(";", 1)[0].strip()
             if tail and "*" in body:
                 names.add(tail)
@@ -241,8 +257,10 @@ def parse_declarations(path: Path, text: str) -> list[Declaration]:
 
 # A release entry point takes the pointer it frees; it does not hand one over.
 # Recognised by its own name shape, which is a property of the declaration, not
-# a list of the functions that happen to exist today.
-_RELEASE_ENTRY = re.compile(r"^sonare_(?:free|release|destroy)\w*$|_(?:free|destroy)$")
+# a list of the functions that happen to exist today.  The verb may sit in the
+# middle of a domain-qualified name (sonare_project_free_compile_result), so it
+# is matched as a whole word rather than only as a prefix or a suffix.
+_RELEASE_ENTRY = re.compile(r"^sonare_(?:\w+_)?(?:free|release|destroy)(?:_\w+)?$")
 
 # Sub-kinds of the allocated class, recorded because they are triaged
 # differently: a pointer-to-pointer has nowhere but the declaration to carry its

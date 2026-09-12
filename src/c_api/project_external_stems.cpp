@@ -237,6 +237,7 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, request, out);
 #endif
 }

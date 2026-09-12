@@ -282,6 +282,8 @@ SonareError sonare_waveform_peaks(const float* samples, size_t length, int chann
 
 /// @brief Compute multiple waveform peak levels. @p samples_per_bucket_levels
 ///        has @p level_count entries; each must be > 0.
+/// @param out Receives heap-owned level buckets; free with
+///        sonare_free_waveform_peak_pyramid_result.
 SonareError sonare_waveform_peak_pyramid(const float* samples, size_t length, int channels,
                                          const size_t* samples_per_bucket_levels,
                                          size_t level_count, SonareWaveformPeakPyramidResult* out);

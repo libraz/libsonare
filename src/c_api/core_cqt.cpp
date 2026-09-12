@@ -4,11 +4,10 @@ SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int
                        float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     CqtConfig config;
@@ -25,11 +24,10 @@ SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_ra
                               float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     CqtConfig config;
@@ -46,11 +44,10 @@ SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_ra
                               float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     CqtConfig config;
@@ -68,12 +65,11 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
                        SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (hop_length <= 0 || !std::isfinite(fmin) || fmin <= 0.0f || n_bins <= 0 ||
       bins_per_octave <= 0 || std::isinf(gamma)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     VqtConfig config;

@@ -134,6 +134,10 @@ SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
 // (2x, 4x, 8x). Returns NULL with sonare_last_error_message() set for a NULL
 // handle or id, a duplicate id, or a factor outside [0, 16].
 //
+// A non-NULL strip is owned by the mixer, NOT the caller: it stays valid until
+// sonare_mixer_destroy and must never be freed separately. Adding further strips
+// does not invalidate it.
+//
 // The same configuration travels in scene JSON as the strip's optional
 // "metering" object, which is how a mixer built with
 // sonare_mixer_from_scene_json chooses it.
@@ -239,10 +243,13 @@ SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id);
 // @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
 SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_count);
 // Borrowed strip handle by index in [0, count). Returns NULL if out of range or
-// mixer is NULL. The handle is owned by the mixer; do not free it.
+// mixer is NULL. The handle is owned by the mixer; do not free it. It stays
+// valid until sonare_mixer_destroy — adding strips does not invalidate it, and
+// there is no entry point that removes one.
 SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index);
 // Borrowed strip handle by strip id. Returns NULL if not found or mixer/id NULL.
-// The handle is owned by the mixer; do not free it.
+// The handle is owned by the mixer; do not free it. Same validity as
+// sonare_mixer_strip_at: it remains usable until sonare_mixer_destroy.
 SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id);
 // Schedules sample-accurate insert-parameter automation on a strip's insert.
 // @c insert_index addresses the combined insert sequence
@@ -352,7 +359,8 @@ SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_lef
 // Returns the built-in mixing-scene preset names, separated by '\n'. Same
 // storage contract as sonare_mixing_assistant_source_class_names: thread-local,
 // rebuilt on every call, so the pointer is valid only until the next call to
-// this function on the same thread. Copy it to hold it; never free it.
+// this function on the same thread. Copy it to hold it; never free it. Never
+// NULL: an empty set comes back as the empty string.
 const char* sonare_mixing_scene_preset_names(void);
 // Free *json_out with sonare_free_string.
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out);
@@ -430,7 +438,8 @@ SonareError sonare_mixing_assistant_suggest_scene_json(
 // valid only until the next call to this function on the same thread — unlike
 // the mastering *_names getters, whose storage is built once and stays valid
 // for the thread's lifetime. Copy the string if you need to hold it across
-// another call. Do NOT cache it across threads or free it.
+// another call. Do NOT cache it across threads or free it. Never NULL: a build
+// without the assistant returns the empty string.
 const char* sonare_mixing_assistant_source_class_names(void);
 
 // Resolves a source-class identifier to its enum value, or -1 when unknown.

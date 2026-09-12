@@ -128,6 +128,12 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_warning();
   if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
+  out->rir = nullptr;
+  out->length = 0;
+  out->sample_rate = sample_rate;
+  out->has_error = 0;
   if (sample_rate < sonare_c_detail::kMinSampleRate ||
       sample_rate > sonare_c_detail::kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -155,11 +161,6 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   for (size_t i = 0; i < config->scattering_band_count; ++i) {
     if (!unit(config->scattering_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
   }
-  out->rir = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->has_error = 0;
-
   SONARE_C_TRY
   using namespace sonare::acoustic;
   const ShoeboxRoom room =
@@ -204,6 +205,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(config, sample_rate, out);
 #endif
 }
@@ -283,6 +285,7 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
     return SONARE_OK;
   });
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
 #endif
 }

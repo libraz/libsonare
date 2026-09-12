@@ -539,6 +539,7 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_clip_id) *out_clip_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id);
 #endif
 }
@@ -731,6 +732,8 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_clip_id) *out_clip_id = {};
+  if (out_take_count) *out_take_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id, out_take_count);
 #endif
 }
@@ -783,6 +786,8 @@ SonareError sonare_project_add_midi_clip(SonareProject* project, double start_pp
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_clip_id) *out_clip_id = {};
+  if (out_track_id) *out_track_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, start_ppq, length_ppq, out_track_id, out_clip_id);
 #endif
 }
@@ -803,6 +808,7 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_new_clip_id) *out_new_clip_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, split_ppq, out_new_clip_id);
 #endif
 }
@@ -1088,6 +1094,7 @@ SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_new_clip_id) *out_new_clip_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, new_start_ppq, out_new_clip_id);
 #endif
 }

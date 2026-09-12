@@ -267,11 +267,13 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
 
 /// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer
 ///        using the default quantization ranges.
+/// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_u8).
 SonareError sonare_stream_analyzer_read_frames_u8(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                   SonareStreamFramesU8* out);
 
 /// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer
 ///        using the default quantization ranges.
+/// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_i16).
 SonareError sonare_stream_analyzer_read_frames_i16(SonareStreamAnalyzer* analyzer,
                                                    size_t max_frames, SonareStreamFramesI16* out);
 
@@ -280,12 +282,14 @@ SonareError sonare_stream_quantize_config_default(SonareStreamQuantizeConfig* co
 
 /// @brief Reads up to @p max_frames frames into an 8-bit quantized SOA buffer
 ///        using caller-supplied quantization ranges (NULL @p config = defaults).
+/// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_u8).
 SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analyzer,
                                                      const SonareStreamQuantizeConfig* config,
                                                      size_t max_frames, SonareStreamFramesU8* out);
 
 /// @brief Reads up to @p max_frames frames into a 16-bit quantized SOA buffer
 ///        using caller-supplied quantization ranges (NULL @p config = defaults).
+/// @param out Receives heap-allocated arrays (free with sonare_free_stream_frames_i16).
 SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* analyzer,
                                                       const SonareStreamQuantizeConfig* config,
                                                       size_t max_frames,
@@ -364,6 +368,8 @@ typedef struct SonareStreamingRetune SonareStreamingRetune;
 ///        effect at the NEXT prepare(), and re-preparing at a different sample
 ///        rate re-derives it when it is 0. Values above the 8192 ceiling are
 ///        clamped by the core.
+/// @details The caller owns the handle and must release it with
+///        @ref sonare_streaming_retune_destroy, which is what invalidates it; no other call does.
 SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix, int grain_size);
 
 /// @brief Destroys a streaming retune stage. NULL is a no-op.

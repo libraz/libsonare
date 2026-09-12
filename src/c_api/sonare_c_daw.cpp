@@ -411,6 +411,7 @@ SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* 
   config->vibrato_threshold_cents = defaults.vibrato_threshold_cents;
   return SONARE_OK;
 #else
+  if (config) *config = {};
   SONARE_C_STUB_NOT_SUPPORTED(config);
 #endif
 }
@@ -666,6 +667,7 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, size_t n_frames, flo
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(f0_hz, n_frames, frame_rate, median_hz, vibrato_cutoff_hz, out);
 #endif
 }

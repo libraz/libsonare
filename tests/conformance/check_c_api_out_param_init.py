@@ -27,6 +27,11 @@ quietly:
   written, so a return whose nearest enclosing ``if`` condition null-checks the
   same parameter -- anywhere in a combined condition, not only in its first
   operand -- is not a finding.
+* **A single ``*`` to an opaque public type is a receiver, not an
+  out-parameter.**  The caller cannot allocate storage for a type the headers
+  declare and never define, so such a parameter is the object being operated on;
+  a ``sonare_project_*`` entry point writing ``project->field`` is mutating the
+  caller's object, not defining a slot.  ``SonareProject**`` stays in the scan.
 
 Known common mode, and the reason the report has an ``unanalysable`` bucket: a
 parameter written only through a helper call (``fill_cqt_result(result, out)``)
@@ -146,10 +151,24 @@ class Parameter:
     is_pointer: bool
     is_const_pointee: bool
     is_function_pointer: bool
+    pointee: str = ""
+    stars: int = 0
 
     @property
     def is_out_candidate(self) -> bool:
         return self.is_pointer and not self.is_const_pointee and not self.is_function_pointer
+
+    def is_receiver_handle(self, opaque: frozenset[str]) -> bool:
+        """Whether this is a handle the caller passes in, not one it receives.
+
+        A single ``*`` to a type the public headers declare but never define is
+        storage the caller cannot allocate, so it cannot be a slot the callee
+        defines: it is the object being operated on.  Deriving this from the
+        header's own incomplete types keeps it structural -- a handle type added
+        later is covered without editing a list here, and the moment a type
+        gains a definition its parameters re-enter the scan.
+        """
+        return self.stars == 1 and self.pointee in opaque
 
 
 def parse_parameter(text: str) -> Parameter | None:
@@ -177,7 +196,16 @@ def parse_parameter(text: str) -> Parameter | None:
     is_const_pointee = bool(
         is_pointer and last_star >= 0 and re.search(r"\bconst\b", before_name[:last_star])
     )
-    return Parameter(stripped, name, is_pointer, is_const_pointee, False)
+    words = [w for w in _IDENTIFIER.findall(before_name) if w != "const"]
+    return Parameter(
+        stripped,
+        name,
+        is_pointer,
+        is_const_pointee,
+        False,
+        pointee=words[-1] if words else "",
+        stars=declarator.count("*"),
+    )
 
 
 @dataclass
@@ -269,6 +297,24 @@ def indirect_write(body: str, name: str) -> bool:
     """Whether ``name`` is passed somewhere that could write through it."""
     escaped = re.escape(name)
     return bool(re.search(rf"\w\s*\([^()]*?\b{escaped}\b", body))
+
+
+_OPAQUE_TYPEDEF = re.compile(r"typedef\s+struct\s+(\w+)\s+\1\s*;")
+# Both definition spellings: the trailing typedef name, and a named struct body.
+_CLOSING_TAG = re.compile(r"\}\s*(\w+)\s*;")
+_NAMED_STRUCT_BODY = re.compile(r"\bstruct\s+(\w+)\s*\{")
+
+
+def opaque_handle_types(header_dir: Path) -> frozenset[str]:
+    """Public types declared as incomplete and never defined."""
+    declared: set[str] = set()
+    defined: set[str] = set()
+    for path in sorted(header_dir.glob("*.h")):
+        text = strip_comments_and_literals(path.read_text(encoding="utf-8", errors="replace"))
+        declared.update(match.group(1) for match in _OPAQUE_TYPEDEF.finditer(text))
+        defined.update(match.group(1) for match in _CLOSING_TAG.finditer(text))
+        defined.update(match.group(1) for match in _NAMED_STRUCT_BODY.finditer(text))
+    return frozenset(declared - defined)
 
 
 _DEFINE = re.compile(r"^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)", re.MULTILINE)
@@ -487,12 +533,14 @@ class ScanResult:
     unanalysable: list[str]
     resolved: int = 0
     in_place: int = 0
+    receivers: int = 0
 
 
 def scan_entry_point(
     entry: EntryPoint,
     success_only: set[tuple[str, str]],
     return_macros: frozenset[str] = frozenset(),
+    opaque: frozenset[str] = frozenset(),
 ) -> ScanResult:
     """Classify every out-parameter candidate of one entry point."""
     result = ScanResult(findings=[], unanalysable=[])
@@ -508,6 +556,9 @@ def scan_entry_point(
     ]
     for param in entry.parameters:
         if not param.is_out_candidate:
+            continue
+        if param.is_receiver_handle(opaque):
+            result.receivers += 1
             continue
         if (entry.name, param.name) in success_only:
             continue
@@ -571,6 +622,25 @@ def scan_entry_point(
     return result
 
 
+# A ``@param`` body runs to the next block command, not to the next ``@``: an
+# inline ``@p`` reference is part of the prose, and splitting on it truncates
+# the body before the sentence that carries the contract.
+_BLOCK_COMMAND = re.compile(
+    r"@(?:param|return|retval|brief|details|note|see|warning|throws|pre|post)\b"
+)
+_PARAM_TAG = re.compile(r"@param(?:\s*\[[^\]]*\])?\s+(\w+)")
+
+
+def _param_bodies(doc: str) -> list[tuple[str, str]]:
+    """Each ``@param`` name paired with its prose, inline ``@p`` refs included."""
+    found: list[tuple[str, str]] = []
+    for match in _PARAM_TAG.finditer(doc):
+        rest = doc[match.end() :]
+        stop = _BLOCK_COMMAND.search(rest)
+        found.append((match.group(1), rest[: stop.start()] if stop else rest))
+    return found
+
+
 def success_only_parameters(header_dir: Path) -> set[tuple[str, str]]:
     """``(function, parameter)`` pairs the public headers declare success-only."""
     declared: set[tuple[str, str]] = set()
@@ -581,9 +651,9 @@ def success_only_parameters(header_dir: Path) -> set[tuple[str, str]]:
             doc = _doc_block_before(text, match.start())
             if not doc:
                 continue
-            for param_match in re.finditer(r"@param\s+(\w+)([^@]*)", doc):
-                if _SUCCESS_ONLY.search(param_match.group(2)):
-                    declared.add((name, param_match.group(1)))
+            for param_name, body in _param_bodies(doc):
+                if _SUCCESS_ONLY.search(body):
+                    declared.add((name, param_name))
     return declared
 
 
@@ -618,11 +688,13 @@ class Report:
     entry_points: int
     resolved: int
     in_place: int
+    receivers: int = 0
 
 
 def audit(source_dir: Path, header_dir: Path) -> Report:
     """Scan every translation unit under ``source_dir``."""
     success_only = success_only_parameters(header_dir) if header_dir.is_dir() else set()
+    opaque = opaque_handle_types(header_dir) if header_dir.is_dir() else frozenset()
     return_macros = frozenset(
         unconditional_return_macros(
             sorted(source_dir.glob("*.h")) + sorted(header_dir.glob("*.h"))
@@ -635,11 +707,12 @@ def audit(source_dir: Path, header_dir: Path) -> Report:
         text = path.read_text(encoding="utf-8", errors="replace")
         for entry in parse_entry_points(path, text):
             report.entry_points += 1
-            result = scan_entry_point(entry, success_only, return_macros)
+            result = scan_entry_point(entry, success_only, return_macros, opaque)
             report.findings.extend(result.findings)
             report.unanalysable.extend(result.unanalysable)
             report.resolved += result.resolved
             report.in_place += result.in_place
+            report.receivers += result.receivers
     report.findings.sort(key=lambda f: (f.kind, f.file, f.return_line, f.parameter))
     report.unanalysable.sort()
     return report
@@ -673,6 +746,7 @@ def main() -> int:
                     "entry_points": report.entry_points,
                     "resolved_out_parameters": report.resolved,
                     "mutated_in_place": report.in_place,
+                    "receiver_handles": report.receivers,
                     "unanalysable": report.unanalysable,
                     "findings": [f.__dict__ for f in report.findings],
                 },
@@ -683,6 +757,7 @@ def main() -> int:
         print(f"entry points scanned: {report.entry_points}")
         print(f"  out-parameters with a resolvable first write: {report.resolved}")
         print(f"  pointers read before written, so mutated in place: {report.in_place}")
+        print(f"  opaque handles the caller passes in, not slots it receives: {report.receivers}")
         print(f"  out-parameters written only through a call: {len(report.unanalysable)}")
         print(f"  returns preceding a first write: {len(report.findings)}")
         if report.findings and not args.quiet_findings:

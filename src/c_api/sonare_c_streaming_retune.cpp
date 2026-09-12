@@ -132,6 +132,9 @@ SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, fl
 SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune, float* out_semitones,
                                            float* out_mix, int* out_grain_size) {
   SONARE_C_API_ENTRY;
+  if (out_semitones) *out_semitones = 0.0f;
+  if (out_mix) *out_mix = 0.0f;
+  if (out_grain_size) *out_grain_size = 0;
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
   const StreamingRetuneConfig& config = retune->retune->config();
   if (out_semitones) *out_semitones = config.semitones;

@@ -430,6 +430,7 @@ SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine
                                                     int interval_frames, unsigned int band_count,
                                                     unsigned int* out_band_count) {
   SONARE_C_API_ENTRY;
+  if (out_band_count) *out_band_count = 0;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_MIXING)
   SONARE_C_TRY

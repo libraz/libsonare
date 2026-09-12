@@ -72,10 +72,8 @@ SonareError sonare_mastering_apply_processor(const char* processor_name, const f
   if (!out || !processor_name || processor_name[0] == '\0') {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
   out->samples = nullptr;
   out->length = 0;
   out->sample_rate = sample_rate;
@@ -84,6 +82,10 @@ SonareError sonare_mastering_apply_processor(const char* processor_name, const f
   out->applied_gain_db = 0.0f;
   out->latency_samples = 0;
   out->loudness_target_limited = 0;
+
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_processor(
@@ -103,12 +105,8 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   if (!out || !processor_name || processor_name[0] == '\0') {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
   out->left = nullptr;
   out->right = nullptr;
   out->length = 0;
@@ -118,6 +116,12 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   out->applied_gain_db = 0.0f;
   out->latency_samples = 0;
   out->loudness_target_limited = 0;
+
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_processor_stereo(
@@ -302,11 +306,8 @@ SonareError sonare_mastering_apply_pair_processor_ex(
   if (!out || !processor_name || processor_name[0] == '\0') {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SonareError err = validate_audio_params(source, source_length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(reference, reference_length, sample_rate);
-  if (err != SONARE_OK) return err;
-  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
   out->samples = nullptr;
   out->length = 0;
   out->sample_rate = sample_rate;
@@ -315,6 +316,12 @@ SonareError sonare_mastering_apply_pair_processor_ex(
   out->applied_gain_db = 0.0f;
   out->latency_samples = 0;
   out->loudness_target_limited = 0;
+
+  SonareError err = validate_audio_params(source, source_length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(reference, reference_length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_pair_processor(
@@ -342,12 +349,12 @@ SonareError sonare_mastering_analyze_pair_ex(const char* analysis_name, const fl
                                              char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out || !analysis_name) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
   SonareError err = validate_audio_params(source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params(reference, reference_length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
   SONARE_C_TRY
   auto json = sonare::mastering::api::analyze_named_pair(
       analysis_name, source, reference, source_length, reference_length, sample_rate,
@@ -372,12 +379,12 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
                                             char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out || !analysis_name) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
   SonareError err = validate_audio_params(left, length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params(right, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  *json_out = nullptr;
   SONARE_C_TRY
   auto json = sonare::mastering::api::analyze_named_stereo(
       analysis_name, left, right, length, sample_rate, to_params(params, param_count));

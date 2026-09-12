@@ -623,6 +623,8 @@ SonareError sonare_resample(const float* samples, size_t length, int src_sr, int
                             float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   if (src_sr < kMinSampleRate || src_sr > kMaxSampleRate || target_sr < kMinSampleRate ||
       target_sr > kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -630,8 +632,6 @@ SonareError sonare_resample(const float* samples, size_t length, int src_sr, int
   // Follow the C-array convention used by the sibling offline APIs: an empty
   // span is valid even when its data pointer is null and returns (NULL, 0).
   if (length == 0) {
-    *out = nullptr;
-    *out_length = 0;
     return SONARE_OK;
   }
   SonareError err = validate_audio_params(samples, length, src_sr);

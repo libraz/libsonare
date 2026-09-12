@@ -294,9 +294,14 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
                                    float** out_w, size_t* out_w_length, float** out_h,
                                    size_t* out_h_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_component_count || !out_component_length) return SONARE_ERROR_INVALID_PARAMETER;
-  if ((out_w != nullptr) != (out_w_length != nullptr)) return SONARE_ERROR_INVALID_PARAMETER;
-  if ((out_h != nullptr) != (out_h_length != nullptr)) return SONARE_ERROR_INVALID_PARAMETER;
+  // One guard for every output, so no rejection leaves a caller-supplied slot
+  // undefined: an optional pointer given without its length has nowhere to write
+  // the length, and is refused before anything is touched.
+  if (!out || !out_component_count || !out_component_length ||
+      ((out_w != nullptr) != (out_w_length != nullptr)) ||
+      ((out_h != nullptr) != (out_h_length != nullptr))) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   *out = nullptr;
   *out_component_count = 0;
   *out_component_length = 0;

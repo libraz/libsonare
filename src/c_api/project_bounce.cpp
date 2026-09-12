@@ -377,6 +377,8 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
   SONARE_C_CATCH
 #else
+  if (out_interleaved) *out_interleaved = {};
+  if (out_len) *out_len = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
                               out_len);
 #endif
@@ -415,6 +417,8 @@ SonareError sonare_project_bounce_with_builtin_instruments(
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
   SONARE_C_CATCH
 #else
+  if (out_interleaved) *out_interleaved = {};
+  if (out_len) *out_len = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
                               out_len);
 #endif
@@ -458,6 +462,8 @@ SonareError sonare_project_bounce_with_synth_instruments(
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
   SONARE_C_CATCH
 #else
+  if (out_interleaved) *out_interleaved = {};
+  if (out_len) *out_len = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
                               out_len);
 #endif
@@ -497,6 +503,8 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
   SONARE_C_CATCH
 #else
+  if (out_interleaved) *out_interleaved = {};
+  if (out_len) *out_len = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
                               out_len);
 #endif

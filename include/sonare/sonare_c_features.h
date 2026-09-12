@@ -13,39 +13,48 @@ extern "C" {
 // Detailed analysis primitives
 // ============================================================================
 
+/// @param out Receives heap-owned arrays; free with sonare_free_bpm_analysis_result.
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_acoustic_result.
 SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
                                             int n_octave_bands, SonareAcousticResult* out);
 /// @brief Analyzes an impulse response with an explicit decay-fit range.
 /// @details @p min_decay_db must be finite and positive.  The legacy
 ///          sonare_analyze_impulse_response entry point delegates here with
 ///          the library default of 30 dB.
+/// @param out Receives heap-owned arrays; free with sonare_free_acoustic_result.
 SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t length, int sample_rate,
                                                int n_octave_bands, float min_decay_db,
                                                SonareAcousticResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_acoustic_result.
 SonareError sonare_detect_acoustic(const float* samples, size_t length, int sample_rate,
                                    int n_octave_bands, int n_third_octave_subbands,
                                    float min_decay_db, float noise_floor_margin_db,
                                    SonareAcousticResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_rhythm_result.
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length, SonareRhythmResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_dynamics_result.
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
                                     float window_sec, int hop_length, float compression_threshold,
                                     SonareDynamicsResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_timbre_result.
 SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
                                   int hop_length, int n_mels, int n_mfcc, float window_sec,
                                   SonareTimbreResult* out);
 /// @brief Detects a continuous chord/N.C. timeline.
 /// @details Final correlations below @p threshold (which must be in [0, 1])
 ///   produce @c SONARE_CHORD_UNKNOWN segments instead of a guessed chord.
+/// @param out Receives heap-owned arrays; free with sonare_free_chord_analysis_result.
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
                                  float min_duration, float smoothing_window, float threshold,
                                  int use_triads_only, int n_fft, int hop_length, int use_beat_sync,
                                  SonareChordAnalysisResult* out);
 /// @brief Extended chord detection with the same UNKNOWN/N.C. threshold contract.
+/// @param out Receives heap-owned arrays; free with sonare_free_chord_analysis_result.
 SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
                                     const SonareChordDetectionOptions* options,
                                     SonareChordAnalysisResult* out);
@@ -63,6 +72,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
                                              SonarePitchClass key_root, SonareMode key_mode,
                                              SonareStringArray* out);
 /// @brief Detects song-structure sections (intro/verse/chorus/...).
+/// @param out Receives heap-owned arrays; free with sonare_free_section_result.
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
                                     int hop_length, float min_section_sec,
                                     SonareSectionResult* out);
@@ -77,6 +87,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
 ///   with @c SONARE_ERROR_INVALID_PARAMETER. 0.1 is the library default and
 ///   librosa's. Lower accepts only strongly periodic frames, raising the
 ///   unvoiced count; higher admits noisier ones.
+/// @param out Receives heap-owned arrays; free with sonare_free_melody_result.
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
                                   float fmax, int frame_length, int hop_length, float threshold,
                                   SonareMelodyResult* out);
@@ -95,6 +106,7 @@ SonareError sonare_analyze_melody(const float* samples, size_t length, int sampl
 ///   so frame i is centered at i*hop_length (matches librosa.pyin(center=True));
 ///   zero left-aligns. Ignored when use_pyin is 0 (plain YIN is always
 ///   left-aligned).
+/// @param out Receives heap-owned arrays; free with sonare_free_melody_result.
 SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sample_rate,
                                      float fmin, float fmax, int frame_length, int hop_length,
                                      float threshold, int use_pyin, int center,
@@ -192,6 +204,7 @@ SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_len
 // Features - Spectrogram
 // ============================================================================
 
+/// @param out Receives heap-owned arrays; free with sonare_free_stft_result.
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, SonareStftResult* out);
 /// @note Free @p out_db with @ref sonare_free_floats.
@@ -202,8 +215,10 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
 // Features - Mel
 // ============================================================================
 
+/// @param out Receives heap-owned arrays; free with sonare_free_mel_result.
 SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
                                    int hop_length, int n_mels, SonareMelResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_mfcc_result.
 SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out);
 
@@ -212,6 +227,7 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
 /// @param fmin Minimum Mel frequency in Hz (0.0 keeps the librosa default).
 /// @param fmax Maximum Mel frequency in Hz (0.0 = sr/2).
 /// @param htk Non-zero to use the HTK Mel formula instead of Slaney.
+/// @param out Receives heap-owned arrays; free with sonare_free_mel_result.
 SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int sample_rate,
                                       int n_fft, int hop_length, int n_mels, float fmin, float fmax,
                                       int htk, SonareMelResult* out);
@@ -220,6 +236,7 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
 ///   default). NOTE: the inverse entry points (sonare_mfcc_to_mel /
 ///   sonare_mfcc_to_audio) do not undo liftering, so inverse reconstruction of a
 ///   liftered MFCC is only exact for lifter == 0.
+/// @param out Receives heap-owned arrays; free with sonare_free_mfcc_result.
 SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
                            int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
                            float lifter, SonareMfccResult* out);
@@ -422,11 +439,14 @@ void sonare_free_inverse_result(SonareInverseResult* result);
 ///   tuning argument; sharp/flat (non-A440) recordings smear across pitch classes
 ///   accordingly. Estimate tuning separately via @ref sonare_estimate_tuning if a
 ///   non-A440 reference matters for downstream key/chord detection.
+/// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);
 /// @brief Extended CENS chromagram with configurable CQT resolution.
+/// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sample_rate,
                                   int hop_length, int n_chroma, int bins_per_octave,
                                   SonareChromaResult* out);
@@ -434,13 +454,16 @@ SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sampl
 /// @details Fixed tuning of 0 (concert A440); no auto-tuning estimation, matching
 ///   the other chroma entry points. Use @ref sonare_estimate_tuning separately if
 ///   a non-A440 reference matters.
+/// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out);
 /// @brief Extended Constant-Q chromagram with configurable bins per octave.
 /// @details @p bins_per_octave must be a positive multiple of @p n_chroma.
+/// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample_rate,
                                  int hop_length, int n_chroma, int bins_per_octave,
                                  SonareChromaResult* out);
+/// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);
 
@@ -596,21 +619,28 @@ typedef struct SonareSegmentIndices {
 
 /// @brief Cross-similarity of column-feature matrices. `metric` is `cosine` or
 /// `euclidean`; `mode` is `connectivity` or `affinity`.
+/// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_cross_similarity(const float* x, int x_rows, int x_cols, const float* y,
                                             int y_rows, int y_cols, int k, const char* metric,
                                             const char* mode, SonareSegmentMatrix* out);
+/// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int cols, int k,
                                              int width, int sym, const char* metric,
                                              const char* mode, SonareSegmentMatrix* out);
+/// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int pad,
                                              SonareSegmentMatrix* out);
+/// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_lag_to_recurrence(const float* lag, int n_rows, int n_lags,
                                              SonareSegmentMatrix* out);
+/// @param out Receives a heap-owned index vector; free with sonare_free_segment_indices.
 SonareError sonare_segment_subsegment(const float* data, int rows, int cols, const int* boundaries,
                                       size_t boundary_count, int n_segments,
                                       SonareSegmentIndices* out);
+/// @param out Receives a heap-owned index vector; free with sonare_free_segment_indices.
 SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, int k,
                                          const char* linkage, SonareSegmentIndices* out);
+/// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_path_enhance(const float* recurrence, int n, int win, int max_ratio,
                                         int min_ratio, int n_filters, SonareSegmentMatrix* out);
 void sonare_free_segment_matrix(SonareSegmentMatrix* result);
@@ -631,6 +661,7 @@ void sonare_free_segment_indices(SonareSegmentIndices* result);
 ///   against the caller's own data. Must be within (0, 1]; anything else is
 ///   rejected with @c SONARE_ERROR_INVALID_PARAMETER. 0.1 is the library
 ///   default and librosa's.
+/// @param out Receives heap-owned arrays; free with sonare_free_pitch_result.
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
                              int hop_length, float fmin, float fmax, float threshold, int fill_na,
                              SonarePitchResult* out);
@@ -670,6 +701,7 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 ///          @ref sonare_pitch_correct_timevarying does not scale its correction
 ///          by it; it uses it only to derive voicing when no explicit @c voiced
 ///          array is supplied.
+/// @param out Receives heap-owned arrays; free with sonare_free_pitch_result.
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float fmin, float fmax,
                               float threshold, int fill_na, SonarePitchResult* out);

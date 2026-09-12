@@ -61,10 +61,8 @@ SonareError sonare_master_audio(const char* preset_name, const float* samples, s
                                 size_t override_count, SonareMasteringChainResult* out) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
   out->samples = nullptr;
   out->length = 0;
   out->sample_rate = sample_rate;
@@ -74,6 +72,10 @@ SonareError sonare_master_audio(const char* preset_name, const float* samples, s
   out->stages = nullptr;
   out->stages_count = 0;
   zero_chain_metrics(out);
+
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -91,14 +93,8 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
                                        SonareMasteringChainStereoResult* out) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  // Match the mono paths: reject non-finite samples and out-of-range
-  // sample_rate/length, not just null pointers.
-  SonareError verr = validate_audio_params(left, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  verr = validate_audio_params(right, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
   out->left = nullptr;
   out->right = nullptr;
   out->length = 0;
@@ -109,6 +105,14 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
   out->stages = nullptr;
   out->stages_count = 0;
   zero_chain_metrics(out);
+
+  // Match the mono paths: reject non-finite samples and out-of-range
+  // sample_rate/length, not just null pointers.
+  SonareError verr = validate_audio_params(left, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  verr = validate_audio_params(right, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -127,10 +131,8 @@ SonareError sonare_master_audio_with_progress_ex(
     SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
   out->samples = nullptr;
   out->length = 0;
   out->sample_rate = sample_rate;
@@ -140,6 +142,10 @@ SonareError sonare_master_audio_with_progress_ex(
   out->stages = nullptr;
   out->stages_count = 0;
   zero_chain_metrics(out);
+
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -176,14 +182,8 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
     SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  // Match the mono paths: reject non-finite samples and out-of-range
-  // sample_rate/length, not just null pointers.
-  SonareError verr = validate_audio_params(left, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  verr = validate_audio_params(right, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
-
+  // Define the result before any validation return, so a rejected call hands
+  // back a defined struct rather than the caller's untouched stack slot.
   out->left = nullptr;
   out->right = nullptr;
   out->length = 0;
@@ -194,6 +194,14 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
   out->stages = nullptr;
   out->stages_count = 0;
   zero_chain_metrics(out);
+
+  // Match the mono paths: reject non-finite samples and out-of-range
+  // sample_rate/length, not just null pointers.
+  SonareError verr = validate_audio_params(left, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  verr = validate_audio_params(right, length, sample_rate);
+  if (verr != SONARE_OK) return verr;
+  if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);

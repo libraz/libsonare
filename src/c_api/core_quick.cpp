@@ -60,6 +60,7 @@ SonareError sonare_detect_key_with_extended_options(
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key) {
   SONARE_C_API_ENTRY;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_key = {};
   if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) || high_pass_hz < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -298,11 +299,11 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
   if (out_json == nullptr || options == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  *out_json = nullptr;
   if (options->meter_candidate_numerator_count < 0 ||
       options->meter_candidate_numerator_count > SONARE_MAX_METER_CANDIDATE_NUMERATORS) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out_json = nullptr;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     MusicAnalyzerConfig config;

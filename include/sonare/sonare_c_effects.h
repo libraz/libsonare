@@ -13,6 +13,8 @@ extern "C" {
 // Effects
 // ============================================================================
 
+/// @param out Receives heap-owned harmonic/percussive buffers; free with
+///   sonare_free_hpss_result.
 SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
                         int kernel_percussive, SonareHpssResult* out);
 /// @brief Configurable HPSS wrapper.
@@ -688,109 +690,8 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
                                          const char* preset, int channels, float** out,
                                          size_t* out_length);
 
-/// @brief Flat POD mirror of @c editing::voice_changer::RealtimeVoiceChangerConfig
-///        for C callers that want to avoid the JSON round-trip.
-/// @details Field ordering follows the nested C++ struct (top-level →
-///          retune → formant → eq → gate → compressor → deesser → reverb →
-///          limiter). Values pass through @c normalize_realtime_voice_changer_config
-///          before being applied, so out-of-range entries are clamped rather than
-///          rejected (matching the JSON entry point).
-typedef struct {
-  float input_gain_db;
-  float output_gain_db;
-  float wet_mix;
-
-  float retune_semitones;
-  float retune_mix;
-  int retune_grain_size;
-
-  float formant_factor;
-  float formant_amount;
-  float formant_body;
-  float formant_brightness;
-  float formant_nasal;
-
-  float eq_highpass_hz;
-  float eq_body_db;
-  float eq_presence_db;
-  float eq_air_db;
-
-  float gate_threshold_db;
-  float gate_attack_ms;
-  float gate_release_ms;
-  float gate_range_db;
-
-  float compressor_threshold_db;
-  float compressor_ratio;
-  float compressor_attack_ms;
-  float compressor_release_ms;
-  float compressor_makeup_gain_db;
-
-  float deesser_frequency_hz;
-  float deesser_threshold_db;
-  float deesser_ratio;
-  float deesser_range_db;
-
-  float reverb_mix;
-  float reverb_time_ms;
-  float reverb_damping;
-  int reverb_seed;
-
-  float limiter_ceiling_db;
-  float limiter_release_ms;
-
-  /// @brief Enables the optional 4x-oversampled inter-sample peak (true-peak)
-  ///        limiter as the final output stage (non-zero = enabled). Mirrors
-  ///        editing::voice_changer::LimiterConfig::enable_isp_limiter. Defaults
-  ///        to 1 (enabled).
-  int limiter_enable_isp_limiter;
-  /// @brief True-peak ceiling in dBTP applied by the ISP limiter when
-  ///        @ref limiter_enable_isp_limiter is non-zero. Mirrors
-  ///        editing::voice_changer::LimiterConfig::isp_ceiling_dbtp. Defaults to
-  ///        -1.0 dBTP.
-  float limiter_isp_ceiling_dbtp;
-} SonareRealtimeVoiceChangerConfig;
-
-// Verify the POD struct layout is stable. The ABI version constant
-// SONARE_VOICE_CHANGER_ABI_VERSION below MUST be bumped whenever this size
-// or any field offset changes. Bindings that rely on POD memcpy across the
-// FFI boundary (Rust FFI, raw C ABI consumers) read this size at compile
-// time and detect ABI drift before a single byte is exchanged.
-//
-// Layout: 33 float fields + 3 int fields, every member is 4 bytes and
-// 4-byte aligned -> no struct padding on any target we ship. Exact equality
-// (not >=) so silent padding insertion fails the check too.
-#ifdef __cplusplus
-static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 36u * sizeof(float),
-              "SonareRealtimeVoiceChangerConfig unexpected size");
-#endif
-
-#include "sonare_c_voice_changer.h"
-
-/// @brief Compile-time mirror of the runtime ABI version returned by
-///        @ref sonare_voice_changer_abi_version. Bindings can `static_assert` /
-///        `assertEqual` the runtime value against this at attach time.
-#define SONARE_VOICE_CHANGER_ABI_VERSION 2u
-
-/// @brief Returns the runtime ABI version of the
-///        @ref SonareRealtimeVoiceChangerConfig POD layout.
-/// @details Bindings that pass the POD struct across the C ABI (Rust, raw C
-///          consumers) call this at attach time and compare against their
-///          compile-time expectation; a mismatch means the host libsonare was
-///          built against a different struct layout and the POD path would
-///          corrupt memory. JSON-based bindings (Node/Python via
-///          @ref sonare_realtime_voice_changer_create_json) are tolerant of
-///          layout drift and do not need to gate on this.
-///
-///          Distinct from @ref sonare_engine_abi_version (which tracks the
-///          realtime command queue layout) so that voice-changer-only
-///          consumers can pin a narrower compatibility envelope.
-///
-///          Always equals @ref SONARE_VOICE_CHANGER_ABI_VERSION at the time
-///          libsonare was built.
-uint32_t sonare_voice_changer_abi_version(void);
-
 #include "sonare_c_engine.h"
+#include "sonare_c_voice_changer.h"
 
 /// @brief Peak-normalize mono audio. @p target_db must be finite and <= 0 dBFS;
 /// positive targets are rejected rather than hard-clipped.

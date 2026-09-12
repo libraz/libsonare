@@ -501,6 +501,7 @@ SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 ///   because a chunked render would re-prime on every chunk; a host driving it
 ///   directly primes once itself (a process() block plus
 ///   sonare_engine_settle_parameters).
+/// @param out Receives a heap-owned interleaved buffer; free with sonare_free_bounce_result.
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out);

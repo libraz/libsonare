@@ -174,13 +174,16 @@ typedef struct {
   SonareMasteringReport report;
 } SonareMasteringChainStereoResult;
 
+/// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out);
+/// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_processor(const char* processor_name, const float* samples,
                                              size_t length, int sample_rate,
                                              const SonareMasteringParam* params, size_t param_count,
                                              SonareMasteringResult* out);
+/// @param out Receives heap-owned buffers; free with sonare_free_mastering_stereo_result.
 SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, const float* left,
                                                     const float* right, size_t length,
                                                     int sample_rate,
@@ -204,6 +207,8 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
                                           SonareMasteringChainStereoResult* out);
 
 /// @brief Same as sonare_mastering_chain but reports per-stage progress.
+/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
+///   call: the callback runs on the calling thread and nothing is stored once it returns.
 SonareError sonare_mastering_chain_with_progress(const float* samples, size_t length,
                                                  int sample_rate,
                                                  const SonareMasteringParam* params,
@@ -214,12 +219,17 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
 /// @brief Cancellation-capable equivalent of @ref sonare_mastering_chain_with_progress.
 /// @details When @p cancel_cb returns nonzero after a progress report, returns
 ///          @c SONARE_ERROR_CANCELLED and leaves @p out without allocated output buffers.
+/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
+///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
+///   calling thread and nothing is stored once it returns.
 SonareError sonare_mastering_chain_with_progress_ex(
     const float* samples, size_t length, int sample_rate, const SonareMasteringParam* params,
     size_t param_count, SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 /// @brief Same as sonare_mastering_chain_stereo but reports per-stage progress.
+/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
+///   call: the callback runs on the calling thread and nothing is stored once it returns.
 SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const float* right,
                                                         size_t length, int sample_rate,
                                                         const SonareMasteringParam* params,
@@ -231,6 +241,9 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
 /// @brief Cancellation-capable equivalent of
 ///        @ref sonare_mastering_chain_stereo_with_progress.
 /// @details On cancellation, @p out has no allocated output buffers.
+/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
+///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
+///   calling thread and nothing is stored once it returns.
 SonareError sonare_mastering_chain_stereo_with_progress_ex(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* params, size_t param_count,
@@ -242,7 +255,7 @@ SonareError sonare_mastering_chain_stereo_with_progress_ex(
 ///   valid for the calling thread's lifetime (and stays valid across later API
 ///   calls on that thread, unlike @ref sonare_mastering_insert_param_names). Do
 ///   NOT cache it across threads or use it after the producing thread exits, and
-///   do NOT free it.
+///   do NOT free it. Returns NULL if the name table cannot be built.
 const char* sonare_mastering_preset_names(void);
 
 /// @brief Apply a preset chain to mono audio.
@@ -260,6 +273,8 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
                                        SonareMasteringChainStereoResult* out);
 
 /// @brief Same as sonare_master_audio but reports per-stage progress.
+/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
+///   call: the callback runs on the calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_with_progress(const char* preset_name, const float* samples,
                                               size_t length, int sample_rate,
                                               const SonareMasteringParam* overrides,
@@ -269,6 +284,9 @@ SonareError sonare_master_audio_with_progress(const char* preset_name, const flo
 
 /// @brief Cancellation-capable equivalent of @ref sonare_master_audio_with_progress.
 /// @details On cancellation, @p out has no allocated output buffers.
+/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
+///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
+///   calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_with_progress_ex(
     const char* preset_name, const float* samples, size_t length, int sample_rate,
     const SonareMasteringParam* overrides, size_t override_count,
@@ -276,6 +294,8 @@ SonareError sonare_master_audio_with_progress_ex(
     SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 /// @brief Same as sonare_master_audio_stereo but reports per-stage progress.
+/// @param user_data Passed back to @p callback unchanged. Neither pointer is retained past this
+///   call: the callback runs on the calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_stereo_with_progress(
     const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* overrides, size_t override_count,
@@ -285,6 +305,9 @@ SonareError sonare_master_audio_stereo_with_progress(
 /// @brief Cancellation-capable equivalent of
 ///        @ref sonare_master_audio_stereo_with_progress.
 /// @details On cancellation, @p out has no allocated output buffers.
+/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
+///   @p cancel_cb. No callback or user pointer is retained past this call: both run on the
+///   calling thread and nothing is stored once it returns.
 SonareError sonare_master_audio_stereo_with_progress_ex(
     const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* overrides, size_t override_count,
@@ -302,16 +325,22 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
 ///          call and are valid only until the next call on the same thread.
 const char* sonare_mastering_processor_names(void);
 /// @brief The pair (L/R) processor ids, separated by '\n'.
-/// @details Same storage and lifetime contract as
-///          @ref sonare_mastering_processor_names.
+/// @details Backed by thread-local storage built once on first use; the pointer is valid for the
+///          calling thread's lifetime and stays valid across later API calls on that thread. Do NOT
+///          cache it across threads, use it after the producing thread exits, or free it. Returns
+///          NULL if the name table cannot be built.
 const char* sonare_mastering_pair_processor_names(void);
 /// @brief The pair analysis ids, separated by '\n'.
-/// @details Same storage and lifetime contract as
-///          @ref sonare_mastering_processor_names.
+/// @details Backed by thread-local storage built once on first use; the pointer is valid for the
+///          calling thread's lifetime and stays valid across later API calls on that thread. Do NOT
+///          cache it across threads, use it after the producing thread exits, or free it. Returns
+///          NULL if the name table cannot be built.
 const char* sonare_mastering_pair_analysis_names(void);
 /// @brief The stereo analysis ids, separated by '\n'.
-/// @details Same storage and lifetime contract as
-///          @ref sonare_mastering_processor_names.
+/// @details Backed by thread-local storage built once on first use; the pointer is valid for the
+///          calling thread's lifetime and stays valid across later API calls on that thread. Do NOT
+///          cache it across threads, use it after the producing thread exits, or free it. Returns
+///          NULL if the name table cannot be built.
 const char* sonare_mastering_stereo_analysis_names(void);
 
 /// @brief Machine-readable classification catalog for every named processor id.
@@ -344,6 +373,7 @@ const char* sonare_mastering_processor_catalog(void);
 ///   values as @ref sonare_capabilities_json. Parameter metadata follows @ref
 ///   sonare_mastering_insert_param_info. Backed by thread-local storage and
 ///   valid until the next call on the same thread. Do NOT free the pointer.
+///   Returns NULL if the catalog cannot be built.
 const char* sonare_capability_catalog_json(void);
 
 /// @brief Returns the channel-strip insert / FX processor names that
@@ -355,7 +385,8 @@ const char* sonare_capability_catalog_json(void);
 ///          valid for the calling thread's lifetime and stays valid across later
 ///          API calls on that thread. Do NOT cache it across threads or use it
 ///          after the producing thread exits, and do NOT free it (mirrors
-///          @ref sonare_mastering_processor_names).
+///          @ref sonare_mastering_processor_names). Returns NULL if the name
+///          table cannot be built.
 const char* sonare_mastering_insert_names(void);
 
 /// @brief Returns the camelCase parameter names a given insert / FX processor
@@ -368,7 +399,7 @@ const char* sonare_mastering_insert_names(void);
 ///   `band{i}.<field>` keys. Unlike @ref sonare_mastering_insert_names (which
 ///   stays valid across later API calls on the calling thread), this pointer is
 ///   thread-local valid only until the next API call on the same thread; the
-///   caller must NOT free it.
+///   caller must NOT free it. Returns NULL if the name list cannot be built.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_names(const char* name);
 
@@ -405,6 +436,7 @@ const char* sonare_mastering_insert_param_names(const char* name);
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
 
+/// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
                                                   const float* reference, size_t length,
                                                   int sample_rate,
@@ -416,6 +448,7 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor_name, co
 /// source; the underlying match primitives consume each buffer at its own
 /// length. @ref sonare_mastering_apply_pair_processor delegates here with
 /// reference_length == length.
+/// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_pair_processor_ex(
     const char* processor_name, const float* source, size_t source_length, const float* reference,
     size_t reference_length, int sample_rate, const SonareMasteringParam* params,
@@ -471,9 +504,10 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
 
 /// @brief Returns the delivery-target identifiers the mastering assistant
 ///        accepts, separated by '\n'.
-/// @details These are the values @c targetPlatform selects between. Storage
-///   follows @ref sonare_mastering_preset_names: thread-local, valid for the
-///   calling thread's lifetime, not to be cached across threads or freed.
+/// @details These are the values @c targetPlatform selects between. Backed by thread-local storage
+///   built once on first use: valid for the calling thread's lifetime and across later API calls on
+///   it, not to be cached across threads, used after that thread exits, or freed. Returns NULL if
+///   the name table cannot be built.
 const char* sonare_mastering_platform_names(void);
 
 /// @brief Converts a delivery-target identifier to the index @c targetPlatform
@@ -552,7 +586,9 @@ typedef struct {
 /// @brief Creates a prepared equalizer handle.
 /// @param sample_rate Processing sample rate; must be positive.
 /// @param max_block_size Maximum number of frames accepted by @ref sonare_eq_process.
-/// @return A handle, or NULL when the arguments are invalid or allocation fails.
+/// @return A handle, or NULL when the arguments are invalid or allocation fails. The caller owns
+///   it and must release it with @ref sonare_eq_destroy, which is what invalidates it; no other
+///   call does.
 SonareEq* sonare_eq_create(double sample_rate, int max_block_size);
 /// @brief Destroys an equalizer handle. Accepts NULL.
 void sonare_eq_destroy(SonareEq* eq);

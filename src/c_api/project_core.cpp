@@ -35,6 +35,7 @@ SonareError sonare_project_create(SonareProject** out) {
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(out);
 #endif
 }
@@ -51,9 +52,9 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
                                      size_t* out_len) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_len) *out_len = 0;
   if (!project || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
-  if (out_len) *out_len = 0;
   SONARE_C_TRY
   const std::string json = sonare::serialize::project_to_json(project->history.project(),
                                                               project->history.midi_content());
@@ -62,6 +63,8 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_json) *out_json = {};
+  if (out_len) *out_len = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out_json, out_len);
 #endif
 }
@@ -104,9 +107,9 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
                                        char** out_diag) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_diag) *out_diag = nullptr;
   if (!json || !out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
-  if (out_diag) *out_diag = nullptr;
   if (len > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
     return SONARE_ERROR_INVALID_FORMAT;
   }
@@ -129,6 +132,8 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
+  if (out_diag) *out_diag = {};
   SONARE_C_STUB_NOT_SUPPORTED(json, len, out, out_diag);
 #endif
 }
@@ -148,6 +153,7 @@ SonareError sonare_project_unresolved_audio_source_count(const SonareProject* pr
   *out_count = count;
   return SONARE_OK;
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
 }
@@ -169,6 +175,7 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
   }
   return SONARE_ERROR_INVALID_PARAMETER;
 #else
+  if (out_source_id) *out_source_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out_source_id);
 #endif
 }
@@ -213,6 +220,7 @@ SonareError sonare_project_get_sample_rate(const SonareProject* project, double*
   *out_sample_rate = project->history.project().sample_rate();
   return SONARE_OK;
 #else
+  if (out_sample_rate) *out_sample_rate = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out_sample_rate);
 #endif
 }
@@ -225,6 +233,7 @@ SonareError sonare_project_get_overlap_policy(const SonareProject* project,
   *out_overlap_policy = static_cast<uint32_t>(project->history.project().overlap_policy());
   return SONARE_OK;
 #else
+  if (out_overlap_policy) *out_overlap_policy = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out_overlap_policy);
 #endif
 }
@@ -285,6 +294,7 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   const std::vector<arr::ProjectMarker>& markers = project->history.project().markers();
   if (index >= markers.size()) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::ProjectMarker& m = markers[index];
@@ -300,6 +310,7 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
   out->name[n] = '\0';
   return SONARE_OK;
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }
@@ -309,10 +320,10 @@ SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, 
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   const auto& segments = project->history.project().tempo_segments();
   if (index >= segments.size()) return SONARE_ERROR_INVALID_PARAMETER;
   const sonare::transport::TempoSegment& seg = segments[index];
-  *out = {};
   out->start_ppq = seg.start_ppq;
   out->bpm = seg.bpm;
   // Reported as stored. A project holds musical positions only; the sample
@@ -323,6 +334,7 @@ SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, 
   out->end_bpm = seg.end_bpm;
   return SONARE_OK;
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }
@@ -332,15 +344,16 @@ SonareError sonare_project_time_signature_by_index(const SonareProject* project,
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   const auto& segments = project->history.project().time_signatures();
   if (index >= segments.size()) return SONARE_ERROR_INVALID_PARAMETER;
   const sonare::transport::TimeSignatureSegment& seg = segments[index];
-  *out = {};
   out->start_ppq = seg.start_ppq;
   out->numerator = seg.time_sig.numerator;
   out->denominator = seg.time_sig.denominator;
   return SONARE_OK;
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }
@@ -350,10 +363,10 @@ SonareError sonare_project_track_by_index(const SonareProject* project, size_t i
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   const auto& tracks = project->history.project().tracks();
   if (index >= tracks.size()) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::Track& track = tracks[index];
-  *out = {};
   out->id = track.id;
   out->kind = static_cast<uint32_t>(track.kind);
   out->midi_destination_id = track.midi_destination_id;
@@ -364,6 +377,7 @@ SonareError sonare_project_track_by_index(const SonareProject* project, size_t i
   copy_utf8_prefix(out->name, track.name);
   return SONARE_OK;
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }
@@ -373,10 +387,10 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   const auto& clips = project->history.project().clips();
   if (index >= clips.size()) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::EditClip& clip = clips[index];
-  *out = {};
   out->id = clip.id;
   out->track_id = clip.track_id;
   out->source_id = clip.source_id;
@@ -391,6 +405,7 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
   out->loop_length_ppq = clip.loop_length_ppq;
   return SONARE_OK;
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }
@@ -400,10 +415,10 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   const auto& sources = project->history.project().sources();
   if (index >= sources.size()) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::ClipSource& source = sources[index];
-  *out = {};
   out->kind = static_cast<uint32_t>(arr::source_kind(source));
   if (const auto* audio = std::get_if<arr::AudioSourceRef>(&source)) {
     out->id = audio->id;
@@ -419,6 +434,7 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
   }
   return SONARE_OK;
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }
@@ -470,6 +486,7 @@ SonareError sonare_project_marker_name_by_index(const SonareProject* project, si
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_name) *out_name = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out_name);
 #endif
 }
@@ -506,6 +523,7 @@ SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileR
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out);
 #endif
 }
@@ -522,6 +540,7 @@ SonareError sonare_project_last_bounce_compile_result(const SonareProject* proje
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, out);
 #endif
 }
@@ -604,6 +623,7 @@ SonareError sonare_project_get_assist_sidecar(const SonareProject* project, size
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }

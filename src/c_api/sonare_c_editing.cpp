@@ -82,6 +82,7 @@ SonareError sonare_metering_crest_factor_db_stereo(const float* left, const floa
                                                    size_t length, int sample_rate, float* out_db) {
   SONARE_C_API_ENTRY;
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_db = 0.0f;
   SonareError err = validate_audio_params(left, length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params(right, length, sample_rate);
@@ -112,6 +113,7 @@ SonareError sonare_metering_true_peak_db(const float* samples, size_t length, in
                                          int oversample_factor, float* out_db) {
   SONARE_C_API_ENTRY;
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_db = 0.0f;
   int factor = oversample_factor == 0 ? 4 : oversample_factor;
   if (factor < 1 || factor > 16 || !is_power_of_two(factor)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -214,6 +216,7 @@ SonareError sonare_metering_stereo_correlation(const float* left, const float* r
                                                int sample_rate, float* out_value) {
   SONARE_C_API_ENTRY;
   if (!out_value) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_value = 0.0f;
   SonareError err = validate_stereo_pair(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
@@ -226,6 +229,7 @@ SonareError sonare_metering_stereo_width(const float* left, const float* right, 
                                          int sample_rate, float* out_value) {
   SONARE_C_API_ENTRY;
   if (!out_value) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_value = 0.0f;
   SonareError err = validate_stereo_pair(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
@@ -573,6 +577,7 @@ SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float refer
                                        float midi, float* out_quantized_midi) {
   SONARE_C_API_ENTRY;
   if (!out_quantized_midi) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_quantized_midi = 0.0f;
   if (!editing::pitch_editor::valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -587,6 +592,7 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, floa
                                               float midi, float* out_semitones) {
   SONARE_C_API_ENTRY;
   if (!out_semitones) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_semitones = 0.0f;
   if (!editing::pitch_editor::valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -601,6 +607,7 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
                                              int* out_enabled) {
   SONARE_C_API_ENTRY;
   if (!out_enabled) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_enabled = 0;
   if (pitch_class < 0 || pitch_class > 11) return SONARE_ERROR_INVALID_PARAMETER;
   if (!editing::pitch_editor::valid_scale_args(root, mode_mask)) {
     return SONARE_ERROR_INVALID_PARAMETER;

@@ -99,6 +99,43 @@ class ClassificationTest(unittest.TestCase):
         self.assertEqual(report.findings, [])
         self.assertEqual(report.classified[CHECKER.CLASS_ALLOCATED_OUT], 0)
 
+    def test_a_domain_qualified_release_entry_point_is_not_an_allocator(self) -> None:
+        # The verb sits in the middle of the name, not at either end.
+        report = _audit(
+            "typedef struct {\n  char* text;\n} SonareThingResult;\n"
+            "void sonare_project_free_thing_result(SonareThingResult* result);\n"
+        )
+        self.assertEqual(report.findings, [])
+        self.assertEqual(report.classified[CHECKER.CLASS_ALLOCATED_OUT], 0)
+
+    def test_a_domain_qualified_destroy_counts_as_the_release_call(self) -> None:
+        report = _audit(
+            "/// @brief Creates a thing, or NULL on failure.\n"
+            "/// @details Release it with sonare_thing_destroy.\n"
+            "SonareThing* sonare_thing_create(void);\n"
+        )
+        self.assertEqual(report.findings, [])
+
+    def test_an_array_extent_is_not_a_pointer_member(self) -> None:
+        # `N * 2` inside an extent is arithmetic; the struct owns no pointer.
+        report = _audit(
+            "typedef struct {\n  float points[SONARE_MAX * 2];\n} SonareThingRecord;\n"
+            "/// @brief Fills a caller-owned record.\n"
+            "SonareError sonare_thing(SonareThingRecord* out);\n"
+        )
+        self.assertEqual(report.findings, [])
+        self.assertEqual(report.classified[CHECKER.CLASS_ALLOCATED_OUT], 0)
+
+    def test_a_block_comment_interior_line_belongs_to_the_doc_block(self) -> None:
+        # The release call sits on an interior line that carries no marker.
+        report = _audit(
+            "/* Computes a thing.\n"
+            "   Free @p out with sonare_free_floats.\n"
+            "   Lengths come back in @p n. */\n"
+            "SonareError sonare_thing(const float* in, float** out, size_t* n);\n"
+        )
+        self.assertEqual(report.findings, [])
+
     def test_a_result_struct_contract_may_live_on_the_struct(self) -> None:
         report = _audit(
             "/* Holds the arrays. Free both with sonare_free_thing_result. */\n"

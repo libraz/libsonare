@@ -10,7 +10,8 @@
        voice-readiness voice-status-refresh voice-status-check spec-check \
        spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch \
-       check-c-api-out-param-init check-c-api-pointer-contracts
+       check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
+       check-c-api-type-home
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -420,6 +421,12 @@ conformance:
 	python3 -m unittest tests/conformance/test_bank_versions.py
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
+	python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
+	python3 -m unittest tests/conformance/test_c_api_type_home.py
+	python3 tests/conformance/check_c_api_out_param_init.py --floor 250
+	python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250
+	python3 tests/conformance/check_c_api_header_self_contained.py --floor 20
+	python3 tests/conformance/check_c_api_type_home.py --floor 150
 	python3 -m unittest tests/conformance/test_error_code_mapping.py
 	python3 tools/conformance/test_lint_scope.py
 	python3 tools/parity/test_handle_gating.py
@@ -440,10 +447,9 @@ conformance:
 		echo "conformance: live CLI check skipped (build/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable)"; \
 	fi
 
-# C-ABI contract scans over source text. Both report an open population today,
-# so they are targets rather than `conformance` steps; their self-tests, which
-# include the non-vacuity break each one is calibrated against, run there. Fold
-# a scan into `conformance` when its population reaches zero.
+# C-ABI contract scans, kept as named targets for running one on its own;
+# `conformance` runs all four, plus the self-tests that carry the non-vacuity
+# break each is calibrated against.
 #
 # The floors are the point of the invocation: each scan reports nothing when its
 # pattern stops matching, so the count of declarations it resolves at all is
@@ -453,6 +459,16 @@ check-c-api-out-param-init:
 
 check-c-api-pointer-contracts:
 	python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250
+
+# Compiles each public header as a TU's only include, in C and in C++. No build
+# tree: it drives the compiler on a probe file, so it costs about a second.
+check-c-api-header-self-contained:
+	python3 tests/conformance/check_c_api_header_self_contained.py --floor 20
+
+# Reports a type a surface header defines but none of its own declarations
+# take, while a sibling's do. Text-only, no build tree.
+check-c-api-type-home:
+	python3 tests/conformance/check_c_api_type_home.py --floor 150
 
 # Opt-in GM-program project bounce acceptance across the C, Python, Node, and
 # WASM public surfaces. The check deliberately does not build the bindings: it

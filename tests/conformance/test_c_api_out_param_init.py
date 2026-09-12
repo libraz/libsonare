@@ -264,6 +264,90 @@ class ClassificationTest(unittest.TestCase):
             )
         self.assertEqual(report.findings, [])
 
+    def test_an_inline_reference_does_not_truncate_the_param_body(self) -> None:
+        # `@p` is prose, not a block command: splitting on it would cut the
+        # body before the sentence carrying the contract.
+        with tempfile.TemporaryDirectory() as tmp:
+            header_dir = Path(tmp) / "sonare"
+            header_dir.mkdir(parents=True)
+            (header_dir / "api.h").write_text(
+                "/// @brief Does a thing.\n"
+                "/// @param out Holds up to @p n entries, and is untouched on failure.\n"
+                "SonareError sonare_f(int n, SonareResult* out);\n",
+                encoding="utf-8",
+            )
+            report = _scan(
+                "SonareError sonare_f(int n, SonareResult* out) {\n"
+                "  if (n <= 0) return SONARE_ERROR_INVALID_PARAMETER;\n"
+                "  *out = {};\n"
+                "  return SONARE_OK;\n"
+                "}\n",
+                header_dir=header_dir,
+            )
+        self.assertEqual(report.findings, [])
+
+    def test_an_opaque_handle_is_a_receiver_not_an_out_parameter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            header_dir = Path(tmp) / "sonare"
+            header_dir.mkdir(parents=True)
+            (header_dir / "api.h").write_text(
+                "typedef struct SonareThing SonareThing;\n"
+                "SonareError sonare_thing_load(SonareThing* thing, int n);\n",
+                encoding="utf-8",
+            )
+            report = _scan(
+                "SonareError sonare_thing_load(SonareThing* thing, int n) {\n"
+                "  if (n <= 0) return SONARE_ERROR_INVALID_PARAMETER;\n"
+                "  thing->field = n;\n"
+                "  return SONARE_OK;\n"
+                "}\n",
+                header_dir=header_dir,
+            )
+        self.assertEqual(report.findings, [])
+        self.assertEqual(report.receivers, 1)
+
+    def test_a_handle_out_parameter_stays_in_the_scan(self) -> None:
+        # `SonareThing**` is a slot the caller owns, however opaque the pointee.
+        with tempfile.TemporaryDirectory() as tmp:
+            header_dir = Path(tmp) / "sonare"
+            header_dir.mkdir(parents=True)
+            (header_dir / "api.h").write_text(
+                "typedef struct SonareThing SonareThing;\n"
+                "SonareError sonare_thing_create(int n, SonareThing** out);\n",
+                encoding="utf-8",
+            )
+            report = _scan(
+                "SonareError sonare_thing_create(int n, SonareThing** out) {\n"
+                "  if (n <= 0) return SONARE_ERROR_INVALID_PARAMETER;\n"
+                "  *out = new SonareThing{};\n"
+                "  return SONARE_OK;\n"
+                "}\n",
+                header_dir=header_dir,
+            )
+        self.assertEqual([f.parameter for f in report.findings], ["out"])
+        self.assertEqual(report.receivers, 0)
+
+    def test_a_defined_type_is_not_an_opaque_handle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            header_dir = Path(tmp) / "sonare"
+            header_dir.mkdir(parents=True)
+            (header_dir / "api.h").write_text(
+                "typedef struct SonareThing SonareThing;\n"
+                "struct SonareThing {\n  int field;\n};\n"
+                "SonareError sonare_thing_fill(SonareThing* out, int n);\n",
+                encoding="utf-8",
+            )
+            report = _scan(
+                "SonareError sonare_thing_fill(SonareThing* out, int n) {\n"
+                "  if (n <= 0) return SONARE_ERROR_INVALID_PARAMETER;\n"
+                "  out->field = n;\n"
+                "  return SONARE_OK;\n"
+                "}\n",
+                header_dir=header_dir,
+            )
+        self.assertEqual([f.parameter for f in report.findings], ["out"])
+        self.assertEqual(report.receivers, 0)
+
 
 class TreeTest(unittest.TestCase):
     """The scan against the shipped C-ABI sources."""

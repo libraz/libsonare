@@ -103,6 +103,7 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, candidates, capacity, out_count);
 #endif
 }
@@ -133,6 +134,7 @@ SonareError sonare_project_analyze_tempo_with_options(const SonareProject* proje
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, options, candidates, capacity,
                               out_count);
 #endif
@@ -171,6 +173,7 @@ SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_bpm) *out_bpm = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, options, candidate_index,
                               apply_time_signatures, out_bpm);
 #endif
@@ -204,6 +207,7 @@ SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* au
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_bpm) *out_bpm = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, candidate_index,
                               apply_time_signatures, out_bpm);
 #endif
@@ -237,6 +241,7 @@ SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_ppq) *out_ppq = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, ppq, strength, division, out_ppq);
 #endif
 }

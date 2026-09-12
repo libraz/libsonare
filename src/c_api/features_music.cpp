@@ -56,11 +56,10 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
                                         size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_bands <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-
   *out = nullptr;
   *out_length = 0;
   *out_n_frames = 0;
+  if (n_bands <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
     MelConfig mel_config;
@@ -105,12 +104,11 @@ SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sampl
                                   SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (hop_length <= 0 || n_chroma <= 0 || bins_per_octave <= 0 || bins_per_octave % n_chroma != 0 ||
       bins_per_octave > std::numeric_limits<int>::max() / 7) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     ChromaCensConfig config;
@@ -133,12 +131,11 @@ SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample
                                  SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (hop_length <= 0 || n_chroma <= 0 || bins_per_octave <= 0 || bins_per_octave % n_chroma != 0 ||
       bins_per_octave > std::numeric_limits<int>::max() / 7) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     ChromaCqtConfig config;
@@ -155,9 +152,8 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
                                int n_chroma, SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-
   *out = {};
+  if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     BassChromaConfig config;

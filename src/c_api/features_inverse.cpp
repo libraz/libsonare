@@ -112,11 +112,10 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
                                   SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
   if (!out || !mel) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = {};
 
   SONARE_C_TRY
   MelConfig config;
@@ -141,13 +140,12 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
                                    int n_iter, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length || !mel) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || hop_length <= 0 || sample_rate <= 0 ||
       n_iter <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = nullptr;
-  *out_length = 0;
 
   SONARE_C_TRY
   MelConfig config;
@@ -197,10 +195,9 @@ SonareError sonare_mfcc_to_mel_ex(const float* mfcc, int n_mfcc, int n_frames, i
                                   float lifter, SonareInverseResult* out) {
   SONARE_C_API_ENTRY;
   if (!out || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0 || !std::isfinite(lifter) || lifter < 0.0f)
     return SONARE_ERROR_INVALID_PARAMETER;
-
-  *out = {};
 
   SONARE_C_TRY
   std::vector<float> mel = mfcc_to_mel(mfcc, n_mfcc, n_frames, n_mels, lifter);
@@ -220,13 +217,12 @@ SonareError sonare_mfcc_to_audio_ex2(const float* mfcc, int n_mfcc, int n_frames
                                      size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0 || n_fft <= 0 || hop_length <= 0 ||
       sample_rate <= 0 || n_iter <= 0 || !std::isfinite(lifter) || lifter < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  *out = nullptr;
-  *out_length = 0;
 
   SONARE_C_TRY
   MelConfig config;

@@ -99,6 +99,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
                                           SonareStreamAnalyzer** out) {
   SONARE_C_API_ENTRY;
   if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
   if (config->sample_rate <= 0 || config->n_fft <= 0 || config->hop_length <= 0 ||
       config->hop_length > config->n_fft || config->n_mels <= 0 ||
       config->emit_every_n_frames <= 0 || config->magnitude_downsample <= 0 ||
@@ -114,7 +115,6 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       config->output_format != SONARE_STREAM_OUTPUT_FLOAT32) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out = nullptr;
 
   SONARE_C_TRY
   StreamConfig cfg;

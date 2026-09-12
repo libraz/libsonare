@@ -172,8 +172,8 @@ SonareError sonare_project_bounce_with_builtin_instruments(
 ///        discover valid @ref SonareSynthPatch preset names instead of
 ///        hardcoding magic strings.
 /// @details Pointer is owned by libsonare and remains valid for the program
-///          lifetime; the caller must NOT free it (mirrors
-///          @ref sonare_mastering_insert_names).
+///          lifetime; the caller must NOT free it. Never NULL: a build without
+///          arrangement support returns the empty string.
 const char* sonare_synth_preset_names(void);
 
 typedef enum SONARE_ENUM_BASE {
@@ -191,7 +191,8 @@ typedef enum SONARE_ENUM_BASE {
 /// @brief Returns the canonical names for a @ref SonareSynthPatch enum
 ///        separated by '\n'. Unknown @p kind returns an empty string.
 /// @details Pointer is owned by libsonare and remains valid for the program
-///          lifetime; the caller must NOT free it.
+///          lifetime; the caller must NOT free it. Never NULL: an unknown
+///          @p kind returns the empty string.
 const char* sonare_synth_enum_names(int kind);
 
 /// @brief Converts a built-in oscillator synth waveform name to its C enum value.

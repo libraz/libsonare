@@ -123,6 +123,7 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_track_id) *out_track_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_track_id);
 #endif
 }
@@ -253,6 +254,7 @@ SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_marker_id) *out_marker_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, marker_id, ppq, name, out_marker_id);
 #endif
 }
@@ -287,6 +289,7 @@ SonareError sonare_project_set_marker_ex(SonareProject* project, const SonarePro
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_marker_id) *out_marker_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, marker, out_marker_id);
 #endif
 }
@@ -314,6 +317,7 @@ SonareError sonare_project_set_marker_ex_name(SonareProject* project,
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_marker_id) *out_marker_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, marker, name, out_marker_id);
 #endif
 }
@@ -581,6 +585,7 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_target_param_id) *out_target_param_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, track_id, desc, out_target_param_id);
 #endif
 }
@@ -603,6 +608,7 @@ SonareError sonare_project_add_automation_lane_ex(SonareProject* project, uint32
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_target_param_id) *out_target_param_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, track_id, desc, out_target_param_id);
 #endif
 }

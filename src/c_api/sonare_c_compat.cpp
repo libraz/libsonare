@@ -136,6 +136,8 @@ SonareError sonare_trim_silence(const float* samples, size_t length, float top_d
                                 int* end_sample) {
   SONARE_C_API_ENTRY;
   if (!start_sample || !end_sample) return SONARE_ERROR_INVALID_PARAMETER;
+  *start_sample = 0;
+  *end_sample = 0;
   if (validate_buffer(samples, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   TrimResult result = trim(samples, length, top_db, frame_length, hop_length);
@@ -167,6 +169,7 @@ SonareError sonare_frame_signal(const float* samples, size_t length, int frame_l
                                 int* out_n_frames) {
   SONARE_C_API_ENTRY;
   if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_n_frames = 0;
   if (validate_buffer(samples, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   *out_n_frames = frame_count(length, frame_length, hop_length);
@@ -275,6 +278,7 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
                                        int* out_n_frames) {
   SONARE_C_API_ENTRY;
   if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_n_frames = 0;
   if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   if (mode != SONARE_TEMPOGRAM_AUTOCORRELATION && mode != SONARE_TEMPOGRAM_COSINE) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -307,6 +311,7 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
                                     float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_n_frames = 0;
   if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   TempogramConfig config;
@@ -343,6 +348,7 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
                                      float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
   if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_n_frames = 0;
   if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   TempogramConfig config;
@@ -412,6 +418,7 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
                                     int sample_rate, SonareLufsResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   // Mirror the mono sonare_lufs input contract (validate_audio_params): reject
   // empty audio, out-of-range sample rate, oversized buffers, and non-finite
   // samples so both LUFS entry points share one validation policy.
