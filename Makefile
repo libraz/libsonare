@@ -146,13 +146,25 @@ rebuild: clean build
 # CI, so `make format` can no longer succeed while CI lint would fail. Anything
 # left (e.g. unused imports, an unsafe fix biome will not auto-apply) surfaces in
 # the final `lint` step for manual resolution.
+#
+# Every writing step is fed a tracked file list from git, never a directory. A
+# directory argument cannot tell a file you just wrote from one another worktree
+# is still writing, and a file that exists in no commit is the one write class
+# with nothing to diff against. Format a brand-new file by naming it, or stage it
+# first -- `ls-files` reads the index, so `git add` opts it in. The lists are
+# generated, so a new source tree is picked up without editing this file, and the
+# two binding scripts own their own so `yarn lint:fix` is safe to run directly.
+# `format-check` covers the same files and only reads; point CI and any caller
+# that does not own the worktree at that instead.
+LS_EXISTING = python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))'
+
 format:
-	git ls-files -z --cached --others --exclude-standard -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))' | xargs -0 clang-format -i
+	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | $(LS_EXISTING) | xargs -0 clang-format -i
 	cd bindings/wasm && yarn lint:fix
 	cd bindings/node && yarn lint:fix
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
-	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix .
+	git ls-files -z -- 'bindings/python/src/*.py' 'bindings/python/src/*.pyi' 'bindings/python/tests/*.py' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format
+	git ls-files -z -- '*.py' '*.pyi' '*pyproject.toml' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix
 	$(MAKE) lint
 
 # `test:types` type-checks the Node binding's tests against src (biome does not
@@ -162,9 +174,10 @@ format:
 # Ruff lints the repo rather than a path list. Python lives in ten trees here —
 # the binding, `tools/`, `benchmarks/`, `examples/python/` and four under
 # `tests/` — and a list of them is a hand-maintained index that a new tree drops
-# out of silently; `.` respects .gitignore, so an untracked scratch script is
-# still skipped. `ruff format` deliberately stays on the binding: it would
-# restyle 110 files elsewhere, whose line breaks are hand-set.
+# out of silently. This target only reads, so it takes `.`; the auto-fix side
+# derives the same population from `git ls-files` because it writes. `ruff
+# format` deliberately stays on the binding: it would restyle 110 files
+# elsewhere, whose line breaks are hand-set.
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
