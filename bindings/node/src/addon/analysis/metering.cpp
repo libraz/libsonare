@@ -148,7 +148,7 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   int sr =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
   if (channels <= 0) {
-    Napi::TypeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {

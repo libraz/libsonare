@@ -56,7 +56,9 @@ describe('additive effect and feature options', () => {
     expect(() => hpss({ samples, nFft: 3 })).toThrow(RangeError);
     expect(() => hpss({ samples, hardMask: 'yes' as never })).toThrow(TypeError);
     expect(() => timeStretch(samples, sampleRate, 1, 2048, 0)).toThrow(RangeError);
-    expect(() => nnlsChroma(samples, sampleRate, { hopLength: 1.5 })).toThrow(TypeError);
+    // Fractional but a number: the out-of-domain half of the split, not the
+    // wrong-type half that `hardMask: 'yes'` above stays on.
+    expect(() => nnlsChroma(samples, sampleRate, { hopLength: 1.5 })).toThrow(RangeError);
   });
 
   it('rejects a hop below the half-window overlap contract', () => {

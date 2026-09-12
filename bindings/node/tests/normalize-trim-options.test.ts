@@ -41,7 +41,9 @@ describe('normalize and trim option extensions', () => {
     expect(() => normalize({ samples, mode: 'RMS' as never })).toThrow(RangeError);
     expect(() => normalize(samples, SAMPLE_RATE, 0, null as never)).toThrow(TypeError);
     expect(() => trim(samples, SAMPLE_RATE, -60, 0, 512)).toThrow(RangeError);
-    expect(() => trim(samples, SAMPLE_RATE, -60, 1.5 as never, 512)).toThrow(TypeError);
+    // A fractional frame length is a number out of domain, which is the same
+    // side of the split as the `0` above rather than the `null` mode before it.
+    expect(() => trim(samples, SAMPLE_RATE, -60, 1.5 as never, 512)).toThrow(RangeError);
     expect(() => trim(samples, SAMPLE_RATE, -60, 1024, 0)).toThrow(RangeError);
   });
 });

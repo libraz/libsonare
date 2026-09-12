@@ -166,7 +166,7 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   }
 
   if (length > static_cast<size_t>(block_size_)) {
-    Napi::TypeError::New(env, "block length exceeds the mixer's configured block size")
+    Napi::RangeError::New(env, "block length exceeds the mixer's configured block size")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

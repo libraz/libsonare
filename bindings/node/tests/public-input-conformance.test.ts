@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   analyzeWithProgress,
+  lufsInterleaved,
+  Mixer,
   masterAudio,
   masterAudioAsync,
   masterAudioStereo,
   masterAudioStereoAsync,
+  mixingScenePresetJson,
   mixStereo,
   noteSegments,
   Project,
@@ -13,7 +16,9 @@ import {
   pitchCorrectTimevarying,
   RealtimeEngine,
   spectralEdit,
+  trim,
 } from '../src/index.js';
+import { addon } from '../src/native.js';
 import type { MixOptions } from '../src/types.js';
 
 type CorpusMarker = { id: number | 'uint32_max'; ppq: number | 'nan' | 'inf'; name: string };
@@ -781,4 +786,76 @@ describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
       });
     }
   }
+});
+
+// The addon picks the class by the fault, not by where the value came from: a
+// value of the wrong JS type is a TypeError, a value of the right type that the
+// target domain cannot accept is a RangeError. These three readers each pin one
+// end of that, with the wrong-type counterpart alongside so the convention is
+// not satisfied by a reader that answers RangeError to everything.
+describe('an out-of-domain scalar is a RangeError across the addon readers', () => {
+  const tone = new Float32Array(4096).map(
+    (_, i) => 0.5 * Math.sin((2 * Math.PI * 440 * i) / 22050),
+  );
+
+  it('trim refuses a non-integer frame option with RangeError', () => {
+    // The condition catches non-finite AND fractional, both of which the Int32Arg
+    // convention assigns to RangeError; the <= 0 branch beside it already did.
+    // The facade resolver in front of the addon was split the same way, so this
+    // pins both halves of the path a caller actually travels.
+    for (const frameLength of [12.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => trim(tone, 22050, -60, frameLength, 512)).toThrow(RangeError);
+    }
+    expect(() => trim(tone, 22050, -60, 0, 512)).toThrow(RangeError);
+  });
+
+  it('the addon trim reader refuses a non-integer frame option with RangeError', () => {
+    // Asserted on the addon directly because the facade resolver above refuses
+    // the same value first, so the reader's own class is unreachable from the
+    // public entry point and a facade-level case would pass either way.
+    for (const frameLength of [12.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => addon.trim(tone, 22050, -60, frameLength, 512)).toThrow(RangeError);
+    }
+    expect(() => addon.trim(tone, 22050, -60, 'x' as never, 512)).toThrow(TypeError);
+    expect(addon.trim(tone, 22050, -60, 1024, 512)).toBeInstanceOf(Float32Array);
+  });
+
+  it('trim keeps TypeError for a non-number frame option, and still trims', () => {
+    expect(() => trim(tone, 22050, -60, 'x' as never, 512)).toThrow(TypeError);
+    expect(trim(tone, 22050, -60, 1024, 512)).toBeInstanceOf(Float32Array);
+  });
+
+  it('lufsInterleaved refuses a non-positive channel count with RangeError', () => {
+    expect(() => lufsInterleaved(tone, 0)).toThrow(RangeError);
+    expect(() => lufsInterleaved(tone, -2)).toThrow(RangeError);
+  });
+
+  it('lufsInterleaved keeps TypeError for a non-number, and still measures', () => {
+    expect(() => lufsInterleaved(tone, 'x' as never)).toThrow(TypeError);
+    // Positive control: without it a reader that refused every count would pass.
+    expect(lufsInterleaved(tone, 2).integratedLufs).toBeTypeOf('number');
+  });
+
+  it('the mixer refuses a block past its configured size with RangeError', () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, 8);
+    try {
+      const over = Array.from({ length: 3 }, () => new Float32Array(16));
+      expect(() => mixer.processStereo(over, over)).toThrow(RangeError);
+      // Positive control: a block inside the configured size still processes.
+      const fits = Array.from({ length: 3 }, () => new Float32Array(8));
+      expect(mixer.processStereo(fits, fits).left).toBeInstanceOf(Float32Array);
+    } finally {
+      mixer.destroy();
+    }
+  });
+
+  it('the mixer keeps TypeError for a non-Float32Array strip', () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, 8);
+    try {
+      const bad = Array.from({ length: 3 }, () => [0, 0, 0, 0] as never);
+      expect(() => mixer.processStereo(bad, bad)).toThrow(TypeError);
+    } finally {
+      mixer.destroy();
+    }
+  });
 });

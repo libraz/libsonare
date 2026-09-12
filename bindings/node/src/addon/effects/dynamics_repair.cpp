@@ -610,7 +610,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
     }
     const double value = info[index].As<Napi::Number>().DoubleValue();
     if (!std::isfinite(value) || std::floor(value) != value) {
-      Napi::TypeError::New(env, std::string("trim: ") + name + " must be an integer")
+      Napi::RangeError::New(env, std::string("trim: ") + name + " must be an integer")
           .ThrowAsJavaScriptException();
       return false;
     }
