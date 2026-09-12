@@ -3911,6 +3911,71 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_last_error_message is per-thread across concurrent failures", "[c_api]") {
+  // The two threads are sequenced through `phase`, so each read happens after
+  // the other thread's most recent write: with shared storage a thread reads
+  // the other's message, with thread-local storage it reads its own.
+  const auto provoke_missing_file = [] {
+    SonareAudio* audio = nullptr;
+    const SonareError err = sonare_audio_from_file("sonare-no-such-file-thread-probe.wav", &audio);
+    CHECK(err != SONARE_OK);
+    CHECK(audio == nullptr);
+    return std::string(sonare_last_error_message());
+  };
+  const auto provoke_bad_format = [] {
+    const std::vector<uint8_t> garbage = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                          0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B};
+    SonareAudio* audio = nullptr;
+    const SonareError err = sonare_audio_from_memory(garbage.data(), garbage.size(), &audio);
+    CHECK(err != SONARE_OK);
+    CHECK(audio == nullptr);
+    return std::string(sonare_last_error_message());
+  };
+
+  // Preconditions: without two distinct non-empty messages the isolation
+  // assertions below cannot distinguish shared storage from thread-local.
+  const std::string file_message = provoke_missing_file();
+  const std::string format_message = provoke_bad_format();
+  REQUIRE_FALSE(file_message.empty());
+  REQUIRE_FALSE(format_message.empty());
+  REQUIRE(file_message != format_message);
+
+  std::atomic<int> phase{0};
+  const auto await = [&phase](int target) {
+    while (phase.load(std::memory_order_acquire) < target) std::this_thread::yield();
+  };
+
+  std::string file_thread_own;
+  std::string file_thread_observed;
+  std::string format_thread_own;
+  std::string format_thread_observed;
+
+  std::thread file_thread([&] {
+    file_thread_own = provoke_missing_file();
+    phase.store(1, std::memory_order_release);
+    await(2);  // The other thread has since recorded its own message.
+    file_thread_observed = sonare_last_error_message();
+    provoke_missing_file();
+    phase.store(3, std::memory_order_release);
+  });
+
+  std::thread format_thread([&] {
+    await(1);
+    format_thread_own = provoke_bad_format();
+    phase.store(2, std::memory_order_release);
+    await(3);  // The other thread has since re-recorded its own message.
+    format_thread_observed = sonare_last_error_message();
+  });
+
+  file_thread.join();
+  format_thread.join();
+
+  CHECK(file_thread_own == file_message);
+  CHECK(format_thread_own == format_message);
+  CHECK(file_thread_observed == file_message);
+  CHECK(format_thread_observed == format_message);
+}
+
 #if defined(SONARE_WITH_MASTERING)
 TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors",
           "[c_api][mastering]") {

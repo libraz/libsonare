@@ -1171,6 +1171,22 @@ TEST_CASE("SMF import rejects malformed and truncated input without crashing", "
     REQUIRE(r.status == SmfStatus::kTruncated);
   }
 
+  SECTION("over-length delta-time VLQ") {
+    // A VLQ is at most 4 bytes; a 5th continuation byte must fail the import
+    // rather than silently truncate the delta and mistime the rest of the track.
+    auto reject = [](const std::vector<uint8_t>& body) {
+      const SmfImportResult r = import_smf(wrap_format0_track(body));
+      CHECK_FALSE(r.ok());
+      CHECK(r.status == SmfStatus::kTruncated);
+      CHECK(r.clips.empty());
+    };
+
+    // Five-byte delta terminating on the fifth byte, then a well-formed track.
+    reject({0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x90, 0x3C, 0x40, 0x00, 0xFF, 0x2F, 0x00});
+    // Fifth byte still carrying the continuation bit, ahead of an end-of-track.
+    reject({0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x2F, 0x00});
+  }
+
   SECTION("fuzzy prefix bytes never crash") {
     // Walk a few truncations of the known-good buffer; none may crash / OOB.
     const std::vector<uint8_t> good = make_known_smf();

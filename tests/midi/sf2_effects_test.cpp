@@ -5,6 +5,7 @@
 ///        tail_samples(), per-part insert drive, deterministic effects and a
 ///        no-alloc audio path with effects engaged.
 
+#include <algorithm>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -886,10 +887,49 @@ TEST_CASE("concurrent live GS EFX realises and audio render stay safe",
 
   std::vector<float> left(512, 0.0f), right(512, 0.0f);
   float* chans[2] = {left.data(), right.data()};
-  for (int b = 0; b < 1000; ++b) player.process(chans, 2, 512);
+  size_t non_finite = 0;
+  float render_peak = 0.0f;
+  for (int b = 0; b < 1000; ++b) {
+    player.process(chans, 2, 512);
+    for (int i = 0; i < 512; ++i) {
+      if (!std::isfinite(left[static_cast<size_t>(i)]) ||
+          !std::isfinite(right[static_cast<size_t>(i)])) {
+        ++non_finite;
+        continue;
+      }
+      render_peak = std::max(render_peak, std::abs(left[static_cast<size_t>(i)]));
+      render_peak = std::max(render_peak, std::abs(right[static_cast<size_t>(i)]));
+    }
+  }
   stop.store(true, std::memory_order_relaxed);
   control.join();
-  SUCCEED();  // reached without a crash / sanitizer diagnostic
+
+  WARN("render peak under contention: " << render_peak);
+  CHECK(non_finite == 0);
+  // Above an audible floor, not merely above zero: a buffer of denormals is
+  // not evidence the render survived the contention.
+  CHECK(render_peak > 1.0e-3f);
+
+  // The control thread stopped mid-sequence, so pin the realise against a known
+  // final publish: the mirror carries the last type and nothing stayed pending.
+  player.on_control_sysex(part_on, sizeof(part_on));
+  player.on_control_sysex(od_type, sizeof(od_type));
+  CHECK(player.gs_efx(0).type == 0x0110u);
+  CHECK_FALSE(player.gs_efx_dirty());
+  player.on_control_sysex(chorus, sizeof(chorus));
+  CHECK(player.gs_efx(0).type == 0x0142u);
+  CHECK_FALSE(player.gs_efx_dirty());
+
+  // The audio thread swaps the final snapshot in on the next block.
+  player.process(chans, 2, 512);
+  size_t post_swap_non_finite = 0;
+  for (int i = 0; i < 512; ++i) {
+    if (!std::isfinite(left[static_cast<size_t>(i)]) ||
+        !std::isfinite(right[static_cast<size_t>(i)])) {
+      ++post_swap_non_finite;
+    }
+  }
+  CHECK(post_swap_non_finite == 0);
 }
 
 #endif  // SONARE_WITH_MASTERING

@@ -672,11 +672,13 @@ TEST_CASE("the pipe organ is a clean reverb source (dc-free, sustained)", "[midi
 }
 
 TEST_CASE("a full plenum renders faster than real time", "[.][bench][organ-cpu]") {
-  // CPU probe (opt-in, excluded from the default run): the dominant cost of a
-  // pipe organ is the simultaneous waveguide count — a thick chord across a
-  // multi-rank plenum. This measures it and asserts only a loose real-time
-  // margin (it is HW-sensitive; the printed ratio is the useful artefact). The
-  // five-rank church-organ over a ten-note chord is 50 waveguides at once.
+  // CPU probe, run with `./build/bin/sonare_tests "[organ-cpu]"` — the [.] tag
+  // keeps it out of the default run and no make target selects it. The dominant
+  // cost of a pipe organ is the simultaneous waveguide count — a thick chord
+  // across a multi-rank plenum. This measures it and asserts only a loose
+  // real-time margin (it is HW-sensitive; the printed ratio is the useful
+  // artefact). The five-rank church-organ over a ten-note chord is 50
+  // waveguides at once.
   using sonare::midi::synth::find_synth_preset;
   NativeSynthConfig cfg = find_synth_preset("church-organ")->config;
   NativeSynth synth(cfg);

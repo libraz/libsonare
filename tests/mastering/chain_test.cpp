@@ -1048,14 +1048,70 @@ TEST_CASE("StreamingMasteringChain processes stereo with imager", "[mastering][c
 }
 
 TEST_CASE("StreamingMasteringChain reset clears state", "[mastering][chain][streaming]") {
-  MasteringChainConfig config;
-  config.dynamics.compressor.enabled = true;
-  StreamingMasteringChain chain(std::move(config));
-  chain.prepare(44100.0, 512, 1);
-  std::vector<float> block(512, 0.5f);
-  float* channels[] = {block.data()};
-  chain.process_block(channels, 1, 512);
-  REQUIRE_NOTHROW(chain.reset());
+  constexpr double kRate = 44100.0;
+  constexpr int kBlock = 512;
+
+  // A loud burst to leave state behind, and a quiet probe whose rendering
+  // reveals it: compressor envelope, limiter lookahead and biquad memory all
+  // colour the probe's head differently when the burst preceded it.
+  std::vector<float> prime(kBlock);
+  std::vector<float> probe(kBlock);
+  for (int i = 0; i < kBlock; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kRate);
+    prime[static_cast<size_t>(i)] =
+        0.9f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+    probe[static_cast<size_t>(i)] =
+        0.05f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 100.0f * t);
+  }
+
+  const auto render_probe = [&](const MasteringChainConfig& config, bool with_prime,
+                                bool with_reset) {
+    StreamingMasteringChain chain{config};
+    chain.prepare(kRate, kBlock, 1);
+    if (with_prime) {
+      std::vector<float> burst = prime;
+      float* channels[] = {burst.data()};
+      chain.process_block(channels, 1, kBlock);
+    }
+    if (with_reset) chain.reset();
+    std::vector<float> out = probe;
+    float* channels[] = {out.data()};
+    chain.process_block(channels, 1, kBlock);
+    return out;
+  };
+
+  const auto check_stage = [&](const MasteringChainConfig& config) {
+    const std::vector<float> fresh = render_probe(config, false, false);
+    const std::vector<float> after_reset = render_probe(config, true, true);
+    const std::vector<float> without_reset = render_probe(config, true, false);
+    // Non-vacuity: unless the burst is still audible in the un-reset render,
+    // the bit-identity below would hold for a reset() that did nothing.
+    CHECK(max_abs_difference(without_reset, fresh) > 0.0f);
+    CHECK(max_abs_difference(after_reset, fresh) == 0.0f);
+  };
+
+  SECTION("compressor") {
+    MasteringChainConfig config;
+    config.dynamics.compressor.enabled = true;
+    config.dynamics.compressor.config.threshold_db = -30.0f;
+    config.dynamics.compressor.config.ratio = 8.0f;
+    config.dynamics.compressor.config.release_ms = 500.0f;
+    check_stage(config);
+  }
+
+  SECTION("true peak limiter") {
+    MasteringChainConfig config;
+    config.maximizer.true_peak_limiter.enabled = true;
+    config.maximizer.true_peak_limiter.config.ceiling_db = -6.0f;
+    check_stage(config);
+  }
+
+  SECTION("tilt eq") {
+    MasteringChainConfig config;
+    config.eq.tilt.enabled = true;
+    config.eq.tilt.tilt_db = 6.0f;
+    check_stage(config);
+  }
 }
 
 TEST_CASE("StreamingMasteringChain rejects bad num_channels", "[mastering][chain][streaming]") {

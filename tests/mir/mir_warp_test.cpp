@@ -61,6 +61,31 @@ Audio make_tone(int sr, double freq, double seconds) {
   return Audio::from_vector(std::move(s), sr);
 }
 
+// A continuous pitch glide: the chroma moves every frame, so no two frames
+// carry the same chroma and one alignment is strictly cheaper than the rest.
+// Neither a stationary tone nor a held chord can do this -- a constant-chroma
+// stretch is a plateau on the cost surface that a DTW path crosses for free,
+// so the recovered offset is unconstrained across its whole length.
+// Kept under an octave so no pitch class repeats, and phase-continuous at
+// constant amplitude so the front end sees no energy notch to chase.
+Audio make_glide(int sr, double f0, double semitones, double seconds) {
+  const int n = static_cast<int>(sr * seconds);
+  std::vector<float> s(static_cast<size_t>(n));
+  double phase[2] = {};
+  for (int i = 0; i < n; ++i) {
+    const double frac = static_cast<double>(i) / n;
+    const double freq = f0 * std::pow(2.0, semitones * frac / 12.0);
+    double v = 0.0;
+    for (int partial = 1; partial <= 2; ++partial) {
+      double& p = phase[partial - 1];
+      p += sonare::constants::kTwoPiD * freq * partial / sr;
+      v += (partial == 1 ? 1.0 : 0.5) * std::sin(p);
+    }
+    s[static_cast<size_t>(i)] = static_cast<float>(0.4 * v);
+  }
+  return Audio::from_vector(std::move(s), sr);
+}
+
 // A percussive test signal: periodic short clicks (impulses with fast decay).
 Audio make_clicks(int sr, double seconds, double click_hz) {
   const int n = static_cast<int>(sr * seconds);
@@ -519,9 +544,9 @@ TEST_CASE("chroma-DTW builds its chroma grid from the requested resolution", "[m
 
 TEST_CASE("chroma-DTW recovers a known time shift within tolerance", "[.][slow][mir]") {
   const int sr = 22050;
-  // Reference: a 1.2 s C-ish tone. Target: a delayed copy (silence prefix),
-  // so the alignment path should track a constant offset.
-  Audio ref = make_tone(sr, 261.63, 1.2);
+  // Reference: a continuous glide. Target: a delayed copy (silence prefix), so
+  // the alignment path should track a constant offset once past the corner.
+  Audio ref = make_glide(sr, 261.63, 11.0, 1.5);
 
   const int delay = sr / 4;  // 0.25 s delay.
   std::vector<float> tgt_samples(delay, 0.0f);
@@ -542,20 +567,33 @@ TEST_CASE("chroma-DTW recovers a known time shift within tolerance", "[.][slow][
   // Anchors derived from the path span both signals and stay ordered.
   REQUIRE(r.anchors.size() == r.path.size());
 
-  // The expected target-vs-reference offset (in chroma frames) near the middle
-  // of the reference should be close to the delay (within a few-frame band).
   const double expected_offset_frames = static_cast<double>(delay) / cfg.hop_length;
-  // Find a path point near the middle of the reference.
-  const int mid_ref = r.reference_frames / 2;
-  int best = 0;
-  for (size_t i = 0; i < r.path.size(); ++i) {
-    if (std::abs(r.path[i].first - mid_ref) < std::abs(r.path[best].first - mid_ref)) best = i;
+  // DTW anchors the path at (0, 0), so the offset necessarily starts at zero and
+  // climbs; one step moves each axis by at most one frame, so the climb cannot
+  // finish before reference frame ceil(expected). Everything after it is steady
+  // state and is where the shift is actually recoverable.
+  const int settle_ref = static_cast<int>(std::ceil(expected_offset_frames));
+  double worst = 0.0;
+  int worst_ref = -1;
+  int checked = 0;
+  for (const auto& point : r.path) {
+    if (point.first < settle_ref) continue;
+    ++checked;
+    const double error = std::abs((point.second - point.first) - expected_offset_frames);
+    if (error > worst) {
+      worst = error;
+      worst_ref = point.first;
+    }
   }
-  const double observed_offset = r.path[best].second - r.path[best].first;
-  // A stationary tone has constant chroma, so the cost surface carries no alignment
-  // information and the path wanders the full band: the offset reads 0 to 12 along it and
-  // 5.0 at the midpoint sampled here, against an expected 10.77 -- 5.77 of the 6.0 allowed.
-  REQUIRE(std::abs(observed_offset - expected_offset_frames) <= 6.0);
+  WARN("shift recovery: checked " << checked << " path points, worst error " << worst
+                                  << " frames at reference frame " << worst_ref);
+  // Non-vacuity: the steady-state region has to be most of the path, or the
+  // band below would be asserted over a handful of points near the corner.
+  REQUIRE(checked > r.reference_frames / 2);
+  // Band: both path axes are whole frames while the delay is 10.77 of them, so
+  // the nearest reachable offset is already 0.23 out; one chroma hop of
+  // front-end slack on top gives 1.23, stated as 1.25 frames (29 ms).
+  CHECK(worst <= 1.25);
 }
 
 TEST_CASE("chroma-DTW recovers a known time stretch within tolerance", "[.][slow][mir]") {

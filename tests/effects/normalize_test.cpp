@@ -239,17 +239,43 @@ TEST_CASE("fade preserves duration", "[normalize]") {
 }
 
 TEST_CASE("detect_silence_boundaries with all-silent input", "[normalize]") {
-  // All zeros - should not crash (regression: size_t underflow in backward scan)
+  // No frame clears the threshold, so the full-signal bounds are the contract:
+  // anything narrower makes trim_absolute delete a quiet take.
   std::vector<float> silent(22050, 0.0f);
   Audio silent_audio = Audio::from_buffer(silent.data(), silent.size(), 22050);
-  REQUIRE_NOTHROW(detect_silence_boundaries(silent_audio));
+  auto [start, end] = detect_silence_boundaries(silent_audio);
+  CHECK(start == 0);
+  CHECK(end == silent_audio.size());
+  CHECK(start < end);
 }
 
 TEST_CASE("detect_silence_boundaries with very short input", "[normalize]") {
-  // Shorter than frame_length (2048) and hop_length (512) - should not crash
+  // Shorter than frame_length (2048), so no frame is scanned at all and the
+  // full-signal bounds are the contract.
   std::vector<float> short_signal(100, 0.5f);
   Audio short_audio = Audio::from_buffer(short_signal.data(), short_signal.size(), 22050);
-  REQUIRE_NOTHROW(detect_silence_boundaries(short_audio));
+  auto [start, end] = detect_silence_boundaries(short_audio);
+  CHECK(start == 0);
+  CHECK(end == short_audio.size());
+  CHECK(start < end);
+}
+
+TEST_CASE("trim_absolute keeps all-silent and sub-frame input intact", "[normalize]") {
+  SECTION("all-silent") {
+    std::vector<float> silent(22050, 0.0f);
+    Audio silent_audio = Audio::from_buffer(silent.data(), silent.size(), 22050);
+    Audio trimmed = trim_absolute(silent_audio);
+    CHECK(trimmed.size() == silent_audio.size());
+    CHECK_FALSE(trimmed.empty());
+  }
+
+  SECTION("shorter than frame_length") {
+    std::vector<float> short_signal(100, 0.5f);
+    Audio short_audio = Audio::from_buffer(short_signal.data(), short_signal.size(), 22050);
+    Audio trimmed = trim_absolute(short_audio);
+    CHECK(trimmed.size() == short_audio.size());
+    CHECK_FALSE(trimmed.empty());
+  }
 }
 
 TEST_CASE("detect_silence_boundaries with sound only at end", "[normalize]") {

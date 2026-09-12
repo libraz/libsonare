@@ -520,10 +520,30 @@ TEST_CASE("master_audio_mono runs Pop preset on dummy signal", "[mastering][pres
 }
 
 TEST_CASE("master_audio_mono applies overrides", "[mastering][preset]") {
-  std::vector<float> samples(44100, 0.1f);
-  Param overrides[] = {{"loudness.targetLufs", -10.0}};
-  REQUIRE_NOTHROW(
-      master_audio_mono(Preset::Pop, samples.data(), samples.size(), 44100, overrides, 1));
+  // A dropped override is a silent no-op, so assert the override moved the
+  // achieved loudness AND moved it the right way: "merely different" also
+  // passes for a sign error.
+  const std::vector<float> samples = create_preset_fixture(44100, 1.0f);
+
+  const auto defaults = master_audio_mono(Preset::Pop, samples.data(), samples.size(), 44100);
+
+  Param loud_override[] = {{"loudness.targetLufs", -8.0}};
+  const auto loud =
+      master_audio_mono(Preset::Pop, samples.data(), samples.size(), 44100, loud_override, 1);
+
+  Param quiet_override[] = {{"loudness.targetLufs", -24.0}};
+  const auto quiet =
+      master_audio_mono(Preset::Pop, samples.data(), samples.size(), 44100, quiet_override, 1);
+
+  WARN("output LUFS: quiet=" << quiet.output_lufs << " default=" << defaults.output_lufs
+                             << " loud=" << loud.output_lufs);
+  CHECK(std::isfinite(loud.output_lufs));
+  CHECK(std::isfinite(quiet.output_lufs));
+  CHECK(loud.output_lufs > quiet.output_lufs + 3.0f);
+  CHECK(loud.output_lufs > defaults.output_lufs + 1.5f);
+  CHECK(quiet.output_lufs < defaults.output_lufs - 1.5f);
+  CHECK(loud.samples.size() == samples.size());
+  CHECK(quiet.samples.size() == samples.size());
 }
 
 TEST_CASE("apply_chain_config_overrides updates fields in-place", "[mastering][preset]") {
