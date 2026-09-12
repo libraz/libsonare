@@ -80,3 +80,21 @@ def test_the_markup_is_balanced() -> None:
     check.feed(HTML)
     assert not check.bad, f"closed out of order: {check.bad}"
     assert not check.stack, f"never closed: {check.stack}"
+
+
+def _run_all() -> int:
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            print(f"ok   {t.__name__}")
+        except AssertionError as e:  # noqa: PERF203
+            failed += 1
+            print(f"FAIL {t.__name__}: {e}")
+    print(f"\n{len(tests) - failed}/{len(tests)} passed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_run_all())

@@ -9,7 +9,8 @@
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
        spec-liveness spec-liveness-census spec-liveness-census-check \
-       excerpts excerpts-check test-voicematch
+       excerpts excerpts-check test-voicematch \
+       check-c-api-out-param-init check-c-api-pointer-contracts
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -401,7 +402,12 @@ conformance:
 	python3 tools/conformance/check_lint_scope.py
 	python3 -m unittest tests/conformance/test_cli_contract.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
+	python3 tests/conformance/check_wasm_narrowing_scope.py
+	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_bank_versions.py
+	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
+	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
+	python3 -m unittest tests/conformance/test_error_code_mapping.py
 	python3 tools/conformance/test_lint_scope.py
 	python3 tools/parity/test_handle_gating.py
 	python3 tools/parity/test_record_shape.py
@@ -410,6 +416,7 @@ conformance:
 	python3 tools/parity/test_allowlist_audit.py
 	python3 tools/eval/test_summarize_accuracy.py
 	python3 tools/audition/test_serve.py
+	python3 tools/audition/test_page.py
 	python3 tools/parity/surface_coverage.py --check
 	python3 tools/parity/check_parity.py --audit-allowlist
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \
@@ -419,6 +426,20 @@ conformance:
 	else \
 		echo "conformance: live CLI check skipped (build/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable)"; \
 	fi
+
+# C-ABI contract scans over source text. Both report an open population today,
+# so they are targets rather than `conformance` steps; their self-tests, which
+# include the non-vacuity break each one is calibrated against, run there. Fold
+# a scan into `conformance` when its population reaches zero.
+#
+# The floors are the point of the invocation: each scan reports nothing when its
+# pattern stops matching, so the count of declarations it resolves at all is
+# pinned separately from the count of findings, and falling under it exits 2.
+check-c-api-out-param-init:
+	python3 tests/conformance/check_c_api_out_param_init.py --floor 250
+
+check-c-api-pointer-contracts:
+	python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250
 
 # Opt-in GM-program project bounce acceptance across the C, Python, Node, and
 # WASM public surfaces. The check deliberately does not build the bindings: it
