@@ -242,7 +242,9 @@ def _to_float32(value: float) -> float:
     """
     import struct
 
-    return struct.unpack("<f", struct.pack("<f", value))[0]
+    # struct.unpack is typed as tuple[Any, ...], so the element is narrowed here
+    # rather than left to leak an untyped value out of a float-returning helper.
+    return float(struct.unpack("<f", struct.pack("<f", value))[0])
 
 
 def _clamp_sample(sample: float) -> float:
