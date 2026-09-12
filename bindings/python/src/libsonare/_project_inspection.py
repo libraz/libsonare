@@ -33,6 +33,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _guard_buffer,
     _to_c_float_array,
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
@@ -66,6 +67,7 @@ class _ProjectInspectionMixin:
             options.include_octave_candidates = 1 if include_octave_candidates else 0
         return options
 
+    @_guard_buffer("audio")
     def analyze_tempo(
         self,
         audio: Sequence[float] | np.ndarray,
@@ -96,6 +98,9 @@ class _ProjectInspectionMixin:
 
         Returns:
             One dict per ranked candidate, most-supported first.
+
+        Raises:
+            SonareValueError: If ``audio`` is empty or holds a NaN or Inf sample.
         """
         c_array, length = _to_c_float_array(audio)
         count = ctypes.c_size_t()
@@ -134,6 +139,7 @@ class _ProjectInspectionMixin:
             for candidate in candidates[: min(count.value, len(candidates))]
         ]
 
+    @_guard_buffer("audio")
     def auto_tempo(
         self,
         audio: Sequence[float] | np.ndarray,
@@ -155,6 +161,9 @@ class _ProjectInspectionMixin:
 
         Returns:
             The BPM of the installed map's first segment.
+
+        Raises:
+            SonareValueError: If ``audio`` is empty or holds a NaN or Inf sample.
         """
         c_array, length = _to_c_float_array(audio)
         out_bpm = ctypes.c_float()

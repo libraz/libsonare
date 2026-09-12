@@ -357,13 +357,37 @@ def test_duplicate_track_ids_are_rejected():
         suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
 
 
-def test_non_finite_samples_are_rejected():
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
+def test_non_finite_samples_are_excluded_not_rejected():
+    """A NaN sample is degenerate audio, classified by the core like the other surfaces.
+
+    The exclusion reason is the assertion: a track excluded for the wrong
+    reason is the same defect as one rejected outright.
+    """
+    from libsonare import MixTrackInput, suggest_mix_scene
 
     samples = _tone(110.0).copy()
     samples[17] = np.nan
-    with pytest.raises(SonareValueError, match="NaN or Inf at index 17"):
-        suggest_mix_scene([MixTrackInput("bass", samples)], sample_rate=SAMPLE_RATE)
+    result = suggest_mix_scene(
+        [MixTrackInput("bass", samples), MixTrackInput("pad", _tone(440.0))],
+        sample_rate=SAMPLE_RATE,
+    )
+    profiles = {track["stripId"]: track for track in result["tracks"]}
+    assert profiles["bass"]["usable"] is False
+    assert profiles["bass"]["exclusionReason"] == "track has non-finite samples"
+    # The rest of the call survives: one bad track is isolated, not fatal.
+    assert profiles["pad"]["usable"] is True
+
+
+def test_non_finite_samples_in_the_right_channel_are_excluded():
+    """The stereo path reaches the same classification as the mono one."""
+    from libsonare import MixTrackInput, suggest_mix_scene
+
+    right = _tone(440.0).copy()
+    right[23] = np.inf
+    result = suggest_mix_scene([MixTrackInput("pad", _tone(440.0), right)], sample_rate=SAMPLE_RATE)
+    profile = result["tracks"][0]
+    assert profile["usable"] is False
+    assert profile["exclusionReason"] == "track has non-finite samples"
 
 
 def test_mismatched_channel_lengths_are_rejected():

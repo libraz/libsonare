@@ -20,7 +20,13 @@ from typing import Any, NamedTuple
 import numpy as np
 
 from ._mastering_offline import _mastering_params
-from ._runtime import SonareValueError, _check, _get_lib, _to_c_float_array, _validate_samples
+from ._runtime import (
+    SonareValueError,
+    _as_float32_buffer,
+    _check,
+    _get_lib,
+    _to_c_float_array,
+)
 
 # Keyword argument -> C-ABI param key. The C side accepts both spellings, but
 # the camelCase key is the cross-binding canonical one, so that is what travels.
@@ -108,19 +114,19 @@ def _build_track_arrays(fn_name: str, tracks: Sequence[MixTrackInput]) -> _Track
             raise SonareValueError(f"{fn_name}: duplicate track_id {track_id!r}")
         seen.add(track_id)
 
-        # A NaN or Inf sample would propagate silently through the measurements
-        # into a plausible-looking suggestion, so it is rejected here with the
-        # offending index rather than at the C ABI as a bare invalid-parameter.
-        left = _validate_samples(
-            fn_name, track.left, arg_name=f"tracks[{index}].left", allow_empty=True
-        )
+        # Coerce only: a non-finite sample is degenerate audio here, not a
+        # malformed call. The core classifies it per track and returns
+        # `usable: false` with an exclusion reason, so preflighting it would
+        # turn a partial result into a failed call and make that reason
+        # unreachable. Rank and type are still named by the coercion.
+        left = _as_float32_buffer(track.left, fn_name=fn_name, arg_name=f"tracks[{index}].left")
         left_array, left_length = _to_c_float_array(left)
         if track.right is None:
             right_array = None
             right_length = left_length
         else:
-            right = _validate_samples(
-                fn_name, track.right, arg_name=f"tracks[{index}].right", allow_empty=True
+            right = _as_float32_buffer(
+                track.right, fn_name=fn_name, arg_name=f"tracks[{index}].right"
             )
             right_array, right_length = _to_c_float_array(right)
             any_right = True
@@ -242,6 +248,10 @@ def suggest_mix_scene(
     Args:
         tracks: Tracks to analyse, each a :class:`MixTrackInput`. Lengths may
             differ between tracks. An empty sequence yields an empty suggestion.
+            A track whose audio is degenerate — empty, silent, too short to
+            measure, or holding a NaN or Inf sample — is excluded and reported
+            as ``"usable": False`` with an ``"exclusionReason"`` rather than
+            failing the call.
         sample_rate: Shared sample rate of every track, in Hz.
         target_track_lufs: Absolute integrated-loudness target each track is
             staged towards, in LUFS.

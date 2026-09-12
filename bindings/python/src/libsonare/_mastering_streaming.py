@@ -13,7 +13,15 @@ from ._ffi import (
     SonareEqSnapshot,
 )
 from ._mastering_offline import _chain_params
-from ._runtime import SonareValueError, _check, _get_lib, _to_c_float_array, _to_c_float_array_owned
+from ._runtime import (
+    SonareValueError,
+    _check,
+    _get_lib,
+    _guard_buffer,
+    _to_c_float_array,
+    _to_c_float_array_owned,
+    _validate_samples,
+)
 from .types import (
     EqSpectrumSnapshot,
 )
@@ -66,7 +74,8 @@ class StreamingMasteringChain:
                 block before the loudness stage's true-peak limiter.
             loudness_static_gain_peak_db: Offline-measured true-peak (dBFS) of the
                 source the static gain was computed for. When given, the static
-                gain is clamped to ``ceilingDb - peak`` so the streaming preview
+                gain is clamped to ``(ceiling_db - peak) +
+                max(max_limiter_gain_reduction_db, 0)`` so the streaming preview
                 does not overdrive the loudness limiter harder than the offline
                 render. Ignored unless ``loudness_static_gain_db`` is given.
         """
@@ -348,8 +357,13 @@ class StreamingEqualizer:
         self._ensure_open()
         _check(self._lib.sonare_eq_set_output_pan(self._handle, ctypes.c_float(float(pan))))
 
+    @_guard_buffer("samples")
     def set_sidechain_mono(self, samples: Sequence[float] | list[float]) -> None:
-        """Set a mono external key for dynamic bands with ``externalSidechain`` enabled."""
+        """Set a mono external key for dynamic bands with ``externalSidechain`` enabled.
+
+        Raises:
+            SonareValueError: If ``samples`` is empty or holds a NaN or Inf sample.
+        """
         self._ensure_open()
         c_array, length = _to_c_float_array(samples)
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
@@ -357,12 +371,17 @@ class StreamingEqualizer:
         _check(self._lib.sonare_eq_set_sidechain(self._handle, channels, ctypes.c_int(1), length))
         self._sidechain_refs = (c_array, channels)
 
+    @_guard_buffer("left", "right")
     def set_sidechain_stereo(
         self,
         left: Sequence[float] | list[float],
         right: Sequence[float] | list[float],
     ) -> None:
-        """Set a stereo external key for dynamic bands with ``externalSidechain`` enabled."""
+        """Set a stereo external key for dynamic bands with ``externalSidechain`` enabled.
+
+        Raises:
+            SonareValueError: If either channel is empty or holds a NaN or Inf sample.
+        """
         self._ensure_open()
         left_array, left_length = _to_c_float_array(left)
         right_array, right_length = _to_c_float_array(right)
@@ -386,13 +405,18 @@ class StreamingEqualizer:
         self._lib.sonare_eq_clear_sidechain(self._handle)
         self._sidechain_refs = None
 
+    @_guard_buffer("source", "reference")
     def match(
         self,
         source: Sequence[float] | list[float],
         reference: Sequence[float] | list[float],
         max_bands: int = 8,
     ) -> None:
-        """Configure live EQ bands by matching ``source`` to ``reference``."""
+        """Configure live EQ bands by matching ``source`` to ``reference``.
+
+        Raises:
+            SonareValueError: If either buffer is empty or holds a NaN or Inf sample.
+        """
         self._ensure_open()
         source_array, source_length = _to_c_float_array(source)
         reference_array, reference_length = _to_c_float_array(reference)
@@ -495,6 +519,12 @@ class StreamingEqualizer:
         ``"left"``, ``"right"``, ``"mid"`` or ``"side"``. A band placed on
         stereo is on every path; one placed elsewhere appears only on its own.
         Each frequency is clamped to [0 Hz, Nyquist].
+
+        An empty list is a defined request and comes back as an empty curve:
+        the mapping is per frequency, so there is nothing to ask about.
+
+        Raises:
+            SonareValueError: If ``frequencies_hz`` holds a NaN or Inf value.
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_eq_magnitude_response"):
@@ -503,7 +533,11 @@ class StreamingEqualizer:
         ordinal = self._PLACEMENTS.get(key)
         if ordinal is None:
             raise SonareValueError(f"unknown EQ band placement: {placement}")
-        c_frequencies, count = _to_c_float_array(frequencies_hz)
+        # Non-finite only: an empty curve is a result, a NaN frequency is not.
+        frequencies = _validate_samples(
+            "magnitude_response", frequencies_hz, arg_name="frequencies_hz", allow_empty=True
+        )
+        c_frequencies, count = _to_c_float_array(frequencies)
         out = (ctypes.c_float * count)()
         _check(
             self._lib.sonare_eq_magnitude_response(

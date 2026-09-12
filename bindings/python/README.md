@@ -136,12 +136,12 @@ switched off, or when no track survived exclusion.
   no class-driven EQ, dynamics or placement is suggested for it. A track name is
   read only as a hint and can never select a class on its own.
 - **Degenerate audio is not an error; a malformed call is.** A track that is
-  silent, shorter than the minimum measurable duration (0.4 s), or without
-  energy in the analysis bands comes back with `"usable": False` and an
-  `"exclusionReason"`, and gets no suggestion; an empty track list yields an
-  empty scene. A malformed *call* is rejected instead — a missing or duplicate
-  `track_id`, a non-positive `sample_rate`, mismatched left/right lengths, or
-  NaN/Inf samples raise `SonareValueError`.
+  silent, shorter than the minimum measurable duration (0.4 s), without energy
+  in the analysis bands, or holding a NaN or Inf sample comes back with
+  `"usable": False` and an `"exclusionReason"`, and gets no suggestion; an empty
+  track list yields an empty scene. A malformed *call* is rejected instead — a
+  missing or duplicate `track_id`, a non-positive `sample_rate`, or mismatched
+  left/right lengths raise `SonareValueError`.
 - **Genre- and material-dependent.** The relative levels and placements follow
   common recording practice, not a universal correct answer. Expect to treat the
   result as a first pass on unusual material.
@@ -192,7 +192,7 @@ is preferred when doing more than one computation on the same signal.
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, `estimate_room`, `synthesize_rir`, `room_morph`. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render / capture), `StreamAnalyzer`, `StreamingMasteringChain`, `RealtimeVoiceChanger`. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
-- **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (15 synthesis engines, incl. physically-modeled piano / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [Python API](https://libsonare.libraz.net/docs/python-api)
+- **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (16 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [Python API](https://libsonare.libraz.net/docs/python-api)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [Python API](https://libsonare.libraz.net/docs/python-api)
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ._runtime import _check, _get_lib, _out_float_array, _to_c_float_array
+from ._runtime import _check, _get_lib, _guard_buffer, _out_float_array, _to_c_float_array
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -232,6 +232,7 @@ class Audio:
         return channels
 
     @classmethod
+    @_guard_buffer("data")
     def from_buffer(
         cls,
         data: Sequence[float] | list[float],
@@ -246,6 +247,9 @@ class Audio:
                 first (e.g. ``samples.mean(axis=1, dtype=np.float32)``).
                 Values are nominally in ``[-1.0, 1.0]``.
             sample_rate: Sample rate in Hz (default 48000).
+
+        Raises:
+            SonareValueError: If ``data`` is empty or holds a NaN or Inf sample.
         """
         lib = _get_lib()
         # Use the shared numpy fast path (zero-copy for contiguous float32

@@ -15,14 +15,24 @@ non-finite input with `SonareValueError`. Selection is by annotation shape only
 set off a list of accepted argument names would reintroduce the hand-maintained
 list this module exists to remove. A new entry point of that shape fails here
 until it is guarded or explicitly exempted.
+
+An entry point reached as a public method on an exported class counts the same
+and is keyed by its qualified ``Class.method`` name. The walk follows the MRO
+rather than one class's own ``vars``, because the two largest handle classes are
+assembled from mixins and would otherwise contribute nothing; it stops at the
+first base defined outside the package, so a class that merely subclasses
+``dict`` or ``IntEnum`` does not drag the standard library's methods in. A
+``Protocol`` is skipped: it declares what a *caller* implements and hands to the
+library, so there is no facade there to guard.
 """
 
 from __future__ import annotations
 
 import ast
 import inspect
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import pytest
@@ -51,9 +61,16 @@ _BUFFER_TYPES = frozenset(
 # Entry points for which an empty buffer is a defined result rather than an
 # error, so preflighting it would reject input that works today. Two shapes:
 # element-wise conversions that return an empty buffer, and generators whose
-# output length comes from a parameter rather than from the input. The C ABI
-# still rejects their non-finite input. Any other function of this shape must
-# preflight.
+# output length comes from a parameter rather than from the input. Any other
+# function of this shape must preflight.
+#
+# Exempt is exempt from the *empty* half only. Non-finite input still has to be
+# refused; what differs is where. Most of these leave it to the C ABI, which
+# answers with its own generic code; `StreamingEqualizer.magnitude_response`
+# scans for it in the facade and names the argument, which is strictly better
+# and is pinned in `test_empty_nan_guards.py` rather than here — this module's
+# two guard tests skip an exemption entirely, so an exemption silently drops the
+# non-finite half of the rule along with the empty half.
 #
 # Each entry was decided by calling the function with an empty buffer and
 # keeping whatever it already did, not by assumption; `test_exemptions_accept_
@@ -87,6 +104,9 @@ _EMPTY_INPUT_IS_DEFINED = frozenset(
         "cyclic_tempogram",
         "fourier_tempogram",
         "tempogram",
+        # Per frequency, so an empty frequency list asks nothing and an empty
+        # curve is the answer.
+        "StreamingEqualizer.magnitude_response",
     }
 )
 
@@ -122,6 +142,22 @@ _SCALAR_ARGS: dict[str, Any] = {
     "post_avg": 1,
     "delta": 0.1,
     "wait": 1,
+    "sample_offset": 0,
+}
+
+# How to build an instance for a class whose buffer methods need one. Same
+# polarity as `_SCALAR_ARGS`: a discovered class with no entry here fails the
+# test loudly, so a new handle class cannot drop out of coverage quietly. The
+# constructor arguments are the cheapest configuration that opens the handle —
+# what is being probed is the preflight, which runs before any of them matter.
+_CLASS_INSTANCES: dict[str, Callable[[], Any]] = {
+    "Project": lambda: libsonare.Project(),
+    "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050),
+    "SampleBank": lambda: libsonare.SampleBank(),
+    "StreamAnalyzer": lambda: libsonare.StreamAnalyzer(),
+    "StreamingEqualizer": lambda: libsonare.StreamingEqualizer(),
+    "StreamingMasteringChain": lambda: libsonare.StreamingMasteringChain(),
+    "StreamingRetune": lambda: libsonare.StreamingRetune(),
 }
 
 # A matrix entry point takes its shape alongside the flat row-major buffer, and
@@ -168,20 +204,64 @@ _SEQUENCE_ARGS = (
 )
 
 
+class _EntryPoint(NamedTuple):
+    """One discovered buffer entry point and how to reach it."""
+
+    signature: inspect.Signature
+    owner: str | None
+    """Exported class the entry point is a method of, or ``None`` for a function."""
+
+
 def _is_buffer_parameter(parameter: inspect.Parameter) -> bool:
     alternatives = [part.strip() for part in str(parameter.annotation).split("|")]
     return bool(alternatives) and all(part in _BUFFER_TYPES for part in alternatives)
 
 
-def _buffer_entry_points() -> dict[str, inspect.Signature]:
+def _leading_parameters(signature: inspect.Signature) -> list[inspect.Parameter]:
+    """The signature's parameters with an unbound method's receiver dropped."""
+    return [
+        parameter
+        for parameter in signature.parameters.values()
+        if parameter.name not in ("self", "cls")
+    ]
+
+
+def _public_method_names(cls: type) -> list[str]:
+    """Public attribute names contributed by the package's own classes in the MRO."""
+    names: set[str] = set()
+    for base in cls.__mro__:
+        if not getattr(base, "__module__", "").startswith("libsonare"):
+            continue
+        names.update(name for name in vars(base) if not name.startswith("_"))
+    return sorted(names)
+
+
+def _buffer_entry_points() -> dict[str, _EntryPoint]:
     """Every exported callable whose leading parameter is a sample buffer."""
-    found: dict[str, inspect.Signature] = {}
+    found: dict[str, _EntryPoint] = {}
     # `__init__.pyi` does not re-declare `__all__`, so reach for it dynamically;
     # a missing one collapses the set and trips `test_buffer_entry_point_floor`.
     exported: tuple[str, ...] = tuple(getattr(libsonare, "__all__", ()))
     for name in exported:
         obj = getattr(libsonare, name, None)
-        if obj is None or inspect.isclass(obj) or not callable(obj):
+        if obj is None:
+            continue
+        if inspect.isclass(obj):
+            if getattr(obj, "_is_protocol", False):
+                continue
+            for method_name in _public_method_names(obj):
+                method = getattr(obj, method_name, None)
+                if method is None or not callable(method):
+                    continue
+                try:
+                    signature = inspect.signature(method)
+                except (TypeError, ValueError):  # pragma: no cover - C builtins
+                    continue
+                parameters = _leading_parameters(signature)
+                if parameters and _is_buffer_parameter(parameters[0]):
+                    found[f"{name}.{method_name}"] = _EntryPoint(signature, name)
+            continue
+        if not callable(obj):
             continue
         try:
             signature = inspect.signature(obj)
@@ -189,19 +269,118 @@ def _buffer_entry_points() -> dict[str, inspect.Signature]:
             continue
         parameters = list(signature.parameters.values())
         if parameters and _is_buffer_parameter(parameters[0]):
-            found[name] = signature
+            found[name] = _EntryPoint(signature, None)
     return found
 
 
 _ENTRY_POINTS = _buffer_entry_points()
+_METHOD_ENTRY_POINTS = {
+    name: entry for name, entry in _ENTRY_POINTS.items() if entry.owner is not None
+}
 _GUARDED = sorted(set(_ENTRY_POINTS) - _EMPTY_INPUT_IS_DEFINED)
 _EXEMPT = sorted(_EMPTY_INPUT_IS_DEFINED & set(_ENTRY_POINTS))
+
+# Block-processing methods on the audio-thread path. What they fail is this
+# module's rule, not a promise of their own: the guard's per-block `np.isfinite`
+# walk is the O(n) cost `_check_realtime` exists to keep off that thread, so
+# these take pre-validated blocks by contract and the caller owns the check.
+#
+# Two consequences worth keeping apart, and each entry says which. `unnamed`
+# means the non-finite block is already refused and only the error's class and
+# wording fall short of the rule. `silent` means it is accepted, and what the
+# value then does was measured per method rather than assumed — the three
+# families answer differently, and the equalizer's answer is the one that does
+# not end.
+#
+# Not an exemption list. These stay parametrized and stay running under a strict
+# xfail, so guarding one turns it into an xpass and fails here until the entry
+# is removed — an exemption would have let the same fix pass unnoticed.
+_REALTIME_BLOCK_PATH = {
+    "RealtimeVoiceChanger.process_interleaved": (
+        "silent: the caller owns the finite check on an audio-thread block call; "
+        "output stays finite but is perturbed from the latency boundary onwards"
+    ),
+    "RealtimeVoiceChanger.process_mono": (
+        "silent: the caller owns the finite check on an audio-thread block call; "
+        "output stays finite but is perturbed from the latency boundary onwards"
+    ),
+    "RealtimeVoiceChanger.process_planar_stereo": (
+        "unnamed: the caller owns the finite check on an audio-thread block call; "
+        "the non-finite block is refused as a bare [4] Invalid parameter"
+    ),
+    "StreamAnalyzer.process": (
+        "silent: the caller owns the finite check on a streaming block call; the "
+        "analysis frames overlapping the block carry garbage, later frames recover"
+    ),
+    "StreamAnalyzer.process_with_offset": (
+        "silent: the caller owns the finite check on a streaming block call; the "
+        "analysis frames overlapping the block carry garbage, later frames recover"
+    ),
+    "StreamingEqualizer.process_mono": (
+        "silent: the caller owns the finite check on a streaming block call; one "
+        "non-finite sample poisons the biquad state until clear(), not just the block"
+    ),
+    "StreamingEqualizer.process_stereo": (
+        "silent: the caller owns the finite check on a streaming block call; one "
+        "non-finite sample poisons the biquad state until clear(), not just the block"
+    ),
+    "StreamingMasteringChain.process_mono": (
+        "unnamed: the caller owns the finite check on a streaming block call; "
+        "the non-finite block is refused as a bare [7] Invalid state"
+    ),
+    "StreamingMasteringChain.process_stereo": (
+        "unnamed: the caller owns the finite check on a streaming block call; "
+        "the non-finite block is refused as a bare [7] Invalid state"
+    ),
+    "StreamingRetune.process_mono": (
+        "unnamed: the caller owns the finite check on a streaming block call; "
+        "the non-finite block is refused as a bare [7] Invalid state"
+    ),
+}
+
+
+def _guard_parameters() -> list[Any]:
+    """``_GUARDED`` as parametrize arguments, block-path methods strictly xfailed."""
+    return [
+        pytest.param(name, marks=pytest.mark.xfail(strict=True, reason=_REALTIME_BLOCK_PATH[name]))
+        if name in _REALTIME_BLOCK_PATH
+        else name
+        for name in _GUARDED
+    ]
+
+
+_GUARD_PARAMETERS = _guard_parameters()
+
+
+def _invoke(name: str, entry: _EntryPoint, args: list[Any]) -> Any:
+    """Call ``name`` with ``args``, opening and closing a handle if it needs one."""
+    if entry.owner is None:
+        return getattr(libsonare, name)(*args)
+
+    method_name = name.split(".", 1)[1]
+    owner = getattr(libsonare, entry.owner)
+    if "self" not in entry.signature.parameters:
+        return getattr(owner, method_name)(*args)
+
+    factory = _CLASS_INSTANCES.get(entry.owner)
+    if factory is None:
+        pytest.fail(
+            f"{name}: no instance factory for {entry.owner!r}; add one to this "
+            "module so its buffer methods stay covered"
+        )
+    instance = factory()
+    try:
+        return getattr(instance, method_name)(*args)
+    finally:
+        close = getattr(instance, "close", None)
+        if callable(close):
+            close()
 
 
 def _call_arguments(name: str, signature: inspect.Signature, buffer: np.ndarray) -> list[Any]:
     """Positional arguments that reach ``name``'s body with ``buffer`` as input."""
     args: list[Any] = []
-    for index, parameter in enumerate(signature.parameters.values()):
+    for index, parameter in enumerate(_leading_parameters(signature)):
         if parameter.kind in (
             parameter.KEYWORD_ONLY,
             parameter.VAR_POSITIONAL,
@@ -242,12 +421,27 @@ def test_buffer_entry_point_floor() -> None:
     # would drop roughly a quarter of the set) fails here.
     assert len(_ENTRY_POINTS) >= 150, sorted(_ENTRY_POINTS)
     assert len(_GUARDED) >= 135, _GUARDED
+    # Separately, because the method walk is the part that can collapse on its
+    # own: a mixin reshuffle or a Protocol check that catches too much would
+    # empty it while the module-level count stays comfortably over its floor.
+    assert len(_METHOD_ENTRY_POINTS) >= 15, sorted(_METHOD_ENTRY_POINTS)
 
 
 def test_every_exemption_is_live() -> None:
     """A renamed exemption must not silently hide a real coverage gap."""
     stale = sorted(_EMPTY_INPUT_IS_DEFINED - set(_ENTRY_POINTS))
     assert stale == [], f"exempted functions no longer exist as buffer entry points: {stale}"
+
+
+def test_every_block_path_entry_is_live() -> None:
+    """A renamed block-path method must not carry its xfail to a dead name.
+
+    The strict xfail catches one that gets guarded; this catches one that gets
+    renamed or dropped, where the marker would otherwise sit on a parametrize
+    id that no longer exists and quietly stop applying to anything.
+    """
+    stale = sorted(set(_REALTIME_BLOCK_PATH) - set(_ENTRY_POINTS))
+    assert stale == [], f"block-path methods no longer exist as buffer entry points: {stale}"
 
 
 @pytest.mark.parametrize("name", _EXEMPT)
@@ -259,27 +453,42 @@ def test_exemption_accepts_empty_input(name: str) -> None:
     actually rejects empty input fails, so the only way onto the exemption list
     is to be a function that returns a result for it.
     """
-    signature = _ENTRY_POINTS[name]
-    args = _call_arguments(name, signature, np.zeros(0, dtype=np.float32))
-    getattr(libsonare, name)(*args)
+    entry = _ENTRY_POINTS[name]
+    args = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
+    _invoke(name, entry, args)
 
 
-@pytest.mark.parametrize("name", _GUARDED)
+def _assert_names_the_entry_point(name: str, message: str) -> None:
+    """The rejection must name what the caller invoked.
+
+    For a method that is the method's own name, not the exported ``Class.method``
+    key: the guard builds its prefix from ``fn.__name__``, and the two largest
+    handle classes are assembled from mixins, so the only qualified name reachable
+    there is the private mixin's. Demanding the exported one would mean writing
+    the prefix out by hand at each call site — the hand-maintained list this
+    module exists to remove — and would leak ``_ProjectInspectionMixin`` at users
+    if taken from ``__qualname__`` instead.
+    """
+    invoked = name.rsplit(".", 1)[-1]
+    assert invoked in message, f"{name}: message does not name the entry point"
+
+
+@pytest.mark.parametrize("name", _GUARD_PARAMETERS)
 def test_empty_buffer_is_rejected(name: str) -> None:
-    signature = _ENTRY_POINTS[name]
-    args = _call_arguments(name, signature, np.zeros(0, dtype=np.float32))
+    entry = _ENTRY_POINTS[name]
+    args = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
     with pytest.raises(SonareValueError) as excinfo:
-        getattr(libsonare, name)(*args)
-    assert name in str(excinfo.value), f"{name}: message does not name the function"
+        _invoke(name, entry, args)
+    _assert_names_the_entry_point(name, str(excinfo.value))
 
 
-@pytest.mark.parametrize("name", _GUARDED)
+@pytest.mark.parametrize("name", _GUARD_PARAMETERS)
 def test_non_finite_buffer_is_rejected(name: str) -> None:
-    signature = _ENTRY_POINTS[name]
-    args = _call_arguments(name, signature, np.full(64, np.nan, dtype=np.float32))
+    entry = _ENTRY_POINTS[name]
+    args = _call_arguments(name, entry.signature, np.full(64, np.nan, dtype=np.float32))
     with pytest.raises(SonareValueError) as excinfo:
-        getattr(libsonare, name)(*args)
-    assert name in str(excinfo.value), f"{name}: message does not name the function"
+        _invoke(name, entry, args)
+    _assert_names_the_entry_point(name, str(excinfo.value))
 
 
 # The rank rejection is raised inside `_as_float32_buffer`, which names the

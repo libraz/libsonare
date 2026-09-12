@@ -443,6 +443,23 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
         with pytest.raises(SonareValueError, match=r"pitch_tuning: frequencies contains NaN"):
             pitch_tuning(np.full(32, math.nan, dtype=np.float32))
 
+    def test_magnitude_response_separates_an_empty_curve_from_a_non_finite_frequency(self):
+        # The two halves of the buffer rule part company here, so the derived
+        # coverage module cannot pin it: an empty frequency list is a defined
+        # empty curve, which exempts the method there and takes the non-finite
+        # half out of its reach with it. A NaN frequency is not a curve anyone
+        # can draw, and it would otherwise clamp to [0, Nyquist] and come back
+        # as a plausible dB value.
+        from libsonare import StreamingEqualizer
+
+        with StreamingEqualizer(SR, max_block_size=512) as eq:
+            assert eq.magnitude_response([]) == []
+            assert len(eq.magnitude_response([100.0, 1000.0])) == 2
+            with pytest.raises(
+                SonareValueError, match=r"magnitude_response: frequencies_hz contains NaN"
+            ):
+                eq.magnitude_response([100.0, math.nan, 1000.0])
+
 
 class TestPositiveSmoke:
     def test_metering_rms_db_finite_on_sine(self):
@@ -565,9 +582,10 @@ class TestBufferRankGuards:
         assert mel_to_stft(mel.reshape(-1), 16, 4).n_frames == 4
 
     def test_audio_from_buffer_rejects_a_stereo_read(self):
-        # Reached through `_to_c_float_array`, not through the decorator, so it
-        # is a second entry path into the same helper.
-        with pytest.raises(SonareValueError, match=r"samples must be a 1-D buffer"):
+        # The guard names the parameter the caller actually passed. Before it was
+        # applied the rank rejection came from `_to_c_float_array`'s default and
+        # read "samples", which is not what this entry point calls its buffer.
+        with pytest.raises(SonareValueError, match=r"from_buffer: data must be a 1-D buffer"):
             libsonare.Audio.from_buffer(_stereo_2d(), sample_rate=SR)
 
     def test_realtime_voice_changer_rejects_a_stereo_read(self):
