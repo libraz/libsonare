@@ -312,9 +312,9 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
 
   const int n_bins = spec.n_bins();
   const int n_frames = spec.n_frames();
-  // Taken from the complex spectrum rather than spec.magnitude(): the mel pass below fills the
-  // power cache, and the lazy magnitude cache is sqrt(power) once that exists rather than
-  // abs(z), which differs in the last bit for about one cell in seven.
+  // Built locally rather than through spec.magnitude(): magnitude() is abs(z)
+  // unconditionally now, but this avoids materializing the class-level cache
+  // when a private buffer is needed here anyway.
   std::vector<float> mag(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
   const std::complex<float>* spectrum = spec.complex_data();
   for (size_t i = 0; i < mag.size(); ++i) {

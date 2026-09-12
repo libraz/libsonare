@@ -362,9 +362,9 @@ std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descripto
 
   const int n_bins = spec.n_bins();
   const int n_spec_frames = spec.n_frames();
-  // Taken from the complex spectrum rather than spec.magnitude(): the chroma pass above fills
-  // the power cache, and the lazy magnitude cache is sqrt(power) once that exists rather than
-  // abs(z), which differs in the last bit for about one cell in seven.
+  // Built locally rather than through spec.magnitude(): magnitude() is abs(z)
+  // unconditionally now, but this avoids materializing the class-level cache
+  // when a private buffer is needed here anyway.
   std::vector<float> mag(static_cast<size_t>(n_bins) * static_cast<size_t>(n_spec_frames));
   const std::complex<float>* spectrum = spec.complex_data();
   for (size_t i = 0; i < mag.size(); ++i) {

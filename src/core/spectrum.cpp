@@ -23,42 +23,21 @@ using sonare::constants::kTwoPi;
 
 namespace detail {
 
-void magnitude_run(const std::complex<float>* data, const float* power, size_t count, float* out) {
-  if (power != nullptr) {
-    // Derive magnitude from cached power via sqrt — cheaper than recomputing
-    // re²+im² + sqrt from the complex spectrum.
-    for (size_t i = 0; i < count; ++i) {
-      out[i] = std::sqrt(power[i]);
-    }
-    return;
-  }
+void magnitude_run(const std::complex<float>* data, size_t count, float* out) {
   for (size_t i = 0; i < count; ++i) {
     out[i] = std::abs(data[i]);
   }
 }
 
-void fill_magnitude_cache(const std::vector<std::complex<float>>& data,
-                          const std::vector<float>& power, std::vector<float>& magnitude) {
+void fill_magnitude_cache(const std::vector<std::complex<float>>& data, const std::vector<float>&,
+                          std::vector<float>& magnitude) {
   magnitude.resize(data.size());
-  if (!power.empty()) {
-    magnitude_run(data.data(), power.data(), power.size(), magnitude.data());
-    return;
-  }
-  magnitude_run(data.data(), nullptr, data.size(), magnitude.data());
+  magnitude_run(data.data(), data.size(), magnitude.data());
 }
 
-void fill_power_cache(const std::vector<std::complex<float>>& data,
-                      const std::vector<float>& magnitude, std::vector<float>& power) {
+void fill_power_cache(const std::vector<std::complex<float>>& data, const std::vector<float>&,
+                      std::vector<float>& power) {
   power.resize(data.size());
-  if (!magnitude.empty()) {
-    // Magnitude already computed — squaring is cheaper than recomputing
-    // re²+im² from the complex spectrum.
-    for (size_t i = 0; i < magnitude.size(); ++i) {
-      const float m = magnitude[i];
-      power[i] = m * m;
-    }
-    return;
-  }
   // re² + im² without sqrt (auto-vectorized by the compiler, on par with Eigen).
   for (size_t i = 0; i < data.size(); ++i) {
     const float re = data[i].real();

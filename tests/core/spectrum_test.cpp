@@ -1166,13 +1166,11 @@ TEST_CASE("reassignment helpers reject non-positive STFT dimensions", "[spectrum
   }
 }
 
-TEST_CASE("the magnitude and power caches derive from whichever was filled first",
+TEST_CASE("each cache is one fixed formula regardless of which was filled first",
           "[spectrum][cache]") {
-  // Both caches are lazy, and each is built from the other when that one already exists, so the
-  // accessor called first decides which is computed from the complex spectrum and which is a
-  // derivation of it. One Spectrogram shared between a magnitude consumer and a power consumer
-  // therefore cannot give both the direct form; an analyzer that needs both takes its magnitude
-  // from complex_data() instead, which is what the first assertion here pins.
+  // Neither cache derives from the other: magnitude() is always abs(z) and power() is always
+  // re^2+im^2, so a Spectrogram shared between a magnitude consumer and a power consumer gives
+  // both their direct form no matter which accessor ran first on it.
   const int sr = 22050;
   std::vector<float> samples(4096);
   uint32_t state = 22695477u;
@@ -1188,33 +1186,34 @@ TEST_CASE("the magnitude and power caches derive from whichever was filled first
   config.hop_length = 64;
 
   const Spectrogram magnitude_first = Spectrogram::compute(audio, config);
-  const std::vector<float> direct_magnitude = magnitude_first.magnitude();
-  const std::vector<float> derived_power = magnitude_first.power();
+  const std::vector<float> magnitude_then_power_mag = magnitude_first.magnitude();
+  const std::vector<float> magnitude_then_power_pow = magnitude_first.power();
 
   const Spectrogram power_first = Spectrogram::compute(audio, config);
-  const std::vector<float> direct_power = power_first.power();
-  const std::vector<float> derived_magnitude = power_first.magnitude();
+  const std::vector<float> power_then_magnitude_pow = power_first.power();
+  const std::vector<float> power_then_magnitude_mag = power_first.magnitude();
 
-  REQUIRE(direct_magnitude.size() == derived_magnitude.size());
-  REQUIRE(direct_power.size() == derived_power.size());
-  REQUIRE_FALSE(direct_magnitude.empty());
+  REQUIRE(magnitude_then_power_mag.size() == power_then_magnitude_mag.size());
+  REQUIRE(magnitude_then_power_pow.size() == power_then_magnitude_pow.size());
+  REQUIRE_FALSE(magnitude_then_power_mag.empty());
 
   const std::complex<float>* spectrum = magnitude_first.complex_data();
   size_t magnitude_differs = 0;
   size_t power_differs = 0;
-  for (size_t i = 0; i < direct_magnitude.size(); ++i) {
+  for (size_t i = 0; i < magnitude_then_power_mag.size(); ++i) {
     CAPTURE(i);
-    // The direct magnitude is abs(z), so reading complex_data() reproduces it exactly.
-    REQUIRE(direct_magnitude[i] == std::abs(spectrum[i]));
-    // The derived forms are the other formula for the same quantity, pinned rather than
-    // assumed equal to the direct one.
-    REQUIRE(derived_magnitude[i] == std::sqrt(direct_power[i]));
-    REQUIRE(derived_power[i] == direct_magnitude[i] * direct_magnitude[i]);
-    if (derived_magnitude[i] != direct_magnitude[i]) ++magnitude_differs;
-    if (derived_power[i] != direct_power[i]) ++power_differs;
+    // Both orderings reproduce the direct formulas from the complex spectrum exactly.
+    CHECK(magnitude_then_power_mag[i] == std::abs(spectrum[i]));
+    CHECK(power_then_magnitude_mag[i] == std::abs(spectrum[i]));
+    const float re = spectrum[i].real();
+    const float im = spectrum[i].imag();
+    CHECK(magnitude_then_power_pow[i] == re * re + im * im);
+    CHECK(power_then_magnitude_pow[i] == re * re + im * im);
+    if (power_then_magnitude_mag[i] != magnitude_then_power_mag[i]) ++magnitude_differs;
+    if (power_then_magnitude_pow[i] != magnitude_then_power_pow[i]) ++power_differs;
   }
-  // Not asserted as non-zero: the two formulas agreeing everywhere would make the workaround
-  // unnecessary rather than wrong. Reported so the margin is visible when this is read.
-  CAPTURE(direct_magnitude.size(), magnitude_differs, power_differs);
-  SUCCEED();
+  // Asserted as zero now that neither formula depends on call order.
+  CAPTURE(magnitude_then_power_mag.size(), magnitude_differs, power_differs);
+  CHECK(magnitude_differs == 0);
+  CHECK(power_differs == 0);
 }

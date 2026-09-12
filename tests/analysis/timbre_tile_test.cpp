@@ -7,10 +7,12 @@
 ///          the comparison is exact equality: a tolerance would not see a value
 ///          that moved because of where it sat in the iteration space.
 ///
-///          Three cache states, because which one the Spectrogram is in decides
-///          what the tile holds, and they do not agree with each other -- sqrt of
-///          a cached power and abs(z) differ on roughly one cell in seven. The
-///          oracle mirrors the state; it does not assert the states agree.
+///          Three cache states are exercised, and they now share ONE oracle: after
+///          removing the magnitude/power cross-derivation, magnitude() is abs(z)
+///          regardless of which accessor ran first, so a state that disagreed with
+///          the oracle would be the defect this test exists to catch.
+
+#include <sonare/sonare_c.h>
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -73,6 +75,9 @@ StftConfig config() {
 }
 
 /// @brief The magnitude the tile holds, built whole: sqrt(power) or abs(z).
+/// @details Both paths are one fixed formula of the complex spectrum now, so the
+///          two are bit-identical; kept as two paths so a section can still choose
+///          which cache it forces to populate first.
 std::vector<float> oracle_magnitude(const Spectrogram& spec, bool from_power) {
   const size_t n = static_cast<size_t>(spec.n_bins()) * static_cast<size_t>(spec.n_frames());
   std::vector<float> mag(n);
@@ -160,7 +165,7 @@ TEST_CASE("the two magnitude formulas actually disagree on this fixture",
   WARN("magnitude formulas differ in " << d << " of " << from_power.size() << " cells");
 }
 
-TEST_CASE("tiled magnitude matches an untiled oracle in every cache state",
+TEST_CASE("tiled magnitude matches an untiled oracle, bit-identical across cache states",
           "[timbre][tile][spectrum]") {
   const Audio audio = make_audio();
   TimbreConfig cfg;
@@ -170,38 +175,39 @@ TEST_CASE("tiled magnitude matches an untiled oracle in every cache state",
   MelFilterConfig mel_cfg;
   mel_cfg.n_mels = cfg.n_mels;
 
+  // One oracle for all three sections below. Neither magnitude() nor power() derives
+  // from the other any more, so the same abs(z) reference applies whichever cache a
+  // section forces to populate first -- the three states matching this one oracle is
+  // exactly them matching each other bit for bit.
+  Spectrogram probe = Spectrogram::compute(audio, config());
+  REQUIRE(probe.n_frames() == kTargetFrames);
+  // A partial final tile is what makes a tile-offset error visible at all.
+  REQUIRE(probe.n_frames() % 256 != 0);
+  const std::vector<float> oracle = oracle_magnitude(probe, /*from_power=*/false);
+  const Descriptors ref = untiled(oracle, probe.n_bins(), probe.n_frames());
+
   SECTION("power cached first -- the ordering analyze() produces") {
     Spectrogram spec = Spectrogram::compute(audio, config());
-    REQUIRE(spec.n_frames() == kTargetFrames);
-    // A partial final tile is what makes a tile-offset error visible at all.
-    REQUIRE(spec.n_frames() % 256 != 0);
     const MelSpectrogram mel = MelSpectrogram::from_spectrogram(spec, kSr, mel_cfg);
-    const std::vector<float> mag = oracle_magnitude(spec, /*from_power=*/true);
     const TimbreAnalyzer analyzer(spec, mel, cfg);
-    compare(analyzer, untiled(mag, spec.n_bins(), spec.n_frames()));
+    compare(analyzer, ref);
   }
 
   SECTION("magnitude cached first -- the tile loop must use the cache, not recompute") {
     Spectrogram spec = Spectrogram::compute(audio, config());
-    // Pins abs(z), NOT the power-first answer. The two orderings legitimately
-    // disagree on roughly one cell in seven, and preserving that disagreement is
-    // the point: a test asserting the orderings agree would fail correctly, and
-    // "fixing" it by changing the code would change every consumer's values.
-    const std::vector<float> mag = oracle_magnitude(spec, /*from_power=*/false);
-    REQUIRE(spec.magnitude().size() == mag.size());
+    REQUIRE(spec.magnitude().size() == oracle.size());
     const MelSpectrogram mel = MelSpectrogram::from_spectrogram(spec, kSr, mel_cfg);
     const TimbreAnalyzer analyzer(spec, mel, cfg);
-    compare(analyzer, untiled(mag, spec.n_bins(), spec.n_frames()));
+    compare(analyzer, ref);
   }
 
-  SECTION("neither cached -- the tile holds abs(z)") {
+  SECTION("neither cached -- the tile computes abs(z) fresh") {
     Spectrogram spec = Spectrogram::compute(audio, config());
     // Mel comes from a second spectrogram so this one's caches stay empty.
     Spectrogram other = Spectrogram::compute(audio, config());
     const MelSpectrogram mel = MelSpectrogram::from_spectrogram(other, kSr, mel_cfg);
-    const std::vector<float> mag = oracle_magnitude(spec, /*from_power=*/false);
     const TimbreAnalyzer analyzer(spec, mel, cfg);
-    compare(analyzer, untiled(mag, spec.n_bins(), spec.n_frames()));
+    compare(analyzer, ref);
   }
 
   SECTION("flux tiles with lag overlap -- its zero prefix is positional") {
@@ -210,11 +216,9 @@ TEST_CASE("tiled magnitude matches an untiled oracle in every cache state",
     // Without the overlap a zero would appear at every tile boundary instead of
     // only at frame 0, which is what makes the prefix positional rather than a
     // property of the data.
-    Spectrogram spec = Spectrogram::compute(audio, config());
-    const int n_bins = spec.n_bins();
-    const int n_frames = spec.n_frames();
-    const std::vector<float> mag = oracle_magnitude(spec, /*from_power=*/false);
-    const std::vector<float> ref = spectral_flux(mag.data(), n_bins, n_frames, kFluxLag);
+    const int n_bins = probe.n_bins();
+    const int n_frames = probe.n_frames();
+    const std::vector<float> ref_flux = spectral_flux(oracle.data(), n_bins, n_frames, kFluxLag);
 
     std::vector<float> tiled;
     std::vector<float> buf;
@@ -226,13 +230,14 @@ TEST_CASE("tiled magnitude matches an untiled oracle in every cache state",
       const int discard = first - lo;
       buf.assign(static_cast<size_t>(n_bins) * static_cast<size_t>(len), 0.0f);
       for (int b = 0; b < n_bins; ++b) {
-        const float* src = mag.data() + static_cast<size_t>(b) * static_cast<size_t>(n_frames) + lo;
+        const float* src =
+            oracle.data() + static_cast<size_t>(b) * static_cast<size_t>(n_frames) + lo;
         std::copy(src, src + len, buf.data() + static_cast<size_t>(b) * static_cast<size_t>(len));
       }
       const std::vector<float> f = spectral_flux(buf.data(), n_bins, len, kFluxLag);
       tiled.insert(tiled.end(), f.begin() + discard, f.end());
     }
-    CHECK(differ(tiled, ref) == 0);
+    CHECK(differ(tiled, ref_flux) == 0);
 
     // Non-vacuity: drop the overlap and the boundary frames must go wrong.
     std::vector<float> no_overlap;
@@ -241,23 +246,50 @@ TEST_CASE("tiled magnitude matches an untiled oracle in every cache state",
       buf.assign(static_cast<size_t>(n_bins) * static_cast<size_t>(len), 0.0f);
       for (int b = 0; b < n_bins; ++b) {
         const float* src =
-            mag.data() + static_cast<size_t>(b) * static_cast<size_t>(n_frames) + first;
+            oracle.data() + static_cast<size_t>(b) * static_cast<size_t>(n_frames) + first;
         std::copy(src, src + len, buf.data() + static_cast<size_t>(b) * static_cast<size_t>(len));
       }
       const std::vector<float> f = spectral_flux(buf.data(), n_bins, len, kFluxLag);
       no_overlap.insert(no_overlap.end(), f.begin(), f.end());
     }
-    CHECK(differ(no_overlap, ref) > 0);
+    CHECK(differ(no_overlap, ref_flux) > 0);
   }
 
   SECTION("the comparison can go red -- a one-frame tile offset") {
     Spectrogram spec = Spectrogram::compute(audio, config());
     const MelSpectrogram mel = MelSpectrogram::from_spectrogram(spec, kSr, mel_cfg);
-    const std::vector<float> mag = oracle_magnitude(spec, /*from_power=*/true);
     const TimbreAnalyzer analyzer(spec, mel, cfg);
-    const Descriptors bad = offset_by_one(mag, spec.n_bins(), spec.n_frames(), 256);
+    const Descriptors bad = offset_by_one(oracle, spec.n_bins(), spec.n_frames(), 256);
     CHECK(differ(analyzer.spectral_centroid(), bad.centroid) > 0);
     CHECK(differ(analyzer.spectral_flatness(), bad.flatness) > 0);
     CHECK(differ(analyzer.spectral_rolloff(), bad.rolloff) > 0);
   }
+}
+
+TEST_CASE("sonare_stft's power equals re^2+im^2 independent of a preceding magnitude read",
+          "[timbre][tile][spectrum][c-api]") {
+  // The cross-entry-point guard: sonare_stft (src/c_api/features_spectrogram_mel.cpp)
+  // reads magnitude() then power() on one Spectrogram, which used to return
+  // power = abs(z)^2 rather than the re^2+im^2 every other power consumer gets.
+  const Audio audio = make_audio();
+
+  SonareStftResult result{};
+  REQUIRE(sonare_stft(audio.data(), audio.size(), audio.sample_rate(), kNfft, kHop, &result) ==
+          SONARE_OK);
+
+  // Independent reference, built from a second spectrogram's complex data without
+  // ever calling Spectrogram::power() or ::magnitude().
+  Spectrogram spec = Spectrogram::compute(audio, config());
+  const std::complex<float>* z = spec.complex_data();
+  const size_t n = static_cast<size_t>(spec.n_bins()) * static_cast<size_t>(spec.n_frames());
+  REQUIRE(n == static_cast<size_t>(result.n_bins) * static_cast<size_t>(result.n_frames));
+
+  int d = 0;
+  for (size_t i = 0; i < n; ++i) {
+    const float expected = z[i].real() * z[i].real() + z[i].imag() * z[i].imag();
+    if (result.power[i] != expected) ++d;
+  }
+  CHECK(d == 0);
+
+  sonare_free_stft_result(&result);
 }
