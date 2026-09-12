@@ -26,6 +26,8 @@ MAKEFILE = """
 format:
 \truff format bindings/python/src
 \truff check --fix .
+\tgit ls-files -z -- '*.py' | xargs -0 ruff check --fix
+\t$(MAKE) lint
 lint:
 \truff check .
 format-check:
@@ -47,6 +49,16 @@ WORKFLOW = """
 def test_a_fix_flag_is_not_a_narrower_scope() -> None:
     """`make format` runs the same path with `--fix`; only the path is scope."""
     assert mod.ruff_targets(MAKEFILE) == ["."]
+
+
+def test_an_xargs_fed_call_contributes_no_target() -> None:
+    """The auto-fix side ends its line at the flags and takes files from `xargs`.
+
+    A match allowed to cross the newline reads the next recipe line instead, so
+    the Makefile reported a scope of `$(MAKE)` alongside `.` and disagreed with
+    both workflows over an invocation that names no path at all.
+    """
+    assert mod.ruff_targets("\tgit ls-files -z | xargs -0 ruff check --fix\n\t$(MAKE) lint\n") == []
 
 
 def test_the_ruff_target_is_read_out_of_a_workflow_too() -> None:

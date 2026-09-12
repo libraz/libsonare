@@ -34,8 +34,13 @@ LOCK = REPO_ROOT / "bindings/python/requirements-dev.lock"
 
 #: `ruff check <target>`, however the interpreter in front of it is spelled and
 #: whatever flags sit between. Only the target is scope: `make format` runs the
-#: same path with `--fix` and that is not a narrower gate.
-RUFF_CALL = re.compile(r"ruff\s+check\s+(?:--[\w-]+\s+)*(?P<target>[^\s|;&]+)")
+#: same path with `--fix` and that is not a narrower gate. The target has to sit
+#: on the same line, because the auto-fix side takes its files from an `xargs`
+#: pipeline and so ends the line at the flags: letting the match cross the
+#: newline read the next recipe line as the scope, and letting a flag be the
+#: target reads `--fix` as one.
+RUFF_CALL = re.compile(
+    r"ruff[ \t]+check(?:[ \t]+--[\w-]+)*[ \t]+(?P<target>(?!-)[^\s|;&]+)")
 
 #: The pathspec list a `git ls-files ... -- <specs> |` pipeline feeds clang-format.
 LS_FILES_SPECS = re.compile(r"git ls-files[^|]*?--\s+(?P<specs>(?:'[^']*'\s*)+)")
