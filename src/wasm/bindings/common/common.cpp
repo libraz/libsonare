@@ -272,6 +272,14 @@ int checkedIntFromVal(const val& value, const char* key) {
         ErrorCode::InvalidParameter,
         std::string(key) + " must be a finite number within the 32-bit integer range");
   }
+  // The cast truncates, and truncation is the same class of silent value change
+  // as the saturation above: 31.5 separates on 31, and anything in (-1, 0) lands
+  // on the 0 that most of these fields read as "keep the default". Refusing here
+  // rather than per facade is what reaches a caller driving the embind classes
+  // directly, which no JS-side check can see.
+  if (number != std::trunc(number)) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
+  }
   return static_cast<int>(number);
 }
 

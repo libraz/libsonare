@@ -206,11 +206,15 @@ std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
 float floatProperty(val object, const char* key, float default_value);
-/// @brief Narrows a JS number to int, rejecting anything out of range.
+/// @brief Narrows a JS number to int, rejecting anything out of range or
+///        fractional.
 /// @details The one place that knows how to do this safely. A reader that needs
 ///          an int from a val must call this rather than val::as<int>(), which
 ///          saturates: a file-local copy in repair.cpp accepted 2^31 and
-///          4294967295 as the same INT_MAX for 15 fields.
+///          4294967295 as the same INT_MAX for 15 fields. Truncation is the same
+///          silent value change from the other end, so both are refused here
+///          rather than per facade -- a JS-side check cannot see a caller
+///          driving the embind classes directly.
 /// @throws SonareException(InvalidParameter) naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
 int intProperty(val object, const char* key, int default_value);

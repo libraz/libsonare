@@ -125,6 +125,11 @@ export function assertInt32(fnName: string, value: number, argName: string): voi
  * Parity, positivity and the ceiling stay the core's to enforce, and it names
  * the median filter that rejected the value. What cannot be deferred is the
  * narrowing itself: a wrapped kernel arrives as a legal one and separates on it.
+ *
+ * These two arrive POSITIONALLY, so they never pass through the options-bag
+ * reader and inherit none of its checks. That is what separates this from
+ * {@link assertPercussiveSeparation}, which duplicates a reader check to improve
+ * a message; here there is no reader to duplicate.
  */
 export function assertHpssKernels(
   fnName: string,
@@ -158,13 +163,13 @@ export interface PercussiveSeparationFields {
 /**
  * Check the percussive-event separation's framing and kernels for integrality.
  *
- * All four fields reach the module through one options-bag reader, which
- * refuses a non-finite or out-of-range value by name — but it narrows with a
- * cast, so a fractional value truncates instead. 31.5 separates on 31, and
- * anything in `(-1, 0)` truncates to the 0 every one of these fields reads as
- * "keep the default", so the call succeeds on a framing the caller never asked
- * for. Range stays the reader's, which names the field it rejected;
- * integrality is what cannot be deferred to it.
+ * All four fields reach the module through one options-bag reader, which now
+ * refuses a fractional value itself, so this is the diagnostic rather than the
+ * guarantee: it fires first and names the function, where the reader can only
+ * name the field. Both reject the same set, so they cannot disagree about an
+ * input — only about how the message reads. Do not narrow this to fields the
+ * reader misses; there are none, and a check scoped to a gap that no longer
+ * exists is how a stale justification outlives its divergence.
  *
  * The fields are iterated rather than named at each call site so a new one is
  * visible here. Absence means the default, so an omitted field is not resolved.

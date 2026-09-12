@@ -61,13 +61,6 @@
       "reason": "The shared enum reader's numeric path. It rejects a non-number before the cast but does not range-check the ordinal, so what a saturated value becomes depends on whether the patch field it fills is validated downstream. Unmeasured."
     },
     {
-      "file": "bindings/project/project_bounce.cpp",
-      "receiver": "options[\"numChannels\"]",
-      "type": "int",
-      "triage": "pending",
-      "reason": "Refused for out-of-range input, but by the channel-count check that rejects anything above two rather than by a range check -- a rescue that holds only while that bound stays narrow. Correct today, for a reason that is not this one."
-    },
-    {
       "file": "bindings/project/project_external_stems.cpp",
       "receiver": "request[\"sampleRate\"]",
       "type": "int",

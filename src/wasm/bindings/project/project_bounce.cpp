@@ -179,7 +179,7 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
       opts.block_size = checkedIntFromVal(options["blockSize"], "blockSize");
     }
     if (hasProperty(options, "numChannels")) {
-      opts.num_channels = options["numChannels"].as<int>();
+      opts.num_channels = checkedIntFromVal(options["numChannels"], "numChannels");
       // The project bounce only produces a mono downmix or the stereo pair;
       // wider counts would surface a generic InvalidState from the C ABI later.
       // Reject them here so WASM matches the C-ABI oracle up front. A
