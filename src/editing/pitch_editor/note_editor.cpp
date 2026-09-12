@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "editing/note_model/note_renderer.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -20,12 +21,15 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
   const int length = clipped.offset_sample - clipped.onset_sample;
   SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
 
+  const int fade = fade_samples(audio.sample_rate(), length);
   std::vector<float> output(audio.begin(), audio.end());
   std::vector<float> segment(audio.begin() + clipped.onset_sample,
                              audio.begin() + clipped.offset_sample);
-  apply_edge_fades(segment, fade_samples(audio.sample_rate(), length));
+  apply_edge_fades(segment, fade);
 
-  std::fill(output.begin() + clipped.onset_sample, output.begin() + clipped.offset_sample, 0.0f);
+  // Ramps the vacated span out instead of cutting it, the way note rendering
+  // vacates the same kind of span.
+  note_model::erase_span(output, audio, clipped.onset_sample, clipped.offset_sample, fade);
 
   const int target_start = std::clamp(target_onset_sample, 0, static_cast<int>(output.size()));
   const int target_end = std::min(target_start + length, static_cast<int>(output.size()));

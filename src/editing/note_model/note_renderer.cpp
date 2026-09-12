@@ -65,20 +65,6 @@ float fade_phase(int64_t k, int64_t length, int64_t fade) noexcept {
   return 1.0f;
 }
 
-/// Ramps the source out over [@p begin, @p end) rather than cutting it. A note
-/// that is muted, shortened or moved away leaves this range behind, and a hard
-/// cut would put a step there; whatever @ref overlay writes back over the range
-/// replaces it outright.
-void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
-                int64_t fade) {
-  const int64_t length = end - begin;
-  for (int64_t j = begin; j < end; ++j) {
-    const float phase = fade_phase(j - begin, length, fade);
-    const float source_gain = phase >= 1.0f ? 0.0f : std::cos(kHalfPi * phase);
-    output[static_cast<size_t>(j)] = source_gain * source[static_cast<size_t>(j)];
-  }
-}
-
 /// Writes @p segment at @p dest, cross-fading its edges against the untouched
 /// source over @p fade samples with the equal-power (cos/sin) weights
 /// NoteEditor splices with: the source ramps down while the segment ramps up,
@@ -170,6 +156,16 @@ void apply_pitch_curve(std::vector<float>& segment, const NoteObject& note, int 
 }
 
 }  // namespace
+
+void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
+                int64_t fade) {
+  const int64_t length = end - begin;
+  for (int64_t j = begin; j < end; ++j) {
+    const float phase = fade_phase(j - begin, length, fade);
+    const float source_gain = phase >= 1.0f ? 0.0f : std::cos(kHalfPi * phase);
+    output[static_cast<size_t>(j)] = source_gain * source[static_cast<size_t>(j)];
+  }
+}
 
 void validate_note_for_render(const NoteObject& note) {
   SONARE_CHECK(note.onset_sample >= 0 && note.length_samples() > 0, ErrorCode::InvalidParameter);

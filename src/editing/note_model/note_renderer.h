@@ -8,6 +8,7 @@
 /// identity therefore reproduces the input bit for bit, which is the property
 /// the whole editing model rests on.
 
+#include <cstdint>
 #include <vector>
 
 #include "core/audio.h"
@@ -25,6 +26,19 @@ struct NoteRenderConfig {
   /// @ref PitchDecomposition a host drew from rather than restating the cutoff.
   PitchDecompositionConfig decomposition{};
 };
+
+/// @brief Ramps @p source out over [@p begin, @p end) of @p output rather than
+///        cutting it, over @p fade samples at each edge.
+/// @details A note that is muted, shortened or moved away leaves that range
+///          behind, and a hard cut puts a step there. The taper is the
+///          equal-power counterpart of the one the note cross-fades use, so the
+///          seam keeps its level; @c fade of 0 is a hard cut.
+///
+///          Exposed because the pitch editor vacates a span the same way and a
+///          second copy of the taper would drift out of step with the
+///          cross-fade it is paired against.
+void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
+                int64_t fade);
 
 /// @brief Validates one note's span and edit fields as @ref render_notes does.
 /// @details Exposed because the polyphonic chain makes the same per-note checks

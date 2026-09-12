@@ -613,7 +613,12 @@ TEST_CASE("NoteEditor moves note region with edge fades", "[pitch_editor]") {
   const sonare::Audio moved = editor.move_note(audio, region, 500);
 
   REQUIRE(moved.size() == audio.size());
-  REQUIRE_THAT(moved[100], WithinAbs(0.0f, 0.0001f));
+  // The vacated span ramps out of the source instead of being cut: the taper's
+  // first point sits half a fade step in, so sample 100 keeps most of its level.
+  REQUIRE_THAT(moved[100], WithinAbs(0.49384f, 0.001f));
+  REQUIRE(moved[100] > moved[101]);
+  REQUIRE(moved[101] > moved[104]);
+  REQUIRE_THAT(moved[105], WithinAbs(0.0f, 0.000001f));
   REQUIRE(moved[510] > 0.0f);
   REQUIRE(moved[500] < moved[510]);
   // The moved note must fade down toward its final sample. A reversed tail
@@ -621,6 +626,26 @@ TEST_CASE("NoteEditor moves note region with edge fades", "[pitch_editor]") {
   // producing both a dropout and a click at the note offset.
   REQUIRE(moved[699] < moved[695]);
   REQUIRE(moved[699] < 0.1f);
+}
+
+TEST_CASE("NoteEditor vacates a moved note span without a step at the seam", "[pitch_editor]") {
+  constexpr int sample_rate = 1000;
+  // Continuous material either side of the note, which is the case where a hard
+  // cut at the vacated edge is audible as a click.
+  std::vector<float> samples(1000, 0.5f);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+
+  NoteRegion region;
+  region.onset_sample = 400;
+  region.offset_sample = 600;
+
+  NoteEditor editor({5.0f, sonare::StretchBackend::NativeSpectral});
+  const sonare::Audio moved = editor.move_note(audio, region, 700);
+
+  // A hard fill steps the whole 0.5 at either edge; the taper's first step is
+  // 0.5 * (1 - cos(pi/2 * 0.1)) = 0.0062.
+  REQUIRE(std::abs(moved[400] - moved[399]) < 0.05f);
+  REQUIRE(std::abs(moved[600] - moved[599]) < 0.05f);
 }
 
 TEST_CASE("NoteEditor stretches note region to requested length ratio", "[pitch_editor]") {
