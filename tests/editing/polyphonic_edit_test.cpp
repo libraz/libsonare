@@ -21,6 +21,7 @@
 #include "editing/polyphony/masked_renderer.h"
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
+#include "editing/polyphony/shared_bins.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -137,13 +138,17 @@ sonare::Spectrogram spectrogram_of(const sonare::Audio& audio,
 
 // --- The chain this file composes ------------------------------------------
 
-/// @brief The four committed calls the contract runs, in the order it states.
+/// @brief The committed calls the contract runs, in the order it states.
 /// @details The oracle for everything @ref analyze_polyphonic returns. Built from
 ///          the public entry points rather than from a second spelling of what
 ///          they do, so a case reading it is comparing one composition against
 ///          another and not against a remembered number. The spectrogram form of
 ///          the extraction is the one used, since that is the call that takes an
 ///          STFT the caller already holds.
+///
+///          A composition is only an oracle for the stages it runs: a stage
+///          missing from both sides agrees with itself. @ref masks_differ is what
+///          keeps that from passing silently for the apportionment.
 struct Chain {
   sonare::Spectrogram spectrum;
   MultiF0Track track;
@@ -158,9 +163,24 @@ Chain chain_by_hand(const sonare::Audio& audio, const PolyphonicEditConfig& conf
   built.spectrum = sonare::Spectrogram::compute(audio, config.extraction.stft);
   built.track = extract_multi_f0(audio, built.spectrum, config.extraction);
   built.masks = build_note_masks(built.spectrum, built.track, config.masks);
+  built.masks = solve_shared_bins(built.spectrum, built.masks, built.track, config.shared_bins);
   built.notes =
       make_masked_notes(built.spectrum, built.track, built.masks, built.length, config.notes);
   return built;
+}
+
+/// @brief Whether two mask sets divide any shared bin differently.
+/// @details The geometry is not compared: the apportionment is defined to leave
+///          the bins and the note order alone, so the weights are the only place
+///          its presence shows. A caller asserting a difference over equal
+///          geometry is asserting that one stage ran.
+bool masks_differ(const NoteMaskSet& a, const NoteMaskSet& b) {
+  if (a.notes.size() != b.notes.size()) return true;
+  for (size_t i = 0; i < a.notes.size(); ++i) {
+    if (a.notes[i].bins != b.notes[i].bins) return true;
+    if (a.notes[i].weights != b.notes[i].weights) return true;
+  }
+  return false;
 }
 
 // --- Hand-built analyses ---------------------------------------------------
@@ -601,6 +621,13 @@ TEST_CASE("the analysis is the chain below it, measured at the source's own leng
     INFO("the extraction found " << want.track.ridges.size() << " ridges");
     REQUIRE(!analysis.notes.empty());
 
+    // The oracle's last mask stage is not a no-op on this material, which is what
+    // makes the mask comparison below able to see it at all. Without this the
+    // chain and the call could both be missing the apportionment and agree.
+    const NoteMaskSet equally_split =
+        build_note_masks(want.spectrum, want.track, PolyphonicEditConfig{}.masks);
+    REQUIRE(masks_differ(equally_split, want.masks));
+
     require_same_spectrum(analysis.spectrum, want.spectrum);
     require_same_track(analysis.track, want.track);
     require_same_masks(analysis.masks, want.masks);
@@ -675,7 +702,7 @@ TEST_CASE("every member of the analysis describes the others", "[polyphony_edit]
   require_usable_notes(analysis);
 }
 
-TEST_CASE("the three stage configurations reach their stages", "[polyphony_edit]") {
+TEST_CASE("every stage configuration reaches its stage", "[polyphony_edit]") {
   // One config per stage, read off a value rather than off the absence of a
   // throw. A config silently dropped would return the default analysis, which is
   // a correct-looking result measured against something the caller did not ask
@@ -719,6 +746,26 @@ TEST_CASE("the three stage configurations reach their stages", "[polyphony_edit]
     // residual carries.
     require_telescopes(render_polyphonic(analysis), analysis.spectrum.to_audio(analysis.length),
                        "a three-partial claim", analysis.notes.size());
+  }
+
+  SECTION("the thresholds the apportionment refuses on") {
+    // Read off both ends of one threshold rather than off a carried value: the
+    // mask set does not carry SharedBinConfig, so the only evidence the config
+    // arrived is the division it produced.
+    PolyphonicEditConfig config;
+    config.shared_bins.window_frames = 64;
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+    require_same_masks(analysis.masks, chain_by_hand(audio, config).masks);
+
+    // A window longer than the material's own frame count leaves every span too
+    // short to fit, so every shared bin refuses and the equal split stands.
+    REQUIRE(config.shared_bins.window_frames > analysis.spectrum.n_frames());
+    const NoteMaskSet equally_split =
+        build_note_masks(analysis.spectrum, analysis.track, config.masks);
+    REQUIRE(!masks_differ(equally_split, analysis.masks));
+    // And the default does divide this material, so the section above is not
+    // reporting a stage that never moves anything.
+    REQUIRE(masks_differ(equally_split, base.masks));
   }
 
   SECTION("the reference pitch the measurement is stated against") {

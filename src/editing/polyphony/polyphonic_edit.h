@@ -25,6 +25,7 @@
 #include "editing/note_model/note_renderer.h"
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
+#include "editing/polyphony/shared_bins.h"
 
 namespace sonare::editing::polyphony {
 
@@ -32,6 +33,11 @@ struct PolyphonicEditConfig {
   /// Carries the STFT geometry the whole chain runs in.
   MultiF0ExtractorConfig extraction{};
   NoteMaskConfig masks{};
+  /// The refusal thresholds the apportionment runs under. Its defaults are the
+  /// measured ones and lowering a threshold buys bins at the price of solving
+  /// ones a fit cannot do, which @ref solve_shared_bins states costs more than it
+  /// gains.
+  SharedBinConfig shared_bins{};
   /// @ref make_masked_notes reads two of the segmenter's fields and checks the
   /// rest for finiteness, so an unrelated field that is not finite is still
   /// refused. Read by two is not the same as harmless to set.
@@ -48,6 +54,10 @@ struct PolyphonicAnalysis {
   /// run over.
   Spectrogram spectrum;
   MultiF0Track track;
+  /// Apportioned, not equally split: a weight is the partial's fitted
+  /// contribution over the observed bin, so it is complex and may exceed one
+  /// where two partials partly cancel. Where a bin was refused, the equal share
+  /// @ref build_note_masks gave it stands.
   NoteMaskSet masks;
   /// One per mask, in the masks' order. The only member a host writes, and only
   /// each note's @c edit: the spans and curves are measurements, and the order is
@@ -68,9 +78,29 @@ struct PolyphonicAnalysis {
 
 /// @brief Finds the notes in @p audio and measures each over its own separation.
 /// @details Runs the chain once: one STFT, the multi-F0 extraction over it, a mask
-///          per tracked ridge, and @ref make_masked_notes for the measured fields.
+///          per tracked ridge, @ref solve_shared_bins to apportion the bins two
+///          notes stand on, and @ref make_masked_notes for the measured fields.
 ///          Every returned note has an identity edit, so rendering the result
 ///          unchanged reproduces the analysis's own round trip.
+///
+///          The apportionment is in the chain rather than offered beside it,
+///          because an equal split is not a neutral default: a bin is claimed
+///          from a note's f0 and harmonic number, never from the spectrum, so a
+///          note claims bins its own partials never reached, and an equal share
+///          there takes half of whatever else is standing on them. What the fit
+///          cannot do it refuses, and a refused bin keeps the equal share, so the
+///          stage only ever replaces a split with something measured.
+///
+///          One consequence is not a refinement and is worth stating plainly.
+///          A weight is the fitted component over the observation, so where two
+///          partials nearly cancel it exceeds one, and @ref mask_total reaches
+///          @ref SharedBinConfig::max_weight_modulus there. @ref residual_spectrum
+///          is @c 1 - total unclamped, so at such a bin it carries several times
+///          the input. **While every edit is identity this is inaudible** -- the
+///          notes and the residual still sum to the input, which is the whole of
+///          @ref render_polyphonic's round-trip claim. **The moment one note
+///          moves, what is left there no longer cancels.** Lowering that ceiling
+///          trades separation for a quieter residual.
 ///
 ///          A result with no notes is not an error. Silence, or material the
 ///          register of the framing cannot resolve, tracks no ridge; rendering
@@ -84,8 +114,9 @@ struct PolyphonicAnalysis {
 ///         longer than @ref PolyphonicAnalysis::length can hold -- the length is
 ///         an @c int because every stage below takes one, so a source past that
 ///         has to be refused here rather than wrapped into a shorter render --
-///         plus every reason @ref extract_multi_f0, @ref build_note_masks and
-///         @ref make_masked_notes throw about their inputs or their configs.
+///         plus every reason @ref extract_multi_f0, @ref build_note_masks,
+///         @ref solve_shared_bins and @ref make_masked_notes throw about their
+///         inputs or their configs.
 PolyphonicAnalysis analyze_polyphonic(const Audio& audio, const PolyphonicEditConfig& config = {});
 
 /// @brief Renders @p analysis back to audio, with whatever edits its notes carry.
