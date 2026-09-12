@@ -8,12 +8,12 @@
 #include "mixing/alignment_delay.h"
 #include "sonare_c_internal.h"
 #if defined(SONARE_WITH_MIXING)
-#include <exception>
 #include <string>
 
 #include "c_api/eq_band_json.h"
 #include "c_api/mixing_internal.h"
 #include "mixing/api/scene.h"
+#include "util/json.h"
 #endif
 
 using namespace sonare;
@@ -22,13 +22,15 @@ using namespace sonare_c_detail;
 #if defined(SONARE_WITH_MIXING)
 namespace {
 
-/// Parses a mixing scene from a JSON string, recording the parse-failure message
-/// and mapping a failure to SONARE_ERROR_INVALID_FORMAT. Shared by the
-/// strip-setter entry points that accept a scene JSON payload.
+/// Parses a mixing scene from a JSON string, mapping a syntactic parse failure
+/// to SONARE_ERROR_INVALID_FORMAT. Shared by the strip-setter entry points that
+/// accept a scene JSON payload. A semantic failure inside a well-formed document
+/// is left to SONARE_C_CATCH so it maps by exception class, which is what
+/// separates "your document is corrupt" from "this value is out of range".
 SonareError parse_scene_json(const char* json, mixing::api::Scene* out) {
   try {
     *out = mixing::api::scene_from_json(json);
-  } catch (const std::exception& e) {
+  } catch (const util::json::JsonError& e) {
     set_last_error(e.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }

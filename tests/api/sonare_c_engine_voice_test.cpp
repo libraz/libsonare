@@ -261,6 +261,41 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("a scene JSON entry point separates a malformed document from an invalid value",
+          "[c_api][engine][json]") {
+  // INVALID_FORMAT means the document did not parse. A document that parses and
+  // then fails a scene rule carries its own code, which is the difference
+  // between "your file is corrupt" and "this value is not accepted".
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  const char* malformed = R"({"version":1,"strips":[)";
+  const char* unsupported_version =
+      R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
+  const char* unknown_insert_slot =
+      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"nowhere","processor":"eq.parametric","params":"{}"}]}],"buses":[],"connections":[]})";
+
+  REQUIRE(sonare_engine_set_master_strip_json(engine, malformed) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, unsupported_version) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, unknown_insert_slot) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 1, malformed) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 1, unsupported_version) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, malformed) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, unsupported_version) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+#else
+  REQUIRE(sonare_engine_set_master_strip_json(engine, "{}") == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("engine degradation counters are reachable through the C ABI",
           "[c_api][engine][clip_pages]") {
   // Both counters record a silent degradation: page requests the bounded queue
