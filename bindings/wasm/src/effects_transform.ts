@@ -17,7 +17,12 @@ import type {
   VoicedFlags,
 } from './public_types';
 import type { ValidateOptions } from './validation';
-import { assertHpssKernels, assertSampleRate, assertSamples } from './validation';
+import {
+  assertHpssKernels,
+  assertPercussiveSeparationKernels,
+  assertSampleRate,
+  assertSamples,
+} from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -1141,10 +1146,11 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
  * @returns One {@link PercussiveEvent} per detected hit, in time order; an empty
  *   array when nothing was detected
  * @throws RangeError when the samples or sample rate fail the shared input checks
- * @throws SonareError (`InvalidParameter`) on a framing or kernel size that is
- *   negative or outside the 32-bit integer range, a framing that breaks constant
- *   overlap-add, a negative or non-finite `onsetWait` / `onsetDelta` /
- *   `maxEventMs`, or a `minPercussiveRatio` outside `[0, 1]`
+ * @throws SonareError (`InvalidParameter`) on a kernel size that is not an
+ *   integer within the 32-bit range, a framing size that is negative or outside
+ *   that range, a framing that breaks constant overlap-add, a negative or
+ *   non-finite `onsetWait` / `onsetDelta` / `maxEventMs`, or a
+ *   `minPercussiveRatio` outside `[0, 1]`
  *
  * @example
  * ```ts
@@ -1160,6 +1166,11 @@ export function extractPercussiveEvents(
 ): PercussiveEvent[] {
   assertSamples('extractPercussiveEvents', request.samples, request.validate !== false);
   assertSampleRate('extractPercussiveEvents', request.sampleRate);
+  assertPercussiveSeparationKernels(
+    'extractPercussiveEvents',
+    request.hpssKernelHarmonic,
+    request.hpssKernelPercussive,
+  );
   return requireModule().extractPercussiveEvents(request.samples, request.sampleRate, request);
 }
 
@@ -1193,8 +1204,9 @@ export function extractPercussiveEvents(
  * @throws RangeError when the samples or sample rate fail the shared input checks
  * @throws SonareError (`InvalidParameter`) on an event whose span is empty,
  *   reversed or outside the audio, overlapping source spans, a non-finite
- *   `gainDb`, a framing that breaks constant overlap-add, or a negative or
- *   non-finite `fadeMs`
+ *   `gainDb`, a kernel size that is not an integer within the 32-bit range, a
+ *   framing that breaks constant overlap-add, or a negative or non-finite
+ *   `fadeMs`
  *
  * @example
  * ```ts
@@ -1211,6 +1223,11 @@ export function extractPercussiveEvents(
 export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
   assertSamples('renderPercussiveEvents', request.samples, request.validate !== false);
   assertSampleRate('renderPercussiveEvents', request.sampleRate);
+  assertPercussiveSeparationKernels(
+    'renderPercussiveEvents',
+    request.hpssKernelHarmonic,
+    request.hpssKernelPercussive,
+  );
   return requireModule().renderPercussiveEvents(
     request.samples,
     request.sampleRate,

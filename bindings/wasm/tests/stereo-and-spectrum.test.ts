@@ -145,4 +145,48 @@ describe('Spectrum meter wrapper (WASM)', () => {
       expect(() => meteringSpectrumFrame(samples, SR, 0, options)).toThrow();
     }
   });
+
+  // `nFft` reads through the shared range-checked reader rather than a raw
+  // narrowing. The two entry points hold their own copy of the read, so each is
+  // driven separately.
+  const entryPoints: ReadonlyArray<[string, (options: object) => { nFft: number }]> = [
+    ['meteringSpectrum', (options) => meteringSpectrum(sine(440, 0.1), SR, options)],
+    ['meteringSpectrumFrame', (options) => meteringSpectrumFrame(sine(440, 0.1), SR, 0, options)],
+  ];
+
+  for (const [name, run] of entryPoints) {
+    it(`${name} refuses a non-finite nFft rather than taking the default`, () => {
+      // The discriminating case. A raw narrowing turns NaN into 0, and 0 is this
+      // option's spelling of "keep the default", so the call SUCCEEDS on 2048 and
+      // reports it as the nFft the caller asked for. Asserting the refusal alone
+      // would not separate that from a refusal, so the default run is built here
+      // and the accepted outcome is named.
+      const byDefault = run({});
+      expect(byDefault.nFft).toBe(2048);
+      let outcome: number | string;
+      try {
+        outcome = run({ nFft: Number.NaN }).nFft;
+      } catch {
+        outcome = 'refused';
+      }
+      expect(outcome).toBe('refused');
+      expect(outcome).not.toBe(byDefault.nFft);
+    });
+
+    for (const nFft of [2 ** 31, 2 ** 40, 3e9, 4294967295]) {
+      it(`${name} refuses nFft ${nFft} by naming the range, not the framing`, () => {
+        // Out of range, these reached the framing checks as INT_MAX and were
+        // refused for not being a power of two -- the right code for the wrong
+        // reason, and a rescue that disappears the moment that check moves.
+        let message = '';
+        try {
+          run({ nFft });
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toContain('nFft must be a finite number within the 32-bit integer range');
+        expect(message).not.toContain('power of two');
+      });
+    }
+  }
 });

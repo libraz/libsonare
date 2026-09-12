@@ -303,7 +303,7 @@ val js_metering_spectrum(val samples, int sample_rate, val options) {
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "nFft")) {
-      const int n = options["nFft"].as<int>();
+      const int n = checkedIntFromVal(options["nFft"], "nFft");
       if (n < 0) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "meteringSpectrum: nFft must be non-negative");
@@ -362,7 +362,7 @@ val js_metering_spectrum_frame(val samples, int sample_rate, size_t frame_offset
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "nFft")) {
-      const int n = options["nFft"].as<int>();
+      const int n = checkedIntFromVal(options["nFft"], "nFft");
       if (n < 0) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "meteringSpectrumFrame: nFft must be non-negative");

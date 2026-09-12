@@ -92,8 +92,6 @@ exports[`WASM binding sources stay on the shared common.h field readers > has no
   "metering/metering.cpp options["dbAmin"].as<float>() #2",
   "metering/metering.cpp options["dbRef"].as<float>() #1",
   "metering/metering.cpp options["dbRef"].as<float>() #2",
-  "metering/metering.cpp options["nFft"].as<int>() #1",
-  "metering/metering.cpp options["nFft"].as<int>() #2",
   "project/project_arrange.cpp anchor["sourceSample"].as<double>() #1",
   "project/project_arrange.cpp anchor["warpSample"].as<double>() #1",
   "project/project_arrange.cpp desc["gain"].as<float>() #1",

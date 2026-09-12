@@ -135,6 +135,43 @@ export function assertHpssKernels(
   assertInt32(fnName, kernelPercussive, 'kernelPercussive');
 }
 
+function assertIntegralKernel(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value)) {
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      `${fnName}: ${argName} must be an integer`,
+    );
+  }
+}
+
+/**
+ * Check the percussive-event separation's HPSS kernels for integrality.
+ *
+ * The kernels reach the module as options-object fields, where the shared
+ * reader already refuses a non-finite or out-of-range value by name — but it
+ * narrows with a cast, so a fractional kernel truncates instead. 31.5 separates
+ * on 31 and anything in `(-1, 0)` truncates to the 0 that the separation config
+ * reads as "keep the default", so the call succeeds on a kernel the caller never
+ * asked for. Range stays the reader's, which names the field it rejected;
+ * integrality is what cannot be deferred to it.
+ *
+ * The fields are optional and absence means the default, so an omitted one is
+ * not resolved to a value here.
+ */
+export function assertPercussiveSeparationKernels(
+  fnName: string,
+  kernelHarmonic: number | undefined,
+  kernelPercussive: number | undefined,
+): void {
+  if (kernelHarmonic !== undefined) {
+    assertIntegralKernel(fnName, kernelHarmonic, 'hpssKernelHarmonic');
+  }
+  if (kernelPercussive !== undefined) {
+    assertIntegralKernel(fnName, kernelPercussive, 'hpssKernelPercussive');
+  }
+}
+
 export function assertNonNegativeInteger(fnName: string, value: number, argName: string): void {
   if (!Number.isInteger(value) || value < 0) {
     throw new RangeError(`${fnName}: ${argName} must be a non-negative integer`);

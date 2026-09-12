@@ -33,6 +33,7 @@ import {
   hpssWithResidual,
   init,
   isSonareError,
+  renderPercussiveEvents,
   type SonareError,
 } from '../dist/index.js';
 
@@ -90,6 +91,22 @@ const WRAPPING: ReadonlyArray<{ passed: number; wrapsTo: number }> = [
   { passed: 2 ** 32 + 3, wrapsTo: 3 },
   { passed: 3 * 2 ** 32, wrapsTo: 0 },
   { passed: 2 ** 31, wrapsTo: -2147483648 },
+];
+
+/**
+ * Values the module's reader would accept and TRUNCATE, each with the kernel it
+ * would have separated on.
+ *
+ * These are the inputs the range check cannot see: every one of them is finite
+ * and inside the 32-bit range, so the reader passes it and the cast rounds it
+ * toward zero. Two of the three land on a kernel that runs -- 31 explicitly,
+ * and 0 through the config's zero-is-default rule -- so before the integrality
+ * check the call SUCCEEDED on a kernel the caller never asked for.
+ */
+const FRACTIONAL: ReadonlyArray<{ passed: number; truncatesTo: number }> = [
+  { passed: 31.5, truncatesTo: 31 },
+  { passed: 32.5, truncatesTo: 32 },
+  { passed: -0.5, truncatesTo: 0 },
 ];
 
 /** A refusal reduced to the same domain as a result, so the two can be compared. */
@@ -263,6 +280,11 @@ describe('HPSS kernel ceiling', () => {
  * object. Unlike the two entry points above it range-checks and sign-checks
  * them by name before the call, so only the values that survive that reach the
  * core's own guards.
+ *
+ * Range and sign belong to the module's reader; integrality does not, because
+ * that reader narrows with a cast. The facade checks it, so the two refusals
+ * come from different layers and carry different messages — asserted apart
+ * below rather than flattened into "it throws".
  */
 describe('percussive-event separation kernel', () => {
   const spans = (events: ReturnType<typeof extractPercussiveEvents>): string =>
@@ -349,6 +371,47 @@ describe('percussive-event separation kernel', () => {
       );
     });
 
+    for (const { passed, truncatesTo } of FRACTIONAL) {
+      it(`refuses a fractional ${direction} kernel of ${passed} for not being an integer`, () => {
+        const error = expectParameterRefusal(
+          capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed })),
+        );
+        expect(error.message).toContain(`${key} must be an integer`);
+        // Refused above the narrowing, so it never reaches the reader's range
+        // check nor the core's parity and ceiling guards. Without this, 32.5
+        // would pass by tripping the parity guard on the 32 it truncated to,
+        // which says nothing about the integrality check.
+        expect(error.message).not.toContain('within the 32-bit integer range');
+        expect(error.message).not.toContain(filterFor(direction));
+      });
+
+      it(`never separates a fractional ${direction} kernel of ${passed} as ${truncatesTo}`, () => {
+        // The assertion the refusal cannot make. 31.5 and -0.5 both truncate
+        // onto a kernel that SUCCEEDS -- 31 explicitly, and 0 through the
+        // zero-is-default rule -- so "it threw" and "it quietly ran the default"
+        // are the same shape from outside. Compare the outcomes instead.
+        const fallback = eventOutcome({});
+        expect(fallback).not.toBe(REFUSED);
+        const outcome = eventOutcome({ [key]: passed });
+        expect(outcome).toBe(REFUSED);
+        expect(outcome).not.toBe(fallback);
+        const truncated = eventOutcome({ [key]: truncatesTo });
+        // 32 is even, so the core refuses the truncation of 32.5 for parity and
+        // there is no successful run to compare against; the message assertion
+        // above carries that case on its own.
+        if (truncated !== REFUSED) {
+          expect(outcome).not.toBe(truncated);
+        }
+      });
+    }
+
+    it(`refuses a NaN ${direction} kernel for not being an integer`, () => {
+      const error = expectParameterRefusal(
+        capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: Number.NaN })),
+      );
+      expect(error.message).toContain(`${key} must be an integer`);
+    });
+
     it(`accepts the largest legal ${direction} kernel`, () => {
       const events = extractPercussiveEvents({
         samples: hits,
@@ -356,6 +419,59 @@ describe('percussive-event separation kernel', () => {
         [key]: LARGEST_LEGAL,
       });
       expect(events.length).toBeGreaterThan(0);
+    });
+  }
+});
+
+/**
+ * The render half of the percussive-event pair takes the same separation
+ * options, so it carries the same integrality gap. Its own kernel sensitivity
+ * needs a non-identity edit: a set whose edits are all identity reproduces the
+ * input bit for bit and runs no separation, which would make a default-run
+ * comparison agree for any kernel at all.
+ */
+describe('percussive-event render separation kernel', () => {
+  for (const direction of directions) {
+    const key = direction === 'harmonic' ? 'hpssKernelHarmonic' : 'hpssKernelPercussive';
+
+    const rendered = (kernel: Record<string, number>): string => {
+      const events = extractPercussiveEvents({ samples: hits, sampleRate });
+      const edited = [
+        { ...events[0], edit: { ...events[0].edit, muted: true } },
+        ...events.slice(1),
+      ];
+      const out = renderPercussiveEvents({ samples: hits, sampleRate, events: edited, ...kernel });
+      let digest = 0;
+      for (let i = 0; i < out.length; i++) {
+        digest = (digest * 31 + out[i]) % 1e9;
+      }
+      return `${out.length}:${digest.toFixed(6)}`;
+    };
+
+    for (const { passed, truncatesTo } of FRACTIONAL) {
+      it(`refuses a fractional ${direction} kernel of ${passed}`, () => {
+        const error = expectParameterRefusal(capture(() => rendered({ [key]: passed })));
+        expect(error.message).toContain(`renderPercussiveEvents: ${key} must be an integer`);
+      });
+
+      it(`never renders a fractional ${direction} kernel of ${passed} as ${truncatesTo}`, () => {
+        const fallback = rendered({});
+        let outcome: string;
+        try {
+          outcome = rendered({ [key]: passed });
+        } catch {
+          outcome = REFUSED;
+        }
+        expect(outcome).toBe(REFUSED);
+        expect(outcome).not.toBe(fallback);
+      });
+    }
+
+    // Without this the refusals above are satisfied by a guard that rejects
+    // every kernel, and the muted edit is what makes the kernel reach the
+    // output at all.
+    it(`renders an integral ${direction} kernel and the default differently`, () => {
+      expect(rendered({ [key]: 3 })).not.toBe(rendered({}));
     });
   }
 });
