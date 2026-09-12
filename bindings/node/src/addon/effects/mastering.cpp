@@ -37,6 +37,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/zero_is_default.h"
 
 using namespace sonare_node;
 
@@ -214,11 +215,11 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
     const int oversample = info[4].As<Napi::Number>().Int32Value();
     if (oversample > 0) config.true_peak_oversample = oversample;
   }
-  // release_ms: only a positive value overrides the library default (50 ms), so
-  // 0 (or an omitted arg) keeps the previous fixed-release behavior.
+  // release_ms: 0 selects the library default; any other value is applied as
+  // asked and rejected by the shared loudness validator if it is not positive.
   if (info.Length() >= 6 && info[5].IsNumber()) {
-    const float release = info[5].As<Napi::Number>().FloatValue();
-    if (release > 0.0f) config.release_ms = release;
+    config.release_ms = sonare::ZeroIsDefault(info[5].As<Napi::Number>().FloatValue())
+                            .or_default(config.release_ms);
   }
   config.apply_gain_at_input_rate =
       info.Length() >= 7 && info[6].IsBoolean() ? info[6].As<Napi::Boolean>().Value() : false;

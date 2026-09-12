@@ -33,8 +33,9 @@ class MonoMaker : public rt::ProcessorBase {
   // Automatable parameters: 0=amount
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
   static void validate_config(const MonoMakerConfig& config);
+
+ private:
   void update_coefficient() noexcept;
 
   MonoMakerConfig config_{};

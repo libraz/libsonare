@@ -57,8 +57,9 @@ class DeEsser : public rt::ProcessorBase, public rt::RtConfigLifecycle<DeEsser, 
   // 5=rangeDb, 6=bandpassQ
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
   static void validate_config(const DeEsserConfig& config);
+
+ private:
   static float gain_reduction_db(float input_db, const DeEsserConfig& config);
   void ensure_state(int num_channels);
   /// @brief Recomputes scalar derived coefficients (bandpass biquads,

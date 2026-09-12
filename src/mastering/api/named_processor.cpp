@@ -726,17 +726,22 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     multiband::MultibandImager p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "maximizer.loudnessOptimize") {
-    maximizer::TruePeakLimiterConfig defaults;
+    const maximizer::LoudnessOptimizeConfig defaults;
+    const float target_lufs = f(map, "targetLufs", defaults.target_lufs);
+    const float ceiling_db = f(map, "ceilingDb", defaults.ceiling_db);
+    const int true_peak_oversample = i(map, "truePeakOversample", defaults.true_peak_oversample);
+    const float max_limiter_gain_reduction_db =
+        f(map, "maxLimiterGainReductionDb", defaults.max_limiter_gain_reduction_db);
+    // Same validator as the mono helper, before the limiter config is built, so
+    // the two branches accept and reject the same parameter map.
+    const float release_ms = maximizer::validate_loudness_params(
+        target_lufs, ceiling_db, f(map, "releaseMs", defaults.release_ms),
+        max_limiter_gain_reduction_db, true_peak_oversample);
     const maximizer::TruePeakLimiterConfig config = maximizer::loudness_limiter_config(
-        f(map, "ceilingDb", defaults.ceiling_db),
-        i(map, "truePeakOversample", defaults.oversample_factor),
-        f(map, "releaseMs", defaults.release_ms),
+        ceiling_db, true_peak_oversample, release_ms,
         b(map, "applyGainAtInputRate", defaults.apply_gain_at_input_rate));
     // Bound the static normalization gain to the ceiling headroom plus the depth
     // the limiter may be driven to (mirrors the mono loudness_optimize() helper).
-    const float target_lufs = f(map, "targetLufs", -14.0f);
-    const float max_limiter_gain_reduction_db =
-        f(map, "maxLimiterGainReductionDb", maximizer::kDefaultLoudnessMaxLimiterGainReductionDb);
     const float gain_db = detail::loudness_gain_db_with_ceiling(
         result.left, result.right, sample_rate, target_lufs, config.ceiling_db,
         config.oversample_factor, max_limiter_gain_reduction_db);

@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include "rt/aliasing_control.h"
+#include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
@@ -16,8 +17,11 @@ val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_
   config.ceiling_db = ceiling_db;
   // Keep C-ABI sentinel semantics: 0 requests the default oversample factor.
   if (true_peak_oversample > 0) config.true_peak_oversample = true_peak_oversample;
-  // release_ms == 0 keeps the C++ default (50 ms); only a positive value overrides.
-  if (release_ms > 0.0f) config.release_ms = release_ms;
+  // release_ms == 0 requests the library default; any other value is applied as
+  // asked and rejected by the shared loudness validator if it is not positive.
+  // Filtering on `> 0` here instead would discard a negative or non-finite
+  // request silently, which is what the other surfaces stopped doing.
+  config.release_ms = ZeroIsDefault(release_ms).or_default(config.release_ms);
   config.apply_gain_at_input_rate = apply_gain_at_input_rate;
 
   auto result = mastering::maximizer::loudness_optimize(audio, config);

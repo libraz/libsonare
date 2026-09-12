@@ -55,8 +55,9 @@ class MultibandCompressor : public rt::ProcessorBase {
   // +0=thresholdDb, +1=ratio, +2=attackMs, +3=releaseMs, +4=makeupGainDb.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
   static void validate_config(const MultibandCompressorConfig& config);
+
+ private:
   void rebuild_processors();
 
   MultibandCompressorConfig config_{};

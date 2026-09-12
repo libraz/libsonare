@@ -46,8 +46,9 @@ class AirBand : public rt::ProcessorBase {
 
   using Biquad = rt::BiquadState;
 
- private:
   static void validate_config(const AirBandConfig& config);
+
+ private:
   void ensure_state(int num_channels);
   void rebuild_filters(int num_channels);
 

@@ -297,6 +297,172 @@ TEST_CASE("MasteringChain rejects a tilt pivot above Nyquist before the first st
   CHECK_NOTHROW(flat_chain.process_mono(samples.data(), samples.size(), kSampleRate));
 }
 
+// Each enabled stage carries its own static validator, and the chain runs all of
+// them at construction. Before that, a stage rejected its config where the
+// processor was built - which for everything from eq.tilt onward is behind the
+// six repair stages.
+TEST_CASE("MasteringChain rejects every enabled stage's invalid config at construction",
+          "[mastering][chain]") {
+  auto with_stage = [](auto&& make_invalid) {
+    MasteringChainConfig config;
+    make_invalid(config);
+    return config;
+  };
+
+  SECTION("dynamics.deesser") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.dynamics.deesser.enabled = true;
+                      c.dynamics.deesser.config.ratio = 0.5f;  // must be >= 1
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("dynamics.transientShaper") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.dynamics.transient_shaper.enabled = true;
+                      c.dynamics.transient_shaper.config.fast_release_ms = -1.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("dynamics.compressor") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.dynamics.compressor.enabled = true;
+                      c.dynamics.compressor.config.attack_ms = -1.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("dynamics.multibandComp band") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.dynamics.multiband_comp.enabled = true;
+                      c.dynamics.multiband_comp.config.bands[1].knee_db = -3.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("dynamics.multibandComp crossover") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.dynamics.multiband_comp.enabled = true;
+                      c.dynamics.multiband_comp.config.crossover.cutoffs_hz = {2000.0f, 200.0f};
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("saturation.tape") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.saturation.tape.enabled = true;
+                      c.saturation.tape.config.saturation = 2.0f;  // must be in [0, 1]
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("saturation.exciter") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.saturation.exciter.enabled = true;
+                      c.saturation.exciter.config.q = 0.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("spectral.airBand") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.spectral.air_band.enabled = true;
+                      c.spectral.air_band.config.dynamic_range_db = -1.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("stereo.imager") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.stereo.imager.enabled = true;
+                      c.stereo.imager.config.width = -1.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("stereo.monoMaker") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.stereo.mono_maker.enabled = true;
+                      c.stereo.mono_maker.config.frequency_hz = 0.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("maximizer.truePeakLimiter") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.maximizer.true_peak_limiter.enabled = true;
+                      c.maximizer.true_peak_limiter.config.lookahead_ms = -1.0f;
+                    })),
+                    sonare::SonareException);
+  }
+  SECTION("loudness") {
+    CHECK_THROWS_AS(MasteringChain(with_stage([](MasteringChainConfig& c) {
+                      c.loudness.enabled = true;
+                      c.loudness.release_ms = -1.0f;
+                    })),
+                    sonare::SonareException);
+  }
+
+  // Positive control: every one of those stages enabled with its default config
+  // builds and runs. A validator that rejected everything would pass the
+  // rejections above on its own.
+  MasteringChainConfig valid;
+  valid.dynamics.deesser.enabled = true;
+  valid.dynamics.transient_shaper.enabled = true;
+  valid.dynamics.compressor.enabled = true;
+  valid.dynamics.multiband_comp.enabled = true;
+  valid.saturation.tape.enabled = true;
+  valid.saturation.exciter.enabled = true;
+  valid.spectral.air_band.enabled = true;
+  valid.stereo.imager.enabled = true;
+  valid.stereo.mono_maker.enabled = true;
+  valid.maximizer.true_peak_limiter.enabled = true;
+  valid.loudness.enabled = true;
+  MasteringChain chain(valid);
+  std::vector<float> samples(11025, 0.1f);
+  CHECK_NOTHROW(chain.process_stereo(samples.data(), samples.data(), samples.size(), 44100));
+}
+
+// The stage that surfaced this: Compressor::validate_config used to run where
+// chain.cpp builds the compressor, which is after repair has processed the whole
+// track.
+TEST_CASE("MasteringChain rejects an invalid compressor before the repair stages run",
+          "[mastering][chain]") {
+  constexpr int kSampleRate = 22050;
+  MasteringChainConfig config;
+  config.repair.declick.enabled = true;
+  config.repair.dehum.enabled = true;
+  config.dynamics.compressor.enabled = true;
+  config.dynamics.compressor.config.release_ms = -5.0f;
+  // Construction throws, so no chain object exists to process anything: the
+  // repair stages below cannot have run.
+  CHECK_THROWS_AS(MasteringChain(config), sonare::SonareException);
+
+  // The same chain with a valid release runs, and the stage list shows the two
+  // repair stages the rejection above skipped.
+  config.dynamics.compressor.config.release_ms = 100.0f;
+  MasteringChain chain(config);
+  std::vector<std::string> stages;
+  chain.set_progress_callback([&](float, const char* stage) { stages.emplace_back(stage); });
+  std::vector<float> samples(kSampleRate / 4, 0.1f);
+  CHECK_NOTHROW(chain.process_mono(samples.data(), samples.size(), kSampleRate));
+  REQUIRE(stages.size() == 3);
+  CHECK(stages[0] == "repair.declick");
+  CHECK(stages[1] == "repair.dehum");
+  CHECK(stages[2] == "dynamics.compressor");
+}
+
+// Rate-dependent constraints must stay out of validate_mastering_chain_config():
+// it runs before a sample rate is known, so a cutoff legal at 48 kHz would be
+// rejected there on no evidence.
+TEST_CASE("MasteringChain defers the multiband crossover Nyquist check to the rate",
+          "[mastering][chain]") {
+  MasteringChainConfig config;
+  config.dynamics.multiband_comp.enabled = true;
+  config.dynamics.multiband_comp.config.crossover.cutoffs_hz = {200.0f, 18000.0f};
+  // Construction knows no rate, so the 18 kHz cutoff is accepted here.
+  MasteringChain chain(config);
+
+  int stages_run = 0;
+  chain.set_progress_callback([&](float, const char*) { ++stages_run; });
+  std::vector<float> samples(11025, 0.1f);
+  CHECK_THROWS_AS(chain.process_mono(samples.data(), samples.size(), 22050),
+                  sonare::SonareException);
+  CHECK(stages_run == 0);
+  CHECK_NOTHROW(chain.process_mono(samples.data(), samples.size(), 48000));
+}
+
 TEST_CASE("MasteringChain rejects unsupported true-peak oversampling before processing",
           "[mastering][chain]") {
   MasteringChainConfig config;

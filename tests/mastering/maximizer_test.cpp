@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "mastering/api/internal_processor_runner.h"
+#include "mastering/api/named_processor.h"
 #include "mastering/maximizer/adaptive_release.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/soft_knee_max.h"
@@ -603,6 +604,99 @@ TEST_CASE("LoudnessOptimize rejects a negative limiter allowance", "[mastering][
   LoudnessOptimizeConfig config;
   config.max_limiter_gain_reduction_db = -1.0f;
   REQUIRE_THROWS(loudness_optimize(sine_audio(0.5f), config));
+}
+
+namespace {
+
+// A loud half followed by a quiet one, so the post-gain limiter is driven into
+// gain reduction and then recovers: the release time governs that recovery, and
+// two different releases cannot produce the same samples.
+std::vector<float> limiter_driving_signal(int sample_rate, float duration_sec) {
+  const int total = static_cast<int>(duration_sec * static_cast<float>(sample_rate));
+  std::vector<float> samples = generate_sine_samples(1000.0f, sample_rate, total, 0.9f);
+  for (int index = total / 2; index < total; ++index) {
+    samples[static_cast<size_t>(index)] *= 0.05f;
+  }
+  return samples;
+}
+
+sonare::mastering::api::MonoResult loudness_mono(
+    const std::vector<float>& samples, int sample_rate,
+    const std::vector<sonare::mastering::api::Param>& params) {
+  return sonare::mastering::api::apply_named_processor("maximizer.loudnessOptimize", samples.data(),
+                                                       samples.size(), sample_rate, params);
+}
+
+sonare::mastering::api::StereoResult loudness_stereo(
+    const std::vector<float>& samples, int sample_rate,
+    const std::vector<sonare::mastering::api::Param>& params) {
+  return sonare::mastering::api::apply_named_processor_stereo("maximizer.loudnessOptimize",
+                                                              samples.data(), samples.data(),
+                                                              samples.size(), sample_rate, params);
+}
+
+}  // namespace
+
+TEST_CASE("maximizer.loudnessOptimize validates one parameter map identically on both entry points",
+          "[mastering][maximizer]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> samples = limiter_driving_signal(kSampleRate, 0.25f);
+
+  struct Case {
+    const char* key;
+    double value;
+    bool accepted;
+  };
+  const Case cases[] = {
+      {"releaseMs", 0.0, true},
+      {"releaseMs", -1.0, false},
+      {"releaseMs", std::numeric_limits<double>::quiet_NaN(), false},
+      {"releaseMs", std::numeric_limits<double>::infinity(), false},
+      {"releaseMs", 50.0, true},
+      {"maxLimiterGainReductionDb", -3.0, false},
+      {"maxLimiterGainReductionDb", -0.0001, false},
+      {"maxLimiterGainReductionDb", 0.0, true},
+      {"maxLimiterGainReductionDb", 6.0, true},
+  };
+
+  for (const Case& test_case : cases) {
+    CAPTURE(test_case.key, test_case.value);
+    const std::vector<sonare::mastering::api::Param> params = {{test_case.key, test_case.value}};
+    if (test_case.accepted) {
+      CHECK_NOTHROW(loudness_mono(samples, kSampleRate, params));
+      CHECK_NOTHROW(loudness_stereo(samples, kSampleRate, params));
+    } else {
+      CHECK_THROWS_AS(loudness_mono(samples, kSampleRate, params), SonareException);
+      CHECK_THROWS_AS(loudness_stereo(samples, kSampleRate, params), SonareException);
+    }
+  }
+}
+
+TEST_CASE("maximizer.loudnessOptimize releaseMs 0 runs the library default release",
+          "[mastering][maximizer]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> samples = limiter_driving_signal(kSampleRate, 0.25f);
+  // A target the peak headroom cannot reach, so the limiter is doing the work
+  // and its release is audible in the output.
+  const std::vector<sonare::mastering::api::Param> base = {{"targetLufs", 0.0},
+                                                           {"ceilingDb", -6.0}};
+  auto with_release = [&](double release_ms) {
+    std::vector<sonare::mastering::api::Param> params = base;
+    params.push_back({"releaseMs", release_ms});
+    return params;
+  };
+
+  const auto sentinel = loudness_mono(samples, kSampleRate, with_release(0.0));
+  const auto library_default = loudness_mono(samples, kSampleRate, with_release(50.0));
+  const auto immediate = loudness_mono(samples, kSampleRate, with_release(1.0));
+  CHECK(sentinel.samples == library_default.samples);
+  CHECK(sentinel.samples != immediate.samples);
+
+  const auto stereo_sentinel = loudness_stereo(samples, kSampleRate, with_release(0.0));
+  const auto stereo_default = loudness_stereo(samples, kSampleRate, with_release(50.0));
+  const auto stereo_immediate = loudness_stereo(samples, kSampleRate, with_release(1.0));
+  CHECK(stereo_sentinel.left == stereo_default.left);
+  CHECK(stereo_sentinel.left != stereo_immediate.left);
 }
 
 TEST_CASE("LoudnessOptimize returns time-aligned output with zero reported latency",

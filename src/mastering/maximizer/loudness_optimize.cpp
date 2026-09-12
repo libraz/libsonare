@@ -11,28 +11,33 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/zero_is_default.h"
 
 namespace sonare::mastering::maximizer {
 
+float validate_loudness_params(float target_lufs, float ceiling_db, float release_ms,
+                               float max_limiter_gain_reduction_db, int true_peak_oversample) {
+  SONARE_CHECK_MSG(std::isfinite(target_lufs) && std::isfinite(ceiling_db),
+                   ErrorCode::InvalidParameter, "target_lufs and ceiling_db must be finite");
+  SONARE_CHECK_MSG(std::isfinite(release_ms) && release_ms >= 0.0f, ErrorCode::InvalidParameter,
+                   "release_ms must be 0 (the library default) or a finite positive value");
+  SONARE_CHECK_MSG(
+      std::isfinite(max_limiter_gain_reduction_db) && max_limiter_gain_reduction_db >= 0.0f,
+      ErrorCode::InvalidParameter, "max_limiter_gain_reduction_db must be finite and >= 0");
+  SONARE_CHECK_MSG(true_peak_oversample == 1 || true_peak_oversample == 2 ||
+                       true_peak_oversample == 4 || true_peak_oversample == 8 ||
+                       true_peak_oversample == 16,
+                   ErrorCode::InvalidParameter, "oversample must be one of 1, 2, 4, 8, or 16");
+  // Checked above, so the sentinel is the only value that resolves to anything
+  // other than itself.
+  return ZeroIsDefault(release_ms).or_default(kDefaultLoudnessReleaseMs);
+}
+
 LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptimizeConfig& config) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  if (!std::isfinite(config.target_lufs) || !std::isfinite(config.ceiling_db) ||
-      !std::isfinite(config.release_ms) || config.release_ms <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "target_lufs, ceiling_db, and release_ms must be finite and release_ms "
-                          "must be positive");
-  }
-  if (!std::isfinite(config.max_limiter_gain_reduction_db) ||
-      config.max_limiter_gain_reduction_db < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "max_limiter_gain_reduction_db must be finite and >= 0");
-  }
-  if (config.true_peak_oversample != 1 && config.true_peak_oversample != 2 &&
-      config.true_peak_oversample != 4 && config.true_peak_oversample != 8 &&
-      config.true_peak_oversample != 16) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "oversample must be one of 1, 2, 4, 8, or 16");
-  }
+  const float release_ms =
+      validate_loudness_params(config.target_lufs, config.ceiling_db, config.release_ms,
+                               config.max_limiter_gain_reduction_db, config.true_peak_oversample);
 
   const float input_lufs = common::measure_lufs(audio);
   const float requested_gain_db =
@@ -61,9 +66,8 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   // limiter has look-ahead latency, so the shared runner streams trailing
   // silence and removes the delayed prefix. Its fixed-size blocks also keep
   // the limiter's oversampled scratch allocation independent of track length.
-  const TruePeakLimiterConfig limiter_config =
-      loudness_limiter_config(config.ceiling_db, config.true_peak_oversample, config.release_ms,
-                              config.apply_gain_at_input_rate);
+  const TruePeakLimiterConfig limiter_config = loudness_limiter_config(
+      config.ceiling_db, config.true_peak_oversample, release_ms, config.apply_gain_at_input_rate);
   TruePeakLimiter limiter(limiter_config);
   api::internal::run_processor_mono(limiter, samples, audio.sample_rate());
 

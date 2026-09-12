@@ -205,7 +205,7 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
   cfg.dynamics.compressor.config.sidechain_hpf_enabled = true;
   cfg.dynamics.compressor.config.sidechain_hpf_hz = 180.0f;
   cfg.dynamics.compressor.config.pdr_time_ms = 22.0f;
-  cfg.dynamics.compressor.config.pdr_release_scale = 0.75f;
+  cfg.dynamics.compressor.config.pdr_release_scale = 2.25f;
 
   const MasteringChainConfig restored = chain_config_from_json(chain_config_to_json(cfg));
   const auto& c = restored.dynamics.compressor.config;
@@ -215,7 +215,7 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
   REQUIRE(c.sidechain_hpf_enabled);
   REQUIRE(c.sidechain_hpf_hz == 180.0f);
   REQUIRE(c.pdr_time_ms == 22.0f);
-  REQUIRE(c.pdr_release_scale == 0.75f);
+  REQUIRE(c.pdr_release_scale == 2.25f);
 }
 
 // --- M5: stereo dither decorrelation --------------------------------------

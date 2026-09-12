@@ -69,6 +69,14 @@ struct TruePeakLimiterConfig {
 ///          strict headroom clamp.
 inline constexpr float kDefaultLoudnessMaxLimiterGainReductionDb = 12.0f;
 
+/// @brief Release time (ms) every loudness entry point runs its post-gain
+///        true-peak limiter at unless the caller asks for another one.
+/// @details Mirrors @ref TruePeakLimiterConfig::release_ms, which is the
+///          limiter's own default rather than the loudness stage's; the two are
+///          equal today and this name is what the public "0 selects the library
+///          default" sentinel resolves to.
+inline constexpr float kDefaultLoudnessReleaseMs = 50.0f;
+
 /// @brief Builds the limiter config the loudness-normalization stage runs after
 ///        applying its static normalization gain.
 /// @details The standalone @ref loudness_optimize helper, the per-processor
@@ -125,8 +133,9 @@ class TruePeakLimiter : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
- private:
   static void validate_config(const TruePeakLimiterConfig& config);
+
+ private:
   void prepare_buffers(int num_channels);
   void update_time_constants();
   /// @brief Sample rate the gain-smoother loop actually advances at.

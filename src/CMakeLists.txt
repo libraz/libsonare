@@ -1376,6 +1376,7 @@ if(BUILD_WASM)
   endif()
   if(TARGET sonare_mastering)
     set_source_files_properties(
+      mastering/api/chain.cpp
       mastering/api/chain_json.cpp
       mastering/api/insert_factory.cpp
       mastering/api/named_processor_registry.cpp

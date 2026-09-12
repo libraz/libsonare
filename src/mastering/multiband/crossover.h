@@ -107,10 +107,15 @@ class Crossover {
     return config_.mode == CrossoverMode::FirLinearPhase ? config_.fir_kernel_size / 2 : 0;
   }
 
+  /// @brief Validates cutoff ordering, positivity and the FIR kernel size.
+  /// @details The cutoff-below-Nyquist rule is the only rate-dependent part, so
+  ///          a caller that does not yet know its rate leaves @p sample_rate at
+  ///          0 and checks the rest.
+  static void validate_config(const CrossoverConfig& config, double sample_rate = 0.0);
+
  private:
   using Biquad = rt::BiquadState;
 
-  static void validate_config(const CrossoverConfig& config, double sample_rate = 0.0);
   static int filter_order(CrossoverSlope slope, CrossoverMode mode);
   struct FilterSection {
     double lowpass_frequency_scale = 1.0;

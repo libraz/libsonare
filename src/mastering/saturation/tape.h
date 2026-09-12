@@ -74,8 +74,9 @@ class Tape : public rt::ProcessorBase {
   //   4=speedIps, 5=headBumpDb, 6=bias, 7=gapLoss
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
   static void validate_config(const TapeConfig& config);
+
+ private:
   static common::JilesAthertonConfig make_ja_config(const TapeConfig& config);
   float process_sample(common::JilesAthertonState& state, float input) const;
   void ensure_state(int num_channels);

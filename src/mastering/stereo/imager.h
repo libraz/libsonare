@@ -35,6 +35,8 @@ class Imager : public rt::ProcessorBase {
   // Automatable parameters: 0=width, 1=outputGainDb, 2=decorrelationAmount
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
+  static void validate_config(const ImagerConfig& config);
+
  private:
   struct Allpass {
     float coefficient = 0.0f;
@@ -44,8 +46,6 @@ class Imager : public rt::ProcessorBase {
     float process(float input) noexcept;
     void reset() noexcept;
   };
-
-  static void validate_config(const ImagerConfig& config);
 
   ImagerConfig config_{};
   bool prepared_ = false;

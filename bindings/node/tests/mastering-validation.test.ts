@@ -97,12 +97,39 @@ describe('simple mastering() accepts the appended maximizer knobs', () => {
   });
 
   it('treats releaseMs 0 (or omitted) as the library default', () => {
+    // A target the peak headroom cannot reach, so the limiter is doing the work
+    // and its release time is visible in the output. Without that the three
+    // results below would agree because nothing reads releaseMs at all, and the
+    // equality would hold for a wrapper that dropped the option entirely.
     const x = sine(4096, 220, 0.2);
-    const omitted = mastering(x, SR, { targetLufs: -14 });
-    const zero = mastering(x, SR, { targetLufs: -14, releaseMs: 0 });
-    const explicit = mastering(x, SR, { targetLufs: -14, releaseMs: 50 });
+    const driven = { targetLufs: 0, ceilingDb: -6 };
+    const omitted = mastering(x, SR, driven);
+    const zero = mastering(x, SR, { ...driven, releaseMs: 0 });
+    const explicit = mastering(x, SR, { ...driven, releaseMs: 50 });
+    const immediate = mastering(x, SR, { ...driven, releaseMs: 1 });
     expect(zero.samples).toEqual(omitted.samples);
     expect(zero.samples).toEqual(explicit.samples);
+    // The varying control: releaseMs reaches the limiter on this fixture.
+    expect(zero.samples).not.toEqual(immediate.samples);
+  });
+
+  it('refuses the releaseMs values it cannot honour instead of ignoring them', () => {
+    // The wrapper used to apply releaseMs only when it was positive, so a
+    // negative or non-finite request silently ran the library default and the
+    // caller never learned its value had been discarded. The shared loudness
+    // validator in the core now sees the value, which is why these throw; 0
+    // stays accepted because it is the documented default sentinel, not a
+    // value the limiter is asked to run.
+    const x = sine(4096, 220, 0.2);
+    const refused = [-1, -0.5, Number.NaN, Number.POSITIVE_INFINITY];
+    for (const releaseMs of refused) {
+      expect(() => mastering(x, SR, { targetLufs: -14, releaseMs })).toThrow();
+    }
+    // The controls. A wrapper that had started refusing every releaseMs would
+    // pass every assertion above and fail only here.
+    for (const releaseMs of [0, 1, 50, 250]) {
+      expect(() => mastering(x, SR, { targetLufs: -14, releaseMs })).not.toThrow();
+    }
   });
 
   it('rejects non-finite targets and accepts a later finite call', () => {

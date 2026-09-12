@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -18,7 +19,9 @@
 #include "mastering/dynamics/transient_shaper.h"
 #include "mastering/eq/tilt.h"
 #include "mastering/match/reference_spectrum.h"
+#include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "mastering/multiband/crossover.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
@@ -40,6 +43,25 @@ using internal::run_processor_stereo;
 
 bool valid_true_peak_oversample(int factor) noexcept {
   return factor == 1 || factor == 2 || factor == 4 || factor == 8 || factor == 16;
+}
+
+// The loudness stage's release time with the documented 0 sentinel resolved.
+// The values were already accepted by validate_mastering_chain_config().
+float loudness_release_ms(const LoudnessStage& stage) {
+  return maximizer::validate_loudness_params(stage.target_lufs, stage.ceiling_db, stage.release_ms,
+                                             stage.max_limiter_gain_reduction_db,
+                                             stage.true_peak_oversample);
+}
+
+// Runs @p validate and rethrows its message behind the stage name, so a chain
+// rejection names the stage to fix rather than only the offending field.
+template <typename ValidateFn>
+void check_stage(const char* stage, ValidateFn&& validate) {
+  try {
+    validate();
+  } catch (const SonareException& error) {
+    throw SonareException(error.code(), std::string(stage) + ": " + error.what());
+  }
 }
 
 // Returns the per-band gain reduction with the largest magnitude (most-reduced
@@ -188,6 +210,9 @@ int count_enabled_stereo_stages(const MasteringChainConfig& cfg) {
 // ---------------------------------------------------------------------------
 
 void validate_mastering_chain_config(const MasteringChainConfig& config) {
+  // The loudness stage's own parameters are checked whether or not it is
+  // enabled: a chain built with an unsupported oversample has always been
+  // rejected at construction.
   SONARE_CHECK_MSG(valid_true_peak_oversample(config.loudness.true_peak_oversample),
                    ErrorCode::InvalidParameter,
                    "loudness.truePeakOversample must be one of 1, 2, 4, 8, or 16");
@@ -195,11 +220,69 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
                        config.loudness.max_limiter_gain_reduction_db >= 0.0f,
                    ErrorCode::InvalidParameter,
                    "loudness.maxLimiterGainReductionDb must be finite and >= 0");
+  check_stage("loudness", [&] {
+    maximizer::validate_loudness_params(
+        config.loudness.target_lufs, config.loudness.ceiling_db, config.loudness.release_ms,
+        config.loudness.max_limiter_gain_reduction_db, config.loudness.true_peak_oversample);
+  });
+  // Every enabled stage's own static validator, run here rather than where the
+  // stage is constructed: construction happens after the repair stages have
+  // already processed the whole track. All of these are rate-independent; the
+  // rate-dependent half is validate_chain_config_for_rate().
+  if (config.dynamics.deesser.enabled) {
+    check_stage("dynamics.deesser",
+                [&] { dynamics::DeEsser::validate_config(config.dynamics.deesser.config); });
+  }
+  if (config.dynamics.transient_shaper.enabled) {
+    check_stage("dynamics.transientShaper", [&] {
+      dynamics::TransientShaper::validate_config(config.dynamics.transient_shaper.config);
+    });
+  }
+  if (config.dynamics.compressor.enabled) {
+    check_stage("dynamics.compressor",
+                [&] { dynamics::Compressor::validate_config(config.dynamics.compressor.config); });
+  }
+  if (config.dynamics.multiband_comp.enabled) {
+    check_stage("dynamics.multibandComp", [&] {
+      const auto& multiband_config = config.dynamics.multiband_comp.config;
+      // MultibandCompressor::validate_config only checks the band count; the
+      // crossover and the per-band compressors validate themselves as the
+      // stage constructs them.
+      multiband::Crossover::validate_config(multiband_config.crossover);
+      multiband::MultibandCompressor::validate_config(multiband_config);
+      for (const auto& band : multiband_config.bands) {
+        dynamics::Compressor::validate_config(band);
+      }
+    });
+  }
+  if (config.saturation.tape.enabled) {
+    check_stage("saturation.tape",
+                [&] { saturation::Tape::validate_config(config.saturation.tape.config); });
+  }
+  if (config.saturation.exciter.enabled) {
+    check_stage("saturation.exciter",
+                [&] { saturation::Exciter::validate_config(config.saturation.exciter.config); });
+  }
+  if (config.spectral.air_band.enabled) {
+    check_stage("spectral.airBand",
+                [&] { spectral::AirBand::validate_config(config.spectral.air_band.config); });
+  }
+  if (config.stereo.imager.enabled) {
+    check_stage("stereo.imager",
+                [&] { stereo::Imager::validate_config(config.stereo.imager.config); });
+  }
+  if (config.stereo.mono_maker.enabled) {
+    check_stage("stereo.monoMaker",
+                [&] { stereo::MonoMaker::validate_config(config.stereo.mono_maker.config); });
+  }
   if (config.maximizer.true_peak_limiter.enabled) {
     SONARE_CHECK_MSG(
         valid_true_peak_oversample(config.maximizer.true_peak_limiter.config.oversample_factor),
         ErrorCode::InvalidParameter,
         "maximizer.truePeakLimiter.oversampleFactor must be one of 1, 2, 4, 8, or 16");
+    check_stage("maximizer.truePeakLimiter", [&] {
+      maximizer::TruePeakLimiter::validate_config(config.maximizer.true_peak_limiter.config);
+    });
   }
   if (config.eq.tilt.enabled) {
     // TiltEq::set_pivot_hz rejects this at stage time, which for a chain with
@@ -226,6 +309,15 @@ void validate_chain_config_for_rate(const MasteringChainConfig& config, int samp
     const float nyquist = 0.5f * static_cast<float>(sample_rate);
     SONARE_CHECK_MSG(config.eq.tilt.pivot_hz < nyquist, ErrorCode::InvalidParameter,
                      "eq.tilt.pivotHz must be below Nyquist for this sample rate");
+  }
+  if (config.dynamics.multiband_comp.enabled) {
+    // Crossover::prepare() applies this at stage time; the same rule with the
+    // rate known is the only part of the crossover config that cannot be
+    // checked at construction.
+    check_stage("dynamics.multibandComp", [&] {
+      multiband::Crossover::validate_config(config.dynamics.multiband_comp.config.crossover,
+                                            static_cast<double>(sample_rate));
+    });
   }
 }
 
@@ -439,7 +531,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
             config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
-            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
+            loudness_release_ms(config_.loudness), config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
@@ -689,7 +781,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
             config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
-            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
+            loudness_release_ms(config_.loudness), config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(

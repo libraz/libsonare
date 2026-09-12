@@ -42,12 +42,37 @@ describe('simple mastering() knobs (WASM)', () => {
   });
 
   it('treats releaseMs 0 (or omitted) as the library default', () => {
+    // A target the peak headroom cannot reach, so the limiter is doing the work
+    // and its release time is visible in the output. Without that the three
+    // results below would agree because nothing reads releaseMs at all, and the
+    // equality would hold for a shim that dropped the argument entirely.
     const x = sine(220, 0.1);
-    const omitted = mastering(x, SR, { targetLufs: -14 });
-    const zero = mastering(x, SR, { targetLufs: -14, releaseMs: 0 });
-    const explicit = mastering(x, SR, { targetLufs: -14, releaseMs: 50 });
+    const driven = { targetLufs: 0, ceilingDb: -6 };
+    const omitted = mastering(x, SR, driven);
+    const zero = mastering(x, SR, { ...driven, releaseMs: 0 });
+    const explicit = mastering(x, SR, { ...driven, releaseMs: 50 });
+    const immediate = mastering(x, SR, { ...driven, releaseMs: 1 });
     expect(Array.from(zero.samples)).toEqual(Array.from(omitted.samples));
     expect(Array.from(zero.samples)).toEqual(Array.from(explicit.samples));
+    // The varying control: releaseMs reaches the limiter on this fixture.
+    expect(Array.from(zero.samples)).not.toEqual(Array.from(immediate.samples));
+  });
+
+  it('refuses the releaseMs values it cannot honour instead of ignoring them', () => {
+    // The shim used to apply releaseMs only when it was positive, so a negative
+    // or non-finite request silently ran the library default and the caller
+    // never learned its value had been discarded. This is the same refusal set
+    // the Node facade and the C ABI parameter map reach, which is the point:
+    // the value is refused by one shared core validator, not per surface.
+    const x = sine(220, 0.1);
+    for (const releaseMs of [-1, -0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => mastering(x, SR, { targetLufs: -14, releaseMs })).toThrow();
+    }
+    // The controls. A shim that had started refusing every releaseMs would pass
+    // every assertion above and fail only here.
+    for (const releaseMs of [0, 1, 50, 250]) {
+      expect(() => mastering(x, SR, { targetLufs: -14, releaseMs })).not.toThrow();
+    }
   });
 
   it('rejects non-finite targets and accepts a later finite call', () => {

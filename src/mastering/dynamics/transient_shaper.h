@@ -71,8 +71,9 @@ class TransientShaper : public rt::ProcessorBase,
   //   7=maxGainDb, 8=gainSmoothingMs.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
   static void validate_config(const TransientShaperConfig& config);
+
+ private:
   void ensure_followers(int num_channels);
   /// @brief Recomputes scalar derived coefficients (gain smoother and per-
   ///        channel envelope follower attack/release) from @p config. RT-safe:

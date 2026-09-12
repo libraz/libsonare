@@ -82,8 +82,9 @@ class Compressor : public rt::ProcessorBase,
   // 9=sidechainHpfHz, 10=pdrTimeMs, 11=pdrReleaseScale.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
   static void validate_config(const CompressorConfig& config);
+
+ private:
   static float gain_reduction_db(float input_db, const CompressorConfig& config);
   /// @brief Recomputes scalar derived coefficients (RMS / sidechain HPF / PDR /
   ///        envelope follower) from @p config. RT-safe: scalar math only, no

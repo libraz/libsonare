@@ -51,8 +51,9 @@ class Exciter : public rt::ProcessorBase {
   ///   oversampler's streaming round-trip latency.
   int latency_samples() const noexcept override;
 
- private:
   static void validate_config(const ExciterConfig& config);
+
+ private:
   void compute_coeffs();
   void update_coeff();
   void update_coeff_preserving_state();
