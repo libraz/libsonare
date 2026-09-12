@@ -264,6 +264,38 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
   }
 }
 
+/// @brief Runs an offline analysis body against an already-validated buffer.
+/// @details Shares run_offline's Audio::from_buffer -> body -> catch chain but
+///          skips validate_audio_params, for a caller that already ran the scan
+///          against a LARGER buffer this one is a window into -- re-validating
+///          the window would check nothing the first scan did not already cover.
+template <typename Fn>
+SonareError run_prevalidated_offline(const float* samples, size_t length, int sample_rate,
+                                     Fn body) {
+  try {
+    Audio audio = Audio::from_buffer(samples, length, sample_rate);
+    return body(audio);
+  } catch (const sonare::SonareException& e) {
+    set_last_error(e.what());
+    return map_sonare_exception(e);
+  } catch (const std::bad_alloc& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_OUT_OF_MEMORY;
+  } catch (const std::invalid_argument& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_PARAMETER;
+  } catch (const std::logic_error& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_STATE;
+  } catch (const std::exception& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_UNKNOWN;
+  } catch (...) {
+    set_last_error(kUnknownExceptionMessage);
+    return SONARE_ERROR_UNKNOWN;
+  }
+}
+
 /// @brief Runs an offline analysis body against a validated mono C buffer.
 /// @details Folds the validate_audio_params -> Audio::from_buffer -> try/catch
 ///          boilerplate shared by every offline analysis/feature wrapper. The

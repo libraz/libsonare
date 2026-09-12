@@ -8,6 +8,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -407,9 +408,29 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
                               &err)) {
     return err;
   }
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    return fill_spectrum_result(metering::spectrum_frame(audio, frame_offset, cfg), out);
-  });
+  err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  // Only [frame_offset, frame_offset + n_fft) ever reaches the FFT, so only that
+  // window is copied into an Audio; the scan above already covers the full
+  // buffer, so re-validating the window would check nothing new. Never form
+  // frame_offset + n_fft directly -- it overflows size_t when frame_offset is
+  // caller-supplied garbage.
+  const size_t start = std::min(frame_offset, length);
+  const size_t count = std::min(static_cast<size_t>(cfg.n_fft), length - start);
+  const auto run_frame = [&](const Audio& window_audio) -> SonareError {
+    return fill_spectrum_result(metering::spectrum_frame(window_audio, 0, cfg), out);
+  };
+  if (count == 0) {
+    // frame_offset is at or past the buffer's end. The full-length path would
+    // have windowed an all-zero frame here too; a genuinely empty Audio would
+    // instead take spectrum_frame's own empty-input shortcut, which returns a
+    // fixed dB floor regardless of db_amin/db_ref. A single zero sample keeps
+    // this on the same finalize_spectrum() path the in-bounds case takes.
+    static constexpr float kZeroSample = 0.0f;
+    return run_prevalidated_offline(&kZeroSample, 1, sample_rate, run_frame);
+  }
+  return run_prevalidated_offline(samples + start, count, sample_rate, run_frame);
 }
 
 void sonare_free_spectrum_result(SonareSpectrumResult* result) {
