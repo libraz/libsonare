@@ -814,6 +814,31 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
   sonare_mixer_destroy(clean);
 }
 
+TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
+          "[mixing][routing][warning]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+
+  const std::string with_unknown = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master", "inserts": [
+      {"slot": "post", "processor": "eq.parametric",
+       "params": "{\"highPassHz\":80,\"presenceDb\":4}"}
+    ]}],
+    "strips": [{"id": "vocal"}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  SonareMixer* mixer = sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  const std::string warning = sonare_last_warning_message();
+  CHECK(warning.find("eq.parametric") != std::string::npos);
+  CHECK(warning.find("master") != std::string::npos);
+  CHECK(warning.find("highPassHz") != std::string::npos);
+  CHECK(warning.find("presenceDb") != std::string::npos);
+  CHECK(std::string(sonare_last_error_message()).empty());
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("sonare_mastering_insert_param_names enumerates an insert's keys",
           "[mixing][routing][mastering]") {
   const std::string comp = sonare_mastering_insert_param_names("dynamics.compressor");

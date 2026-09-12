@@ -416,12 +416,23 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       // prepare this bus again on a later compile.
       dsp->fx.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
       for (const auto& insert : bus.inserts) {
-        auto processor =
-            sonare::mastering::api::make_insert(insert.processor_name, insert.params_json);
+        std::vector<std::string> unknown_keys;
+        auto processor = sonare::mastering::api::make_insert(insert.processor_name,
+                                                             insert.params_json, &unknown_keys);
         if (!processor) {
           throw sonare::SonareException(
               sonare::ErrorCode::InvalidParameter,
               "unknown bus insert processor: " + insert.processor_name + " (bus " + bus.id + ")");
+        }
+        if (!unknown_keys.empty()) {
+          std::string note = "insert '" + insert.processor_name + "' on bus '" + bus.id +
+                             "' ignored unknown param" + (unknown_keys.size() > 1 ? "s" : "") +
+                             ": ";
+          for (size_t k = 0; k < unknown_keys.size(); ++k) {
+            if (k > 0) note += ", ";
+            note += unknown_keys[k];
+          }
+          ignored_param_notes.push_back(std::move(note));
         }
         dsp->fx.add_insert(std::move(processor));
       }
