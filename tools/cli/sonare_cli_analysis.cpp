@@ -26,6 +26,20 @@ const char* canonical_section_type(SectionType type) {
   return "unknown";
 }
 
+/// Writes one named summary block for a per-frame series, in the shape both
+/// CLIs publish for an array statistic.
+void write_array_stats(JsonBuilder& json, const char* key, const std::vector<float>& values) {
+  const Stats stats = Stats::compute(values);
+  json.key(key)
+      .begin_object()
+      .kv("count", values.size())
+      .kv("mean", stats.mean)
+      .kv("std", stats.std)
+      .kv("min", stats.min)
+      .kv("max", stats.max)
+      .end_object();
+}
+
 }  // namespace
 
 int cmd_bpm(const CliArgs& args, const Audio& audio) {
@@ -303,15 +317,17 @@ int cmd_timbre(const CliArgs& args, const Audio& audio) {
   const Timbre& t = analyzer.timbre();
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("brightness", t.brightness)
         .kv("warmth", t.warmth)
         .kv("density", t.density)
         .kv("roughness", t.roughness)
-        .kv("complexity", t.complexity)
-        .end_object()
-        .print();
+        .kv("complexity", t.complexity);
+    write_array_stats(json, "spectral_centroid", analyzer.spectral_centroid());
+    write_array_stats(json, "spectral_flatness", analyzer.spectral_flatness());
+    write_array_stats(json, "spectral_rolloff", analyzer.spectral_rolloff());
+    json.end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";
@@ -345,16 +361,16 @@ int cmd_dynamics(const CliArgs& args, const Audio& audio) {
   const Dynamics& d = analyzer.dynamics();
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("peak_db", d.peak_db)
         .kv("rms_db", d.rms_db)
         .kv("dynamic_range_db", d.dynamic_range_db)
         .kv("crest_factor", d.crest_factor)
         .kv("loudness_range_db", d.loudness_range_db)
-        .kv("is_compressed", d.is_compressed)
-        .end_object()
-        .print();
+        .kv("is_compressed", d.is_compressed);
+    write_array_stats(json, "loudness", analyzer.loudness_curve().rms_db);
+    json.end_object().print();
   } else {
     std::cout << "\n"
               << color::cyan << color::bold << basename(args.input_file) << color::reset << "\n";

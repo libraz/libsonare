@@ -192,7 +192,9 @@ def test_mel_forwards_htk_flag(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def fake_mel(samples: Any, **kwargs: object) -> SimpleNamespace:
         calls.append(kwargs)
-        return SimpleNamespace(n_mels=128, n_frames=1, sample_rate=22050, hop_length=512)
+        return SimpleNamespace(
+            n_mels=128, n_frames=1, sample_rate=22050, hop_length=512, power=[0.0]
+        )
 
     monkeypatch.setattr(libsonare, "mel_spectrogram", fake_mel)
 

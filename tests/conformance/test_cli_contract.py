@@ -391,7 +391,13 @@ class CliContractSelfTest(unittest.TestCase):
                     (path, mutation, errors),
                 )
 
-    def test_analysis_output_rejection_cases_cover_both_spellings(self) -> None:
+    def test_analysis_output_rejection_cases_cover_every_spelling(self) -> None:
+        """A stdout-only command refuses the destination however it is written.
+
+        The three accepted spellings of a valued option -- long, short with a
+        separated value, short with the value attached -- all resolve to the
+        same option, so a command that publishes no file must refuse all three.
+        """
         cases = {
             case["id"]: case
             for case in self.manifest["parser_cases"]
@@ -402,6 +408,7 @@ class CliContractSelfTest(unittest.TestCase):
             {
                 "analyze_reject_output",
                 "analyze_reject_output_alias",
+                "analyze_reject_output_attached",
                 "spectral_reject_output",
                 "spectral_reject_output_alias",
             },

@@ -25,6 +25,8 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
         .kv("output", args.output_file)
         .kv("mode", mode)
         .kv("target_db", target_db)
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
         .kv("duration", result.duration())
         .end_object()
         .print();

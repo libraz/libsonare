@@ -820,9 +820,11 @@ int cmd_nnls_chroma(const CliArgs& args, const Audio& audio) {
         .kv("n_frames", chroma.n_frames())
         .kv("duration", chroma.duration())
         .key("mean_energy")
-        .begin_object();
-    for (int i = 0; i < 12; ++i) json.kv(names[i], mean_energy[i]);
-    json.end_object().end_object().print();
+        .begin_array();
+    // One pitch-class vector, one representation: `chroma` publishes this array
+    // and a consumer must not need a second reader for the NNLS variant.
+    for (float value : mean_energy) json.value(value);
+    json.end_array().end_object().print();
   } else {
     std::cout << "NNLS Chromagram:\n";
     printf("  Shape:    %d bins x %d frames\n", chroma.n_chroma(), chroma.n_frames());

@@ -813,16 +813,97 @@ def test_synthesize_rir_invalid_geometry_honors_legacy_exit_code() -> None:
 
 
 def test_pcm16_clamps_and_stays_byte_identical() -> None:
-    """The shared PCM helper preserves the clamp-and-scale contract (L-17)."""
+    """The shared PCM helper preserves the clamp-and-scale contract."""
     from libsonare import cli
 
     assert cli._pcm16(0.0) == struct.pack("<h", 0)
     assert cli._pcm16(1.0) == struct.pack("<h", 32767)
     assert cli._pcm16(-1.0) == struct.pack("<h", -32767)
-    assert cli._pcm16(0.5) == struct.pack("<h", int(round(0.5 * 32767.0)))
+    assert cli._pcm16(0.5) == struct.pack("<h", 16384)
     # Out-of-range values clamp to the full-scale endpoints.
     assert cli._pcm16(2.0) == struct.pack("<h", 32767)
     assert cli._pcm16(-2.0) == struct.pack("<h", -32767)
+
+
+# Codes the native writer produces for samples that separate the two rounding
+# conventions: each `x` lands on or near a .5 boundary once scaled, where
+# round-half-to-even and round-half-away-from-zero disagree. Recorded from
+# `std::lroundf` on the 32-bit product, which is the contract `float_to_pcm16`
+# and `float_to_pcm24` (src/core/audio_io.cpp) publish.
+_PCM16_NATIVE_CODES = [
+    (1.5259254723787308e-05, 1),
+    (-1.5259254723787308e-05, -1),
+    (4.577776417136192e-05, 2),
+    (-4.577776417136192e-05, -2),
+    (7.629627361893654e-05, 3),
+    (-7.629627361893654e-05, -3),
+    (0.00032044434919953346, 11),
+    (-0.00032044434919953346, -11),
+    (0.0030976287089288235, 102),
+    (-0.0030976287089288235, -102),
+    (0.500030517578125, 16385),
+    (-0.500030517578125, -16385),
+    (0.5625629425048828, 18434),
+    (-0.8147373795509338, -26697),
+    (-0.5259407162666321, -17234),
+    (0.6181066036224365, 20254),
+    (-0.7396008033483668, -24234),
+    (0.30104981593725233, 9865),
+    (1.0, 32767),
+    (-1.0, -32767),
+    (1.5, 32767),
+    (-1.5, -32767),
+    (0.0, 0),
+    (float("nan"), 32767),
+    (float("inf"), 32767),
+    (float("-inf"), -32767),
+]
+
+_PCM24_NATIVE_CODES = [
+    (5.960465188081798e-08, 1),
+    (-5.960465188081798e-08, -1),
+    (2.9802325229866256e-07, 3),
+    (-2.9802325229866256e-07, -3),
+    (0.5, 4194304),
+    (-0.5, -4194304),
+    (0.5625629425048828, 4719120),
+    (-0.7396008033483668, -6204221),
+    (1.0, 8388607),
+    (-1.0, -8388607),
+    (1.5, 8388607),
+    (-1.5, -8388607),
+    (0.0, 0),
+    (float("nan"), 8388607),
+    (float("inf"), 8388607),
+    (float("-inf"), -8388607),
+]
+
+
+def test_pcm_quantization_matches_the_native_writer_on_boundary_samples() -> None:
+    """Python and native WAV writers agree sample for sample, halves included."""
+    from libsonare._cli_common import _pcm16, _pcm24
+
+    for sample, expected in _PCM16_NATIVE_CODES:
+        assert _pcm16(sample) == struct.pack("<h", expected), sample
+    for sample, expected in _PCM24_NATIVE_CODES:
+        assert _pcm24(sample) == expected.to_bytes(3, "little", signed=True), sample
+
+
+def test_pcm_boundary_vector_separates_the_two_rounding_conventions() -> None:
+    """The vector above is not satisfied by round-half-to-even on float64.
+
+    Round-half-away and round-half-to-even agree on every even-side sample, so a
+    vector that never lands on a half would pass under either rule and assert
+    nothing. This is the control that says the vector discriminates.
+    """
+    disagreeing = 0
+    for sample, expected in _PCM16_NATIVE_CODES:
+        if sample != sample:  # NaN reaches the clamp, not the rounding step
+            continue
+        clamped = max(-1.0, min(1.0, sample))
+        if int(round(clamped * 32767.0)) != expected:
+            disagreeing += 1
+    assert disagreeing >= 10
 
 
 def test_voice_set_preserves_removed_macro_for_core_validation() -> None:

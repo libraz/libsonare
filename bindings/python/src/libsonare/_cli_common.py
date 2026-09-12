@@ -233,6 +233,18 @@ def _resample_linear(samples: list[float], source_rate: int, target_rate: int) -
     return output
 
 
+def _to_float32(value: float) -> float:
+    """Round a Python float to the nearest ``float`` the C++ writer would hold.
+
+    The native quantizer takes a 32-bit sample and scales it in 32-bit
+    arithmetic, so a mirror computing in Python's float64 lands on a different
+    integer for some inputs even though both round the same way.
+    """
+    import struct
+
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
 def _clamp_sample(sample: float) -> float:
     """Clamp a float sample to ``[-1.0, 1.0]``, including non-finite input.
 
@@ -245,6 +257,20 @@ def _clamp_sample(sample: float) -> float:
     return capped if capped > -1.0 else -1.0
 
 
+def _quantize_sample(sample: float, full_scale: float, minimum: int, maximum: int) -> int:
+    """Scale a clamped float sample to an integer PCM code.
+
+    Reproduces ``float_to_pcm16`` / ``float_to_pcm24`` (audio_io.cpp) step for
+    step: narrow to 32-bit, clamp, scale in 32-bit, then round half away from
+    zero rather than to even, and clamp the code to the container. Both the
+    narrowing and the rounding rule are load-bearing -- either one alone still
+    disagrees with the native writer on some samples.
+    """
+    scaled = _to_float32(_clamp_sample(_to_float32(sample)) * full_scale)
+    rounded = math.floor(scaled + 0.5) if scaled >= 0.0 else math.ceil(scaled - 0.5)
+    return max(minimum, min(maximum, int(rounded)))
+
+
 def _pcm16(sample: float) -> bytes:
     """Clamp a float to ``[-1.0, 1.0]`` and pack it as little-endian 16-bit PCM.
 
@@ -252,12 +278,12 @@ def _pcm16(sample: float) -> bytes:
     """
     import struct
 
-    return struct.pack("<h", int(round(_clamp_sample(sample) * 32767.0)))
+    return struct.pack("<h", _quantize_sample(sample, 32767.0, -32768, 32767))
 
 
 def _pcm24(sample: float) -> bytes:
     """Clamp a float and pack it as little-endian 24-bit PCM."""
-    value = int(round(_clamp_sample(sample) * 8388607.0))
+    value = _quantize_sample(sample, 8388607.0, -8388608, 8388607)
     return value.to_bytes(3, byteorder="little", signed=True)
 
 
@@ -482,9 +508,13 @@ def _emit_effect_result(
 
     Shared by the offline-effect subcommands whose result is a mono buffer plus
     an optional ``extra`` payload block. The JSON payload keeps the key order
-    ``length, sample_rate, <extra...>, output`` and the human-readable form
-    prints ``<label>: <n> samples`` followed by an optional ``Wrote:`` line,
+    ``length, sample_rate, duration, <extra...>, output`` and the human-readable
+    form prints ``<label>: <n> samples`` followed by an optional ``Wrote:`` line,
     matching each command's historical output exactly.
+
+    ``length`` and ``duration`` are the same quantity in two units and both are
+    published: neither converts to the other without the sample rate, and the
+    native CLI's callers read one while these read the other.
 
     A command that renders audio requires an output destination (``requires_output``),
     so running it without ``-o`` is a parameter error (exit ``EXIT_INVALID_PARAMETER``)
@@ -499,7 +529,11 @@ def _emit_effect_result(
         _write_wav(args.output, result, sr)
 
     if args.json:
-        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
+        payload: dict[str, object] = {
+            "length": len(result),
+            "sample_rate": sr,
+            "duration": len(result) / sr if sr > 0 else 0.0,
+        }
         if extra:
             payload.update(extra)
         if args.output:

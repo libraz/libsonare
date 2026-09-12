@@ -41,6 +41,8 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
         .begin_object()
         .kv("output", args.output_file)
         .kv("semitones", semitones)
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
         .kv("duration", result.duration())
         .end_object()
         .print();
@@ -74,6 +76,8 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
         .begin_object()
         .kv("output", args.output_file)
         .kv("rate", rate)
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
         .kv("duration", result.duration())
         .end_object()
         .print();
@@ -102,6 +106,8 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
         .kv("output", args.output_file)
         .kv("current_midi", current_midi)
         .kv("target_midi", target_midi)
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
         .kv("duration", result.duration())
         .end_object()
         .print();
@@ -128,7 +134,9 @@ int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
         .kv("onset_sample", region.onset_sample)
         .kv("offset_sample", region.offset_sample)
         .kv("ratio", ratio)
-        .kv("samples", result.size())
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
+        .kv("duration", result.duration())
         .end_object()
         .print();
   } else if (!args.quiet) {
@@ -406,21 +414,46 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   auto save_audio = [](const std::string& path, const Audio& a) {
     save_wav(path, a.data(), a.size(), a.sample_rate());
   };
+  // Mean absolute amplitude, the level summary both CLIs publish per component.
+  auto component_energy = [](const Audio& a) {
+    if (a.empty()) return 0.0f;
+    float total = 0.0f;
+    for (float sample : a) total += std::fabs(sample);
+    return total / static_cast<float>(a.size());
+  };
 
   if (args.has("harmonic-only")) {
     std::string path = base + ".wav";
-    save_audio(path, harmonic(audio, config, stft));
+    const Audio result = harmonic(audio, config, stft);
+    save_audio(path, result);
     if (!args.quiet) {
       std::cerr << color::green << "Saved harmonic to " << path << color::reset << "\n";
     }
-    if (args.json_output) JsonBuilder().begin_object().kv("harmonic", path).end_object().print();
+    if (args.json_output)
+      JsonBuilder()
+          .begin_object()
+          .kv("length", result.size())
+          .kv("sample_rate", result.sample_rate())
+          .kv("harmonic_energy", component_energy(result))
+          .kv("harmonic", path)
+          .end_object()
+          .print();
   } else if (args.has("percussive-only")) {
     std::string path = base + ".wav";
-    save_audio(path, percussive(audio, config, stft));
+    const Audio result = percussive(audio, config, stft);
+    save_audio(path, result);
     if (!args.quiet) {
       std::cerr << color::green << "Saved percussive to " << path << color::reset << "\n";
     }
-    if (args.json_output) JsonBuilder().begin_object().kv("percussive", path).end_object().print();
+    if (args.json_output)
+      JsonBuilder()
+          .begin_object()
+          .kv("length", result.size())
+          .kv("sample_rate", result.sample_rate())
+          .kv("percussive_energy", component_energy(result))
+          .kv("percussive", path)
+          .end_object()
+          .print();
   } else if (args.has("with-residual")) {
     auto r = hpss_with_residual(audio, config, stft);
     std::string h = base + "_harmonic.wav", p = base + "_percussive.wav",
@@ -435,6 +468,11 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
     if (args.json_output)
       JsonBuilder()
           .begin_object()
+          .kv("length", r.harmonic.size())
+          .kv("sample_rate", r.harmonic.sample_rate())
+          .kv("harmonic_energy", component_energy(r.harmonic))
+          .kv("percussive_energy", component_energy(r.percussive))
+          .kv("residual_energy", component_energy(r.residual))
           .kv("harmonic", h)
           .kv("percussive", p)
           .kv("residual", res)
@@ -449,7 +487,16 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
       std::cerr << color::green << "Saved: " << h << ", " << p << color::reset << "\n";
     }
     if (args.json_output)
-      JsonBuilder().begin_object().kv("harmonic", h).kv("percussive", p).end_object().print();
+      JsonBuilder()
+          .begin_object()
+          .kv("length", r.harmonic.size())
+          .kv("sample_rate", r.harmonic.sample_rate())
+          .kv("harmonic_energy", component_energy(r.harmonic))
+          .kv("percussive_energy", component_energy(r.percussive))
+          .kv("harmonic", h)
+          .kv("percussive", p)
+          .end_object()
+          .print();
   }
   return 0;
 }
@@ -517,7 +564,10 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
 
   if (args.json_output) {
     JsonBuilder json;
-    json.begin_object().kv("length", result.size()).kv("sample_rate", audio.sample_rate());
+    json.begin_object()
+        .kv("length", result.size())
+        .kv("sample_rate", audio.sample_rate())
+        .kv("duration", result.duration());
     // Report the parameter that actually drove the trim: the relative top_db for
     // the legacy algorithm, the absolute threshold_db otherwise.
     if (use_legacy_top_db) {
@@ -525,6 +575,7 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
     } else {
       json.kv("threshold_db", threshold_db);
     }
+    json.kv("n_fft", args.n_fft).kv("hop_length", args.hop_length);
     if (!args.output_file.empty()) json.kv("output", args.output_file);
     json.end_object().print();
   } else {

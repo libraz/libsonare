@@ -250,6 +250,7 @@ def cmd_chords(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
+                    "progression": " - ".join(chord.name for chord in result.chords),
                     "count": len(result.chords),
                     "chords": [
                         {
@@ -407,8 +408,18 @@ def cmd_mel(args: argparse.Namespace) -> int:
                 {
                     "n_mels": result.n_mels,
                     "n_frames": result.n_frames,
+                    "duration": result.n_frames * result.hop_length / result.sample_rate
+                    if result.sample_rate > 0
+                    else 0.0,
                     "sample_rate": result.sample_rate,
                     "hop_length": result.hop_length,
+                    "stats": {
+                        "min": round(min(result.power), 6) if result.power else 0.0,
+                        "max": round(max(result.power), 6) if result.power else 0.0,
+                        "mean": round(sum(result.power) / len(result.power), 6)
+                        if result.power
+                        else 0.0,
+                    },
                 }
             )
         )

@@ -186,7 +186,16 @@ def cmd_onset_envelope(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            _strict_json_dumps({"stats": _array_stats(env), "values": [round(v, 6) for v in env]})
+            _strict_json_dumps(
+                {
+                    "count": len(env),
+                    "hop_length": args.hop_length,
+                    # The analyzed audio's duration, not the frame grid's span.
+                    "duration": len(samples) / sr if sr > 0 else 0.0,
+                    "stats": _array_stats(env, with_count=False),
+                    "values": [round(v, 6) for v in env],
+                }
+            )
         )
     else:
         stats = _array_stats(env)
@@ -219,6 +228,7 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
                 {
                     "n_chroma": n_chroma,
                     "n_frames": n_frames,
+                    "duration": n_frames * args.hop_length / sr if sr > 0 else 0.0,
                     "mean_energy": [round(e, 6) for e in mean_energy],
                 }
             )
@@ -256,7 +266,7 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
                 {
                     "win_length": win_length,
                     "n_frames": n_frames,
-                    "stats": _array_stats(data),
+                    "stats": _array_stats(data, with_count=False),
                 }
             )
         )
@@ -285,7 +295,16 @@ def cmd_plp(args: argparse.Namespace) -> int:
     pulse = plp(env, sample_rate=sr, hop_length=args.hop_length, **plp_options)
 
     if args.json:
-        print(_strict_json_dumps({"stats": _array_stats(pulse)}))
+        print(
+            _strict_json_dumps(
+                {
+                    "n_frames": len(pulse),
+                    "tempo_min": plp_options.get("tempo_min", 30.0),
+                    "tempo_max": plp_options.get("tempo_max", 300.0),
+                    "stats": _array_stats(pulse, with_count=False),
+                }
+            )
+        )
     else:
         stats = _array_stats(pulse)
         print("  Predominant local pulse (PLP):")

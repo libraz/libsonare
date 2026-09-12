@@ -102,12 +102,17 @@ def cmd_hpss(args: argparse.Namespace) -> int:
                 _write_wav(residual_path, residual, output_sr)
 
     if args.json:
+        # Each component's energy is reported only when that component is part
+        # of the requested output, so a single-component run publishes the same
+        # keys on both CLIs -- the native one never separates the other half.
         payload: dict[str, object] = {
-            "length": len(harmonic),
+            "length": len(percussive) if modes == ["percussive_only"] else len(harmonic),
             "sample_rate": output_sr,
-            "harmonic_energy": round(h_energy, 6),
-            "percussive_energy": round(p_energy, 6),
         }
+        if modes != ["percussive_only"]:
+            payload["harmonic_energy"] = round(h_energy, 6)
+        if modes != ["harmonic_only"]:
+            payload["percussive_energy"] = round(p_energy, 6)
         if residual:
             payload["residual_energy"] = round(_mean_abs(residual), 6)
         if harmonic_path:
@@ -215,7 +220,17 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
         stretch_ratio=args.ratio,
     )
 
-    return _emit_effect_result(args, result, sr, label="Note stretch")
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={
+            "onset_sample": args.onset,
+            "offset_sample": args.offset,
+            "ratio": args.ratio,
+        },
+        label="Note stretch",
+    )
 
 
 def cmd_pitch_shift(args: argparse.Namespace) -> int:
@@ -461,7 +476,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         args,
         result,
         sr,
-        extra={"duration": len(result) / sr, "latency_samples": latency_samples, **mode_metadata},
+        extra={"latency_samples": latency_samples, **mode_metadata},
         label="Voice change",
     )
 
