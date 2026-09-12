@@ -205,8 +205,8 @@ class _ProjectRenderMixin:
 
         Like :meth:`bounce_with_builtin_instrument`, but each bound destination
         renders through the patch-driven NativeSynth — the full synthesizer
-        (subtractive / FM / Karplus-Strong / modal / additive / percussion /
-        extended-waveguide-piano engines plus the realism layer).
+        (every engine mode plus the realism layer; the modes are enumerated by
+        ``synth_enum_tables()["engine_modes"]``).
 
         Args:
             instrument: Patch bound to ``destination_id`` (default 0). Pass a

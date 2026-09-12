@@ -85,7 +85,7 @@ python = [
   # Deprecated Python-only alias for `realtime_voice_changer_preset_config`
   # (which wraps C `sonare_realtime_voice_changer_preset_config`); kept for
   # backward compatibility, no C counterpart of its own. See
-  # bindings/python/src/libsonare/_effects.py:1040.
+  # bindings/python/src/libsonare/_effects_voice.py:564.
   "realtime_voice_changer_preset_pod",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
 ]

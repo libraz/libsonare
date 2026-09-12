@@ -226,9 +226,10 @@ typedef struct {
 
 /// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to
 ///        the given destinations through the patch-driven NativeSynth (the
-///        full synthesizer: subtractive / FM / Karplus-Strong / modal /
-///        additive / percussion / extended-waveguide piano engines plus the
-///        realism layer). Each binding resolves its @ref SonareSynthPatch via
+///        full synthesizer: every @ref SonareSynthEngineMode engine plus the
+///        realism layer; @ref sonare_synth_enum_names with
+///        SONARE_SYNTH_ENUM_ENGINE_MODE lists them at runtime).
+///        Each binding resolves its @ref SonareSynthPatch via
 ///        the preset catalog + field overrides; an invalid struct_version or
 ///        unknown preset name fails with SONARE_ERROR_INVALID_PARAMETER.
 ///        When @p options->total_frames <= 0 the render length is auto-derived

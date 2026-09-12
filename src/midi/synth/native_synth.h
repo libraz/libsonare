@@ -1,9 +1,9 @@
 #pragma once
 
 /// @file native_synth.h
-/// @brief NativeSynth — the patch-driven synthesis engine: a mode-tagged
-///        patch POD (subtractive / FM / Karplus-Strong / modal / additive /
-///        percussion / waveguide piano), the unison subtractive voice
+/// @brief NativeSynth — the patch-driven synthesis engine: a patch POD tagged
+///        with a SynthEngineMode (declared below, one enumerator per engine),
+///        the unison subtractive voice
 ///        (PolyBLEP oscillators -> TPT SVF -> exponential DAHDSR VCA) with
 ///        the per-mode cores embedded beside it, and a 16-channel
 ///        MidiInstrument host around the shared voice pool.

@@ -1088,9 +1088,9 @@ export class Project {
 
   /**
    * Like {@link bounce}, but renders MIDI tracks routed to a destination
-   * through the patch-driven NativeSynth — the full synthesizer (subtractive /
-   * FM / Karplus-Strong / modal / additive / percussion /
-   * extended-waveguide-piano engines plus the realism layer). Each entry of
+   * through the patch-driven NativeSynth — the full synthesizer (every
+   * {@link SynthEngineMode} engine plus the realism layer; the modes are
+   * enumerated by {@link SYNTH_ENGINE_MODES}). Each entry of
    * `instruments` binds a {@link SynthPatch} (or a preset-name string such as
    * `'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}) to a
    * `destinationId` (default `0`). An object descriptor may also set

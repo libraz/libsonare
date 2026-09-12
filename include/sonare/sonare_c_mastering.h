@@ -671,9 +671,10 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
 /// Pass NaN to reproduce the throw-on-loudness behaviour of the non-_ex create.
 /// @param loudness_static_gain_peak_db Offline-measured true-peak (dBFS) of the
 ///        source the static gain was computed for. When finite, the static gain
-///        is clamped to `ceiling_db - peak_db` so the streaming preview does not
-///        overdrive the loudness limiter harder than the offline chain (which
-///        applies the same ceiling clamp). Pass NaN to apply the static gain
+///        is clamped to `(ceiling_db - peak_db) +
+///        max(max_limiter_gain_reduction_db, 0)` so the streaming preview does
+///        not overdrive the loudness limiter harder than the offline chain
+///        (which applies the same clamp). Pass NaN to apply the static gain
 ///        verbatim (no clamp). Returns NULL on error; a non-NULL handle is
 ///        owned by the caller and stays valid until
 ///        @ref sonare_streaming_mastering_chain_destroy.

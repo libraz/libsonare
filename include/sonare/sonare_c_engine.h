@@ -691,8 +691,9 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
                                                  const SonareEngineBuiltinSynthConfig* config);
 
 /// @brief Binds/replaces the patch-driven NativeSynth on a realtime MIDI
-///        destination (the full synthesizer: subtractive / FM / Karplus-Strong
-///        / modal / additive / percussion / waveguide-piano engines). The
+///        destination (the full synthesizer: every @ref SonareSynthEngineMode
+///        engine, enumerable at runtime via @ref sonare_synth_enum_names with
+///        SONARE_SYNTH_ENUM_ENGINE_MODE). The
 ///        patch resolves exactly like the project bounce surface
 ///        (@ref SonareSynthPatch: preset catalog base + field overrides); an
 ///        invalid struct_version or unknown preset name fails with

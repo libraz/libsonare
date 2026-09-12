@@ -314,14 +314,19 @@ const char* sonare_last_error_message(void);
 ///   SUCCESS return never has to share storage with (or be mistaken for) an
 ///   error. It is recorded by sonare_mixer_from_scene_json when a scene loads
 ///   successfully but a channel-strip insert was handed param keys it does not
-///   read, and by @ref sonare_synthesize_rir for its first recoverable acoustic
-///   diagnostic (such as a clamped RIR tail). Use
+///   read, and by @ref sonare_synthesize_rir for its recoverable acoustic
+///   diagnostics (such as a clamped RIR tail). Use
 ///   sonare_mastering_insert_param_names() to discover the keys a given insert
 ///   accepts.
 ///   - The pointer is owned by libsonare, never NULL, and valid until the next
 ///     API call that records or clears a warning on the same thread.
-///   - Cleared at the entry of sonare_mixer_from_scene_json, so a stale warning
-///     from an earlier load never leaks into a later, clean one.
+///   - @ref sonare_synthesize_rir publishes EVERY recoverable diagnostic it
+///     raised, each as ``acoustic.code: explanation`` and joined with "; " in
+///     the synthesizer's own order, so a request that trips two reports both.
+///     Parse the string as a "; "-separated list, not as a single diagnostic.
+///   - Cleared at the entry of sonare_mixer_from_scene_json and of
+///     sonare_synthesize_rir, so a stale warning from an earlier call never
+///     leaks into a later, clean one.
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_warning_message(void);
 

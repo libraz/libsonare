@@ -314,8 +314,11 @@ class MasteringChain {
 /// (e.g. `target_lufs - measured_integrated_lufs`) and supply it here. When
 /// provided and `config.loudness.enabled` is set, the chain applies that fixed
 /// gain per block before the loudness stage's true-peak limiter instead of
-/// throwing. The true-peak ceiling is still enforced live by the
-/// `maximizer.truePeakLimiter` stage that the loudness config enables.
+/// throwing. The true-peak ceiling is still enforced live by the loudness
+/// stage's own true-peak limiter, built at `prepare()` from
+/// `loudness.ceiling_db` / `true_peak_oversample` / `release_ms`; the
+/// standalone `maximizer.truePeakLimiter` stage stays off, since limiting on
+/// both sides of the loudness gain pumps transients for no ceiling benefit.
 struct StreamingMasteringChainOptions {
   /// Precomputed static loudness gain in dB. NaN (the default) means "not
   /// provided"; in that case an enabled loudness stage still throws.
@@ -323,9 +326,10 @@ struct StreamingMasteringChainOptions {
 
   /// Offline-measured true-peak (dBFS) of the source the static gain was
   /// computed for. When finite, the static gain is clamped to
-  /// `loudness.ceiling_db - loudness_static_gain_peak_db` so the streaming
-  /// preview does not drive the loudness limiter harder than the offline chain
-  /// (which applies the same ceiling clamp via `loudness_gain_db_with_ceiling`).
+  /// `(loudness.ceiling_db - loudness_static_gain_peak_db) +
+  /// max(loudness.max_limiter_gain_reduction_db, 0)` so the streaming preview
+  /// does not drive the loudness limiter harder than the offline chain (which
+  /// applies the same clamp via `loudness_gain_db_with_ceiling`).
   /// NaN (the default) applies the static gain verbatim.
   float loudness_static_gain_peak_db = std::numeric_limits<float>::quiet_NaN();
 };

@@ -773,9 +773,9 @@ export class Project {
 
   /**
    * Compile + render the project offline, routing MIDI tracks through the
-   * patch-driven NativeSynth — the full synthesizer (subtractive / FM /
-   * Karplus-Strong / modal / additive / percussion / extended-waveguide-piano
-   * engines plus the realism layer). Pass a {@link SynthPatch}, a preset-name
+   * patch-driven NativeSynth — the full synthesizer (every
+   * {@link SynthEngineMode} engine plus the realism layer; the modes are
+   * enumerated by {@link SYNTH_ENGINE_MODES}). Pass a {@link SynthPatch}, a preset-name
    * string (`'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}), or
    * an array of either; each object entry may carry `destinationId` (default
    * 0) and `useGmPrograms` (default `false`) binding conveniences, neither of
