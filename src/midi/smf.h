@@ -178,6 +178,13 @@ struct SmfExportResult {
   /// Count of events skipped lossily during export (unresolved SysEx handles,
   /// MIDI 2.0-only controller forms, non-channel voice packets, etc.).
   uint32_t skipped_events = 0;
+  /// Count of events written at an earlier tick than their own because the gap
+  /// from the previously written event exceeded what a 4-byte delta time can
+  /// encode. Distinct from @ref skipped_events: the event IS in the file and
+  /// re-imports, only its position moved. A track's later events are measured
+  /// from where the clamp left the stream, so they land on their own ticks again
+  /// as soon as the remaining gap fits.
+  uint32_t clamped_delta_events = 0;
 
   bool ok() const noexcept { return status == SmfStatus::kOk; }
 };

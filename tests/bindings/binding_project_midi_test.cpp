@@ -3,9 +3,17 @@
 
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/project_internal.h"
+#include "midi/midi_clip.h"
+#include "midi/ump.h"
 #include "util/resource_limits.h"
 
 namespace {
+
+// A gap far wider than the largest delta a 4-byte variable-length quantity can
+// carry (0x0FFFFFFF ticks), and the tick the clamp lands on, both expressed in
+// quarter notes at the default 480 PPQN export division.
+constexpr double kPpqFarPastDeltaCeiling = 1000000.0;
+constexpr double kClampedPpq = 268435455.0 / 480.0;
 
 std::vector<uint8_t> make_project_limit_running_status_smf(std::size_t event_count) {
   std::vector<uint8_t> body;
@@ -1673,4 +1681,99 @@ TEST_CASE("truncated multi-track SMF import keeps every track that parsed comple
     REQUIRE(project->history.midi_content().events.at(first_clip).size() == 8);
     sonare_project_destroy(project);
   }
+}
+
+TEST_CASE("SMF export reports a clamped delta instead of dropping the event",
+          "[midi][smf][export]") {
+  sonare::midi::MidiClip clip;
+  clip.add_event(sonare::midi::MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(sonare::midi::MidiClipEvent{kPpqFarPastDeltaCeiling,
+                                             sonare::midi::make_midi1_note_on(0, 0, 67, 100)});
+
+  const sonare::midi::SmfExportResult result = sonare::midi::export_smf({clip}, {}, {});
+  REQUIRE(result.ok());
+  CHECK(result.clamped_delta_events == 1);
+  // The event was written, so it is not a skip.
+  CHECK(result.skipped_events == 0);
+
+  const sonare::midi::SmfImportResult back = sonare::midi::import_smf(result.bytes);
+  REQUIRE(back.status == sonare::midi::SmfStatus::kOk);
+  REQUIRE(back.clips.size() == 1);
+  REQUIRE(back.clips[0].events().size() == 2);
+  CHECK(back.clips[0].events()[0].ppq == 0.0);
+  // Exact ==: the clamped tick over 480 PPQN is a dyadic rational, so the
+  // round trip through double is lossless.
+  CHECK(back.clips[0].events()[1].ppq == kClampedPpq);
+}
+
+TEST_CASE("A clamped SMF delta does not cascade into the rest of the track",
+          "[midi][smf][export]") {
+  // Two ordinary events behind the oversized gap. Deltas after the clamp are
+  // measured from where the clamp left the stream, so once the remaining gap
+  // fits they land on their own ticks again.
+  sonare::midi::MidiClip clip;
+  clip.add_event(sonare::midi::MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(sonare::midi::MidiClipEvent{kPpqFarPastDeltaCeiling,
+                                             sonare::midi::make_midi1_note_on(0, 0, 62, 100)});
+  clip.add_event(sonare::midi::MidiClipEvent{kPpqFarPastDeltaCeiling + 1.0,
+                                             sonare::midi::make_midi1_note_on(0, 0, 64, 100)});
+  clip.add_event(sonare::midi::MidiClipEvent{kPpqFarPastDeltaCeiling + 2.0,
+                                             sonare::midi::make_midi1_note_on(0, 0, 65, 100)});
+
+  const sonare::midi::SmfExportResult result = sonare::midi::export_smf({clip}, {}, {});
+  REQUIRE(result.ok());
+  CHECK(result.clamped_delta_events == 1);
+  CHECK(result.skipped_events == 0);
+
+  const sonare::midi::SmfImportResult back = sonare::midi::import_smf(result.bytes);
+  REQUIRE(back.status == sonare::midi::SmfStatus::kOk);
+  REQUIRE(back.clips.size() == 1);
+  REQUIRE(back.clips[0].events().size() == 4);
+  CHECK(back.clips[0].events()[0].ppq == 0.0);
+  CHECK(back.clips[0].events()[1].ppq == kClampedPpq);
+  CHECK(back.clips[0].events()[2].ppq == kPpqFarPastDeltaCeiling + 1.0);
+  CHECK(back.clips[0].events()[3].ppq == kPpqFarPastDeltaCeiling + 2.0);
+}
+
+TEST_CASE("SMF export reports a clamped marker delta on the meta track", "[midi][smf][export]") {
+  sonare::midi::MidiClip clip;
+  clip.add_event(sonare::midi::MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+
+  sonare::midi::SmfExportOptions options;
+  options.markers.push_back(sonare::midi::SmfMarker{0.0, "start"});
+  options.markers.push_back(sonare::midi::SmfMarker{kPpqFarPastDeltaCeiling, "far"});
+
+  const sonare::midi::SmfExportResult result =
+      sonare::midi::export_smf({clip}, {}, {}, {}, options);
+  REQUIRE(result.ok());
+  CHECK(result.clamped_delta_events == 1);
+
+  const sonare::midi::SmfImportResult back = sonare::midi::import_smf(result.bytes);
+  REQUIRE(back.status == sonare::midi::SmfStatus::kOk);
+  int far_markers = 0;
+  for (const sonare::midi::SmfMarker& marker : back.markers) {
+    if (marker.text == "far") {
+      ++far_markers;
+      CHECK(marker.ppq == kClampedPpq);
+    }
+  }
+  CHECK(far_markers == 1);
+}
+
+TEST_CASE("SMF export keeps a representable delta exact", "[midi][smf][export]") {
+  sonare::midi::MidiClip clip;
+  clip.add_event(sonare::midi::MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(sonare::midi::MidiClipEvent{4.0, sonare::midi::make_midi1_note_on(0, 0, 67, 100)});
+
+  const sonare::midi::SmfExportResult result = sonare::midi::export_smf({clip}, {}, {});
+  REQUIRE(result.ok());
+  CHECK(result.skipped_events == 0);
+  CHECK(result.clamped_delta_events == 0);
+
+  const sonare::midi::SmfImportResult back = sonare::midi::import_smf(result.bytes);
+  REQUIRE(back.status == sonare::midi::SmfStatus::kOk);
+  REQUIRE(back.clips.size() == 1);
+  REQUIRE(back.clips[0].events().size() == 2);
+  CHECK(back.clips[0].events()[0].ppq == 0.0);
+  CHECK(back.clips[0].events()[1].ppq == 4.0);
 }

@@ -203,12 +203,14 @@ void put_tag(std::vector<uint8_t>* out, const uint8_t (&tag)[4]) {
   out->insert(out->end(), tag, tag + 4);
 }
 
+// The largest gap an SMF delta time can carry: 28 bits in a 4-byte VLQ. A wider
+// gap is clamped to it so the event stays in the file and stays readable, at the
+// cost of landing early; export counts each one in clamped_delta_events.
+constexpr uint32_t kMaxVlq = 0x0FFFFFFFu;
+
 void put_vlq(std::vector<uint8_t>* out, uint32_t value) {
-  // An SMF variable-length quantity is at most 4 bytes (28 significant bits), so
-  // clamp to the largest representable value. A 5th byte would carry a
-  // continuation bit the reader rejects, making the stream unreadable to this
-  // library and to spec-compliant DAWs.
-  constexpr uint32_t kMaxVlq = 0x0FFFFFFFu;
+  // A 5th byte would carry a continuation bit the reader rejects, making the
+  // stream unreadable to this library and to spec-compliant DAWs.
   if (value > kMaxVlq) value = kMaxVlq;
   // Encode 7 bits/byte, big-endian, continuation bit on all but the last.
   std::array<uint8_t, 5> buf{};
@@ -934,8 +936,14 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     std::vector<uint8_t> body;
     int64_t prev_tick = 0;
     for (const auto& item : items) {
-      const uint32_t delta = static_cast<uint32_t>(std::max<int64_t>(0, item.tick - prev_tick));
-      prev_tick = item.tick;
+      const int64_t delta_ticks = std::max<int64_t>(0, item.tick - prev_tick);
+      const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
+      if (clamped) ++result.clamped_delta_events;
+      const uint32_t delta = static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks);
+      // Advance by what was encoded, not by the item's own tick: the stream sits
+      // where the delta put it, so a later item measured from anywhere else
+      // would land off by the amount the clamp ate.
+      prev_tick += static_cast<int64_t>(delta);
       if (item.kind == 0) {
         const double us = kMicrosPerMinute / item.bpm;
         // SMF stores tempo as a 24-bit microseconds-per-quarter field; clamp so
@@ -1026,8 +1034,11 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
           ++result.skipped_events;
           continue;
         }
-        const uint32_t delta = static_cast<uint32_t>(std::max<int64_t>(0, tick - prev_tick));
-        prev_tick = tick;
+        const int64_t delta_ticks = std::max<int64_t>(0, tick - prev_tick);
+        const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
+        if (clamped) ++result.clamped_delta_events;
+        const uint32_t delta = static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks);
+        prev_tick += static_cast<int64_t>(delta);
         put_sysex(&body, delta, *payload);
         continue;
       }
@@ -1041,7 +1052,10 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         ++result.skipped_events;
         continue;  // Unresolved SysEx / dropped 2.0-only messages are not emitted.
       }
-      uint32_t delta = static_cast<uint32_t>(std::max<int64_t>(0, tick - prev_tick));
+      const int64_t delta_ticks = std::max<int64_t>(0, tick - prev_tick);
+      const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
+      uint32_t delta = static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks);
+      const int64_t landed_tick = prev_tick + static_cast<int64_t>(delta);
       // Whether this event put anything in the track. prev_tick has to stay on
       // the last event actually written, because the delta below spans from
       // there: an event whose every message failed to lower contributes no
@@ -1070,7 +1084,10 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         delta = 0;
         emitted_any = true;
       }
-      if (emitted_any) prev_tick = tick;
+      if (emitted_any) {
+        prev_tick = landed_tick;
+        if (clamped) ++result.clamped_delta_events;
+      }
     }
     put_meta(&body, 0, kMetaEndOfTrack, nullptr, 0);
     append_track_chunk(&result.bytes, body);
