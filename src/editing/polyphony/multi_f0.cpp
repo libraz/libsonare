@@ -217,11 +217,14 @@ float MultiF0Track::frame_rate_hz() const noexcept {
   return static_cast<float>(sample_rate) / static_cast<float>(hop_length);
 }
 
-MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& config) {
+MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
+                              const MultiF0ExtractorConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  // Checked rather than trusted: a spectrogram of another framing would put every
+  // ridge on frames it never measured.
+  validate_reused_geometry(spec, config.stft, audio.sample_rate(), audio.size());
 
-  const Spectrogram spectrogram = Spectrogram::compute(audio, config.stft);
-  const CentSpectrum spectrum = compute_cent_spectrum(spectrogram, config.spectrum);
+  const CentSpectrum spectrum = compute_cent_spectrum(spec, config.spectrum);
   const MultiF0Estimator estimator(spectrum.axis, config.estimation);
 
   MultiF0Track track;
@@ -247,6 +250,11 @@ MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& 
     ridge.offset_sample = std::min(ridge.offset_sample, n_samples);
   }
   return track;
+}
+
+MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  return extract_multi_f0(audio, Spectrogram::compute(audio, config.stft), config);
 }
 
 }  // namespace sonare::editing::polyphony

@@ -2156,3 +2156,226 @@ TEST_CASE(
 
   REQUIRE_NOTHROW(extract_multi_f0(audio));
 }
+
+namespace {
+
+/// @brief Asserts two tracks are the same extraction, field by field.
+/// @details Every member is named rather than compared through one equality over
+///          the whole struct, so a member added later has to be handled here
+///          instead of being absorbed silently. The comparison is exact because
+///          the two sides are one calculation: the audio form reaches the
+///          spectrogram form with that same spectrogram of that same audio, so a
+///          difference is a different calculation rather than rounding.
+void require_same_track(const MultiF0Track& reused, const MultiF0Track& computed) {
+  // Two empty tracks agree perfectly, so the comparison says something only once
+  // there is something in it.
+  REQUIRE(!reused.ridges.empty());
+  REQUIRE(!reused.polyphony.empty());
+  for (const F0Ridge& ridge : reused.ridges) REQUIRE(!ridge.f0_hz.empty());
+
+  REQUIRE(reused.n_frames == computed.n_frames);
+  REQUIRE(reused.hop_length == computed.hop_length);
+  REQUIRE(reused.sample_rate == computed.sample_rate);
+  REQUIRE(reused.polyphony == computed.polyphony);
+  REQUIRE(reused.ridges.size() == computed.ridges.size());
+  for (size_t i = 0; i < reused.ridges.size(); ++i) {
+    INFO("ridge " << i);
+    const F0Ridge& left = reused.ridges[i];
+    const F0Ridge& right = computed.ridges[i];
+    REQUIRE(left.frame_start == right.frame_start);
+    REQUIRE(left.f0_hz == right.f0_hz);
+    REQUIRE(left.salience == right.salience);
+    REQUIRE(left.onset_sample == right.onset_sample);
+    REQUIRE(left.offset_sample == right.offset_sample);
+    REQUIRE(left.median_hz == right.median_hz);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("the spectrogram form of extract_multi_f0 agrees with the audio form field for field",
+          "[polyphonic_f0]") {
+  const sonare::Audio audio = chord_audio(kChordMid, 4, 1.0f, 12);
+  const MultiF0ExtractorConfig config;
+  const sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config.stft);
+  REQUIRE(!spec.empty());
+
+  const MultiF0Track reused = extract_multi_f0(audio, spec, config);
+
+  // Measured against the material and not only against the other form: the two
+  // forms are one calculation, so their agreement says nothing about whether
+  // either of them resolved the chord.
+  REQUIRE(reused.sample_rate == kSampleRate);
+  REQUIRE(reused.hop_length == kHopLength);
+  REQUIRE(reused.n_frames == spec.n_frames());
+  REQUIRE(reused.polyphony.size() == static_cast<size_t>(reused.n_frames));
+  REQUIRE(long_ridges(reused, 0.7f).size() == 4);
+  REQUIRE(resolved_tones(reused, kChordMid, 4, 40.0f, 0.7f) == 4);
+
+  // It clamps its spans into the audio the way the audio form does, and the
+  // clamp bites rather than the arithmetic happening to fit: centre padding puts
+  // the last frame's unclamped end past the signal.
+  int reaching_last = 0;
+  for (const F0Ridge& ridge : reused.ridges) {
+    INFO("ridge at " << ridge.median_hz);
+    REQUIRE(ridge.onset_sample >= 0);
+    REQUIRE(ridge.onset_sample < ridge.offset_sample);
+    REQUIRE(ridge.offset_sample <= static_cast<int64_t>(audio.size()));
+    if (ridge.frame_end() != reused.n_frames) continue;
+    ++reaching_last;
+    REQUIRE(ridge.offset_sample < static_cast<int64_t>(ridge.frame_end()) * kHopLength);
+  }
+  REQUIRE(reaching_last > 0);
+
+  // Nothing here asserts that one STFT was computed rather than two. The forms
+  // have no observable difference but the result they return, and a timing is
+  // not an assertion this suite can make.
+  require_same_track(reused, extract_multi_f0(audio, config));
+}
+
+TEST_CASE("the spectrogram form reads config.stft rather than any default framing",
+          "[polyphonic_f0]") {
+  const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
+  const sonare::Audio audio = chord_audio(kChordMid, 4, 0.75f, 12);
+
+  // A third framing: the same window as the polyphony default at the longer hop,
+  // so it shares a field with that default and with neither one whole.
+  MultiF0ExtractorConfig config;
+  config.stft = sonare::make_stft_config(kNfft, kBassHop);
+  const sonare::Spectrogram asked = sonare::Spectrogram::compute(audio, config.stft);
+  const MultiF0Track reused = extract_multi_f0(audio, asked, config);
+  REQUIRE(reused.hop_length == kBassHop);
+  REQUIRE(reused.n_frames == asked.n_frames());
+  require_same_track(reused, extract_multi_f0(audio, config));
+
+  // A framing that merely shares a library default does not pass for the one the
+  // caller asked for, in either direction: StftConfig's own default, the
+  // polyphony default, and config.stft here are three different framings.
+  const sonare::Spectrogram at_stft_default =
+      sonare::Spectrogram::compute(audio, sonare::StftConfig{});
+  const sonare::Spectrogram at_polyphony_default =
+      sonare::Spectrogram::compute(audio, polyphony_stft_defaults());
+  REQUIRE(code_of([&] { extract_multi_f0(audio, at_stft_default, config); }) == kInvalid);
+  REQUIRE(code_of([&] { extract_multi_f0(audio, at_polyphony_default, config); }) == kInvalid);
+
+  const MultiF0ExtractorConfig defaults;
+  REQUIRE(code_of([&] { extract_multi_f0(audio, at_stft_default, defaults); }) == kInvalid);
+  REQUIRE_NOTHROW(extract_multi_f0(audio, at_polyphony_default, defaults));
+
+  // A window length stated rather than left at 0 is the same framing, so saying
+  // it out loud is not a disagreement.
+  MultiF0ExtractorConfig stated_window = defaults;
+  stated_window.stft.win_length = stated_window.stft.n_fft;
+  REQUIRE_NOTHROW(extract_multi_f0(audio, sonare::Spectrogram::compute(audio, stated_window.stft),
+                                   stated_window));
+}
+
+TEST_CASE("the spectrogram form rejects every framing field that disagrees with config.stft",
+          "[polyphonic_f0]") {
+  const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
+  const MultiF0ExtractorConfig config;
+  const sonare::Audio audio = chord_audio(kChordMid, 2, 0.5f, 8);
+
+  // Each entry moves exactly one field of config.stft, so a rejection is
+  // attributable to that field rather than to a wholly different framing.
+  const auto moved = [&config](auto apply) {
+    sonare::StftConfig stft = config.stft;
+    apply(stft);
+    return stft;
+  };
+  const std::vector<std::pair<const char*, sonare::StftConfig>> disagreeing = {
+      {"a longer window", moved([](sonare::StftConfig& stft) { stft.n_fft = 2 * kNfft; })},
+      {"a shorter window", moved([](sonare::StftConfig& stft) { stft.n_fft = kNfft / 2; })},
+      {"a longer hop", moved([](sonare::StftConfig& stft) { stft.hop_length = 2 * kHopLength; })},
+      {"a shorter hop", moved([](sonare::StftConfig& stft) { stft.hop_length = kHopLength / 2; })},
+      {"a window shorter than the FFT",
+       moved([](sonare::StftConfig& stft) { stft.win_length = kNfft / 2; })},
+      {"another window function",
+       moved([](sonare::StftConfig& stft) { stft.window = sonare::WindowType::Hamming; })},
+      {"no centring", moved([](sonare::StftConfig& stft) { stft.center = false; })},
+      {"reflect padding",
+       moved([](sonare::StftConfig& stft) { stft.pad_mode = sonare::PadMode::Reflect; })},
+  };
+
+  for (const auto& entry : disagreeing) {
+    INFO(entry.first);
+    const sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, entry.second);
+    // A spectrogram that came out empty would be rejected for its emptiness
+    // instead of for the field under test.
+    REQUIRE(!spec.empty());
+    REQUIRE(code_of([&] { extract_multi_f0(audio, spec, config); }) == kInvalid);
+  }
+
+  // The control the loop needs: config.stft's own spectrogram of this audio is
+  // accepted, so the rejections above are not every spectrogram being refused.
+  REQUIRE_NOTHROW(
+      extract_multi_f0(audio, sonare::Spectrogram::compute(audio, config.stft), config));
+}
+
+TEST_CASE("the spectrogram form rejects a spec that does not span the audio it is read alongside",
+          "[polyphonic_f0]") {
+  const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
+  const MultiF0ExtractorConfig config;
+  const sonare::Audio audio = chord_audio(kChordMid, 2, 0.5f, 8);
+  const int asked_frames = sonare::stft_frame_count(audio.size(), config.stft);
+
+  // Every framing field agrees and the signal length does not, on both sides of
+  // the audio's own length.
+  for (const float seconds : {0.25f, 1.0f}) {
+    INFO("spectrogram computed over " << seconds << " s");
+    const sonare::Audio other = chord_audio(kChordMid, 2, seconds, 8);
+    const sonare::Spectrogram spec = sonare::Spectrogram::compute(other, config.stft);
+    REQUIRE(spec.n_frames() != asked_frames);
+    REQUIRE(code_of([&] { extract_multi_f0(audio, spec, config); }) == kInvalid);
+  }
+
+  // A rate the audio was not sampled at, over the same length and framing, so
+  // the frame count agrees and only the rate disagrees.
+  std::vector<float> other_rate_samples(audio.size(), 0.0f);
+  add_tone(other_rate_samples, 220.0f, 0.2f, 8);
+  const sonare::Spectrogram other_rate = sonare::Spectrogram::compute(
+      sonare::Audio::from_vector(std::move(other_rate_samples), kSampleRate / 2), config.stft);
+  REQUIRE(other_rate.n_frames() == asked_frames);
+  REQUIRE(code_of([&] { extract_multi_f0(audio, other_rate, config); }) == kInvalid);
+}
+
+TEST_CASE("the spectrogram form rejects empty audio and inherits the audio form's rules",
+          "[polyphonic_f0]") {
+  const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
+  const MultiF0ExtractorConfig config;
+  const sonare::Audio audio = chord_audio(kChordMid, 2, 0.5f, 8);
+  const sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config.stft);
+
+  const sonare::Audio empty;
+  REQUIRE(empty.empty());
+  // An empty signal's own spectrogram is empty, so the pair is consistent with
+  // itself and the emptiness is still the error; a spectrogram of real audio
+  // alongside it is rejected as well.
+  const sonare::Spectrogram empty_spec = sonare::Spectrogram::compute(empty, config.stft);
+  REQUIRE(empty_spec.empty());
+  REQUIRE(code_of([&] { extract_multi_f0(empty, empty_spec, config); }) == kInvalid);
+  REQUIRE(code_of([&] { extract_multi_f0(empty, spec, config); }) == kInvalid);
+
+  // One frame is the correct framing of a signal this short and still too little
+  // to read an instantaneous frequency from, so a spec that passes the geometry
+  // check does not carry the extraction past the audio form's own rules.
+  const sonare::Audio too_short = audio_of(std::vector<float>(100, 0.01f));
+  const sonare::Spectrogram short_spec = sonare::Spectrogram::compute(too_short, config.stft);
+  REQUIRE(short_spec.n_frames() == sonare::stft_frame_count(too_short.size(), config.stft));
+  REQUIRE(code_of([&] { extract_multi_f0(too_short, short_spec, config); }) == kInvalid);
+
+  // Every later stage's rules reach this entry point too.
+  MultiF0ExtractorConfig bad_axis = config;
+  bad_axis.spectrum.max_hz = bad_axis.spectrum.ref_hz;
+  REQUIRE(code_of([&] { extract_multi_f0(audio, spec, bad_axis); }) == kInvalid);
+
+  MultiF0ExtractorConfig bad_estimation = config;
+  bad_estimation.estimation.max_polyphony = 0;
+  REQUIRE(code_of([&] { extract_multi_f0(audio, spec, bad_estimation); }) == kInvalid);
+
+  MultiF0ExtractorConfig bad_ridges = config;
+  bad_ridges.ridges.max_jump_cents = 0.0f;
+  REQUIRE(code_of([&] { extract_multi_f0(audio, spec, bad_ridges); }) == kInvalid);
+
+  REQUIRE_NOTHROW(extract_multi_f0(audio, spec, config));
+}

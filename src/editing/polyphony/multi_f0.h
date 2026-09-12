@@ -232,4 +232,37 @@ struct MultiF0ExtractorConfig {
 ///         @ref track_f0_ridges throw.
 MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& config = {});
 
+/// @brief The same extraction over an STFT the caller already has.
+/// @details For the chain that separates and re-renders: @ref build_note_masks
+///          needs the same spectrogram this reads, so a caller holding only the
+///          audio form computes it twice. @p spec is validated against
+///          @c config.stft rather than trusted -- a framing that is not the one
+///          the extraction asked for would put every ridge on frames it never
+///          measured, and the frame count @p audio implies is part of that check.
+///
+///          @c config.stft is still read, for that validation. It is not a way to
+///          ask for a different framing than @p spec carries.
+///
+///          What the check reaches is the geometry, not the content: a spectrogram
+///          of a different signal of the same length, rate and framing is
+///          indistinguishable from the right one and is accepted. Stated rather
+///          than fixed -- there is nothing in @p spec to compare against @p audio
+///          short of transforming it again, which is the cost this overload exists
+///          to avoid.
+///
+///          The returned track is indexed against @p spec: its @c n_frames is
+///          `spec.n_frames()` and every ridge's frames are that spectrogram's. That
+///          is the fact a caller chains on -- @ref build_note_masks and
+///          @ref make_masked_notes both pair the track with the same @p spec -- so
+///          it is stated here rather than left to follow from the framing check.
+/// @param audio The signal @p spec was computed from, read for its length and rate
+///        and for the span clamping the audio form also does.
+/// @param spec That signal's STFT under @c config.stft.
+/// @throws SonareException(InvalidParameter) on empty @p audio, a @p spec whose
+///         geometry is not that of @c config.stft over @p audio -- every framing
+///         field, the sample rate, and the frame count @p audio implies -- plus
+///         every reason the audio form throws.
+MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
+                              const MultiF0ExtractorConfig& config = {});
+
 }  // namespace sonare::editing::polyphony
