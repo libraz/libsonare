@@ -82,6 +82,9 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
 /// @param fmin Minimum frequency in Hz
 /// @param quantile Quantile for valley/peak detection (default 0.02)
 /// @return Spectral contrast [n_bands + 1 x n_frames] (includes one band for residual)
+/// @note Band 0 spans [0, @p fmin], so an @p fmin below one analysis bin
+///       (@p sr / n_fft) leaves it empty after the band trim. Its row is still
+///       finite, but comes from the other bands' extremes rather than itself.
 std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_bands = 6,
                                      float fmin = 200.0f, float quantile = 0.02f);
 

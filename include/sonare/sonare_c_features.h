@@ -483,6 +483,12 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
 /// @details Mirrors librosa.feature.spectral_contrast. Output is a row-major
 ///   matrix [(@p n_bands + 1) x n_frames]; the extra row is the residual band.
 ///   Free @p out with sonare_free_floats.
+///
+///   Band 0 spans [0, @p fmin], so an @p fmin below one analysis bin
+///   (@p sample_rate / @p n_fft) leaves it empty after the band trim. Its row is
+///   still finite, but comes from the other bands' extremes rather than from
+///   itself, and is neither level-invariant nor confined to the band. Keep
+///   @p fmin at or above one bin width for row 0 to mean anything.
 /// @param out Receives the freshly allocated [(n_bands + 1) * n_frames] matrix.
 /// @param out_rows Receives the number of rows (n_bands + 1).
 /// @param out_cols Receives the number of columns (n_frames).

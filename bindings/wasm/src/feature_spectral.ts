@@ -227,6 +227,14 @@ export function spectralCentroid(
 /**
  * Compute spectral contrast (librosa.feature.spectral_contrast).
  *
+ * @remarks
+ * Band 0 spans `[0, fmin]`, so an `fmin` below one analysis bin
+ * (`sampleRate / nFft`) leaves it empty after the band trim. Row 0 is still
+ * finite, but comes from the other bands' extremes rather than from itself, and
+ * is neither level-invariant nor confined to the band. Keep `fmin` at or above
+ * one bin width for row 0 to mean anything — at the defaults (22050 Hz, 2048)
+ * one bin is 10.8 Hz, so only a small `nFft` or a tiny `fmin` reaches this.
+ *
  * @returns Matrix2d of shape (nBands + 1) x nFrames.
  */
 export function spectralContrast(request: SpectralContrastRequest): WasmMatrix2dResult;

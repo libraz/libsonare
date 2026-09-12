@@ -756,6 +756,15 @@ def spectral_contrast(
     Returns:
         A float32 array of shape ``(n_bands + 1, n_frames)`` (matches the
         bare-ndarray convention of ``stft`` / ``mel_spectrogram`` / ``nn_filter``).
+
+    Note:
+        Band 0 spans ``[0, fmin]``, so an ``fmin`` below one analysis bin
+        (``sample_rate / n_fft``) leaves it empty after the band trim. Row 0 is
+        still finite, but comes from the other bands' extremes rather than from
+        itself, and is neither level-invariant nor confined to the band. Keep
+        ``fmin`` at or above one bin width for row 0 to mean anything -- at the
+        defaults (22050 Hz, 2048) one bin is 10.8 Hz, so only a small ``n_fft``
+        or a tiny ``fmin`` reaches this.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

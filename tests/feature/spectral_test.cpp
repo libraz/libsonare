@@ -341,6 +341,59 @@ TEST_CASE("spectral_contrast uses librosa band quantile means", "[spectral]") {
   REQUIRE_THAT(contrast[2], WithinAbs(2.6884532f, 1e-6f));
 }
 
+TEST_CASE("a spectral_contrast band below one bin width reports a value from outside itself",
+          "[spectral]") {
+  // Band 0 spans [0, fmin]. At 22050 Hz over a 64-point transform one bin is
+  // 344.53 Hz, so the default fmin of 200 Hz leaves band 0 holding bin 0 alone
+  // and the k < n_bands trim empties it. The band still produces a number; these
+  // assertions pin what that number is not.
+  const int n_fft = 64;
+  const int n_bins = n_fft / 2 + 1;
+  const int sr = 22050;
+  const int n_bands = 4;
+
+  std::vector<std::complex<float>> data(static_cast<size_t>(n_bins));
+  uint32_t state = 0xc0ffeeu;
+  for (auto& value : data) {
+    state = state * 1664525u + 1013904223u;
+    value = {static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f, 0.0f};
+  }
+
+  const auto contrast_of = [&](const std::vector<std::complex<float>>& bins) {
+    Spectrogram spec =
+        Spectrogram::from_complex(bins.data(), n_bins, 1, n_fft, 16, sr, WindowType::Hann);
+    return spectral_contrast(spec, sr, n_bands, 200.0f, 0.02f);
+  };
+
+  const std::vector<float> base = contrast_of(data);
+  REQUIRE(base.size() == static_cast<size_t>(n_bands + 1));
+  // Nothing non-finite escapes: the empty band's 0/0 is absorbed upstream of the
+  // caller, which is what makes it silent.
+  for (float value : base) CHECK(std::isfinite(value));
+
+  // Raise only the top bin (~10.8 kHz), which band 0 does not cover.
+  std::vector<std::complex<float>> moved(data);
+  moved[static_cast<size_t>(n_bins - 1)] = {data[static_cast<size_t>(n_bins - 1)].real() * 8.0f,
+                                            0.0f};
+  const std::vector<float> perturbed = contrast_of(moved);
+  // Non-vacuity: the residual band does contain that bin, so it must move.
+  CHECK(perturbed[4] != base[4]);
+  // A populated band that does not contain it is bit-identical.
+  CHECK(perturbed[3] == base[3]);
+  // The degenerate band does not contain it either, and moves anyway.
+  CHECK(perturbed[0] != base[0]);
+
+  // Contrast is a difference of dB, so a populated band is invariant to the
+  // input level up to the conversion's own rounding (measured: 2e-7 relative).
+  // The degenerate band moves by 1.49 dB, four orders above that.
+  std::vector<std::complex<float>> quiet(data.size());
+  for (size_t i = 0; i < data.size(); ++i) quiet[i] = data[i] * 1.0e-4f;
+  const std::vector<float> scaled = contrast_of(quiet);
+  CHECK_THAT(scaled[3], WithinRel(base[3], 1.0e-5f));
+  CHECK_THAT(scaled[4], WithinRel(base[4], 1.0e-5f));
+  CHECK(std::abs(scaled[0] - base[0]) > 0.5f);
+}
+
 TEST_CASE("spectral_contrast sanitizes NaN magnitudes before sorting", "[spectral]") {
   const float nan = std::numeric_limits<float>::quiet_NaN();
   std::vector<std::complex<float>> data = {
