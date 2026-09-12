@@ -58,10 +58,17 @@ jobs:
             bindings/node/yarn.lock
       - run: yarn install --immutable
       - run: yarn lint
+      - name: Emit the WASM binding's declarations
+        # The Node type-check reads them: one cross-surface test drives the same
+        # input through Node, WASM and Python, so it imports the WASM entry
+        # point. Declarations only -- the emscripten module's types are tracked
+        # as src/sonare.js.d.ts, so tsc needs no toolchain and dist/sonare.wasm
+        # is left alone.
+        run: yarn build:types
       - name: Lint and type-check the Node binding
-        # Source-only, so neither check needs the native addon built:
-        # tsconfig.test.json excludes dist/ and build/, and the tests import
-        # from ../src rather than the package entry point.
+        # Neither check needs the native addon built: tsconfig.test.json
+        # excludes dist/ and build/, and the tests import from ../src rather
+        # than the package entry point.
         working-directory: bindings/node
         run: |
           yarn install --immutable
