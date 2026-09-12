@@ -6,11 +6,9 @@
 #include "util/db.h"
 #include "util/exception.h"
 
-// The C ABI ↔ C++ ABI version consistency check (kVoiceChangerAbiVersion ==
-// SONARE_VOICE_CHANGER_ABI_VERSION) lives in src/sonare_c_daw.cpp. Keeping it
-// there preserves the layer rule "editing/ must not depend on the public C
-// API header sonare_c.h" while still failing the build the moment the two
-// constants drift.
+// kVoiceChangerAbiVersion is checked against the C macro in
+// src/c_api/sonare_c_voice_changer.cpp, which is the bridge layer that may
+// include sonare_c.h; this one must not.
 
 namespace sonare::editing::voice_changer {
 namespace {
