@@ -3020,7 +3020,7 @@
         {
           "default": 0,
           "id": 1,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band0.gainDb",
           "rtSafe": true,
@@ -3050,7 +3050,7 @@
         {
           "default": 0,
           "id": 4,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band1.gainDb",
           "rtSafe": true,
@@ -3080,7 +3080,7 @@
         {
           "default": 0,
           "id": 7,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band2.gainDb",
           "rtSafe": true,
@@ -3110,7 +3110,7 @@
         {
           "default": 0,
           "id": 10,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band3.gainDb",
           "rtSafe": true,
@@ -3140,7 +3140,7 @@
         {
           "default": 0,
           "id": 13,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band4.gainDb",
           "rtSafe": true,
@@ -3170,7 +3170,7 @@
         {
           "default": 0,
           "id": 16,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band5.gainDb",
           "rtSafe": true,
@@ -3200,7 +3200,7 @@
         {
           "default": 0,
           "id": 19,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band6.gainDb",
           "rtSafe": true,
@@ -3230,7 +3230,7 @@
         {
           "default": 0,
           "id": 22,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band7.gainDb",
           "rtSafe": true,
@@ -3260,7 +3260,7 @@
         {
           "default": 0,
           "id": 25,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band8.gainDb",
           "rtSafe": true,
@@ -3290,7 +3290,7 @@
         {
           "default": 0,
           "id": 28,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band9.gainDb",
           "rtSafe": true,
@@ -3320,7 +3320,7 @@
         {
           "default": 0,
           "id": 31,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band10.gainDb",
           "rtSafe": true,
@@ -3350,7 +3350,7 @@
         {
           "default": 0,
           "id": 34,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band11.gainDb",
           "rtSafe": true,
@@ -3380,7 +3380,7 @@
         {
           "default": 0,
           "id": 37,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band12.gainDb",
           "rtSafe": true,
@@ -3410,7 +3410,7 @@
         {
           "default": 0,
           "id": 40,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band13.gainDb",
           "rtSafe": true,
@@ -3440,7 +3440,7 @@
         {
           "default": 0,
           "id": 43,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band14.gainDb",
           "rtSafe": true,
@@ -3470,7 +3470,7 @@
         {
           "default": 0,
           "id": 46,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band15.gainDb",
           "rtSafe": true,
@@ -3500,7 +3500,7 @@
         {
           "default": 0,
           "id": 49,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band16.gainDb",
           "rtSafe": true,
@@ -3530,7 +3530,7 @@
         {
           "default": 0,
           "id": 52,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band17.gainDb",
           "rtSafe": true,
@@ -3560,7 +3560,7 @@
         {
           "default": 0,
           "id": 55,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band18.gainDb",
           "rtSafe": true,
@@ -3590,7 +3590,7 @@
         {
           "default": 0,
           "id": 58,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band19.gainDb",
           "rtSafe": true,
@@ -3620,7 +3620,7 @@
         {
           "default": 0,
           "id": 61,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band20.gainDb",
           "rtSafe": true,
@@ -3650,7 +3650,7 @@
         {
           "default": 0,
           "id": 64,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band21.gainDb",
           "rtSafe": true,
@@ -3680,7 +3680,7 @@
         {
           "default": 0,
           "id": 67,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band22.gainDb",
           "rtSafe": true,
@@ -3710,7 +3710,7 @@
         {
           "default": 0,
           "id": 70,
-          "max": null,
+          "max": 12330.2,
           "min": null,
           "name": "band23.gainDb",
           "rtSafe": true,
