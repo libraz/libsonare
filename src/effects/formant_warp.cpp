@@ -75,6 +75,7 @@ Audio FormantWarp::process(const Audio& audio) const {
   std::vector<float> env(static_cast<size_t>(n_bins));
   std::vector<float> warped(static_cast<size_t>(n_bins));
   std::vector<float> time_frame(static_cast<size_t>(n_fft));
+  sonare::LpcResult model;
 
   // Start so that the first frame's analysis window is centred near sample 0.
   for (long start = -kFrameSize / 2; start < static_cast<long>(n); start += kHopSize) {
@@ -85,7 +86,7 @@ Audio FormantWarp::process(const Audio& audio) const {
       windowed[static_cast<size_t>(i)] = s * hann[static_cast<size_t>(i)];
     }
 
-    const auto model = sonare::lpc_autocorrelation(windowed.data(), windowed.size(), order);
+    sonare::lpc_autocorrelation(windowed.data(), windowed.size(), order, &model);
 
     // Degenerate frame: pass the windowed signal through OLA unchanged. The main
     // path reconstructs the analysis-windowed signal (time_frame[i] ~= s*hann[i])

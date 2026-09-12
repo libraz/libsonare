@@ -101,6 +101,44 @@ TEST_CASE("lpc delegates Burg coefficients to the shared util implementation",
   REQUIRE(model.variance >= 0.0f);
 }
 
+TEST_CASE("lpc_autocorrelation writes a reused result exactly as a fresh one",
+          "[audio_ops][util]") {
+  // A per-frame analysis loop reuses one LpcResult, so every field it carries
+  // must be overwritten, not merged with what the previous frame left there.
+  // Exact ==: the two overloads run the same arithmetic, and a partially
+  // rewritten buffer differs by whole coefficients, not by an ulp.
+  std::mt19937 rng(20260912u);
+  std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
+  LpcResult reused;
+  for (int frame = 0; frame < 8; ++frame) {
+    // Alternate the order so a stale coefficient past the new order survives in
+    // the reused buffer if assign() ever stops covering it, and alternate the
+    // frame between signal and silence so the early-return path is reused too.
+    const int order = (frame % 2 == 0) ? 6 : 3;
+    std::vector<float> frame_samples(32);
+    for (float& sample : frame_samples) {
+      sample = (frame % 4 == 3) ? 0.0f : dist(rng);
+    }
+
+    lpc_autocorrelation(frame_samples.data(), frame_samples.size(), order, &reused);
+    const LpcResult fresh = lpc_autocorrelation(frame_samples.data(), frame_samples.size(), order);
+
+    CAPTURE(frame, order);
+    REQUIRE(reused.ar.size() == fresh.ar.size());
+    for (size_t i = 0; i < fresh.ar.size(); ++i) {
+      CAPTURE(i);
+      CHECK(reused.ar[i] == fresh.ar[i]);
+    }
+    CHECK(reused.variance == fresh.variance);
+  }
+}
+
+TEST_CASE("lpc_autocorrelation rejects a null result", "[audio_ops][util][edge]") {
+  std::vector<float> y{0.1f, -0.4f, 0.7f, 0.2f};
+  REQUIRE_THROWS_AS(lpc_autocorrelation(y.data(), y.size(), 2, nullptr), SonareException);
+}
+
 TEST_CASE("lpc rejects invalid order", "[audio_ops][util][edge]") {
   std::vector<float> y(8, 1.0f);
   REQUIRE_THROWS_AS(lpc(y, 0), SonareException);

@@ -95,16 +95,20 @@ LpcResult lpc_burg(const float* x, size_t n, int order) {
   return result;
 }
 
-LpcResult lpc_autocorrelation(const float* x, size_t n, int order) {
+void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out) {
+  if (out == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
+  }
   validate_lpc_args(x, n, order);
-  LpcResult result;
+  LpcResult& result = *out;
+  result.variance = 0.0f;
   result.ar.assign(static_cast<size_t>(order + 1), 0.0f);
   result.ar[0] = 1.0f;
   if (n == 0 || order == 0) {
     double energy = 0.0;
     for (size_t i = 0; i < n; ++i) energy += static_cast<double>(x[i]) * x[i];
     result.variance = n == 0 ? 0.0f : static_cast<float>(energy / static_cast<double>(n));
-    return result;
+    return;
   }
 
   const std::vector<float> raw = unnormalized_autocorrelation(x, n, static_cast<size_t>(order + 1));
@@ -119,7 +123,7 @@ LpcResult lpc_autocorrelation(const float* x, size_t n, int order) {
   double error = r[0];
   if (error <= 1.0e-20) {
     result.variance = 0.0f;
-    return result;
+    return;
   }
 
   for (int i = 1; i <= order; ++i) {
@@ -146,6 +150,11 @@ LpcResult lpc_autocorrelation(const float* x, size_t n, int order) {
     result.ar[static_cast<size_t>(i)] = static_cast<float>(a[static_cast<size_t>(i)]);
   }
   result.variance = static_cast<float>(error);
+}
+
+LpcResult lpc_autocorrelation(const float* x, size_t n, int order) {
+  LpcResult result;
+  lpc_autocorrelation(x, n, order, &result);
   return result;
 }
 

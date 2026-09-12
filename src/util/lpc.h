@@ -19,6 +19,9 @@ struct LpcResult {
 
 LpcResult lpc_burg(const float* x, size_t n, int order);
 LpcResult lpc_autocorrelation(const float* x, size_t n, int order);
+// Same estimate written into a caller-owned result, so a per-frame analysis loop
+// reuses one coefficient buffer instead of building a fresh vector each frame.
+void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out);
 std::vector<float> lpc_residual(const float* x, size_t n, const LpcResult& model);
 std::vector<float> ar_interpolate(const float* x, const bool* mask, size_t n,
                                   const LpcResult& model);
