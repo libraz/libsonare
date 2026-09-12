@@ -74,6 +74,16 @@ struct NoteMaskConfig {
 
   /// B in @c f_h = h * f0 * sqrt(1 + B * h^2), the same stretch the salience
   /// model uses. 0 is the ideal harmonic series.
+  ///
+  /// Leaving it at 0 for material that is stretched costs more than a widened
+  /// claim would. At a piano's B of 1e-4 the highest partial of a twenty-harmonic
+  /// claim sits 2.29 bins from where the claim puts it, against a half-width of 2
+  /// at the default @ref claim_lobes, so the claim misses its own partial
+  /// entirely; at 1e-3 it misses by 22.39 bins. A partial outside every claim is
+  /// residual, and the residual is carried unedited -- so it keeps sounding at the
+  /// old pitch after its note is moved. Declare it rather than widening
+  /// @ref claim_lobes, which buys the same reach by claiming more of the
+  /// neighbours.
   float inharmonicity = 0.0f;
 };
 
@@ -216,6 +226,20 @@ std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
 ///          half of every partial its upper note stands on, so editing one of a
 ///          pair audibly thins the other. Deciding the share from the material is
 ///          what a later stage does, and this contract is what it will change.
+///
+///          A claim is predicted and never read from the spectrum, so a note
+///          claims bins its own partials never reached and takes a share of
+///          whatever stands there. **Dropping such a claim by measuring how many
+///          partials the note actually has was tried and is not worth shipping.**
+///          Weighted by each partial's own level, the best setting gained 0.68 dB
+///          over the whole rendered note and 1.25 dB on the most favourable
+///          material, against a division error of 17.65 dB that the share itself
+///          carries -- the spare claim is a small term in a larger one. And the
+///          estimate it rests on does not survive real material: on a piano dyad
+///          the two notes' measured partial counts came out 19 and 3 at the same
+///          level, so the rule would have dropped a partial 29 dB above the floor.
+///          The evidence for the gain is synthetic and the evidence against the
+///          estimate is not.
 /// @param spec Complex STFT the masks index into.
 /// @param track Ridges to build masks for, from the same framing as @p spec.
 /// @param config Claim geometry.

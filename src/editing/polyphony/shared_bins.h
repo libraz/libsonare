@@ -66,8 +66,13 @@
 /// two partials close enough to need separating put both recovered poles nearest
 /// the same prediction. Worst error on a real shared bin went from 1.67 dB back to
 /// 6.88 and the bin the rule was aimed at came out 5.8 dB worse still. **The cases
-/// such a rule refuses are the ones this file exists for.** A fix belongs where the
-/// claim is made, not where it is divided.
+/// such a rule refuses are the ones this file exists for.** Nor does the claim
+/// geometry fix it -- @ref build_note_masks carries what pruning a claim by the
+/// partial count measured from the spectrum is worth, and it is not enough to
+/// ship. **The spare claim is a limit of the representation rather than a defect
+/// with a known fix**, and what it costs is bounded: the bin's content reaches the
+/// render either way, so the note that did not produce it either takes a share it
+/// cannot move or leaves a share the other note cannot.
 ///
 /// Most of the value is in refusing. Solved everywhere, over a spread of
 /// intervals, this returns 0.6 dB over an equal split, because the bins it
