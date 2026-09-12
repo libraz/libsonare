@@ -53,9 +53,13 @@ constexpr float kHighHz = 495.0f;
 /// @brief How far the render of the returned notes may sit from one inverse of
 ///        the whole spectrogram, relative to the reconstruction's peak.
 /// @details Only the composition case needs a tolerance at all, and the quantity
-///          it bounds is the masked renderer's own telescoping error, measured
-///          there at this framing and at the polyphony defaults at 2.0e-07 to
-///          2.7e-07 of the peak. This is four times the worst of those.
+///          it bounds is the masked renderer's own telescoping error. Measured
+///          here: worst 1.78814e-07 against a peak of 0.886, which is 2.02e-07 of
+///          it, so this is five times the measurement it bounds.
+///
+///          Not a quantity a wrong answer could be confused with. The falsifier in
+///          the same case -- one note's gain applied through the other's mask --
+///          moves the render by 0.434829, five orders over the bound.
 constexpr double kTelescopeRelative = 1e-6;
 
 /// @brief How far the measured Hz may move when only the reference pitch moves.
@@ -88,15 +92,24 @@ constexpr double kFixturePeakFloor = 0.2;
 constexpr double kGuardMargin = 50.0;
 
 /// @brief Per-frame RMS below which an isolated note carries nothing to measure.
-/// @details The fixture's tones are at 0.3 and 0.25 linear, so a note holding
-///          its own partials measures an order above this and a silent or
-///          misaddressed buffer measures zero.
+/// @details The fixture's tones are at 0.3 and 0.25 linear and the isolated notes
+///          measure 0.202032 and 0.259209, so the quieter of them sits four times
+///          this while a silent or misaddressed buffer measures zero.
 constexpr float kNoteAmplitudeFloor = 0.05f;
 
 /// @brief How much louder the mixture reads than one isolated note.
-/// @details The other tone is at a comparable level and sounds throughout, so
-///          its energy puts the mixture's RMS well over the separated note's.
-///          The margin only has to exclude the two being the same buffer.
+/// @details The other tone is at a comparable level and sounds throughout, so its
+///          energy puts the mixture's RMS over the separated note's: measured
+///          1.7106 for the lower ridge and 1.3152 for the upper, so the worse of
+///          the two keeps 20% of headroom here.
+///
+///          Left where it is rather than tightened onto that. It is a structural
+///          lower bound and not a tolerance, so it moves with the fixture's level
+///          ratio and with how many partials the fifth puts in one bin -- one more
+///          collision lowers it, and tightening wants those two measured rather
+///          than a second reading of the same two ridges. What catches a mask that
+///          degrades is the frame-by-frame comparison in the same case, not this
+///          bound.
 constexpr float kMixtureMargin = 1.1f;
 
 /// @brief The error code a call throws, or Ok when it does not throw.
