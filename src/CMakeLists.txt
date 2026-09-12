@@ -689,6 +689,7 @@ if(BUILD_PITCH_EDITOR)
     editing/pitch_editor/scale_quantizer.cpp
     editing/polyphony/masked_notes.cpp
     editing/polyphony/masked_renderer.cpp
+    editing/polyphony/polyphonic_edit.cpp
   )
   target_include_directories(sonare_pitch_editor PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
   target_include_directories(sonare_pitch_editor SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})

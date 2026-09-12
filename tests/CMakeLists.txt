@@ -382,7 +382,8 @@ if(BUILD_PITCH_EDITOR)
   target_sources(sonare_tests PRIVATE editing/note_model_test.cpp editing/note_pitch_curve_test.cpp
                                       editing/pitch_editor_test.cpp
                                       editing/polyphonic_notes_test.cpp
-                                      editing/polyphonic_render_test.cpp)
+                                      editing/polyphonic_render_test.cpp
+                                      editing/polyphonic_edit_test.cpp)
   if(NOT BUILD_VOICE_CHANGER)
     target_link_libraries(sonare_tests PRIVATE sonare_pitch_editor)
   endif()
