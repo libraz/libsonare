@@ -65,6 +65,7 @@ wasm = [
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
+  "assert_percussive_separation_kernels", # WASM facade integrality check for the HPSS kernel option fields; the shared reader narrows with a cast, so no C entry point can see a fractional value
   "assert_interleaved_samples",  # WASM test helper: validates interleaved buffers before embind calls
   "assert_non_negative_integer", # WASM test helper: mirrors TS facade argument validation
   "assert_positive_integer",     # WASM test helper: mirrors TS facade argument validation
