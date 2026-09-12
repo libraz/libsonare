@@ -363,7 +363,11 @@ inline bool RequiredMidiByteValue(Napi::Env env, const Napi::Value& value, const
 ///          first value past the enum is 4, not some implausible number. An
 ///          undefined value leaves @p out untouched and succeeds, so a config
 ///          object that omits the field keeps its caller's default.
-/// @return false with a pending JS TypeError for any value outside the set.
+/// @return false with a pending JS RangeError for any value the reader can
+///         interpret but not resolve -- an unknown name, an ordinal outside the
+///         enum, a number the C int cannot hold -- matching resolveEnumOrdinal
+///         on the TS side. A value that is neither a string nor a number is the
+///         one TypeError, per the width families above.
 inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* out) {
   static const char* kExpected = "' (expected sine, saw, sawtooth, square, or triangle)";
   if (value.IsUndefined() || value.IsNull()) {
@@ -373,7 +377,7 @@ inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* ou
     const std::string name = value.As<Napi::String>().Utf8Value();
     const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
     if (mapped < 0) {
-      Napi::TypeError::New(env, "Unknown synth waveform: '" + name + kExpected)
+      Napi::RangeError::New(env, "Unknown synth waveform: '" + name + kExpected)
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -389,13 +393,13 @@ inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* ou
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
       number > static_cast<double>(std::numeric_limits<int>::max())) {
-    Napi::TypeError::New(env, "waveform must be a finite number within the 32-bit integer range")
+    Napi::RangeError::New(env, "waveform must be a finite number within the 32-bit integer range")
         .ThrowAsJavaScriptException();
     return false;
   }
   const int ordinal = static_cast<int>(number);
   if (ordinal < SONARE_SYNTH_WAVEFORM_SINE || ordinal > SONARE_SYNTH_WAVEFORM_TRIANGLE) {
-    Napi::TypeError::New(env, "Unknown synth waveform: '" + std::to_string(ordinal) + kExpected)
+    Napi::RangeError::New(env, "Unknown synth waveform: '" + std::to_string(ordinal) + kExpected)
         .ThrowAsJavaScriptException();
     return false;
   }

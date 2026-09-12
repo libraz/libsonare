@@ -201,6 +201,80 @@ describe('shared public-input conformance corpus', () => {
   });
 });
 
+// The addon's argument readers pick the class by what the refusal stands in for:
+// a RangeError is this surface refusing a value its target C type cannot hold, a
+// TypeError a value of the wrong JavaScript type. One reader per width, so a
+// consumer's `catch (e) { if (e instanceof RangeError) }` cannot miss one.
+describe('a number no target C type can hold is a RangeError on every width', () => {
+  it('refuses an unrepresentable number with RangeError', () => {
+    const project = Project.create();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      // uint8_t: 256 would wrap to 0, a channel the C ABI accepts.
+      expect(() => project.setProgramOnChannel(clipId, 256, 0, 24)).toThrow(RangeError);
+      // int: Int32Value() would wrap 2 ** 31 to -2147483648.
+      expect(() => project.setProgramOnChannel(clipId, 0, 0, 2 ** 31)).toThrow(RangeError);
+      // size_t: a negative index would wrap to an enormous positive one.
+      expect(() => project.markerByIndex(-1)).toThrow(RangeError);
+      // int, through the waveform resolver's own pre-narrowing check.
+      expect(() =>
+        project.bounceWithBuiltinInstrument({ waveform: (2 ** 31) as unknown as 'sine' }),
+      ).toThrow(RangeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  // The waveform resolver refuses three shapes of unresolvable value, and they
+  // answer as one class because the TS-side resolveEnumOrdinal does: an unknown
+  // ordinal and an unknown name are both RangeError there, asserted against the
+  // shared pan-law and automation-curve corpora.
+  it('answers every unresolvable waveform with RangeError, whichever spelling', () => {
+    for (const waveform of ['noise', 4, -1, 2 ** 31, Number.NaN]) {
+      const project = Project.create();
+      try {
+        expect(
+          () => project.bounceWithBuiltinInstrument({ waveform: waveform as unknown as 'sine' }),
+          `waveform ${waveform} must be refused as out of range`,
+        ).toThrow(RangeError);
+      } finally {
+        project.destroy();
+      }
+    }
+  });
+
+  it('keeps TypeError for a value of the wrong JavaScript type', () => {
+    // The contrast that stops the assertions above from being satisfied by a
+    // reader that answers RangeError to everything.
+    const project = Project.create();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      expect(() => project.setProgramOnChannel(clipId, 0, 0, 'x' as never)).toThrow(TypeError);
+      expect(() => project.markerByIndex('x' as never)).toThrow(TypeError);
+      expect(() =>
+        project.bounceWithBuiltinInstrument({ waveform: true as unknown as 'sine' }),
+      ).toThrow(TypeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('still accepts every in-domain waveform, in both spellings', () => {
+    // Vacuity guard: a resolver that refused everything would satisfy the two
+    // cases above.
+    const project = Project.create();
+    try {
+      for (const waveform of ['sine', 'saw', 'sawtooth', 'square', 'triangle', 0, 1, 2, 3]) {
+        expect(() =>
+          project.bounceWithBuiltinInstrument({ waveform: waveform as unknown as 'sine' }),
+        ).not.toThrow();
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+});
+
 // An optional field declared `k?: T` accepts an explicit `undefined` in
 // TypeScript, so `{ k: undefined }` reaches the addon whenever a caller spreads
 // a partially-populated options object. Every options-accepting entry point must
@@ -590,5 +664,121 @@ describe('async entry points reject instead of throwing synchronously', () => {
       expect(promise).toBeInstanceOf(Promise);
       await expect(promise).rejects.toThrow(expected);
     });
+  }
+});
+
+// Every NativeSynth patch enum reaches the addon through one reader, whose
+// ordinal path used to be a bare Int32Value(). That WRAPS, so `2 ** 32 + k`
+// arrived as `k` and RENDERED -- the defect's signature is a successful call,
+// not a throw, so these compare rendered output rather than the refusal. A
+// throw-shaped assertion goes green on the fix while staying green on the
+// defect, which is the one thing it must not do.
+describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
+  const bounceOptions = { totalFrames: 4096, numChannels: 1, sampleRate: 48000 };
+
+  const midiProject = (): Project => {
+    const project = Project.create();
+    project.setSampleRate(48000);
+    const { trackId, clipId } = project.addMidiClip(0, 4);
+    project.setTrackMidiDestination(trackId, 0);
+    project.setMidiEvents(clipId, [
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(2, 0, 0, 60, 0),
+    ]);
+    return project;
+  };
+
+  /** The render as one number, or the error class when the patch is refused. */
+  const outcome = (patch: Record<string, unknown>): string => {
+    const project = midiProject();
+    try {
+      const audio = project.bounceWithSynthInstrument(patch as never, bounceOptions);
+      return `render:${audio.reduce((h, s) => (h * 31 + Math.round(s * 1e6)) | 0, 0)}`;
+    } catch (error) {
+      return (error as Error).constructor.name;
+    } finally {
+      project.destroy();
+    }
+  };
+
+  const routing = (source: unknown, destination: unknown) => ({
+    engineMode: 'subtractive',
+    modRoutings: [{ source, destination, depth: 400 }],
+  });
+
+  // `audible` holds two ordinals this patch shape renders differently; the two
+  // sample fields have none without a SampleBank, so they carry the wrap check
+  // alone rather than a positive control that cannot exist here.
+  const fields: {
+    name: string;
+    patch: (value: unknown) => Record<string, unknown>;
+    audible: number[];
+  }[] = [
+    { name: 'engineMode', patch: (v) => ({ engineMode: v }), audible: [3, 13] },
+    {
+      name: 'waveform',
+      patch: (v) => ({ engineMode: 'subtractive', waveform: v }),
+      audible: [2, 4],
+    },
+    {
+      name: 'filterModel',
+      patch: (v) => ({ engineMode: 'subtractive', filterModel: v, cutoffHz: 800, resonance: 0.7 }),
+      audible: [1, 2],
+    },
+    {
+      name: 'filterOutput',
+      patch: (v) => ({
+        engineMode: 'subtractive',
+        filterOutput: v,
+        cutoffHz: 800,
+        resonance: 0.7,
+      }),
+      audible: [1, 3],
+    },
+    {
+      name: 'body',
+      patch: (v) => ({ engineMode: 'subtractive', body: v, bodyMix: 0.9 }),
+      audible: [2, 3],
+    },
+    {
+      name: 'sampleLoop',
+      patch: (v) => ({ engineMode: 'subtractive', sampleLoop: v }),
+      audible: [],
+    },
+    {
+      name: 'sampleKeyTrack',
+      patch: (v) => ({ engineMode: 'subtractive', sampleKeyTrack: v }),
+      audible: [],
+    },
+    { name: 'modSource', patch: (v) => routing(v, 2), audible: [4, 5] },
+    { name: 'modDestination', patch: (v) => routing(3, v), audible: [1, 3] },
+  ];
+
+  for (const field of fields) {
+    const probe = field.audible[0] ?? 1;
+
+    it(`${field.name}: 2 ** 32 + ${probe} must not render as ${probe}`, () => {
+      expect(
+        outcome(field.patch(2 ** 32 + probe)),
+        `a wrapping ${field.name} ordinal reached the patch as ${probe}`,
+      ).not.toBe(outcome(field.patch(probe)));
+    });
+
+    it(`${field.name}: an ordinal past the enum is refused rather than rendered`, () => {
+      // 5000 does not wrap, so before the reader gained a domain check four of
+      // these fields rendered it as an accepted value with no refusal anywhere.
+      expect(outcome(field.patch(5000))).toBe('RangeError');
+    });
+
+    if (field.audible.length === 2) {
+      it(`${field.name}: its two in-domain ordinals still render, and differently`, () => {
+        // Without this a reader that refused every ordinal would pass above.
+        const [first, second] = field.audible;
+        const rendered = [outcome(field.patch(first)), outcome(field.patch(second))];
+        expect(rendered[0]).toMatch(/^render:/);
+        expect(rendered[1]).toMatch(/^render:/);
+        expect(rendered[0]).not.toBe(rendered[1]);
+      });
+    }
   }
 });

@@ -387,6 +387,11 @@ export interface BuiltinInstrumentConfig {
    * Oscillator waveform: a {@link SynthWaveform} name or numeric enum (0=sine).
    * The one config field with no nearest sensible value — a name or an ordinal
    * outside the set throws rather than falling back to sine.
+   *
+   * @throws {RangeError} The value is a string or a number the resolver cannot
+   * resolve: an unknown name, an ordinal outside the enum, or a number outside
+   * the signed 32-bit range (which would otherwise wrap onto a valid ordinal).
+   * @throws {TypeError} The value is neither a string nor a number.
    */
   waveform?: SynthWaveform | number;
   /** Master output gain (linear); 0 / omit => 0.2. */

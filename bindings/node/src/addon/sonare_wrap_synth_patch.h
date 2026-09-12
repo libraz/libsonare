@@ -4,6 +4,7 @@
 #include <napi.h>
 #include <sonare/sonare_c.h>
 
+#include <cmath>
 #include <cstring>
 #include <iterator>
 #include <string>
@@ -61,8 +62,9 @@ inline int SynthEnumFromName(const std::string& name, const char* const* names, 
   return -1;
 }
 
-// Reads an enum field that accepts the C ordinal or a name. Returns false
-// (with a pending JS exception) on an unknown name.
+// Reads an enum field that accepts the C ordinal or a name. Returns false with a
+// pending JS RangeError for an unknown name or an ordinal outside [0, count),
+// and a TypeError for a value that is neither a string nor a number.
 inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char* key,
                               const char* const* names, int count, const char* what, int* out) {
   Napi::Value value = obj.Get(key);
@@ -71,7 +73,7 @@ inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char
     const std::string name = value.As<Napi::String>().Utf8Value();
     const int mapped = SynthEnumFromName(name, names, count);
     if (mapped < 0) {
-      Napi::TypeError::New(env, std::string("Unknown ") + what + " name: '" + name + "'")
+      Napi::RangeError::New(env, std::string("Unknown ") + what + " name: '" + name + "'")
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -83,7 +85,19 @@ inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char
         .ThrowAsJavaScriptException();
     return false;
   }
-  *out = value.As<Napi::Number>().Int32Value();
+  // Checked before the int read, because Int32Value() WRAPS: 2^32 + 2 arrived as
+  // 2 and rendered a patch the caller never sent. @p count is the C ABI's own
+  // enumerator count, so the domain widens with the enum rather than with a
+  // literal here.
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 ||
+      number >= static_cast<double>(count)) {
+    Napi::RangeError::New(env, std::string(what) + " must be a name or an ordinal in [0, " +
+                                   std::to_string(count) + ")")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = static_cast<int>(number);
   return true;
 }
 
