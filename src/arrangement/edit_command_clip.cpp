@@ -214,6 +214,11 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   }
   std::vector<ClipCompSegment> shifted_segments =
       detail::shifted_clamped_comp_segments(c->comp_segments, -delta, new_length_ppq_);
+  // The same loop/comp pair SetClipLoop and SetClipCompSegments refuse to write.
+  if (c->loop_mode == LoopMode::kLoop &&
+      detail::comp_segments_split_clip(shifted_segments, new_length_ppq_)) {
+    return false;
+  }
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(c->track_id, new_start_ppq_, new_length_ppq_, id_)) {
     return false;

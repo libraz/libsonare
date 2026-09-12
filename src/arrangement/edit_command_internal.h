@@ -7,6 +7,11 @@
 /// implementation details of the edit-command split TUs. They are not part of
 /// any public surface and live in @ref sonare::arrangement::detail so the
 /// per-domain edit_command_*.cpp files can share a single definition.
+///
+/// The comp-segment well-formedness rule (@ref take_id_exists, @ref
+/// valid_comp_segments) is shared with edit_compiler.cpp as well: a segment list
+/// an edit command accepts must be one the compiler accepts, so the two paths
+/// cannot be allowed to carry separate copies of the rule.
 
 #include <algorithm>
 #include <cmath>

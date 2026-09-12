@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 
+#include "arrangement/edit_command_internal.h"
 #include "core/audio.h"
 #include "core/resample.h"
 #include "engine/mixing_runtime.h"
@@ -216,24 +217,9 @@ const ClipTake* find_take(const EditClip& clip, TakeId id) noexcept {
   return it == clip.takes.end() ? nullptr : &*it;
 }
 
-bool take_id_exists(const std::vector<ClipTake>& takes, TakeId id) noexcept {
-  if (id == 0) return true;
-  return std::any_of(takes.begin(), takes.end(),
-                     [id](const ClipTake& take) { return take.id == id; });
-}
-
+// Clip-shaped spelling of the one rule the edit commands validate against.
 bool valid_comp_segments(const EditClip& clip) noexcept {
-  double previous_end = 0.0;
-  for (const ClipCompSegment& segment : clip.comp_segments) {
-    if (!std::isfinite(segment.start_ppq) || !std::isfinite(segment.end_ppq) ||
-        segment.start_ppq < 0.0 || !(segment.end_ppq > segment.start_ppq) ||
-        segment.end_ppq > clip.length_ppq || segment.start_ppq < previous_end ||
-        !take_id_exists(clip.takes, segment.take_id)) {
-      return false;
-    }
-    previous_end = segment.end_ppq;
-  }
-  return true;
+  return detail::valid_comp_segments(clip.takes, clip.comp_segments, clip.length_ppq);
 }
 
 bool resolve_take_part(const EditClip& clip, TakeId take_id, double start_ppq, double end_ppq,
@@ -709,6 +695,18 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     if (!parts_ok || parts.empty()) {
       add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError, clip.id,
                "clip comp lane references a take that is not registered");
+      continue;
+    }
+
+    // A baked warped rendition is keyed on the clip, not on a take, so selecting
+    // it for a comp that spans several sources would render one take's audio for
+    // all of them.
+    if (audio.find_warped(clip.warp_ref_id) != nullptr &&
+        std::any_of(parts.begin(), parts.end(), [&parts](const AudioClipPart& part) {
+          return part.source_id != parts.front().source_id;
+        })) {
+      add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError, clip.id,
+               "clip comp lane spans several sources but carries pre-baked warped audio");
       continue;
     }
 

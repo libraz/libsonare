@@ -758,6 +758,51 @@ TEST_CASE("compiler expands audio comp segments into take-specific schedules", "
   REQUIRE(rendered[25000 * 2] < 0.71f);
 }
 
+TEST_CASE("compiler rejects a multi-source comp carrying pre-baked warped audio", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+
+  sonare::arrangement::AudioSourceRef take_ref;
+  take_ref.sample_rate_hint = kProjectSr;
+  take_ref.channel_count = 2;
+  const arr::SourceId take_source = f.project.add_audio_source(take_ref);
+  arr::AudioSourceSamples take_samples;
+  take_samples.sample_rate = kProjectSr;
+  take_samples.channels.assign(2, std::vector<float>(48000, 0.7f));
+  f.audio.sources.emplace(take_source, std::move(take_samples));
+
+  arr::AudioSourceSamples warped;
+  warped.sample_rate = kProjectSr;
+  warped.channels.assign(2, std::vector<float>(48000, 0.3f));
+  f.audio.warped_sources.emplace(77, std::move(warped));
+
+  clip->warp_ref_id = 77;
+  clip->takes = {{1, 0, 0.0, "base"}, {2, take_source, 0.0, "alternate"}};
+  clip->active_take_id = 1;
+  clip->comp_segments = {{0.0, 1.0, 1}, {1.0, 2.0, 2}};
+
+  const auto has_dangling_source_ref = [](const arr::CompileResult& result) {
+    return std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& diag) {
+      return diag.code == arr::Diagnostic::Code::kDanglingSourceRef &&
+             diag.severity == arr::Diagnostic::Severity::kError;
+    });
+  };
+
+  const arr::CompileResult multi_source = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE(multi_source.has_errors());
+  REQUIRE(has_dangling_source_ref(multi_source));
+  REQUIRE_FALSE(multi_source.timeline.has_value());
+
+  // Only the spread across sources is ambiguous: one source under the same baked
+  // rendition still compiles.
+  clip->comp_segments = {{0.0, 1.0, 1}, {1.0, 2.0, 1}};
+  const arr::CompileResult single_source = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(single_source.has_errors());
+  REQUIRE_FALSE(has_dangling_source_ref(single_source));
+  REQUIRE(single_source.timeline.has_value());
+}
+
 TEST_CASE("compiler rejects invalid audio comp segments from loaded projects", "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);

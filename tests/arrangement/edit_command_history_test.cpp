@@ -828,6 +828,30 @@ TEST_CASE("TrimClip shifts takes and keeps comp segments timeline-aligned", "[ar
   REQUIRE(project_equal(f.project, before));
 }
 
+TEST_CASE("TrimClip refuses a trim that would split a looped clip's comp lane", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  EditClip* clip = f.project.find_clip_mutable(f.audio_clip);
+  REQUIRE(clip != nullptr);
+  clip->start_ppq = 960.0;
+  clip->source_offset_ppq = 960.0;
+  clip->takes = {{1, 0, 960.0, "one"}};
+  clip->active_take_id = 1;
+  clip->comp_segments = {{0.0, 1920.0, 1}};
+  clip->loop_mode = LoopMode::kLoop;
+  const EditClip before = *clip;
+
+  // Extending the start earlier shifts the sole segment off [0, length), the
+  // pair SetClipLoop and SetClipCompSegments both refuse to write.
+  REQUIRE_FALSE(TrimClip(f.audio_clip, 480.0, 2400.0).apply(f.project, store));
+  CHECK(clip_equal(*f.project.find_clip(f.audio_clip), before));
+
+  // A trim leaving the segment spanning the whole clip is still accepted.
+  REQUIRE(TrimClip(f.audio_clip, 960.0, 960.0).apply(f.project, store));
+  CHECK(f.project.find_clip(f.audio_clip)->comp_segments ==
+        std::vector<ClipCompSegment>{{0.0, 960.0, 1}});
+}
+
 TEST_CASE("Clip geometry commands leave no fade longer than the clip carrying it",
           "[arrangement]") {
   // Fades are stored as absolute PPQ lengths, so shortening a clip can strand
