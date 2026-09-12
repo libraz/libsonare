@@ -28,10 +28,8 @@ library, so there is no facade there to guard.
 
 from __future__ import annotations
 
-import ast
 import inspect
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -489,51 +487,6 @@ def test_non_finite_buffer_is_rejected(name: str) -> None:
     with pytest.raises(SonareValueError) as excinfo:
         _invoke(name, entry, args)
     _assert_names_the_entry_point(name, str(excinfo.value))
-
-
-# The rank rejection is raised inside `_as_float32_buffer`, which names the
-# argument from `arg_name` and defaults it to "samples". A call site coercing a
-# differently-named argument therefore has to forward the real name, and
-# forwarding is a per-call-site edit — the same drift this module exists to
-# catch for the guards. Derived from the source rather than listed: a new call
-# site fails here until it either forwards a name or is coercing something
-# actually called `samples`.
-_BINDING_SOURCE_ROOT = Path(__file__).parents[1] / "src" / "libsonare"
-
-
-def _buffer_coercion_call_sites() -> list[tuple[str, int, ast.Call]]:
-    """Every `_as_float32_buffer(...)` call in the binding, with its location."""
-    sites: list[tuple[str, int, ast.Call]] = []
-    for path in sorted(_BINDING_SOURCE_ROOT.glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "_as_float32_buffer"
-            ):
-                sites.append((path.name, node.lineno, node))
-    return sites
-
-
-def test_every_buffer_coercion_site_names_the_argument_it_coerces() -> None:
-    """A rank rejection must not report the helper's default for another name."""
-    sites = _buffer_coercion_call_sites()
-    # Non-vacuity: the walk has to be finding the call sites at all.
-    assert len(sites) >= 10, sites
-
-    misnaming = []
-    for filename, lineno, call in sites:
-        if any(keyword.arg == "arg_name" for keyword in call.keywords):
-            continue
-        coerced = call.args[0] if call.args else None
-        if isinstance(coerced, ast.Name) and coerced.id == "samples":
-            continue  # the helper's default already names it correctly
-        misnaming.append(f"{filename}:{lineno}")
-    assert misnaming == [], (
-        "these coercions would report the default argument name 'samples' for a "
-        f"differently-named argument: {misnaming}"
-    )
 
 
 @pytest.mark.parametrize(

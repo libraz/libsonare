@@ -167,8 +167,8 @@ class StreamingMasteringChain:
         private copies.
         """
         self._ensure_open()
-        left_array, left_length = _to_c_float_array_owned(left)
-        right_array, right_length = _to_c_float_array_owned(right)
+        left_array, left_length = _to_c_float_array_owned(left, arg_name="left")
+        right_array, right_length = _to_c_float_array_owned(right, arg_name="right")
         if left_length != right_length:
             raise SonareValueError("left and right channel lengths must match")
         rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
@@ -457,8 +457,8 @@ class StreamingEqualizer:
         private copies.
         """
         self._ensure_open()
-        left_array, left_length = _to_c_float_array_owned(left)
-        right_array, right_length = _to_c_float_array_owned(right)
+        left_array, left_length = _to_c_float_array_owned(left, arg_name="left")
+        right_array, right_length = _to_c_float_array_owned(right, arg_name="right")
         if left_length != right_length:
             raise SonareValueError("left and right channel lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2

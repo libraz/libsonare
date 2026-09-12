@@ -104,7 +104,7 @@ def clicks(
 ) -> list[float]:
     """Generate decaying sine clicks at times in seconds."""
     lib = _get_lib()
-    data, count = _to_c_float_array(times)
+    data, count = _to_c_float_array(times, arg_name="times")
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_clicks(
@@ -601,7 +601,7 @@ def onset_backtrack(
     """Backtrack onset event indices to local energy minima."""
     lib = _get_lib()
     event_array, event_count = _to_c_int_array(events)
-    energy_array, energy_count = _to_c_float_array(energy)
+    energy_array, energy_count = _to_c_float_array(energy, arg_name="energy")
     with _out_int_array(lib) as (out, out_count):
         _check(
             lib.sonare_onset_backtrack(
@@ -1150,7 +1150,7 @@ def recurrence_to_lag(
     pad: bool = False,
 ) -> SegmentMatrix:
     """Convert an ``n × n`` recurrence matrix to a lag matrix."""
-    c_recurrence, _ = _segment_input("recurrence_to_lag", recurrence, n, n)
+    c_recurrence, _ = _segment_input("recurrence_to_lag", recurrence, n, n, arg_name="recurrence")
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(lib.sonare_segment_recurrence_to_lag(c_recurrence, n, int(pad), ctypes.byref(out)))
@@ -1163,7 +1163,7 @@ def lag_to_recurrence(
     n_lags: int,
 ) -> SegmentMatrix:
     """Convert a lag matrix back to an ``n_rows × n_rows`` recurrence matrix."""
-    c_lag, _ = _segment_input("lag_to_recurrence", lag, n_rows, n_lags)
+    c_lag, _ = _segment_input("lag_to_recurrence", lag, n_rows, n_lags, arg_name="lag")
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(lib.sonare_segment_lag_to_recurrence(c_lag, n_rows, n_lags, ctypes.byref(out)))
@@ -1222,7 +1222,7 @@ def path_enhance(
     n_filters: int = 7,
 ) -> SegmentMatrix:
     """Enhance diagonal paths in a recurrence matrix."""
-    c_recurrence, _ = _segment_input("path_enhance", recurrence, n, n)
+    c_recurrence, _ = _segment_input("path_enhance", recurrence, n, n, arg_name="recurrence")
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(
@@ -1383,7 +1383,7 @@ def note_segments(
     """
     lib = _get_lib()
     f0_array, f0_count = _to_c_float_array(f0_hz)
-    probability_array, probability_count = _to_c_float_array(voiced_prob)
+    probability_array, probability_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
     config = SonareNoteSegmenterConfig(
         2,
         0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,

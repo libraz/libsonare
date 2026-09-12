@@ -117,6 +117,7 @@ def power_to_db(
         ctypes.c_float(ref),
         ctypes.c_float(amin),
         ctypes.c_float(top_db),
+        arg_name="values",
     )
 
 
@@ -133,17 +134,22 @@ def amplitude_to_db(
         ctypes.c_float(ref),
         ctypes.c_float(amin),
         ctypes.c_float(top_db),
+        arg_name="values",
     )
 
 
 def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
     """Convert dB values back to power."""
-    return _call_float_transform("sonare_db_to_power", values, ctypes.c_float(ref))
+    return _call_float_transform(
+        "sonare_db_to_power", values, ctypes.c_float(ref), arg_name="values"
+    )
 
 
 def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
     """Convert dB values back to amplitude."""
-    return _call_float_transform("sonare_db_to_amplitude", values, ctypes.c_float(ref))
+    return _call_float_transform(
+        "sonare_db_to_amplitude", values, ctypes.c_float(ref), arg_name="values"
+    )
 
 
 def preemphasis(
@@ -261,7 +267,11 @@ def pad_center(
     if not isinstance(target_size, int) or target_size < 0:
         raise SonareValueError("target_size must be a non-negative integer")
     return _call_float_transform(
-        "sonare_pad_center", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
+        "sonare_pad_center",
+        values,
+        ctypes.c_size_t(target_size),
+        ctypes.c_float(pad_value),
+        arg_name="values",
     )
 
 
@@ -274,7 +284,11 @@ def fix_length(
     if not isinstance(target_size, int) or target_size < 0:
         raise SonareValueError("target_size must be a non-negative integer")
     return _call_float_transform(
-        "sonare_fix_length", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
+        "sonare_fix_length",
+        values,
+        ctypes.c_size_t(target_size),
+        ctypes.c_float(pad_value),
+        arg_name="values",
     )
 
 
@@ -322,7 +336,7 @@ def peak_pick(
     one over from another source.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(values)
+    c_array, length = _to_c_float_array(values, arg_name="values")
     with _out_int_array(lib) as (out, out_length):
         rc = lib.sonare_peak_pick(
             c_array,
@@ -351,6 +365,7 @@ def vector_normalize(
         values,
         ctypes.c_int(norm_type),
         ctypes.c_float(threshold),
+        arg_name="values",
     )
 
 
@@ -368,7 +383,7 @@ def pcen(
 ) -> list[float]:
     """Apply per-channel energy normalization to a row-major spectrogram."""
     lib = _get_lib()
-    c_array, length = _to_c_float_array(values)
+    c_array, length = _to_c_float_array(values, arg_name="values")
     if length != n_bins * n_frames:
         raise SonareValueError("values length must equal n_bins * n_frames")
     with _out_float_array(lib) as (out, out_length):
@@ -423,7 +438,7 @@ def tempogram(
     if mode_id is None:
         raise SonareValueError("mode must be 'autocorrelation' or 'cosine'")
     lib = _get_lib()
-    c_array, length = _to_c_float_array(onset_envelope)
+    c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tempogram_with_mode(
@@ -453,7 +468,7 @@ def cyclic_tempogram(
 ) -> tuple[int, list[float]]:
     """Compute cyclic tempogram. Returns (n_frames, row-major matrix)."""
     lib = _get_lib()
-    c_array, length = _to_c_float_array(onset_envelope)
+    c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_cyclic_tempogram(
@@ -489,6 +504,7 @@ def plp(
         ctypes.c_float(tempo_min),
         ctypes.c_float(tempo_max),
         ctypes.c_int(win_length),
+        arg_name="onset_envelope",
     )
 
 
@@ -558,7 +574,7 @@ def fourier_tempogram(
     n_bins = len(matrix) // n_frames.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(onset_envelope)
+    c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_fourier_tempogram(
@@ -604,7 +620,7 @@ def tempogram_ratio(
                 raise SonareValueError(
                     f"tempogram_ratio: factors[{index}] must be a finite positive number"
                 )
-        factors_ptr, n_factors = _to_c_float_array(factor_values)
+        factors_ptr, n_factors = _to_c_float_array(factor_values, arg_name="factors")
     return _call_float_transform(
         "sonare_tempogram_ratio",
         tempogram_data,

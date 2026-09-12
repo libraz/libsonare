@@ -682,9 +682,13 @@ class Mixer:
         left_arrays: list[ctypes.Array[ctypes.c_float]] = []
         right_arrays: list[ctypes.Array[ctypes.c_float]] = []
         length: int | None = None
-        for left, right in zip(left_channels, right_channels, strict=True):
-            left_array, left_length = _to_c_float_array(left)
-            right_array, right_length = _to_c_float_array(right)
+        for index, (left, right) in enumerate(zip(left_channels, right_channels, strict=True)):
+            # Name the strip as well as the side: what the caller passed is a
+            # sequence of strips, so the position is what locates the bad one.
+            left_array, left_length = _to_c_float_array(left, arg_name=f"left_channels[{index}]")
+            right_array, right_length = _to_c_float_array(
+                right, arg_name=f"right_channels[{index}]"
+            )
             if left_length != right_length:
                 raise SonareValueError("left and right channel lengths must match")
             if length is None:

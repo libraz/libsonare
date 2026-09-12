@@ -91,7 +91,7 @@ class _ProjectEditMixin:
         self, source_id: int, audio: Sequence[float] | np.ndarray, channels: int, sample_rate: int
     ) -> None:
         """Register decoded interleaved PCM for an existing audio source (undoable)."""
-        backing, total = _to_c_float_array(audio)
+        backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
             raise SonareValueError("audio length must be a multiple of channels")
         _check(
@@ -177,7 +177,7 @@ class _ProjectEditMixin:
         audio_frames = 0
         backing = None
         if audio is not None:
-            backing, total = _to_c_float_array(audio)
+            backing, total = _to_c_float_array(audio, arg_name="audio")
             c_audio = backing
             channels = int(audio_channels)
             if channels <= 0 or total % channels != 0:
@@ -294,7 +294,7 @@ class _ProjectEditMixin:
         newest take is made active.
         """
         channels = int(audio_channels)
-        backing, total = _to_c_float_array(audio)
+        backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
             raise SonareValueError("audio length must be a multiple of audio_channels")
         frames = total // channels

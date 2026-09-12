@@ -384,10 +384,10 @@ def pitch_correct_to_midi_timevarying(
     if not hasattr(lib, "sonare_pitch_correct_to_midi_timevarying"):
         raise RuntimeError("libsonare was built without pitch-editor support")
     c_array, length = _to_c_float_array(samples)
-    f0_array, n_frames = _to_c_float_array(f0_hz)
+    f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     prob_array = None
     if voiced_prob is not None:
-        prob_array, prob_len = _to_c_float_array(voiced_prob)
+        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
         if prob_len != n_frames:
             raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
@@ -494,10 +494,10 @@ def pitch_correct_timevarying(
         config.vibrato_threshold_cents = float(vibrato_threshold_cents)
 
     c_array, length = _to_c_float_array(samples)
-    f0_array, n_frames = _to_c_float_array(f0_hz)
+    f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     prob_array = None
     if voiced_prob is not None:
-        prob_array, prob_len = _to_c_float_array(voiced_prob)
+        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
         if prob_len != n_frames:
             raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
@@ -820,7 +820,7 @@ def _note_voicing_arrays(
         raise SonareValueError(f"{fn_name}: pass voiced or voiced_prob")
     prob_array = None
     if voiced_prob is not None:
-        prob_array, prob_len = _to_c_float_array(voiced_prob)
+        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
         if prob_len != n_frames:
             raise SonareValueError(f"{fn_name}: voiced_prob must have f0_hz's length")
     voiced_array = None
@@ -1178,7 +1178,7 @@ def _note_set_edit(
         raise _unsupported_effect_symbol(symbol)
 
     c_array, length = _to_c_float_array(samples)
-    f0_array, n_frames = _to_c_float_array(f0_hz)
+    f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     prob_array, voiced_array = _note_voicing_arrays(fn_name, n_frames, voiced, voiced_prob)
     c_notes, note_count, envelopes, envelope_count = _notes_to_c(fn_name, notes)
 

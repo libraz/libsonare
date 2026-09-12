@@ -592,7 +592,7 @@ def mastering_repair_dereverb_config_for_room(
         raise SonareValueError(
             "mastering_repair_dereverb_config_for_room: estimate must not be None"
         )
-    bands, band_count = _to_c_float_array(estimate.rt60_bands)
+    bands, band_count = _to_c_float_array(estimate.rt60_bands, arg_name="estimate.rt60_bands")
     c_estimate = SonareRoomEstimate(
         volume=float(estimate.volume),
         rt60_bands=ctypes.cast(bands, ctypes.POINTER(ctypes.c_float)),

@@ -462,7 +462,7 @@ def estimate_meter(
         raise _unsupported_feature_symbol("sonare_estimate_meter_json")
 
     c_times, time_count = _to_c_float_array(beat_times)
-    c_strengths, strength_count = _to_c_float_array(beat_strengths)
+    c_strengths, strength_count = _to_c_float_array(beat_strengths, arg_name="beat_strengths")
     # The C entry point carries one beat count for both arrays, so a mismatch
     # never reaches the core's own check — reject it with the same meaning.
     if time_count != strength_count:

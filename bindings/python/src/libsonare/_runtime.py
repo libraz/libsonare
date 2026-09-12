@@ -403,6 +403,9 @@ def _planar_channel_arrays(
 
 def _to_c_float_array(
     samples: Sequence[float] | list[float] | np.ndarray,
+    *,
+    fn_name: str = "",
+    arg_name: str = "samples",
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
     """Convert a sample sequence to a ctypes float array (zero-copy when possible).
 
@@ -414,8 +417,12 @@ def _to_c_float_array(
     A reference to the backing buffer is attached to the returned ctypes
     array via ``_np_backing`` so it cannot be collected while the C call is
     in flight.
+
+    ``fn_name`` / ``arg_name`` are forwarded to :func:`_as_float32_buffer`, so a
+    call site coercing an unvalidated buffer under another name reports that
+    name instead of this helper's ``samples`` default.
     """
-    buf = _as_float32_buffer(samples)
+    buf = _as_float32_buffer(samples, fn_name=fn_name, arg_name=arg_name)
     length = int(buf.shape[0])
     if length == 0:  # noqa: SIM108
         # `from_buffer` rejects zero-length buffers on some platforms; fall
@@ -431,6 +438,9 @@ def _to_c_float_array(
 
 def _to_c_float_array_owned(
     samples: Sequence[float] | list[float] | np.ndarray,
+    *,
+    fn_name: str = "",
+    arg_name: str = "samples",
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
     """Like :func:`_to_c_float_array`, but always over a fresh writable copy.
 
@@ -440,7 +450,12 @@ def _to_c_float_array_owned(
     cannot overwrite the input. The single bulk copy is negligible next to the
     DSP work these offline/streaming calls perform.
     """
-    buf = np.array(_as_float32_buffer(samples), dtype=np.float32, copy=True, order="C")
+    buf = np.array(
+        _as_float32_buffer(samples, fn_name=fn_name, arg_name=arg_name),
+        dtype=np.float32,
+        copy=True,
+        order="C",
+    )
     length = int(buf.shape[0])
     if length == 0:  # noqa: SIM108
         c_array = (ctypes.c_float * 0)()
@@ -943,10 +958,14 @@ def _out_int_array(
 
 
 def _call_float_transform(
-    fn_name: str, values: Sequence[float] | list[float] | np.ndarray, *args: object
+    fn_name: str,
+    values: Sequence[float] | list[float] | np.ndarray,
+    *args: object,
+    arg_name: str = "samples",
 ) -> list[float]:
     lib = _get_lib()
-    c_array, length = _to_c_float_array(values)
+    # `fn_name` is the C symbol, not the facade, so only the argument name goes on.
+    c_array, length = _to_c_float_array(values, arg_name=arg_name)
     with _out_float_array(lib) as (out, out_length):
         rc = getattr(lib, fn_name)(
             c_array,

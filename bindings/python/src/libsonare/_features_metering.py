@@ -285,8 +285,12 @@ def metering_crest_factor_db_stereo(
     :func:`metering_crest_factor_db` would need, which understates its RMS and
     so overstates the crest factor.
     """
-    left_buf = _validate_samples("metering_crest_factor_db_stereo", left, validate=validate)
-    right_buf = _validate_samples("metering_crest_factor_db_stereo", right, validate=validate)
+    left_buf = _validate_samples(
+        "metering_crest_factor_db_stereo", left, validate=validate, arg_name="left"
+    )
+    right_buf = _validate_samples(
+        "metering_crest_factor_db_stereo", right, validate=validate, arg_name="right"
+    )
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_crest_factor_db_stereo"):
         raise RuntimeError("libsonare was built without the stereo crest factor meter")

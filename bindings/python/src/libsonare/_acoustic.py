@@ -42,11 +42,16 @@ def _late_model(prefer_eyring: bool) -> int:
 
 def _band_array_args(
     bands: Sequence[float] | None,
+    *,
+    arg_name: str = "bands",
 ) -> tuple[object, int, object]:
     """Build the (pointer, count, owner) tuple for an optional per-band array.
 
     The third element keeps the backing ctypes buffer alive for the duration of
     the FFI call (the config only stores a borrowed pointer).
+
+    ``arg_name`` names the caller's own parameter in a rejection, since every
+    entry point reaching here spells its bands differently.
     """
     if not bands:
         return None, 0, None
@@ -54,7 +59,7 @@ def _band_array_args(
     # ABI. A band list is short enough that the per-element varargs form cost
     # nothing measurable, but keeping one path means the rule holds without an
     # exception list -- which is what let the two clip paths drift.
-    buf, count = _to_c_float_array(bands)
+    buf, count = _to_c_float_array(bands, arg_name=arg_name)
     return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), count, buf
 
 
@@ -127,8 +132,12 @@ def synthesize_rir(
     lib = _get_lib()
     if not hasattr(lib, "sonare_synthesize_rir"):
         raise RuntimeError("libsonare was built without acoustic-simulation support")
-    bands_ptr, bands_count, _bands_owner = _band_array_args(absorption_bands)
-    scatter_ptr, scatter_count, _scatter_owner = _band_array_args(scattering_bands)
+    bands_ptr, bands_count, _bands_owner = _band_array_args(
+        absorption_bands, arg_name="absorption_bands"
+    )
+    scatter_ptr, scatter_count, _scatter_owner = _band_array_args(
+        scattering_bands, arg_name="scattering_bands"
+    )
     config = SonareRirSynthConfig(
         length_m=length_m,
         width_m=width_m,
@@ -313,8 +322,12 @@ def room_morph(
     if not hasattr(lib, "sonare_room_morph"):
         raise RuntimeError("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
-    bands_ptr, bands_count, _bands_owner = _band_array_args(absorption_bands)
-    scatter_ptr, scatter_count, _scatter_owner = _band_array_args(scattering_bands)
+    bands_ptr, bands_count, _bands_owner = _band_array_args(
+        absorption_bands, arg_name="absorption_bands"
+    )
+    scatter_ptr, scatter_count, _scatter_owner = _band_array_args(
+        scattering_bands, arg_name="scattering_bands"
+    )
     config = SonareRoomMorphConfig(
         length_m=length_m,
         width_m=width_m,

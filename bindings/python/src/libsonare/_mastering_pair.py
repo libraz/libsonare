@@ -251,8 +251,8 @@ def _stereo_channels(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
 ) -> tuple[Any, Any, int]:
-    left_array, left_length = _to_c_float_array(left)
-    right_array, right_length = _to_c_float_array(right)
+    left_array, left_length = _to_c_float_array(left, arg_name="left")
+    right_array, right_length = _to_c_float_array(right, arg_name="right")
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     return left_array, right_array, left_length
