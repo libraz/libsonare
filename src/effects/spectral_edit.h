@@ -33,9 +33,10 @@ struct SpectralRegionOp {
 };
 
 /// @brief Largest accepted @ref SpectralEditConfig::n_fft.
-/// @details The window is the time smear every region edit inherits, so the useful
-/// domain ends near a one-second window -- past it a rectangle cannot address
-/// anything shorter than a phrase. One second at 192 kHz, rounded up to a power of two.
+/// @details Past a one-second window a region rectangle cannot address anything shorter
+/// than a phrase. A sample count pins the rate it was derived at -- one second at
+/// 192 kHz rounded up to a power of two -- so 384 kHz gets 0.68 s, not the second.
+/// Not @ref kMaxStftNFft: that is a backstop that must never bind a consumer, this binds.
 inline constexpr int kSpectralEditMaxNFft = 262144;
 
 /// @brief STFT + heal parameters for a spectral edit pass.

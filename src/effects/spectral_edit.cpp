@@ -11,6 +11,9 @@
 
 namespace sonare {
 
+static_assert(kSpectralEditMaxNFft <= kMaxStftNFft,
+              "the shared STFT backstop must stay above this entry's domain bound");
+
 namespace {
 
 /// @brief True if n is a power of two and >= 2.

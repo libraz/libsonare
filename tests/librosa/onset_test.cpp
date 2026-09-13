@@ -12,7 +12,9 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -150,5 +152,41 @@ TEST_CASE("onset_backtrack reference compatibility", "[onset][onset_backtrack][r
       CAPTURE(events[i]);
       REQUIRE(actual[i] == expected[i]);
     }
+  }
+}
+
+TEST_CASE("the onset entry inherits the shared STFT size ceiling", "[onset][edge]") {
+  const int sr = 22050;
+  Audio audio = Audio::from_vector(create_impulse_train(sr, 1.0f), sr);
+
+  SECTION("a size past the ceiling is an invalid parameter, not an allocation failure") {
+    MelConfig mel_config;
+    mel_config.n_fft = 1 << 24;  // even, a power of two, inside int's range
+    try {
+      compute_onset_strength(audio, mel_config, OnsetConfig());
+      FAIL("nFft past the ceiling was accepted");
+    } catch (const SonareException& e) {
+      const std::string message = e.what();
+      CAPTURE(message);
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+      REQUIRE(message.find("nFft") != std::string::npos);
+    }
+  }
+
+  SECTION("a window far past onset's own useful range still passes and carries signal") {
+    MelConfig mel_config;
+    mel_config.n_fft = 16384;  // 0.74 s at 22050 Hz, against ~10 ms onset events
+    mel_config.hop_length = 512;
+    OnsetConfig onset_config;
+    onset_config.detrend = false;
+
+    std::vector<float> onset_env;
+    REQUIRE_NOTHROW(onset_env = compute_onset_strength(audio, mel_config, onset_config));
+    REQUIRE(onset_env.size() > 1);
+
+    float max_val = 0.0f;
+    for (float v : onset_env) max_val = std::max(max_val, v);
+    CAPTURE(onset_env.size(), max_val, kMaxStftNFft);
+    REQUIRE(max_val > 0.0f);
   }
 }

@@ -3,12 +3,17 @@
 
 #include "core/spectrum.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <functional>
+#include <limits>
 #include <numeric>
+#include <string>
 #include <vector>
 
 #include "core/window.h"
@@ -1216,4 +1221,95 @@ TEST_CASE("each cache is one fixed formula regardless of which was filled first"
   CAPTURE(magnitude_then_power_mag.size(), magnitude_differs, power_differs);
   CHECK(magnitude_differs == 0);
   CHECK(power_differs == 0);
+}
+
+TEST_CASE("The STFT layer bounds n_fft by magnitude and not only by shape", "[spectrum][edge]") {
+  const int sr = 22050;
+  const int samples = sr / 2;
+  Audio audio = Audio::from_vector(generate_sine(samples, 440.0f, sr), sr);
+
+  // Only a power of two can reach the magnitude check: every smaller shape rule
+  // (even, >= 2) already accepts these, so neither side of the boundary is vacuous.
+  StftConfig at_ceiling;
+  at_ceiling.n_fft = kMaxStftNFft;
+  at_ceiling.hop_length = kMaxStftNFft / 4;
+  StftConfig above_ceiling;
+  above_ceiling.n_fft = kMaxStftNFft * 2;
+  above_ceiling.hop_length = kMaxStftNFft / 2;
+
+  SECTION("a size above the ceiling is rejected by name") {
+    try {
+      Spectrogram::compute(audio, above_ceiling);
+      FAIL("nFft above the ceiling was accepted");
+    } catch (const SonareException& e) {
+      const std::string message = e.what();
+      CAPTURE(message);
+      // Not OutOfMemory: reaching the allocator would report a failure that names
+      // nothing the caller passed.
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+      REQUIRE(message.find("nFft") != std::string::npos);
+      REQUIRE(message.find(std::to_string(kMaxStftNFft)) != std::string::npos);
+    }
+  }
+
+  SECTION("the rejection costs nothing next to the work it prevents") {
+    // Minimum over repeats, not a single reading: the rejected side runs in tens of
+    // microseconds, so one scheduler preemption inside that window would otherwise
+    // decide the verdict on a loaded machine.
+    constexpr int kTrials = 5;
+    auto fastest_us = [](const std::function<void()>& body) {
+      long long best = std::numeric_limits<long long>::max();
+      for (int trial = 0; trial < kTrials; ++trial) {
+        const auto start = std::chrono::steady_clock::now();
+        body();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                                 std::chrono::steady_clock::now() - start)
+                                 .count();
+        best = std::min(best, static_cast<long long>(elapsed));
+      }
+      return best;
+    };
+
+    int frames = 0;
+    const long long accept_us =
+        fastest_us([&] { frames = Spectrogram::compute(audio, at_ceiling).n_frames(); });
+    const long long reject_us = fastest_us(
+        [&] { REQUIRE_THROWS_AS(Spectrogram::compute(audio, above_ceiling), SonareException); });
+
+    CAPTURE(accept_us, reject_us, frames);
+    // The accepted side is the calibration: without it a reject time near zero
+    // would prove nothing about whether the rejected side allocated.
+    REQUIRE(accept_us > 0);
+    REQUIRE(reject_us * 20 < accept_us);
+  }
+
+  SECTION("the ceiling itself is a usable size, not merely an accepted one") {
+    const Spectrogram spec = Spectrogram::compute(audio, at_ceiling);
+    REQUIRE(spec.n_fft() == kMaxStftNFft);
+    REQUIRE(spec.n_bins() == kMaxStftNFft / 2 + 1);
+    REQUIRE(spec.n_frames() >= 1);
+
+    // A degenerate zero-filled path would round-trip to silence, so energy is what
+    // separates a size that works from one that is only tolerated.
+    const Audio reconstructed = spec.to_audio(samples);
+    REQUIRE(reconstructed.size() == static_cast<size_t>(samples));
+    double in_energy = 0.0;
+    double out_energy = 0.0;
+    for (int i = 0; i < samples; ++i) {
+      in_energy += static_cast<double>(audio[i]) * audio[i];
+      out_energy += static_cast<double>(reconstructed[i]) * reconstructed[i];
+    }
+    const double ratio = out_energy / in_energy;
+    CAPTURE(in_energy, out_energy, ratio);
+    REQUIRE(ratio > 0.9);
+    REQUIRE(ratio < 1.1);
+  }
+
+  SECTION("the practical default is unaffected") {
+    StftConfig config;
+    REQUIRE(config.n_fft == 2048);
+    const Spectrogram spec = Spectrogram::compute(audio, config);
+    REQUIRE(spec.n_bins() == 2048 / 2 + 1);
+    REQUIRE(spec.n_frames() > 1);
+  }
 }

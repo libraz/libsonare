@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <limits>
 #include <random>
+#include <string>
 
 #include "core/db_convert.h"
 #include "core/fft.h"
@@ -180,6 +181,9 @@ Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int 
 void validate_config(const StftConfig& config) {
   SONARE_CHECK_MSG(config.n_fft > 0, ErrorCode::InvalidParameter,
                    "StftConfig: nFft must be positive");
+  SONARE_CHECK_MSG(config.n_fft <= kMaxStftNFft, ErrorCode::InvalidParameter,
+                   "StftConfig: nFft must not exceed " + std::to_string(kMaxStftNFft) + ", got " +
+                       std::to_string(config.n_fft));
   SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
                    "StftConfig: hopLength must be positive");
   // 0 is the documented "use nFft" sentinel; a negative value would take the

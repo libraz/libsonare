@@ -58,9 +58,19 @@ enum class PadMode {
   Reflect,   ///< Reflect input edges before/after the signal
 };
 
+/// @brief Largest accepted @ref StftConfig::n_fft.
+/// @details Bin spacing is 1/(window seconds) Hz, so the useful window ends near one
+/// second: 1 Hz already resolves a semitone at the bottom of the audible range, and the
+/// time smear past it exceeds any event. A backstop rather than a domain bound -- one
+/// second at @ref kMaxAudioSampleRate rounded up to a power of two, so it sits above
+/// every consumer's useful maximum instead of binding one.
+inline constexpr int kMaxStftNFft = 524288;
+static_assert(kMaxStftNFft >= kMaxAudioSampleRate,
+              "the STFT ceiling must hold a one-second window at the highest accepted rate");
+
 /// @brief Configuration for STFT computation.
 struct StftConfig {
-  int n_fft = 2048;                      ///< FFT size
+  int n_fft = 2048;                      ///< FFT size; in [1, @ref kMaxStftNFft]
   int hop_length = 512;                  ///< Hop length between frames
   int win_length = 0;                    ///< Window length (0 = n_fft)
   WindowType window = WindowType::Hann;  ///< Window function
@@ -76,8 +86,11 @@ struct StftConfig {
 ///          @ref Spectrogram::compute uses before it touches the framing loop.
 ///          Every surface reaches the STFT through that entry point, so the
 ///          rules do not need repeating per binding.
-/// @throws SonareException(InvalidParameter) for a non-positive size, a
-///         negative window length, or a window longer than the FFT.
+/// @throws SonareException(InvalidParameter) for a non-positive size, a size above
+///         @ref kMaxStftNFft, a negative window length, or a window longer than the
+///         FFT. The size ceiling is checked here so it is rejected by name before the
+///         framing loop allocates; reaching the allocator instead reports the failure
+///         as OutOfMemory, which names nothing the caller passed.
 void validate_config(const StftConfig& config);
 
 /// @brief Validates an analysis geometry whose spectrum is resynthesized to audio.
