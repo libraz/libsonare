@@ -22,11 +22,20 @@
 /// on -- a pair sharing no bin that still shows a loss is not measuring
 /// apportionment.
 ///
-/// This file measures and does not gate: every quantity is reported with WARN, both
-/// sides of every ratio are reported as raw magnitudes beside it, and the only
-/// assertions are the ones no number can change -- shapes agree, buffers are finite
-/// and non-empty, each chord resolves two notes, each band a ratio is taken over
-/// carries something, and the two pairs differ in the way the cases below rely on.
+/// Every quantity is reported with WARN and both sides of every ratio appear as raw
+/// magnitudes beside it, because a bound is only as good as the reader's ability to
+/// see what it bounded.
+///
+/// What is gated is bounded per band, by what sits in the band. A band no other note
+/// reaches is where the apportionment had nothing to decide, so its share must be the
+/// solo share and the ceiling there is tight. A band the other note has a partial in
+/// is what the apportionment exists for, and its ceiling is this file's one quality
+/// claim. A band the other note only *claims* carries the cost of a claim made from
+/// the predicted geometry rather than from the data, which is a limit with no fix
+/// worth shipping -- that ceiling records the size it has today so it cannot grow,
+/// and is not a statement that the size is acceptable. A band the chord and the solo
+/// analysis claimed differently is skipped and counted, since the apportionment never
+/// adds or drops a bin and therefore cannot be what differs.
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -354,6 +363,98 @@ MaskReach mask_reach(const NoteMask& mask, const sonare::Spectrogram& spec, doub
   return reach;
 }
 
+// --- What may be asserted at a band ----------------------------------------
+
+/// Reach of a neighbour, in bins. Wider than the band's own half-width because a
+/// partial just outside it still leaks in, and the leak no claim covers is carried
+/// in the residual: at 7 bins a neighbour moved a ghost figure 6.03 dB, at 13 none
+/// moved more than 2.25.
+constexpr int kCompanyReachBins = 8;
+
+/// @brief What sits in a band, which decides what may be asserted there.
+enum class BandRole {
+  Uncontested,   ///< No other note's partial and no other note's claim within reach.
+  PhantomClaim,  ///< The other note claims the band and has no partial in it.
+  Shared,        ///< The other note has a partial within reach, so the band is contested.
+};
+
+BandRole role_of(const BandCompany& company) {
+  if (company.other_partial <= kCompanyReachBins) return BandRole::Shared;
+  if (company.other_claim <= kCompanyReachBins) return BandRole::PhantomClaim;
+  return BandRole::Uncontested;
+}
+
+/// @brief Worst deviation per role, and how many bands each role covered.
+/// @details The counts are not bookkeeping: a ceiling over zero bands asserts
+///          nothing, so every caller reports them and requires the ones its
+///          fixture exists to produce.
+struct BandTally {
+  int uncontested = 0;
+  int phantom = 0;
+  int shared = 0;
+  int geometry_mismatch = 0;
+  double worst_uncontested = 0.0;
+  double worst_phantom = 0.0;
+  double worst_shared = 0.0;
+
+  void add(BandRole role, double deviation_db) {
+    const double size = std::abs(deviation_db);
+    switch (role) {
+      case BandRole::Uncontested:
+        ++uncontested;
+        worst_uncontested = std::max(worst_uncontested, size);
+        return;
+      case BandRole::PhantomClaim:
+        ++phantom;
+        worst_phantom = std::max(worst_phantom, size);
+        return;
+      case BandRole::Shared:
+        ++shared;
+        worst_shared = std::max(worst_shared, size);
+        return;
+    }
+  }
+
+  BandTally& operator+=(const BandTally& other) {
+    uncontested += other.uncontested;
+    phantom += other.phantom;
+    shared += other.shared;
+    geometry_mismatch += other.geometry_mismatch;
+    worst_uncontested = std::max(worst_uncontested, other.worst_uncontested);
+    worst_phantom = std::max(worst_phantom, other.worst_phantom);
+    worst_shared = std::max(worst_shared, other.worst_shared);
+    return *this;
+  }
+};
+
+void report_tally(const char* what, const BandTally& tally) {
+  WARN("  " << what << ": " << tally.uncontested << " uncontested bands, worst "
+            << tally.worst_uncontested << " dB; " << tally.shared << " shared, worst "
+            << tally.worst_shared << " dB; " << tally.phantom << " spare-claim, worst "
+            << tally.worst_phantom << " dB; " << tally.geometry_mismatch
+            << " skipped where the two analyses claimed the band differently");
+}
+
+/// Worst measured 0.03 dB over 26 bands. With nothing contesting the band the
+/// apportionment has nothing to decide, so the share must be the solo share; this
+/// is the one ceiling here that is a correctness claim rather than a recorded size.
+constexpr double kUncontestedTheftDb = 0.5;
+
+/// Worst measured 1.67 dB over 8 bands. This is what the apportionment is for, and
+/// the only quality figure this file gates: the share is read off the data, so it
+/// cannot come out exact.
+constexpr double kSharedTheftDb = 3.0;
+
+/// Worst measured 13.46 dB. Not a quality bar -- it records the size of the spare
+/// claim @ref sonare::editing::polyphony::build_note_masks documents, which has no
+/// fix worth shipping, so the ceiling stops it growing rather than blessing it.
+constexpr double kPhantomClaimTheftDb = 20.0;
+
+/// Worst measured 2.25 dB over 38 bands, against the same shift on the tone alone.
+/// The shifter's own leakage is in both sides, so only the gap between them is the
+/// mask's, and only where nothing else can hold the old band up.
+constexpr double kGhostTracksSoloDb = 5.0;
+
 // --- The chain's own per-note step -----------------------------------------
 
 /// @brief One note's contribution to the masked render, built the way
@@ -384,7 +485,7 @@ size_t note_nearest(const std::vector<NoteObject>& notes, float hz) {
 
 /// @brief Reports the drop at @p pitch's original harmonics when it moves, with
 ///        the same shift on the tone alone beside every figure.
-void measure_ghost(const Pair& pair, float pitch, float semitones) {
+BandTally measure_ghost(const Pair& pair, float pitch, float semitones) {
   const PolyphonicAnalysis analysis = analyze_polyphonic(chord_audio(pair));
   REQUIRE(analysis.notes.size() == 2);
   const sonare::Audio base = render_polyphonic(analysis);
@@ -428,6 +529,12 @@ void measure_ghost(const Pair& pair, float pitch, float semitones) {
                                     << alone_span.begin << ", " << alone_span.end << ")");
   REQUIRE(alone_span.count() > 0);
 
+  // The two masks are read over one stretch of time, so a claim count that differs
+  // says the geometry differs rather than that the spans were placed differently.
+  const FrameSpan common = intersect(span, alone_span);
+  REQUIRE(common.count() > 0);
+
+  BandTally tally;
   const double factor = std::pow(2.0, static_cast<double>(semitones) / 12.0);
   for (int h = 1; h <= kPartials; ++h) {
     const double hz = harmonic_hz(pitch, h);
@@ -470,12 +577,32 @@ void measure_ghost(const Pair& pair, float pitch, float semitones) {
                << at_new_after << "; the tracked pitch puts this partial "
                << (bin_of(harmonic_hz(analysis.notes[k].median_hz, h)) - bin_of(hz))
                << " bins off the band centre");
+
+    // The apportionment never adds or drops a bin, so a band the chord and the solo
+    // claimed differently differs by its claim geometry and says nothing here.
+    const MaskReach held = mask_reach(analysis.masks.notes[k], analysis.spectrum, hz, common);
+    const MaskReach held_alone = mask_reach(alone.masks.notes[a], alone.spectrum, hz, common);
+    if (held.claimed != held_alone.claimed) {
+      ++tally.geometry_mismatch;
+      continue;
+    }
+    tally.add(role_of(company),
+              db_of(at_old_after, at_old_before) - db_of(solo_after, solo_before));
   }
+
+  report_tally("ghost against the same shift on the tone alone", tally);
+  // Gated only where nothing else can hold the old band up. Where the other note has
+  // a partial in the band its content legitimately stays after this note moves, and
+  // where the other note merely claims the band the spare claim's own cost is there,
+  // so both are reported rather than bounded.
+  REQUIRE(tally.uncontested > 0);
+  REQUIRE(tally.worst_uncontested <= kGhostTracksSoloDb);
+  return tally;
 }
 
 /// @brief Reports @p pitch's masked share inside @p pair against its share when
 ///        analysed alone, per harmonic.
-void measure_theft(const Pair& pair, float pitch) {
+BandTally measure_theft(const Pair& pair, float pitch) {
   const PolyphonicAnalysis chord = analyze_polyphonic(chord_audio(pair));
   REQUIRE(chord.notes.size() == 2);
   const float other = pair.other_than(pitch);
@@ -515,6 +642,7 @@ void measure_theft(const Pair& pair, float pitch) {
        << peak_of(isolated));
   REQUIRE(span.count() > 0);
 
+  BandTally tally;
   for (int h = 1; h <= kPartials; ++h) {
     const double hz = harmonic_hz(pitch, h);
     if (!below_nyquist(hz)) break;
@@ -538,7 +666,23 @@ void measure_theft(const Pair& pair, float pitch) {
                << (bin_of(harmonic_hz(chord.notes[j].median_hz, h)) - bin_of(hz))
                << " bins off the band centre (" << chord.notes[j].median_hz << " vs " << pitch
                << " Hz)");
+
+    // The apportionment never adds or drops a bin, so a band the chord and the solo
+    // claimed differently differs by its claim geometry and says nothing here.
+    if (held.claimed != held_alone.claimed) {
+      ++tally.geometry_mismatch;
+      continue;
+    }
+    tally.add(role_of(company), db_of(in_chord_band, isolated_band));
   }
+
+  report_tally("share in the chord against the share alone", tally);
+  REQUIRE(tally.uncontested > 0);
+  REQUIRE(tally.shared > 0);
+  REQUIRE(tally.worst_uncontested <= kUncontestedTheftDb);
+  REQUIRE(tally.worst_shared <= kSharedTheftDb);
+  REQUIRE(tally.worst_phantom <= kPhantomClaimTheftDb);
+  return tally;
 }
 
 // --- What the apportionment decided, bin by bin ----------------------------
@@ -965,16 +1109,26 @@ TEST_CASE("theft: a note's masked share inside the chord against the same note a
   // second population is an analysis of audio holding only that note, where the
   // mask has nothing to take from, so the per-harmonic ratio of the two masked
   // contributions is what the chord's division did to that partial.
+  //
+  // The ceilings are per-role and applied inside the measurement; what a section has
+  // to add is the spare claim's, which exists on one note of a pair and not the other,
+  // so its ceiling would be vacuous if only one note were measured.
   SECTION("the pair that shares bins") {
-    measure_theft(kFifth, kLowHz);
-    measure_theft(kFifth, kHighHz);
+    BandTally both;
+    both += measure_theft(kFifth, kLowHz);
+    both += measure_theft(kFifth, kHighHz);
+    REQUIRE(both.phantom > 0);
   }
 
   SECTION("the pair that shares none") {
     // The control the whole measurement rests on: a pair sharing no bin that still
     // shows a loss is not measuring apportionment.
-    measure_theft(kDisjoint, kLowHz);
-    measure_theft(kDisjoint, kDisjointHighHz);
+    BandTally both;
+    both += measure_theft(kDisjoint, kLowHz);
+    both += measure_theft(kDisjoint, kDisjointHighHz);
+    // Disjoint in its partials, not in its claims: a claim grid of 20 partials a note
+    // reaches over the other note's partials here too.
+    REQUIRE(both.phantom > 0);
   }
 }
 
