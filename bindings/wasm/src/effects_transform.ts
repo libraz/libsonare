@@ -88,7 +88,13 @@ function resolveHardMask(value: unknown, fnName: string): boolean {
 export interface HpssRequest {
   samples: Float32Array;
   sampleRate?: number;
+  /**
+   * Horizontal median filter size, in STFT frames: a positive odd integer at
+   * most 524287. Default 31. The ceiling is 524288 and an even kernel is
+   * refused, so 524287 is the largest legal value.
+   */
   kernelHarmonic?: number;
+  /** Vertical median filter size, in STFT bins, under the same rule. Default 31. */
   kernelPercussive?: number;
   nFft?: number;
   hopLength?: number;
@@ -382,8 +388,10 @@ export interface SpectralEditRequest extends SpectralEditOptions, ValidateOption
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param kernelHarmonic - Horizontal median filter size for harmonic (default: 31)
- * @param kernelPercussive - Vertical median filter size for percussive (default: 31)
+ * @param kernelHarmonic - Horizontal median filter size in STFT frames; a
+ *   positive odd integer at most 524287 (default: 31)
+ * @param kernelPercussive - Vertical median filter size in STFT bins, under the
+ *   same rule (default: 31)
  * @returns Separated harmonic and percussive components
  * @throws SonareError (`InvalidParameter`) on a kernel that is not an integer
  *   within the signed 32-bit range, or one the core rejects as even,

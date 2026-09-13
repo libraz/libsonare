@@ -65,7 +65,7 @@ typedef struct {
 
   /* --- The cent axis the salience is folded onto. --- */
   float cent_ref_hz;    /* bottom of the axis; 0 => 55 */
-  float cents_per_bin;  /* axis resolution; 0 => 100/3 */
+  float cents_per_bin;  /* axis resolution; 0 => 100/3, and under 1 cent is rejected */
   float cent_max_hz;    /* top of the axis; 0 => 8000 */
   int32_t tonality_off; /* non-zero stops weighting bins by tonality, which is on */
 

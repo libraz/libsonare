@@ -13,6 +13,11 @@ extern "C" {
 // Effects
 // ============================================================================
 
+/// @param kernel_harmonic Horizontal median filter size, in STFT frames: a
+///   positive odd integer at most 524287. The ceiling is 524288 and an even
+///   kernel is refused, so 524287 is the largest legal size.
+/// @param kernel_percussive Vertical median filter size, in STFT bins, under the
+///   same rule.
 /// @param out Receives heap-owned harmonic/percussive buffers; free with
 ///   sonare_free_hpss_result.
 SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
@@ -22,6 +27,12 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 ///          @p with_residual is non-zero, @p out_residual is required and
 ///          receives the third signal; otherwise it is optional and remains
 ///          NULL. All output fields are reset before input/config validation.
+/// @param kernel_harmonic Horizontal median filter size, in STFT frames: a
+///                   positive odd integer at most 524287. The ceiling is 524288
+///                   and an even kernel is refused, so 524287 is the largest
+///                   legal size.
+/// @param kernel_percussive Vertical median filter size, in STFT bins, under the
+///                   same rule.
 /// @param n_fft      FFT size: an even integer >= 2. Any even size is accepted;
 ///                   the FFT is mixed-radix, not power-of-two only.
 /// @param hop_length Hop in samples, in (0, n_fft/2]. The result is
@@ -877,8 +888,11 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
 /// @param samples Input audio.
 /// @param length Number of samples.
 /// @param sample_rate Sample rate.
-/// @param kernel_harmonic Horizontal median filter size (odd and positive).
-/// @param kernel_percussive Vertical median filter size (odd and positive).
+/// @param kernel_harmonic Horizontal median filter size, in STFT frames: a
+///   positive odd integer at most 524287. The ceiling is 524288 and an even
+///   kernel is refused, so 524287 is the largest legal size.
+/// @param kernel_percussive Vertical median filter size, in STFT bins, under the
+///   same rule.
 /// @param out_harmonic Receives the harmonic signal.
 /// @param out_percussive Receives the percussive signal.
 /// @param out_residual Receives the residual signal.

@@ -123,7 +123,13 @@ export interface NnFilterRequest {
 }
 
 export interface HpssWithResidualRequest extends FeatureSamplesRequest {
+  /**
+   * Horizontal median filter size, in STFT frames: a positive odd integer at
+   * most 524287. Default 31. The ceiling is 524288 and an even kernel is
+   * refused, so 524287 is the largest legal value.
+   */
   kernelHarmonic?: number;
+  /** Vertical median filter size, in STFT bins, under the same rule. Default 31. */
   kernelPercussive?: number;
   nFft?: number;
   hopLength?: number;

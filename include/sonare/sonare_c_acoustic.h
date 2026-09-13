@@ -145,7 +145,13 @@ typedef struct {
   float aspect_hint_lw;        /* length/width shape prior; 0 = library default */
   float aspect_hint_lh;        /* length/height shape prior; 0 = library default */
   float reference_absorption;  /* absorption prior anchoring the volume scale;
-                                * 0 = library default (0.15) */
+                                * 0 = library default (0.15). Clamped into
+                                * [0.01, 0.99] rather than refused, so a value
+                                * outside that range returns a successful
+                                * estimate computed from the clamped prior --
+                                * and the reported volume scales with the cube
+                                * of the prior, so the substitution is worth
+                                * three orders of magnitude at the low end. */
   float min_decay_db;          /* analyzer decay-fit span (dB); 0 = library default */
   float noise_floor_margin_db; /* analyzer noise-floor margin (dB); 0 = library default */
   int prefer_eyring;           /* 1 = Eyring model, 0 = Sabine */

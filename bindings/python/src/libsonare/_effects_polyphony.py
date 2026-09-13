@@ -153,7 +153,8 @@ class PolyphonicAnalysis:
             win_length: Window length (default ``n_fft``).
             cent_ref_hz: Bottom of the cent axis the salience is folded onto
                 (default 55).
-            cents_per_bin: Resolution of that axis (default 100/3).
+            cents_per_bin: Resolution of that axis (default 100/3). Finer than
+                1 cent is rejected.
             cent_max_hz: Top of that axis (default 8000).
             tonality_off: ``True`` stops weighting bins by tonality, which is on.
             salience_harmonics: Partials summed per F0 candidate (default 20, at

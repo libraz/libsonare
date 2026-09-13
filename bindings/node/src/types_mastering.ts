@@ -347,7 +347,10 @@ export interface PolyphonicAnalysisOptions {
 
   /** Bottom of the cent axis the salience is folded onto, in Hz. Default 55. */
   centRefHz?: number;
-  /** Resolution of that axis, in cents per bin. Default 100/3. */
+  /**
+   * Resolution of that axis, in cents per bin. Default 100/3; finer than 1 cent
+   * is rejected.
+   */
   centsPerBin?: number;
   /** Top of that axis, in Hz. Default 8000. */
   centMaxHz?: number;

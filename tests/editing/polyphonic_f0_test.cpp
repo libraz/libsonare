@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -582,6 +583,32 @@ TEST_CASE("CentSpectrum is frame-major and frame 0 carries frame 1's frequencies
   REQUIRE(std::abs(peak_first - peak_middle) <= 1);
   REQUIRE_THAT(static_cast<double>(peak_first),
                WithinAbs(static_cast<double>(spectrum.axis.bin_at(330.0f)), 1.0));
+}
+
+TEST_CASE("compute_cent_spectrum names the axis field and its bound when it refuses",
+          "[polyphonic_f0]") {
+  // Three of the four surfaces pass these straight through and document them
+  // only as a default, so the refusal is where a caller learns the bound. A bare
+  // "it threw InvalidParameter" cannot tell one field's guard from another's, and
+  // all three share the code.
+  using Catch::Matchers::ContainsSubstring;
+  std::vector<float> samples(static_cast<size_t>(kSampleRate / 2), 0.0f);
+  add_tone(samples, 220.0f, 0.4f, 4);
+  const sonare::Spectrogram spectrogram =
+      sonare::Spectrogram::compute(audio_of(std::move(samples)), polyphony_stft_defaults());
+
+  CentSpectrumConfig fine;
+  fine.cents_per_bin = 0.5f;
+  REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, fine),
+                      ContainsSubstring("centsPerBin") && ContainsSubstring("1 cent"));
+
+  CentSpectrumConfig bad_ref;
+  bad_ref.ref_hz = 0.0f;
+  REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, bad_ref), ContainsSubstring("centRefHz"));
+
+  CentSpectrumConfig bad_max;
+  bad_max.max_hz = 27.5f;
+  REQUIRE_THROWS_WITH(compute_cent_spectrum(spectrogram, bad_max), ContainsSubstring("centMaxHz"));
 }
 
 TEST_CASE("compute_cent_spectrum rejects a one-frame spectrogram and a malformed axis",

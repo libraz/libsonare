@@ -138,6 +138,13 @@ export interface RirResult {
 export interface RoomEstimateOptions {
   aspectHintLw?: number;
   aspectHintLh?: number;
+  /**
+   * Mean-absorption prior anchoring the volume scale (0 = library default,
+   * 0.15). Clamped into `[0.01, 0.99]` rather than refused: a value outside that
+   * range still returns a successful estimate, computed from the clamped prior.
+   * The reported volume scales with the cube of the prior, so the substitution
+   * is worth three orders of magnitude at the low end.
+   */
   referenceAbsorption?: number;
   preferEyring?: boolean;
   nOctaveBands?: number;
