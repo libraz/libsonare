@@ -158,6 +158,31 @@ export class PolyphonicAnalysis {
   }
 
   /**
+   * The stretch fitted for each note, one entry per note in {@link notes}' order.
+   *
+   * Empty when `estimateInharmonicity` was not set, so an empty array means the
+   * fit was never asked for. A non-negative entry is a fitted stretch; **exactly
+   * `-1` is the refusal**, and a refused note's claims were placed at the
+   * `inharmonicity` the request declared instead.
+   *
+   * **`0` is a fitted result and means the harmonic series**, which is why the
+   * refusal is reported at all: the declared stretch also defaults to 0, so the
+   * effective value alone cannot separate a fit that reached the material from one
+   * that did not. The fit refuses a chord at the default framing, so the
+   * distinction is the usual case rather than an edge one.
+   *
+   * @example
+   * ```typescript
+   * const analysis = analyzePolyphonic({ samples, sampleRate, estimateInharmonicity: true });
+   * const fitted = analysis.noteInharmonicity();
+   * const reached = [...fitted].filter((stretch) => stretch >= 0).length;
+   * ```
+   */
+  noteInharmonicity(): Float32Array {
+    return this.handle().noteInharmonicity();
+  }
+
+  /**
    * One note's amplitude envelope points, as last set — the same array
    * `notes()[note].edit.amplitudeEnvelope` carries.
    *

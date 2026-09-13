@@ -33,10 +33,25 @@ constexpr int kPartials = 10;
 constexpr float kLowHz = 329.6276f;
 constexpr float kHighHz = 493.8833f;
 
-void add_tone(std::vector<float>& into, float f0_hz) {
+/// @brief The sentinel a refused ridge returns, and the 0 it is not.
+constexpr float kRefused = -1.0f;
+
+/// @brief C3 and a sampled piano's own stretch there, which is inside the register
+///        the fit reaches at this chain's framing.
+constexpr float kStretchedHz = 130.8128f;
+constexpr float kStretchedB = 1.130e-4f;
+constexpr int kStretchedPartials = 20;
+
+/// @brief A declared stretch no stage arrives at on its own, so a note's effective
+///        stretch says whether a fit or the fallback placed its claims.
+constexpr float kDeclaredStretch = 1.0e-5f;
+
+void add_tone(std::vector<float>& into, float f0_hz, double inharmonicity = 0.0,
+              int n_partials = kPartials) {
   const double nyquist = 0.5 * static_cast<double>(kSampleRate);
-  for (int h = 1; h <= kPartials; ++h) {
-    const double hz = static_cast<double>(h) * static_cast<double>(f0_hz);
+  for (int h = 1; h <= n_partials; ++h) {
+    const double hd = static_cast<double>(h);
+    const double hz = hd * static_cast<double>(f0_hz) * std::sqrt(1.0 + inharmonicity * hd * hd);
     if (hz >= nyquist) break;
     const double phase = 0.37 * static_cast<double>(h) * static_cast<double>(h);
     const float level = 0.25f / static_cast<float>(h);
@@ -53,6 +68,13 @@ std::vector<float> chord() {
   std::vector<float> samples(kSourceSamples, 0.0f);
   add_tone(samples, kLowHz);
   add_tone(samples, kHighHz);
+  return samples;
+}
+
+/// @brief One stretched note, isolated, at the pitch the fit's reach covers.
+std::vector<float> stretched_tone() {
+  std::vector<float> samples(kSourceSamples, 0.0f);
+  add_tone(samples, kStretchedHz, kStretchedB, kStretchedPartials);
   return samples;
 }
 
@@ -98,6 +120,45 @@ std::vector<SonareNoteObject> notes_of(SonarePolyphonicAnalysis* analysis) {
   REQUIRE(sonare_polyphonic_notes(analysis, notes.data(), notes.size(), &written) == SONARE_OK);
   REQUIRE(written == notes.size());
   return notes;
+}
+
+/// @brief The per-note stretch the handle reports, read into a buffer four longer
+///        than the note count so a writer running past the count is visible.
+std::vector<float> inharmonicity_of(SonarePolyphonicAnalysis* analysis) {
+  std::vector<float> out(note_count_of(analysis) + 4, -99.0f);
+  size_t written = 0;
+  REQUIRE(sonare_polyphonic_note_inharmonicity(analysis, out.data(), out.size(), &written) ==
+          SONARE_OK);
+  for (size_t i = written; i < out.size(); ++i) REQUIRE(out[i] == -99.0f);
+  out.resize(written);
+  return out;
+}
+
+/// @brief The C++ chain over the same audio, which is the oracle for a wrapper
+///        that copies rather than computes.
+sonare::editing::polyphony::PolyphonicAnalysis chain_over(
+    const std::vector<float>& samples,
+    const sonare::editing::polyphony::PolyphonicEditConfig& config) {
+  return sonare::editing::polyphony::analyze_polyphonic(
+      sonare::Audio::from_buffer(samples.data(), samples.size(), kSampleRate), config);
+}
+
+/// @brief The core config an isolated stretched tone is fitted under, and the C
+///        struct that has to resolve onto it.
+sonare::editing::polyphony::PolyphonicEditConfig fitted_core_config() {
+  sonare::editing::polyphony::PolyphonicEditConfig config;
+  config.extraction.estimation.max_polyphony = 1;
+  config.masks.inharmonicity = kDeclaredStretch;
+  config.estimate_inharmonicity = true;
+  return config;
+}
+
+SonarePolyphonicConfig fitted_c_config() {
+  SonarePolyphonicConfig config{};
+  config.max_polyphony = 1;
+  config.inharmonicity = kDeclaredStretch;
+  config.estimate_inharmonicity = 1;
+  return config;
 }
 
 }  // namespace
@@ -375,6 +436,239 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
   }
 
   SECTION("destroying a NULL handle") { sonare_polyphonic_analysis_destroy(nullptr); }
+}
+
+TEST_CASE("the stretch fit crosses as one entry per note, or not at all", "[c_api][polyphony]") {
+  // Three answers, not two. An empty array says the fit never ran; -1 says it ran
+  // and would not commit; a non-negative value is a measurement. A host handed
+  // only the effective stretch could not separate the second from the third,
+  // because a refused note carries the declared value and that defaults to the
+  // same 0 a fit of the harmonic series returns.
+  const std::vector<float> samples = chord();
+
+  SECTION("not asked for") {
+    const Handle handle(nullptr, samples);
+    REQUIRE(handle.error() == SONARE_OK);
+    REQUIRE(note_count_of(handle.get()) > 0);
+    // A capacity is offered and nothing is written, so the zero is the fit's
+    // absence rather than a buffer the call could not fill.
+    std::vector<float> out(8, -99.0f);
+    size_t written = 99;
+    REQUIRE(sonare_polyphonic_note_inharmonicity(handle.get(), out.data(), out.size(), &written) ==
+            SONARE_OK);
+    REQUIRE(written == 0);
+    for (const float value : out) REQUIRE(value == -99.0f);
+  }
+
+  SECTION("asked for") {
+    SonarePolyphonicConfig config{};
+    config.estimate_inharmonicity = 1;
+    config.inharmonicity = kDeclaredStretch;
+    const Handle handle(&config, samples);
+    REQUIRE(handle.error() == SONARE_OK);
+
+    sonare::editing::polyphony::PolyphonicEditConfig core;
+    core.masks.inharmonicity = kDeclaredStretch;
+    core.estimate_inharmonicity = true;
+    const sonare::editing::polyphony::PolyphonicAnalysis want = chain_over(samples, core);
+    REQUIRE(!want.notes.empty());
+    REQUIRE(want.inharmonicity_fit.size() == want.notes.size());
+
+    const std::vector<float> got = inharmonicity_of(handle.get());
+    // One entry per note whatever happened to each, and exact rather than close:
+    // the wrapper copies, so anything but equality means a second code path
+    // reached the values.
+    REQUIRE(got.size() == note_count_of(handle.get()));
+    REQUIRE(got == want.inharmonicity_fit);
+    for (size_t i = 0; i < got.size(); ++i) {
+      INFO("note " << i << ": " << got[i]);
+      REQUIRE(std::isfinite(got[i]));
+      REQUIRE((got[i] == kRefused || got[i] >= 0.0f));
+    }
+  }
+}
+
+TEST_CASE("a fitted stretch and a refused one are different answers at the C door",
+          "[c_api][polyphony]") {
+  // The value case. Without it every assertion about this accessor is about an
+  // array's length, and a wrapper that reported the declared value for every note
+  // would pass all of them.
+  const std::vector<float> samples = stretched_tone();
+  const sonare::editing::polyphony::PolyphonicAnalysis want =
+      chain_over(samples, fitted_core_config());
+
+  INFO("the chain found " << want.notes.size() << " notes");
+  REQUIRE(want.notes.size() == 1);
+  REQUIRE(want.inharmonicity_fit.size() == 1);
+
+  SECTION("a fit the material supports") {
+    // The fixture's premise, stated against the oracle so a fit that did not reach
+    // this material fails as a statement about the material.
+    INFO("the chain fitted " << want.inharmonicity_fit[0]);
+    REQUIRE(want.inharmonicity_fit[0] != kRefused);
+    REQUIRE(want.inharmonicity_fit[0] >= 0.0f);
+    REQUIRE(want.inharmonicity_fit[0] != kDeclaredStretch);
+
+    const SonarePolyphonicConfig config = fitted_c_config();
+    const Handle handle(&config, samples);
+    REQUIRE(handle.error() == SONARE_OK);
+    REQUIRE(note_count_of(handle.get()) == want.notes.size());
+    const std::vector<float> got = inharmonicity_of(handle.get());
+    REQUIRE(got == want.inharmonicity_fit);
+  }
+
+  SECTION("a refusal the configuration forces") {
+    // More partials than the twenty claims the geometry places, so the refusal is
+    // attributable to the threshold rather than to the material.
+    SonarePolyphonicConfig config = fitted_c_config();
+    config.inharmonicity_min_partials = 128;
+    const Handle handle(&config, samples);
+    REQUIRE(handle.error() == SONARE_OK);
+
+    const std::vector<float> got = inharmonicity_of(handle.get());
+    REQUIRE(got.size() == 1);
+    INFO("returned " << got[0]);
+    REQUIRE(got[0] == kRefused);
+    // Both halves: 0 is a fitted result meaning the harmonic series, and a build
+    // returning it here would send a host to the ideal series where it meant to
+    // read the declared value.
+    REQUIRE(got[0] != 0.0f);
+
+    sonare::editing::polyphony::PolyphonicEditConfig core = fitted_core_config();
+    core.inharmonicity.min_partials = 128;
+    REQUIRE(got == chain_over(samples, core).inharmonicity_fit);
+  }
+}
+
+TEST_CASE("the fit's four fields take their defaults at zero and reach the core otherwise",
+          "[c_api][polyphony]") {
+  // A zeroed struct is the defaults, so a field silently dropped would produce a
+  // correct-looking array measured under something the caller did not ask for.
+  // Each field is read off both ends: the value it takes at zero, and a value the
+  // core answers differently for.
+  const std::vector<float> samples = stretched_tone();
+
+  SECTION("zero is the default on all four") {
+    SonarePolyphonicConfig config = fitted_c_config();
+    config.inharmonicity_min_partials = 0;
+    config.inharmonicity_max_residual_bins = 0.0f;
+    config.inharmonicity_max_stretch = 0.0f;
+    const Handle handle(&config, samples);
+    REQUIRE(handle.error() == SONARE_OK);
+    REQUIRE(inharmonicity_of(handle.get()) ==
+            chain_over(samples, fitted_core_config()).inharmonicity_fit);
+  }
+
+  SECTION("each threshold moved past what the material supplies refuses the note") {
+    struct NamedForced {
+      const char* what;
+      SonarePolyphonicConfig config;
+      sonare::editing::polyphony::PolyphonicEditConfig core;
+    };
+    std::vector<NamedForced> forced;
+    {
+      NamedForced entry{"more partials than the claim count places", fitted_c_config(),
+                        fitted_core_config()};
+      entry.config.inharmonicity_min_partials = 128;
+      entry.core.inharmonicity.min_partials = 128;
+      forced.push_back(entry);
+    }
+    {
+      NamedForced entry{"a misfit ceiling under the fit's own rounding", fitted_c_config(),
+                        fitted_core_config()};
+      entry.config.inharmonicity_max_residual_bins = 1e-6f;
+      entry.core.inharmonicity.max_residual_bins = 1e-6f;
+      forced.push_back(entry);
+    }
+    {
+      NamedForced entry{"a stretch ceiling under the one synthesised", fitted_c_config(),
+                        fitted_core_config()};
+      entry.config.inharmonicity_max_stretch = 1e-6f;
+      entry.core.inharmonicity.max_inharmonicity = 1e-6f;
+      forced.push_back(entry);
+    }
+
+    for (const NamedForced& entry : forced) {
+      INFO(entry.what);
+      const Handle handle(&entry.config, samples);
+      REQUIRE(handle.error() == SONARE_OK);
+      const std::vector<float> got = inharmonicity_of(handle.get());
+      REQUIRE(got.size() == 1);
+      INFO("returned " << got[0]);
+      REQUIRE(got[0] == kRefused);
+      REQUIRE(got[0] != 0.0f);
+      REQUIRE(got == chain_over(samples, entry.core).inharmonicity_fit);
+    }
+  }
+
+  SECTION("a value outside the core's range is refused, and only where the fit runs") {
+    // The sharper half of the zero rule: 1 is rejected while 0 is the default 3,
+    // so the sentinel cannot be a field the wrapper forwards unchanged. And a
+    // field read only when the fit was asked for refuses nobody who did not ask.
+    std::vector<std::pair<const char*, SonarePolyphonicConfig>> rejected;
+    for (const int32_t partials : {1, 129}) {
+      SonarePolyphonicConfig config{};
+      config.inharmonicity_min_partials = partials;
+      rejected.emplace_back("a partial count outside [2, 128]", config);
+    }
+    {
+      SonarePolyphonicConfig config{};
+      config.inharmonicity_max_residual_bins = -1.0f;
+      rejected.emplace_back("a negative misfit ceiling", config);
+    }
+    {
+      SonarePolyphonicConfig config{};
+      config.inharmonicity_max_stretch = -1.0f;
+      rejected.emplace_back("a negative stretch ceiling", config);
+    }
+
+    for (const auto& entry : rejected) {
+      INFO(entry.first);
+      SonarePolyphonicConfig off = entry.second;
+      off.estimate_inharmonicity = 0;
+      const Handle unread(&off, samples);
+      REQUIRE(unread.error() == SONARE_OK);
+
+      SonarePolyphonicConfig on = entry.second;
+      on.estimate_inharmonicity = 1;
+      SonarePolyphonicAnalysis* out = nullptr;
+      REQUIRE(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &on, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(out == nullptr);
+    }
+  }
+}
+
+TEST_CASE("the stretch accessor sizes a buffer the way its siblings do", "[c_api][polyphony]") {
+  const std::vector<float> samples = chord();
+  SonarePolyphonicConfig config{};
+  config.estimate_inharmonicity = 1;
+  const Handle handle(&config, samples);
+  REQUIRE(handle.error() == SONARE_OK);
+  const size_t count = note_count_of(handle.get());
+  REQUIRE(count > 1);
+
+  float one = -99.0f;
+  size_t written = 99;
+  // A short buffer is clamped rather than refused, which is how a host reads the
+  // first entry without sizing anything.
+  REQUIRE(sonare_polyphonic_note_inharmonicity(handle.get(), &one, 1, &written) == SONARE_OK);
+  REQUIRE(written == 1);
+  REQUIRE(one != -99.0f);
+
+  // A zero capacity writes nothing and needs no buffer, so a host can size one
+  // without a separate call.
+  written = 99;
+  REQUIRE(sonare_polyphonic_note_inharmonicity(handle.get(), nullptr, 0, &written) == SONARE_OK);
+  REQUIRE(written == 0);
+
+  // A capacity with no buffer is a caller error rather than an empty read.
+  REQUIRE(sonare_polyphonic_note_inharmonicity(handle.get(), nullptr, count, &written) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_polyphonic_note_inharmonicity(nullptr, &one, 1, &written) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_polyphonic_note_inharmonicity(handle.get(), &one, 1, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 }
 
 #endif  // SONARE_WITH_PITCH_EDITOR

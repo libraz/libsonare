@@ -64,6 +64,10 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
   out->mask_harmonics = IntProperty(opts, "maskHarmonics", 0);
   out->claim_lobes = FloatProperty(opts, "claimLobes", 0.0f);
   out->inharmonicity = FloatProperty(opts, "inharmonicity", 0.0f);
+  out->estimate_inharmonicity = BoolProperty(opts, "estimateInharmonicity", false) ? 1 : 0;
+  out->inharmonicity_min_partials = IntProperty(opts, "inharmonicityMinPartials", 0);
+  out->inharmonicity_max_residual_bins = FloatProperty(opts, "inharmonicityMaxResidualBins", 0.0f);
+  out->inharmonicity_max_stretch = FloatProperty(opts, "inharmonicityMaxStretch", 0.0f);
 
   out->window_frames = IntProperty(opts, "windowFrames", 0);
   out->min_partial_separation = FloatProperty(opts, "minPartialSeparation", 0.0f);
@@ -81,21 +85,22 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
 }  // namespace
 
 Napi::Object PolyphonicAnalysisWrap::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func =
-      DefineClass(env, "PolyphonicAnalysis",
-                  {
-                      InstanceMethod<&PolyphonicAnalysisWrap::NoteCount>("noteCount"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::FrameCount>("frameCount"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::Notes>("notes"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::SetNoteEdit>("setNoteEdit"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::Polyphony>("polyphony"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::NoteF0>("noteF0"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::NoteAmplitude>("noteAmplitude"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::NoteSalience>("noteSalience"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::NoteEnvelope>("noteEnvelope"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::Render>("render"),
-                      InstanceMethod<&PolyphonicAnalysisWrap::Destroy>("destroy"),
-                  });
+  Napi::Function func = DefineClass(
+      env, "PolyphonicAnalysis",
+      {
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteCount>("noteCount"),
+          InstanceMethod<&PolyphonicAnalysisWrap::FrameCount>("frameCount"),
+          InstanceMethod<&PolyphonicAnalysisWrap::Notes>("notes"),
+          InstanceMethod<&PolyphonicAnalysisWrap::SetNoteEdit>("setNoteEdit"),
+          InstanceMethod<&PolyphonicAnalysisWrap::Polyphony>("polyphony"),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteF0>("noteF0"),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteAmplitude>("noteAmplitude"),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteSalience>("noteSalience"),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteEnvelope>("noteEnvelope"),
+          InstanceMethod<&PolyphonicAnalysisWrap::NoteInharmonicity>("noteInharmonicity"),
+          InstanceMethod<&PolyphonicAnalysisWrap::Render>("render"),
+          InstanceMethod<&PolyphonicAnalysisWrap::Destroy>("destroy"),
+      });
 
   exports.Set("PolyphonicAnalysis", func);
   return exports;
@@ -375,6 +380,26 @@ Napi::Value PolyphonicAnalysisWrap::NoteEnvelope(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   return CopyToFloat32(env, points.data(), written);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value PolyphonicAnalysisWrap::NoteInharmonicity(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!RequireOpen(env)) return env.Undefined();
+
+  // One entry per note, so the note count is the capacity. A write of zero is
+  // the documented answer for an analysis that never asked for the fit, not a
+  // buffer this sized too small, so it is marshalled as the empty array.
+  std::vector<float> stretches(spans_.size(), 0.0f);
+  size_t written = 0;
+  const SonareError err = sonare_polyphonic_note_inharmonicity(
+      analysis_, stretches.empty() ? nullptr : stretches.data(), stretches.size(), &written);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  return CopyToFloat32(env, stretches.data(), written);
   SONARE_NODE_CATCH(env)
 }
 

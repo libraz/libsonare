@@ -414,6 +414,23 @@ export interface PolyphonicAnalysisOptions {
    * note is moved.
    */
   inharmonicity?: number;
+  /**
+   * Fit a stretch per note from the spectrum instead of spending
+   * {@link PolyphonicAnalysisOptions.inharmonicity} on every one of them.
+   * Default false, and the reason is reach rather than cost: at this framing the
+   * fit takes an isolated note in the middle register and refuses a chord.
+   *
+   * A refused note keeps the declared stretch, so the fit only ever replaces a
+   * guess with a measurement. {@link PolyphonicAnalysis.noteInharmonicity}
+   * reports which notes it reached.
+   */
+  estimateInharmonicity?: boolean;
+  /** Usable partials a fit needs before it is attempted. Default 3. */
+  inharmonicityMinPartials?: number;
+  /** Largest per-partial misfit a fit may keep, in bins. Default 0.5. */
+  inharmonicityMaxResidualBins?: number;
+  /** A fit above this stretch is refused. Default 0.03125. */
+  inharmonicityMaxStretch?: number;
 
   /** Frames per apportionment fit; between 4 and 64. Default 8. */
   windowFrames?: number;

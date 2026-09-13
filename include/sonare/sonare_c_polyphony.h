@@ -101,6 +101,16 @@ typedef struct {
      residual, which is carried unedited and so keeps sounding at the old pitch after
      its note is moved. */
   float inharmonicity;
+  /* Fit a stretch per note from the spectrum instead of spending the field above on
+     every one of them; non-zero turns it on. Off by default because of what it
+     reaches rather than what it costs: at this framing the fit takes an isolated
+     note in the middle register and refuses a chord. A refused note keeps the
+     declared stretch, so the fit only ever replaces a guess with a measurement --
+     @ref sonare_polyphonic_note_inharmonicity reports which notes it reached. */
+  int32_t estimate_inharmonicity;
+  int32_t inharmonicity_min_partials;    /* usable partials a fit needs; 0 => 3 */
+  float inharmonicity_max_residual_bins; /* largest per-partial misfit kept; 0 => 0.5 */
+  float inharmonicity_max_stretch;       /* a fit above this is refused; 0 => 0.03125 */
 
   /* --- Apportionment: what the fit refuses rather than guesses, at a bin two notes
      both claimed. A refused bin keeps the equal share. --- */
@@ -236,6 +246,25 @@ SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* anal
 ///          field promising what it cannot deliver.
 SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* analysis, size_t note,
                                             float* out, size_t capacity, size_t* out_count);
+
+/// @brief The stretch fitted for each note, where the fit was asked for.
+/// @details One entry per note, in @ref sonare_polyphonic_notes' order:
+///          non-negative where the stretch was fitted, and exactly -1 where it was
+///          refused, which means that note's claims were placed at the config's
+///          @c inharmonicity instead. **0 is a fitted result and means the harmonic
+///          series**, so it is not the refusal.
+///
+///          The refusal has to be reported rather than folded away, because the
+///          value a refused note ends up using is the declared one and the declared
+///          one defaults to 0 -- which is also what a genuine fit returns for an
+///          unstretched note. A host handed only the effective stretch could not
+///          tell a fit that reached its material from one that did not, and the fit
+///          refuses a chord at the default framing.
+/// @param out_count Receives the number written, which is 0 when
+///        @c estimate_inharmonicity was not set. An analysis that asked for the fit
+///        reports one entry per note whatever happened to each.
+SonareError sonare_polyphonic_note_inharmonicity(const SonarePolyphonicAnalysis* analysis,
+                                                 float* out, size_t capacity, size_t* out_count);
 
 /// @brief Renders the analysis back to audio with whatever edits its notes carry.
 /// @details Each note's claimed share is inverted, edited, and added to the residual

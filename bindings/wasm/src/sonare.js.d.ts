@@ -2855,6 +2855,7 @@ export interface WasmPolyphonicAnalysis {
   noteF0: (note: number) => Float32Array;
   noteAmplitude: (note: number) => Float32Array;
   noteSalience: (note: number) => Float32Array;
+  noteInharmonicity: () => Float32Array;
   noteEnvelope: (note: number) => Float32Array;
   render: (options: Record<string, unknown>) => Float32Array;
   delete: () => void;

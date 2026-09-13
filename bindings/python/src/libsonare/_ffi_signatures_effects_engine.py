@@ -285,6 +285,15 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(ctypes.c_size_t),
             ]
+        # Whole-array out like the polyphony above rather than per-note like the
+        # curves: one entry per note, so it takes no note index.
+        lib.sonare_polyphonic_note_inharmonicity.restype = ctypes.c_int32
+        lib.sonare_polyphonic_note_inharmonicity.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
         lib.sonare_polyphonic_render.restype = ctypes.c_int32
         lib.sonare_polyphonic_render.argtypes = [
             ctypes.c_void_p,

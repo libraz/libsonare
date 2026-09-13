@@ -4834,60 +4834,84 @@
       },
       {
         "kind": "signed",
-        "name": "window_frames",
+        "name": "estimate_inharmonicity",
         "offset": 96,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "min_partial_separation",
+        "kind": "signed",
+        "name": "inharmonicity_min_partials",
         "offset": 100,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_fit_residual",
+        "name": "inharmonicity_max_residual_bins",
         "offset": 104,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_weight_modulus",
+        "name": "inharmonicity_max_stretch",
         "offset": 108,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "max_refine_hz",
+        "kind": "signed",
+        "name": "window_frames",
         "offset": 112,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "f0_tolerance_cents",
+        "name": "min_partial_separation",
         "offset": 116,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "segmentation_threshold_cents",
+        "name": "max_fit_residual",
         "offset": 120,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "min_note_ms",
+        "name": "max_weight_modulus",
         "offset": 124,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reference_hz",
+        "name": "max_refine_hz",
         "offset": 128,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "f0_tolerance_cents",
+        "offset": 132,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "segmentation_threshold_cents",
+        "offset": 136,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_note_ms",
+        "offset": 140,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reference_hz",
+        "offset": 144,
         "size": 4
       }
     ],
-    "size": 132
+    "size": 148
   },
   "SonareProjectAssistSidecar": {
     "align": 8,

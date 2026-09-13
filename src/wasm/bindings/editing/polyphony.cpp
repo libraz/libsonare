@@ -108,6 +108,11 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   set_positive("claimLobes", out.masks.claim_lobes);
   out.masks.inharmonicity = read("inharmonicity");
 
+  out.estimate_inharmonicity = boolProperty(config, "estimateInharmonicity", false);
+  set_count("inharmonicityMinPartials", out.inharmonicity.min_partials);
+  set_positive("inharmonicityMaxResidualBins", out.inharmonicity.max_residual_bins);
+  set_positive("inharmonicityMaxStretch", out.inharmonicity.max_inharmonicity);
+
   set_count("windowFrames", out.shared_bins.window_frames);
   set_positive("minPartialSeparation", out.shared_bins.min_partial_separation);
   set_positive("maxFitResidual", out.shared_bins.max_fit_residual);
@@ -203,6 +208,17 @@ class PolyphonicAnalysisWasm {
     return vectorToFloat32Array(span);
   }
 
+  // Empty is the fit not having been asked for. Any other length would break the
+  // per-note indexing this reports under, which an analysis built here cannot do.
+  val noteInharmonicity() const {
+    const std::vector<float>& fitted = analysis_.inharmonicity_fit;
+    if (!fitted.empty() && fitted.size() != analysis_.notes.size()) {
+      throw SonareException(ErrorCode::InvalidState,
+                            "noteInharmonicity: the fit does not cover every note");
+    }
+    return vectorToFloat32Array(fitted);
+  }
+
   val render(val options) const {
     // Resolved the way renderNotes resolves the same two fields, so one config
     // means one thing whichever door applies it.
@@ -251,6 +267,7 @@ void registerPolyphonyBindings() {
       .function("noteF0", &PolyphonicAnalysisWasm::noteF0)
       .function("noteAmplitude", &PolyphonicAnalysisWasm::noteAmplitude)
       .function("noteSalience", &PolyphonicAnalysisWasm::noteSalience)
+      .function("noteInharmonicity", &PolyphonicAnalysisWasm::noteInharmonicity)
       .function("noteEnvelope", &PolyphonicAnalysisWasm::noteEnvelope)
       .function("render", &PolyphonicAnalysisWasm::render);
   function("createPolyphonicAnalysis", &createPolyphonicAnalysis, allow_raw_pointers());

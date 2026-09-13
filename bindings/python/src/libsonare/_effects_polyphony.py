@@ -124,6 +124,10 @@ class PolyphonicAnalysis:
         mask_harmonics: int | None = None,
         claim_lobes: float | None = None,
         inharmonicity: float | None = None,
+        estimate_inharmonicity: bool = False,
+        inharmonicity_min_partials: int | None = None,
+        inharmonicity_max_residual_bins: float | None = None,
+        inharmonicity_max_stretch: float | None = None,
         window_frames: int | None = None,
         min_partial_separation: float | None = None,
         max_fit_residual: float | None = None,
@@ -194,6 +198,19 @@ class PolyphonicAnalysis:
                 outside the claim entirely, and a partial outside every claim is
                 residual, which is carried unedited and so keeps sounding at the
                 old pitch after its note is moved.
+            estimate_inharmonicity: ``True`` fits a stretch per note from the
+                spectrum instead of spending ``inharmonicity`` on every one of
+                them. Off by default because of what it reaches rather than what
+                it costs: at this framing the fit takes an isolated note in the
+                middle register and refuses a chord. A refused note keeps the
+                declared stretch, so the fit only ever replaces a guess with a
+                measurement --
+                :meth:`note_inharmonicity` reports which notes it reached.
+            inharmonicity_min_partials: Usable partials a fit needs (default 3).
+            inharmonicity_max_residual_bins: Largest per-partial misfit a fit may
+                keep (default 0.5).
+            inharmonicity_max_stretch: A fit above this is refused (default
+                0.03125).
             window_frames: Frames per apportionment fit (default 8, between 4
                 and 64).
             min_partial_separation: Radians per frame two partials must differ by
@@ -257,6 +274,10 @@ class PolyphonicAnalysis:
             mask_harmonics=_count_field(mask_harmonics),
             claim_lobes=_value_field(claim_lobes),
             inharmonicity=_value_field(inharmonicity),
+            estimate_inharmonicity=1 if estimate_inharmonicity else 0,
+            inharmonicity_min_partials=_count_field(inharmonicity_min_partials),
+            inharmonicity_max_residual_bins=_value_field(inharmonicity_max_residual_bins),
+            inharmonicity_max_stretch=_value_field(inharmonicity_max_stretch),
             window_frames=_count_field(window_frames),
             min_partial_separation=_value_field(min_partial_separation),
             max_fit_residual=_value_field(max_fit_residual),
@@ -402,6 +423,38 @@ class PolyphonicAnalysis:
             )
         )
         return _from_c_int_array(out, int(written.value))
+
+    def note_inharmonicity(self) -> np.ndarray:
+        """The stretch fitted for each note, where the fit was asked for.
+
+        One entry per note, in :meth:`notes`' order: non-negative where the
+        stretch was fitted, and exactly ``-1`` where it was refused, which means
+        that note's claims were placed at ``inharmonicity`` instead. **0 is a
+        fitted result and means the harmonic series**, so it is not the refusal.
+
+        The refusal is reported rather than folded away because the value a
+        refused note ends up using is the declared one, and the declared one
+        defaults to 0 -- which is also what a genuine fit returns for an
+        unstretched note. Handed only the effective stretch, a host could not
+        tell a fit that reached its material from one that did not, and the fit
+        refuses a chord at the default framing.
+
+        Returns:
+            ``float32`` ndarray with one entry per note, and empty when
+            ``estimate_inharmonicity`` was not set. An analysis that asked for
+            the fit reports one entry per note whatever happened to each.
+        """
+        lib = _get_lib()
+        handle = self._require_handle()
+        capacity = self.note_count()
+        out = (ctypes.c_float * capacity)()
+        written = ctypes.c_size_t()
+        _check(
+            lib.sonare_polyphonic_note_inharmonicity(
+                handle, out, _to_c_size_t(capacity, "capacity"), ctypes.byref(written)
+            )
+        )
+        return _from_c_float_array(out, int(written.value))
 
     def note_f0(self, note: int) -> np.ndarray:
         """One note's F0 in Hz, per frame over its own span.

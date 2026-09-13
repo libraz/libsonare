@@ -87,6 +87,11 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
   set_positive(in->claim_lobes, out.masks.claim_lobes);
   out.masks.inharmonicity = in->inharmonicity;
 
+  out.estimate_inharmonicity = in->estimate_inharmonicity != 0;
+  set_count(in->inharmonicity_min_partials, out.inharmonicity.min_partials);
+  set_positive(in->inharmonicity_max_residual_bins, out.inharmonicity.max_residual_bins);
+  set_positive(in->inharmonicity_max_stretch, out.inharmonicity.max_inharmonicity);
+
   set_count(in->window_frames, out.shared_bins.window_frames);
   set_positive(in->min_partial_separation, out.shared_bins.min_partial_separation);
   set_positive(in->max_fit_residual, out.shared_bins.max_fit_residual);
@@ -341,6 +346,25 @@ SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* anal
                     out_count);
 #else
   SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
+#endif
+}
+
+SonareError sonare_polyphonic_note_inharmonicity(const SonarePolyphonicAnalysis* analysis,
+                                                 float* out, size_t capacity, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (analysis == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = 0;
+  const auto& fitted = analysis->analysis.inharmonicity_fit;
+  // Empty is the fit not having run; any other length breaks the per-note indexing
+  // this reports under, which only a hand-built analysis can produce.
+  if (!fitted.empty() && fitted.size() != analysis->analysis.notes.size()) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  return copy_curve(fitted, out, capacity, out_count);
+#else
+  if (out_count) *out_count = {};
+  SONARE_C_STUB_NOT_SUPPORTED(analysis, out, capacity, out_count);
 #endif
 }
 

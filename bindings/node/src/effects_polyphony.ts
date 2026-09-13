@@ -35,6 +35,7 @@ const INT_FIELDS = [
   'salienceHarmonics',
   'maxPolyphony',
   'maskHarmonics',
+  'inharmonicityMinPartials',
   'windowFrames',
 ] as const;
 
@@ -190,6 +191,40 @@ export class PolyphonicAnalysis {
    */
   noteEnvelope(note: number): Float32Array {
     return this.native.noteEnvelope(note);
+  }
+
+  /**
+   * The partial-series stretch fitted for each note, one entry per note in
+   * {@link notes} order.
+   *
+   * Empty unless the analysis was built with `estimateInharmonicity`, so an
+   * empty array means the fit was never asked for rather than that it found
+   * nothing. An analysis that did ask reports one entry per note whatever
+   * happened to each:
+   *
+   * - A non-negative entry is the fitted stretch, `B` in
+   *   `f_h = h*f0*sqrt(1 + B*h^2)`. **0 is a fitted result and means the
+   *   harmonic series** — it is not the refusal.
+   * - Exactly `-1` is a refusal: that note's claims were placed at the
+   *   `inharmonicity` the options declared instead.
+   *
+   * The refusal is reported rather than folded away because the declared
+   * `inharmonicity` also defaults to 0, which is what a genuine fit returns for
+   * an unstretched note. Handed only the effective stretch, a host could not
+   * tell a fit that reached its material from one that did not — and at the
+   * default framing the fit takes an isolated note in the middle register and
+   * refuses a chord.
+   *
+   * @example
+   * ```ts
+   * using analysis = analyzePolyphonic({ samples, sampleRate, estimateInharmonicity: true });
+   *
+   * const stretch = analysis.noteInharmonicity();
+   * const fitted = [...stretch].filter((b) => b !== -1);
+   * ```
+   */
+  noteInharmonicity(): Float32Array {
+    return this.native.noteInharmonicity();
   }
 
   /**

@@ -19,6 +19,7 @@ namespace sonare_node {
 ///   analysis.noteCount();  analysis.frameCount();
 ///   analysis.notes();      analysis.polyphony();
 ///   analysis.noteF0(i);    analysis.noteAmplitude(i);  analysis.noteSalience(i);
+///   analysis.noteEnvelope(i);  analysis.noteInharmonicity();
 ///   analysis.setNoteEdit(i, edit, envelope);
 ///   analysis.render(options);
 ///   analysis.destroy();
@@ -53,6 +54,10 @@ class PolyphonicAnalysisWrap : public Napi::ObjectWrap<PolyphonicAnalysisWrap> {
   Napi::Value NoteAmplitude(const Napi::CallbackInfo& info);
   Napi::Value NoteSalience(const Napi::CallbackInfo& info);
   Napi::Value NoteEnvelope(const Napi::CallbackInfo& info);
+  /// Not a curve accessor: one entry per note rather than per frame, and sized
+  /// by the note count, so it takes no note index and shares no signature with
+  /// @ref CurveReader.
+  Napi::Value NoteInharmonicity(const Napi::CallbackInfo& info);
   Napi::Value Render(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 
