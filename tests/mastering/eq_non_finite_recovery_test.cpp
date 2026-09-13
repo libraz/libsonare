@@ -17,6 +17,8 @@
 /// passthrough recovers instantly for reasons that say nothing about the state
 /// under test.
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include "eq_test_helpers.h"
@@ -104,14 +106,24 @@ int first_identical_block(const std::vector<std::vector<float>>& control,
   return block_count;
 }
 
-/// Largest difference from the control over the blocks from @p from onward.
+/// Largest difference from the control over the blocks from @p from onward, or
+/// infinity when any difference is non-finite.
+/// @note The non-finite return is what keeps the instrument from carrying the
+///       defect it measures. std::max returns its first argument when the second
+///       is non-finite, so folding the difference into a running maximum skips it
+///       and a wholly non-finite run reads as a residual of zero -- a bound this
+///       value is compared against would then pass on the worst possible result.
 double residual_from(const std::vector<std::vector<float>>& control,
                      const std::vector<std::vector<float>>& poisoned, int from) {
   double worst = 0.0;
   for (size_t k = static_cast<size_t>(from); k < control.size(); ++k) {
     for (int i = 0; i < kBlockSize; ++i) {
-      worst = std::max(worst, std::abs(static_cast<double>(control[k][static_cast<size_t>(i)]) -
-                                       poisoned[k][static_cast<size_t>(i)]));
+      const double difference = std::abs(static_cast<double>(control[k][static_cast<size_t>(i)]) -
+                                         poisoned[k][static_cast<size_t>(i)]);
+      if (!std::isfinite(difference)) {
+        return std::numeric_limits<double>::infinity();
+      }
+      worst = std::max(worst, difference);
     }
   }
   return worst;
