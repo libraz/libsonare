@@ -326,6 +326,10 @@
       "option": "output"
     },
     {
+      "command": "polyphonic-render",
+      "option": "output"
+    },
+    {
       "command": "preemphasis",
       "option": "output"
     },
