@@ -28,11 +28,12 @@
 /// - C6 is refused on the misfit, 0.95 to 1.97 bins over 7 partials. C8 is refused
 ///   for an unrefinable f0 -- every partial of it is above @ref refine_track_f0's
 ///   alias ceiling, which is 1470 Hz at that function's default tolerance.
-/// - **A real chord does not fit at this framing**, and the reason is arithmetic
-///   rather than material: where the rival partials times twice the main lobe cover
-///   the span, every partial of every note is contested. C3+E3+G3 puts 28 rival
-///   partials under 2616 Hz at 93.8 Hz of exclusion each, which is 2626 Hz, so all
-///   three notes are left with no uncontested partial at all.
+/// - **A real chord does not fit at this framing.** C3+E3+G3 refuses all three
+///   notes where each of the same tones alone fits. Being clear of a rival is not
+///   the same as entering the fit, and the gap is wide: claim geometry leaves each
+///   note five to eleven partials no rival stands on, while the walk locates them
+///   from the bottom upward and narrows each window on the last reading, so one
+///   contaminated reading costs every partial above it.
 /// - Resolution is the lever, and it is not a complete one. At @c n_fft 16384 the
 ///   same chord admits 15 and 17 partials for C3 and E3 and E3 fits at 1.63e-4,
 ///   while G3 still admits none: a fifth's partials coincide with every third one of
