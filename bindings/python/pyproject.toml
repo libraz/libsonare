@@ -55,7 +55,9 @@ dependencies = [
     # shared `_to_c_float_array` ctypes bridge) rely on numpy buffers for
     # zero-copy marshalling. Element-wise ctypes conversion was a real-time
     # blocker (128-sample / 2.9 ms blocks could not meet deadline at 44.1 kHz).
-    "numpy>=1.24",
+    # The floor is the version the test suite and the lock files exercise, so a
+    # declared minimum is one that has been run rather than one merely allowed.
+    "numpy>=2.4.6",
 ]
 
 [project.scripts]
