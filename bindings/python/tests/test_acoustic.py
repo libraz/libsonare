@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import math
 
+import numpy as np
 import pytest
 
 import libsonare
@@ -290,3 +291,95 @@ def test_room_morph_routes_air_absorption_and_rejects_a_bad_climate() -> None:
             air_absorption_enabled=True,
             air_humidity_percent=150.0,
         )
+
+
+# Band arrays reach the C ABI through one optional-array helper shared by
+# `synthesize_rir` and `room_morph`, for both the absorption and the scattering
+# bands. The rows below drive a numpy input at each of the lengths whose
+# `bool()` behaviour differs: empty and 2+ raise, and a single element answers
+# by value -- so a zero band used to be indistinguishable from no bands at all.
+_BAND_ROOM = dict(sample_rate=22050, max_seconds=0.2)
+_BAND_SHAPES = ([], [0.0], [0.9], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+
+
+@acoustic
+def test_synthesize_rir_accepts_a_numpy_band_array_of_any_length() -> None:
+    default = libsonare.synthesize_rir(**_BAND_ROOM)
+    # The comparison quantity must be able to move: a silent RIR would make
+    # every assertion below pass vacuously.
+    assert max(abs(s) for s in default.rir) > 1e-4
+
+    for shape in _BAND_SHAPES:
+        bands = np.array(shape, dtype=np.float32)
+        result = libsonare.synthesize_rir(absorption_bands=bands, **_BAND_ROOM)
+        assert result.has_error is False
+        scattering = libsonare.synthesize_rir(scattering_bands=bands, **_BAND_ROOM)
+        assert scattering.has_error is False
+
+
+@acoustic
+def test_a_single_zero_band_array_is_not_read_as_absent() -> None:
+    # The quiet half of the defect: `bool(np.array([0.0]))` is False, so this
+    # request silently rendered the library default instead of the zero band.
+    # An absence-of-exception check cannot see it -- the outcome has to move.
+    default = libsonare.synthesize_rir(**_BAND_ROOM)
+    zero_band = libsonare.synthesize_rir(
+        absorption_bands=np.array([0.0], dtype=np.float32), **_BAND_ROOM
+    )
+    assert zero_band.has_error is False
+    assert max(abs(s) for s in zero_band.rir) > 1e-4
+    assert zero_band.rir != default.rir
+    assert len(zero_band.rir) != len(default.rir)
+
+
+@acoustic
+def test_band_arrays_agree_between_a_list_and_a_numpy_array() -> None:
+    # The positive control: without it, a fix that rejected every numpy input
+    # would satisfy every rejection test above.
+    for shape in _BAND_SHAPES:
+        from_list = libsonare.synthesize_rir(absorption_bands=shape, **_BAND_ROOM)
+        from_array = libsonare.synthesize_rir(
+            absorption_bands=np.array(shape, dtype=np.float32), **_BAND_ROOM
+        )
+        assert from_array.rir == from_list.rir
+        assert from_array.sample_rate == from_list.sample_rate
+
+
+@acoustic
+def test_an_empty_band_array_reads_as_absent() -> None:
+    # Empty means absent for a list and must mean the same for a numpy array,
+    # whose `bool()` raises rather than answering.
+    default = libsonare.synthesize_rir(**_BAND_ROOM)
+    assert libsonare.synthesize_rir(absorption_bands=[], **_BAND_ROOM).rir == default.rir
+    empty = libsonare.synthesize_rir(absorption_bands=np.array([], dtype=np.float32), **_BAND_ROOM)
+    assert empty.rir == default.rir
+
+
+@acoustic
+def test_a_malformed_band_array_is_rejected_naming_the_parameter() -> None:
+    # Rejection is the binding's own, so it carries the caller's parameter name
+    # rather than a bare numpy message about an ambiguous truth value.
+    with pytest.raises(libsonare.SonareValueError, match="absorption_bands"):
+        libsonare.synthesize_rir(absorption_bands=np.zeros((2, 3), dtype=np.float32), **_BAND_ROOM)
+    with pytest.raises(libsonare.SonareValueError, match="scattering_bands"):
+        libsonare.synthesize_rir(scattering_bands="not a buffer", **_BAND_ROOM)
+
+
+@acoustic
+def test_room_morph_accepts_numpy_band_arrays() -> None:
+    samples = [math.sin(2.0 * math.pi * 220.0 * i / 22050.0) for i in range(4410)]
+    room = dict(sample_rate=22050, length_m=7.0, width_m=5.0, height_m=3.0, max_seconds=0.2)
+    default = libsonare.room_morph(samples, **room)
+    assert max(abs(s) for s in default) > 1e-4
+
+    zero_band = libsonare.room_morph(
+        samples, absorption_bands=np.array([0.0], dtype=np.float32), **room
+    )
+    assert zero_band != default
+    assert libsonare.room_morph(
+        samples, absorption_bands=np.array([0.0], dtype=np.float32), **room
+    ) == libsonare.room_morph(samples, absorption_bands=[0.0], **room)
+    scattered = libsonare.room_morph(
+        samples, scattering_bands=np.array([0.3, 0.4, 0.5], dtype=np.float32), **room
+    )
+    assert scattered == libsonare.room_morph(samples, scattering_bands=[0.3, 0.4, 0.5], **room)

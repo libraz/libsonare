@@ -52,16 +52,23 @@ def _band_array_args(
     The third element keeps the backing ctypes buffer alive for the duration of
     the FFI call (the config only stores a borrowed pointer).
 
+    ``None`` and an empty array are both absent (the library default applies).
+    Emptiness is read from the coerced element count, never from truthiness: a
+    numpy array answers ``bool()`` by value at one element and raises at any
+    other length, so only the count separates absent from a present zero band.
+
     ``arg_name`` names the caller's own parameter in a rejection, since every
     entry point reaching here spells its bands differently.
     """
-    if not bands:
+    if bands is None:
         return None, 0, None
     # Bulk numpy marshalling like every other float buffer that crosses the C
     # ABI. A band list is short enough that the per-element varargs form cost
     # nothing measurable, but keeping one path means the rule holds without an
     # exception list -- which is what let the two clip paths drift.
     buf, count = _to_c_float_array(bands, arg_name=arg_name)
+    if count == 0:
+        return None, 0, None
     return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), count, buf
 
 
@@ -221,6 +228,12 @@ def estimate_room(
     returned ``confidence`` reports how well the data support the estimate.
 
     Args:
+        reference_absorption: Mean-absorption prior anchoring the volume scale
+            (0 = library default, 0.15). Clamped into ``[0.01, 0.99]`` rather
+            than refused: a value outside that range still returns a successful
+            estimate, computed from the clamped prior. The reported volume
+            scales with the cube of the prior, so the substitution is worth
+            three orders of magnitude at the low end.
         mode: Analyzer routing -- 0 = auto (impulse-like inputs route to IR
             analysis), 1 = blind, 2 = impulse-response.
         min_decay_db: Analyzer decay-fit span in dB (0 = library default).
