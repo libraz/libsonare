@@ -19,12 +19,9 @@ namespace {
 // The O(1) preconditions, which describe the buffer as a whole and so are
 // identical for a whole-buffer and a windowed validation.
 void check_offline_audio_bounds(const float* samples, std::size_t length, int sample_rate) {
-  SONARE_CHECK_MSG(samples != nullptr && length != 0, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(samples != nullptr, ErrorCode::InvalidParameter,
                    "audio input must be a non-empty buffer");
-  SONARE_CHECK_MSG(sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate,
-                   ErrorCode::InvalidParameter, "sample_rate is out of the supported range");
-  SONARE_CHECK_MSG(length <= kMaxAudioBufferSize, ErrorCode::InvalidParameter,
-                   "audio buffer is too large");
+  validate_offline_audio_extent(length, sample_rate);
 }
 
 void check_finite_range(const float* samples, std::size_t begin, std::size_t end) {
@@ -35,6 +32,15 @@ void check_finite_range(const float* samples, std::size_t begin, std::size_t end
 }
 
 }  // namespace
+
+void validate_offline_audio_extent(std::size_t length, int sample_rate) {
+  SONARE_CHECK_MSG(length != 0, ErrorCode::InvalidParameter,
+                   "audio input must be a non-empty buffer");
+  SONARE_CHECK_MSG(sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate,
+                   ErrorCode::InvalidParameter, "sample_rate is out of the supported range");
+  SONARE_CHECK_MSG(length <= kMaxAudioBufferSize, ErrorCode::InvalidParameter,
+                   "audio buffer is too large");
+}
 
 void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate) {
   check_offline_audio_bounds(samples, length, sample_rate);

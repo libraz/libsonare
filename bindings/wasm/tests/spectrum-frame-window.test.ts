@@ -107,6 +107,33 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     expect(String((caught as Error).message)).not.toContain('NaN or Inf');
   });
 
+  it('asks the source for the analysis frame rather than for the whole buffer', () => {
+    // The per-call cost contract is structural rather than a timing claim: the
+    // binding copies the span it reads. A source that records what was asked of
+    // it makes that observable without a clock, which is what keeps this from
+    // being the kind of assertion that goes quiet on a slow machine.
+    const asked: Array<[number, number]> = [];
+    class Probe extends Float32Array {
+      subarray(begin?: number, end?: number): Float32Array {
+        asked.push([begin ?? 0, end ?? this.length]);
+        return super.subarray(begin, end);
+      }
+    }
+    const samples = new Probe(LENGTH);
+    for (let i = 0; i < LENGTH; i++) {
+      samples[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
+    }
+    meteringSpectrumFrame(samples as Float32Array, SR, FRAME_OFFSET, {
+      nFft: N_FFT,
+      validate: false,
+    });
+    expect(asked).toContainEqual([FRAME_OFFSET, FRAME_END]);
+    // Non-vacuity in both directions: the probe really was consulted, and
+    // nothing asked for a span wider than the frame.
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every(([begin, end]) => end - begin <= N_FFT)).toBe(true);
+  });
+
   it('still refuses an empty buffer whatever the frame asks for', () => {
     expect(() => meteringSpectrumFrame(new Float32Array(0), SR, 99999, { nFft: N_FFT })).toThrow(
       /must not be empty/,

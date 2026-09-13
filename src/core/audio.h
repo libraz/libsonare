@@ -132,6 +132,19 @@ inline constexpr int kMinAudioSampleRate = 8000;
 inline constexpr int kMaxAudioSampleRate = 384000;
 inline constexpr std::size_t kMaxAudioBufferSize = resource::kMaxOfflineAudioSamples;
 
+/// @brief The O(1) half of the policy: the rules that describe a buffer's extent
+///        rather than its contents.
+/// @details Exposed for a surface that cannot hand over a pointer to the whole
+///          buffer -- the WASM bindings copy only the window a windowed call
+///          reads, so the emptiness, @p sample_rate and size rules still have to
+///          be asked about the whole length, and only the finiteness scan
+///          narrows. Both validators below are expressed in terms of this, so
+///          there is one statement of the policy rather than a second copy.
+/// @throws SonareException(InvalidParameter) for an empty buffer, a
+///         @p sample_rate outside [kMinAudioSampleRate, kMaxAudioSampleRate], or
+///         a @p length above kMaxAudioBufferSize.
+void validate_offline_audio_extent(std::size_t length, int sample_rate);
+
 /// @brief Validates an offline-analysis audio buffer (single source of truth).
 /// @param samples       Pointer to mono/interleaved float sample data.
 /// @param length        Number of float samples.

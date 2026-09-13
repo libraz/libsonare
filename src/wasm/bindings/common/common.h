@@ -188,6 +188,10 @@ void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, c
                                   const char* second_subject, const char* budget_subject,
                                   bool require_matching_lengths);
 std::vector<float> float32ArrayToVector(val arr);
+/// @brief float32ArrayToVector for one span of the source, so a windowed entry
+/// point costs its window rather than the buffer it is polling. @p start and
+/// @p count must already be clamped to the source's length.
+std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::size_t count);
 /// @brief Loads a JS Float32Array into an Audio after the shared offline-input
 /// validation (rejects null/empty, an out-of-range sampleRate, an oversized
 /// buffer, and any non-finite sample). Mirrors the C ABI validate_audio_params

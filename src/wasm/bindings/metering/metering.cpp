@@ -404,9 +404,11 @@ val js_metering_spectrum_frame(val samples, int sample_rate, double frame_offset
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "meteringSpectrumFrame: nFft must be a power of two");
   }
+  // The loader hands back the frame alone, clamped, so the frame starts at 0 of
+  // what it returned -- the same shape the C ABI passes to its prevalidated call.
   Audio audio = loadValidatedAudioWindow(samples, sample_rate, frame_offset,
                                          static_cast<std::size_t>(cfg.n_fft));
-  metering::SpectrumResult result = metering::spectrum_frame(audio, frame_offset, cfg);
+  metering::SpectrumResult result = metering::spectrum_frame(audio, 0, cfg);
   val out = val::object();
   out.set("frequencies", vectorToFloat32Array(result.frequencies));
   out.set("magnitude", vectorToFloat32Array(result.magnitude));

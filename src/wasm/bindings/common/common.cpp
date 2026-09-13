@@ -174,11 +174,47 @@ Audio loadValidatedAudio(val samples, int sample_rate) {
   return Audio::from_buffer(data.data(), data.size(), sample_rate);
 }
 
+std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::size_t count) {
+  std::vector<float> result(count);
+  if (count == 0) return result;
+  // Ask the source for the span rather than for everything: a typed array's
+  // subarray is a view, so the only copy is the set() below, and slice on a
+  // plain array copies the span and nothing else. An array-like offering
+  // neither is copied whole and then narrowed -- the same answer, and the one
+  // case that still costs the buffer's length rather than the window's.
+  val source = val::undefined();
+  const double first = static_cast<double>(start);
+  const double last = static_cast<double>(start + count);
+  if (arr["subarray"].typeOf().as<std::string>() == "function") {
+    source = arr.call<val>("subarray", first, last);
+  } else if (arr["slice"].typeOf().as<std::string>() == "function") {
+    source = arr.call<val>("slice", first, last);
+  } else {
+    const std::vector<float> whole = float32ArrayToVector(arr);
+    std::copy(whole.begin() + static_cast<std::ptrdiff_t>(start),
+              whole.begin() + static_cast<std::ptrdiff_t>(start + count), result.begin());
+    return result;
+  }
+  val view = val(typed_memory_view(count, result.data()));
+  view.call<void>("set", source);
+  return result;
+}
+
 Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_offset,
                                std::size_t scan_count) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_window(data.data(), data.size(), sample_rate, scan_offset, scan_count);
-  return Audio::from_buffer(data.data(), data.size(), sample_rate);
+  const std::size_t length = wasmFloat32ArrayLength(samples);
+  // The extent rules are asked about the whole buffer, as they are on the C ABI;
+  // only the finiteness scan -- and the copy that feeds it -- narrows.
+  validate_offline_audio_extent(length, sample_rate);
+  const std::size_t begin = std::min(scan_offset, length);
+  const std::size_t count = std::min(scan_count, length - begin);
+  std::vector<float> window = float32ArrayWindowToVector(samples, begin, count);
+  // An offset at or past the end leaves no sample to read, which the core
+  // answers with a zero-padded frame rather than a refusal.
+  if (count != 0) {
+    validate_offline_audio_window(window.data(), count, sample_rate, 0, count);
+  }
+  return Audio::from_buffer(window.data(), window.size(), sample_rate);
 }
 
 std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
