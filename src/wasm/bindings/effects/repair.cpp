@@ -96,8 +96,9 @@ val js_mastering_repair_declick(val samples, int sample_rate, val options) {
 
 namespace {
 
-mastering::repair::DenoiseMode parseDenoiseMode(const std::string& name,
-                                                mastering::repair::DenoiseMode fallback) {
+// Throws on an unknown name rather than falling back, matching the C ABI's own
+// enum mapping, so there is no default to carry.
+mastering::repair::DenoiseMode parseDenoiseMode(const std::string& name) {
   std::string s = name;
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -114,8 +115,7 @@ mastering::repair::DenoiseMode parseDenoiseMode(const std::string& name,
                                 "unknown denoise mode: " + name);
 }
 
-mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(
-    const std::string& name, mastering::repair::DenoiseNoiseEstimator fallback) {
+mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(const std::string& name) {
   std::string s = name;
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -135,14 +135,13 @@ val js_mastering_repair_denoise_classical(val samples, int sample_rate, val opti
     if (hasProperty(options, "mode")) {
       val value = val::undefined();
       if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDenoiseMode(value.as<std::string>(), cfg.mode);
+        cfg.mode = parseDenoiseMode(value.as<std::string>());
       }
     }
     if (hasProperty(options, "noiseEstimator")) {
       val value = val::undefined();
       if (repairOptionValue(options, "noiseEstimator", &value)) {
-        cfg.noise_estimator =
-            parseDenoiseNoiseEstimator(value.as<std::string>(), cfg.noise_estimator);
+        cfg.noise_estimator = parseDenoiseNoiseEstimator(value.as<std::string>());
       }
     }
     cfg.n_fft = repairIntOption(options, "nFft", cfg.n_fft);
@@ -187,8 +186,7 @@ val js_mastering_repair_declip(val samples, int sample_rate, val options) {
 
 namespace {
 
-mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name,
-                                                    mastering::repair::DecrackleMode fallback) {
+mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name) {
   std::string s = name;
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -200,8 +198,7 @@ mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name,
                                 "unknown decrackle mode: " + name);
 }
 
-mastering::repair::TrimSilenceMode parseTrimSilenceMode(
-    const std::string& name, mastering::repair::TrimSilenceMode fallback) {
+mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name) {
   std::string s = name;
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -223,7 +220,7 @@ val js_mastering_repair_decrackle(val samples, int sample_rate, val options) {
     if (hasProperty(options, "mode")) {
       val value = val::undefined();
       if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDecrackleMode(value.as<std::string>(), cfg.mode);
+        cfg.mode = parseDecrackleMode(value.as<std::string>());
       }
     }
     cfg.levels = repairIntOption(options, "levels", cfg.levels);
@@ -331,7 +328,7 @@ val js_mastering_repair_trim_silence(val samples, int sample_rate, val options) 
     if (hasProperty(options, "mode")) {
       val value = val::undefined();
       if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseTrimSilenceMode(value.as<std::string>(), cfg.mode);
+        cfg.mode = parseTrimSilenceMode(value.as<std::string>());
       }
     }
     cfg.gate_lufs = repairFloatOption(options, "gateLufs", cfg.gate_lufs);

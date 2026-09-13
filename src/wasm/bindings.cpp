@@ -92,12 +92,20 @@ int capability_hardware_concurrency() {
   // Query the browser at call time rather than baking in the build machine's
   // value. A worker may not expose navigator, in which case one is the safe
   // synchronous fallback.
+  //
+  // The snippet substitutes nothing, and omitting a variadic macro's arguments
+  // is only a C++20 extension in this dialect. EM_ASM_INT is the toolchain's
+  // macro, so the exception is taken at the one call site rather than by
+  // dropping the warning for the file.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wvariadic-macro-arguments-omitted"
   return EM_ASM_INT({
     if (!globalThis.navigator || !Number.isFinite(globalThis.navigator.hardwareConcurrency)) {
       return 1;
     }
     return Math.max(1, Math.floor(globalThis.navigator.hardwareConcurrency));
   });
+#pragma clang diagnostic pop
 }
 
 val string_array(std::initializer_list<const char*> values) {

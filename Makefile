@@ -419,6 +419,8 @@ conformance:
 	python3 tools/conformance/check_lint_scope.py
 	python3 -m unittest tests/conformance/test_cli_contract.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
+	python3 tests/conformance/check_binding_warning_flags.py
+	python3 -m unittest tests/conformance/test_binding_warning_flags.py
 	python3 tests/conformance/check_wasm_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py
 	python3 tests/conformance/check_python_narrowing_scope.py

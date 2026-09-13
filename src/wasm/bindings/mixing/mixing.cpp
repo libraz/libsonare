@@ -195,7 +195,9 @@ val optionAt(val options, const char* key, int index) {
   return value;
 }
 
-mixing::PanMode panModeFromVal(val value) {
+// Reached only on the build without a mixing graph, where a strip is configured
+// field by field instead of through the graph's scene.
+[[maybe_unused]] mixing::PanMode panModeFromVal(val value) {
   if (value.isUndefined() || value.isNull()) {
     return mixing::PanMode::Balance;
   }
@@ -228,7 +230,8 @@ mixing::PanMode panModeFromVal(val value) {
                                 "unknown mixing pan mode: " + mode);
 }
 
-val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
+// Same: the graph build reports meters through the scene walker instead.
+[[maybe_unused]] val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
   val out = val::object();
   out.set("peakDbL", snapshot.peak_db[0]);
   out.set("peakDbR", snapshot.peak_db[1]);

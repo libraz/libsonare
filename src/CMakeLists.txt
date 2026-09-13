@@ -1233,7 +1233,11 @@ if(BUILD_WASM)
       sonare_arrangement sonare_serialize sonare_midi sonare_mir)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)
   endif()
-  target_compile_options(sonare PRIVATE -msimd128)
+  # The binding layer carries the same warning contract as every other target.
+  # Without it the whole of src/wasm/ compiled with no warnings enabled at all,
+  # so an unhandled enumerator -- the failure an exhaustive switch is written to
+  # produce -- was silent here while it stopped the build everywhere else.
+  target_compile_options(sonare PRIVATE -msimd128 ${SONARE_WARNING_FLAGS})
   # -fexceptions must be on the COMPILE line, not only the link line: emscripten
   # defaults to DISABLE_EXCEPTION_CATCHING=1, which elides landing pads at
   # compile time, so enabling runtime support at link time cannot restore a

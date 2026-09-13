@@ -31,13 +31,6 @@ void validateMatrix(const std::vector<float>& values, int rows, int columns, con
   validateFiniteVector(values, function);
 }
 
-void validateSampleRate(const char* function, int sample_rate) {
-  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(function) + ": sample rate is out of range");
-  }
-}
-
 // The tempogram / PLP family takes an onset envelope (not raw audio); its
 // sample_rate is only a BPM-scaling factor, so — matching the C ABI oracle,
 // which does not band-limit it — we require it to be positive rather than

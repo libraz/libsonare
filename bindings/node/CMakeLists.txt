@@ -179,8 +179,11 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   SONARE_WITH_ARRANGEMENT=1
 )
 
+# -Werror matches the core targets: a warning the addon layer emits is a defect
+# the same way one in src/ is, and without it an unhandled enumerator here only
+# printed.
 if(MSVC)
-  target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+  target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX)
 else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
+  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
