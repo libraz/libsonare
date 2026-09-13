@@ -1,0 +1,313 @@
+{
+  "_comment": [
+    "Sites that still spell the zero-default sentinel as `> 0`, keyed on the file",
+    "and the tested expression so a line move does not invalidate a record.",
+    "",
+    "This is a ratchet, not a blessing. A site that is neither converted nor",
+    "listed here is a new one. A record is deleted in the change that converts",
+    "its site -- the scan fails on a record that matches nothing.",
+    "",
+    "`measured` says whether the core's response to a negative or non-finite",
+    "request was actually driven. `no` means the site's disposition is unknown,",
+    "which is the narrowing step this population still needs: a filter is only a",
+    "defect where the core would have refused the value it swallowed.",
+    "",
+    "The floor is a liveness check on the scan, not a target. Converting sites",
+    "past it means lowering it deliberately in the same change."
+  ],
+  "floor": {
+    "sites": 20,
+    "comparisons": 250,
+    "helper_calls": 35
+  },
+  "sites": [
+    {
+      "file": "src/c_api/features_spectral_pitch.cpp",
+      "value": "config->segmentation_threshold_cents",
+      "measured": "no",
+      "reason": "Note segmentation threshold; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_daw.cpp",
+      "value": "config->segmentation_threshold_cents",
+      "measured": "no",
+      "reason": "Same segmentation threshold as the features_spectral_pitch.cpp copy; moves with it."
+    },
+    {
+      "file": "src/c_api/sonare_c_daw.cpp",
+      "value": "config->vibrato_cutoff_hz",
+      "measured": "no",
+      "reason": "Decomposition vibrato cutoff on the struct path; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_polyphony.cpp",
+      "value": "config->vibrato_cutoff_hz",
+      "measured": "no",
+      "reason": "Decomposition vibrato cutoff on the struct path; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_engine.cpp",
+      "value": "config.click_seconds",
+      "measured": "no",
+      "reason": "Metronome click length; core response to a negative or non-finite length not driven."
+    },
+    {
+      "file": "src/wasm/bindings/realtime/transport.cpp",
+      "value": "click_seconds",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_engine.cpp metronome click; moves with it."
+    },
+    {
+      "file": "src/c_api/features_spectral_pitch.cpp",
+      "value": "config->min_note_ms",
+      "measured": "yes",
+      "reason": "NoteSegmenter derives a frame count as max(1, ceil(min_note_ms * ...)), so a negative reaches the same one-frame floor the filter hands it."
+    },
+    {
+      "file": "src/c_api/features_spectral_pitch.cpp",
+      "value": "config->reference_hz",
+      "measured": "yes",
+      "reason": "NoteSegmenter substitutes its own default for a non-positive or non-finite reference, so the filter is redundant with the core rather than pre-empting it."
+    },
+    {
+      "file": "src/c_api/features_spectral_pitch.cpp",
+      "value": "config->voiced_threshold",
+      "measured": "no",
+      "reason": "Core response to a negative or non-finite threshold not driven."
+    },
+    {
+      "file": "src/c_api/mixing_strip.cpp",
+      "value": "true_peak_oversample",
+      "measured": "no",
+      "reason": "Strip meter oversample; core response not driven. Same field as the converted mastering path, so it is the next one to move."
+    },
+    {
+      "file": "src/c_api/mixing_strip.cpp",
+      "value": "pan->distance",
+      "measured": "no",
+      "reason": "Surround pan distance; core response to a negative or non-finite distance not driven."
+    },
+    {
+      "file": "src/c_api/project_bounce.cpp",
+      "value": "opts.block_size",
+      "measured": "no",
+      "reason": "Bounce block size; core response not driven."
+    },
+    {
+      "file": "src/c_api/project_bounce.cpp",
+      "value": "opts.num_channels",
+      "measured": "no",
+      "reason": "Bounce channel count; core response not driven."
+    },
+    {
+      "file": "src/c_api/project_bounce_internal.h",
+      "value": "max_block_size",
+      "measured": "no",
+      "reason": "Bounce ring capacity; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_daw.cpp",
+      "value": "config->min_note_ms",
+      "measured": "yes",
+      "reason": "Same NoteSegmenter frame-count floor as the features_spectral_pitch.cpp copy."
+    },
+    {
+      "file": "src/c_api/sonare_c_daw.cpp",
+      "value": "config->reference_hz",
+      "measured": "yes",
+      "reason": "Same NoteSegmenter default substitution as the features_spectral_pitch.cpp copy."
+    },
+    {
+      "file": "src/c_api/sonare_c_daw.cpp",
+      "value": "config->voiced_threshold",
+      "measured": "no",
+      "reason": "Core response to a negative or non-finite threshold not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_daw.cpp",
+      "value": "config->fade_ms",
+      "measured": "no",
+      "reason": "Core response to a negative or non-finite fade not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_daw.cpp",
+      "value": "vibrato_cutoff_hz",
+      "measured": "no",
+      "reason": "Core response to a negative or non-finite cutoff not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_editing.cpp",
+      "value": "n_fft",
+      "measured": "yes",
+      "reason": "Metering spectrum FFT size. A negative n_fft is refused in front of the filter, and an integer has no non-finite spelling, so nothing the caller chooses can reach the substitution except the sentinel itself."
+    },
+    {
+      "file": "src/c_api/sonare_c_editing.cpp",
+      "value": "octave_fraction",
+      "measured": "yes",
+      "reason": "Metering spectrum smoothing fraction; refused and reachable exactly as n_fft is."
+    },
+    {
+      "file": "src/c_api/sonare_c_editing.cpp",
+      "value": "db_ref",
+      "measured": "yes",
+      "reason": "Metering spectrum dB reference. The guard in front of the filter admits only the sentinel or a finite non-negative value, so a negative, a NaN and an infinity are all refused rather than promoted."
+    },
+    {
+      "file": "src/c_api/sonare_c_editing.cpp",
+      "value": "db_amin",
+      "measured": "yes",
+      "reason": "Metering spectrum dB floor; guarded by the same test as db_ref."
+    },
+    {
+      "file": "src/c_api/sonare_c_effects.cpp",
+      "value": "config->n_components",
+      "measured": "no",
+      "reason": "Decomposition component count; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_effects.cpp",
+      "value": "config->n_fft",
+      "measured": "no",
+      "reason": "Decomposition FFT size; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_effects.cpp",
+      "value": "config->hop_length",
+      "measured": "no",
+      "reason": "Decomposition hop; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_effects.cpp",
+      "value": "config->n_iter",
+      "measured": "no",
+      "reason": "Decomposition iteration count; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_effects.cpp",
+      "value": "config->mask_power",
+      "measured": "no",
+      "reason": "Decomposition mask exponent; core response not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_engine_capture.cpp",
+      "value": "node.num_ports",
+      "measured": "no",
+      "reason": "Port count derived from the spec when absent; core response to a negative not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_engine_clips.cpp",
+      "value": "clip.length_samples",
+      "measured": "no",
+      "reason": "0 documents 'to the end of the source'; core response to a negative length not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_engine_render.cpp",
+      "value": "options->dither_bits",
+      "measured": "no",
+      "reason": "Dither target bit depth; core response to a negative not driven."
+    },
+    {
+      "file": "src/c_api/sonare_c_polyphony.cpp",
+      "value": "config->fade_ms",
+      "measured": "no",
+      "reason": "Core response to a negative or non-finite fade not driven."
+    },
+    {
+      "file": "src/wasm/bindings/editing/polyphony.cpp",
+      "value": "fade_ms",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_polyphony.cpp fade; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/editing/polyphony.cpp",
+      "value": "vibrato_cutoff_hz",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_daw.cpp cutoff; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "threshold_cents",
+      "measured": "no",
+      "reason": "Note segmentation threshold; core response not driven."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "min_note_ms",
+      "measured": "yes",
+      "reason": "Same NoteSegmenter frame-count floor as the C-ABI copies."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "reference_hz",
+      "measured": "yes",
+      "reason": "Same NoteSegmenter default substitution as the C-ABI copies."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "voiced_threshold",
+      "measured": "no",
+      "reason": "WASM twin of the C-ABI voiced threshold; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "fade_ms",
+      "measured": "no",
+      "reason": "WASM twin of the C-ABI fade; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "vibrato_cutoff_hz",
+      "measured": "no",
+      "reason": "WASM twin of the C-ABI cutoff; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "n_components",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "n_fft",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "hop_length",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "n_iter",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/effects/audio.cpp",
+      "value": "mask_power",
+      "measured": "no",
+      "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
+    },
+    {
+      "file": "src/wasm/bindings/metering/metering.cpp",
+      "value": "n",
+      "measured": "yes",
+      "reason": "A negative nFft is refused explicitly in front of the filter, and the value is read through the checked integer reader, so nothing non-finite reaches it."
+    },
+    {
+      "file": "src/wasm/bindings/metering/metering.cpp",
+      "value": "f",
+      "measured": "yes",
+      "reason": "A negative octaveFraction is refused explicitly in front of the filter, and the value is read through the checked integer reader."
+    },
+    {
+      "file": "src/wasm/bindings/realtime/processing.cpp",
+      "value": "requested_ports",
+      "measured": "no",
+      "reason": "Port count derived from the channel count when absent; core response to a negative not driven."
+    }
+  ]
+}

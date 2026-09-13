@@ -423,8 +423,12 @@ conformance:
 	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py
 	python3 tests/conformance/check_python_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_python_narrowing_scope.py
+	python3 tests/conformance/check_zero_sentinel_filter.py
+	python3 -m unittest tests/conformance/test_zero_sentinel_filter.py
 	python3 tests/conformance/check_goniometer_capacity_mirrors.py
 	python3 -m unittest tests/conformance/test_goniometer_capacity_mirrors.py
+	python3 tests/conformance/check_documented_bound_mirrors.py
+	python3 -m unittest tests/conformance/test_documented_bound_mirrors.py
 	python3 -m unittest tests/conformance/test_bank_versions.py
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
