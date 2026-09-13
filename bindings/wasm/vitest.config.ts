@@ -10,6 +10,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Every test here reads dist/, which is gitignored and carries no record of
+    // the sources it was built from; the setup attests it before anything runs.
+    globalSetup: ['./scripts/dist-freshness-setup.mjs'],
     // Heavy WASM analysis tests (e.g. NNLS chroma over multi-second signals) can
     // exceed vitest's 5s default on loaded CI runners; give them ample headroom.
     testTimeout: 30000,
