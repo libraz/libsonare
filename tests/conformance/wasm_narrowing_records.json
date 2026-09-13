@@ -1,8 +1,8 @@
 {
   "floor": {
-    "files": 22,
+    "files": 21,
     "containers": 411,
-    "narrowings": 54,
+    "narrowings": 51,
     "readers": 29
   },
   "shapes": [
@@ -19,28 +19,10 @@
   ],
   "narrowings": [
     {
-      "file": "bindings/effects/offline_dynamics_editing.cpp",
-      "receiver": "value",
-      "type": "int",
-      "reason": "An enum ordinal switched on with a throwing default, so a saturated value is rejected rather than landing on a mode."
-    },
-    {
-      "file": "bindings/features/core.cpp",
-      "receiver": "mode",
-      "type": "int",
-      "reason": "An enum ordinal compared against both legal values and throwing otherwise, so a saturated value has no branch to reach."
-    },
-    {
       "file": "bindings/project/project_arrange.cpp",
       "receiver": "mode_val",
       "type": "int",
       "reason": "An enum ordinal range-checked against the warp-mode bounds before the cast is used, so a saturated value is refused by name."
-    },
-    {
-      "file": "bindings/project/project_edit.cpp",
-      "receiver": "curve",
-      "type": "int",
-      "reason": "An enum ordinal the C ABI range-checks against the curve enum's bounds, so a saturated value is refused there. The guard is in the C ABI rather than here, which is what makes this worth recording: moving the validation would make this a live narrowing again."
     }
   ],
   "readers": [

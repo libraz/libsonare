@@ -322,9 +322,11 @@ function isSharedReaderFile(file: string): boolean {
  * Finds every `val`-taking function definition, measures its body by brace
  * balance, and asks that body's own text whether it narrows.
  */
-export function valReaderFunctions(): ValReaderFunction[] {
+export function valReaderFunctions(
+  sources: readonly WasmBindingSource[] = wasmBindingSources(),
+): ValReaderFunction[] {
   const out: ValReaderFunction[] = [];
-  for (const { file, text } of wasmBindingSources()) {
+  for (const { file, text } of sources) {
     if (isSharedReaderFile(file)) {
       continue;
     }
@@ -367,9 +369,11 @@ export function valReaderFunctions(): ValReaderFunction[] {
  * Finds every integer narrowing in the scanned tree and resolves which of
  * {@link valReaderFunctions}' spans contains it.
  */
-export function integerNarrowingSites(): IntegerNarrowingSite[] {
+export function integerNarrowingSites(
+  sources: readonly WasmBindingSource[] = wasmBindingSources(),
+): IntegerNarrowingSite[] {
   const byFile = new Map<string, ValReaderFunction[]>();
-  for (const fn of valReaderFunctions()) {
+  for (const fn of valReaderFunctions(sources)) {
     const list = byFile.get(fn.file);
     if (list) {
       list.push(fn);
@@ -378,7 +382,7 @@ export function integerNarrowingSites(): IntegerNarrowingSite[] {
     }
   }
   const out: IntegerNarrowingSite[] = [];
-  for (const { file, text } of wasmBindingSources()) {
+  for (const { file, text } of sources) {
     if (isSharedReaderFile(file)) {
       continue;
     }

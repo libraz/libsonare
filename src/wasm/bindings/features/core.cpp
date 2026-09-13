@@ -247,7 +247,9 @@ val js_tonnetz(val chromagram, int n_chroma, int n_frames) {
 TempogramMode tempogramModeFromValue(val mode) {
   if (mode.isUndefined() || mode.isNull()) return TempogramMode::kAutocorrelation;
   if (mode.typeOf().as<std::string>() == "number") {
-    const int mode_id = mode.as<int>();
+    // An ordinal names a member, not a quantity: 0.5 used to select
+    // autocorrelation and 1.5 cosine, neither of which the caller spelled.
+    const int mode_id = checkedIntFromVal(mode, "tempogram mode");
     if (mode_id == SONARE_TEMPOGRAM_AUTOCORRELATION) return TempogramMode::kAutocorrelation;
     if (mode_id == SONARE_TEMPOGRAM_COSINE) return TempogramMode::kCosine;
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

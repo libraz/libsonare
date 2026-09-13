@@ -205,11 +205,20 @@ namespace {
 /// this only runs for a caller that drives the embind class directly. It still
 /// accepts the same spellings the facade documents — the canonical 's-curve'
 /// plus the legacy 'scurve' — because a spelling the facade takes must not
-/// become a different curve here. An unrecognised spelling is rejected rather
-/// than silently coerced to Linear, which had quietly changed the curve shape.
+/// become a different curve here. Neither spelling may name a curve outside the
+/// enum: an unrecognised name and an out-of-range, fractional or non-finite
+/// ordinal are all rejected rather than silently coerced to a neighbouring
+/// curve, which had quietly changed the curve shape.
 int automationCurveFromVal(val curve) {
   if (curve.typeOf().as<std::string>() != "string") {
-    return curve.as<int>();
+    // The numeric path is the one the direct caller above actually takes, and it
+    // had no check of its own: 1.5 truncated onto a neighbouring curve and NaN
+    // onto Linear, both reporting success. 2^31 was refused only because it
+    // saturated past the enum, which is the domain check catching a narrowing by
+    // accident -- it says nothing about the fractions in between.
+    const int ordinal = checkedIntFromVal(curve, "automation curve");
+    requireOrdinalInRange(ordinal, SONARE_CURVE_LINEAR, SONARE_CURVE_SCURVE, "automation curve");
+    return ordinal;
   }
   const std::string s = curve.as<std::string>();
   if (s == "linear") {

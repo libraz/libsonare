@@ -94,8 +94,9 @@ inline emscripten::val synthEnumTablesToVal() {
   return out;
 }
 
-/// Reads an enum field accepting the C ordinal or a name; throws on an
-/// unknown name. Absent fields keep @p out unchanged (0 = "keep base").
+/// Reads an enum field accepting the C ordinal or a name; throws on an unknown
+/// name and on an ordinal outside [0, @p count). Absent fields keep @p out
+/// unchanged (0 = "keep base").
 inline void enumProperty(emscripten::val object, const char* key, const char* const* names,
                          int count, const char* what, int* out) {
   if (!hasProperty(object, key)) return;
@@ -117,10 +118,12 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   std::string("Expected ") + what + " to be a number or string");
   }
-  // Range-checked rather than cast: the downstream enum validation refuses a
-  // saturated ordinal but not the ordinal a fractional value truncates onto,
-  // and NaN reads as the "keep base" zero.
-  *out = checkedIntFromVal(value, what);
+  // The name path cannot spell an ordinal outside the table, so the numeric path
+  // must not either: mod source and destination land in a struct field the core
+  // reads without re-checking, where 9, 10, 99 and -1 all render as "none".
+  const int ordinal = checkedIntFromVal(value, what);
+  requireOrdinalInRange(ordinal, 0, count - 1, what);
+  *out = ordinal;
 }
 
 inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {

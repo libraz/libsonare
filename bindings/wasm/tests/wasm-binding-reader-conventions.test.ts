@@ -284,12 +284,7 @@ describe('WASM inherits the C ABI feature gate on mixing-only engine commands', 
  * the defect: unlike a count, an out-of-range ordinal has nowhere plausible to
  * land. Keyed `file:function`.
  */
-const LOCAL_INT_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
-  [
-    'project/project_edit.cpp:automationCurveFromVal',
-    'Narrows an enum ordinal, not a size. The C ABI range-checks it against [0, SCurve] at project_edit_track.cpp:64 and rejects a saturated INT_MAX, so the value cannot reach a consumer as a plausible curve.',
-  ],
-]);
+const LOCAL_INT_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map<string, string>();
 
 describe('WASM options-bag reader functions narrow only through the shared reader', () => {
   it('self-checks the scanner against the reader it was written for', () => {
@@ -337,33 +332,62 @@ describe('the two narrowing scans agree, and disagreeing is the failure', () => 
   // agreement stays green. That is the known common mode, stated here rather
   // than papered over.
 
-  it('self-checks that both scans still see a tree to scan', () => {
-    // Both assertions below are agreement checks, and two empty sets agree
-    // perfectly. Pin that neither scan has silently stopped matching.
+  it('self-checks that scan A still sees a tree to scan', () => {
+    // The agreement checks below are set differences, and two empty sets agree
+    // perfectly, so something has to pin that the scans still match. This counts
+    // `val`-taking DEFINITIONS, which remediation does not remove -- a floor on
+    // them stays true however many of their narrowings get fixed.
+    //
+    // Scan B has no floor here on purpose. A count of narrowings falls every
+    // time one is remediated, so a floor on it borrows its calibration from the
+    // defects still in the tree and tightens toward failure as they are fixed.
+    // Scan B's non-vacuity is the fixture below, which goes red when the scanner
+    // returns nothing, and `tools`-side the population floor in
+    // `tests/conformance/check_wasm_narrowing_scope.py`, which records why its
+    // numbers are what they are.
     expect(valReaderFunctions().length).toBeGreaterThan(20);
-    expect(integerNarrowingSites().length).toBeGreaterThan(45);
   });
 
-  it('sees both receiver shapes, so a population figure can state its shape', () => {
+  it('sees both receiver shapes, on a fixture this test owns', () => {
     // A narrowing chained on a plain `val` variable rather than a literal-keyed
     // index is invisible to the bracket-keyed scan, and a count drawn from that
-    // scan alone is an undercount by an amount nobody can name. Pin that both
-    // shapes resolve, and pin one `other` site by name so the classification
-    // cannot quietly collapse into a single bucket.
-    const sites = integerNarrowingSites();
-    const other = sites.filter((s) => s.receiverShape === 'other');
-    expect(sites.filter((s) => s.receiverShape === 'bracket-literal-key').length).toBeGreaterThan(
-      40,
-    );
-    expect(other.length).toBeGreaterThan(5);
-    // Anchored on the file holding the most `other` sites, so remediating any
-    // single one does not silently turn this into a vacuous check. The anchor
-    // asserts that the classification still resolves - it is not a judgement
-    // that these reads are correct.
-    expect(
-      other.filter((s) => s.file === 'features/core.cpp').length,
-      'these reads are chained on local vals, not literal keys',
-    ).toBeGreaterThan(1);
+    // scan alone is an undercount by an amount nobody can name. So the
+    // classifier has to be shown to distinguish the two shapes.
+    //
+    // The evidence is a synthetic source rather than a count of the real tree's
+    // sites. Borrowing it from the tree makes the check weaker every time one of
+    // those reads is remediated and vacuous once they are all gone -- a guard
+    // calibrated on defects rewards leaving them in place. This fixture holds
+    // one read of each shape whatever the tree looks like.
+    const fixture = [
+      {
+        file: 'fixture/receiver_shapes.cpp',
+        text: [
+          'int readBoth(val options) {',
+          '  const int keyed = options["nFft"].as<int>();',
+          '  val local = options["hopLength"];',
+          '  const int chained = local.as<int>();',
+          '  return keyed + chained;',
+          '}',
+        ].join('\n'),
+      },
+    ];
+    const sites = integerNarrowingSites(fixture);
+    expect(sites.map((s) => s.receiverShape)).toEqual(['bracket-literal-key', 'other']);
+    // Both sites must also resolve to the enclosing definition, or the shapes
+    // above were classified by a scan that had lost track of its spans.
+    expect(sites.map((s) => s.container)).toEqual(['readBoth', 'readBoth']);
+  });
+
+  it('classifies every real site into one of the two shapes', () => {
+    // What the real tree is still asked for: that the classification RESOLVES,
+    // not how many sites of each kind exist. A site the classifier cannot place
+    // would be an undercount nobody can name; a shrinking count is remediation
+    // and must not read as a regression.
+    const shapes = new Set(integerNarrowingSites().map((s) => s.receiverShape));
+    for (const shape of shapes) {
+      expect(['bracket-literal-key', 'other']).toContain(shape);
+    }
   });
 
   it('every narrowing expression sits inside a definition scan A found', () => {

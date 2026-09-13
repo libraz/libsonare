@@ -17,7 +17,9 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
     val value, mastering::dynamics::DetectorMode fallback) {
   const std::string type = value.typeOf().as<std::string>();
   if (type == "number") {
-    const int code = value.as<int>();
+    // An ordinal names a member, not a quantity: 1.5 used to select Rms and NaN
+    // Peak, neither of which the caller spelled.
+    const int code = checkedIntFromVal(value, "masteringDynamicsCompressor detector");
     switch (code) {
       case 0:
         return mastering::dynamics::DetectorMode::Peak;
