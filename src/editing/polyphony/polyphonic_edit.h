@@ -23,6 +23,7 @@
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_object.h"
 #include "editing/note_model/note_renderer.h"
+#include "editing/polyphony/inharmonicity.h"
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
 #include "editing/polyphony/shared_bins.h"
@@ -33,6 +34,14 @@ struct PolyphonicEditConfig {
   /// Carries the STFT geometry the whole chain runs in.
   MultiF0ExtractorConfig extraction{};
   NoteMaskConfig masks{};
+  /// Fit each note's stretch from the spectrum rather than spending
+  /// @c masks.inharmonicity on all of them. Off by default, and the reason is
+  /// reach rather than cost: @ref estimate_track_inharmonicity fits isolated
+  /// notes at this chain's framing and refuses a chord, so turning it on is a
+  /// statement about the material.
+  bool estimate_inharmonicity = false;
+  /// Read only when @ref estimate_inharmonicity is set.
+  InharmonicityConfig inharmonicity{};
   /// The refusal thresholds the apportionment runs under. Its defaults are the
   /// measured ones and lowering a threshold buys bins at the price of solving
   /// ones a fit cannot do, which @ref solve_shared_bins states costs more than it
@@ -59,6 +68,17 @@ struct PolyphonicAnalysis {
   /// where two partials partly cancel. Where a bin was refused, the equal share
   /// @ref build_note_masks gave it stands.
   NoteMaskSet masks;
+  /// What the fit returned per ridge, in ridge order: non-negative where it was
+  /// fitted, exactly -1 where it was refused. Empty when the fit was not asked
+  /// for, so an empty vector and a refused ridge are different answers.
+  ///
+  /// Not the same figure as @c masks.inharmonicity, which is what the claims were
+  /// actually placed with: a refused ridge appears there as the declared value.
+  /// This is the only place the two are told apart, and they have to be -- 0 is a
+  /// fitted result meaning the harmonic series and is also the declared default,
+  /// so comparing the effective value against the declaration cannot separate a
+  /// fit that reached the material from one that did not.
+  std::vector<float> inharmonicity_fit;
   /// One per mask, in the masks' order. The only member a host writes, and only
   /// each note's @c edit: the spans and curves are measurements, and the order is
   /// the pairing with @ref masks.
@@ -82,6 +102,12 @@ struct PolyphonicAnalysis {
 ///          notes stand on, and @ref make_masked_notes for the measured fields.
 ///          Every returned note has an identity edit, so rendering the result
 ///          unchanged reproduces the analysis's own round trip.
+///
+///          @ref PolyphonicEditConfig::estimate_inharmonicity adds one stage
+///          between the masks and the apportionment: the stretch is fitted from
+///          the spectrum and the masks are built a second time with it. A refused
+///          ridge keeps the declared stretch, so the stage only ever replaces a
+///          guess with a measurement.
 ///
 ///          The apportionment is in the chain rather than offered beside it,
 ///          because an equal split is not a neutral default: a bin is claimed
@@ -115,8 +141,9 @@ struct PolyphonicAnalysis {
 ///         an @c int because every stage below takes one, so a source past that
 ///         has to be refused here rather than wrapped into a shorter render --
 ///         plus every reason @ref extract_multi_f0, @ref build_note_masks,
-///         @ref solve_shared_bins and @ref make_masked_notes throw about their
-///         inputs or their configs.
+///         @ref solve_shared_bins, @ref make_masked_notes and, where it runs,
+///         @ref estimate_track_inharmonicity throw about their inputs or their
+///         configs.
 PolyphonicAnalysis analyze_polyphonic(const Audio& audio, const PolyphonicEditConfig& config = {});
 
 /// @brief Renders @p analysis back to audio, with whatever edits its notes carry.

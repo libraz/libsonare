@@ -17,6 +17,7 @@
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_object.h"
 #include "editing/note_model/note_renderer.h"
+#include "editing/polyphony/inharmonicity.h"
 #include "editing/polyphony/masked_notes.h"
 #include "editing/polyphony/masked_renderer.h"
 #include "editing/polyphony/multi_f0.h"
@@ -84,6 +85,57 @@ constexpr double kGuardMargin = 50.0;
 ///          silent or misaddressed buffer reads.
 constexpr float kNoteAmplitudeFloor = 0.05f;
 
+// --- The stretch fit's own fixture -----------------------------------------
+
+/// @brief The sentinel a refused ridge returns. Exactly this value, not a small
+///        one, and not the 0 a fitted harmonic series returns.
+constexpr float kRefused = -1.0f;
+
+/// @brief C3 and a sampled piano's own stretch there, with the partial count that
+///        was usable at that pitch.
+/// @details The register the fit's measured reach covers at this framing: an
+///          isolated note from about C2 to C4 fits over 20 partials, C6 is refused
+///          on the misfit and A0 for too few partials. A fixture outside that
+///          would be measuring the reach rather than the plumbing.
+constexpr float kStretchedHz = 130.8128f;
+constexpr float kStretchedB = 1.130e-4f;
+constexpr int kStretchedPartials = 20;
+
+/// @brief The other two notes of the chord the fit refuses, a major third and a
+///        fifth over @ref kStretchedHz.
+constexpr float kChordMidHz = 164.8138f;
+constexpr float kChordTopHz = 195.9977f;
+
+/// @brief Samples the chord fixture is held over.
+/// @details Half again as long as @ref kSourceSamples: three voices a third apart
+///          sit at the bottom of the register the default framing resolves, and
+///          the estimator separates them over frames.
+constexpr size_t kChordSamples = 33075;
+
+/// @brief A declared stretch no stage arrives at on its own.
+/// @details Small enough that the declared claims still sit on a harmonic series's
+///          partials -- at the eleventh partial of @ref kStretchedHz it displaces a
+///          claim by 0.87 Hz, a twelfth of a bin, so the f0 refinement the fit
+///          depends on reads the same bins it would at zero. Distinct from both
+///          outcomes the fit can return here: ten times under a fit of
+///          @ref kStretchedB and ten times over the tolerance a fit of the
+///          harmonic series is judged by, so a note's effective stretch names
+///          which of the two placed its claims.
+constexpr float kDeclaredStretch = 1.0e-5f;
+
+/// @brief Largest stretch error that keeps every partial inside half a bin of its
+///        claim, which is the 6 dB band's own edge.
+/// @details From @c d(f_h)/dB = h^3*f0 / (2*sqrt(1 + B*h^2)): half a bin of
+///          displacement at the top partial is @c bin_hz*sqrt(1 + B*h^2)/(h^3*f0).
+///          The criterion the fit's own suite judges a returned stretch by, not a
+///          band chosen to admit this fixture -- it is 1.05e-5 at C3 over 20
+///          partials against a bisected 1.03e-5, and 9.3% of @ref kStretchedB.
+double stretch_tolerance(double f0_hz, double inharmonicity, int n_partials) {
+  const double bin_hz = static_cast<double>(kSampleRate) / static_cast<double>(kNfft);
+  const double hd = static_cast<double>(n_partials);
+  return bin_hz * std::sqrt(1.0 + inharmonicity * hd * hd) / (hd * hd * hd * f0_hz);
+}
+
 /// @brief The error code a call throws, or Ok when it does not throw.
 template <typename Fn>
 sonare::ErrorCode code_of(Fn&& fn) {
@@ -97,14 +149,18 @@ sonare::ErrorCode code_of(Fn&& fn) {
 
 // --- Synthetic material ----------------------------------------------------
 
-/// @brief Adds a steady harmonic tone, partials at 1/h amplitude.
+/// @brief Adds a steady tone, partials at 1/h amplitude and @c h*f0*sqrt(1+B*h^2).
 /// @details The fixed per-harmonic phase keeps the partials from summing into an
 ///          impulse train, so the reconstruction's peak is the tone's own level
-///          rather than one sample of it.
-void add_tone(std::vector<float>& into, float f0_hz, float amplitude, int n_partials) {
+///          rather than one sample of it. At the default stretch the root is
+///          exactly one and the series is the harmonic one every fixture below it
+///          was written against.
+void add_tone(std::vector<float>& into, float f0_hz, float amplitude, int n_partials,
+              double inharmonicity = 0.0) {
   const double nyquist = 0.5 * static_cast<double>(kSampleRate);
   for (int h = 1; h <= n_partials; ++h) {
-    const double hz = static_cast<double>(h) * static_cast<double>(f0_hz);
+    const double hd = static_cast<double>(h);
+    const double hz = hd * static_cast<double>(f0_hz) * std::sqrt(1.0 + inharmonicity * hd * hd);
     if (hz >= nyquist) break;
     const double phase = 0.37 * static_cast<double>(h) * static_cast<double>(h);
     const float level = amplitude / static_cast<float>(h);
@@ -131,6 +187,34 @@ sonare::Audio source_audio() {
 
 sonare::Audio silent_audio() { return audio_of(std::vector<float>(kSourceSamples, 0.0f)); }
 
+/// @brief One stretched note, isolated, at the pitch the fit's reach covers.
+sonare::Audio stretched_tone_audio() {
+  std::vector<float> samples(kSourceSamples, 0.0f);
+  add_tone(samples, kStretchedHz, 0.25f, kStretchedPartials, kStretchedB);
+  return audio_of(std::move(samples));
+}
+
+/// @brief The same note with no stretch at all, whose fit is the harmonic series.
+sonare::Audio harmonic_tone_audio() {
+  std::vector<float> samples(kSourceSamples, 0.0f);
+  add_tone(samples, kStretchedHz, 0.25f, kStretchedPartials);
+  return audio_of(std::move(samples));
+}
+
+/// @brief The chord the fit refuses: a major triad whose notes' rival partials
+///        cover each other's span.
+/// @details The arithmetic the refusal comes from rather than the material: the
+///          rival partials under the lowest note's twentieth, times twice the
+///          window main lobe each, cover that span, so no note is left with an
+///          uncontested partial and every ridge falls under @c min_partials.
+sonare::Audio chord_audio() {
+  std::vector<float> samples(kChordSamples, 0.0f);
+  for (const float hz : {kStretchedHz, kChordMidHz, kChordTopHz}) {
+    add_tone(samples, hz, 0.18f, kStretchedPartials);
+  }
+  return audio_of(std::move(samples));
+}
+
 sonare::Spectrogram spectrogram_of(const sonare::Audio& audio,
                                    const sonare::StftConfig& stft = polyphony_stft_defaults()) {
   return sonare::Spectrogram::compute(audio, stft);
@@ -153,6 +237,7 @@ struct Chain {
   sonare::Spectrogram spectrum;
   MultiF0Track track;
   NoteMaskSet masks;
+  std::vector<float> inharmonicity_fit;
   std::vector<NoteObject> notes;
   int length = 0;
 };
@@ -163,6 +248,15 @@ Chain chain_by_hand(const sonare::Audio& audio, const PolyphonicEditConfig& conf
   built.spectrum = sonare::Spectrogram::compute(audio, config.extraction.stft);
   built.track = extract_multi_f0(audio, built.spectrum, config.extraction);
   built.masks = build_note_masks(built.spectrum, built.track, config.masks);
+  if (config.estimate_inharmonicity) {
+    // The order is the whole of the added stage's contract: the fit reads the
+    // declared geometry to tell a contested partial from a clear one, and the
+    // claims it returns are what the apportionment below divides.
+    built.inharmonicity_fit = estimate_track_inharmonicity(built.spectrum, built.track, built.masks,
+                                                           config.inharmonicity);
+    built.masks =
+        build_note_masks(built.spectrum, built.track, config.masks, built.inharmonicity_fit);
+  }
   built.masks = solve_shared_bins(built.spectrum, built.masks, built.track, config.shared_bins);
   built.notes =
       make_masked_notes(built.spectrum, built.track, built.masks, built.length, config.notes);
@@ -361,6 +455,10 @@ void require_same_masks(const NoteMaskSet& got, const NoteMaskSet& want) {
   REQUIRE(got.config.n_harmonics == want.config.n_harmonics);
   REQUIRE(got.config.claim_lobes == want.config.claim_lobes);
   REQUIRE(got.config.inharmonicity == want.config.inharmonicity);
+  // The per-ridge stretch the claims were actually placed with, which is a
+  // different figure from the declared one above and the only place the set says
+  // a fit reached it.
+  REQUIRE(got.inharmonicity == want.inharmonicity);
   REQUIRE(got.notes.size() == want.notes.size());
   for (size_t i = 0; i < want.notes.size(); ++i) {
     INFO("mask " << i);
@@ -1441,4 +1539,290 @@ TEST_CASE("a render config is refused where the render chain refuses it", "[poly
                   << " fields the up-front validator covers");
   REQUIRE(refused > 0);
   REQUIRE(hoisted > 0);
+}
+
+// --- The stretch fit, where the chain runs it ------------------------------
+
+TEST_CASE("the stretch fit is absent when it was not asked for, and absent is not refused",
+          "[polyphony_edit]") {
+  // Three answers, not two. An empty vector says the fit never looked; -1 says it
+  // looked and would not commit; a non-negative value is a measurement. A caller
+  // handed only the effective stretch cannot separate the second from the third,
+  // because a refused ridge ends up carrying the declared value and the declared
+  // value defaults to the same 0 a fit of the harmonic series returns.
+  const sonare::Audio audio = source_audio();
+
+  SECTION("not asked for") {
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio);
+    REQUIRE(!analysis.notes.empty());
+    REQUIRE(analysis.inharmonicity_fit.empty());
+    // The set carries no per-ridge geometry either, so every note reads the one
+    // declared value rather than a vector of copies of it.
+    REQUIRE(analysis.masks.inharmonicity.empty());
+    for (size_t i = 0; i < analysis.masks.notes.size(); ++i) {
+      INFO("note " << i);
+      REQUIRE(analysis.masks.stretch_of(i) == PolyphonicEditConfig{}.masks.inharmonicity);
+    }
+  }
+
+  SECTION("asked for") {
+    PolyphonicEditConfig config;
+    config.masks.inharmonicity = kDeclaredStretch;
+    config.estimate_inharmonicity = true;
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+    REQUIRE(!analysis.notes.empty());
+
+    // One entry per note whatever happened to each, which is what makes the vector
+    // indexable beside the notes rather than a list of the ridges that succeeded.
+    REQUIRE(analysis.inharmonicity_fit.size() == analysis.notes.size());
+    // Non-empty here against empty above is the observable that says the claims
+    // were built a second time at all.
+    REQUIRE(analysis.masks.inharmonicity.size() == analysis.notes.size());
+
+    for (size_t i = 0; i < analysis.notes.size(); ++i) {
+      const float fitted = analysis.inharmonicity_fit[i];
+      INFO("note " << i << " at " << analysis.notes[i].median_hz << " Hz: fit " << fitted
+                   << ", claims placed at " << analysis.masks.stretch_of(i));
+      REQUIRE(std::isfinite(fitted));
+      // Two outcomes and no third. Any other negative would reach the rebuild as a
+      // refusal and never be reported as one.
+      REQUIRE((fitted == kRefused || fitted >= 0.0f));
+      if (fitted == kRefused) {
+        REQUIRE(analysis.masks.stretch_of(i) == config.masks.inharmonicity);
+      } else {
+        REQUIRE(analysis.masks.stretch_of(i) == fitted);
+      }
+    }
+  }
+}
+
+TEST_CASE("a fitted stretch is the stretch the claims were rebuilt at", "[polyphony_edit]") {
+  // The value case. Without it every assertion about the fit is about a vector's
+  // length, and a stage that returned the declared value for every ridge would
+  // pass all of them.
+  PolyphonicEditConfig config;
+  // One voice per frame, so an isolated tone tracks as one ridge and the fitted
+  // value pairs with a pitch the case knows.
+  config.extraction.estimation.max_polyphony = 1;
+  config.masks.inharmonicity = kDeclaredStretch;
+  config.estimate_inharmonicity = true;
+
+  PolyphonicEditConfig declared_only = config;
+  declared_only.estimate_inharmonicity = false;
+
+  SECTION("a stretched tone") {
+    const sonare::Audio audio = stretched_tone_audio();
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+    INFO("the extraction found " << analysis.notes.size() << " notes");
+    REQUIRE(analysis.notes.size() == 1);
+    // The fixture's own premise: a fit against a pitch the tracker read as
+    // something else would be compared with the wrong stretch.
+    INFO("tracked at " << analysis.notes[0].median_hz << " Hz");
+    REQUIRE(std::abs(analysis.notes[0].median_hz - kStretchedHz) < 0.03f * kStretchedHz);
+
+    REQUIRE(analysis.inharmonicity_fit.size() == 1);
+    const float fitted = analysis.inharmonicity_fit[0];
+    const double tolerance = stretch_tolerance(kStretchedHz, kStretchedB, kStretchedPartials);
+    INFO("fit " << fitted << " against a synthesised " << kStretchedB << ", tolerance "
+                << tolerance);
+    REQUIRE(fitted != kRefused);
+    REQUIRE(fitted >= 0.0f);
+    REQUIRE(std::abs(static_cast<double>(fitted) - static_cast<double>(kStretchedB)) <= tolerance);
+
+    // The comparison below cannot tell a rebuild from no rebuild while the two
+    // numbers agree, so the guard sits at the assertion rather than in a fixture.
+    REQUIRE(fitted != config.masks.inharmonicity);
+    REQUIRE(analysis.masks.stretch_of(0) == fitted);
+
+    // And the claims really moved: the declared geometry puts this tone's
+    // twentieth partial some five bins off where the fitted geometry puts it, so
+    // the two sets do not name the same bins.
+    const PolyphonicAnalysis declared = analyze_polyphonic(audio, declared_only);
+    REQUIRE(declared.notes.size() == analysis.notes.size());
+    REQUIRE(declared.masks.stretch_of(0) == kDeclaredStretch);
+    REQUIRE(masks_differ(declared.masks, analysis.masks));
+  }
+
+  SECTION("a tone with no stretch, whose fit is the harmonic series") {
+    // Zero is a fitted result and the declared value's own default, which is the
+    // one pair the contract insists stays distinguishable. The declared value here
+    // is not zero, so a fit that returns the series still moves the geometry.
+    const sonare::Audio audio = harmonic_tone_audio();
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+    INFO("the extraction found " << analysis.notes.size() << " notes");
+    REQUIRE(analysis.notes.size() == 1);
+    REQUIRE(analysis.inharmonicity_fit.size() == 1);
+
+    const float fitted = analysis.inharmonicity_fit[0];
+    const double tolerance = stretch_tolerance(kStretchedHz, 0.0, kStretchedPartials);
+    INFO("fit " << fitted << " against a synthesised 0, tolerance " << tolerance);
+    REQUIRE(fitted != kRefused);
+    REQUIRE(fitted >= 0.0f);
+    REQUIRE(static_cast<double>(fitted) <= tolerance);
+    REQUIRE(fitted != config.masks.inharmonicity);
+    REQUIRE(analysis.masks.stretch_of(0) == fitted);
+  }
+}
+
+TEST_CASE("a refused ridge keeps the declared geometry rather than the sentinel",
+          "[polyphony_edit]") {
+  // Every refusal the fit can reach on material it otherwise fits, so the outcome
+  // is attributable to the threshold and not to the fixture. Each entry moves one
+  // threshold past what this tone can supply: twenty claims are placed, a correct
+  // fit leaves hundredths of a bin behind, and the stretch synthesised is 1.13e-4.
+  const sonare::Audio audio = stretched_tone_audio();
+
+  PolyphonicEditConfig base;
+  base.extraction.estimation.max_polyphony = 1;
+  base.masks.inharmonicity = kDeclaredStretch;
+
+  const PolyphonicAnalysis declared = analyze_polyphonic(audio, base);
+  REQUIRE(declared.notes.size() == 1);
+
+  struct NamedRefusal {
+    const char* what;
+    InharmonicityConfig config;
+  };
+  std::vector<NamedRefusal> refusals;
+  {
+    InharmonicityConfig too_few;
+    too_few.min_partials = 128;
+    refusals.push_back({"more partials than the claim count places", too_few});
+    InharmonicityConfig too_loose;
+    too_loose.max_residual_bins = 1e-6f;
+    refusals.push_back({"a misfit ceiling under the fit's own rounding", too_loose});
+    InharmonicityConfig too_stiff;
+    too_stiff.max_inharmonicity = 1e-6f;
+    refusals.push_back({"a stretch ceiling under the one synthesised", too_stiff});
+  }
+
+  for (const NamedRefusal& entry : refusals) {
+    INFO(entry.what);
+    PolyphonicEditConfig config = base;
+    config.estimate_inharmonicity = true;
+    config.inharmonicity = entry.config;
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+    REQUIRE(analysis.notes.size() == declared.notes.size());
+    REQUIRE(analysis.inharmonicity_fit.size() == 1);
+
+    const float fitted = analysis.inharmonicity_fit[0];
+    INFO("returned " << fitted << ", claims placed at " << analysis.masks.stretch_of(0));
+    REQUIRE(fitted == kRefused);
+    // Stated as both halves: zero is a fitted result meaning the harmonic series,
+    // and a build returning it here would send a caller to the ideal series where
+    // it meant to fall back on the declared value.
+    REQUIRE(fitted != 0.0f);
+
+    // The refusal reaches the geometry as the declared value and not as -1, which
+    // is the one substitution nothing downstream could undo.
+    REQUIRE(analysis.masks.inharmonicity.size() == 1);
+    REQUIRE(analysis.masks.stretch_of(0) == kDeclaredStretch);
+    // And the claims are the ones the declared value alone would have placed, so a
+    // refusal costs nothing rather than costing a differently wrong geometry.
+    REQUIRE(!masks_differ(declared.masks, analysis.masks));
+  }
+}
+
+TEST_CASE("the fit refuses a chord, and says so once per note", "[polyphony_edit]") {
+  // The reach the whole stage is opt-in for. Every partial of every note here is
+  // contested -- the rival partials under the lowest note's twentieth, at twice a
+  // window main lobe of exclusion each, cover that span -- so no ridge reaches
+  // min_partials and each one falls back on the declared stretch.
+  PolyphonicEditConfig config;
+  config.masks.inharmonicity = kDeclaredStretch;
+  config.estimate_inharmonicity = true;
+  const PolyphonicAnalysis analysis = analyze_polyphonic(chord_audio(), config);
+
+  std::string tracked;
+  for (const NoteObject& note : analysis.notes) {
+    tracked += std::to_string(note.median_hz) + " Hz ";
+  }
+  INFO("the extraction tracked " << tracked);
+  REQUIRE(analysis.notes.size() == 3);
+  REQUIRE(analysis.inharmonicity_fit.size() == 3);
+  // Non-empty, so the rebuild ran and the values below are the ones it used rather
+  // than the fallback stretch_of reports for a set that has none.
+  REQUIRE(analysis.masks.inharmonicity.size() == 3);
+
+  for (size_t i = 0; i < analysis.notes.size(); ++i) {
+    INFO("note " << i << " at " << analysis.notes[i].median_hz << " Hz: fit "
+                 << analysis.inharmonicity_fit[i] << ", claims placed at "
+                 << analysis.masks.stretch_of(i));
+    REQUIRE(analysis.inharmonicity_fit[i] == kRefused);
+    REQUIRE(analysis.inharmonicity_fit[i] != 0.0f);
+    REQUIRE(analysis.masks.stretch_of(i) == kDeclaredStretch);
+  }
+}
+
+TEST_CASE("the fit is the chain below it, run between the claims and the apportionment",
+          "[polyphony_edit]") {
+  // The only case that can tell the stated order from any other. The fit is handed
+  // the declared-stretch claims and its result is what the apportionment divides,
+  // so a fit run over the rebuilt claims, or after the division, returns a
+  // different vector and places different bins -- and every other case here would
+  // still pass.
+  const sonare::Audio audio = stretched_tone_audio();
+  PolyphonicEditConfig config;
+  config.extraction.estimation.max_polyphony = 1;
+  config.masks.inharmonicity = kDeclaredStretch;
+  config.estimate_inharmonicity = true;
+
+  const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+  const Chain want = chain_by_hand(audio, config);
+
+  REQUIRE(!analysis.notes.empty());
+  // The oracle's fit stage is not a no-op on this material, or the comparison
+  // below holds between two chains that both skipped it.
+  REQUIRE(!want.inharmonicity_fit.empty());
+  REQUIRE(want.inharmonicity_fit[0] != kRefused);
+  REQUIRE(want.inharmonicity_fit[0] != config.masks.inharmonicity);
+  REQUIRE(masks_differ(build_note_masks(want.spectrum, want.track, config.masks), want.masks));
+
+  REQUIRE(analysis.inharmonicity_fit == want.inharmonicity_fit);
+  require_same_spectrum(analysis.spectrum, want.spectrum);
+  require_same_track(analysis.track, want.track);
+  require_same_masks(analysis.masks, want.masks);
+  require_same_notes(analysis.notes, want.notes);
+  REQUIRE(analysis.length == want.length);
+  require_usable_notes(analysis);
+}
+
+TEST_CASE("the fit's own configuration is read where the fit runs and nowhere else",
+          "[polyphony_edit]") {
+  // Both halves. A field the chain refuses with the fit off would refuse a caller
+  // for a stage it never reaches; a field it accepts with the fit on would reach
+  // the geometry unchecked.
+  // Silence, because the fit's config is checked before anything is read off the
+  // data: a rejection here is the check and not the material.
+  const sonare::Audio audio = silent_audio();
+
+  struct NamedFitConfig {
+    const char* what;
+    InharmonicityConfig config;
+  };
+  std::vector<NamedFitConfig> rejected;
+  for (const int partials : {1, 129}) {
+    InharmonicityConfig config;
+    config.min_partials = partials;
+    rejected.push_back({"a partial count outside [2, 128]", config});
+  }
+  for (const float bad : {0.0f, -1.0f, kNaN, kInf}) {
+    InharmonicityConfig residual;
+    residual.max_residual_bins = bad;
+    rejected.push_back({"a misfit ceiling that is not finite and positive", residual});
+    InharmonicityConfig stretch;
+    stretch.max_inharmonicity = bad;
+    rejected.push_back({"a stretch ceiling that is not finite and positive", stretch});
+  }
+
+  for (const NamedFitConfig& entry : rejected) {
+    INFO(entry.what);
+    PolyphonicEditConfig off;
+    off.inharmonicity = entry.config;
+    REQUIRE(code_of([&] { analyze_polyphonic(audio, off); }) == sonare::ErrorCode::Ok);
+
+    PolyphonicEditConfig on = off;
+    on.estimate_inharmonicity = true;
+    REQUIRE(code_of([&] { analyze_polyphonic(audio, on); }) == sonare::ErrorCode::InvalidParameter);
+  }
 }
