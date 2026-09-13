@@ -424,8 +424,10 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     // never drifts away from the C/Node/Python bounce normalization target.
     // See SONARE_DEFAULT_BOUNCE_TARGET_LUFS in src/sonare_c_types.h and the
     // sentinel handling in sonare_engine_bounce_offline.
-    float target_lufs = floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
-    if (target_lufs == 0.0f || !std::isfinite(target_lufs)) {
+    // floatOption covers the non-finite half of the sentinel; 0 is the other
+    // half and stays here because only this field spells the default that way.
+    float target_lufs = floatOption(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
+    if (target_lufs == 0.0f) {
       target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
     }
     metering::normalize_interleaved_to_lufs(interleaved, frames, num_channels, target_sample_rate,

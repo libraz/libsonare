@@ -43,11 +43,14 @@ void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val confi
       cfg.waveform =
           static_cast<sonare::midi::SynthWaveform>(builtinWaveformFromVal(config["waveform"]));
     }
-    cfg.gain = floatProperty(config, "gain", 0.0f);
-    cfg.attack_ms = floatProperty(config, "attackMs", 0.0f);
-    cfg.decay_ms = floatProperty(config, "decayMs", 0.0f);
-    cfg.sustain = floatProperty(config, "sustain", 0.0f);
-    cfg.release_ms = floatProperty(config, "releaseMs", 0.0f);
+    // clamp_synth_config reads a zero, non-positive or non-finite field as "use
+    // the built-in default" (see positive_or_default in midi/builtin_synth.cpp),
+    // which is why 0 is the default here rather than the real one.
+    cfg.gain = floatOption(config, "gain", 0.0f);
+    cfg.attack_ms = floatOption(config, "attackMs", 0.0f);
+    cfg.decay_ms = floatOption(config, "decayMs", 0.0f);
+    cfg.sustain = floatOption(config, "sustain", 0.0f);
+    cfg.release_ms = floatOption(config, "releaseMs", 0.0f);
     cfg.polyphony = intProperty(config, "polyphony", 0);
   }
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(sonare::midi::clamp_synth_config(cfg));

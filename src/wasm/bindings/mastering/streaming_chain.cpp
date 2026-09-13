@@ -16,17 +16,19 @@ namespace {
 /// @brief Build StreamingMasteringChainOptions from an optional config val.
 ///
 /// Reads the optional numeric fields `loudnessStaticGainDb` and
-/// `loudnessStaticGainPeakDb`. Absent fields keep their NaN ("not provided")
-/// defaults so an enabled loudness stage behaves as before.
+/// `loudnessStaticGainPeakDb`. Both defaults are the NaN that
+/// StreamingMasteringChainOptions spells "not provided" with, so floatOption is
+/// the reader: a non-finite value means the same thing, and an enabled loudness
+/// stage still refuses a gain it was never given.
 mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val config) {
   mastering::api::StreamingMasteringChainOptions options;
   if (hasProperty(config, "loudnessStaticGainDb")) {
     options.loudness_static_gain_db =
-        floatProperty(config, "loudnessStaticGainDb", options.loudness_static_gain_db);
+        floatOption(config, "loudnessStaticGainDb", options.loudness_static_gain_db);
   }
   if (hasProperty(config, "loudnessStaticGainPeakDb")) {
     options.loudness_static_gain_peak_db =
-        floatProperty(config, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db);
+        floatOption(config, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db);
   }
   return options;
 }

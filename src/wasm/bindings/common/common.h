@@ -205,7 +205,27 @@ std::vector<int32_t> int32ArrayToVector(val arr);
 std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
+/// @brief Presence-checked float reader: an absent field takes @p default_value,
+///        a present one is validated by @ref checkedFloatFromVal.
+/// @details Presence and validity are separate questions, and only the first one
+///          has a default. A present NaN is a caller error rather than a request
+///          to fall back: most options bags here are read straight into a config
+///          struct whose guards are written as `x > lo` or `isfinite(a) && a > b`,
+///          so a NaN lands on the permissive arm and the call returns a plausible
+///          finite result. Use @ref floatOption for the fields whose owner has a
+///          documented "non-finite means unspecified" convention.
+/// @throws SonareException(InvalidParameter) naming @p key.
 float floatProperty(val object, const char* key, float default_value);
+/// @brief Fallback float reader: a field that is absent, or present but not a
+///        finite number, takes @p default_value.
+/// @details The sibling of @ref floatProperty for a field whose owner documents
+///          a non-finite value as "unspecified" -- the WASM half of the Node
+///          addon's node_*_option / *Property split, where the _option family is
+///          the one that substitutes rather than rejects. Reserved for that case:
+///          a reader that silently eats a bad number reports success with a
+///          plausible result, so every call site must be able to point at the
+///          convention it is honouring.
+float floatOption(val object, const char* key, float default_value);
 /// @brief Narrows a JS number to int, rejecting anything out of range or
 ///        fractional.
 /// @details The one place that knows how to do this safely. A reader that needs
@@ -299,7 +319,7 @@ int requireMatchedLength(const val& a, const val& b, const char* subject,
 /// ternary's default/else arm silently substitute whichever member it
 /// happens to return. @p subject names the field in the error message.
 /// Mirrors the C ABI's range-checked enum converters (e.g. core_common.cpp's
-/// fill_key_profile / fill_key_modes, features_streaming.cpp's valid_window),
+/// fill_key_profile / fill_key_modes, sonare_c_internal.h's valid_window),
 /// which reject an unmapped ordinal rather than defaulting it.
 /// @throws SonareException(InvalidParameter) when @p value is outside
 /// [@p min, @p max].

@@ -253,7 +253,14 @@ val objectProperty(val object, const char* key) {
 
 float floatProperty(val object, const char* key, float default_value) {
   val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : value.as<float>();
+  return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
+}
+
+float floatOption(val object, const char* key, float default_value) {
+  val value = objectProperty(object, key);
+  if (value.isUndefined()) return default_value;
+  const float number = value.as<float>();
+  return std::isfinite(number) ? number : default_value;
 }
 
 int checkedIntFromVal(const val& value, const char* key) {

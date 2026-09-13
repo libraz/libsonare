@@ -17,7 +17,9 @@ import {
   masteringProcessorNames,
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
+  masteringStreamingPreview,
   RealtimeEngine,
+  type StreamingPlatform,
 } from '../dist/index.js';
 
 beforeAll(async () => {
@@ -106,6 +108,67 @@ describe('mastering pair input guards', () => {
     const source = nanBuffer(1024);
     const reference = new Float32Array(1024);
     expect(() => masteringPairAnalyze(name, source, reference, 22050, {})).toThrow();
+  });
+});
+
+describe('masteringStreamingPreview platform-field guards', () => {
+  // A quiet tone with one full-scale burst: the crest factor is what makes the
+  // normalization gain push the true peak well past a real ceiling, so the
+  // ceilingRisk verdict is decided by ceilingDb rather than by the material.
+  const previewRate = 22050;
+  const clippingMaterial = (() => {
+    const buf = new Float32Array(previewRate);
+    for (let i = 0; i < buf.length; i++) {
+      buf[i] = Math.sin((2 * Math.PI * 220 * i) / previewRate) * 0.01;
+    }
+    for (let i = 0; i < 16; i++) {
+      buf[previewRate / 2 + i] = i % 2 === 0 ? 0.99 : -0.99;
+    }
+    return buf;
+  })();
+
+  // Returns the verdict itself rather than a thrown/not-thrown flag: the defect
+  // this covers does not throw, it answers "no limiting needed" with a report
+  // in which no field is out of the ordinary.
+  function ceilingVerdict(platform: StreamingPlatform): Record<string, unknown> {
+    let json: string;
+    try {
+      json = masteringStreamingPreview(clippingMaterial, previewRate, [platform]);
+    } catch {
+      return { rejected: true };
+    }
+    return { ceilingRisk: JSON.parse(json).platforms[0].ceilingRisk };
+  }
+
+  it('reports a ceiling risk for material that will clip at a real ceiling', () => {
+    expect(ceilingVerdict({ name: 'strict', targetLufs: -14, ceilingDb: -1 })).toEqual({
+      ceilingRisk: true,
+    });
+  });
+
+  it('reports no ceiling risk once the ceiling is above the normalized peak', () => {
+    expect(ceilingVerdict({ name: 'open', targetLufs: -14, ceilingDb: 40 })).toEqual({
+      ceilingRisk: false,
+    });
+  });
+
+  it('rejects a non-finite ceilingDb instead of answering with it', () => {
+    // Each non-finite value separately: the comparison the verdict comes from is
+    // `truePeak + gain > ceilingDb`, which a NaN sends to the false arm while
+    // one of the infinities still decides correctly.
+    for (const ceilingDb of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(ceilingVerdict({ name: 'strict', targetLufs: -14, ceilingDb })).toEqual({
+        rejected: true,
+      });
+    }
+  });
+
+  it('rejects a non-finite targetLufs instead of answering with it', () => {
+    for (const targetLufs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(ceilingVerdict({ name: 'strict', targetLufs, ceilingDb: -1 })).toEqual({
+        rejected: true,
+      });
+    }
   });
 });
 

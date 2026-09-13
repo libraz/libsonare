@@ -291,8 +291,11 @@ val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
     // converge" rather than as a zero reverberation time.
     if (!bands.isUndefined() && !bands.isNull()) rt60_bands = float32ArrayToVector(bands);
   }
+  // apply_room_measurement takes a non-positive or non-finite volume as "no
+  // measurement" and leaves lateDelayMs at the caller's value, which is also
+  // what the C ABI does with the same field.
   mastering::repair::apply_room_measurement(cfg, mid_frequency_rt60(rt60_bands),
-                                            floatProperty(estimate, "volume", 0.0f));
+                                            floatOption(estimate, "volume", 0.0f));
 
   val out = val::object();
   out.set("threshold", cfg.threshold);
