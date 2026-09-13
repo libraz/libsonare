@@ -3269,6 +3269,16 @@
       "status": "native_only",
       "option_status": "pending"
     },
+    "polyphonic-notes": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "polyphonic-render": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
     "preemphasis": {
       "classification": "native_only",
       "status": "native_only",

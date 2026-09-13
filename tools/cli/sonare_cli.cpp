@@ -42,6 +42,12 @@ const std::vector<CommandInfo>& get_commands() {
       {"time-stretch", "Time stretch audio", cmd_time_stretch, true},
       {"pitch-correct", "Correct pitch to target MIDI note", cmd_pitch_correct, true},
       {"note-stretch", "Stretch a note region", cmd_note_stretch, true},
+      {"polyphonic-notes", "List the notes and per-frame voice count of a polyphonic analysis",
+       cmd_polyphonic_notes, true},
+      {"polyphonic-render",
+       "Apply note edits to a polyphonic analysis (--edit N.FIELD=VALUE, repeatable; -o out.wav; "
+       "amplitude envelopes are outside this CLI)",
+       cmd_polyphonic_render, true},
       {"voice-change", "Apply pitch and formant voice change", cmd_voice_change, true},
       {"voice-presets", "List realtime voice changer presets", cmd_voice_presets, false},
       {"voice-preset", "Print a realtime voice changer preset JSON", cmd_voice_preset, false},

@@ -36,6 +36,7 @@
 #include "core/synthesis.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
+#include "editing/polyphony/polyphonic_edit.h"
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/voice_changer.h"
 #include "effects/hpss.h"
@@ -169,6 +170,8 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio);
 int cmd_time_stretch(const CliArgs& args, const Audio& audio);
 int cmd_pitch_correct(const CliArgs& args, const Audio& audio);
 int cmd_note_stretch(const CliArgs& args, const Audio& audio);
+int cmd_polyphonic_notes(const CliArgs& args, const Audio& audio);
+int cmd_polyphonic_render(const CliArgs& args, const Audio& audio);
 int cmd_voice_change(const CliArgs& args, const Audio& audio);
 int cmd_voice_presets(const CliArgs& args, const Audio& audio);
 int cmd_voice_preset(const CliArgs& args, const Audio& audio);

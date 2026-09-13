@@ -408,6 +408,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "note-stretch", true,
                 {int_value("onset", 0), int_value("offset", 0), number_value("ratio", 1.0),
                  required_output()});
+    add_command(commands, "polyphonic-notes", true, {});
+    // One assignment per --edit occurrence, as --set does: the value reaches the
+    // field parser as written, so no separator a fold could pick has to be
+    // reserved.
+    add_command(commands, "polyphonic-render", true,
+                {string_value("edit", "", false, true), required_output()});
     add_command(commands, "voice-change", true,
                 {string_value("preset", ""), path_value("preset-json"), path_value("preset-pack"),
                  string_value("set", "", false, true), number_value("pitch-semitones"),
