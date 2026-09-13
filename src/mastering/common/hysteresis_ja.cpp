@@ -114,7 +114,11 @@ float JilesAtherton::process(JilesAthertonState& state, float field, float sampl
   int sub_steps = 1;
   if (config_.max_field_step > 0.0f) {
     const float wanted = std::abs(d_field) / config_.max_field_step;
-    sub_steps = std::min(kMaxSubSteps, 1 + static_cast<int>(wanted));
+    // A failed upper-bound test rather than a min() after the cast: a non-finite or
+    // out-of-range field converts to an unspecified int, and the architectures
+    // disagree on its sign, so on one of them the loop below ran zero times.
+    sub_steps =
+        wanted < static_cast<float>(kMaxSubSteps) ? 1 + static_cast<int>(wanted) : kMaxSubSteps;
   }
   const float start_field = state.previous_field;
   const float sub_d_field = d_field / static_cast<float>(sub_steps);
