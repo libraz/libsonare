@@ -27,11 +27,17 @@ Stats Stats::compute(const std::vector<float>& v) {
 
   s.min = *std::min_element(v.begin(), v.end());
   s.max = *std::max_element(v.begin(), v.end());
-  s.mean = std::accumulate(v.begin(), v.end(), 0.0f) / static_cast<float>(v.size());
 
-  float var = 0.0f;
-  for (float x : v) var += (x - s.mean) * (x - s.mean);
-  s.std = std::sqrt(var / static_cast<float>(v.size()));
+  // Accumulate in double: a float sum drops low digits of a mean or a variance long before an
+  // array of the sizes these commands report ends, and the other CLI publishes the same quantity.
+  const double mean = std::accumulate(v.begin(), v.end(), 0.0) / static_cast<double>(v.size());
+  double var = 0.0;
+  for (float x : v) {
+    const double deviation = static_cast<double>(x) - mean;
+    var += deviation * deviation;
+  }
+  s.mean = static_cast<float>(mean);
+  s.std = static_cast<float>(std::sqrt(var / static_cast<double>(v.size())));
 
   return s;
 }

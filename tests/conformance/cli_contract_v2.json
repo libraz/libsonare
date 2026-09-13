@@ -3163,7 +3163,7 @@
     },
     "tempogram": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "plp": {
@@ -6675,6 +6675,95 @@
           "id": "success",
           "argv": [
             "mel",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "tempogram",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": 128,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "win-length",
+          "type": "integer",
+          "default": 384,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "win_length": "integer",
+            "n_frames": "integer",
+            "stats": {
+              "keys": {
+                "mean": "number",
+                "std": "number",
+                "min": "number",
+                "max": "number"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "tempogram",
             "{audio}",
             "--json"
           ],

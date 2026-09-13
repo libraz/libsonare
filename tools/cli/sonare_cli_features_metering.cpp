@@ -19,7 +19,9 @@ int cmd_mel(const CliArgs& args, const Audio& audio) {
 
   float min_v = *std::min_element(data, data + total);
   float max_v = *std::max_element(data, data + total);
-  float mean_v = std::accumulate(data, data + total, 0.0f) / static_cast<float>(total);
+  // Accumulate in double; a float sum drops low digits well before a full mel grid ends.
+  float mean_v =
+      static_cast<float>(std::accumulate(data, data + total, 0.0) / static_cast<double>(total));
 
   if (args.json_output) {
     JsonBuilder()
@@ -254,8 +256,9 @@ int cmd_onset_env(const CliArgs& args, const Audio& audio) {
   float peak = *max_it;
   int peak_frame = static_cast<int>(std::distance(envelope.begin(), max_it));
   float peak_time = static_cast<float>(peak_frame * args.hop_length) / audio.sample_rate();
-  float mean =
-      std::accumulate(envelope.begin(), envelope.end(), 0.0f) / static_cast<float>(envelope.size());
+  // Accumulate in double; a float sum drops low digits well before a full envelope ends.
+  float mean = static_cast<float>(std::accumulate(envelope.begin(), envelope.end(), 0.0) /
+                                  static_cast<double>(envelope.size()));
 
   if (args.json_output) {
     JsonBuilder()
