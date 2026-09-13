@@ -169,6 +169,10 @@ class DynamicEq : public rt::ProcessorBase {
   float band_detector_db(const float* const* channels, int num_channels, int num_samples,
                          size_t index);
   void ensure_detector(size_t index, int num_channels);
+  // Applies the recursive-cell rule to the detector and gain state that survives
+  // a block. O(bands x channels) and independent of block size, so the
+  // per-sample input scan the realtime contract avoids is not reintroduced.
+  void discard_non_finite_detector_state() noexcept;
   static float dynamic_gain_delta(const DynamicEqBand& band, float detector_db);
   void rebuild(int num_samples = 0);
   void apply_band_gain(size_t index, float gain_db);

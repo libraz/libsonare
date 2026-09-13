@@ -8,10 +8,12 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
 namespace {
 
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kButterworthQ;
 using sonare::constants::kPiD;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
@@ -275,6 +277,8 @@ void CutFilter::process_stage(const std::array<Section, kMaxSections>& sections,
       state.z2 = c.b2 * x - c.a2 * y;
       samples[i] = y;
     }
+    // Two floats per section per channel, once per block.
+    discard_group_if_non_finite(state.z1, state.z2);
   }
 }
 

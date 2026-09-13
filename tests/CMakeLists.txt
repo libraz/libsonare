@@ -144,6 +144,7 @@ add_executable(sonare_tests
   api/sonare_c_effects_extra_test.cpp
   api/sonare_c_note_objects_test.cpp
   api/sonare_c_note_split_merge_test.cpp
+  api/sonare_c_polyphony_test.cpp
   api/sonare_c_percussive_events_test.cpp
   api/sonare_c_metering_extra_test.cpp
   conformance/public_input_conformance_test.cpp
@@ -217,6 +218,7 @@ if(BUILD_MASTERING)
     mastering/eq_phase_test.cpp
     mastering/eq_specialized_test.cpp
     mastering/eq_dynamic_detail_test.cpp
+    mastering/eq_non_finite_recovery_test.cpp
     mastering/final_test.cpp
     mastering/golden_hash_test.cpp
     mastering/hysteresis_relaxation_test.cpp
@@ -399,6 +401,7 @@ endif()
 # these TUs unconditionally too instead of coupling them to voice-changer.
 target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_daw.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_polyphony.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_midi.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_clips.cpp)

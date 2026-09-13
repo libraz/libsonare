@@ -12,9 +12,12 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
 
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 using sonare::constants::kTwoPiD;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
@@ -64,6 +67,9 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
             ? band_detector_db(detector_channels, detector_num_channels, num_samples, i)
             : kFloorDb;
   }
+  // Before the reading reaches a gain target, so a poisoned detector cannot hand
+  // a non-finite gain to a band.
+  discard_non_finite_detector_state();
 
   // Compute each band's target gain (static + dynamic delta) once per block, then
   // evolve the applied gain toward that target at SAMPLE rate inside the loop and
@@ -110,6 +116,35 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
   }
 
   clear_sidechain();
+}
+
+void DynamicEq::discard_non_finite_detector_state() noexcept {
+  discard_if_non_finite(last_detector_db_, kFloorDb);
+  for (size_t i = 0; i < kMaxBands; ++i) {
+    bool discarded = false;
+    for (auto& channel : detectors_[i].channels) {
+      // Four taps and an envelope per band per channel is the whole per-block
+      // cost. The delay ring is history too, but it is walked only when the
+      // group trips, never per block.
+      if (discard_group_if_non_finite(channel.filter_a.z1, channel.filter_a.z2, channel.filter_b.z1,
+                                      channel.filter_b.z2, channel.envelope)) {
+        std::fill(channel.look_ring.begin(), channel.look_ring.end(), 0.0f);
+        channel.look_pos = 0;
+        discarded = true;
+      }
+    }
+    // The reading a discarded detector produced is not usable either.
+    if (discarded) {
+      last_band_detector_db_[i] = kFloorDb;
+    }
+    discard_if_non_finite(last_band_detector_db_[i], kFloorDb);
+    discard_if_non_finite(smoothed_gain_db_[i], 0.0f);
+    discard_if_non_finite(target_gain_db_[i], 0.0f);
+    discard_if_non_finite(last_applied_gain_db_[i], 0.0f);
+    // last_applied_coeff_gain_db_ is deliberately NaN until a band is first
+    // programmed, and the skip test it feeds reads that NaN as "reprogram".
+    // Discarding it here would turn the first apply into a skip.
+  }
 }
 
 void DynamicEq::apply_band_gain(size_t index, float gain_db) {

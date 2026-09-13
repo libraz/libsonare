@@ -7,9 +7,12 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
 
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 
 EqualizerProcessor::EqualizerProcessor(EqualizerProcessorConfig config)
@@ -104,6 +107,9 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
       rms_db(const_cast<const float* const*>(channels), num_channels, num_samples);
   if (has_dynamic_bands_) {
     update_dynamic_state(const_cast<const float* const*>(channels), num_channels, num_samples);
+    // Before the detector's reading reaches coefficient design, so a poisoned
+    // detector cannot hand a non-finite gain to a band.
+    discard_non_finite_dynamic_state();
     update_iir_bands_preserving_state(num_samples);
   }
   if (has_lr_linear_bands_) {
@@ -164,6 +170,13 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
     }
   }
   apply_auto_gain(channels, num_channels, num_samples, input_db);
+  // The auto-gain smoother is driven by the block RMS of both the input and the
+  // output, so a non-finite sample reaches it whether or not it survived the
+  // filters.
+  if (discard_if_non_finite(smoothed_auto_gain_db_, 0.0f)) {
+    last_auto_gain_db_ = 0.0f;
+  }
+  discard_if_non_finite(last_auto_gain_db_, 0.0f);
   apply_output_gain_and_pan(channels, num_channels, num_samples);
   publish_spectrum_snapshot(pre_snapshot, const_cast<const float* const*>(channels), num_channels,
                             num_samples);
@@ -200,6 +213,34 @@ void EqualizerProcessor::reset() {
   smoothed_auto_gain_db_ = 0.0f;
   spectrum_analyzer_.reset();
   clear_sidechain();
+}
+
+void EqualizerProcessor::discard_non_finite_dynamic_state() noexcept {
+  discard_if_non_finite(last_detector_db_, kFloorDb);
+  for (size_t i = 0; i < kMaxBands; ++i) {
+    bool discarded = false;
+    for (auto& state : detector_states_[i]) {
+      // Five scalars per band per channel is the whole per-block cost. The delay
+      // ring is the detector's history too, but it is walked only when the group
+      // trips, never per block.
+      if (discard_group_if_non_finite(state.filter_a_z1, state.filter_a_z2, state.filter_b_z1,
+                                      state.filter_b_z2, state.envelope)) {
+        std::fill(state.look_ring.begin(), state.look_ring.end(), 0.0f);
+        state.look_pos = 0;
+        discarded = true;
+      }
+    }
+    // The reading a discarded detector produced is not usable either.
+    if (discarded) {
+      last_band_detector_db_[i] = kFloorDb;
+    }
+    discard_if_non_finite(last_band_detector_db_[i], kFloorDb);
+    // Reinitialised by a floor-sentinel comparison in update_dynamic_state,
+    // which a non-finite value answers false to forever.
+    discard_if_non_finite(auto_threshold_db_[i], kFloorDb);
+    discard_if_non_finite(smoothed_gain_db_[i], 0.0f);
+    discard_if_non_finite(last_applied_gain_db_[i], 0.0f);
+  }
 }
 
 bool EqualizerProcessor::set_parameter(unsigned int param_id, float value) {
