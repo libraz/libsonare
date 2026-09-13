@@ -47,7 +47,7 @@ struct NoteMaskConfig {
   /// either side of the partial -- counting in lobes rather than in bins is what
   /// makes the value travel across zero padding instead of describing one
   /// framing. Zero padding is the axis it is invariant on and the only one: the
-  /// width in Hz works out to @c 2 * claim_lobes * sample_rate / win_length, so
+  /// half-width in Hz works out to @c 2 * claim_lobes * sample_rate / win_length, so
   /// it does not depend on @c n_fft at all, and halving the window doubles it --
   /// which is the window's own main lobe widening, not a defect.
   ///
@@ -75,15 +75,25 @@ struct NoteMaskConfig {
   /// B in @c f_h = h * f0 * sqrt(1 + B * h^2), the same stretch the salience
   /// model uses. 0 is the ideal harmonic series.
   ///
-  /// Leaving it at 0 for material that is stretched costs more than a widened
-  /// claim would. At a piano's B of 1e-4 the highest partial of a twenty-harmonic
-  /// claim sits 2.29 bins from where the claim puts it, against a half-width of 2
-  /// at the default @ref claim_lobes, so the claim misses its own partial
-  /// entirely; at 1e-3 it misses by 22.39 bins. A partial outside every claim is
-  /// residual, and the residual is carried unedited -- so it keeps sounding at the
-  /// old pitch after its note is moved. Declare it rather than widening
-  /// @ref claim_lobes, which buys the same reach by claiming more of the
-  /// neighbours.
+  /// At a piano's 1e-4 the twentieth partial of a B4 sits 18.2 bins from where a
+  /// claim built on 0 puts it, against a half-width of 2 at the default
+  /// @ref claim_lobes: the claim misses its own partial, which becomes residual,
+  /// and the residual is carried unedited -- so it keeps sounding at the old pitch
+  /// after its note is moved. Landing inside the half-width is not landing right,
+  /// though: the claim is flat over a main lobe 4 bins wide, so half a bin of
+  /// offset already leaves 6 dB more behind and the usable tolerance is about a
+  /// quarter of the half-width. Measuring the margin by whether the partial is
+  /// still inside its claim overstates it fourfold.
+  ///
+  /// **One value covers about an octave.** On a sampled piano B runs 1.13e-4 at C3
+  /// to 1.04e-3 at C5, while the declared range that holds a note within 6 dB of
+  /// its own best is 1.2x at C3 and 1.008x at D5 -- the tolerance goes as
+  /// 1/(h^3 * f0). Those bands do not overlap, so a wider span has no compromise
+  /// value rather than a slightly worse one: either choice leaves the other note's
+  /// partials some 63 dB further behind, and the geometric mean is worse than
+  /// both. Widening @ref claim_lobes is not the way out -- the neighbour's partial
+  /// it then claims lands on an equal division's -6.02 dB instead of losing a
+  /// little, and no width brings the moved note within 6 dB of its own best.
   float inharmonicity = 0.0f;
 };
 
