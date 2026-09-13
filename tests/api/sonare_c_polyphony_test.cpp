@@ -275,6 +275,21 @@ TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
     }
     const std::vector<SonareNoteObject> notes = notes_of(handle.get());
     CHECK(notes[1].edit.envelope_count == 3);
+    // A count whose points cannot be fetched would be a field promising what it
+    // cannot deliver, so the points come back and are compared to what went in.
+    std::vector<float> back(5, -1.0f);
+    size_t written = 0;
+    REQUIRE(sonare_polyphonic_note_envelope(handle.get(), 1, back.data(), back.size(), &written) ==
+            SONARE_OK);
+    REQUIRE(written == 3);
+    CHECK(back[0] == 1.0f);
+    CHECK(back[1] == 0.25f);
+    CHECK(back[2] == 0.0f);
+    // The other note never had one, which is what says the read is per note.
+    REQUIRE(sonare_polyphonic_note_envelope(handle.get(), 0, back.data(), back.size(), &written) ==
+            SONARE_OK);
+    CHECK(written == 0);
+
     const std::vector<float> edited = render(handle.get());
     REQUIRE(edited.size() == unedited.size());
     CHECK(std::equal(edited.begin(), edited.end(), unedited.begin()) == false);
@@ -349,6 +364,8 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
     CHECK(sonare_polyphonic_note_amplitude(handle.get(), past_end, &curve, 1, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(sonare_polyphonic_note_salience(handle.get(), past_end, &curve, 1, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_polyphonic_note_envelope(handle.get(), past_end, &curve, 1, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(sonare_polyphonic_set_note_edit(handle.get(), past_end, nullptr, nullptr, 0) ==
           SONARE_ERROR_INVALID_PARAMETER);

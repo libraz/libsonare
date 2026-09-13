@@ -326,6 +326,19 @@ SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* anal
 #endif
 }
 
+SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* analysis, size_t note,
+                                            float* out, size_t capacity, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  const SonareError error = check_note(analysis, note, out_count);
+  if (error != SONARE_OK) return error;
+  return copy_curve(analysis->analysis.notes[note].edit.amplitude_envelope, out, capacity,
+                    out_count);
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
+#endif
+}
+
 SonareError sonare_polyphonic_render(const SonarePolyphonicAnalysis* analysis,
                                      const SonareNoteRenderConfig* config, float** out,
                                      size_t* out_length) {

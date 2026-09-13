@@ -151,6 +151,12 @@ SonareError sonare_polyphonic_note_count(const SonarePolyphonicAnalysis* analysi
                                          size_t* out_count);
 
 /// @brief Number of STFT frames the analysis ran over.
+/// @details An @c int32_t rather than the @c size_t the note count uses, and the
+///          difference is deliberate: a frame is a signed 32-bit quantity throughout
+///          this library -- a note's @c frame_start and @c frame_end among them -- so
+///          a host bounds-checking a note against this compares like with like
+///          instead of signed against unsigned. The @c size_t counts here count
+///          elements; this one counts frames.
 SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analysis,
                                           int32_t* out_count);
 
@@ -161,9 +167,8 @@ SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analys
 ///          be guessed at: @c amplitude_offset and the edit's @c envelope_offset are
 ///          always 0, and the edit's @c envelope_count is how many points the note's
 ///          envelope holds. The curves themselves come from
-///          @ref sonare_polyphonic_note_f0 and its two siblings; the envelope's
-///          points are the caller's own, set through
-///          @ref sonare_polyphonic_set_note_edit.
+///          @ref sonare_polyphonic_note_f0 and its three siblings, the envelope
+///          included.
 /// @param out Receives up to @p capacity notes.
 /// @param out_count Receives the number written, which is the note count clamped to
 ///        @p capacity. Query @ref sonare_polyphonic_note_count first to size the
@@ -219,6 +224,17 @@ SonareError sonare_polyphonic_note_amplitude(const SonarePolyphonicAnalysis* ana
 ///          scored the candidate at, so it says how well the material supported this
 ///          note rather than how loud the note is -- the amplitude above is the loud.
 SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* analysis, size_t note,
+                                            float* out, size_t capacity, size_t* out_count);
+
+/// @brief One note's amplitude envelope points, as last set.
+/// @details Indexed from 0 rather than over the note's span: an envelope is a set of
+///          gain points stretched over whatever length the note renders at, not a
+///          per-frame signal. The only one of the four curves here that is not a
+///          measurement -- these are the points a caller handed
+///          @ref sonare_polyphonic_set_note_edit. Readable because a note reports its
+///          own @c envelope_count, and a count whose points cannot be fetched is a
+///          field promising what it cannot deliver.
+SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* analysis, size_t note,
                                             float* out, size_t capacity, size_t* out_count);
 
 /// @brief Renders the analysis back to audio with whatever edits its notes carry.
