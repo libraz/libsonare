@@ -506,6 +506,68 @@ def test_planar_rank_rejection_names_the_caller_subject(subject, expected) -> No
     assert "samples must be" not in message
 
 
+def _process_channels(channels: Any) -> None:
+    """Drive the public realtime path, whose subject is ``channels``."""
+    with libsonare.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.process(channels)
+
+
+def _set_clip_channels(channels: Any) -> None:
+    """Drive the public clip path, whose subject is ``clip channels``."""
+    with libsonare.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_clips([libsonare.EngineClip(id=1, channels=channels, start_ppq=0.0)])
+
+
+_PLANAR_ENTRY_POINTS = [
+    pytest.param(_process_channels, "channels", id="process"),
+    pytest.param(_set_clip_channels, "clip channels", id="set_clips"),
+]
+
+
+@pytest.mark.parametrize(("drive", "subject"), _PLANAR_ENTRY_POINTS)
+@pytest.mark.parametrize(
+    ("channels", "detail"),
+    [
+        pytest.param(np.zeros(4, dtype=np.float32), "ndim=1 shape=(4,)", id="rank-1"),
+        pytest.param(np.full(1, 0.5, dtype=np.float32), "ndim=1 shape=(1,)", id="rank-1-single"),
+        pytest.param(np.array(0.5, dtype=np.float32), "ndim=0 shape=()", id="rank-0"),
+        pytest.param(np.float32(0.5), "a float32", id="numpy-scalar"),
+        pytest.param(np.zeros((2, 2, 2), dtype=np.float32), "ndim=3 shape=(2, 2, 2)", id="rank-3"),
+        pytest.param(0.5, "a float", id="python-scalar"),
+        pytest.param(None, "a NoneType", id="none"),
+    ],
+)
+def test_non_planar_channels_name_the_caller_subject(drive, subject, channels, detail) -> None:
+    """Anything that is not a planar buffer is refused by this library, naming the argument.
+
+    These escaped as NumPy's ambiguous-truth ``ValueError``, a bare ``TypeError``
+    from ``len()`` on a scalar, or a bare ``IndexError`` from indexing one --
+    none of which named the argument or this binding.
+    """
+    with pytest.raises(SonareValueError) as excinfo:
+        drive(channels)
+    message = str(excinfo.value)
+    assert message.startswith(f"{subject} must be a sequence of 1-D channel buffers"), message
+    assert message.endswith(f"not {detail}"), message
+
+
+@pytest.mark.parametrize(("drive", "subject"), _PLANAR_ENTRY_POINTS)
+@pytest.mark.parametrize(
+    "channels",
+    [
+        pytest.param([], id="no-channels"),
+        pytest.param([[]], id="empty-plane"),
+        pytest.param(np.zeros((0, 4), dtype=np.float32), id="ndarray-no-channels"),
+        pytest.param(np.zeros((4, 0), dtype=np.float32), id="ndarray-no-frames"),
+    ],
+)
+def test_empty_planar_axis_is_rejected_by_length(drive, subject, channels) -> None:
+    """Either axis empty is refused by an explicit length, not by truthiness."""
+    with pytest.raises(SonareValueError) as excinfo:
+        drive(channels)
+    assert str(excinfo.value) == f"{subject} must not be empty"
+
+
 @pytest.mark.parametrize("bad_side", ["left", "right"])
 def test_planar_stereo_rank_rejection_names_the_side(bad_side: str) -> None:
     """Each planar-stereo channel reports its own parameter name."""

@@ -220,8 +220,6 @@ def _clips_to_c(
             raw_items.append(raw)
             channel_arrays.append([])
             continue
-        if not clip.channels:
-            raise SonareValueError("clip channels must not be empty")
         arrays, ptrs, num_samples = _planar_channel_arrays(clip.channels, subject="clip channels")
         raw = SonareEngineClip()
         raw.id = int(clip.id)

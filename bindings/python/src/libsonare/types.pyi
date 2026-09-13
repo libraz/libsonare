@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import builtins
+from collections.abc import Sequence
 from enum import IntEnum
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypeAlias, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
+
+FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
+# Planar audio: one buffer per channel, or a 2-D (channels, frames) array.
+PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
@@ -1449,7 +1454,7 @@ class EngineMetronomeConfig:
 
 class EngineClip:
     id: int
-    channels: list[list[float]] | None
+    channels: PlanarChannels | None
     start_ppq: float
     track_id: int
     length_samples: int | None
@@ -1464,7 +1469,7 @@ class EngineClip:
     def __init__(
         self,
         id: int,
-        channels: list[list[float]] | None,
+        channels: PlanarChannels | None,
         start_ppq: float,
         track_id: int = 0,
         length_samples: int | None = None,

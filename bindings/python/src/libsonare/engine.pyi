@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping, Sequence
+from typing import Any, TypeAlias
+
+import numpy as np
 
 from ._project import (
     BuiltinSynthConfig,
@@ -10,6 +13,7 @@ from ._project import (
     Sf2InstrumentConfig,
     SynthPatch,
 )
+from .analyzer import FloatSamples
 from .types import (
     AutomationPoint,
     ClipPageRequest,
@@ -34,6 +38,9 @@ from .types import (
     TransportState,
 )
 
+# Planar audio: one buffer per channel, or a 2-D (channels, frames) array.
+PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
+
 EXPECTED_ENGINE_ABI_VERSION: int
 
 class ClipPageProvider:
@@ -42,7 +49,7 @@ class ClipPageProvider:
     def destroy(self) -> None: ...
     def __enter__(self) -> ClipPageProvider: ...
     def __exit__(self, *_exc: object) -> None: ...
-    def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None: ...
+    def supply(self, page_index: int, channels: PlanarChannels) -> None: ...
     def clear(self, page_index: int) -> None: ...
 
 class FileClipPageProvider(ClipPageProvider):
@@ -183,13 +190,13 @@ class RealtimeEngine:
     def set_graph(self, spec: EngineGraphSpec) -> None: ...
     def graph_node_count(self) -> int: ...
     def graph_connection_count(self) -> int: ...
-    def process(self, channels: Sequence[Sequence[float]]) -> list[list[float]]: ...
+    def process(self, channels: PlanarChannels) -> list[list[float]]: ...
     def process_with_monitor(
-        self, channels: Sequence[Sequence[float]]
+        self, channels: PlanarChannels
     ) -> tuple[list[list[float]], list[list[float]]]: ...
     def render_offline(
         self,
-        channels: Sequence[Sequence[float]],
+        channels: PlanarChannels,
         *,
         block_size: int = 128,
         finalize: bool = True,

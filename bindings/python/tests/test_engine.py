@@ -821,6 +821,71 @@ def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
         assert oversized[-1].value == 3
 
 
+def _process_through_clip(channels: object, frames: int) -> list[list[float]]:
+    """Render one block over a fixed clip, so the result is derived, not echoed back."""
+    clip_plane = [0.5, 0.25, 0.125, 0.0625][:frames]
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=frames) as engine:
+        engine.set_clips(
+            [EngineClip(id=401, channels=[clip_plane], start_ppq=0.0, length_samples=frames)]
+        )
+        engine.play()
+        return engine.process(channels)
+
+
+def test_process_accepts_planar_channels_as_a_2d_ndarray() -> None:
+    """Nested lists and a (channels, frames) array must render identically."""
+    nested = [[0.1, 0.2, 0.3, 0.4], [-0.1, -0.2, -0.3, -0.4]]
+    planar = np.array(nested, dtype=np.float32)
+
+    from_lists = _process_through_clip(nested, 4)
+    from_array = _process_through_clip(planar, 4)
+
+    assert from_array == from_lists
+    # The clip mixed into channel 0, so this compares a render, not the input.
+    assert from_lists[0] != pytest.approx(nested[0])
+    assert np.array_equal(planar, np.array(nested, dtype=np.float32))
+
+
+@pytest.mark.parametrize("value", [0.0, 0.5])
+def test_process_accepts_a_single_frame_plane_whatever_it_stores(value: float) -> None:
+    """A (1, 1) array is one channel of one frame; the sample it holds is not a size."""
+    from_list = _process_through_clip([[value]], 1)
+    from_array = _process_through_clip(np.full((1, 1), value, dtype=np.float32), 1)
+
+    assert from_array == from_list
+    assert from_list == [[pytest.approx(value + 0.5)]]
+
+
+def test_set_clips_accepts_planar_channels_as_a_2d_ndarray() -> None:
+    """A clip's channels take the same planar spellings the process path does."""
+    nested = [[0.5, 0.25, 0.125, 0.0625]]
+
+    def rendered(channels: object) -> list[list[float]]:
+        with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+            engine.set_clips(
+                [EngineClip(id=402, channels=channels, start_ppq=0.0, length_samples=4)]
+            )
+            engine.play()
+            return engine.process([[0.0] * 4])
+
+    assert rendered(np.array(nested, dtype=np.float32)) == rendered(nested)
+    assert rendered(nested)[0] == pytest.approx(nested[0])
+
+
+def test_clip_page_provider_supply_accepts_a_2d_ndarray_page() -> None:
+    """A page supplied as a (channels, frames) array renders as a nested-list page does."""
+    page = np.array([[1.0, 2.0, 3.0, 4.0]], dtype=np.float32)
+    with (
+        RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
+        ClipPageProvider(1, 8, 4) as provider,
+    ):
+        provider.supply(0, page)
+        provider.supply(1, page * 2.0)
+        engine.set_clips([EngineClip(id=403, channels=None, start_ppq=0.0, page_provider=provider)])
+        engine.play()
+        assert engine.process([[0.0] * 8])[0] == [1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 6.0, 8.0]
+
+
 def test_engine_marker_kind_and_key_signature_round_trip() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_markers(

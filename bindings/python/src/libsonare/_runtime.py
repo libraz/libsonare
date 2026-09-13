@@ -357,8 +357,21 @@ def _as_float32_buffer(
     return np.ascontiguousarray(converted)
 
 
+def _not_planar_channels(channels: object, subject: str) -> SonareValueError:
+    """Build the rejection for a channels argument that is not a planar buffer."""
+    detail = (
+        f"ndim={channels.ndim} shape={tuple(channels.shape)}"
+        if isinstance(channels, np.ndarray)
+        else f"a {type(channels).__name__}"
+    )
+    return SonareValueError(
+        f"{subject} must be a sequence of 1-D channel buffers or a 2-D "
+        f"(channels, frames) array, not {detail}"
+    )
+
+
 def _planar_channel_arrays(
-    channels: Sequence[Sequence[float]],
+    channels: Sequence[Sequence[float]] | np.ndarray,
     *,
     subject: str = "channels",
 ) -> tuple[list[ctypes.Array[ctypes.c_float]], ctypes.Array[Any], int]:
@@ -375,25 +388,45 @@ def _planar_channel_arrays(
     output back into these planes cannot reach the caller's array, and the numpy
     backing is pinned to the ctypes object so it outlives the call.
 
+    A sequence of channel buffers and a 2-D ``(channels, frames)`` ndarray are
+    both accepted -- the array is exactly the planar shape this API models, and
+    it iterates as its channel rows. Every emptiness test here is an explicit
+    length test: truthiness of the outer object raised NumPy's own ambiguous
+    error for an array, and truthiness of a ``(1, 1)`` array split on the sample
+    value it stored rather than on any size.
+
     ``subject`` names the argument in every rejection raised here, including the
     per-channel rank check, so a 2-D channel reports the name the caller used
     rather than the coercion helper's default.
     """
-    if not channels:
-        raise SonareValueError(f"{subject} must not be empty")
-    frame_count = len(channels[0])
-    if frame_count == 0:
+    if isinstance(channels, np.ndarray):
+        if channels.ndim != 2:
+            raise _not_planar_channels(channels, subject)
+        channel_count = int(channels.shape[0])
+    else:
+        try:
+            channel_count = len(channels)
+        except TypeError as exc:
+            raise _not_planar_channels(channels, subject) from exc
+    if channel_count == 0:
         raise SonareValueError(f"{subject} must not be empty")
     arrays: list[ctypes.Array[ctypes.c_float]] = []
+    frame_count = -1
     for channel in channels:
-        if len(channel) != frame_count:
-            raise SonareValueError(f"all {subject} must have the same length")
         buf = np.array(
             _as_float32_buffer(channel, arg_name=subject),
             dtype=np.float32,
             copy=True,
             order="C",
         )
+        if frame_count < 0:
+            # The frame count comes from the first coerced plane, so the rank
+            # check runs before anything reads a length off a non-buffer.
+            frame_count = int(buf.shape[0])
+            if frame_count == 0:
+                raise SonareValueError(f"{subject} must not be empty")
+        elif int(buf.shape[0]) != frame_count:
+            raise SonareValueError(f"all {subject} must have the same length")
         c_array = (ctypes.c_float * frame_count).from_buffer(buf)
         c_array._np_backing = buf  # type: ignore[attr-defined]
         arrays.append(c_array)
