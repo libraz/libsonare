@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import operator
-from typing import Any
+from typing import Any, ClassVar, SupportsIndex
 
 # ctypes type codes for the integer widths, taken from the field's own type so a
 # platform alias (``c_int32 is c_int``, ``c_size_t is c_ulong``) needs no table.
@@ -48,6 +48,10 @@ class CStruct(ctypes.Structure):
 
     __slots__ = ()
 
+    # Read through ``cls.__dict__`` rather than attribute lookup, so a subclass
+    # builds its own table instead of inheriting its parent's.
+    _integer_bounds_cache: ClassVar[dict[str, tuple[int, int]]]
+
     @classmethod
     def _integer_bounds(cls) -> dict[str, tuple[int, int]]:
         """Field name to inclusive range, built once per struct on first write."""
@@ -73,7 +77,7 @@ class CStruct(ctypes.Structure):
 
 def _narrow_field(value: object, name: str, low: int, high: int) -> int:
     """Return ``value`` as a plain ``int``, or refuse what the field would change."""
-    if not isinstance(value, bool):
+    if not isinstance(value, bool) and isinstance(value, SupportsIndex):
         try:
             integer = operator.index(value)
         except TypeError:

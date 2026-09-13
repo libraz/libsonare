@@ -10,7 +10,7 @@ import operator
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import IntEnum
 from numbers import Integral
-from typing import Any, TypeVar, cast
+from typing import Any, SupportsIndex, TypeVar, cast
 
 import numpy as np
 
@@ -561,7 +561,7 @@ def _narrow_int(value: object, name: str, low: int, high: int) -> int:
     Raises:
         SonareValueError: If ``value`` is not an integer, or does not fit.
     """
-    if not isinstance(value, bool):
+    if not isinstance(value, bool) and isinstance(value, SupportsIndex):
         try:
             integer = operator.index(value)
         except TypeError:
