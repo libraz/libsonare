@@ -70,9 +70,11 @@
 /// geometry fix it -- @ref build_note_masks carries what pruning a claim by the
 /// partial count measured from the spectrum is worth, and it is not enough to
 /// ship. **The spare claim is a limit of the representation rather than a defect
-/// with a known fix**, and what it costs is bounded: the bin's content reaches the
-/// render either way, so the note that did not produce it either takes a share it
-/// cannot move or leaves a share the other note cannot.
+/// with a known fix.** What it costs is not bounded by the division error: the
+/// bin's content reaches the render either way, and the note that did not produce
+/// it takes a share it cannot move, so the partial stays where it was. Measured at
+/// 75 dB on one partial of a shifted note; @ref build_note_masks carries the
+/// figure and why pruning is the larger risk.
 ///
 /// Most of the value is in refusing. Solved everywhere, over a spread of
 /// intervals, this returns 0.6 dB over an equal split, because the bins it

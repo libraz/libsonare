@@ -229,17 +229,22 @@ std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
 ///
 ///          A claim is predicted and never read from the spectrum, so a note
 ///          claims bins its own partials never reached and takes a share of
-///          whatever stands there. **Dropping such a claim by measuring how many
-///          partials the note actually has was tried and is not worth shipping.**
-///          Weighted by each partial's own level, the best setting gained 0.68 dB
-///          over the whole rendered note and 1.25 dB on the most favourable
-///          material, against a division error of 17.65 dB that the share itself
-///          carries -- the spare claim is a small term in a larger one. And the
-///          estimate it rests on does not survive real material: on a piano dyad
-///          the two notes' measured partial counts came out 19 and 3 at the same
-///          level, so the rule would have dropped a partial 29 dB above the floor.
-///          The evidence for the gain is synthetic and the evidence against the
-///          estimate is not.
+///          whatever stands there. **The share it takes does not move when its
+///          note moves**, so the cost is not a level error: it is a partial left
+///          sounding at the old pitch. Measured on a fifth whose upper note is
+///          shifted, the partial a spare claim sits on drops 1.81 dB while the
+///          same claim set cut to the real partial count drops it 77.39 dB, every
+///          other partial agreeing to within 0.01.
+///
+///          **Dropping such a claim by measuring how many partials the note has
+///          was tried anyway and is not worth shipping**, and that 75 dB is the
+///          reason rather than a counter-argument: a claim dropped wrongly sends a
+///          real partial to the residual, which is carried unedited, so the payoff
+///          is the same size in both directions. The estimate does not survive real
+///          material -- on a piano dyad the two notes' measured partial counts came
+///          out 19 and 3 at the same level, so the rule would have dropped a
+///          partial 29 dB above the floor. A large symmetric bet on an estimator
+///          that is wrong on the material that matters is worse than the claim.
 /// @param spec Complex STFT the masks index into.
 /// @param track Ridges to build masks for, from the same framing as @p spec.
 /// @param config Claim geometry.
