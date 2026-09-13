@@ -17,7 +17,7 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     val lane_val = lanes[i];
     uint32_t track_id = 0;
     if (lane_val.typeOf().as<std::string>() == "number") {
-      track_id = lane_val.as<uint32_t>();
+      track_id = checkedUintFromVal(lane_val, "trackId");
     } else {
       track_id = static_cast<uint32_t>(intProperty(lane_val, "trackId", 0));
     }

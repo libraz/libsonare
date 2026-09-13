@@ -1,9 +1,9 @@
 {
   "floor": {
-    "files": 18,
-    "containers": 300,
-    "narrowings": 80,
-    "readers": 12
+    "files": 22,
+    "containers": 411,
+    "narrowings": 54,
+    "readers": 29
   },
   "shapes": [
     {
@@ -13,19 +13,8 @@
     },
     {
       "name": "array_element",
-      "receiver_pattern": "\\[[^\"\\]]+\\]$"
-    ,
+      "receiver_pattern": "\\[[^\"\\]]+\\]$",
       "reason": "An element read from an array whose length was taken first, indexed by the loop counter. The value is a caller-supplied number like any other, but the receiver is the element rather than a named option, so it carries no field name a range error could report; the element's own domain is checked where the struct it fills is validated."
-    }
-  ],
-  "pending_types": [
-    {
-      "type": "uint32_t",
-      "reason": "The identifier class -- track, take, destination, parameter and clip ids, plus pitch-class and quality ordinals. Their consequence when saturated has not been measured, so they are carried rather than blessed: an id that saturates is rejected by whatever owns the id space, an ordinal that saturates may not be. Recorded as a type rather than as fifty sites so the list stays readable, and so a signed narrowing cannot hide inside it."
-    },
-    {
-      "type": "uint8_t",
-      "reason": "MIDI channel, controller and selector bytes. Same standing as the identifier class and unmeasured for the same reason; unlike it, the target type is narrow enough that a wrapped value is always in the byte domain, which is what makes the outcome worth measuring rather than assuming."
     }
   ],
   "narrowings": [
@@ -52,119 +41,13 @@
       "receiver": "curve",
       "type": "int",
       "reason": "An enum ordinal the C ABI range-checks against the curve enum's bounds, so a saturated value is refused there. The guard is in the C ABI rather than here, which is what makes this worth recording: moving the validation would make this a live narrowing again."
-    },
-    {
-      "file": "bindings/common/synth_patch_val.h",
-      "receiver": "value",
-      "type": "int",
-      "triage": "pending",
-      "reason": "The shared enum reader's numeric path. It rejects a non-number before the cast but does not range-check the ordinal, so what a saturated value becomes depends on whether the patch field it fills is validated downstream. Unmeasured."
-    },
-    {
-      "file": "bindings/project/project_external_stems.cpp",
-      "receiver": "request[\"sampleRate\"]",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A sample rate read straight into the import request. Whether a saturated rate is refused depends on the core's rate bounds, which are not applied here. Unmeasured."
-    },
-    {
-      "file": "bindings/project/project_external_stems.cpp",
-      "receiver": "stem[\"startFrame\"]",
-      "type": "int64_t",
-      "triage": "pending",
-      "reason": "A frame position. int64_t is wide enough that a JS safe integer arrives intact, so saturation needs a value past 2^53 to reach; what the import does with an absurd start frame is unmeasured."
-    },
-    {
-      "file": "bindings/project/project_meta.cpp",
-      "receiver": "entry[\"numerator\"]",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A time-signature numerator defaulting to 0 when absent. Whether a saturated value is refused depends on the core's time-signature validation. Unmeasured."
-    },
-    {
-      "file": "bindings/project/project_meta.cpp",
-      "receiver": "entry[\"denominator\"]",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A time-signature denominator, under the same standing as its numerator."
-    },
-    {
-      "file": "bindings/project/project_midi.cpp",
-      "receiver": "config[\"filterGroup\"]",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A routing filter that defaults to -1 for 'no filter'. A saturated value is a filter that matches nothing rather than an error, which is the silent-empty-result outcome rather than a refusal. Unmeasured."
-    },
-    {
-      "file": "bindings/project/project_midi.cpp",
-      "receiver": "config[\"filterChannel\"]",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A routing channel filter, under the same standing as the group filter."
-    },
-    {
-      "file": "bindings/project/project_midi.cpp",
-      "receiver": "config[\"remapChannel\"]",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A remap target channel. Unlike the two filters it is written into events rather than compared against them, so a saturated value has somewhere to land. Unmeasured."
-    },
-    {
-      "file": "bindings/realtime/clips.cpp",
-      "receiver": "objectProperty(clip_val, \"pageProvider\")",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A page-provider handle. A saturated handle resolves to no provider, which is a lookup failure rather than a saturation bug -- but which of the two the engine reports is unmeasured."
-    },
-    {
-      "file": "bindings/realtime/clips.cpp",
-      "receiver": "objectProperty(clip_val, \"clipOffsetSamples\")",
-      "type": "int64_t",
-      "triage": "pending",
-      "reason": "A sample position on the realtime clip path. int64_t takes a JS safe integer intact; what an absurd offset does to clip scheduling is unmeasured."
-    },
-    {
-      "file": "bindings/realtime/clips.cpp",
-      "receiver": "objectProperty(clip_val, \"lengthSamples\")",
-      "type": "int64_t",
-      "triage": "pending",
-      "reason": "A clip length, under the same standing as the clip offset."
-    },
-    {
-      "file": "bindings/realtime/clips.cpp",
-      "receiver": "objectProperty(clip_val, \"fadeInSamples\")",
-      "type": "int64_t",
-      "triage": "pending",
-      "reason": "A fade length, under the same standing as the clip offset."
-    },
-    {
-      "file": "bindings/realtime/clips.cpp",
-      "receiver": "objectProperty(clip_val, \"fadeOutSamples\")",
-      "type": "int64_t",
-      "triage": "pending",
-      "reason": "A fade length, under the same standing as the clip offset."
-    },
-    {
-      "file": "bindings/realtime/clips.cpp",
-      "receiver": "mode_val",
-      "type": "int",
-      "triage": "pending",
-      "reason": "A clip mode ordinal. Unlike the warp-mode and curve ordinals above, no range check was found beside it. Unmeasured."
-    },
-    {
-      "file": "bindings/realtime/processing.cpp",
-      "receiver": "objectProperty(options_val, \"totalFrames\")",
-      "type": "int64_t",
-      "triage": "pending",
-      "reason": "The offline render length, read the same way on both the bounce and the freeze path. It drives the render loop, so an absurd value is a runtime cost rather than a wrong result. Unmeasured."
     }
   ],
   "readers": [
     {
       "file": "bindings/analysis/quick.cpp",
       "symbol": "seedFromVal",
-      "triage": "pending",
-      "reason": "A default seeder rather than an options-bag reader: it turns an absent or non-numeric value into a deterministic seed, and every value in the type's range is a legal seed, so there is nothing for a range check to reject."
+      "reason": "A default seeder rather than an options-bag reader: it rejects a non-number, turns a non-positive value into a deterministic seed, and refuses anything past the type's maximum by name. Every value in the type's range is a legal seed, so truncating a fractional one cannot land outside the domain -- driving it, a seed moves the synthesized response, 4294967296 and Infinity are refused, and 0 / -1 / NaN all fall back to the documented default."
     },
     {
       "file": "bindings/effects/repair.cpp",
@@ -174,32 +57,27 @@
     {
       "file": "bindings/effects/repair.cpp",
       "symbol": "repairFloatOption",
-      "triage": "pending",
-      "reason": "The float sibling of repairIntOption, and not the same defect: a float overflow produces inf, which is outside every domain and caught by any finite check, where an integer saturation produces a plausible in-domain number. Driving it found no field on its path that consumes the value, so it is unmeasured rather than benign."
+      "reason": "Delegates its narrowing to the shared checkedFloatFromVal rather than casting, so the conversion contract is single-sourced and only the default-and-absence handling is local. Kept out of the shared header for the same reason as its integer sibling: its options bag is positional in a way the generic reader is not. Not the same defect as the integer one and it had to be measured separately -- an overflow here produces inf rather than a plausible in-domain number, and the config validator refuses NaN but accepted inf, so four distinct absurd requests reached one identical result."
     },
     {
       "file": "bindings/mixing/mixing.cpp",
       "symbol": "panModeOrdinalFromVal",
-      "triage": "pending",
-      "reason": "An enum resolver for the pan-law ordinal, taking the string and numeric spellings together. Whether the numeric path range-checks the ordinal is unmeasured."
+      "reason": "An enum resolver for the pan-law ordinal, taking the string and numeric spellings together. The numeric path requires a finite, integral value inside the enum's bounds before the cast, so a saturated, negative, fractional or non-finite ordinal is refused by name; the two legal ordinals pan differently, which is what makes those refusals a measurement rather than an unread field."
     },
     {
       "file": "bindings/project/project_bounce.cpp",
       "symbol": "integerField",
-      "triage": "pending",
-      "reason": "Reads through double rather than narrowing, so no integer cast happens here and the inline-narrowing population does not see it. It is a second numeric reader outside the shared family all the same."
+      "reason": "Reads through double rather than narrowing, so no integer cast happens here and the inline-narrowing population does not see it. It is a second numeric reader outside the shared family all the same. Its own range check is the mechanism: a value outside [0, max] or a fractional one is refused naming the field, and a non-finite one is refused by the shared requireNumberProperty it reads through."
     },
     {
       "file": "bindings/project/project_bounce.cpp",
       "symbol": "numberField",
-      "triage": "pending",
-      "reason": "The floating-point sibling of integerField, under the same standing."
+      "reason": "The floating-point sibling of integerField, under the same standing. It type-checks and refuses a non-finite value through the shared requireNumberProperty and returns the double unnarrowed; the float narrowing is the caller's, and it can only overflow for values already far outside the field's physical domain, where the representable neighbours render identically."
     },
     {
       "file": "bindings/project/project_bounce.cpp",
       "symbol": "sampleDescLoopMode",
-      "triage": "pending",
-      "reason": "An enum resolver for the sample loop mode. Unmeasured."
+      "reason": "An enum resolver for the sample loop mode, accepting the SoundFont numeric value and the name spellings. The numeric path is integerField's, so the ordinal is refused outside [0, 3] and for a fractional or non-finite value; an unknown name is refused naming the accepted set."
     },
     {
       "file": "bindings/project/project_edit.cpp",
@@ -209,26 +87,7 @@
     {
       "file": "bindings/project/project_edit.cpp",
       "symbol": "automationTargetKindFromVal",
-      "triage": "pending",
-      "reason": "The sibling enum resolver for the automation target kind. Unmeasured."
-    },
-    {
-      "file": "bindings/realtime/realtime_engine_wasm.h",
-      "symbol": "uintProperty",
-      "triage": "pending",
-      "reason": "A second unsigned options-bag reader, narrowing with a bare cast and no range check -- the shape the shared int reader was fixed out of. It has no shared counterpart to delegate to, so closing it means adding an unsigned reader to the shared family, which changes behaviour on the realtime engine path."
-    },
-    {
-      "file": "bindings/realtime/realtime_engine_wasm.h",
-      "symbol": "int64Property",
-      "triage": "pending",
-      "reason": "The 64-bit sibling of uintProperty. int64_t takes a JS safe integer intact, so its exposure is narrower, but it is the same duplication."
-    },
-    {
-      "file": "bindings/realtime/realtime_engine_wasm.h",
-      "symbol": "doubleProperty",
-      "triage": "pending",
-      "reason": "The floating-point sibling of uintProperty. A double read cannot saturate, so this one duplicates the family without duplicating the defect."
+      "reason": "The sibling enum resolver for the automation target kind. Like automationCurveFromVal it exists to accept both spellings of one enum, and its numeric path requires a finite, integral ordinal inside the enum's bounds before the cast, so a saturated, negative or fractional one is refused rather than landing on a member."
     }
   ]
 }

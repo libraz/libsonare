@@ -35,23 +35,6 @@ class WasmClipPageProvider;
 sonare::automation::CurveType automationCurveFromInt(int curve);
 int automationCurveToInt(sonare::automation::CurveType curve);
 
-// Object-property readers used across several facade TUs. The C-ABI TU is not
-// linked into WASM, so these mirror its numeric coercions inline.
-inline uint32_t uintProperty(emscripten::val object, const char* key, uint32_t default_value) {
-  emscripten::val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : value.as<uint32_t>();
-}
-
-inline int64_t int64Property(emscripten::val object, const char* key, int64_t default_value) {
-  emscripten::val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : static_cast<int64_t>(value.as<double>());
-}
-
-inline double doubleProperty(emscripten::val object, const char* key, double default_value) {
-  emscripten::val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : value.as<double>();
-}
-
 class RealtimeEngineWasm {
  public:
   // Mirror the C-ABI guard (sonare_engine_prepare): reject a non-positive

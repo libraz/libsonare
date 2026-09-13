@@ -44,7 +44,7 @@ val ProjectWasm::importExternalStems(val request) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "each external stem needs name, layout, and planarSamples");
     }
-    const uint32_t layout = stem["layout"].as<uint32_t>();
+    const uint32_t layout = checkedUintFromVal(stem["layout"], "layout");
     const size_t channels = channel_count(layout);
     const val source_planes = stem["planarSamples"];
     if (channels == 0 || source_planes["length"].as<size_t>() != channels) {
@@ -82,11 +82,11 @@ val ProjectWasm::importExternalStems(val request) {
     descriptor.layout = layout;
     descriptor.planar_samples = planes.data();
     descriptor.frame_count = static_cast<int64_t>(frames);
-    descriptor.start_frame = hasProperty(stem, "startFrame") ? stem["startFrame"].as<int64_t>() : 0;
+    descriptor.start_frame = int64Property(stem, "startFrame", 0);
     descriptors.push_back(descriptor);
   }
   SonareExternalStemImportRequest request_desc{};
-  request_desc.sample_rate = request["sampleRate"].as<int>();
+  request_desc.sample_rate = intProperty(request, "sampleRate", 0);
   request_desc.stems = descriptors.data();
   request_desc.stem_count = descriptors.size();
   SonareExternalStemImportResult result{};

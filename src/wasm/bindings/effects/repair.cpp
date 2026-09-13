@@ -35,9 +35,13 @@ int repairIntOption(const val& options, const char* key, int fallback) {
 
 float repairFloatOption(const val& options, const char* key, float fallback) {
   val value = val::undefined();
-  return repairOptionValue(options, key, &value) && value.typeOf().as<std::string>() == "number"
-             ? value.as<float>()
-             : fallback;
+  if (!repairOptionValue(options, key, &value) || value.typeOf().as<std::string>() != "number") {
+    return fallback;
+  }
+  // Range-check before narrowing, for the reason repairIntOption does: a value
+  // past FLT_MAX becomes +inf, and the config validator refuses NaN but not inf,
+  // so 3.5e38, 1e39, 1e300 and Infinity all produced one identical output.
+  return checkedFloatFromVal(value, key);
 }
 
 bool repairBoolOption(const val& options, const char* key, bool fallback) {

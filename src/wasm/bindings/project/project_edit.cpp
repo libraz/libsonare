@@ -42,7 +42,7 @@ SonareProjectClipFade ProjectWasm::clipFadeFromVal(val desc) {
                                       "unknown fade curve: " + s);
       }
     } else {
-      fade.curve = curve.as<uint32_t>();
+      fade.curve = checkedUintFromVal(curve, "curve");
     }
   }
   return fade;
@@ -104,10 +104,8 @@ void ProjectWasm::setClipTakes(uint32_t clip_id, val takes_val, uint32_t active_
   for (size_t i = 0; i < count; ++i) {
     val entry = takes_val[static_cast<unsigned>(i)];
     SonareProjectClipTake take{};
-    take.id = entry["id"].as<uint32_t>();
-    if (hasProperty(entry, "sourceId")) {
-      take.source_id = entry["sourceId"].as<uint32_t>();
-    }
+    take.id = checkedUintFromVal(entry["id"], "id");
+    take.source_id = uintProperty(entry, "sourceId", take.source_id);
     if (hasProperty(entry, "sourceOffsetPpq")) {
       take.source_offset_ppq = entry["sourceOffsetPpq"].as<double>();
     }
@@ -138,9 +136,7 @@ void ProjectWasm::setClipCompSegments(uint32_t clip_id, val segments_val) {
     SonareProjectClipCompSegment segment{};
     segment.start_ppq = entry["startPpq"].as<double>();
     segment.end_ppq = entry["endPpq"].as<double>();
-    if (hasProperty(entry, "takeId")) {
-      segment.take_id = entry["takeId"].as<uint32_t>();
-    }
+    segment.take_id = uintProperty(entry, "takeId", segment.take_id);
     segments.push_back(segment);
   }
   const SonareError err = sonare_project_set_clip_comp_segments(
@@ -275,7 +271,7 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "automation lane descriptor required");
   }
-  d.target_param_id = hasProperty(desc, "targetParamId") ? desc["targetParamId"].as<uint32_t>() : 0;
+  d.target_param_id = uintProperty(desc, "targetParamId", 0);
   *storage = automationPointsFromVal(hasProperty(desc, "points") ? desc["points"] : val::array());
   d.points = storage->empty() ? nullptr : storage->data();
   d.point_count = storage->size();

@@ -117,7 +117,10 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   std::string("Expected ") + what + " to be a number or string");
   }
-  *out = value.as<int>();
+  // Range-checked rather than cast: the downstream enum validation refuses a
+  // saturated ordinal but not the ordinal a fractional value truncates onto,
+  // and NaN reads as the "keep base" zero.
+  *out = checkedIntFromVal(value, what);
 }
 
 inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {

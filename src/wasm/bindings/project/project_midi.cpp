@@ -16,12 +16,12 @@ void ProjectWasm::setMidiEvents(uint32_t clip_id, val events) {
     val entry = events[i];
     if (val::global("Array").call<bool>("isArray", entry)) {
       pods[i].ppq = entry[0].as<double>();
-      pods[i].data0 = entry[1].as<uint32_t>();
-      pods[i].data1 = entry[2].as<uint32_t>();
+      pods[i].data0 = checkedWordFromVal(entry[1], "data0");
+      pods[i].data1 = checkedWordFromVal(entry[2], "data1");
     } else {
       pods[i].ppq = entry["ppq"].as<double>();
-      pods[i].data0 = entry["data0"].as<uint32_t>();
-      pods[i].data1 = hasProperty(entry, "data1") ? entry["data1"].as<uint32_t>() : 0;
+      pods[i].data0 = checkedWordFromVal(entry["data0"], "data0");
+      pods[i].data1 = wordProperty(entry, "data1", 0);
     }
   }
   const SonareError err = sonare_project_set_midi_events(
@@ -302,8 +302,8 @@ val js_midi_bank_program(double ppq, int group, int channel, int bank_msb, int b
 SonareMidiEventPod js_midi_event_from_val(val event) {
   SonareMidiEventPod out{};
   out.ppq = event["ppq"].as<double>();
-  out.data0 = event["data0"].as<uint32_t>();
-  out.data1 = hasProperty(event, "data1") ? event["data1"].as<uint32_t>() : 0;
+  out.data0 = checkedWordFromVal(event["data0"], "data0");
+  out.data1 = wordProperty(event, "data1", 0);
   return out;
 }
 
@@ -317,15 +317,13 @@ val js_midi_event_to_val(const SonareMidiEventPod& event) {
 
 SonareMidiCcBinding js_cc_binding_from_val(val object) {
   SonareMidiCcBinding out{};
-  out.cc_number = object["ccNumber"].as<uint8_t>();
-  out.channel = hasProperty(object, "channel") && !object["channel"].isNull()
-                    ? object["channel"].as<uint8_t>()
-                    : 0xffu;
-  out.kind = hasProperty(object, "kind") ? object["kind"].as<uint8_t>() : 0u;
-  out.cc_lsb_number = hasProperty(object, "ccLsbNumber") ? object["ccLsbNumber"].as<uint8_t>() : 0u;
-  out.selector_msb = hasProperty(object, "selectorMsb") ? object["selectorMsb"].as<uint8_t>() : 0u;
-  out.selector_lsb = hasProperty(object, "selectorLsb") ? object["selectorLsb"].as<uint8_t>() : 0u;
-  out.param_id = object["paramId"].as<uint32_t>();
+  out.cc_number = checkedByteFromVal(object["ccNumber"], "ccNumber");
+  out.channel = byteProperty(object, "channel", 0xffu);
+  out.kind = byteProperty(object, "kind", 0u);
+  out.cc_lsb_number = byteProperty(object, "ccLsbNumber", 0u);
+  out.selector_msb = byteProperty(object, "selectorMsb", 0u);
+  out.selector_lsb = byteProperty(object, "selectorLsb", 0u);
+  out.param_id = checkedUintFromVal(object["paramId"], "paramId");
   out.min_value = hasProperty(object, "minValue") ? object["minValue"].as<float>() : 0.0f;
   out.max_value = hasProperty(object, "maxValue") ? object["maxValue"].as<float>() : 1.0f;
   return out;
@@ -409,21 +407,19 @@ val js_midi_route_events(val events, val config) {
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
     input[i].ppq = entry["ppq"].as<double>();
-    input[i].data0 = entry["data0"].as<uint32_t>();
-    input[i].data1 = hasProperty(entry, "data1") ? entry["data1"].as<uint32_t>() : 0;
+    input[i].data0 = checkedWordFromVal(entry["data0"], "data0");
+    input[i].data1 = wordProperty(entry, "data1", 0);
   }
 
   SonareMidiRouteConfig route{-1, -1, -1, 1};
   if (!config.isUndefined() && !config.isNull()) {
-    if (hasProperty(config, "filterGroup") && !config["filterGroup"].isNull()) {
-      route.filter_group = config["filterGroup"].as<int>();
-    }
-    if (hasProperty(config, "filterChannel") && !config["filterChannel"].isNull()) {
-      route.filter_channel = config["filterChannel"].as<int>();
-    }
-    if (hasProperty(config, "remapChannel") && !config["remapChannel"].isNull()) {
-      route.remap_channel = config["remapChannel"].as<int>();
-    }
+    // -1 is the "any group / any channel / no remap" sentinel, so the range
+    // check has to keep it while refusing the values a bare cast turned into a
+    // real filter: NaN reads as channel 0 and a fractional value truncates onto
+    // a neighbouring channel, both of them silently.
+    route.filter_group = intProperty(config, "filterGroup", -1);
+    route.filter_channel = intProperty(config, "filterChannel", -1);
+    route.remap_channel = intProperty(config, "remapChannel", -1);
     if (hasProperty(config, "thru")) {
       route.thru = config["thru"].as<bool>() ? 1 : 0;
     }

@@ -341,7 +341,7 @@ describe('the two narrowing scans agree, and disagreeing is the failure', () => 
     // Both assertions below are agreement checks, and two empty sets agree
     // perfectly. Pin that neither scan has silently stopped matching.
     expect(valReaderFunctions().length).toBeGreaterThan(20);
-    expect(integerNarrowingSites().length).toBeGreaterThan(50);
+    expect(integerNarrowingSites().length).toBeGreaterThan(45);
   });
 
   it('sees both receiver shapes, so a population figure can state its shape', () => {
@@ -353,15 +353,15 @@ describe('the two narrowing scans agree, and disagreeing is the failure', () => 
     const sites = integerNarrowingSites();
     const other = sites.filter((s) => s.receiverShape === 'other');
     expect(sites.filter((s) => s.receiverShape === 'bracket-literal-key').length).toBeGreaterThan(
-      50,
+      40,
     );
-    expect(other.length).toBeGreaterThan(10);
+    expect(other.length).toBeGreaterThan(5);
     // Anchored on the file holding the most `other` sites, so remediating any
     // single one does not silently turn this into a vacuous check. The anchor
     // asserts that the classification still resolves - it is not a judgement
     // that these reads are correct.
     expect(
-      other.filter((s) => s.file === 'realtime/clips.cpp').length,
+      other.filter((s) => s.file === 'features/core.cpp').length,
       'these reads are chained on local vals, not literal keys',
     ).toBeGreaterThan(1);
   });

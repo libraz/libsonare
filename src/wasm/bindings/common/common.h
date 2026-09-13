@@ -218,6 +218,48 @@ float floatProperty(val object, const char* key, float default_value);
 /// @throws SonareException(InvalidParameter) naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
 int intProperty(val object, const char* key, int default_value);
+/// @brief Unsigned sibling of @ref checkedIntFromVal.
+/// @details val::as<uint32_t>() saturates at the top and clamps a negative to 0,
+///          so -1 -- the sentinel several fields here spell "none" with -- lands
+///          on the first real id or the first enum member instead.
+/// @throws SonareException(InvalidParameter) naming @p key.
+uint32_t checkedUintFromVal(const val& value, const char* key);
+uint32_t uintProperty(val object, const char* key, uint32_t default_value);
+/// @brief Reads a raw 32-bit word (a UMP word, a packed MIDI 1.0 message).
+/// @details Deliberately NOT @ref uintProperty: the whole 32-bit range is legal
+///          here, and the idiomatic JS spelling `(0x4 << 28) | …` is a SIGNED
+///          int once bit 31 is set, so a negative is reinterpreted as its
+///          two's-complement word rather than refused. Only a value outside
+///          [-2^31, 2^32) or a fractional one is a caller error.
+/// @throws SonareException(InvalidParameter) naming @p key.
+uint32_t checkedWordFromVal(const val& value, const char* key);
+uint32_t wordProperty(val object, const char* key, uint32_t default_value);
+/// @brief MIDI-byte sibling of @ref checkedIntFromVal, narrowing only: the
+///        member's own domain stays with whoever owns it.
+/// @details val::as<uint8_t>() WRAPS, and a wrapped byte is always inside the
+///          byte domain, so no downstream range check can see it: 256 reads as
+///          controller 0, 300 as controller 44, and 511 as the any-channel
+///          wildcard.
+/// @throws SonareException(InvalidParameter) naming @p key.
+uint8_t checkedByteFromVal(const val& value, const char* key);
+uint8_t byteProperty(val object, const char* key, uint8_t default_value);
+/// @brief 64-bit sibling of @ref checkedIntFromVal.
+/// @details Reading through double instead of the BigInt conversion turns NaN
+///          into 0 and truncates a fractional frame position, neither of which
+///          any downstream non-negative check can tell from a real request.
+/// @throws SonareException(InvalidParameter) naming @p key.
+int64_t checkedInt64FromVal(const val& value, const char* key);
+int64_t int64Property(val object, const char* key, int64_t default_value);
+/// @brief Narrows a JS number to float, rejecting what float cannot hold.
+/// @details The integer readers' counterpart for the other overflow: a value
+///          past FLT_MAX becomes +inf, and a config validator that rejects NaN
+///          need not reject inf, so distinct absurd requests collapse into one
+///          accepted result.
+/// @throws SonareException(InvalidParameter) naming @p key.
+float checkedFloatFromVal(const val& value, const char* key);
+/// @brief Presence-checked double reader. No narrowing happens -- it is here so
+///        the double half of an options bag reads through the same family.
+double doubleProperty(val object, const char* key, double default_value);
 /// @brief Resolves a built-in oscillator waveform given as a JS string or a JS
 ///        number to its @ref SonareSynthWaveform ordinal.
 /// @details Both spellings reach the same rejection naming the accepted set.

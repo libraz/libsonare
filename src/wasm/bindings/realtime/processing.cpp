@@ -364,7 +364,7 @@ void RealtimeEngineWasm::finishOfflineRender() {
 }
 
 val RealtimeEngineWasm::bounceOffline(val options_val) {
-  const int64_t total_frames = objectProperty(options_val, "totalFrames").as<int64_t>();
+  const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
   const int block_size = intProperty(options_val, "blockSize", 128);
   const int num_channels = intProperty(options_val, "numChannels", 2);
   const int source_sample_rate = intProperty(options_val, "sourceSampleRate", 48000);
@@ -459,7 +459,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
 }
 
 val RealtimeEngineWasm::freezeOffline(val options_val) {
-  const int64_t total_frames = objectProperty(options_val, "totalFrames").as<int64_t>();
+  const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
   const int block_size = intProperty(options_val, "blockSize", 128);
   const int num_channels = intProperty(options_val, "numChannels", 2);
   if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 ||

@@ -194,7 +194,10 @@ void RealtimeEngineWasm::setClips(val clips) {
                             ? static_cast<uint32_t>(intProperty(clip_val, "trackId", 0))
                             : 0;
     if (has_page_provider) {
-      const int provider_id = objectProperty(clip_val, "pageProvider").as<int>();
+      // Truncating rather than refusing resolves a fractional handle onto a
+      // real provider: 1.5 binds provider 1 and 2.9 binds provider 2.
+      const int provider_id =
+          checkedIntFromVal(objectProperty(clip_val, "pageProvider"), "pageProvider");
       auto provider = liveProviderById(clip_page_providers_, provider_id);
       if (!provider) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -214,9 +217,7 @@ void RealtimeEngineWasm::setClips(val clips) {
     // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
     // them at full 64-bit precision (like length_samples below) so large
     // offsets above 2^31 samples do not silently truncate/sign-flip.
-    schedule.clip_offset_samples = hasProperty(clip_val, "clipOffsetSamples")
-                                       ? objectProperty(clip_val, "clipOffsetSamples").as<int64_t>()
-                                       : 0;
+    schedule.clip_offset_samples = int64Property(clip_val, "clipOffsetSamples", 0);
     const int64_t source_samples = has_page_provider && schedule.page_provider
                                        ? schedule.page_provider->num_samples()
                                        : num_samples;
@@ -225,9 +226,7 @@ void RealtimeEngineWasm::setClips(val clips) {
                                     "clip offset is outside the source");
     }
     const int64_t default_length = source_samples - schedule.clip_offset_samples;
-    const int64_t requested_length = hasProperty(clip_val, "lengthSamples")
-                                         ? objectProperty(clip_val, "lengthSamples").as<int64_t>()
-                                         : 0;
+    const int64_t requested_length = int64Property(clip_val, "lengthSamples", 0);
     // Match the C ABI / Node / Python convention: zero selects the full
     // remaining source from clipOffsetSamples rather than an empty clip.
     schedule.length_samples = requested_length == 0 ? default_length : requested_length;
@@ -241,12 +240,8 @@ void RealtimeEngineWasm::setClips(val clips) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "clip gain must be a finite non-negative number");
     }
-    schedule.fade_in_samples = hasProperty(clip_val, "fadeInSamples")
-                                   ? objectProperty(clip_val, "fadeInSamples").as<int64_t>()
-                                   : 0;
-    schedule.fade_out_samples = hasProperty(clip_val, "fadeOutSamples")
-                                    ? objectProperty(clip_val, "fadeOutSamples").as<int64_t>()
-                                    : 0;
+    schedule.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
+    schedule.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
     if (schedule.fade_in_samples < 0 || schedule.fade_out_samples < 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "clip fade lengths must be non-negative");
@@ -267,7 +262,7 @@ void RealtimeEngineWasm::setClips(val clips) {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
         }
       } else {
-        const int mode = mode_val.as<int>();
+        const int mode = checkedIntFromVal(mode_val, "warpMode");
         if (mode == 0) {
           schedule.warp_mode = sonare::engine::WarpMode::kOff;
         } else if (mode == 1) {

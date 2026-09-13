@@ -29,8 +29,8 @@ void ProjectWasm::annotateKeys(val keys) {
       SonareProjectKeySegment seg{};
       seg.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
       seg.end_ppq = hasProperty(entry, "endPpq") ? entry["endPpq"].as<double>() : 0.0;
-      seg.tonic_pc = hasProperty(entry, "tonicPc") ? entry["tonicPc"].as<uint32_t>() : 255u;
-      seg.mode = hasProperty(entry, "mode") ? entry["mode"].as<uint32_t>() : 0u;
+      seg.tonic_pc = uintProperty(entry, "tonicPc", 255u);
+      seg.mode = uintProperty(entry, "mode", 0u);
       segments.push_back(seg);
     }
   }
@@ -57,10 +57,9 @@ void ProjectWasm::annotateChords(val chords) {
       SonareProjectChordSymbol sym{};
       sym.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
       sym.end_ppq = hasProperty(entry, "endPpq") ? entry["endPpq"].as<double>() : 0.0;
-      sym.root_pc = hasProperty(entry, "rootPc") ? entry["rootPc"].as<uint32_t>() : 255u;
-      sym.quality = hasProperty(entry, "quality") ? entry["quality"].as<uint32_t>() : 0u;
-      sym.slash_bass_pc =
-          hasProperty(entry, "slashBassPc") ? entry["slashBassPc"].as<uint32_t>() : 255u;
+      sym.root_pc = uintProperty(entry, "rootPc", 255u);
+      sym.quality = uintProperty(entry, "quality", 0u);
+      sym.slash_bass_pc = uintProperty(entry, "slashBassPc", 255u);
       sym.modulation_boundary =
           hasProperty(entry, "modulationBoundary") && entry["modulationBoundary"].as<bool>() ? 1
                                                                                              : 0;
@@ -388,8 +387,8 @@ void ProjectWasm::setTimeSignatures(val segments) {
       val entry = segments[i];
       SonareProjectTimeSignatureSegment seg{};
       seg.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
-      seg.numerator = hasProperty(entry, "numerator") ? entry["numerator"].as<int>() : 0;
-      seg.denominator = hasProperty(entry, "denominator") ? entry["denominator"].as<int>() : 0;
+      seg.numerator = intProperty(entry, "numerator", 0);
+      seg.denominator = intProperty(entry, "denominator", 0);
       segs.push_back(seg);
     }
   }

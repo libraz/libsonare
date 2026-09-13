@@ -205,9 +205,7 @@ SonareBuiltinInstrumentBinding ProjectWasm::builtinBindingFromVal(val desc) {
   if (desc.isUndefined() || desc.isNull()) {
     return binding;
   }
-  if (hasProperty(desc, "destinationId")) {
-    binding.destination_id = desc["destinationId"].as<uint32_t>();
-  }
+  binding.destination_id = uintProperty(desc, "destinationId", binding.destination_id);
   if (hasProperty(desc, "waveform")) {
     binding.config.waveform = builtinWaveformFromVal(desc["waveform"]);
   }
@@ -286,9 +284,7 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
     auto bindingFromVal = [](val desc) {
       SonareSynthInstrumentBinding binding{};
       if (desc.typeOf().as<std::string>() == "object") {
-        if (hasProperty(desc, "destinationId")) {
-          binding.destination_id = desc["destinationId"].as<uint32_t>();
-        }
+        binding.destination_id = uintProperty(desc, "destinationId", binding.destination_id);
         if (hasProperty(desc, "useGmPrograms")) {
           binding.use_gm_programs =
               requireProperty<bool>(desc, "useGmPrograms", "synth instrument") ? 1 : 0;
@@ -378,9 +374,7 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
   if (desc.isUndefined() || desc.isNull()) {
     return binding;
   }
-  if (hasProperty(desc, "destinationId")) {
-    binding.destination_id = desc["destinationId"].as<uint32_t>();
-  }
+  binding.destination_id = uintProperty(desc, "destinationId", binding.destination_id);
   if (hasProperty(desc, "gain")) {
     binding.config.gain = desc["gain"].as<float>();
   }

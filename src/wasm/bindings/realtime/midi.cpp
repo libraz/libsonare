@@ -91,10 +91,10 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       sonare::midi::MidiEvent event;
       event.render_frame = int64Property(event_val, "renderFrame", 0);
       sonare::midi::Ump ump;
-      ump.words[0] = uintProperty(event_val, "word0", uintProperty(event_val, "data0", 0));
-      ump.words[1] = uintProperty(event_val, "word1", uintProperty(event_val, "data1", 0));
-      ump.words[2] = uintProperty(event_val, "word2", 0);
-      ump.words[3] = uintProperty(event_val, "word3", 0);
+      ump.words[0] = wordProperty(event_val, "word0", wordProperty(event_val, "data0", 0));
+      ump.words[1] = wordProperty(event_val, "word1", wordProperty(event_val, "data1", 0));
+      ump.words[2] = wordProperty(event_val, "word2", 0);
+      ump.words[3] = wordProperty(event_val, "word3", 0);
       const uint32_t word_count = uintProperty(event_val, "wordCount", 0);
       if (word_count >= 1 && word_count <= 4) {
         ump.word_count = static_cast<uint8_t>(word_count);
@@ -321,24 +321,21 @@ void RealtimeEngineWasm::bindMidiCc(int channel, int controller, uint32_t param_
 void RealtimeEngineWasm::bindMidiCcBinding(val object) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   sonare::midi::CcBinding binding{};
-  binding.cc_number = object["ccNumber"].as<uint8_t>();
+  binding.cc_number = checkedByteFromVal(object["ccNumber"], "ccNumber");
   const val channel = object["channel"];
-  binding.channel = channel.isUndefined() || channel.isNull() ? sonare::midi::kCcAnyChannel
-                                                              : channel.as<uint8_t>();
+  binding.channel = channel.isUndefined() || channel.isNull()
+                        ? sonare::midi::kCcAnyChannel
+                        : checkedByteFromVal(channel, "channel");
   // Only ccNumber and paramId are required; every other field falls back to the
   // CcBinding default (any channel, 7-bit Control Change, unit output range),
   // matching the Node addon reader and the Project-side descriptor reader. A
   // field that IS supplied is still range-checked below, so the leniency covers
   // omission only and a non-finite range is still rejected.
-  binding.kind = static_cast<sonare::midi::CcBindingKind>(
-      static_cast<uint8_t>(uintProperty(object, "kind", 0u)));
-  const val cc_lsb = object["ccLsbNumber"];
-  const val selector_msb = object["selectorMsb"];
-  const val selector_lsb = object["selectorLsb"];
-  binding.cc_lsb_number = cc_lsb.isUndefined() ? 0u : cc_lsb.as<uint8_t>();
-  binding.selector_msb = selector_msb.isUndefined() ? 0u : selector_msb.as<uint8_t>();
-  binding.selector_lsb = selector_lsb.isUndefined() ? 0u : selector_lsb.as<uint8_t>();
-  binding.param_id = object["paramId"].as<uint32_t>();
+  binding.kind = static_cast<sonare::midi::CcBindingKind>(byteProperty(object, "kind", 0u));
+  binding.cc_lsb_number = byteProperty(object, "ccLsbNumber", 0u);
+  binding.selector_msb = byteProperty(object, "selectorMsb", 0u);
+  binding.selector_lsb = byteProperty(object, "selectorLsb", 0u);
+  binding.param_id = checkedUintFromVal(object["paramId"], "paramId");
   binding.min_value = floatProperty(object, "minValue", 0.0f);
   binding.max_value = floatProperty(object, "maxValue", 1.0f);
   if (binding.cc_number > 127 || binding.param_id == 0 ||

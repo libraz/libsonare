@@ -499,46 +499,34 @@ def _self_check(scan: Scan, floor: dict) -> list[str]:
     return failures
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tree", type=Path, default=WASM_TREE)
-    parser.add_argument("--records", type=Path, default=RECORDS)
-    parser.add_argument(
-        "--body-window",
-        type=int,
-        default=None,
-        help="measure bodies with a fixed character window instead of brace "
-        "balance, to show what the reconciliation catches",
-    )
-    parser.add_argument(
-        "--no-qualified-val",
-        action="store_true",
-        help="stop matching an `emscripten::val` parameter, to show what the "
-        "orphan check catches",
-    )
-    args = parser.parse_args()
+def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[str]]]:
+    """Every failure class, as (heading, lines).
 
-    global _VAL_PARAM
-    if args.no_qualified_val:
-        _VAL_PARAM = re.compile(r"\bval\b(?<!::val)")
-
-    data = load_records(args.records)
-    records = Records(data)
-    scan = Scan(args.tree, body_window=args.body_window)
-
-    print(f"val-taking bodies: {len(scan.containers)}")
-    print(f"integer narrowings: {len(scan.sites)}")
-    print(f"val-taking numeric-returning functions: {len(scan.readers)}")
-    # The standing debt, printed every run rather than left in the file. A
-    # record marked pending says the site was enumerated and NOT graded, which
-    # is a different claim from benign and must not read as one.
-    pending = records.pending_count()
-    if pending:
-        print(f"records carrying an ungraded site: {pending}")
-
+    Separated from ``main`` so the self-tests can revert one site at a time and
+    require the matching class to fire with a count -- a class asserted through
+    a reimplementation of this function would agree with itself.
+    """
     failures: list[tuple[str, list[str]]] = []
 
-    self_check = _self_check(scan, data["floor"])
+    # A record marked pending says the site was enumerated and NOT graded, which
+    # is a different claim from benign. Gated rather than printed: a suppression
+    # whose reason is "nobody has looked" reads, to everything downstream, like
+    # one whose reason is a mechanism.
+    ungraded = [
+        f"  {entry.get('file')}:{entry.get('receiver') or entry.get('symbol')}"
+        for entry in records.narrowings + records.readers
+        if entry.get("triage") == "pending"
+    ]
+    if ungraded:
+        failures.append(
+            (
+                "These records enumerate a site without grading what it does, so "
+                "they suppress it on no stated mechanism",
+                sorted(ungraded),
+            )
+        )
+
+    self_check = _self_check(scan, floor)
     if self_check:
         failures.append(("The scan no longer finds the population it is sized for", self_check))
 
@@ -604,6 +592,41 @@ def main() -> int:
                 [f"  {name}" for name in stale],
             )
         )
+    return failures
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tree", type=Path, default=WASM_TREE)
+    parser.add_argument("--records", type=Path, default=RECORDS)
+    parser.add_argument(
+        "--body-window",
+        type=int,
+        default=None,
+        help="measure bodies with a fixed character window instead of brace "
+        "balance, to show what the reconciliation catches",
+    )
+    parser.add_argument(
+        "--no-qualified-val",
+        action="store_true",
+        help="stop matching an `emscripten::val` parameter, to show what the "
+        "orphan check catches",
+    )
+    args = parser.parse_args()
+
+    global _VAL_PARAM
+    if args.no_qualified_val:
+        _VAL_PARAM = re.compile(r"\bval\b(?<!::val)")
+
+    data = load_records(args.records)
+    records = Records(data)
+    scan = Scan(args.tree, body_window=args.body_window)
+
+    print(f"val-taking bodies: {len(scan.containers)}")
+    print(f"integer narrowings: {len(scan.sites)}")
+    print(f"val-taking numeric-returning functions: {len(scan.readers)}")
+
+    failures = evaluate(scan, records, data["floor"])
 
     for heading, lines in failures:
         print(f"\n{heading}:", *lines, sep="\n", file=sys.stderr)

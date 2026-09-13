@@ -199,25 +199,128 @@ val entryPoint(val options) {
             self.assertTrue(any("files" in line for line in failures))
 
 
+class FailureClassTest(unittest.TestCase):
+    """Each reported class, reverted one site at a time.
+
+    A class asserted only through a clean run is asserted vacuously: a check
+    that never fires and a check that cannot fire look identical from the
+    outside.  The two populations are separate defects with separate remedies,
+    so they are reverted separately -- a single revert that reddens both would
+    leave either class free to be the one that did nothing.
+    """
+
+    SHARED = 'int sharedReader(val v) { return 1; }\n'
+    LOCAL = """
+#include <emscripten/val.h>
+using emscripten::val;
+
+// The file-local reader: a val in, a number out, outside the shared directory.
+int localIntOption(val object, const char* key) {
+  return object[key].as<int>();
+}
+
+val entryPoint(val options) {
+  const int n = options["nFft"].as<int>();
+  return val(n);
+}
+"""
+
+    FLOOR = {"files": 1, "containers": 1, "narrowings": 1, "readers": 1}
+
+    def _records(self, *, keep_reader: bool = True, keep_narrowing: bool = True) -> dict:
+        data: dict = {"shapes": [], "narrowings": [], "readers": []}
+        if keep_reader:
+            data["readers"].append(
+                {
+                    "file": "bindings/domain/unit.cpp",
+                    "symbol": "localIntOption",
+                    "reason": "test fixture",
+                }
+            )
+        if keep_narrowing:
+            data["narrowings"].append(
+                {
+                    "file": "bindings/domain/unit.cpp",
+                    "receiver": 'options["nFft"]',
+                    "type": "int",
+                    "reason": "test fixture",
+                }
+            )
+        # The reader's own narrowing is recorded unconditionally, so reverting
+        # the reader record cannot redden the narrowing class as a side effect.
+        data["narrowings"].append(
+            {
+                "file": "bindings/domain/unit.cpp",
+                "receiver": "object[key]",
+                "type": "int",
+                "reason": "test fixture",
+            }
+        )
+        return data
+
+    def _run(self, root: Path, records: dict) -> list[tuple[str, list[str]]]:
+        wasm = root / "src" / "wasm" / "bindings"
+        _write(wasm / "common" / "common.cpp", self.SHARED)
+        _write(wasm / "domain" / "unit.cpp", self.LOCAL)
+        with mock.patch.multiple(
+            CHECKER,
+            ROOT=root,
+            WASM_TREE=root / "src" / "wasm",
+            SHARED_READER_DIR=root / "src" / "wasm" / "bindings" / "common",
+        ):
+            scan = CHECKER.Scan(root / "src" / "wasm")
+            return CHECKER.evaluate(scan, CHECKER.Records(records), self.FLOOR)
+
+    def test_the_fixture_is_clean_with_both_records_in_place(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._run(Path(tmp), self._records()), [])
+
+    def test_reverting_the_reader_record_reports_exactly_that_reader(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            failures = self._run(Path(tmp), self._records(keep_reader=False))
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("file-local readers", heading)
+            self.assertEqual(len(lines), 1)
+            self.assertIn("localIntOption", lines[0])
+
+    def test_reverting_the_narrowing_record_reports_exactly_that_narrowing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            failures = self._run(Path(tmp), self._records(keep_narrowing=False))
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("neither performed by the shared reader", heading)
+            self.assertEqual(len(lines), 1)
+            self.assertIn('options["nFft"]', lines[0])
+
+    def test_marking_a_record_pending_reports_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            records = self._records()
+            records["readers"][0]["triage"] = "pending"
+            failures = self._run(Path(tmp), records)
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("without grading what it does", heading)
+            self.assertEqual(len(lines), 1)
+            self.assertIn("localIntOption", lines[0])
+
+
 class RecordsTest(unittest.TestCase):
     def test_every_record_carries_a_reason(self) -> None:
         data = CHECKER.load_records()
-        entries = (
-            data["shapes"] + data["pending_types"] + data["narrowings"] + data["readers"]
-        )
+        entries = data["shapes"] + data["narrowings"] + data["readers"]
         self.assertTrue(entries)
         for entry in entries:
             self.assertTrue(entry.get("reason", "").strip(), entry)
 
-    def test_a_pending_record_is_not_read_as_benign(self) -> None:
-        data = CHECKER.load_records()
-        records = CHECKER.Records(data)
-        self.assertGreater(
+    def test_no_record_is_left_ungraded(self) -> None:
+        records = CHECKER.Records(CHECKER.load_records())
+        self.assertEqual(
             records.pending_count(),
             0,
-            "a pending record states a site was enumerated and not graded; if "
-            "that count ever reaches zero the triage is done and this test "
-            "should be replaced by one asserting it stays zero",
+            "a pending record states a site was enumerated and not graded, and "
+            "the checker fails on one; a record added without a verdict belongs "
+            "in the triage, not in the file",
         )
 
 
@@ -236,20 +339,24 @@ class RealTreeTest(unittest.TestCase):
         # A type list that lost an entry would shrink the population without
         # emptying it, which the floor alone could survive.
         types = {site.type for site in self.scan.sites}
-        for name in ("int", "size_t", "int64_t", "uint32_t", "uint8_t", "unsigned"):
+        for name in ("int", "size_t", "uint32_t", "unsigned"):
             self.assertIn(name, types)
 
-    def test_a_narrowing_inside_a_lambda_is_attributed_to_the_lambda(self) -> None:
-        in_lambdas = [
-            site
-            for site in self.scan.sites
-            if site.container is not None and site.container.is_lambda
-        ]
-        self.assertTrue(
-            in_lambdas,
-            "the tree writes at least one val-taking lambda that narrows; a scan "
-            "shaped only for named signatures reports zero here",
-        )
+    def test_the_type_list_still_names_the_widths_the_tree_has_no_instance_of(self) -> None:
+        # The tree currently narrows to none of these, so the population check
+        # above cannot see them dropped from the list -- and the day one lands,
+        # a list missing its spelling reports nothing at all.
+        for name in ("int8_t", "uint8_t", "int16_t", "uint16_t", "int64_t", "uint64_t"):
+            self.assertIn(name, CHECKER.INTEGER_TYPES)
+
+    def test_val_taking_lambdas_are_in_the_container_population(self) -> None:
+        # The tree writes val-taking lambdas, and a scan shaped only for named
+        # signatures finds none of them -- which would make any narrowing that
+        # later lands inside one an orphan the record file cannot key on.
+        # Attribution itself is measured on the synthetic tree; no lambda in
+        # this tree currently narrows, so only the container half is pinned
+        # here rather than asserting a subject that is not there.
+        self.assertTrue([c for c in self.scan.containers if c.is_lambda])
 
     def test_the_tree_is_clean(self) -> None:
         self.assertEqual(self.scan.orphans, [])

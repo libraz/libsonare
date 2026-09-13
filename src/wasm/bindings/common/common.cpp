@@ -288,6 +288,104 @@ int intProperty(val object, const char* key, int default_value) {
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
 
+namespace {
+
+// Shared by the unsigned narrowings below: the range is the only thing that
+// differs between them, and every one of them refuses the same two silent value
+// changes -- a value outside the target type, and a fractional one.
+double checkedUnsignedNumber(const val& value, const char* key, double max) {
+  const double number = value.as<double>();
+  if (!std::isfinite(number) || number < 0.0 || number > max) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " must be a finite number within [0, " +
+                              std::to_string(static_cast<long long>(max)) + "]");
+  }
+  if (number != std::trunc(number)) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
+  }
+  return number;
+}
+
+}  // namespace
+
+uint32_t checkedUintFromVal(const val& value, const char* key) {
+  return static_cast<uint32_t>(
+      checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint32_t>::max())));
+}
+
+uint32_t uintProperty(val object, const char* key, uint32_t default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : checkedUintFromVal(value, key);
+}
+
+uint32_t checkedWordFromVal(const val& value, const char* key) {
+  static constexpr double kSignedMin = -2147483648.0;   // -2^31
+  static constexpr double kUnsignedMax = 4294967295.0;  // 2^32 - 1
+  const double number = value.as<double>();
+  if (!std::isfinite(number) || number < kSignedMin || number > kUnsignedMax) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " must be a finite 32-bit word value");
+  }
+  if (number != std::trunc(number)) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
+  }
+  return number < 0.0 ? static_cast<uint32_t>(static_cast<int64_t>(number))
+                      : static_cast<uint32_t>(number);
+}
+
+uint32_t wordProperty(val object, const char* key, uint32_t default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : checkedWordFromVal(value, key);
+}
+
+uint8_t checkedByteFromVal(const val& value, const char* key) {
+  return static_cast<uint8_t>(
+      checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint8_t>::max())));
+}
+
+uint8_t byteProperty(val object, const char* key, uint8_t default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : checkedByteFromVal(value, key);
+}
+
+int64_t checkedInt64FromVal(const val& value, const char* key) {
+  // Written as a power of two rather than as numeric_limits: INT64_MAX is not
+  // representable as a double, and converting it rounds the bound up past the
+  // values it is meant to exclude.
+  static constexpr double kUpperBound = 9223372036854775808.0;  // 2^63
+  const double number = value.as<double>();
+  if (!std::isfinite(number) || number < -kUpperBound || number >= kUpperBound) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        std::string(key) + " must be a finite number within the 64-bit integer range");
+  }
+  if (number != std::trunc(number)) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
+  }
+  return static_cast<int64_t>(number);
+}
+
+int64_t int64Property(val object, const char* key, int64_t default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : checkedInt64FromVal(value, key);
+}
+
+float checkedFloatFromVal(const val& value, const char* key) {
+  const double number = value.as<double>();
+  if (!std::isfinite(number) ||
+      std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        std::string(key) + " must be a finite number within the 32-bit float range");
+  }
+  return static_cast<float>(number);
+}
+
+double doubleProperty(val object, const char* key, double default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : value.as<double>();
+}
+
 int builtinWaveformFromVal(const val& value) {
   // One rejection for both spellings, matching the C ABI. The first invalid
   // ordinal is 4 -- what an off-by-one or a 1-based mirror emits -- so the
