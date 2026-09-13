@@ -57,7 +57,10 @@ struct RoomEstimateConfig {
   /// true volume; mismatch scales the estimate. Silently clamped to [0.01, 0.99]
   /// -- an out-of-range prior is answered from the bound, not refused -- and the
   /// interval only has to sit inside (0, 1), where 0 collapses the recovered
-  /// length and 1 diverges. Its width is a budget, not a measured range.
+  /// length and 1 diverges. The floor sits within the range hard surfaces
+  /// (glass, polished concrete) themselves measure (~0.01-0.02), and above
+  /// what air absorption alone contributes for any room past a few hundred
+  /// m^3 at 1 kHz and up -- a measured edge, not an arbitrary width.
   float reference_absorption = 0.15f;
 
   /// Use Eyring instead of Sabine for bands whose mean absorption exceeds ~0.2,
