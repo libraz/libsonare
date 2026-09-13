@@ -10,7 +10,7 @@
 
 namespace sonare {
 
-/// @brief Largest median-filter kernel either HPSS direction accepts.
+/// @brief Largest median-filter kernel either HPSS direction accepts, counted in frames.
 /// @details Set past the edge of meaningful input rather than to a memory
 ///          budget: a kernel is a median width in STFT frames or bins, and an
 ///          hour at hop 512 / 48 kHz is about 337k frames, so a caller at this
@@ -18,6 +18,8 @@ namespace sonare {
 ///          a per-element constant -- each worker allocates its own
 ///          sliding-median array and scratch window, so residency is 8 bytes x
 ///          kernel x @c hardware_concurrency() and scales with the host.
+///          Shares a value with @ref kMaxStftNFft by coincidence: that one counts
+///          samples and is pinned by an assertion, this one may move freely.
 inline constexpr int kMaxHpssKernelSize = 1 << 19;
 
 /// @brief Configuration for HPSS algorithm.

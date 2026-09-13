@@ -58,12 +58,11 @@ enum class PadMode {
   Reflect,   ///< Reflect input edges before/after the signal
 };
 
-/// @brief Largest accepted @ref StftConfig::n_fft.
-/// @details Bin spacing is 1/(window seconds) Hz, so the useful window ends near one
-/// second: 1 Hz already resolves a semitone at the bottom of the audible range, and the
-/// time smear past it exceeds any event. A backstop rather than a domain bound -- one
-/// second at @ref kMaxAudioSampleRate rounded up to a power of two, so it sits above
-/// every consumer's useful maximum instead of binding one.
+/// @brief Largest accepted @ref StftConfig::n_fft, counted in samples.
+/// @details A backstop rather than a domain bound: one second at @ref kMaxAudioSampleRate
+/// rounded up to a power of two, so it sits above every consumer's useful maximum instead
+/// of binding one. @ref kMaxHpssKernelSize shares this value by coincidence and counts
+/// frames; only this one is pinned to a value, by the assertion below.
 inline constexpr int kMaxStftNFft = 524288;
 static_assert(kMaxStftNFft >= kMaxAudioSampleRate,
               "the STFT ceiling must hold a one-second window at the highest accepted rate");
