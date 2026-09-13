@@ -192,7 +192,16 @@ def _sample_key_track_value(value: str | int) -> int:
 
 
 def _sample_desc_loop_value(mode: str | int) -> int:
-    """Resolve a sample's own loop mode to its SF2 ``sampleModes`` value."""
+    """Resolve a sample's own loop mode to its SF2 ``sampleModes`` value.
+
+    Bounded by the field's own domain rather than by the spellings below: an
+    SF2 zone carries any of the four, and the core reads anything but 1 or 3 as
+    unlooped. That makes the reserved 2 a documented alternative rather than the
+    silent substitution an out-of-domain value would get.
+    """
+    # sampleModes is two bits wide; 2 is reserved and means no loop.
+    if isinstance(mode, int) and not isinstance(mode, bool) and 0 <= mode <= 3:
+        return mode
     return _synth_enum_value(mode, _SAMPLE_DESC_LOOP_MODES, "sample loop mode")
 
 

@@ -190,7 +190,6 @@ def _coerce_denoise_mode(value: int | str) -> int:
         underscore=True,
         strip=True,
         validate_int=True,
-        quote_value=True,
     )
 
 
@@ -202,7 +201,6 @@ def _coerce_denoise_estimator(value: int | str) -> int:
         underscore=True,
         strip=True,
         validate_int=True,
-        quote_value=True,
     )
 
 
@@ -359,7 +357,6 @@ def _coerce_decrackle_mode(value: int | str) -> int:
         underscore=True,
         strip=True,
         validate_int=True,
-        quote_value=True,
     )
 
 
@@ -371,7 +368,6 @@ def _coerce_trim_silence_mode(value: int | str) -> int:
         underscore=True,
         strip=True,
         validate_int=True,
-        quote_value=True,
     )
 
 
@@ -739,7 +735,6 @@ def _coerce_compressor_detector(value: int | str) -> int:
         underscore=True,
         strip=True,
         validate_int=True,
-        quote_value=True,
     )
 
 

@@ -91,8 +91,11 @@ def hpss(
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        kernel_harmonic: Harmonic median filter kernel size (positive odd integer).
-        kernel_percussive: Percussive median filter kernel size (positive odd integer).
+        kernel_harmonic: Harmonic median filter kernel size, in STFT frames: a
+            positive odd integer at most 524287. The ceiling is 524288 and an
+            even kernel is refused, so 524287 is the largest legal value.
+        kernel_percussive: Percussive median filter kernel size, in STFT bins,
+            under the same rule.
         n_fft: FFT size used for analysis/synthesis; an even integer >= 2
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
@@ -1792,7 +1795,6 @@ def _coerce_spectral_edit_mode(value: int | str) -> int:
         strip=True,
         validate_int=True,
         reject_bool=True,
-        quote_value=True,
     )
 
 
@@ -1805,7 +1807,6 @@ def _coerce_spectral_edit_window(value: int | str) -> int:
         strip=True,
         validate_int=True,
         reject_bool=True,
-        quote_value=True,
     )
 
 

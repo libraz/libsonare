@@ -635,12 +635,10 @@ def _enum_error(
     what: str,
     verb: str,
     expected: bool,
-    quote_value: bool,
 ) -> str:
     if expected:
         return f"{verb} {what}: {value!r} (expected one of {sorted(names)})"
-    rendered = repr(value) if quote_value else str(value)
-    return f"{verb} {what}: {rendered}"
+    return f"{verb} {what}: {value}"
 
 
 def _resolve_enum(
@@ -652,19 +650,23 @@ def _resolve_enum(
     dash: bool = False,
     underscore: bool = False,
     strip: bool = False,
-    validate_int: bool = False,
-    reject_bool: bool = False,
+    validate_int: bool = True,
+    reject_bool: bool = True,
     verb: str = "unknown",
-    expected: bool = False,
-    quote_value: bool = False,
+    expected: bool = True,
 ) -> int:
     """Resolve a string / int / enum ``value`` to its C enum ordinal.
 
     ``names`` maps accepted lowercase spellings (with underscores folded to
-    dashes when ``dash`` is set) to ordinals. Integers pass through unchanged;
-    an ``enum_cls`` instance is coerced with ``int()``. Unknown inputs raise
-    :class:`SonareValueError` built from ``verb`` / ``what`` (and, when
-    ``expected`` is set, the sorted accepted names).
+    dashes when ``dash`` is set) to ordinals. An integer must name one of those
+    ordinals, and a ``bool`` is not an ordinal; an ``enum_cls`` instance is
+    coerced with ``int()``. Unknown inputs raise :class:`SonareValueError` built
+    from ``verb`` / ``what``, listing the accepted names: a refusal that names
+    none of them leaves the caller with nothing to try next.
+
+    A table that does not spell every ordinal its field accepts is bounded at
+    the call site instead; ``validate_int=False`` is not that tool, because it
+    removes the bound rather than widening it.
     """
     if enum_cls is not None and isinstance(value, enum_cls):
         return cast(int, value)
@@ -672,10 +674,10 @@ def _resolve_enum(
         if (reject_bool and isinstance(value, bool)) or (
             validate_int and value not in names.values()
         ):
-            raise SonareValueError(_enum_error(value, names, what, verb, expected, quote_value))
+            raise SonareValueError(_enum_error(value, names, what, verb, expected))
         return value
     if not isinstance(value, str):
-        raise SonareValueError(_enum_error(value, names, what, verb, expected, quote_value))
+        raise SonareValueError(_enum_error(value, names, what, verb, expected))
     key = value.strip() if strip else value
     if dash:
         key = key.replace("_", "-")
@@ -683,7 +685,7 @@ def _resolve_enum(
         key = key.replace("-", "_")
     key = key.lower()
     if key not in names:
-        raise SonareValueError(_enum_error(value, names, what, verb, expected, quote_value))
+        raise SonareValueError(_enum_error(value, names, what, verb, expected))
     return names[key]
 
 
