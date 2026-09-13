@@ -21,11 +21,13 @@ from ._ffi import (
     SonareWaveformPeaksResult,
 )
 from ._runtime import (
+    _SIZE_T_MAX,
     SonareValueError,
     _call_float_transform,
     _check,
     _from_c_float_array,
     _get_lib,
+    _narrow_int,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -885,7 +887,15 @@ def waveform_peak_pyramid(
         )
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
-    c_levels = (ctypes.c_size_t * len(levels))(*levels)
+    # Narrowed per entry: a value that wrapped would arrive as the 0 refused above.
+    c_levels = (ctypes.c_size_t * len(levels))(
+        *[
+            _narrow_int(
+                level, f"waveform_peak_pyramid: samples_per_bucket_levels[{i}]", 0, _SIZE_T_MAX
+            )
+            for i, level in enumerate(levels)
+        ]
+    )
     out = SonareWaveformPeakPyramidResult()
     rc = lib.sonare_waveform_peak_pyramid(
         c_array,

@@ -204,6 +204,22 @@ def test_over_long_candidate_list_names_the_limit() -> None:
         libsonare.estimate_meter(times, strengths, candidate_numerators=list(range(2, 19)))
 
 
+def test_a_numerator_too_large_for_the_c_array_is_refused_not_folded() -> None:
+    """``2**32 + 5`` is the 5 below once the C conversion has it, and 5 is legal.
+
+    The accepted call is what gives the refusal its meaning: the wrapped value
+    used to be scored as this same numerator and reported as this same meter.
+    """
+    times, strengths = _beat_series(5)
+
+    accepted = libsonare.estimate_meter(times, strengths, candidate_numerators=[3, 4, 5])
+    assert accepted.time_signature.numerator == 5
+    assert len(accepted.candidate_scores) == 3
+
+    with pytest.raises(SonareValueError, match=r"candidate_numerators\[2\]"):
+        libsonare.estimate_meter(times, strengths, candidate_numerators=[3, 4, 2**32 + 5])
+
+
 def test_camel_case_aliases_mirror_snake_case() -> None:
     """The camelCase aliases return the same values as the snake_case fields."""
     times, strengths = _beat_series(4)

@@ -155,6 +155,31 @@ def test_waveform_peak_pyramid_returns_requested_levels() -> None:
     assert pyramid[1].max[0] == pytest.approx(0.75)
 
 
+def test_a_bucket_width_that_would_wrap_is_refused_like_the_zero_it_became() -> None:
+    """``2**64`` is the 0 this call already refuses, once the C conversion has it.
+
+    So the two are asserted together: the width the function rejects by name and
+    the width that used to turn into it reach the caller as the same refusal.
+    """
+    samples = np.array(
+        [-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9],
+        dtype=np.float32,
+    )
+
+    # Positive control: a width the call accepts, with the buckets it built read
+    # back, so the refusals below are refusals and not a call failing anyway.
+    accepted = libsonare.waveform_peak_pyramid(samples, 2, samples_per_bucket_levels=[2])
+    assert accepted[0].samples_per_bucket == 2
+    assert accepted[0].bucket_count == 3
+    assert accepted[0].min[0] == pytest.approx(-1.0)
+
+    # 2**64 is the 0 refused by name; 2**64 + 2 is the width just accepted. One
+    # used to come back as the core's own complaint, the other not at all.
+    for level in (0, 2**64, 2**64 + 2):
+        with pytest.raises(libsonare.SonareValueError):
+            libsonare.waveform_peak_pyramid(samples, 2, samples_per_bucket_levels=[level])
+
+
 def test_waveform_peaks_default_bucket_width_and_pyramid_levels() -> None:
     samples = np.array(
         [-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9],

@@ -24,12 +24,15 @@ from ._ffi import (
     SonareTimbreResult,
 )
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     ErrorCode,
     SonareError,
     SonareValueError,
     _check,
     _get_lib,
     _guard_buffer,
+    _narrow_int,
     _optional_float_array_result,
     _to_c_float_array,
     _to_c_int,
@@ -156,8 +159,9 @@ def analyze(
         else tuple(int(value) for value in meter_candidate_numerators)
     )
     # The flat C array cannot carry an over-long list, so reject it here rather
-    # than truncating it into a set the caller never asked for. Every other
-    # rule (non-empty, per-entry range, denominator) is the core's to enforce.
+    # than truncating it into a set the caller never asked for. Entries are
+    # narrowed on the C int range below so the core sees what the caller passed;
+    # every other rule (non-empty, numerator domain, denominator) is the core's.
     if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
         raise SonareValueError(
             "analyze: meter_candidate_numerators must hold at most "
@@ -192,7 +196,15 @@ def analyze(
                 # any field left unset, and a zero count reads to the core as
                 # an empty candidate set, which it rejects.
                 meter_candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(
-                    *numerators
+                    *[
+                        _narrow_int(
+                            value,
+                            f"analyze: meter_candidate_numerators[{i}]",
+                            _C_INT_MIN,
+                            _C_INT_MAX,
+                        )
+                        for i, value in enumerate(numerators)
+                    ]
                 ),
                 meter_candidate_numerator_count=len(numerators),
                 meter_denominator=meter_denominator,
@@ -453,9 +465,10 @@ def estimate_meter(
         else tuple(int(value) for value in candidate_numerators)
     )
     # The flat C array cannot carry an over-long list, so reject it here rather
-    # than truncating it into a set the caller never asked for. Every other
-    # rule (non-empty, per-entry range, denominator, weights, beat series) is
-    # the core's to enforce.
+    # than truncating it into a set the caller never asked for. Entries are
+    # narrowed on the C int range below so the core sees what the caller passed;
+    # every other rule (non-empty, numerator domain, denominator, weights, beat
+    # series) is the core's to enforce.
     if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
         raise SonareValueError(
             "estimate_meter: candidate_numerators must hold at most "
@@ -480,7 +493,14 @@ def estimate_meter(
         # Both the array and its count must be written: ctypes zeroes any field
         # left unset, and a zero count reads to the core as an empty candidate
         # set, which it rejects.
-        candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(*numerators),
+        candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(
+            *[
+                _narrow_int(
+                    value, f"estimate_meter: candidate_numerators[{i}]", _C_INT_MIN, _C_INT_MAX
+                )
+                for i, value in enumerate(numerators)
+            ]
+        ),
         candidate_numerator_count=len(numerators),
         denominator=denominator,
         downbeat_weight=downbeat_weight,

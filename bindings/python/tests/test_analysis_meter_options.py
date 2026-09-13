@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 import libsonare
-from libsonare import ErrorCode, SonareError
+from libsonare import ErrorCode, SonareError, SonareValueError
 
 from ._helpers import LIB_AVAILABLE
 
@@ -144,6 +144,21 @@ def test_over_long_numerator_list_names_the_limit() -> None:
             sample_rate=22050,
             meter_candidate_numerators=list(range(2, 19)),
         )
+
+
+def test_a_numerator_too_large_for_the_c_array_is_refused_not_folded() -> None:
+    """``2**32 + 4`` is the 4 below once the C conversion has it, and 4 is legal.
+
+    The two calls differ only in that summand, so the accepted one establishes
+    what the refused one used to do: reach the core as a numerator it scores.
+    """
+    samples = _accented_signal(bars=1)
+
+    accepted = libsonare.analyze(samples, sample_rate=22050, meter_candidate_numerators=[4])
+    assert accepted.time_signature.numerator == 4
+
+    with pytest.raises(SonareValueError, match=r"meter_candidate_numerators\[0\]"):
+        libsonare.analyze(samples, sample_rate=22050, meter_candidate_numerators=[2**32 + 4])
 
 
 @pytest.fixture(scope="module")
