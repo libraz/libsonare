@@ -105,6 +105,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/mixing_mixer.cpp
   ${SONARE_ROOT}/src/c_api/mixing_strip.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_daw.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_polyphony.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_engine.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_engine_midi.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_engine_clips.cpp

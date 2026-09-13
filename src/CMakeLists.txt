@@ -959,6 +959,7 @@ if(BUILD_SHARED)
   # the acoustic + FX modules are both linked.
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_acoustic.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_daw.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_polyphony.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_midi.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_clips.cpp)
