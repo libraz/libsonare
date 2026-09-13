@@ -922,7 +922,7 @@ typedef enum SONARE_ENUM_BASE {
 /// @details Zero-init friendly: every "0 => default" field below picks the
 ///          documented default so a memset(0) config is the all-defaults case.
 typedef struct {
-  int n_fft;              /* 0 => default 2048; must be a power of two (>= 2) */
+  int n_fft;              /* 0 => default 2048; a power of two in [2, 262144] */
   int hop_length;         /* 0 => default 512; must satisfy 0 < hop <= n_fft/2 */
   int window;             /* SonareWindowType (sonare_c_streaming.h); 0 = Hann */
   int heal_radius_frames; /* 0 => default 2; neighbour frames each side used by Heal */

@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "core/spectrum.h"
@@ -321,5 +322,67 @@ TEST_CASE("spectral_edit rejects invalid parameters", "[spectral_edit]") {
   }
   SECTION("valid call with the same audio succeeds") {
     REQUIRE_NOTHROW(spectral_edit(audio, default_config(), &op, 1));
+  }
+}
+
+TEST_CASE("spectral_edit bounds n_fft by magnitude and not only by shape", "[spectral_edit]") {
+  const int samples = kSampleRate / 2;
+  Audio audio = Audio::from_vector(generate_sine(samples, 1000.0f, 0.3f), kSampleRate);
+  SpectralRegionOp op{0, samples, 4000.0f, 6000.0f, 0.0f, SpectralEditMode::Mute};
+
+  SECTION("an n_fft past the ceiling is rejected before any spectrum is allocated") {
+    SpectralEditConfig cfg = default_config();
+    cfg.n_fft = 1 << 30;       // even, a power of two, inside int's range
+    cfg.hop_length = 1 << 29;  // exactly n_fft/2, so the COLA ratio accepts it
+    try {
+      spectral_edit(audio, cfg, nullptr, 0);
+      FAIL("n_fft past the ceiling was accepted");
+    } catch (const SonareException& e) {
+      const std::string message = e.what();
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+      REQUIRE(message.find("nFft") != std::string::npos);
+      REQUIRE(message.find(std::to_string(kSpectralEditMaxNFft)) != std::string::npos);
+    }
+  }
+
+  SECTION("the ceiling itself is accepted") {
+    SpectralEditConfig cfg = default_config();
+    cfg.n_fft = kSpectralEditMaxNFft;
+    cfg.hop_length = kSpectralEditMaxNFft / 4;
+    Audio out;
+    REQUIRE_NOTHROW(out = spectral_edit(audio, cfg, &op, 1));
+    REQUIRE(out.size() == audio.size());
+    // The ceiling must be a usable value, not merely an accepted one: the
+    // round-trip has to carry the signal, not return a zero-filled buffer.
+    float in_energy = 0.0f;
+    float out_energy = 0.0f;
+    for (size_t i = 0; i < out.size(); ++i) {
+      in_energy += audio[i] * audio[i];
+      out_energy += out[i] * out[i];
+    }
+    const float ratio = out_energy / in_energy;
+    REQUIRE(ratio > 0.9f);
+  }
+
+  SECTION("the next power of two above the ceiling is rejected") {
+    SpectralEditConfig cfg = default_config();
+    cfg.n_fft = kSpectralEditMaxNFft * 2;   // still even, still a power of two
+    cfg.hop_length = kSpectralEditMaxNFft;  // n_fft/2, so the COLA ratio accepts it
+    REQUIRE_THROWS_AS(spectral_edit(audio, cfg, nullptr, 0), SonareException);
+  }
+
+  SECTION("a large practical n_fft is still accepted") {
+    SpectralEditConfig cfg = default_config();
+    cfg.n_fft = 16384;  // 0.74 s analysis window at 22050 Hz, 0.34 s at 48 kHz
+    cfg.hop_length = 4096;
+    Audio out;
+    REQUIRE_NOTHROW(out = spectral_edit(audio, cfg, &op, 1));
+    REQUIRE(out.size() == audio.size());
+  }
+
+  SECTION("the default n_fft is unaffected") {
+    Audio out;
+    REQUIRE_NOTHROW(out = spectral_edit(audio, default_config(), &op, 1));
+    REQUIRE(out.size() == audio.size());
   }
 }

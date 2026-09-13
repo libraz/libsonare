@@ -32,9 +32,15 @@ struct SpectralRegionOp {
   SpectralEditMode mode = SpectralEditMode::Gain;  ///< Edit mode.
 };
 
+/// @brief Largest accepted @ref SpectralEditConfig::n_fft.
+/// @details The window is the time smear every region edit inherits, so the useful
+/// domain ends near a one-second window -- past it a rectangle cannot address
+/// anything shorter than a phrase. One second at 192 kHz, rounded up to a power of two.
+inline constexpr int kSpectralEditMaxNFft = 262144;
+
 /// @brief STFT + heal parameters for a spectral edit pass.
 struct SpectralEditConfig {
-  int n_fft = 2048;      ///< FFT size; must be a power of two (>= 2). Mirrors StftConfig default.
+  int n_fft = 2048;      ///< FFT size; a power of two in [2, @ref kSpectralEditMaxNFft].
   int hop_length = 512;  ///< Hop length; must satisfy 0 < hop <= n_fft/2 (COLA).
   WindowType window = WindowType::Hann;  ///< Analysis + synthesis window.
   int heal_radius_frames = 2;            ///< Neighbour frames each side used by Heal (>= 1).
@@ -56,8 +62,8 @@ struct SpectralEditConfig {
 /// @param n_ops Number of region ops.
 /// @return Edited audio, same length and sample rate as @p audio.
 /// @throws SonareException(InvalidParameter) if @p audio is empty, @p n_fft is not
-///         a power of two >= 2, @p hop_length is out of (0, n_fft/2], or
-///         @p ops is null with @p n_ops > 0.
+///         a power of two in [2, @ref kSpectralEditMaxNFft], @p hop_length is out of
+///         (0, n_fft/2], or @p ops is null with @p n_ops > 0.
 Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
                     const SpectralRegionOp* ops, std::size_t n_ops);
 

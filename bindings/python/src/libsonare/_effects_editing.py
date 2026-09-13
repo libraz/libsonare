@@ -1852,7 +1852,7 @@ def spectral_edit(
         samples: Audio samples (mono).
         sample_rate: Sample rate in Hz.
         ops: Sequence of :class:`SpectralRegionOp` region edits, applied in order.
-        n_fft: STFT size; must be a power of two (default 2048).
+        n_fft: STFT size; a power of two in ``[2, 262144]`` (default 2048).
         hop_length: STFT hop; must satisfy ``0 < hop_length <= n_fft / 2``
             (default 512).
         window: Analysis window, one of ``"hann"``, ``"hamming"``,
@@ -1865,12 +1865,16 @@ def spectral_edit(
         List of edited samples.
 
     Note:
-        ``n_fft``/``hop_length``/``heal_radius_frames`` are validated eagerly here
-        and raise :class:`SonareValueError`, which is both a ``ValueError`` (the
-        idiomatic Python contract) and a ``SonareError``. The Node and WASM
-        surfaces accept the same valid inputs but delegate rejection to the C++
-        core, so an invalid value surfaces there only once it reaches the core.
-        The accepted input range is identical across surfaces.
+        The shape rules -- ``n_fft`` a power of two, ``hop_length`` within
+        ``(0, n_fft / 2]``, ``heal_radius_frames`` non-negative -- are validated
+        eagerly here and raise :class:`SonareValueError`, which is both a
+        ``ValueError`` (the idiomatic Python contract) and a ``SonareError``. The
+        upper bound on ``n_fft`` is a value rule and is checked by the C++ core
+        instead, so exceeding it raises a plain :class:`SonareError`; both carry
+        ``ErrorCode.INVALID_PARAMETER``, so only ``except ValueError`` tells them
+        apart. The Node and WASM surfaces accept the same valid inputs but
+        delegate every rejection to the core. The accepted input range is
+        identical across surfaces.
     """
     # spectral_edit is deliberately stricter than the shared even-size rule:
     # src/effects/spectral_edit.cpp requires a power of two, so checking it here

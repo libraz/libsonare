@@ -1279,7 +1279,7 @@ export interface SpectralRegionOp {
  * `SonareSpectralEditConfig`.
  */
 export interface SpectralEditOptions {
-  /** FFT size; must be a power of two `>= 2`. Default 2048. */
+  /** FFT size; a power of two in `[2, 262144]`. Default 2048. */
   nFft?: number;
   /** Hop length; must satisfy `0 < hop <= nFft / 2`. Default 512. */
   hopLength?: number;

@@ -176,6 +176,8 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
   // Stricter than the shared rule: this entry point has always documented a
   // power-of-two nFft (spectral_edit.h) and every surface already enforces it.
   SONARE_CHECK(is_power_of_two(config.n_fft), ErrorCode::InvalidParameter);
+  // Shape checks never bound magnitude: 2^30 passes them all and then asks for 4 GiB.
+  SONARE_CHECK_RANGE("SpectralEditConfig: nFft", config.n_fft, 2, kSpectralEditMaxNFft);
   SONARE_CHECK(config.heal_radius_frames >= 1, ErrorCode::InvalidParameter);
   SONARE_CHECK(ops != nullptr || n_ops == 0, ErrorCode::InvalidParameter);
 
