@@ -1554,6 +1554,59 @@ TEST_CASE("more claimants than the window can fit poles for is refused",
   }
 }
 
+TEST_CASE("more claimants than the assignment can enumerate is refused",
+          "[polyphony_shared_bins]") {
+  // Nine notes inside nine hertz, so every bin near the fundamental carries all
+  // nine claims. The other ceiling is out of the way at a window of eighteen,
+  // where the fit admits nine, so only the assignment's eight is left to refuse.
+  std::vector<ToneSpec> tones;
+  std::vector<float> pitches;
+  for (int i = 0; i < 9; ++i) {
+    ToneSpec tone;
+    tone.f0_hz = 300.0 + static_cast<double>(i);
+    tone.amplitude = 0.1;
+    tone.n_partials = kFixturePartials;
+    tone.phase_step = 0.11 * static_cast<double>(i);
+    tones.push_back(tone);
+    pitches.push_back(static_cast<float>(tone.f0_hz));
+  }
+  const sonare::Spectrogram spec = spectrogram_of_tones(tones, 0.4f);
+
+  /// @brief Outcomes of the bins every claimant reaches, over a track holding the
+  ///        first @p n_claimants of the nine ridges against one material.
+  const auto verdicts = [&](size_t n_claimants) {
+    const std::vector<float> claiming(pitches.begin(),
+                                      pitches.begin() + static_cast<std::ptrdiff_t>(n_claimants));
+    const MultiF0Track track = track_of_pitches(spec, claiming);
+    const NoteMaskSet masks = matched_masks(spec, track);
+
+    SharedBinConfig config;
+    config.window_frames = 18;
+    SharedBinReport report;
+    const NoteMaskSet solved = solve_and_check(spec, masks, track, config, report);
+
+    const std::vector<int> counts = claim_counts(masks);
+    std::vector<SharedBinOutcome> outcomes;
+    for (const Entry& entry : entries_of(solved)) {
+      if (counts[entry.cell] != static_cast<int>(n_claimants)) continue;
+      outcomes.push_back(report.outcome[entry.cell]);
+    }
+    REQUIRE(!outcomes.empty());
+    return outcomes;
+  };
+
+  for (const SharedBinOutcome outcome : verdicts(9)) {
+    REQUIRE(outcome == SharedBinOutcome::TooManyClaimants);
+  }
+  // The ninth ridge withdrawn and the material untouched: eight claimants sit on
+  // the ceiling rather than past it, so the count stops being the reason. Without
+  // it the case reads the same when something other than the count refused them.
+  for (const SharedBinOutcome outcome : verdicts(8)) {
+    INFO("outcome " << name_of(outcome));
+    REQUIRE(outcome != SharedBinOutcome::TooManyClaimants);
+  }
+}
+
 TEST_CASE("a claim standing on a partial the material never rendered holds only leakage",
           "[polyphony_shared_bins]") {
   // The default mask claims twenty partials and few real notes have twenty, so a
