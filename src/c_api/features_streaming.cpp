@@ -18,24 +18,6 @@ bool finite_positive(float value) { return std::isfinite(value) && value > 0.0f;
 
 bool finite_non_negative(float value) { return std::isfinite(value) && value >= 0.0f; }
 
-bool valid_window(int value) {
-  return value >= SONARE_WINDOW_HANN && value <= SONARE_WINDOW_RECTANGULAR;
-}
-
-WindowType to_window_type(int value) {
-  switch (static_cast<SonareWindowType>(value)) {
-    case SONARE_WINDOW_HAMMING:
-      return WindowType::Hamming;
-    case SONARE_WINDOW_BLACKMAN:
-      return WindowType::Blackman;
-    case SONARE_WINDOW_RECTANGULAR:
-      return WindowType::Rectangular;
-    case SONARE_WINDOW_HANN:
-    default:
-      return WindowType::Hann;
-  }
-}
-
 SonareStreamChordChange* copy_chord_changes(const std::vector<ChordChange>& v) {
   if (v.empty()) return nullptr;
   std::unique_ptr<SonareStreamChordChange[]> buf(new SonareStreamChordChange[v.size()]);

@@ -454,25 +454,6 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
   });
 }
 
-namespace {
-
-/// @brief Maps a SonareWindowType int to the core WindowType (defaults to Hann).
-WindowType spectral_edit_window(int value) {
-  switch (value) {
-    case SONARE_WINDOW_HAMMING:
-      return WindowType::Hamming;
-    case SONARE_WINDOW_BLACKMAN:
-      return WindowType::Blackman;
-    case SONARE_WINDOW_RECTANGULAR:
-      return WindowType::Rectangular;
-    case SONARE_WINDOW_HANN:
-    default:
-      return WindowType::Hann;
-  }
-}
-
-}  // namespace
-
 SonareError sonare_spectral_edit(const float* samples, size_t length, int sample_rate,
                                  const SonareSpectralEditConfig* config,
                                  const SonareSpectralRegionOp* ops, size_t n_ops, float** out,
@@ -488,7 +469,8 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
   if (config != nullptr) {
     if (config->n_fft != 0) core_config.n_fft = config->n_fft;
     if (config->hop_length != 0) core_config.hop_length = config->hop_length;
-    core_config.window = spectral_edit_window(config->window);
+    if (!valid_window(config->window)) return SONARE_ERROR_INVALID_PARAMETER;
+    core_config.window = to_window_type(config->window);
     if (config->heal_radius_frames != 0)
       core_config.heal_radius_frames = config->heal_radius_frames;
   }

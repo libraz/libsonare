@@ -701,7 +701,7 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     sonare_free_floats(out);
   }
 
-  SECTION("null ops with non-zero count, bad mode, and null out are rejected") {
+  SECTION("null ops with non-zero count, bad mode, bad window, and null out are rejected") {
     float* out = non_null_sentinel_float_ptr();
     size_t out_len = 99;
     REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, nullptr, 3, &out,
@@ -717,5 +717,95 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
 
     REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, nullptr, 0, nullptr,
                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+    // Bounds derive from the enum, so a new enumerator widens the accepted range here too.
+    const int bad_windows[] = {SONARE_WINDOW_HANN - 1, SONARE_WINDOW_RECTANGULAR + 1, 99};
+    for (int bad_window : bad_windows) {
+      SonareSpectralEditConfig config{};
+      config.window = bad_window;
+      out = non_null_sentinel_float_ptr();
+      out_len = 99;
+      CAPTURE(bad_window);
+      REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &config, nullptr, 0, &out,
+                                   &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(out == nullptr);
+      REQUIRE(out_len == 0);
+    }
+  }
+
+  SECTION("every mapped window is accepted and changes the output") {
+    SonareSpectralRegionOp op;
+    op.start_sample = 0;
+    op.end_sample = static_cast<int64_t>(samples.size());
+    op.low_hz = 4000.0f;
+    op.high_hz = 6000.0f;
+    op.gain_db = -24.0f;
+    op.mode = SONARE_SPECTRAL_EDIT_MODE_ATTENUATE;
+
+    const int windows[] = {SONARE_WINDOW_HANN, SONARE_WINDOW_HAMMING, SONARE_WINDOW_BLACKMAN,
+                           SONARE_WINDOW_RECTANGULAR};
+    constexpr size_t kWindowCount = sizeof(windows) / sizeof(windows[0]);
+    REQUIRE(kWindowCount == static_cast<size_t>(SONARE_WINDOW_RECTANGULAR) + 1);
+
+    std::vector<std::vector<float>> rendered(kWindowCount);
+    for (size_t i = 0; i < kWindowCount; ++i) {
+      SonareSpectralEditConfig config{};
+      config.window = windows[i];
+      float* out = nullptr;
+      size_t out_len = 0;
+      CAPTURE(windows[i]);
+      REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &config, &op, 1, &out,
+                                   &out_len) == SONARE_OK);
+      REQUIRE(out != nullptr);
+      REQUIRE(out_len == samples.size());
+      rendered[i].assign(out, out + out_len);
+      sonare_free_floats(out);
+    }
+
+    // An implementation that ignored the ordinal and always analysed with Hann would
+    // pass every case above; only a pairwise difference says which window was used.
+    for (size_t i = 0; i < kWindowCount; ++i) {
+      for (size_t j = i + 1; j < kWindowCount; ++j) {
+        CAPTURE(windows[i], windows[j]);
+        REQUIRE(max_abs_difference(rendered[i].data(), rendered[j].data(), samples.size()) > 1e-4f);
+      }
+    }
+  }
+
+  SECTION("a zero-filled config selects Hann and the documented defaults") {
+    SonareSpectralEditConfig zeroed{};
+    REQUIRE(SONARE_WINDOW_HANN == 0);
+    REQUIRE(zeroed.window == SONARE_WINDOW_HANN);
+
+    SonareSpectralEditConfig spelled_out{};
+    spelled_out.n_fft = 2048;
+    spelled_out.hop_length = 512;
+    spelled_out.window = SONARE_WINDOW_HANN;
+    spelled_out.heal_radius_frames = 2;
+
+    SonareSpectralRegionOp op;
+    op.start_sample = 0;
+    op.end_sample = static_cast<int64_t>(samples.size());
+    op.low_hz = 4000.0f;
+    op.high_hz = 6000.0f;
+    op.gain_db = -24.0f;
+    op.mode = SONARE_SPECTRAL_EDIT_MODE_ATTENUATE;
+
+    float* zeroed_out = nullptr;
+    size_t zeroed_len = 0;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &zeroed, &op, 1, &zeroed_out,
+                                 &zeroed_len) == SONARE_OK);
+    REQUIRE(zeroed_out != nullptr);
+    REQUIRE(zeroed_len == samples.size());
+
+    float* spelled_out_audio = nullptr;
+    size_t spelled_out_len = 0;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &spelled_out, &op, 1,
+                                 &spelled_out_audio, &spelled_out_len) == SONARE_OK);
+    REQUIRE(spelled_out_len == zeroed_len);
+    REQUIRE(max_abs_difference(zeroed_out, spelled_out_audio, zeroed_len) == 0.0f);
+
+    sonare_free_floats(zeroed_out);
+    sonare_free_floats(spelled_out_audio);
   }
 }

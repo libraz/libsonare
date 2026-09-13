@@ -1151,8 +1151,30 @@ SpectralEditMode parseSpectralEditMode(val mode) {
                                 "spectralEdit: unknown mode: " + s);
 }
 
-// Map a window string ('hann'|'hamming'|'blackman'|'rectangular') to WindowType.
+// Map a window string ('hann'|'hamming'|'blackman'|'rectangular') or a
+// SonareWindowType ordinal to WindowType. Both spellings are accepted on every
+// surface and both refuse an unmapped value with InvalidParameter; reading the
+// field as a string unconditionally used to send a number out as a raw embind
+// conversion error carrying no error code at all.
 WindowType parseSpectralEditWindow(val window) {
+  if (window.isNumber()) {
+    const int ordinal = checkedIntFromVal(window, "window");
+    requireOrdinalInRange(ordinal, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR, "window");
+    switch (static_cast<SonareWindowType>(ordinal)) {
+      case SONARE_WINDOW_HANN:
+        return WindowType::Hann;
+      case SONARE_WINDOW_HAMMING:
+        return WindowType::Hamming;
+      case SONARE_WINDOW_BLACKMAN:
+        return WindowType::Blackman;
+      case SONARE_WINDOW_RECTANGULAR:
+        return WindowType::Rectangular;
+    }
+  }
+  if (!window.isString()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "spectralEdit: window must be a window name or a window ordinal");
+  }
   std::string s = window.as<std::string>();
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });

@@ -107,6 +107,37 @@ SonareError validate_audio_params(const float* samples, size_t length, int sampl
 SonareGrooveType to_c_groove_type(const std::string& groove);
 SonareChordQuality to_c_chord_quality(ChordQuality quality);
 
+/// @brief Whether an ordinal names a window type this ABI maps.
+/// @details Canonical owner of the SonareWindowType range check. Every entry
+///          point taking a window ordinal calls this and returns
+///          SONARE_ERROR_INVALID_PARAMETER when it fails, rather than letting an
+///          unmapped ordinal fall onto a default: an out-of-range window that
+///          silently becomes Hann is indistinguishable from a caller who asked
+///          for Hann.
+inline bool valid_window(int value) {
+  return value >= SONARE_WINDOW_HANN && value <= SONARE_WINDOW_RECTANGULAR;
+}
+
+/// @brief Maps an ordinal that passed @ref valid_window onto the core enum.
+/// @details The switch is deliberately exhaustive with no default arm, so adding
+///          a SonareWindowType enumerator fails -Wswitch here instead of mapping
+///          the new window to Hann. The trailing return is unreachable for any
+///          ordinal @ref valid_window accepts and exists only to satisfy the
+///          compiler on a value cast in from outside the enum's range.
+inline sonare::WindowType to_window_type(int value) {
+  switch (static_cast<SonareWindowType>(value)) {
+    case SONARE_WINDOW_HANN:
+      return sonare::WindowType::Hann;
+    case SONARE_WINDOW_HAMMING:
+      return sonare::WindowType::Hamming;
+    case SONARE_WINDOW_BLACKMAN:
+      return sonare::WindowType::Blackman;
+    case SONARE_WINDOW_RECTANGULAR:
+      return sonare::WindowType::Rectangular;
+  }
+  return sonare::WindowType::Hann;
+}
+
 template <typename T>
 T* release_array(std::unique_ptr<T[]>& ptr) {
   return ptr.release();
