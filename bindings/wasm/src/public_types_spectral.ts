@@ -145,11 +145,18 @@ export type NoteEditInput = Omit<Partial<NoteEdit>, 'amplitudeEnvelope'> & {
 };
 
 /**
- * One editable note returned by `extractNotes`.
+ * One editable note, returned by `extractNotes` and by
+ * `PolyphonicAnalysis.notes()`.
  *
- * Sample bounds are half-open into the source audio; frame bounds are half-open
- * into the caller's own `f0Hz` track. The per-note F0 curve is deliberately not
- * repeated here — it is `f0Hz.subarray(frameStart, frameEnd)`.
+ * Sample bounds are half-open into the source audio. Frame bounds are half-open
+ * into whichever framing found the note: the caller's own `f0Hz` track through
+ * `extractNotes`, and the analysis's own STFT framing through a
+ * `PolyphonicAnalysis`, whose `f0Hz` curve therefore comes from `noteF0(note)`
+ * rather than from an array the caller holds.
+ *
+ * The per-note F0 curve is deliberately not repeated here — through the by-value
+ * door it is `f0Hz.subarray(frameStart, frameEnd)`, and through a handle it has its
+ * own accessor.
  *
  * `onsetSample` and `offsetSample` are 64-bit on the core side and arrive as JS
  * numbers, which are exact up to `Number.MAX_SAFE_INTEGER`.
@@ -159,7 +166,7 @@ export interface NoteObject {
   onsetSample: number;
   /** One past the last sample of the span. */
   offsetSample: number;
-  /** First frame of the span in the caller's `f0Hz` track. */
+  /** First frame of the span, in the framing that found the note. */
   frameStart: number;
   /** One past the last frame of the span. */
   frameEnd: number;
@@ -232,6 +239,124 @@ export interface PitchDecompositionResult {
   driftCents: Float32Array;
   /** Fast deviation in cents, over the same frames. */
   vibratoCents: Float32Array;
+}
+
+/**
+ * Tuning for `analyzePolyphonic`. Every field is optional and 0 or absent takes
+ * the documented default.
+ *
+ * Four fields accept 0 as a value as well as reading it as their default, and are
+ * marked below: **pass a negative number to select 0 on those**. Each rejects a
+ * negative otherwise, so the two meanings cannot collide.
+ *
+ * The window function and the centred framing are not settable. Every span, claim
+ * and mask offset in this chain is derived against one framing, so a second way to
+ * state it would be a second thing to keep in agreement.
+ */
+export interface PolyphonicAnalysisOptions {
+  /** STFT size the whole chain runs in. Default 4096, the size it is tuned at. */
+  nFft?: number;
+  /** STFT hop in samples. Default 512. */
+  hopLength?: number;
+  /** Window length in samples. Defaults to `nFft`. */
+  winLength?: number;
+  /** Bottom of the cent axis the salience is folded onto, in Hz. Default 55. */
+  centRefHz?: number;
+  /** Cent-axis resolution. Default 100/3; finer than 1 cent is rejected. */
+  centsPerBin?: number;
+  /** Top of the cent axis, in Hz. Default 8000. */
+  centMaxHz?: number;
+  /** Stops weighting bins by tonality, which is on. Default `false`. */
+  tonalityOff?: boolean;
+  /** Partials summed per F0 candidate. Default 20, at most 128. */
+  salienceHarmonics?: number;
+  /** Lowest F0 a candidate may take, in Hz. Default 55. */
+  f0MinHz?: number;
+  /** Highest F0 a candidate may take, in Hz. Default 1760. */
+  f0MaxHz?: number;
+  /** Harmonic weighting offset, in Hz. Default 27. */
+  salienceAlphaHz?: number;
+  /** Harmonic weighting scale, in Hz. Default 320. */
+  salienceBetaHz?: number;
+  /**
+   * Partial-series stretch assumed while scoring a candidate, `B` in
+   * `f_h = h*f0*sqrt(1 + B*h^2)`. 0 is the default and also a stretch of zero, so
+   * it needs no sentinel.
+   */
+  salienceInharmonicity?: number;
+  /** Voices one frame may hold. Default 4, at most 64. */
+  maxPolyphony?: number;
+  /**
+   * Stops the per-frame iteration below this share of the frame's first peak.
+   * Default 0.20; **negative selects 0**.
+   */
+  minFramePeakRatio?: number;
+  /** Closest two candidates of one frame may sit. Default 50; **negative selects 0**. */
+  minSeparationCents?: number;
+  /** Share of a found voice removed before the next iteration. Default 1. */
+  subtractionFactor?: number;
+  /** A larger move between two frames breaks the ridge. Default 50 cents. */
+  maxJumpCents?: number;
+  /**
+   * A fade below this share of the ridge's own running peak breaks it. Default
+   * 0.10; **negative selects 0**.
+   */
+  minRidgePeakRatio?: number;
+  /** Shorter ridges are dropped. Default 140 ms; **negative selects 0**. */
+  minRidgeDurationMs?: number;
+  /** Partials claimed per note. Default 20, at most 128. */
+  maskHarmonics?: number;
+  /** Claim half-width in Hann main lobes. Default 1. */
+  claimLobes?: number;
+  /**
+   * Stretch of the claimed partial series, `B` in `f_h = h*f0*sqrt(1 + B*h^2)`.
+   * Default 0, which is also a value.
+   *
+   * Leaving it at 0 for stretched material costs more than a widened claim would:
+   * at a piano's `1e-4` the highest partial of a twenty-harmonic claim sits
+   * outside the claim entirely, and a partial outside every claim is residual —
+   * carried unedited, so it keeps sounding at the old pitch after its note moves.
+   */
+  inharmonicity?: number;
+  /** Frames per apportionment fit. Default 8, between 4 and 64. */
+  windowFrames?: number;
+  /** Radians per frame two claimed partials must differ by to be fitted. Default 0.01. */
+  minPartialSeparation?: number;
+  /** Relative misfit ceiling above which the fit refuses the bin. Default 0.02. */
+  maxFitResidual?: number;
+  /**
+   * Ceiling on one weight's modulus. A weight is a fitted component over the
+   * observed bin, so where two partials nearly cancel it exceeds one and the
+   * residual carries several times the input there. While every edit is identity
+   * that is inaudible — the notes and the residual still sum to the input.
+   * Lowering it trades separation for a quieter residual. Default 8.
+   */
+  maxWeightModulus?: number;
+  /** Highest partial usable to refine an F0, in Hz. Default 0, which derives one. */
+  maxRefineHz?: number;
+  /** Worst F0 error tolerated by the fit, in cents. Default 50. */
+  f0ToleranceCents?: number;
+  /** Cents of pitch change that cut one ridge into two notes. Default 50. */
+  segmentationThresholdCents?: number;
+  /** Shortest span kept as a note, in ms. Default 30. */
+  minNoteMs?: number;
+  /** Reference pitch each note's `medianCents` is measured against. Default 440. */
+  referenceHz?: number;
+}
+
+/** Options for `PolyphonicAnalysis.render`. All fields are optional. */
+export interface PolyphonicRenderOptions {
+  /**
+   * Equal-power cross-fade at each edited note's edges. Default 5 ms; a hard cut
+   * is deliberately not selectable, because the seam it leaves is a click.
+   */
+  fadeMs?: number;
+  /**
+   * Boundary between the drift and the vibrato that `vibratoDepthChange` and
+   * `driftChange` act on, in Hz. Default 3 Hz, and it has to be whatever a curve
+   * edit was drawn at.
+   */
+  vibratoCutoffHz?: number;
 }
 
 /**

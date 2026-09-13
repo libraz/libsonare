@@ -72,6 +72,7 @@ set(ADDON_SOURCES
   src/addon/analysis/metering.cpp
   src/addon/analysis/progress.cpp
   src/addon/sonare_wrap_effects.cpp
+  src/addon/sonare_wrap_polyphony.cpp
   src/addon/effects/dynamics_repair.cpp
   src/addon/effects/extra.cpp
   src/addon/effects/mastering.cpp

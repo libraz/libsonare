@@ -16,6 +16,7 @@
 #include "editing/note_model/pitch_decomposition.h"
 #include "util/constants.h"
 #include "wasm/bindings/common/common.h"
+#include "wasm/bindings/common/note_val.h"
 
 // ============================================================================
 // Effects
@@ -304,6 +305,12 @@ val js_note_move(val samples, int sample_rate, int onset_sample, int offset_samp
 
 namespace {
 
+// The note-object and note-edit marshalling is the shared one: the polyphonic
+// door reads and writes the same shapes, and one converter is what keeps them
+// from parting.
+using sonare_wasm_editing::noteObjectsToVal;
+using sonare_wasm_editing::noteRowEditFromVal;
+
 // Every field takes its default at 0 or absent, mirroring
 // SonareNoteExtractorConfig.
 editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options,
@@ -407,42 +414,6 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
   return track;
 }
 
-// One note's own amplitude envelope. The C ABI's envelope_offset into a shared
-// pool is an ownership device, so it does not cross here; each note carries the
-// points it owns.
-std::vector<float> noteEnvelopeFromVal(const val& edit, const char* budget_subject,
-                                       std::size_t* cumulative_count) {
-  const val envelope = objectProperty(edit, "amplitudeEnvelope");
-  if (envelope.isUndefined()) return {};
-  accumulateWasmFloat32ArrayLength(envelope, "amplitudeEnvelope", budget_subject, cumulative_count);
-  return float32ArrayToVector(envelope);
-}
-
-// The pending edit on a JS note object. An absent field is its own identity
-// spelling, so `{}` and an omitted `edit` both leave the note untouched.
-editing::note_model::NoteEdit noteEditFromVal(const val& row, const char* entry_point,
-                                              std::size_t* cumulative_count) {
-  const std::string subject = std::string(entry_point) + " note.edit";
-  const std::string budget = std::string(entry_point) + " input";
-  const val edit = objectProperty(row, "edit");
-  editing::note_model::NoteEdit out;
-  if (hasProperty(edit, "timeOffsetSamples")) {
-    out.time_offset_samples =
-        static_cast<int64_t>(requireNumberProperty(edit, "timeOffsetSamples", subject.c_str()));
-  }
-  out.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
-  out.gain_db = floatProperty(edit, "gainDb", 0.0f);
-  const float stretch_ratio = floatProperty(edit, "timeStretchRatio", 0.0f);
-  // A zeroed edit must be the identity, so 0 reads as 1 (SonareNoteEdit).
-  out.time_stretch_ratio = stretch_ratio == 0.0f ? 1.0f : stretch_ratio;
-  out.formant_shift_semitones = floatProperty(edit, "formantShiftSemitones", 0.0f);
-  out.vibrato_depth_change = floatProperty(edit, "vibratoDepthChange", 0.0f);
-  out.drift_change = floatProperty(edit, "driftChange", 0.0f);
-  out.muted = boolProperty(edit, "muted", false);
-  out.amplitude_envelope = noteEnvelopeFromVal(edit, budget.c_str(), cumulative_count);
-  return out;
-}
-
 // Reads one note's span and pending edit, plus the frame bounds and the centre a
 // curve edit is measured through when the caller handed a track in; every other
 // field of a JS note object is ignored, exactly as render_notes ignores the rest
@@ -455,7 +426,7 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
       static_cast<int64_t>(requireNumberProperty(row, "onsetSample", "renderNotes note"));
   note.offset_sample =
       static_cast<int64_t>(requireNumberProperty(row, "offsetSample", "renderNotes note"));
-  note.edit = noteEditFromVal(row, "renderNotes", cumulative_count);
+  note.edit = noteRowEditFromVal(row, "renderNotes", cumulative_count);
 
   if (has_track) {
     // The note's pitch curve is the caller's own track sliced by its bounds.
@@ -515,7 +486,7 @@ std::vector<NoteSetEntry> noteSetFromVal(const val& notes, const char* entry_poi
                                      (subject + ".frameStart").c_str());
     entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", subject.c_str()),
                                    (subject + ".frameEnd").c_str());
-    entry.edit = noteEditFromVal(row, entry_point, cumulative_count);
+    entry.edit = noteRowEditFromVal(row, entry_point, cumulative_count);
     for (const float value : entry.edit.amplitude_envelope) {
       if (!std::isfinite(value) || value < 0.0f) {
         throw SonareException(
@@ -547,46 +518,6 @@ std::vector<editing::note_model::NoteObject> deriveNoteSet(
     out.push_back(
         editing::note_model::make_note(audio, track, entry.frame_start, entry.frame_end, config));
     out.back().edit = std::move(entry.edit);
-  }
-  return out;
-}
-
-// One note as a JS object. Field names and defaults mirror the C ABI
-// (sonare_extract_notes / sonare_render_notes) with two deliberate differences:
-// the per-note F0 curve is not surfaced, because it is the caller's own f0Hz
-// sliced by [frameStart, frameEnd), and each note carries its own amplitude and
-// envelope arrays instead of an offset into one concatenated buffer, which is a
-// C-ABI memory-layout detail with no meaning here.
-val noteObjectToVal(const editing::note_model::NoteObject& note) {
-  val row = val::object();
-  // Sample positions cross as plain JS numbers rather than BigInt, matching
-  // every other int64 field on this surface.
-  row.set("onsetSample", static_cast<double>(note.onset_sample));
-  row.set("offsetSample", static_cast<double>(note.offset_sample));
-  row.set("frameStart", note.frame_start);
-  row.set("frameEnd", note.frame_end);
-  row.set("medianHz", note.median_hz);
-  row.set("medianCents", note.median_cents);
-  row.set("f0Stability", note.f0_stability);
-  row.set("amplitude", vectorToFloat32Array(note.amplitude.values));
-  val edit = val::object();
-  edit.set("timeOffsetSamples", static_cast<double>(note.edit.time_offset_samples));
-  edit.set("pitchShiftSemitones", note.edit.pitch_shift_semitones);
-  edit.set("gainDb", note.edit.gain_db);
-  edit.set("timeStretchRatio", note.edit.time_stretch_ratio);
-  edit.set("formantShiftSemitones", note.edit.formant_shift_semitones);
-  edit.set("vibratoDepthChange", note.edit.vibrato_depth_change);
-  edit.set("driftChange", note.edit.drift_change);
-  edit.set("muted", note.edit.muted);
-  edit.set("amplitudeEnvelope", vectorToFloat32Array(note.edit.amplitude_envelope));
-  row.set("edit", edit);
-  return row;
-}
-
-val noteObjectsToVal(const std::vector<editing::note_model::NoteObject>& notes) {
-  val out = val::array();
-  for (const editing::note_model::NoteObject& note : notes) {
-    out.call<void>("push", noteObjectToVal(note));
   }
   return out;
 }

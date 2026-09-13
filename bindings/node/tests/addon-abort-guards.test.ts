@@ -146,8 +146,28 @@ const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
     'Stateless free function over an event array; it owns no project or engine state to compare, and its argument rejection is driven by public-input-conformance.test.ts.',
   ],
   [
+    'noteAmplitude',
+    'Instance method on PolyphonicAnalysis, which needs an analysed chord; its note-index rejection is driven by polyphonic-analysis.test.ts.',
+  ],
+  [
+    'noteEnvelope',
+    'Instance method on PolyphonicAnalysis, which needs an analysed chord; its note-index rejection is driven by polyphonic-analysis.test.ts.',
+  ],
+  [
+    'noteF0',
+    'Instance method on PolyphonicAnalysis, which needs an analysed chord; its note-index rejection is driven by polyphonic-analysis.test.ts.',
+  ],
+  [
+    'noteSalience',
+    'Instance method on PolyphonicAnalysis, which needs an analysed chord; its note-index rejection is driven by polyphonic-analysis.test.ts.',
+  ],
+  [
     'readGoniometerLatest',
     'Instance method on Mixer, which needs a configured strip and a running meter; covered by metering-and-scale.test.ts.',
+  ],
+  [
+    'setNoteEdit',
+    'Instance method on PolyphonicAnalysis, which needs an analysed chord; its note-index rejection is driven by polyphonic-analysis.test.ts.',
   ],
 ]);
 

@@ -8,6 +8,7 @@
  */
 
 import type {
+  NoteEditInput,
   NoteObject,
   NoteObjectInput,
   NoteSetEntry,
@@ -1889,6 +1890,11 @@ export interface SonareModule {
       voicedThreshold?: number;
     },
   ) => NoteObject[];
+  createPolyphonicAnalysis: (
+    samples: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+  ) => WasmPolyphonicAnalysis;
   extractPercussiveEvents: (
     samples: Float32Array | readonly number[],
     sampleRate: number,
@@ -2836,6 +2842,22 @@ export interface SonareModule {
   // before rethrowing its pointer into JS. Nothing else ever drops it, so the
   // module-error wrapper releases every pointer it surfaces.
   sonareReleaseException: (ptr: number) => void;
+}
+
+// The polyphonic editing analysis. `noteCount` and `frameCount` are embind
+// properties rather than methods; everything else is a call.
+export interface WasmPolyphonicAnalysis {
+  readonly noteCount: number;
+  readonly frameCount: number;
+  notes: () => NoteObject[];
+  setNoteEdit: (note: number, edit: NoteEditInput) => void;
+  polyphony: () => Int32Array;
+  noteF0: (note: number) => Float32Array;
+  noteAmplitude: (note: number) => Float32Array;
+  noteSalience: (note: number) => Float32Array;
+  noteEnvelope: (note: number) => Float32Array;
+  render: (options: Record<string, unknown>) => Float32Array;
+  delete: () => void;
 }
 
 export interface WasmStreamingMasteringChain {

@@ -1,6 +1,7 @@
 export * from './analysis.js';
 export * from './audio.js';
 export * from './effects_mastering.js';
+export * from './effects_polyphony.js';
 export * from './errors.js';
 export * from './features.js';
 export * from './metering.js';
@@ -166,6 +167,8 @@ export type {
   PitchCorrectOptions,
   PitchDecompositionResult,
   PitchResult,
+  PolyphonicAnalysisOptions,
+  PolyphonicRenderOptions,
   ProgressCallback,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,

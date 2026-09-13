@@ -32,6 +32,7 @@
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
 #include "sonare_wrap.h"
+#include "sonare_wrap_note_objects.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -474,14 +475,6 @@ struct NoteTrackOptions {
   const float* prob_ptr = nullptr;
 };
 
-Napi::Float32Array CopyToFloat32(Napi::Env env, const float* values, size_t count) {
-  auto array = Napi::Float32Array::New(env, count);
-  if (count > 0 && values != nullptr) {
-    std::memcpy(array.Data(), values, count * sizeof(float));
-  }
-  return array;
-}
-
 /// Reads the shared options bag, which may be absent. A voicing array that does
 /// not match the track leaves a RangeError pending, so the caller must bail out
 /// on a false return before its C-ABI call.
@@ -521,37 +514,6 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
     out->prob_ptr = out->voiced_prob.data();
   }
   return true;
-}
-
-/// Reads a note's optional `edit`. A zeroed SonareNoteEdit is the identity, so
-/// an omitted edit, and an omitted key within one, is a no-op.
-///
-/// The envelope is appended to @p envelopes and addressed by offset, because
-/// that is how the C ABI keeps the pool's ownership straight; on this surface
-/// every note carries its own points and never sees an offset.
-void ReadNoteEdit(const char* fn, const Napi::Object& note, std::vector<float>* envelopes,
-                  SonareNoteEdit* out) {
-  const Napi::Value edit_value = note.Get("edit");
-  if (edit_value.IsUndefined() || edit_value.IsNull()) {
-    return;
-  }
-  if (!edit_value.IsObject() || edit_value.IsArray()) {
-    throw std::runtime_error(std::string(fn) + ": note.edit must be a plain object");
-  }
-  Napi::Object edit = edit_value.As<Napi::Object>();
-  out->time_offset_samples = node_int64_option(edit, "timeOffsetSamples", 0);
-  out->pitch_shift_semitones = node_float_option(edit, "pitchShiftSemitones", 0.0f);
-  out->gain_db = node_float_option(edit, "gainDb", 0.0f);
-  out->time_stretch_ratio = node_float_option(edit, "timeStretchRatio", 0.0f);
-  out->formant_shift_semitones = node_float_option(edit, "formantShiftSemitones", 0.0f);
-  out->vibrato_depth_change = node_float_option(edit, "vibratoDepthChange", 0.0f);
-  out->drift_change = node_float_option(edit, "driftChange", 0.0f);
-  out->muted = node_bool_option(edit, "muted", false) ? 1 : 0;
-
-  const std::vector<float> envelope = FloatArrayProperty(edit, "amplitudeEnvelope");
-  out->envelope_offset = static_cast<int64_t>(envelopes->size());
-  out->envelope_count = envelope.size();
-  envelopes->insert(envelopes->end(), envelope.begin(), envelope.end());
 }
 
 /// Reads a JS note array onto the C structs, plus the envelope pool their edits
@@ -595,43 +557,17 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjec
   Napi::Array notes = Napi::Array::New(env, result.count);
   for (size_t i = 0; i < result.count; ++i) {
     const SonareNoteObject& note = result.notes[i];
-    Napi::Object row = Napi::Object::New(env);
-    // No int64 in N-API: sample positions marshal as JS numbers, exact up to
-    // Number.MAX_SAFE_INTEGER (2^53-1 samples, millennia of audio).
-    row.Set("onsetSample", Napi::Number::New(env, static_cast<double>(note.onset_sample)));
-    row.Set("offsetSample", Napi::Number::New(env, static_cast<double>(note.offset_sample)));
-    row.Set("frameStart", Napi::Number::New(env, note.frame_start));
-    row.Set("frameEnd", Napi::Number::New(env, note.frame_end));
-    row.Set("medianHz", Napi::Number::New(env, note.median_hz));
-    row.Set("medianCents", Napi::Number::New(env, note.median_cents));
-    row.Set("f0Stability", Napi::Number::New(env, note.f0_stability));
-
-    Napi::Object edit = Napi::Object::New(env);
-    edit.Set("timeOffsetSamples",
-             Napi::Number::New(env, static_cast<double>(note.edit.time_offset_samples)));
-    edit.Set("pitchShiftSemitones", Napi::Number::New(env, note.edit.pitch_shift_semitones));
-    edit.Set("gainDb", Napi::Number::New(env, note.edit.gain_db));
-    edit.Set("timeStretchRatio", Napi::Number::New(env, note.edit.time_stretch_ratio));
-    edit.Set("formantShiftSemitones", Napi::Number::New(env, note.edit.formant_shift_semitones));
-    edit.Set("vibratoDepthChange", Napi::Number::New(env, note.edit.vibrato_depth_change));
-    edit.Set("driftChange", Napi::Number::New(env, note.edit.drift_change));
-    edit.Set("muted", Napi::Boolean::New(env, note.edit.muted != 0));
-
-    // Each note carries its own points, so the pool's offsets never reach JS.
+    // Each note is given its own copy of both slices, so neither pool offset
+    // ever reaches JS.
     const size_t envelope_count = note.edit.envelope_count;
     RequireSliceInRange(fn, "amplitudeEnvelope", note.edit.envelope_offset,
                         static_cast<int64_t>(envelope_count), result.envelope_count);
-    edit.Set("amplitudeEnvelope",
-             CopyToFloat32(env, result.envelopes + note.edit.envelope_offset, envelope_count));
-    row.Set("edit", edit);
-
-    // The same for the amplitude curve, so amplitudeOffset never reaches JS.
     const int64_t span = note.frame_end - note.frame_start;
     RequireSliceInRange(fn, "amplitude", note.amplitude_offset, span, result.amplitude_count);
-    row.Set("amplitude", CopyToFloat32(env, result.amplitude + note.amplitude_offset,
-                                       static_cast<size_t>(span)));
-
-    notes.Set(static_cast<uint32_t>(i), row);
+    notes.Set(static_cast<uint32_t>(i),
+              NoteObjectToJs(env, note, result.amplitude + note.amplitude_offset,
+                             static_cast<size_t>(span),
+                             result.envelopes + note.edit.envelope_offset, envelope_count));
   }
   return notes;
 }

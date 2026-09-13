@@ -186,6 +186,15 @@ _ALIAS_COVERAGE = {
     "realtime_voice_changer_get_config": ("config", "config_json", "config_pod"),
     # Whole-object JSON serialize/deserialize -> to_json / from_json.
     "project_serialize": ("to_json",),
+    # The C name groups with its handle's other ops so the prefix machinery above
+    # can strip it; the facades name the operation rather than the handle, as a
+    # free function (analyzePolyphonic) or a class-level one (analyze). This entry
+    # earns its place on the surface-only side, not the coverage side: the C key is
+    # already informational through the handle prefix, and what the entry suppresses
+    # is the facade name reading as a node-only and wasm-only symbol. Measured both
+    # ways -- replacing the key changes nothing, replacing the value raises two
+    # active findings.
+    "polyphonic_analyze": ("analyze_polyphonic", "analyze"),
     "project_deserialize": ("from_json",),
     # JSON-config setter -> the typed set_config the facades expose.
     "realtime_voice_changer_set_config_json": ("set_config",),

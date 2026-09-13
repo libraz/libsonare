@@ -381,6 +381,7 @@ void registerFeatureSpectralBindings();
 void registerFeaturePitchBindings();
 void registerFeatureCoreBindings();
 void registerEffectsAudioBindings();
+void registerPolyphonyBindings();
 void registerMasteringChainBindings();
 void registerMasteringApiBindings();
 void registerQuickAnalysisBindings();

@@ -10,6 +10,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  analyzePolyphonic,
   init,
   Mixer,
   mixingScenePresetJson,
@@ -22,6 +23,15 @@ import {
   StreamingMasteringChain,
   StreamingRetune,
 } from '../dist/index.js';
+
+/** A short tone, enough for an analysis handle to exist. */
+function tone(): Float32Array {
+  const out = new Float32Array(8192);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = 0.3 * Math.sin((2 * Math.PI * 220 * i) / 22050);
+  }
+  return out;
+}
 
 interface Disposable {
   delete(): void;
@@ -43,6 +53,7 @@ describe('WASM handle disposal names', () => {
     ['Project', () => new Project()],
     ['SampleBank', () => new SampleBank()],
     ['Mixer', () => Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512)],
+    ['PolyphonicAnalysis', () => analyzePolyphonic({ samples: tone(), sampleRate: 22050 })],
   ];
 
   for (const [name, create] of handles) {

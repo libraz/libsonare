@@ -659,6 +659,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['midiParamToCc', 'Reads a binding array rather than an options bag.'],
       ['readFramesI16', 'Needs a live StreamAnalyzer session.'],
       ['readFramesU8', 'Needs a live StreamAnalyzer session.'],
+      [
+        'render',
+        'PolyphonicAnalysis instance method; needs an open analysis, and its undefined-equivalence is asserted in polyphonic-analysis.test.ts.',
+      ],
       ['setAssistSidecar', 'Needs a project with assist sidecar data.'],
       ['setClipCompSegments', 'Needs a project with comp takes.'],
       ['setClipFade', 'Needs a project with an existing clip.'],
@@ -668,6 +672,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
         'StreamingRetune instance method; its undefined-equivalence is asserted in streaming-retune.test.ts.',
       ],
       ['setMarkerEx', 'Project-side marker writer; covered by project.test.ts.'],
+      [
+        'setNoteEdit',
+        'PolyphonicAnalysis instance method; needs an open analysis, and its undefined-equivalence is asserted in polyphonic-analysis.test.ts.',
+      ],
       ['setSurroundPan', 'Needs a mixer strip handle.'],
       ['setSynthInstrument', 'Covered by synth-patch.test.ts and soundfont.test.ts.'],
     ] as const

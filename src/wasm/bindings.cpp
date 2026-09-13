@@ -418,6 +418,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
   registerAnalysisFeatureBindings();
 #else
   registerEffectsAudioBindings();
+  registerPolyphonyBindings();
   registerMasteringChainBindings();
   registerMasteringApiBindings();
   registerMixingBindings();

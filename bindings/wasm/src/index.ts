@@ -442,6 +442,8 @@ export {
   createOpfsClipPageWorker,
   opfsClipPageWorkerSource,
 } from './opfs_clip_pages';
+export type { AnalyzePolyphonicRequest } from './polyphony';
+export { analyzePolyphonic, PolyphonicAnalysis } from './polyphony';
 export type {
   BuiltinSynthBinding,
   BuiltinSynthConfig,
@@ -615,6 +617,8 @@ export type {
   PitchCorrectOptions,
   PitchDecompositionResult,
   PitchResult,
+  PolyphonicAnalysisOptions,
+  PolyphonicRenderOptions,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
   RhythmFeatures,

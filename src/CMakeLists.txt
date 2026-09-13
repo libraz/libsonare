@@ -1115,6 +1115,7 @@ if(BUILD_WASM)
     set(SONARE_WASM_BINDING_SOURCES
       wasm/bindings.cpp
       wasm/bindings/common/common.cpp
+      wasm/bindings/editing/polyphony.cpp
       wasm/bindings/effects/audio.cpp
       c_api/sonare_c_voice_changer.cpp
       c_api/sonare_c_streaming_retune.cpp
@@ -1285,6 +1286,7 @@ if(BUILD_WASM)
       wasm/bindings/analysis/quick_detailed.cpp
       wasm/bindings/analysis/stream_analyzer.cpp
       wasm/bindings/common/common.cpp
+      wasm/bindings/editing/polyphony.cpp
       wasm/bindings/effects/audio.cpp
       wasm/bindings/effects/offline_dynamics_editing.cpp
       wasm/bindings/effects/realtime_voice_changer.cpp
