@@ -22,11 +22,6 @@
       "reason": "Derived from a container this call already holds, so it is bounded by the allocation behind it."
     },
     {
-      "name": "bit-masked",
-      "argument_pattern": ".+ & (?:255|65535|4294967295)",
-      "reason": "The mask is the target type's own width, so the value is in range by construction."
-    },
-    {
       "name": "domain-validated-helper",
       "argument_pattern": "_(?:profile|pan_law|pan_mode|send_timing|meter_tap|curve)_value\\(.+\\)|_resolve_preset_ordinal\\(.+\\)|_note_set_index\\(.+\\)|_unsigned\\(.+\\)|_narrow_int\\(.+\\)",
       "reason": "The argument is a resolver that refuses anything outside the field's own domain before the conversion sees it."

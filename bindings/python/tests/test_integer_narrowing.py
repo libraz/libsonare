@@ -96,6 +96,59 @@ def test_an_out_of_range_index_is_refused(mixer_scene) -> None:
             mixer_scene.schedule_insert_automation(0, 0, value, 0, 0.5, 0)
 
 
+def _cc_sweep() -> list:
+    """One 7-bit controller moving by 10, so a movement threshold is observable."""
+    return [ls.Project.midi_cc(0.0, 0, 2, 74, 60), ls.Project.midi_cc(0.1, 0, 2, 74, 70)]
+
+
+def test_a_wrapped_movement_threshold_is_refused_rather_than_read_as_a_smaller_one() -> None:
+    """The 8-bit argument reader, on a field whose in-domain wrap changes the outcome."""
+    events = _cc_sweep()
+    assert ls.Project.midi_cc_learn(events, 77, min_movement=10) is not None  # positive control
+    assert ls.Project.midi_cc_learn(events, 77, min_movement=11) is None
+    for value in (2**8 + 7, 2**8, -1, 2**32):
+        with pytest.raises(SonareValueError, match="min_movement"):
+            ls.Project.midi_cc_learn(events, 77, min_movement=value)
+
+
+def test_a_wrapped_group_is_refused_rather_than_read_as_a_different_port() -> None:
+    """The same reader on the other field that reaches it from a caller."""
+    binding = ls.Project.midi_cc_learn(_cc_sweep(), 77)
+    assert binding is not None
+    first = ls.Project.midi_param_to_cc([binding], 77, 0.5, 0)
+    second = ls.Project.midi_param_to_cc([binding], 77, 0.5, 1)
+    assert first is not None and second is not None and first != second  # positive control
+    for value in (2**8 + 1, 2**8, -1, 2**32):
+        with pytest.raises(SonareValueError, match="group"):
+            ls.Project.midi_param_to_cc([binding], 77, 0.5, value)
+
+
+def test_a_wrapped_param_id_is_refused_rather_than_read_as_a_bound_one() -> None:
+    """The 32-bit argument reader: a wrap lands back on the id that is bound."""
+    binding = ls.Project.midi_cc_learn(_cc_sweep(), 77)
+    assert binding is not None
+    assert ls.Project.midi_param_to_cc([binding], 77, 0.5, 0) is not None  # positive control
+    assert ls.Project.midi_param_to_cc([binding], 78, 0.5, 0) is None
+    for value in (2**32 + 77, 2**32, -1, 2**64):
+        with pytest.raises(SonareValueError, match="param_id"):
+            ls.Project.midi_param_to_cc([binding], value, 0.5, 0)
+
+
+def test_a_wrapped_marker_kind_is_refused_rather_than_read_as_a_different_kind() -> None:
+    """The struct route for an enum ordinal: the field's own type carries the bound."""
+    with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_markers(
+            [
+                ls.EngineMarker(1, 0.0, "a", kind=ls.MarkerKind.CUE_POINT),
+                ls.EngineMarker(2, 4.0, "b", kind=ls.MarkerKind.KEY_SIGNATURE),
+            ]
+        )
+        assert engine.marker(1).kind != engine.marker(2).kind  # positive control
+        for value in (2**8 + 3, 2**8, -1, 2**32):
+            with pytest.raises(SonareValueError, match="kind"):
+                engine.set_markers([ls.EngineMarker(3, 0.0, "c", kind=value)])
+
+
 @pytest.fixture
 def mixer_scene():
     scene = ls.mixing_scene_preset_json(ls.mixing_scene_preset_names()[0])

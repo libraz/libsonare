@@ -34,6 +34,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
+    _narrow_int,
     _to_c_float_array,
     _to_c_size_t,
     _to_c_uint8,
@@ -260,7 +261,12 @@ class _ProjectInspectionMixin:
                 ext = [int(cast(int, value)) for value in extension_values]
                 ext_count = len(ext)
                 c_ext = (
-                    (ctypes.c_uint8 * ext_count)(*[int(e) & 0xFF for e in ext])
+                    (ctypes.c_uint8 * ext_count)(
+                        *[
+                            _narrow_int(e, f"chords[{i}].extensions[{j}]", 0, 255)
+                            for j, e in enumerate(ext)
+                        ]
+                    )
                     if ext_count
                     else None
                 )
@@ -440,7 +446,7 @@ class _ProjectInspectionMixin:
         """
         raw = SonareProjectMarker()
         raw.id = int(marker.id)
-        raw.kind = int(marker.kind) & 0xFF
+        raw.kind = int(marker.kind)
         raw.key_fifths = int(marker.key_fifths)
         raw.key_minor = 1 if marker.key_minor else 0
         raw.ppq = float(marker.ppq)

@@ -134,7 +134,7 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
         raise SonareValueError("marker id must be a positive uint32 integer")
     raw = SonareEngineMarker()
     raw.id = marker_id
-    raw.kind = int(marker.kind) & 0xFF
+    raw.kind = int(marker.kind)
     raw.key_fifths = int(marker.key_fifths)
     raw.key_minor = 1 if marker.key_minor else 0
     raw.ppq = float(marker.ppq)

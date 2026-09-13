@@ -33,6 +33,8 @@ from ._runtime import (
     _check,
     _get_lib,
     _to_c_size_t,
+    _to_c_uint8,
+    _to_c_uint32,
 )
 
 
@@ -501,10 +503,10 @@ class _ProjectMidiMixin:
         rc = lib.sonare_midi_cc_learn(
             c_in if n else None,
             _to_c_size_t(n, "n"),
-            ctypes.c_uint32(int(param_id) & 0xFFFFFFFF),
+            _to_c_uint32(param_id, "param_id"),
             ctypes.c_float(float(min_value)),
             ctypes.c_float(float(max_value)),
-            ctypes.c_uint8(int(min_movement) & 0xFF),
+            _to_c_uint8(min_movement, "min_movement"),
             ctypes.byref(out_binding),
         )
         if rc == SONARE_ERROR_INVALID_STATE:
@@ -567,9 +569,9 @@ class _ProjectMidiMixin:
         rc = lib.sonare_midi_param_to_cc(
             c_bindings if m else None,
             _to_c_size_t(m, "m"),
-            ctypes.c_uint32(int(param_id) & 0xFFFFFFFF),
+            _to_c_uint32(param_id, "param_id"),
             ctypes.c_float(float(unit_value)),
-            ctypes.c_uint8(int(group) & 0xFF),
+            _to_c_uint8(group, "group"),
             ctypes.c_double(float(ppq)),
             ctypes.byref(out_event),
         )

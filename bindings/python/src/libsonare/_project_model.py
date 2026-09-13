@@ -450,14 +450,14 @@ def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMid
             return getattr(binding, key, default)
 
     return SonareMidiCcBinding(
-        cc_number=int(cast(int, _get("cc_number", 0))) & 0xFF,
-        channel=int(cast(int, _get("channel", 0xFF))) & 0xFF,
-        kind=int(cast(int, _get("kind", MIDI_CC_CONTROL_CHANGE_7))) & 0xFF,
-        cc_lsb_number=int(cast(int, _get("cc_lsb_number", 0))) & 0xFF,
-        selector_msb=int(cast(int, _get("selector_msb", 0))) & 0xFF,
-        selector_lsb=int(cast(int, _get("selector_lsb", 0))) & 0xFF,
+        cc_number=int(cast(int, _get("cc_number", 0))),
+        channel=int(cast(int, _get("channel", 0xFF))),
+        kind=int(cast(int, _get("kind", MIDI_CC_CONTROL_CHANGE_7))),
+        cc_lsb_number=int(cast(int, _get("cc_lsb_number", 0))),
+        selector_msb=int(cast(int, _get("selector_msb", 0))),
+        selector_lsb=int(cast(int, _get("selector_lsb", 0))),
         reserved=0,
-        param_id=int(cast(int, _get("param_id", 0))) & 0xFFFFFFFF,
+        param_id=int(cast(int, _get("param_id", 0))),
         min_value=float(cast(float, _get("min_value", 0.0))),
         max_value=float(cast(float, _get("max_value", 1.0))),
     )
