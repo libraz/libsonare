@@ -7,6 +7,7 @@
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <thread>
@@ -59,28 +60,28 @@ template <typename PublishFn, typename ProcessFn>
       (finite ? finite_blocks : nonfinite_blocks).fetch_add(1, std::memory_order_relaxed);
     }
   });
-  bool audio_thread_started = false;
-  for (int spin = 0; spin < 10000; ++spin) {
-    if (total_blocks() > 0) {
-      audio_thread_started = true;
-      break;
+  // A loaded runner can leave the audio thread unscheduled past any spin count, so both
+  // waits are bounded by wall clock and fall back to sleeping once yielding has not helped.
+  auto wait_until = [](auto&& satisfied) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    for (int spin = 0; std::chrono::steady_clock::now() < deadline; ++spin) {
+      if (satisfied()) return true;
+      if (spin < 10000) {
+        std::this_thread::yield();
+      } else {
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+      }
     }
-    std::this_thread::yield();
-  }
+    return satisfied();
+  };
+  const bool audio_thread_started = wait_until([&] { return total_blocks() > 0; });
   for (int i = 0; i < 2000; ++i) {
     publish_one(i);
     if ((i & 0x0f) == 0) {
       std::this_thread::yield();
     }
   }
-  bool observed_concurrent_blocks = false;
-  for (int spin = 0; spin < 10000; ++spin) {
-    if (total_blocks() > 1) {
-      observed_concurrent_blocks = true;
-      break;
-    }
-    std::this_thread::yield();
-  }
+  const bool observed_concurrent_blocks = wait_until([&] { return total_blocks() > 1; });
   stop.store(true, std::memory_order_release);
   audio_thread.join();
   REQUIRE(audio_thread_started);
