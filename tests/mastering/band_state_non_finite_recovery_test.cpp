@@ -58,6 +58,10 @@ constexpr int kPresenceRecoveryBlocks = 12;
 constexpr int kExciterRecoveryBlocks = 40;
 // Blocks run past the bound, so a run that misses it still shows how far it got.
 constexpr int kHorizonSlack = 20;
+// Floor on the clean run regardless of the bound, so a tight bound does not buy
+// itself a short horizon: a stream that rejoins and then diverges again is only
+// visible in blocks nobody asked the bound about.
+constexpr int kMinimumCleanBlocks = 50;
 
 /// Fixture with content in every owner's band: below and above both crossover
 /// splits, at the presence centre and above the air shelf.
@@ -222,7 +226,7 @@ void require_processor_effect(const Blocks& control) { REQUIRE(control_effect(co
 void check_owner(const std::function<BlockProcessor()>& make, int recovery_blocks,
                  float poison_value, const Reach& reach = {},
                  const NonVacuity& require_non_vacuous = require_processor_effect) {
-  const int block_count = recovery_blocks + kHorizonSlack;
+  const int block_count = std::max(recovery_blocks + kHorizonSlack, kMinimumCleanBlocks);
   const auto control = run_stream(make(), block_count, 0.0f, false);
 
   // Non-vacuity, before any recovery result is read.
