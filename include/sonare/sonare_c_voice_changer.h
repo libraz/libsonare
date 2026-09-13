@@ -217,11 +217,12 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
 ///        and wet paths are aligned to the retune OLA's fixed one-grain delay,
 ///        so the value is independent of `wet_mix` and `retune.mix`. When the
 ///        ISP limiter is enabled, it runs after that aligned mix and adds its
-///        signal-path latency: a 6-sample FIR group delay plus
-///        `ceil(5 * 0.1 ms * sample_rate)` attack-settle samples (31 samples at
-///        48 kHz). Other stages add <= 8
-///        samples combined and are intentionally omitted. The value is 0
-///        before the handle has been prepared.
+///        signal-path latency: a 6-sample FIR group delay plus the samples a
+///        five-time-constant attack settle needs, 31 in total at 48 kHz. Ask
+///        for the number rather than deriving it -- the settle term rounds up
+///        in single precision, so a rate whose product is already whole gains a
+///        sample. Other stages add <= 8 samples combined and are intentionally
+///        omitted. The value is 0 before the handle has been prepared.
 SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
                                                           int* out_latency_samples);
 /// @brief Returns the live (normalized) configuration of the handle as a JSON

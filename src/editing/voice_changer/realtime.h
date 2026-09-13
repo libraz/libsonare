@@ -99,8 +99,7 @@ struct LimiterConfig {
   ///          sample-domain limiter has kept every audible sample under
   ///          @ref ceiling_db. Adds the sample-rate-dependent latency reported
   ///          by @c IspLimiter::latency_samples (the 6-sample FIR group delay
-  ///          plus @c ceil(5 * 0.1 ms * sample_rate) attack-settle samples;
-  ///          31 samples at 48 kHz)
+  ///          plus a five-time-constant attack settle; 31 samples at 48 kHz)
   ///          to the chain latency.
   bool enable_isp_limiter = true;
   /// @brief True-peak ceiling in dBTP. Defaults to -1.0 dBTP per the EBU R128
@@ -189,10 +188,12 @@ class RealtimeVoiceChanger {
   ///          @c retune.mix changes. When @ref LimiterConfig::enable_isp_limiter
   ///          is @c true, the final ISP limiter runs after the aligned mix and
   ///          adds @c IspLimiter::latency_samples: a 6-sample FIR group delay
-  ///          plus @c ceil(5 * 0.1 ms * sample_rate) attack-settle samples
-  ///          (31 samples at 48 kHz).
-  ///          Other stages add <= 8 samples combined and are intentionally
-  ///          omitted. Returns 0 before prepare() has been called.
+  ///          plus the samples a five-time-constant attack settle needs, 31 in
+  ///          total at 48 kHz. Ask for the number rather than deriving it --
+  ///          the settle term rounds up in single precision, so a rate whose
+  ///          product is already whole gains a sample. Other stages add <= 8
+  ///          samples combined and are intentionally omitted. Returns 0 before
+  ///          prepare() has been called.
   int latency_samples() const noexcept;
 
  private:
