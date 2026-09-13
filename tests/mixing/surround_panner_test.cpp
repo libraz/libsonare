@@ -169,3 +169,59 @@ TEST_CASE("surround panner process_add is no-throw on a non-surround layout",
   // The invalid layout produced no placement, so nothing was added.
   CHECK_THAT(planes[2][0], WithinAbs(0.0f, 1e-6f));
 }
+
+TEST_CASE("surround panner snaps rather than glides across a layout change", "[mixing][surround]") {
+  // The per-plane gains are computed against a layout, so the values carried out
+  // of a 5.1 block are a different quantity at 7.1. Gliding from them would
+  // place the source along a path neither layout describes, which is the same
+  // reason the processor's first block after prepare() starts at its target.
+  constexpr int n = 64;
+  SurroundPanParams p;
+  p.azimuth = -90.0f;  // a speaker position in 7.1, a crossfade in 5.1
+
+  const auto render_seven_one = [&p](bool after_a_five_one_block) {
+    SurroundPannerProcessor panner(ChannelLayout::FivePointOne, p);
+    panner.prepare(48000.0, n);
+    std::vector<float> mono(n, 1.0f);
+    const float* mono_ptr = mono.data();
+    std::array<std::vector<float>, 8> planes;
+    std::array<float*, 8> out{};
+    for (int c = 0; c < 8; ++c) {
+      planes[static_cast<size_t>(c)].assign(n, 0.0f);
+      out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+    }
+    if (after_a_five_one_block) {
+      panner.process_add(&mono_ptr, 1, out.data(), 6, n);
+      for (int c = 0; c < 8; ++c) planes[static_cast<size_t>(c)].assign(n, 0.0f);
+    } else {
+      panner.set_layout(ChannelLayout::SevenPointOne);
+      panner.reset();
+    }
+    panner.set_layout(ChannelLayout::SevenPointOne);
+    panner.process_add(&mono_ptr, 1, out.data(), 8, n);
+    return planes;
+  };
+
+  const auto fresh = render_seven_one(false);
+  const auto relaid = render_seven_one(true);
+  for (int c = 0; c < 8; ++c) {
+    for (int i = 0; i < n; ++i) {
+      INFO("plane " << c << " sample " << i);
+      REQUIRE_THAT(relaid[static_cast<size_t>(c)][static_cast<size_t>(i)],
+                   WithinAbs(fresh[static_cast<size_t>(c)][static_cast<size_t>(i)], 1e-6f));
+    }
+  }
+
+  // Non-vacuity: the two layouts must place this source differently, or a glide
+  // from the carried gains would be a no-op the equality above cannot see.
+  SurroundPanGains five_one =
+      sonare::mixing::compute_surround_pan_gains(p, ChannelLayout::FivePointOne);
+  SurroundPanGains seven_one =
+      sonare::mixing::compute_surround_pan_gains(p, ChannelLayout::SevenPointOne);
+  bool differ = false;
+  for (int plane = 0; plane < five_one.count; ++plane) {
+    differ = differ || five_one.gain[static_cast<size_t>(plane)] !=
+                           seven_one.gain[static_cast<size_t>(plane)];
+  }
+  CHECK(differ);
+}

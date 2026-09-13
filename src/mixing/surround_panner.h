@@ -129,6 +129,11 @@ class SurroundPannerProcessor {
   double sample_rate_ = 48000.0;
   float smoothing_ms_ = 5.0f;
   std::array<rt::ParamSmoother, kMaxSurroundPlanes> smoothers_{};
+  // The layout the smoothers currently hold gains for. Gains are computed
+  // against a layout, so carried across a change they are a different quantity
+  // and the next block snaps instead of gliding from them -- the contract the
+  // first block after prepare() already gets. Audio thread only.
+  uint8_t rendered_layout_{static_cast<uint8_t>(ChannelLayout::FivePointOne)};
   std::atomic<uint8_t> layout_{static_cast<uint8_t>(ChannelLayout::FivePointOne)};
   std::atomic<float> azimuth_{0.0f};
   std::atomic<float> elevation_{0.0f};

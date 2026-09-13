@@ -304,11 +304,19 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     // and `surround_gain[p] == target.gain[p]` at a block boundary — true of the
     // old ramp — no longer holds.
     std::array<rt::ParamSmoother, kMaxBusChannels> surround_gain{};
-    // False until the first surround block has run: the first block snaps the
-    // scatter gains to their target (no fade-in from silence) so a bounce is
-    // deterministic regardless of the pre-roll settle pass, and a live first
-    // block does not click. Subsequent blocks ramp from the carried value.
-    bool surround_primed = false;
+    // The destination width this lane last rendered at, or -1 before its first
+    // block. A surround block whose width differs snaps the scatter gains to
+    // their target (no fade-in from silence) so a bounce is deterministic
+    // regardless of the pre-roll settle pass and a live first block does not
+    // click; consecutive surround blocks at one width ramp from the carried
+    // value. The width is the condition rather than a bare "has run" flag
+    // because the gains are computed against a layout, so carried across a width
+    // change -- including a stereo interlude, which records its own width here
+    // and computes no scatter gains at all -- they are a different quantity, and
+    // gliding from them places the lane along a path neither layout describes. A
+    // lane returning to a width it held earlier therefore snaps rather than
+    // glides, which is the same contract its first block gets.
+    int surround_primed_channels = -1;
   };
 
   struct OwnedStrip {

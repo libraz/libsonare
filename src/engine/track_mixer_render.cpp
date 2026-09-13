@@ -542,6 +542,10 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     float* const* dest = routed_to_bus ? bus_planes.data() : channels;
     apply_lane_to_mix_surround(lane_index, dest, num_channels, dest_channels, num_samples);
   } else {
+    // A stereo/mono block is a width too: recording it means the next surround
+    // block starts from placement rather than from a scatter position left
+    // behind an arbitrarily long interlude.
+    lane.surround_primed_channels = dest_channels;
     // Honor the strip's configured pan law (the offline/set_track_pan path
     // already does), evaluated with the same NearUnity balance normalization as
     // PannerProcessor's Balance mode so a centered lane stays at unity for any
@@ -610,15 +614,16 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
   mixing::SurroundPanGains target;
   if (!mixing::try_compute_surround_pan_gains(params, dest_layout, &target)) return;
   const int planes = std::min(dest_channels, mixing::kMaxSurroundPlanes);
-  // First surround block for this lane: snap the carried scatter gains to the
-  // target so the block starts at full placement instead of fading in from
-  // silence. This makes an offline bounce deterministic (no dependence on a
-  // pre-roll settle pass) and avoids a first-block click live.
-  if (!lane.surround_primed) {
+  // First surround block at this destination width: snap the carried scatter
+  // gains to the target so the block starts at full placement instead of fading
+  // in from silence, or from gains a different layout computed. This makes an
+  // offline bounce deterministic (no dependence on a pre-roll settle pass) and
+  // avoids a first-block click live.
+  if (lane.surround_primed_channels != dest_channels) {
     for (int p = 0; p < planes; ++p) {
       lane.surround_gain[static_cast<size_t>(p)].reset(target.gain[static_cast<size_t>(p)]);
     }
-    lane.surround_primed = true;
+    lane.surround_primed_channels = dest_channels;
   }
   for (int p = 0; p < planes; ++p) {
     lane.surround_gain[static_cast<size_t>(p)].set_target(target.gain[static_cast<size_t>(p)]);

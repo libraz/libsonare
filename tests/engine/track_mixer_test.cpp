@@ -1039,8 +1039,8 @@ TEST_CASE("TrackMixerRuntime surround pan glide is independent of sub-block part
     REQUIRE(mixer.mix_source(10, prime_src, prime_out.data(), 6, kChunk));
 
     // Move the pan. set_track_strip's in-place path retargets the smoothers
-    // without rebuilding the strip, so surround_primed stays set and what
-    // follows is a genuine glide rather than another snap.
+    // without rebuilding the strip, and the destination width is unchanged, so
+    // what follows is a genuine glide rather than another snap.
     spec.surround_pan.azimuth = 110.0f;
     REQUIRE(mixer.set_track_strip(10, spec));
 
@@ -1758,4 +1758,186 @@ TEST_CASE("TrackMixerRuntime rejects an out-of-range channel delay in the core",
 
   REQUIRE(mixer.set_track_channel_delay_samples(10, 0));
   REQUIRE(mixer.latency_samples() == 0);
+}
+
+TEST_CASE("TrackMixerRuntime re-snaps a lane's scatter gains when the master width changes",
+          "[engine][track_mixer][surround]") {
+  // Scatter gains are computed against a destination layout, so the values a 5.1
+  // block carries out are a different quantity at 7.1. Gliding from them would
+  // place the lane along a path neither layout describes, so a width change
+  // starts from placement exactly as the lane's own first block does.
+  constexpr int kBlock = 16;
+
+  const auto render_wide = [](bool prime_at_five_one) {
+    std::array<float, kBlock> src_l{};
+    std::array<float, kBlock> src_r{};
+    src_l.fill(1.0f);
+    src_r.fill(1.0f);
+    float* source[] = {src_l.data(), src_r.data()};
+
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_track_lanes({{10}}));
+    sonare::mixing::api::Strip spec;
+    spec.id = "vox";
+    // -90 deg is a speaker position in 7.1 (Lss) and a crossfade between two
+    // in 5.1, so the two layouts place this lane differently -- the condition
+    // the non-vacuity check at the foot of the case verifies.
+    spec.surround_pan.azimuth = -90.0f;
+    REQUIRE(mixer.set_track_strip(10, spec));
+    mixer.settle_smoothers();
+
+    if (prime_at_five_one) {
+      std::array<std::array<float, kBlock>, 6> narrow{};
+      std::array<float*, 6> narrow_out{};
+      for (int c = 0; c < 6; ++c) {
+        narrow_out[static_cast<size_t>(c)] = narrow[static_cast<size_t>(c)].data();
+      }
+      REQUIRE(mixer.mix_source(10, source, narrow_out.data(), 6, kBlock));
+      src_l.fill(1.0f);
+      src_r.fill(1.0f);
+    }
+
+    std::array<std::array<float, kBlock>, 8> planes{};
+    std::array<float*, 8> out{};
+    for (int c = 0; c < 8; ++c) {
+      out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+    }
+    REQUIRE(mixer.mix_source(10, source, out.data(), 8, kBlock));
+    return planes;
+  };
+
+  const auto first_block = render_wide(false);
+  const auto after_width_change = render_wide(true);
+
+  for (int c = 0; c < 8; ++c) {
+    for (int i = 0; i < kBlock; ++i) {
+      INFO("plane " << c << " sample " << i);
+      REQUIRE(after_width_change[static_cast<size_t>(c)][static_cast<size_t>(i)] ==
+              first_block[static_cast<size_t>(c)][static_cast<size_t>(i)]);
+    }
+  }
+
+  // Non-vacuity, both halves. A snapped block holds its target from its first
+  // sample, so a glide would be visible as a rising plane.
+  bool constant_through_block = true;
+  for (int c = 0; c < 8; ++c) {
+    const auto& plane = after_width_change[static_cast<size_t>(c)];
+    constant_through_block = constant_through_block && plane.front() == plane.back();
+  }
+  CHECK(constant_through_block);
+
+  // And the two layouts must actually place this lane differently, or a glide
+  // from the carried gains would be a no-op and the equality above would hold
+  // for a lane the change cannot reach.
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+  sonare::engine::TrackMixerRuntime narrow_mixer;
+  narrow_mixer.prepare(48000.0, kBlock);
+  REQUIRE(narrow_mixer.set_track_lanes({{10}}));
+  sonare::mixing::api::Strip spec;
+  spec.id = "vox";
+  spec.surround_pan.azimuth = -90.0f;
+  REQUIRE(narrow_mixer.set_track_strip(10, spec));
+  narrow_mixer.settle_smoothers();
+  std::array<std::array<float, kBlock>, 6> narrow{};
+  std::array<float*, 6> narrow_out{};
+  for (int c = 0; c < 6; ++c) {
+    narrow_out[static_cast<size_t>(c)] = narrow[static_cast<size_t>(c)].data();
+  }
+  REQUIRE(narrow_mixer.mix_source(10, source, narrow_out.data(), 6, kBlock));
+
+  bool layouts_differ = false;
+  for (int c = 0; c < 6; ++c) {
+    layouts_differ = layouts_differ || narrow[static_cast<size_t>(c)].back() !=
+                                           first_block[static_cast<size_t>(c)].back();
+  }
+  CHECK(layouts_differ);
+}
+
+TEST_CASE("TrackMixerRuntime re-snaps a lane's scatter gains after a stereo interlude",
+          "[engine][track_mixer][surround]") {
+  // The destination width is a per-call argument on the engine's own render
+  // entry point, so a host alternating a stereo monitor render with a surround
+  // one is an ordinary sequence rather than a re-routing edge case. The stereo
+  // blocks compute no scatter gains, so resuming from the ones the last surround
+  // block left would place the lane where its pan was at an arbitrarily earlier
+  // moment -- here, at an azimuth the caller has since moved away from.
+  constexpr int kBlock = 16;
+  constexpr float kBefore = -90.0f;
+  constexpr float kAfter = 60.0f;
+
+  const auto surround_block_at = [](float before, int interlude_blocks, float after) {
+    std::array<float, kBlock> src_l{};
+    std::array<float, kBlock> src_r{};
+    src_l.fill(1.0f);
+    src_r.fill(1.0f);
+    float* source[] = {src_l.data(), src_r.data()};
+
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_track_lanes({{10}}));
+    sonare::mixing::api::Strip spec;
+    spec.id = "vox";
+    spec.surround_pan.azimuth = before;
+    REQUIRE(mixer.set_track_strip(10, spec));
+    mixer.settle_smoothers();
+
+    if (interlude_blocks > 0) {
+      std::array<std::array<float, kBlock>, 6> primed{};
+      std::array<float*, 6> primed_out{};
+      for (int c = 0; c < 6; ++c) {
+        primed_out[static_cast<size_t>(c)] = primed[static_cast<size_t>(c)].data();
+      }
+      REQUIRE(mixer.mix_source(10, source, primed_out.data(), 6, kBlock));
+
+      spec.surround_pan.azimuth = after;
+      REQUIRE(mixer.set_track_strip(10, spec));
+
+      std::array<std::array<float, kBlock>, 2> stereo{};
+      std::array<float*, 2> stereo_out{{stereo[0].data(), stereo[1].data()}};
+      for (int block = 0; block < interlude_blocks; ++block) {
+        src_l.fill(1.0f);
+        src_r.fill(1.0f);
+        REQUIRE(mixer.mix_source(10, source, stereo_out.data(), 2, kBlock));
+      }
+    }
+
+    src_l.fill(1.0f);
+    src_r.fill(1.0f);
+    std::array<std::array<float, kBlock>, 6> planes{};
+    std::array<float*, 6> out{};
+    for (int c = 0; c < 6; ++c) {
+      out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+    }
+    REQUIRE(mixer.mix_source(10, source, out.data(), 6, kBlock));
+    return planes;
+  };
+
+  // The lane's own first surround block at the post-interlude azimuth: the
+  // placement the returning block has to match.
+  const auto fresh = surround_block_at(kAfter, 0, kAfter);
+  const auto returning = surround_block_at(kBefore, 4, kAfter);
+
+  for (int c = 0; c < 6; ++c) {
+    for (int i = 0; i < kBlock; ++i) {
+      INFO("plane " << c << " sample " << i);
+      REQUIRE(returning[static_cast<size_t>(c)][static_cast<size_t>(i)] ==
+              fresh[static_cast<size_t>(c)][static_cast<size_t>(i)]);
+    }
+  }
+
+  // Non-vacuity: the two azimuths must place the lane differently, or a glide
+  // from the carried gains would be a no-op and the equality above would hold
+  // for a lane the interlude cannot reach.
+  const auto before_placement = surround_block_at(kBefore, 0, kBefore);
+  bool azimuths_differ = false;
+  for (int c = 0; c < 6; ++c) {
+    azimuths_differ = azimuths_differ || before_placement[static_cast<size_t>(c)].back() !=
+                                             fresh[static_cast<size_t>(c)].back();
+  }
+  CHECK(azimuths_differ);
 }

@@ -161,6 +161,7 @@ void SurroundPannerProcessor::load_target_gains(SurroundPanGains& out) const {
 void SurroundPannerProcessor::reset() {
   SurroundPanGains gains;
   load_target_gains(gains);
+  rendered_layout_ = static_cast<uint8_t>(layout());
   for (int p = 0; p < kMaxSurroundPlanes; ++p) {
     smoothers_[p].reset(p < gains.count ? gains.gain[p] : 0.0f);
   }
@@ -207,7 +208,18 @@ void SurroundPannerProcessor::process_add(const float* const* in, int num_in_cha
   SurroundPanGains gains;
   load_target_gains(gains);
   const int planes = std::min(gains.count, num_out_planes);
-  for (int p = 0; p < planes; ++p) smoothers_[p].set_target(gains.gain[p]);
+  // A layout change makes the carried gains a different quantity, so this block
+  // starts at placement the way the first block after prepare() does.
+  const uint8_t active = static_cast<uint8_t>(layout());
+  const bool relaid_out = active != rendered_layout_;
+  rendered_layout_ = active;
+  for (int p = 0; p < planes; ++p) {
+    if (relaid_out) {
+      smoothers_[p].reset(gains.gain[p]);
+    } else {
+      smoothers_[p].set_target(gains.gain[p]);
+    }
+  }
 
   // Collapse the source to a point: mono passes through, stereo is summed at
   // -6 dB so a correlated centre image stays at unity.

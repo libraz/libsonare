@@ -615,7 +615,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.monitor_mode = TrackMonitorMode::kOff;
     lane.strip = nullptr;
     for (rt::ParamSmoother& plane_gain : lane.surround_gain) plane_gain.reset(0.0f);
-    lane.surround_primed = false;
+    lane.surround_primed_channels = -1;
   };
 
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
