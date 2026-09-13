@@ -10,11 +10,11 @@ namespace sonare_node {
 namespace {
 
 /// Upper bound on the goniometer working buffer, mirroring the strip ring
-/// (sonare::mixing::ChannelStrip::kGoniometerCapacity, which is private). One
-/// read can never return more than the ring holds, so capping the buffer here
-/// drops no point: it only stops a caller-supplied maxPoints from reserving
-/// gigabytes up front, which under NAPI_DISABLE_CPP_EXCEPTIONS would surface as
-/// an uncatchable std::bad_alloc that terminates the process.
+/// (sonare::mixing::ChannelStrip::kGoniometerCapacity, out of reach here: an
+/// addon TU includes the C ABI only). One read never returns more than the ring
+/// holds, so capping here drops no point: it only stops a caller-supplied
+/// maxPoints from reserving gigabytes, which under NAPI_DISABLE_CPP_EXCEPTIONS
+/// would surface as an uncatchable std::bad_alloc that terminates the process.
 constexpr size_t kGoniometerReadCap = 4096;
 
 Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
