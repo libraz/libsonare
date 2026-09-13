@@ -141,22 +141,68 @@ def _resolved_python_library(python_executable: str, timeout: float) -> str | No
 _CORE_SOURCE_SUFFIXES = frozenset(
     {".c", ".cc", ".cpp", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".inc", ".ipp"}
 )
+_TRANSLATION_UNIT_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx", ".m", ".mm"})
+
+# A suffix cannot express the rule above, because `src/wasm/` holds .cpp and .h
+# files that only the WASM module compiles -- identical suffixes, linked into
+# neither artifact under comparison. The compilation database says which
+# translation units this build actually compiled, so the surface-specific trees
+# are derived from the build rather than listed here.
+_COMPILE_DB = ROOT / "build" / "compile_commands.json"
 
 
-def _is_core_source(path: Path) -> bool:
-    return path.is_file() and (
-        path.suffix in _CORE_SOURCE_SUFFIXES or path.name == "CMakeLists.txt"
-    )
+def _uncompiled_source_dirs() -> frozenset[Path]:
+    """Directories under `src/` whose translation units this build never compiled.
+
+    A directory qualifies only when it holds translation units and none of them
+    appear in the compilation database, which is the signature of a tree built
+    for another surface. Header-only directories are never excluded: nothing
+    compiles them directly and the TUs that include them live elsewhere. An
+    absent or unreadable database excludes nothing, leaving the skew check on
+    every source rather than silently narrowing it.
+    """
+    try:
+        with _COMPILE_DB.open(encoding="utf-8") as handle:
+            entries = json.load(handle)
+    except (OSError, ValueError):
+        return frozenset()
+    compiled: set[Path] = set()
+    for entry in entries:
+        try:
+            compiled.add(Path(entry["file"]).resolve().parent)
+        except (KeyError, TypeError, OSError):
+            continue
+    uncompiled: set[Path] = set()
+    src_root = ROOT / "src"
+    if not src_root.is_dir():
+        return frozenset()
+    for directory in {path.parent for path in src_root.rglob("*") if path.is_file()}:
+        if directory in compiled:
+            continue
+        if any(
+            child.suffix in _TRANSLATION_UNIT_SUFFIXES for child in directory.iterdir()
+        ):
+            uncompiled.add(directory)
+    return frozenset(uncompiled)
+
+
+def _is_core_source(path: Path, uncompiled_dirs: frozenset[Path] = frozenset()) -> bool:
+    if not path.is_file():
+        return False
+    if path.parent in uncompiled_dirs:
+        return False
+    return path.suffix in _CORE_SOURCE_SUFFIXES or path.name == "CMakeLists.txt"
 
 
 def _straddling_source(older: float, newer: float) -> Path | None:
     """Return a core source file last modified between two artifact link times."""
+    uncompiled = _uncompiled_source_dirs()
     for directory in ("src", "include"):
         root = ROOT / directory
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not _is_core_source(path):
+            if not _is_core_source(path, uncompiled):
                 continue
             try:
                 mtime = path.stat().st_mtime
@@ -170,12 +216,13 @@ def _straddling_source(older: float, newer: float) -> Path | None:
 def _count_sources_after(mtime: float) -> int:
     """Count core source files last modified after a given time."""
     count = 0
+    uncompiled = _uncompiled_source_dirs()
     for directory in ("src", "include"):
         root = ROOT / directory
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not _is_core_source(path):
+            if not _is_core_source(path, uncompiled):
                 continue
             try:
                 if path.stat().st_mtime > mtime:
@@ -231,8 +278,8 @@ def _check_artifact_skew(
     report.append(
         (
             "fail",
-            f"artifact skew: {behind} predates {straddling.relative_to(ROOT)}, "
-            f"which {ahead} already includes -- rebuild both before comparing",
+            f"artifact skew: {straddling.relative_to(ROOT)} changed after {behind} "
+            f"was linked and before {ahead} was -- rebuild both before comparing",
         )
     )
 

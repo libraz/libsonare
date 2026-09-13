@@ -572,6 +572,58 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertFalse(CHECKER._is_core_source(ROOT / "src/midi/synth/docs/gs.md"))
         self.assertFalse(CHECKER._is_core_source(ROOT / "src/midi/synth/docs"))
 
+    def test_a_source_neither_artifact_links_is_not_straddling(self) -> None:
+        """A suffix cannot separate a WASM binding from a core source.
+
+        Both compared artifacts are native, and `src/wasm/` is compiled only
+        into the WASM module, so an edit there can never explain a difference
+        between them -- yet its files carry the same suffixes as the ones that
+        can. The exclusion comes from the compilation database, so the positive
+        control below moves with the build rather than with a hand-kept list.
+        """
+        uncompiled = CHECKER._uncompiled_source_dirs()
+        if not uncompiled:
+            self.skipTest("no compilation database to derive target membership from")
+        wasm = ROOT / "src/wasm/bindings/common/common.cpp"
+        core = ROOT / "src/c_api/core_quick.cpp"
+        self.assertIn(wasm.parent, uncompiled)
+        self.assertNotIn(core.parent, uncompiled)
+        # The header beside an uncompiled unit goes with it; a header-only tree
+        # stays in, because nothing compiles it directly either way.
+        self.assertFalse(CHECKER._is_core_source(wasm, uncompiled))
+        self.assertFalse(
+            CHECKER._is_core_source(ROOT / "src/wasm/bindings/common/common.h", uncompiled)
+        )
+        self.assertTrue(CHECKER._is_core_source(core, uncompiled))
+        self.assertTrue(
+            CHECKER._is_core_source(ROOT / "include/sonare/sonare_c.h", uncompiled)
+        )
+        # Non-vacuity: without the exclusion the same file reads as a core source,
+        # which is the state that refused a matched pair.
+        self.assertTrue(CHECKER._is_core_source(wasm))
+
+    def test_skew_names_what_it_measured_rather_than_link_membership(self) -> None:
+        """The report may only claim the straddle it observed.
+
+        Ordering two link times against one mtime says nothing about which
+        artifact contains the file, and the earlier wording asserted that it did.
+        """
+        report: list[tuple[str, str]] = []
+        straddler = ROOT / "src/c_api/core_quick.cpp"
+        with (
+            mock.patch.object(CHECKER, "_resolved_python_library", return_value="lib.dylib"),
+            mock.patch.object(CHECKER.os.path, "getmtime", side_effect=[100.0, 200.0]),
+            mock.patch.object(CHECKER, "_count_sources_after", return_value=0),
+            mock.patch.object(CHECKER, "_straddling_source", return_value=straddler),
+        ):
+            CHECKER._check_artifact_skew("cli", "python", 1.0, report)
+        self.assertEqual(len(report), 1)
+        level, message = report[0]
+        self.assertEqual(level, "fail")
+        self.assertIn("src/c_api/core_quick.cpp", message)
+        self.assertIn("changed after cli was linked and before lib.dylib was", message)
+        self.assertNotIn("includes", message)
+
     def test_pending_payload_with_active_options_still_checks_inventory(self) -> None:
         """Payload promotion and option promotion are independent gates."""
         manifest = copy.deepcopy(self.manifest)
