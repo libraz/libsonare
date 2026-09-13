@@ -171,6 +171,7 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
     return SONARE_OK;
   });
 #else
+  if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
 #endif
 }
@@ -185,6 +186,7 @@ SonareError sonare_polyphonic_note_count(const SonarePolyphonicAnalysis* analysi
   *out_count = analysis->analysis.notes.size();
   return SONARE_OK;
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(analysis, out_count);
 #endif
 }
@@ -197,6 +199,7 @@ SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analys
   *out_count = static_cast<int32_t>(analysis->analysis.spectrum.n_frames());
   return SONARE_OK;
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(analysis, out_count);
 #endif
 }
@@ -214,6 +217,7 @@ SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, So
   *out_count = written;
   return SONARE_OK;
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(analysis, out, capacity, out_count);
 #endif
 }
@@ -265,6 +269,7 @@ SonareError sonare_polyphonic_polyphony(const SonarePolyphonicAnalysis* analysis
   *out_count = written;
   return SONARE_OK;
 #else
+  if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(analysis, out, capacity, out_count);
 #endif
 }
@@ -373,6 +378,8 @@ SonareError sonare_polyphonic_render(const SonarePolyphonicAnalysis* analysis,
   return copy_audio_result(rendered, out, out_length);
   SONARE_C_CATCH
 #else
+  if (out) *out = {};
+  if (out_length) *out_length = {};
   SONARE_C_STUB_NOT_SUPPORTED(analysis, config, out, out_length);
 #endif
 }
