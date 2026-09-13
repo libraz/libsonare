@@ -72,6 +72,8 @@ TOP_LEVEL_ROUTES = (
     "note-move",
     "scale-quantize",
     "note-stretch",
+    "polyphonic-notes",
+    "polyphonic-render",
     "pitch-shift",
     "time-stretch",
     "normalize",
@@ -614,6 +616,48 @@ def test_inline_flag_values_match_the_native_cli() -> None:
     start = native.index("bool is_false_flag_literal")
     body = native[start : native.index("}", start)]
     assert body.count("lowered ==") == len(_FALSE_FLAG_LITERALS)
+
+
+def _native_function_body(source: str, signature: str) -> str:
+    """The body of one native CLI function, read from its own source."""
+    start = source.index(signature)
+    return source[start : source.index("\n}", start)]
+
+
+def _native_processing_source() -> str:
+    return (
+        Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_processing.cpp"
+    ).read_text(encoding="utf-8")
+
+
+def test_polyphonic_edit_fields_match_the_native_cli() -> None:
+    """The accepted ``--edit`` field set is read from the native source, not assumed.
+
+    Both CLIs have to spell one field the same way or a script written against
+    either stops working on the other, so the two lists are compared directly.
+    """
+    from libsonare.cli import _POLYPHONIC_EDIT_FIELDS
+
+    body = _native_function_body(_native_processing_source(), "void apply_polyphonic_note_edit")
+    for field in _POLYPHONIC_EDIT_FIELDS:
+        assert f'field == "{field}"' in body, field
+    # And nothing the native side accepts is missing from the Python set.
+    assert body.count("field == ") == len(_POLYPHONIC_EDIT_FIELDS)
+
+
+def test_polyphonic_edit_flag_literals_match_the_native_cli() -> None:
+    """``--edit N.muted=VALUE`` reads the same literals on both CLIs."""
+    from libsonare._cli_effects import _parse_polyphonic_edit_bool
+    from libsonare.cli import _FALSE_FLAG_LITERALS, _TRUE_FLAG_LITERALS
+
+    body = _native_function_body(_native_processing_source(), "bool parse_edit_bool")
+    for literal in _TRUE_FLAG_LITERALS:
+        assert f'lowered == "{literal}"' in body, literal
+        assert _parse_polyphonic_edit_bool("muted", literal.upper()) is True
+    for literal in _FALSE_FLAG_LITERALS:
+        assert f'lowered == "{literal}"' in body, literal
+        assert _parse_polyphonic_edit_bool("muted", literal.upper()) is False
+    assert body.count("lowered ==") == len(_TRUE_FLAG_LITERALS) + len(_FALSE_FLAG_LITERALS)
 
 
 def test_a_non_finite_option_value_exits_two_from_the_console_script(tmp_path) -> None:

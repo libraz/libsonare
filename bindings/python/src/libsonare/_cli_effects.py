@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections.abc import Iterable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
@@ -21,6 +22,10 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._runtime import _C_INT_MAX, _C_INT_MIN
+
+if TYPE_CHECKING:
+    from .analyzer import NoteEdit
 
 
 def cmd_hpss(args: argparse.Namespace) -> int:
@@ -230,6 +235,205 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
             "ratio": args.ratio,
         },
         label="Note stretch",
+    )
+
+
+# The fields one --edit occurrence may address, in the order the refusal below
+# names them. The amplitude envelope is the one NoteEdit field missing from the
+# set: it is a curve, and nothing on a command line states one.
+_POLYPHONIC_EDIT_FIELDS = (
+    "pitch_shift_semitones",
+    "gain_db",
+    "time_offset_samples",
+    "time_stretch_ratio",
+    "formant_shift_semitones",
+    "vibrato_depth_change",
+    "drift_change",
+    "muted",
+)
+_POLYPHONIC_EDIT_FLOAT_FIELDS = frozenset(_POLYPHONIC_EDIT_FIELDS) - {
+    "time_offset_samples",
+    "muted",
+}
+
+
+def _edit_value_consumed_whole(value: str) -> bool:
+    """Whether the native numeric parsers would read ``value`` to its end.
+
+    They skip leading whitespace and then require the conversion to reach the end
+    of the string, so a PEP 515 underscore and a trailing space are refusals there
+    rather than 10 and 3.
+    """
+    return "_" not in value and value == value.rstrip()
+
+
+def _parse_polyphonic_edit_float(value: str) -> float:
+    """Read one ``--edit`` value as a finite float, refusing anything else."""
+    parsed = None
+    if _edit_value_consumed_whole(value):
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid float value for --edit: {value}") from exc
+    if parsed is None:
+        raise ValueError(f"invalid float value for --edit: {value}")
+    if not math.isfinite(parsed):
+        raise ValueError(f"numeric value for --edit must be finite: {value}")
+    return parsed
+
+
+def _parse_polyphonic_edit_int(value: str) -> int:
+    """Read one ``--edit`` value as an integer, refusing anything else.
+
+    Bounded to a C ``int``, which is the whole reachable range: the chain refuses
+    audio longer than an int can index, so a wider offset only ever moves a note
+    off the end.
+    """
+    parsed = None
+    if _edit_value_consumed_whole(value):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid integer value for --edit: {value}") from exc
+    if parsed is None or not _C_INT_MIN <= parsed <= _C_INT_MAX:
+        raise ValueError(f"invalid integer value for --edit: {value}")
+    return parsed
+
+
+def _parse_polyphonic_edit_bool(field: str, value: str) -> bool:
+    """Read one ``--edit`` value as a flag, using the parser's own literal sets."""
+    from .cli import _FALSE_FLAG_LITERALS, _TRUE_FLAG_LITERALS
+
+    lowered = value.lower()
+    if lowered in _TRUE_FLAG_LITERALS:
+        return True
+    if lowered in _FALSE_FLAG_LITERALS:
+        return False
+    raise ValueError(f"invalid boolean value for --edit {field}: {value}")
+
+
+def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
+    """Apply one ``NOTE.FIELD=VALUE`` assignment in place, returning the note index.
+
+    One occurrence is one assignment, as ``--set`` does, with the note index as
+    the dot path's first element: an edit addresses a note rather than a JSON
+    document, and nothing else about the spelling has to differ.
+    """
+    path, separator, value = assignment.partition("=")
+    if not separator or not path:
+        raise ValueError(f"invalid --edit assignment: {assignment}")
+    index_text, dot, field = path.rpartition(".")
+    if not dot or not index_text or not field:
+        raise ValueError(f"--edit path must be NOTE.FIELD: {assignment}")
+    index = _parse_polyphonic_edit_int(index_text)
+    if index < 0 or index >= len(edits):
+        raise ValueError(
+            f"--edit note index out of range: {index_text} (the analysis found {len(edits)} notes)"
+        )
+    edit = edits[index]
+    if field == "time_offset_samples":
+        edit.time_offset_samples = _parse_polyphonic_edit_int(value)
+    elif field == "muted":
+        edit.muted = _parse_polyphonic_edit_bool(field, value)
+    elif field in _POLYPHONIC_EDIT_FLOAT_FIELDS:
+        setattr(edit, field, _parse_polyphonic_edit_float(value))
+    else:
+        # The accepted set is named at the refusal because the help carries no
+        # per-field text, so this is the only place a caller can read it.
+        raise ValueError(
+            f"unknown --edit field: {field} (expected one of {', '.join(_POLYPHONIC_EDIT_FIELDS)})"
+        )
+    return index
+
+
+# Both commands run the chain at its own defaults, so the indices polyphonic-notes
+# reports are the ones polyphonic-render edits. A framing option on one of the two
+# would have to be spelled identically on the other, and a caller spelling it
+# differently would silently renumber the notes.
+def cmd_polyphonic_notes(args: argparse.Namespace) -> int:
+    """Report the notes a polyphonic analysis found, with their per-frame curves."""
+    from . import PolyphonicAnalysis
+
+    samples, sr = _load_audio(args.file)
+    with PolyphonicAnalysis.analyze(samples, sr) as analysis:
+        frame_count = analysis.frame_count()
+        polyphony = [int(count) for count in analysis.polyphony()]
+        rows: list[dict[str, object]] = [
+            {
+                "index": index,
+                "onset_sample": note.onset_sample,
+                "offset_sample": note.offset_sample,
+                "frame_start": note.frame_start,
+                "frame_end": note.frame_end,
+                "median_hz": note.median_hz,
+                "median_cents": note.median_cents,
+                "f0_stability": note.f0_stability,
+                "f0_hz": [float(value) for value in analysis.note_f0(index)],
+                "amplitude": [float(value) for value in note.amplitude],
+                "salience": [float(value) for value in analysis.note_salience(index)],
+            }
+            for index, note in enumerate(analysis.notes())
+        ]
+
+    if args.json:
+        print(
+            _strict_json_dumps(
+                {
+                    "sample_rate": sr,
+                    "frame_count": frame_count,
+                    "note_count": len(rows),
+                    "polyphony": polyphony,
+                    "notes": rows,
+                }
+            )
+        )
+    else:
+        print(f"Polyphonic notes: {len(rows)}")
+        print(f"  Frames: {frame_count} @ {sr} Hz")
+        for row in rows:
+            print(
+                f"  [{row['index']}] "
+                f"samples {row['onset_sample']}-{row['offset_sample']}  "
+                f"frames {row['frame_start']}-{row['frame_end']}  "
+                f"{cast(float, row['median_hz']):.2f} Hz  "
+                f"stability {cast(float, row['f0_stability']):.3f}"
+            )
+    return 0
+
+
+def cmd_polyphonic_render(args: argparse.Namespace) -> int:
+    """Re-render a polyphonic analysis with whatever ``--edit`` assigned."""
+    from . import PolyphonicAnalysis
+
+    # Checked before the analysis rather than in _emit_effect_result: the chain is
+    # the expensive part of the command and a missing destination is already known.
+    if not args.output:
+        print("Error: polyphonic-render requires an output file (-o/--output)", file=sys.stderr)
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+
+    assignments = list(getattr(args, "edit", None) or [])
+    samples, sr = _load_audio(args.file)
+    with PolyphonicAnalysis.analyze(samples, sr) as analysis:
+        note_count = analysis.note_count()
+        if assignments:
+            # One NoteEdit per note, mutated in place, so several --edit
+            # occurrences on one note accumulate instead of replacing each other.
+            edits = [note.edit for note in analysis.notes()]
+            touched: list[int] = []
+            for assignment in assignments:
+                index = _apply_polyphonic_note_edit(edits, assignment)
+                if index not in touched:
+                    touched.append(index)
+            for index in touched:
+                analysis.set_note_edit(index, edits[index])
+        result = [float(value) for value in analysis.render()]
+
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={"note_count": note_count, "edits": len(assignments)},
+        label="Polyphonic render",
     )
 
 

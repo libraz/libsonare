@@ -138,6 +138,9 @@ from ._cli_common import (
     cmd_doctor as cmd_doctor,
 )
 from ._cli_effects import *  # noqa: F403
+from ._cli_effects import (
+    _POLYPHONIC_EDIT_FIELDS as _POLYPHONIC_EDIT_FIELDS,
+)
 from ._cli_inventory import (
     _cli_domain as _cli_domain,
 )
@@ -294,6 +297,10 @@ class _ContractArgumentParser(argparse.ArgumentParser):
 # is_false_flag_literal in tools/cli/sonare_cli_args.cpp. Compared
 # case-insensitively there, so lowered here before the lookup.
 _FALSE_FLAG_LITERALS = frozenset({"false", "0", "no", "off"})
+# Their complement, for the one place a boolean is written as a value rather than
+# as a flag: ``polyphonic-render --edit N.muted=VALUE``. One spelling means the
+# same thing wherever it is written.
+_TRUE_FLAG_LITERALS = frozenset({"true", "1", "yes", "on"})
 
 
 def _finite_float(value: str) -> float:
@@ -437,6 +444,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "pitch-correct-timevarying",
         "note-move",
         "note-stretch",
+        "polyphonic-render",
         "pitch-shift",
         "time-stretch",
         "normalize",
@@ -775,6 +783,28 @@ def _build_parser() -> _ContractArgumentParser:
         type=_finite_float,
         default=1.0,
         help="Stretch factor for the region (>1 lengthens)",
+    )
+    sub.add_parser(
+        "polyphonic-notes",
+        parents=[stdout_options],
+        help="List the notes a polyphonic analysis found",
+    )
+    polyphonic_render_p = sub.add_parser(
+        "polyphonic-render",
+        parents=[common],
+        help="Re-render a polyphonic analysis with per-note edits",
+    )
+    # One assignment per occurrence, as --set does: the value reaches the field
+    # parser as written, so no separator a fold could pick has to be reserved.
+    polyphonic_render_p.add_argument(
+        "--edit",
+        action="append",
+        default=[],
+        metavar="NOTE.FIELD=VALUE",
+        help=(
+            "Edit one field of one note, repeatable; FIELD is one of "
+            + ", ".join(_POLYPHONIC_EDIT_FIELDS)
+        ),
     )
     # Effect commands that map directly to the Python effects API. The C++ CLI
     # still exposes some low-level converters and section/melody analyses that
@@ -1372,6 +1402,8 @@ def _build_parser() -> _ContractArgumentParser:
         "pitch-correct-timevarying",
         "note-move",
         "note-stretch",
+        "polyphonic-notes",
+        "polyphonic-render",
         "pitch-shift",
         "time-stretch",
         "normalize",
@@ -1462,6 +1494,8 @@ def _dispatch() -> None:
         "note-move": cmd_note_move,
         "scale-quantize": cmd_scale_quantize,
         "note-stretch": cmd_note_stretch,
+        "polyphonic-notes": cmd_polyphonic_notes,
+        "polyphonic-render": cmd_polyphonic_render,
         "pitch-shift": cmd_pitch_shift,
         "time-stretch": cmd_time_stretch,
         "normalize": cmd_normalize,

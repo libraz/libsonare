@@ -1830,6 +1830,48 @@
           "domain": null
         }
       ],
+      "polyphonic-notes": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "polyphonic-render": [
+        {
+          "name": "edit",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
       "project.abi": [
         {
           "name": "json",
@@ -3270,14 +3312,14 @@
       "option_status": "pending"
     },
     "polyphonic-notes": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending"
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
     },
     "polyphonic-render": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending"
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
     },
     "preemphasis": {
       "classification": "native_only",
