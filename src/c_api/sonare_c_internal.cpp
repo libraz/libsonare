@@ -66,6 +66,17 @@ SonareError validate_audio_params(const float* samples, size_t length, int sampl
   return SONARE_OK;
 }
 
+SonareError validate_audio_params_window(const float* samples, size_t length, int sample_rate,
+                                         size_t scan_offset, size_t scan_count) {
+  clear_last_error();
+  try {
+    sonare::validate_offline_audio_window(samples, length, sample_rate, scan_offset, scan_count);
+  } catch (const SonareException& e) {
+    return map_sonare_exception(e);
+  }
+  return SONARE_OK;
+}
+
 SonareGrooveType to_c_groove_type(const std::string& groove) {
   if (groove == "swing") return SONARE_GROOVE_SWING;
   if (groove == "shuffle") return SONARE_GROOVE_SHUFFLE;

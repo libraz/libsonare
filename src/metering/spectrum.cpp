@@ -4,6 +4,8 @@
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <map>
+#include <memory>
 #include <vector>
 
 #include "core/fft.h"
@@ -14,10 +16,24 @@
 #include "util/exception.h"
 #include "util/fractional_octave.h"
 #include "util/resource_limits.h"
+#include "util/thread_local_cache.h"
 
 namespace sonare::metering {
 
 namespace {
+
+/// @brief Maximum number of cached FFT plans per thread.
+constexpr size_t kMaxFrameFftCacheSize = 8;
+
+/// @brief Thread-local FFT plans for the single-frame path, keyed on n_fft.
+/// @details FFT::forward writes backend scratch, so an instance may not be shared
+///          across threads; thread_local storage is what makes the reuse legal.
+thread_local std::map<int, std::unique_ptr<FFT>> g_frame_fft_cache;
+
+FFT& get_frame_fft_cached(int n_fft) {
+  return *get_or_create_bounded_cache_entry(g_frame_fft_cache, n_fft, kMaxFrameFftCacheSize,
+                                            [&] { return std::make_unique<FFT>(n_fft); });
+}
 
 void validate_spectrum_config(const SpectrumConfig& config) {
   SONARE_CHECK(resource::spectrum_shape_fits(config.n_fft), ErrorCode::InvalidParameter);
@@ -187,7 +203,8 @@ SpectrumResult spectrum_frame(const Audio& audio, size_t frame_offset,
     frame[i] = audio.data()[frame_offset + i] * window[i];
   }
 
-  FFT fft(config.n_fft);
+  // Per-call plan construction dominated this path at analyzer polling rates.
+  FFT& fft = get_frame_fft_cached(config.n_fft);
   fft.forward(frame.data(), bins.data());
   for (int i = 0; i < n_bins; ++i) {
     result.magnitude[i] =

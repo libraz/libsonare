@@ -104,6 +104,15 @@ SonareError map_sonare_exception(const SonareException& e);
 ///          points (sonare_audio_* in sonare_c_types.h), which validate the
 ///          buffer at construction time and never re-scan per analysis.
 SonareError validate_audio_params(const float* samples, size_t length, int sample_rate);
+
+/// @brief validate_audio_params for an entry point that reads one window of the buffer.
+/// @details Same policy, except that the non-finite scan covers only
+///          [@p scan_offset, @p scan_offset + @p scan_count) -- the span the call
+///          actually reads -- so its cost is the window's, not the buffer's. For a
+///          per-frame entry point polled over a long buffer that is the difference
+///          between O(window) and O(length) per call.
+SonareError validate_audio_params_window(const float* samples, size_t length, int sample_rate,
+                                         size_t scan_offset, size_t scan_count);
 SonareGrooveType to_c_groove_type(const std::string& groove);
 SonareChordQuality to_c_chord_quality(ChordQuality quality);
 
@@ -297,9 +306,8 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
 
 /// @brief Runs an offline analysis body against an already-validated buffer.
 /// @details Shares run_offline's Audio::from_buffer -> body -> catch chain but
-///          skips validate_audio_params, for a caller that already ran the scan
-///          against a LARGER buffer this one is a window into -- re-validating
-///          the window would check nothing the first scan did not already cover.
+///          skips validate_audio_params, for a caller that has already validated
+///          the span it passes here -- re-validating would repeat that scan.
 template <typename Fn>
 SonareError run_prevalidated_offline(const float* samples, size_t length, int sample_rate,
                                      Fn body) {

@@ -412,16 +412,15 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
                               &err)) {
     return err;
   }
-  err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  // Only [frame_offset, frame_offset + n_fft) ever reaches the FFT, so only that
-  // window is copied into an Audio; the scan above already covers the full
-  // buffer, so re-validating the window would check nothing new. Never form
-  // frame_offset + n_fft directly -- it overflows size_t when frame_offset is
-  // caller-supplied garbage.
+  // Only [frame_offset, frame_offset + n_fft) ever reaches the FFT, so that window
+  // is both the only span copied into an Audio and the only span scanned for
+  // non-finite samples. Never form frame_offset + n_fft directly -- it overflows
+  // size_t when frame_offset is caller-supplied garbage.
   const size_t start = std::min(frame_offset, length);
   const size_t count = std::min(static_cast<size_t>(cfg.n_fft), length - start);
+  err = validate_audio_params_window(samples, length, sample_rate, start, count);
+  if (err != SONARE_OK) return err;
+
   const auto run_frame = [&](const Audio& window_audio) -> SonareError {
     return fill_spectrum_result(metering::spectrum_frame(window_audio, 0, cfg), out);
   };

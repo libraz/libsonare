@@ -14,17 +14,40 @@ Audio::Audio(std::shared_ptr<const std::vector<float>> buffer, size_t offset, si
              int sample_rate)
     : buffer_(std::move(buffer)), offset_(offset), length_(length), sample_rate_(sample_rate) {}
 
-void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate) {
+namespace {
+
+// The O(1) preconditions, which describe the buffer as a whole and so are
+// identical for a whole-buffer and a windowed validation.
+void check_offline_audio_bounds(const float* samples, std::size_t length, int sample_rate) {
   SONARE_CHECK_MSG(samples != nullptr && length != 0, ErrorCode::InvalidParameter,
                    "audio input must be a non-empty buffer");
   SONARE_CHECK_MSG(sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate,
                    ErrorCode::InvalidParameter, "sample_rate is out of the supported range");
   SONARE_CHECK_MSG(length <= kMaxAudioBufferSize, ErrorCode::InvalidParameter,
                    "audio buffer is too large");
-  for (std::size_t i = 0; i < length; ++i) {
+}
+
+void check_finite_range(const float* samples, std::size_t begin, std::size_t end) {
+  for (std::size_t i = begin; i < end; ++i) {
     SONARE_CHECK_MSG(std::isfinite(samples[i]), ErrorCode::InvalidParameter,
                      "audio buffer contains a non-finite sample");
   }
+}
+
+}  // namespace
+
+void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate) {
+  check_offline_audio_bounds(samples, length, sample_rate);
+  check_finite_range(samples, 0, length);
+}
+
+void validate_offline_audio_window(const float* samples, std::size_t length, int sample_rate,
+                                   std::size_t scan_offset, std::size_t scan_count) {
+  check_offline_audio_bounds(samples, length, sample_rate);
+  // Clamp rather than add: scan_offset + scan_count overflows on a caller-supplied offset.
+  const std::size_t begin = std::min(scan_offset, length);
+  const std::size_t end = begin + std::min(scan_count, length - begin);
+  check_finite_range(samples, begin, end);
 }
 
 Audio Audio::from_buffer(const float* samples, size_t size, int sample_rate) {

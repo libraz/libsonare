@@ -3,15 +3,18 @@
 ///        extensions (sonare_lufs_interleaved, sonare_ebur128_loudness_range),
 ///        the extended true-peak oversample-factor validation (factor 16
 ///        accepted, non-power-of-two rejected), and sonare_metering_spectrum_frame's
-///        windowed-copy path against the whole-buffer metering::spectrum_frame oracle.
+///        windowed copy, windowed non-finite scan and reused FFT plan against the
+///        whole-buffer metering::spectrum_frame oracle.
 
 #include <sonare/sonare_c.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <thread>
 #include <vector>
 
 #include "core/audio.h"
@@ -183,6 +186,29 @@ metering::SpectrumConfig to_cpp_config(const SpectrumFrameConfigCase& c) {
   return cfg;
 }
 
+// Runs one frame on a thread that has never run one, so its FFT plan is built for
+// this call alone -- the reference a reused plan has to reproduce.
+metering::SpectrumResult spectrum_frame_on_fresh_thread(const Audio& audio, size_t frame_offset,
+                                                        const metering::SpectrumConfig& config) {
+  metering::SpectrumResult result;
+  std::thread worker([&] { result = metering::spectrum_frame(audio, frame_offset, config); });
+  worker.join();
+  return result;
+}
+
+void require_identical_spectra(const metering::SpectrumResult& actual,
+                               const metering::SpectrumResult& expect) {
+  REQUIRE(actual.magnitude.size() == expect.magnitude.size());
+  REQUIRE(actual.n_fft == expect.n_fft);
+  for (size_t i = 0; i < actual.magnitude.size(); ++i) {
+    CAPTURE(i);
+    CHECK(actual.frequencies[i] == expect.frequencies[i]);
+    CHECK(actual.magnitude[i] == expect.magnitude[i]);
+    CHECK(actual.power[i] == expect.power[i]);
+    CHECK(actual.db[i] == expect.db[i]);
+  }
+}
+
 }  // namespace
 
 TEST_CASE("sonare_metering_spectrum_frame's windowed copy matches the whole-buffer oracle",
@@ -250,20 +276,112 @@ TEST_CASE("sonare_metering_spectrum_frame's windowed copy matches the whole-buff
   }
 }
 
-TEST_CASE("sonare_metering_spectrum_frame still scans the whole buffer for non-finite samples",
+TEST_CASE("sonare_metering_spectrum_frame's non-finite scan covers the analysis frame",
           "[c_api][metering][spectrum]") {
-  // The windowed copy only touches [0, n_fft), but a NaN planted well outside that
-  // window (near the end of a buffer shorter than n_fft) must still fail -- the
-  // full-length finiteness scan is the retained contract, not an incidental effect
-  // of copying the whole buffer.
-  std::vector<float> samples(512, 0.0f);
-  samples[samples.size() - 10] = std::numeric_limits<float>::quiet_NaN();
+  // The frame is the only span read, so it is the only span whose finiteness is a
+  // precondition. Which samples that covers moves with frame_offset, not with length.
+  constexpr int kNFft = 2048;
+  constexpr size_t kLength = 8192;
+  constexpr size_t kPoisonIndex = 6000;
 
+  std::vector<float> samples(kLength, 0.25f);
   SonareSpectrumResult result = {};
-  const SonareError err = sonare_metering_spectrum_frame(
-      samples.data(), samples.size(), 44100, /*frame_offset=*/0, /*n_fft=*/2048,
-      /*apply_octave_smoothing=*/0, /*octave_fraction=*/0, /*db_ref=*/0.0f, /*db_amin=*/0.0f,
-      &result);
 
-  REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  SECTION("a non-finite sample inside the frame is refused") {
+    samples[100] = std::numeric_limits<float>::quiet_NaN();
+    const SonareError err = sonare_metering_spectrum_frame(
+        samples.data(), samples.size(), kSpectrumFrameSampleRate, /*frame_offset=*/0, kNFft,
+        /*apply_octave_smoothing=*/0, /*octave_fraction=*/0, /*db_ref=*/0.0f, /*db_amin=*/0.0f,
+        &result);
+    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("the same sample outside the frame does not refuse the call") {
+    samples[kPoisonIndex] = std::numeric_limits<float>::quiet_NaN();
+    const SonareError err = sonare_metering_spectrum_frame(
+        samples.data(), samples.size(), kSpectrumFrameSampleRate, /*frame_offset=*/0, kNFft,
+        /*apply_octave_smoothing=*/0, /*octave_fraction=*/0, /*db_ref=*/0.0f, /*db_amin=*/0.0f,
+        &result);
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(result.bin_count > 0);
+    for (size_t i = 0; i < result.bin_count; ++i) {
+      CHECK(std::isfinite(result.magnitude[i]));
+      CHECK(std::isfinite(result.db[i]));
+    }
+    sonare_free_spectrum_result(&result);
+  }
+
+  SECTION("a frame moved onto that sample is refused") {
+    samples[kPoisonIndex] = std::numeric_limits<float>::quiet_NaN();
+    const SonareError err = sonare_metering_spectrum_frame(
+        samples.data(), samples.size(), kSpectrumFrameSampleRate, /*frame_offset=*/4096, kNFft,
+        /*apply_octave_smoothing=*/0, /*octave_fraction=*/0, /*db_ref=*/0.0f, /*db_amin=*/0.0f,
+        &result);
+    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("a reused FFT plan gives the same single-frame spectrum as a fresh one",
+          "[c_api][metering][spectrum]") {
+  const std::vector<float> samples = make_spectrum_frame_fixture();
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), kSpectrumFrameSampleRate);
+
+  // Smallest n_fft first so the sequence is safe to run against a deliberately
+  // colliding cache key, and each size recurs so both a miss and a hit are covered.
+  const std::vector<int> n_ffts = {256, 2048, 512, 2048, 256, 512, 2048};
+
+  // The whole sequence runs on one thread that starts with no cached plan, so which
+  // calls hit and which miss does not depend on what ran before this case.
+  std::vector<metering::SpectrumResult> reused(n_ffts.size());
+  std::thread worker([&] {
+    for (size_t call = 0; call < n_ffts.size(); ++call) {
+      metering::SpectrumConfig cfg;
+      cfg.n_fft = n_ffts[call];
+      reused[call] = metering::spectrum_frame(audio, call * 1024, cfg);
+    }
+  });
+  worker.join();
+
+  for (size_t call = 0; call < n_ffts.size(); ++call) {
+    CAPTURE(call, n_ffts[call]);
+    metering::SpectrumConfig cfg;
+    cfg.n_fft = n_ffts[call];
+    require_identical_spectra(reused[call],
+                              spectrum_frame_on_fresh_thread(audio, call * 1024, cfg));
+  }
+}
+
+TEST_CASE("sonare_metering_spectrum_frame's per-call cost does not track buffer length",
+          "[.][perf][c_api][metering][spectrum]") {
+  constexpr int kNFft = 2048;
+  constexpr size_t kShortLength = 1u << 14;
+  constexpr size_t kLongLength = 1u << 22;
+  constexpr int kCalls = 200;
+
+  const auto time_calls = [](size_t length) {
+    std::vector<float> samples(length, 0.25f);
+    SonareSpectrumResult result = {};
+    // One untimed call so the plan and window caches are warm for both lengths.
+    REQUIRE(sonare_metering_spectrum_frame(samples.data(), samples.size(), kSpectrumFrameSampleRate,
+                                           0, kNFft, 0, 0, 0.0f, 0.0f, &result) == SONARE_OK);
+    sonare_free_spectrum_result(&result);
+
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < kCalls; ++i) {
+      REQUIRE(sonare_metering_spectrum_frame(samples.data(), samples.size(),
+                                             kSpectrumFrameSampleRate, 0, kNFft, 0, 0, 0.0f, 0.0f,
+                                             &result) == SONARE_OK);
+      sonare_free_spectrum_result(&result);
+    }
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    return std::chrono::duration<double, std::micro>(elapsed).count() / kCalls;
+  };
+
+  const double short_us = time_calls(kShortLength);
+  const double long_us = time_calls(kLongLength);
+  WARN("us/call short=" << short_us << " long=" << long_us << " ratio=" << long_us / short_us);
+
+  // The long buffer is 256x the short one, so a per-sample term anywhere in the
+  // call shows up here; with every per-sample term bounded by n_fft it cannot.
+  CHECK(long_us < short_us * 10.0);
 }

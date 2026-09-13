@@ -141,6 +141,20 @@ inline constexpr std::size_t kMaxAudioBufferSize = resource::kMaxOfflineAudioSam
 ///         @p length above kMaxAudioBufferSize, or any non-finite sample. Empty
 ///         audio is never a valid zero-length analysis, matching the C ABI.
 void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate);
+
+/// @brief Validates an offline-analysis buffer whose analysis reads one window of it.
+/// @param samples       Pointer to mono/interleaved float sample data.
+/// @param length        Number of float samples in the whole buffer.
+/// @param sample_rate   Sample rate in Hz.
+/// @param scan_offset   First sample index of the analysed window; clamped to @p length.
+/// @param scan_count    Window length in samples; clamped to the end of the buffer.
+/// @throws SonareException(InvalidParameter) on the same null/empty, @p sample_rate
+///         and @p length conditions as @ref validate_offline_audio_input, and on a
+///         non-finite sample within [@p scan_offset, @p scan_offset + @p scan_count).
+///         Samples outside that window are not read, so their value is not a
+///         precondition of the call.
+void validate_offline_audio_window(const float* samples, std::size_t length, int sample_rate,
+                                   std::size_t scan_offset, std::size_t scan_count);
 /// @}
 
 }  // namespace sonare

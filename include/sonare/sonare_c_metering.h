@@ -236,6 +236,13 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
 /// @brief True single-frame mono magnitude / power / dB spectrum (one Hann-windowed
 ///        @c n_fft-length FFT), for spectrum-analyzer "moment" snapshots that
 ///        must not be time-averaged like @ref sonare_metering_spectrum.
+/// @details The analysis frame is the only span of the buffer this call reads, and
+///          it is the only span validated: a non-finite sample inside the frame is
+///          rejected with @c SONARE_ERROR_INVALID_PARAMETER, while one outside it
+///          neither reaches the FFT nor refuses the call. The null-pointer,
+///          empty-buffer, buffer-size and @p sample_rate checks still cover the
+///          whole buffer. Cost per call is set by @p n_fft, not by @p length, so an
+///          analyzer may poll it over a long buffer.
 /// @param frame_offset Sample index where the analysis frame begins. The frame
 ///        spans [@p frame_offset, @p frame_offset + n_fft); samples past the end
 ///        of the buffer are zero-padded. Pass 0 for the first frame.
