@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep every Python-to-C integer narrowing in the ctypes binding accounted for.
 
-Three populations, all enforced here, all drifting for the same reason -- a new
+Four populations, all enforced here, all drifting for the same reason -- a new
 module can convert a caller's number however it likes and nothing notices:
 
 * **Inline argument narrowings.**  ``ctypes.c_int(value)`` applies the C
@@ -9,10 +9,17 @@ module can convert a caller's number however it likes and nothing notices:
   reads as "keep the default" -- and ``2**32 + 1`` arrives as 1.  A wrapped value
   is always inside the target type, so no downstream range check can see it.  A
   conversion must therefore go through the shared ``_to_c_*`` family or be
-  recorded with the mechanism that makes it harmless.
+  recorded with the mechanism that makes it harmless.  The array constructor
+  ``(ctypes.c_uint8 * n)(*values)`` is the same conversion applied to every
+  element, so it counts as a site and is keyed on the element expression.
 * **Struct field assignment.**  The same conversion happens on assignment to a
   ``ctypes.Structure`` field, and there the field's own type is the only thing
   that knows the bound, so a struct must inherit the base that reads it.
+* **A width mask in front of a field assignment.**  ``raw.kind = int(x) & 0xFF``
+  leaves the checked base's ``__setattr__`` installed and running, and hands it a
+  value already folded into range.  The reader is there; the defect is a layer in
+  front of it, so the mask is the reportable shape rather than the assignment.
+  A bare ``int(...)`` is not reported: truncating to an integer is deliberate.
 * **File-local readers.**  A helper that converts a caller's number to a ctypes
   integer is a reader, and a reader outside the shared home means a change to
   the conversion contract reaches some call sites and not others.
@@ -29,13 +36,15 @@ nothing; only a second measurement disagrees.  The inline population is counted
 twice and the disagreement is an error, not a log line:
 
 * **Scan A, over the parsed syntax.**  Every ``ast.Call`` whose callee resolves
-  to a ctypes integer type and that carries an argument, with the argument's
-  source text taken from the tree.
+  to a ctypes integer type -- directly, or through the multiplication that builds
+  an array type -- and that carries an argument, with the argument's source text
+  taken from the tree.
 * **Scan B, over the token stream.**  The ``NAME . NAME (`` sequence read from
-  ``tokenize``, with the argument's presence decided by the tokens that follow.
-  It never parses, so it sees the spelling rather than the structure, and it
-  skips comments and string literals because the tokenizer classifies them
-  rather than because a pattern blanked them.
+  ``tokenize``, plus the array run ``( NAME . NAME * ... ) (``, with the
+  argument's presence decided by the tokens that follow.  It never parses, so it
+  sees the spelling rather than the structure, and it skips comments and string
+  literals because the tokenizer classifies them rather than because a pattern
+  blanked them.
 
 Neither route can produce the other's answer by construction, so a per-file
 disagreement means one of them stopped seeing a shape the other still sees --
@@ -101,6 +110,15 @@ INTEGER_TYPES = (
     "c_ssize_t",
 )
 
+# A mask that folds a value into a C integer width. Only these are reported in
+# front of a field assignment: they pre-empt the checked base's range check,
+# whereas an arbitrary arithmetic expression does not.
+WIDTH_MASKS = (0xFF, 0xFFFF, 0xFFFFFFFF, 0xFFFFFFFFFFFFFFFF)
+
+# Bracket tokens, for walking the array type expression to its closing paren.
+OPENERS = ("(", "[", "{")
+CLOSERS = (")", "]", "}")
+
 # The shared family every inline narrowing outside the home must route through.
 SHARED_READERS = (
     "_to_c_int",
@@ -143,15 +161,27 @@ def _display(path: Path) -> str:
 class Site:
     """One inline narrowing, with everything a record is keyed on."""
 
-    def __init__(self, path: Path, line: int, ctype: str, argument: str) -> None:
+    def __init__(
+        self, path: Path, line: int, ctype: str, argument: str, *, container: bool = False
+    ) -> None:
         self.path = path
         self.line = line
         self.type = ctype
         self.argument = " ".join(argument.split())
+        # An array constructor converts every element, so the argument recorded
+        # is the element expression rather than the sequence handed to the call.
+        self.container = container
 
     @property
     def display(self) -> str:
         return f"{_display(self.path)}:{self.line}"
+
+    @property
+    def text(self) -> str:
+        """The site as the report names it, in the spelling it was written in."""
+        if self.container:
+            return f"(ctypes.{self.type} * n)(...)  every element: {self.argument}"
+        return f"ctypes.{self.type}({self.argument})"
 
     @property
     def key(self) -> tuple[str, str, str]:
@@ -169,6 +199,7 @@ class Scan:
         self.sites: list[Site] = []
         self.token_counts: dict[str, int] = {}
         self.plain_structs: list[tuple[Path, int, str]] = []
+        self.masked_fields: list[tuple[Path, int, str, int]] = []
         self.local_readers: list[tuple[Path, int, str]] = []
         self.aliased_imports: list[tuple[Path, int, str]] = []
         self._run()
@@ -184,18 +215,22 @@ class Scan:
 
             # Scan A: over the parsed syntax.
             for node in ast.walk(tree):
-                if shared_home or not _is_ctypes_integer_call(node) or not node.args:
+                conversion = _ctypes_integer_conversion(node)
+                if shared_home or conversion is None or not node.args:
                     continue
-                if self.simple_arguments_only and not isinstance(node.args[0], ast.Name):
+                ctype, container = conversion
+                value = _converted_value(node.args[0]) if container else node.args[0]
+                if self.simple_arguments_only and not isinstance(value, ast.Name):
                     continue
                 self.sites.append(
-                    Site(path, node.lineno, node.func.attr, ast.unparse(node.args[0]))
+                    Site(path, node.lineno, ctype, ast.unparse(value), container=container)
                 )
 
             # Scan B: over the token stream.
             self.token_counts[path.name] = 0 if shared_home else _token_scan(source)
 
             self._collect_structure_bases(path, tree)
+            self._collect_masked_fields(path, tree)
             self._collect_local_readers(path, tree, shared_home)
             self._collect_aliased_imports(path, tree)
 
@@ -214,6 +249,23 @@ class Scan:
                     and base.value.id == "ctypes"
                 ):
                     self.plain_structs.append((path, node.lineno, node.name))
+
+    def _collect_masked_fields(self, path: Path, tree: ast.Module) -> None:
+        """A width mask hands the field's own range check a value that cannot fail."""
+        if path.name in SHARED_READER_FILES:
+            return
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                targets, masked = node.targets, _width_mask(node.value)
+            elif isinstance(node, ast.AugAssign):
+                targets, masked = [node.target], _width_mask(node)
+            else:
+                continue
+            if masked is None:
+                continue
+            for target in targets:
+                if isinstance(target, ast.Attribute):
+                    self.masked_fields.append((path, node.lineno, ast.unparse(target), masked))
 
     def _collect_local_readers(self, path: Path, tree: ast.Module, shared_home: bool) -> None:
         """A module-level helper whose whole job is a ctypes integer conversion."""
@@ -250,13 +302,18 @@ class Scan:
 
 
 def _token_scan(source: str) -> int:
-    """Scan B: ``ctypes . <integer type> (`` followed by anything but ``)``."""
+    """Scan B: both call spellings, read from the token stream."""
     stream = [
         token
         for token in tokenize.generate_tokens(io.StringIO(source).readline)
         if token.type not in (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT)
         and token.type != tokenize.DEDENT
     ]
+    return _token_calls(stream) + _token_arrays(stream)
+
+
+def _token_calls(stream: list[tokenize.TokenInfo]) -> int:
+    """``ctypes . <integer type> (`` followed by anything but ``)``."""
     count = 0
     for i in range(len(stream) - 4):
         names = [stream[i + k] for k in range(5)]
@@ -271,14 +328,95 @@ def _token_scan(source: str) -> int:
     return count
 
 
-def _is_ctypes_integer_call(node: ast.AST) -> bool:
+def _token_arrays(stream: list[tokenize.TokenInfo]) -> int:
+    """``( ctypes . <integer type> * ... ) (`` followed by anything but ``)``.
+
+    The count expression between the type and the closing paren is arbitrary, so
+    the run cannot be matched by a fixed window the way the call spelling is: the
+    opening paren is walked to its own close and the call tested from there.
+    """
+    count = 0
+    for i in range(1, len(stream) - 3):
+        if not (
+            stream[i - 1].string == "("
+            and stream[i].string == "ctypes"
+            and stream[i + 1].string == "."
+            and stream[i + 2].string in INTEGER_TYPES
+            and stream[i + 3].string == "*"
+        ):
+            continue
+        close = _matching_close(stream, i - 1)
+        if close is None or close + 2 >= len(stream):
+            continue
+        if stream[close + 1].string == "(" and stream[close + 2].string != ")":
+            count += 1
+    return count
+
+
+def _matching_close(stream: list[tokenize.TokenInfo], start: int) -> int | None:
+    """Index of the bracket closing the one at ``start``, or None if unbalanced."""
+    depth = 0
+    for j in range(start, len(stream)):
+        if stream[j].string in OPENERS:
+            depth += 1
+        elif stream[j].string in CLOSERS:
+            depth -= 1
+            if depth == 0:
+                return j
+    return None
+
+
+def _ctypes_integer_conversion(node: ast.AST) -> tuple[str, bool] | None:
+    """The integer type a call converts through, and whether it is an array type.
+
+    Two spellings reach the same C conversion: ``ctypes.c_int(x)`` narrows one
+    value, ``(ctypes.c_int * n)(*xs)`` narrows every element of ``xs``.
+    """
+    if not isinstance(node, ast.Call):
+        return None
+    if _is_ctypes_integer(node.func):
+        return node.func.attr, False
+    if isinstance(node.func, ast.BinOp) and isinstance(node.func.op, ast.Mult):
+        for side in (node.func.left, node.func.right):
+            if _is_ctypes_integer(side):
+                return side.attr, True
+    return None
+
+
+def _is_ctypes_integer(node: ast.AST) -> bool:
     return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr in INTEGER_TYPES
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "ctypes"
+        isinstance(node, ast.Attribute)
+        and node.attr in INTEGER_TYPES
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "ctypes"
     )
+
+
+def _converted_value(argument: ast.expr) -> ast.expr:
+    """Past a splat, the expression each converted element is built from."""
+    if not isinstance(argument, ast.Starred):
+        return argument
+    if isinstance(argument.value, (ast.ListComp, ast.GeneratorExp)):
+        return argument.value.elt
+    return argument.value
+
+
+def _width_mask(node: ast.AST) -> int | None:
+    """The C integer width a ``&`` folds its value into, or None if it is not one."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitAnd):
+        operands = (node.right, node.left)
+    elif isinstance(node, ast.AugAssign) and isinstance(node.op, ast.BitAnd):
+        operands = (node.value,)
+    else:
+        return None
+    for operand in operands:
+        if (
+            isinstance(operand, ast.Constant)
+            and not isinstance(operand.value, bool)
+            and operand.value in WIDTH_MASKS
+        ):
+            return operand.value
+    return None
 
 
 class Records:
@@ -288,6 +426,7 @@ class Records:
         self.shapes = data.get("shapes", [])
         self.narrowings = data.get("narrowings", [])
         self.structs = data.get("plain_structs", [])
+        self.masked = data.get("masked_fields", [])
         self.readers = data.get("readers", [])
         self.used: set[str] = set()
         self._shape_patterns = {
@@ -313,6 +452,13 @@ class Records:
             return True
         return False
 
+    def covers_masked_field(self, path: Path, target: str) -> bool:
+        for entry in self.masked:
+            if entry["file"] == path.name and entry["target"] == target:
+                self.used.add(f"mask:{entry['file']}:{entry['target']}")
+                return True
+        return False
+
     def covers_reader(self, path: Path, symbol: str) -> bool:
         for entry in self.readers:
             if entry["file"] == path.name and entry["symbol"] == symbol:
@@ -325,6 +471,7 @@ class Records:
             [f"shape:{s['name']}" for s in self.shapes]
             + [f"narrowing:{e['file']}:{e['argument']}" for e in self.narrowings]
             + [f"struct:{s}" for s in self.structs]
+            + [f"mask:{e['file']}:{e['target']}" for e in self.masked]
             + [f"reader:{e['file']}:{e['symbol']}" for e in self.readers]
         )
         return sorted(name for name in every if name not in self.used)
@@ -340,6 +487,9 @@ def _self_check(scan: Scan, floor: dict) -> list[str]:
     measured = {
         "files": len(list(scan.tree.rglob("*.py"))),
         "narrowings": len(scan.sites),
+        # Pinned apart from the total: the array spelling is a small population
+        # a growing scalar count would otherwise hide the disappearance of.
+        "array_narrowings": sum(1 for site in scan.sites if site.container),
         "shared_reader_calls": _shared_reader_calls(scan.tree),
     }
     return [
@@ -411,6 +561,24 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
             )
         )
 
+    masked = [
+        (path, line, target, mask)
+        for path, line, target, mask in scan.masked_fields
+        if not records.covers_masked_field(path, target)
+    ]
+    if masked:
+        failures.append(
+            (
+                "These width masks fold a value into range in front of a struct "
+                f"field, so the {STRUCT_BASE} range check behind the assignment is "
+                "handed a value that can no longer fail it",
+                [
+                    f"  {_display(p)}:{line}  {target} = ... & {mask:#x}"
+                    for p, line, target, mask in masked
+                ],
+            )
+        )
+
     local = [
         (path, line, name)
         for path, line, name in scan.local_readers
@@ -432,7 +600,7 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
             (
                 "These narrowings are neither performed by the shared reader nor "
                 "recorded with the mechanism that makes them harmless",
-                [f"  {site.display}  ctypes.{site.type}({site.argument})" for site in unrecorded],
+                [f"  {site.display}  {site.text}" for site in unrecorded],
             )
         )
 

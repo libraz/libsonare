@@ -1,7 +1,8 @@
 {
   "floor": {
     "files": 60,
-    "narrowings": 60,
+    "narrowings": 65,
+    "array_narrowings": 5,
     "shared_reader_calls": 600
   },
   "shapes": [
@@ -27,7 +28,15 @@
       "reason": "The argument is a resolver that refuses anything outside the field's own domain before the conversion sees it."
     }
   ],
-  "narrowings": [],
+  "narrowings": [
+    {
+      "file": "mixing_assistant.py",
+      "argument": "lengths",
+      "type": "c_size_t",
+      "reason": "Each entry is the length returned by _to_c_float_array for a buffer this call already allocated, so it is bounded by that allocation."
+    }
+  ],
   "plain_structs": [],
+  "masked_fields": [],
   "readers": []
 }

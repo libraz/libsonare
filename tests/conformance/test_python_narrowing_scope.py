@@ -111,6 +111,59 @@ class FailureClassTest(_SyntheticTree):
         )
         self.assertEqual(self.evaluate(root), [])
 
+    def test_an_array_constructor_is_the_only_report(self) -> None:
+        """The spelling whose callee is a BinOp rather than an attribute."""
+        root = self.tree(
+            "import ctypes\n\n\ndef f(values):\n"
+            "    return (ctypes.c_uint8 * len(values))(*values)\n"
+        )
+        lines = self.only(self.evaluate(root), "neither performed by the shared reader")
+        self.assertIn("(ctypes.c_uint8 * n)(...)", lines[0])
+        self.assertIn("every element: values", lines[0])
+
+    def test_an_array_constructor_is_keyed_on_its_element_expression(self) -> None:
+        """A splat is unwrapped, so the record vocabulary reads the converted value."""
+        root = self.tree(
+            "import ctypes\n\n\ndef f(xs):\n"
+            "    return (ctypes.c_uint8 * len(xs))(*[_narrow_int(x, 'x', 0, 255) for x in xs])\n"
+        )
+        records = {
+            "shapes": [
+                {
+                    "name": "domain-validated-helper",
+                    "argument_pattern": "_narrow_int\\(.+\\)",
+                    "reason": "refuses anything outside the field's own domain first",
+                }
+            ],
+            "narrowings": [],
+        }
+        self.assertEqual(self.evaluate(root, records=records), [])
+
+    def test_an_empty_array_is_not_a_narrowing(self) -> None:
+        """An out-buffer converts nothing, in either spelling."""
+        root = self.tree("import ctypes\n\n\ndef f(n):\n    return (ctypes.c_int32 * n)()\n")
+        self.assertEqual(self.evaluate(root), [])
+        self.assertEqual(scope.Scan(root).token_counts["m.py"], 0)
+
+    def test_a_masked_field_assignment_is_the_only_report(self) -> None:
+        """The checked base is still installed; the mask is a layer in front of it."""
+        root = self.tree(
+            "import ctypes\n\nfrom ._cstruct import CStruct\n\n\n"
+            "class S(CStruct):\n    _fields_ = [('kind', ctypes.c_uint8)]\n\n\n"
+            "def f(raw, x):\n    raw.kind = int(x) & 0xFF\n"
+        )
+        lines = self.only(self.evaluate(root), "fold a value into range")
+        self.assertIn("raw.kind = ... & 0xff", lines[0])
+
+    def test_a_truncation_in_front_of_a_field_is_not_a_mask(self) -> None:
+        """``int(...)`` is deliberate, so only a width mask is reportable."""
+        root = self.tree(
+            "import ctypes\n\nfrom ._cstruct import CStruct\n\n\n"
+            "class S(CStruct):\n    _fields_ = [('kind', ctypes.c_uint8)]\n\n\n"
+            "def f(raw, x):\n    raw.kind = int(x)\n    raw.count = x & 0x7\n"
+        )
+        self.assertEqual(self.evaluate(root), [])
+
     def test_a_file_local_reader_is_the_only_report(self) -> None:
         root = self.tree(
             "import ctypes\n\n\ndef _checked_size_t(v: int, name: str) -> ctypes.c_size_t:\n"
@@ -140,6 +193,17 @@ class FailureClassTest(_SyntheticTree):
         )
         self.assertIn("stopped matching", lines[0])
 
+    def test_a_shrunken_array_population_is_the_only_report(self) -> None:
+        """The array spelling is pinned apart, so a growing total cannot hide it."""
+        root = self.tree("import ctypes\n\n\ndef f(n):\n    return ctypes.c_int(n)\n")
+        records = {
+            "shapes": [{"name": "any", "argument_pattern": ".+", "reason": "not the subject"}],
+            "narrowings": [],
+        }
+        failures = self.evaluate(root, records=records, floor={"array_narrowings": 1})
+        lines = self.only(failures, "no longer finds the population")
+        self.assertIn("array_narrowings: found 0", lines[0])
+
     def test_the_two_scans_disagreeing_is_the_only_report(self) -> None:
         """Narrow the tree scan past a call shape the token scan still sees."""
         root = self.tree("import ctypes\n\n\ndef f(n):\n    return ctypes.c_int(len(n))\n")
@@ -158,6 +222,25 @@ class ScanFidelityTest(_SyntheticTree):
                 root = self.tree(body)
                 self.assertEqual(self.evaluate(root), [])
                 self.assertEqual(scope.Scan(root).token_counts["m.py"], 0)
+
+    def test_an_array_narrowing_is_seen_by_both_scans(self) -> None:
+        """Both routes carry the array spelling, so their agreement still asserts."""
+        root = self.tree(
+            "import ctypes\n\n\ndef f(n, xs):\n    return (ctypes.c_uint8 * (n + 1))(*xs)\n"
+        )
+        scan = scope.Scan(root)
+        self.assertEqual(len(scan.sites), 1)
+        self.assertEqual(scan.token_counts["m.py"], 1)
+
+    def test_an_array_type_that_is_not_called_is_not_a_narrowing(self) -> None:
+        """Naming the type converts nothing; the report is for the constructor."""
+        root = self.tree(
+            "import ctypes\n\n\ndef f(buf):\n"
+            "    return (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)\n"
+        )
+        scan = scope.Scan(root)
+        self.assertEqual(len(scan.sites), 0)
+        self.assertEqual(scan.token_counts["m.py"], 0)
 
     def test_a_narrowing_split_across_lines_is_seen_by_both_scans(self) -> None:
         root = self.tree(
