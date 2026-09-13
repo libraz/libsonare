@@ -39,6 +39,17 @@ double wrap_to_pi(double angle) {
   return wrapped < 0.0 ? wrapped + kPiD : wrapped - kPiD;
 }
 
+/// The geometry @p masks placed note @p note's claims with.
+/// @details The only geometry a replay may read. A set carries a stretch per note
+///          where they differ, and reading the scalar instead identifies the wrong
+///          partial from about the fourteenth up at an ordinary piano stretch --
+///          which is the threshold @c NoteMaskSet::config's own note states.
+NoteMaskConfig note_geometry(const NoteMaskSet& masks, size_t note) {
+  NoteMaskConfig config = masks.config;
+  config.inharmonicity = masks.stretch_of(note);
+  return config;
+}
+
 /// The partial standing on @p bin, or null where the geometry places none there.
 /// Claims are disjoint, so at most one can.
 const PartialClaim* claim_over_bin(const std::vector<PartialClaim>& partials, int bin) {
@@ -117,6 +128,16 @@ void check_inputs(const Spectrogram& spec, const NoteMaskSet& masks, const Multi
                    masks.hop_length == spec.hop_length() && masks.sample_rate == spec.sample_rate(),
                ErrorCode::InvalidParameter);
   SONARE_CHECK(masks.notes.size() == track.ridges.size(), ErrorCode::InvalidParameter);
+  // Read rather than carried here, so its shape is checked here: the set's own note
+  // says a stage that interprets the claims validates the geometry for itself, and
+  // a vector shorter than the notes would quietly read the scalar for the rest.
+  // These are effective stretches, so a negative one is not a refusal but a value
+  // partial_claims refuses, and a NaN passes every comparison that would catch it.
+  SONARE_CHECK(masks.inharmonicity.empty() || masks.inharmonicity.size() == masks.notes.size(),
+               ErrorCode::InvalidParameter);
+  for (const float stretch : masks.inharmonicity) {
+    SONARE_CHECK(std::isfinite(stretch) && stretch >= 0.0f, ErrorCode::InvalidParameter);
+  }
   // The track carries the instants the ridges mean, so a hop or a rate of its own
   // indexes the same frames while describing different times.
   SONARE_CHECK(track.n_frames == spec.n_frames() && track.hop_length == spec.hop_length() &&
@@ -400,7 +421,9 @@ bool partial_stands_alone(const Spectrogram& spec, const MultiF0Track& track,
     if (ridge.frame_end() <= frame_start || ridge.frame_start >= frame_end) continue;
     const double f0 = ridge_f0_at(ridge, frame_start);
     if (!(f0 > 0.0)) continue;
-    scratch = partial_claims(spec, static_cast<float>(f0), masks.config);
+    // The rival's own geometry, not this note's: the set places each note's claims
+    // at its own stretch, so a rival's partials stand where its stretch put them.
+    scratch = partial_claims(spec, static_cast<float>(f0), note_geometry(masks, other));
     for (const PartialClaim& claim : scratch) {
       const double rival_hz = claim.centre_hz;
       const double margin = half_width_hz + error_rel * (centre_hz + rival_hz);
@@ -453,7 +476,8 @@ std::vector<float> refine_from_claims(const Spectrogram& spec, const MultiF0Trac
       if (span.n_notes != 1 || span.n_frames < window) continue;
       const int note = claims[span.group_lo].note;
       const double f0 = ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
-      partials = partial_claims(spec, static_cast<float>(f0), masks.config);
+      partials = partial_claims(spec, static_cast<float>(f0),
+                                note_geometry(masks, static_cast<size_t>(note)));
       const PartialClaim* partial = claim_over_bin(partials, bin);
       if (partial == nullptr) continue;
       if (!partial_stands_alone(spec, track, masks, note, span.frame_start,
@@ -598,7 +622,8 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
         // built with; guessing it back from the bin's frequency misses the stretch.
         const double f0_built =
             ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
-        partials = partial_claims(spec, static_cast<float>(f0_built), masks.config);
+        partials = partial_claims(spec, static_cast<float>(f0_built),
+                                  note_geometry(masks, static_cast<size_t>(note)));
         const PartialClaim* partial = claim_over_bin(partials, bin);
         every_partial_placed = partial != nullptr && partial->centre_hz > 0.0f;
         if (!every_partial_placed) break;

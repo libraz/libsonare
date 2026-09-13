@@ -155,6 +155,12 @@ std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
 
 NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                              const NoteMaskConfig& config) {
+  return build_note_masks(spec, track, config, std::vector<float>{});
+}
+
+NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
+                             const NoteMaskConfig& config,
+                             const std::vector<float>& per_ridge_stretch) {
   check_geometry(spec, config);
   SONARE_CHECK(track.n_frames == spec.n_frames() && track.hop_length == spec.hop_length() &&
                    track.sample_rate == spec.sample_rate(),
@@ -167,6 +173,15 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
     for (const float f0_hz : ridge.f0_hz) {
       SONARE_CHECK(std::isfinite(f0_hz) && f0_hz > 0.0f, ErrorCode::InvalidParameter);
     }
+  }
+  SONARE_CHECK_MSG(per_ridge_stretch.empty() || per_ridge_stretch.size() == track.ridges.size(),
+                   ErrorCode::InvalidParameter,
+                   "build_note_masks: perRidgeStretch must be empty or one value per ridge");
+  for (const float stretch : per_ridge_stretch) {
+    // Only a negative number carries the refusal; a NaN passes every comparison
+    // that would have caught it and reaches the geometry as a stretch.
+    SONARE_CHECK_MSG(std::isfinite(stretch), ErrorCode::InvalidParameter,
+                     "build_note_masks: perRidgeStretch must be finite");
   }
 
   const int n_bins = spec.n_bins();
@@ -183,6 +198,18 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
   // guessing a harmonic number back out of the bin's frequency.
   set.config = config;
   set.notes.resize(track.ridges.size());
+  // One config per ridge, differing only in the stretch, so place_claims stays the
+  // single derivation. The effective value is stored rather than the argument: a
+  // negative entry is the caller's refusal and the geometry used the declared
+  // value, which is the number a replay has to read back.
+  std::vector<NoteMaskConfig> geometry(track.ridges.size(), config);
+  if (!per_ridge_stretch.empty()) {
+    set.inharmonicity.resize(track.ridges.size());
+    for (size_t i = 0; i < track.ridges.size(); ++i) {
+      if (per_ridge_stretch[i] >= 0.0f) geometry[i].inharmonicity = per_ridge_stretch[i];
+      set.inharmonicity[i] = geometry[i].inharmonicity;
+    }
+  }
   for (size_t i = 0; i < track.ridges.size(); ++i) {
     NoteMask& mask = set.notes[i];
     mask.ridge_index = static_cast<int>(i);
@@ -202,7 +229,7 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
       NoteMask& mask = set.notes[i];
       const int index = frame - mask.frame_start;
       if (index < 0 || index >= mask.n_frames) continue;
-      place_claims(track.ridges[i].f0_hz[static_cast<size_t>(index)], config, bins_per_hz,
+      place_claims(track.ridges[i].f0_hz[static_cast<size_t>(index)], geometry[i], bins_per_hz,
                    half_width, n_bins, partials);
       for (const PartialClaim& partial : partials) {
         for (int bin = partial.first_bin; bin <= partial.last_bin; ++bin) {

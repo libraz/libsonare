@@ -100,6 +100,7 @@ add_executable(sonare_tests
   editing/percussive_event_test.cpp
   editing/polyphonic_f0_test.cpp
   editing/polyphonic_f0_eval_test.cpp
+  editing/polyphonic_inharmonicity_test.cpp
   editing/polyphonic_mask_test.cpp
   editing/polyphonic_shared_bins_test.cpp
   streaming/stream_analyzer_core_test.cpp
@@ -203,6 +204,7 @@ endif()
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
     mastering/assistant_test.cpp
+    mastering/band_state_non_finite_recovery_test.cpp
     mastering/chain_test.cpp
     mastering/chain_latency_test.cpp
     mastering/common_test.cpp

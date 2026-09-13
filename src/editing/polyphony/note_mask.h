@@ -160,6 +160,22 @@ struct NoteMaskSet {
   /// stage that has to interpret the claims reads it, and such a stage validates
   /// it for itself.
   NoteMaskConfig config;
+
+  /// The stretch each note's claims were actually placed with, where they differ.
+  /// Empty means every note used @c config.inharmonicity, so a set built before
+  /// this existed and a hand-built one carrying the default both read correctly.
+  /// Non-empty is @c notes.size() long.
+  ///
+  /// These are the effective values, never a caller's refusal sentinel: a stage
+  /// replaying the geometry to tell which partial stands on a bin needs the
+  /// number that was used, and substituting the declared value at every reader
+  /// instead would put the same decision in several places.
+  std::vector<float> inharmonicity;
+
+  /// The stretch note @p index was placed with, whichever of the two holds it.
+  float stretch_of(size_t index) const noexcept {
+    return index < inharmonicity.size() ? inharmonicity[index] : config.inharmonicity;
+  }
 };
 
 /// @brief One partial's claim: which harmonic, where it sits, which bins it takes.
@@ -269,6 +285,28 @@ std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
 ///         @c inharmonicity.
 NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                              const NoteMaskConfig& config = {});
+
+/// @brief Builds one mask per ridge, each note's claims placed at its own stretch.
+/// @details One value cannot serve a chord wider than about an octave -- see
+///          @ref NoteMaskConfig::inharmonicity for what that costs -- so a caller
+///          that has measured the stretch per note places the claims with it here.
+///
+///          The stretch stays declared rather than read: this takes the values as
+///          an argument, so @ref partial_claims remains independent of the signal
+///          and a stage replaying the geometry replays what was used.
+/// @param per_ridge_stretch One value per ridge, in ridge order. **A negative
+///        entry means "use @c config.inharmonicity for this ridge"**, which is
+///        what @ref estimate_track_inharmonicity's refusal returns, so its output
+///        can be handed straight here without the caller substituting. Empty is
+///        every ridge declared, identical to the overload above.
+/// @throws SonareException(InvalidParameter) on everything the overload above
+///         rejects, and on a @p per_ridge_stretch that is neither empty nor
+///         @c track.ridges.size() long. A non-finite entry is rejected rather than
+///         read as a refusal: only a negative number carries that meaning, and a
+///         NaN would otherwise reach @ref partial_claims through the comparison.
+NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
+                             const NoteMaskConfig& config,
+                             const std::vector<float>& per_ridge_stretch);
 
 /// @brief One note's share of @p spec.
 /// @details Every bin the mask does not name is zero, so the result is a

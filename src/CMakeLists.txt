@@ -175,6 +175,7 @@ set(SONARE_SOURCES
   # Multiple-F0 estimation reaches only for the STFT, which is here, so gating it
   # alongside the pitch editor would declare a dependency that does not exist.
   editing/polyphony/f0_salience.cpp
+  editing/polyphony/inharmonicity.cpp
   editing/polyphony/multi_f0.cpp
   editing/polyphony/note_mask.cpp
   editing/polyphony/shared_bins.cpp
