@@ -20,6 +20,9 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_int32,
+    _to_c_size_t,
 )
 from .types import (
     Capabilities,
@@ -83,8 +86,8 @@ def detect_chords(
     )
     rc = lib.sonare_detect_chords_ex(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(options),
         ctypes.byref(out),
     )
@@ -183,11 +186,11 @@ def chord_functional_analysis(
     )
     rc = lib.sonare_chord_functional_analysis(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(options),
-        ctypes.c_int32(int(key_root)),
-        ctypes.c_int32(int(key_mode)),
+        _to_c_int32(int(key_root), "key_root"),
+        _to_c_int32(int(key_mode), "key_mode"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -231,10 +234,10 @@ def analyze_sections(
     out = SonareSectionResult()
     rc = lib.sonare_analyze_sections(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(min_section_sec),
         ctypes.byref(out),
     )
@@ -300,12 +303,12 @@ def analyze_melody(
         out = SonareMelodyResult()
         rc = lib.sonare_analyze_melody_ex(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.c_float(fmin),
             ctypes.c_float(fmax),
-            ctypes.c_int(frame_length),
-            ctypes.c_int(hop_length),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
             ctypes.c_float(threshold),
             ctypes.c_int(1 if use_pyin else 0),
             ctypes.c_int(1 if center else 0),
@@ -336,12 +339,12 @@ def analyze_melody(
     out = SonareMelodyResult()
     rc = lib.sonare_analyze_melody(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
+        _to_c_int(frame_length, "frame_length"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(threshold),
         ctypes.byref(out),
     )

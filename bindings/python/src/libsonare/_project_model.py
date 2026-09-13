@@ -106,6 +106,7 @@ from ._runtime import (
     _curve_value,
     _get_lib,
     _resolve_enum,
+    _to_c_size_t,
 )
 
 # Mirrors SONARE_ERROR_INVALID_STATE in sonare_c.h. The pure MIDI conversion
@@ -344,7 +345,7 @@ def _automation_lane_desc(
     desc = SonareAutomationLaneDesc(
         target_param_id=target_id,
         points=c_points,
-        point_count=ctypes.c_size_t(count),
+        point_count=_to_c_size_t(count, "count"),
     )
     return desc, c_points
 

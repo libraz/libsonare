@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ctypes
 
+from ._cstruct import CStruct
+
 # Cancellation callback: int(void* user_data), nonzero requests cancellation.
 # Maps to SonareCancelCallback in sonare_c.h.
 SonareCancelCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p)
@@ -15,7 +17,7 @@ SONARE_PITCH_TARGET_FIXED_MIDI = 0
 SONARE_PITCH_TARGET_SCALE = 1
 
 
-class SonarePitchCorrectionConfig(ctypes.Structure):
+class SonarePitchCorrectionConfig(CStruct):
     """Maps to SonarePitchCorrectionConfig in sonare_c.h."""
 
     _fields_ = [
@@ -31,7 +33,7 @@ class SonarePitchCorrectionConfig(ctypes.Structure):
     ]
 
 
-class SonareKey(ctypes.Structure):
+class SonareKey(CStruct):
     """Maps to SonareKey in sonare_c.h."""
 
     _fields_ = [
@@ -41,7 +43,7 @@ class SonareKey(ctypes.Structure):
     ]
 
 
-class SonareKeyCandidate(ctypes.Structure):
+class SonareKeyCandidate(CStruct):
     """Maps to SonareKeyCandidate in sonare_c.h."""
 
     _fields_ = [
@@ -50,7 +52,7 @@ class SonareKeyCandidate(ctypes.Structure):
     ]
 
 
-class SonareOnsetDetectConfig(ctypes.Structure):
+class SonareOnsetDetectConfig(CStruct):
     """Maps to SonareOnsetDetectConfig in sonare_c_types_functions.h."""
 
     _fields_ = [
@@ -69,7 +71,7 @@ class SonareOnsetDetectConfig(ctypes.Structure):
     ]
 
 
-class SonareTimeSignature(ctypes.Structure):
+class SonareTimeSignature(CStruct):
     """Maps to SonareTimeSignature in sonare_c.h."""
 
     _fields_ = [
@@ -79,7 +81,7 @@ class SonareTimeSignature(ctypes.Structure):
     ]
 
 
-class SonareAnalysisBpmCandidate(ctypes.Structure):
+class SonareAnalysisBpmCandidate(CStruct):
     """Maps to SonareAnalysisBpmCandidate in sonare_c.h."""
 
     _fields_ = [
@@ -89,7 +91,7 @@ class SonareAnalysisBpmCandidate(ctypes.Structure):
     ]
 
 
-class SonareAnalysisResult(ctypes.Structure):
+class SonareAnalysisResult(CStruct):
     """Maps to SonareAnalysisResult in sonare_c.h."""
 
     _fields_ = [
@@ -106,7 +108,7 @@ class SonareAnalysisResult(ctypes.Structure):
     ]
 
 
-class SonareEngineTelemetry(ctypes.Structure):
+class SonareEngineTelemetry(CStruct):
     """Maps to SonareEngineTelemetry in sonare_c.h."""
 
     _fields_ = [
@@ -120,7 +122,7 @@ class SonareEngineTelemetry(ctypes.Structure):
     ]
 
 
-class SonareClipPageRequest(ctypes.Structure):
+class SonareClipPageRequest(CStruct):
     """Maps to SonareClipPageRequest in sonare_c.h."""
 
     _fields_ = [
@@ -130,7 +132,7 @@ class SonareClipPageRequest(ctypes.Structure):
     ]
 
 
-class SonareMeterTelemetryRecord(ctypes.Structure):
+class SonareMeterTelemetryRecord(CStruct):
     """Maps to SonareMeterTelemetryRecord in sonare_c.h."""
 
     _fields_ = [
@@ -157,7 +159,7 @@ class SonareMeterTelemetryRecord(ctypes.Structure):
 SONARE_METER_MAX_CHANNELS = 8
 
 
-class SonareMeterTelemetryRecordWide(ctypes.Structure):
+class SonareMeterTelemetryRecordWide(CStruct):
     """Maps to SonareMeterTelemetryRecordWide in sonare_c.h."""
 
     _fields_ = [
@@ -179,7 +181,7 @@ class SonareMeterTelemetryRecordWide(ctypes.Structure):
     ]
 
 
-class SonareExternalMidiEvent(ctypes.Structure):
+class SonareExternalMidiEvent(CStruct):
     """Maps to SonareExternalMidiEvent in sonare_c.h."""
 
     _fields_ = [
@@ -195,7 +197,7 @@ SONARE_SCOPE_MAX_BANDS = 64
 SONARE_SCOPE_MAX_POINTS = 32
 
 
-class SonareScopeTelemetryRecord(ctypes.Structure):
+class SonareScopeTelemetryRecord(CStruct):
     """Maps to SonareScopeTelemetryRecord in sonare_c.h."""
 
     _fields_ = [
@@ -210,7 +212,7 @@ class SonareScopeTelemetryRecord(ctypes.Structure):
     ]
 
 
-class SonareTransportState(ctypes.Structure):
+class SonareTransportState(CStruct):
     """Maps to SonareTransportState in sonare_c.h."""
 
     _fields_ = [
@@ -235,7 +237,7 @@ class SonareTransportState(ctypes.Structure):
     ]
 
 
-class SonareParameterInfo(ctypes.Structure):
+class SonareParameterInfo(CStruct):
     """Maps to SonareParameterInfo in sonare_c.h."""
 
     _fields_ = [
@@ -250,7 +252,7 @@ class SonareParameterInfo(ctypes.Structure):
     ]
 
 
-class SonareAutomationPoint(ctypes.Structure):
+class SonareAutomationPoint(CStruct):
     """Maps to SonareAutomationPoint in sonare_c.h."""
 
     _fields_ = [
@@ -260,7 +262,7 @@ class SonareAutomationPoint(ctypes.Structure):
     ]
 
 
-class SonareEngineMarker(ctypes.Structure):
+class SonareEngineMarker(CStruct):
     """Maps to SonareEngineMarker in sonare_c.h.
 
     ``kind`` / ``key_fifths`` / ``key_minor`` occupy the 4-byte padding hole
@@ -278,7 +280,7 @@ class SonareEngineMarker(ctypes.Structure):
     ]
 
 
-class SonareProjectMarker(ctypes.Structure):
+class SonareProjectMarker(CStruct):
     """Maps to SonareProjectMarker in sonare_c_project.h.
 
     Same shape / offsets as :class:`SonareEngineMarker` so one binding shape
@@ -295,7 +297,7 @@ class SonareProjectMarker(ctypes.Structure):
     ]
 
 
-class SonareProjectTrack(ctypes.Structure):
+class SonareProjectTrack(CStruct):
     _fields_ = [
         ("id", ctypes.c_uint32),
         ("kind", ctypes.c_uint32),
@@ -309,7 +311,7 @@ class SonareProjectTrack(ctypes.Structure):
     ]
 
 
-class SonareProjectClip(ctypes.Structure):
+class SonareProjectClip(CStruct):
     _fields_ = [
         ("id", ctypes.c_uint32),
         ("track_id", ctypes.c_uint32),
@@ -324,7 +326,7 @@ class SonareProjectClip(ctypes.Structure):
     ]
 
 
-class SonareProjectSource(ctypes.Structure):
+class SonareProjectSource(CStruct):
     _fields_ = [
         ("id", ctypes.c_uint32),
         ("kind", ctypes.c_uint32),
@@ -335,7 +337,7 @@ class SonareProjectSource(ctypes.Structure):
     ]
 
 
-class SonareProjectAudioSourceMetadata(ctypes.Structure):
+class SonareProjectAudioSourceMetadata(CStruct):
     """Maps to the heap-owned audio-source metadata descriptor."""
 
     _fields_ = [
@@ -344,7 +346,7 @@ class SonareProjectAudioSourceMetadata(ctypes.Structure):
     ]
 
 
-class SonareEngineMetronomeConfig(ctypes.Structure):
+class SonareEngineMetronomeConfig(CStruct):
     """Maps to SonareEngineMetronomeConfig in sonare_c.h."""
 
     _fields_ = [
@@ -356,7 +358,7 @@ class SonareEngineMetronomeConfig(ctypes.Structure):
     ]
 
 
-class SonareEngineClip(ctypes.Structure):
+class SonareEngineClip(CStruct):
     """Maps to SonareEngineClip in sonare_c.h."""
 
     _fields_ = [
@@ -379,7 +381,7 @@ class SonareEngineClip(ctypes.Structure):
     ]
 
 
-class SonareEngineTrackSend(ctypes.Structure):
+class SonareEngineTrackSend(CStruct):
     """Maps to SonareEngineTrackSend in sonare_c.h."""
 
     _fields_ = [
@@ -390,7 +392,7 @@ class SonareEngineTrackSend(ctypes.Structure):
     ]
 
 
-class SonareEngineTrackLane(ctypes.Structure):
+class SonareEngineTrackLane(CStruct):
     """Maps to SonareEngineTrackLane in sonare_c.h."""
 
     _fields_ = [
@@ -402,7 +404,7 @@ class SonareEngineTrackLane(ctypes.Structure):
     ]
 
 
-class SonareEngineBus(ctypes.Structure):
+class SonareEngineBus(CStruct):
     """Maps to SonareEngineBus in sonare_c.h."""
 
     _fields_ = [
@@ -412,7 +414,7 @@ class SonareEngineBus(ctypes.Structure):
     ]
 
 
-class SonareEngineWarpAnchor(ctypes.Structure):
+class SonareEngineWarpAnchor(CStruct):
     """Maps to SonareEngineWarpAnchor in sonare_c.h."""
 
     _fields_ = [
@@ -421,7 +423,7 @@ class SonareEngineWarpAnchor(ctypes.Structure):
     ]
 
 
-class SonareEngineCaptureBuffer(ctypes.Structure):
+class SonareEngineCaptureBuffer(CStruct):
     """Maps to SonareEngineCaptureBuffer in sonare_c.h."""
 
     _fields_ = [
@@ -431,7 +433,7 @@ class SonareEngineCaptureBuffer(ctypes.Structure):
     ]
 
 
-class SonareEngineCaptureStatus(ctypes.Structure):
+class SonareEngineCaptureStatus(CStruct):
     """Maps to SonareEngineCaptureStatus in sonare_c.h."""
 
     _fields_ = [
@@ -444,7 +446,7 @@ class SonareEngineCaptureStatus(ctypes.Structure):
     ]
 
 
-class SonareEngineBounceOptions(ctypes.Structure):
+class SonareEngineBounceOptions(CStruct):
     """Maps to SonareEngineBounceOptions in sonare_c.h."""
 
     _fields_ = [
@@ -461,7 +463,7 @@ class SonareEngineBounceOptions(ctypes.Structure):
     ]
 
 
-class SonareEngineBounceResult(ctypes.Structure):
+class SonareEngineBounceResult(CStruct):
     """Maps to SonareEngineBounceResult in sonare_c.h."""
 
     _fields_ = [
@@ -474,7 +476,7 @@ class SonareEngineBounceResult(ctypes.Structure):
     ]
 
 
-class SonareEngineFreezeOptions(ctypes.Structure):
+class SonareEngineFreezeOptions(CStruct):
     """Maps to SonareEngineFreezeOptions in sonare_c.h."""
 
     _fields_ = [
@@ -487,7 +489,7 @@ class SonareEngineFreezeOptions(ctypes.Structure):
     ]
 
 
-class SonareEngineFreezeResult(ctypes.Structure):
+class SonareEngineFreezeResult(CStruct):
     """Maps to SonareEngineFreezeResult in sonare_c.h."""
 
     _fields_ = [
@@ -497,7 +499,7 @@ class SonareEngineFreezeResult(ctypes.Structure):
     ]
 
 
-class SonareEngineGraphNode(ctypes.Structure):
+class SonareEngineGraphNode(CStruct):
     """Maps to SonareEngineGraphNode in sonare_c.h."""
 
     _fields_ = [
@@ -508,7 +510,7 @@ class SonareEngineGraphNode(ctypes.Structure):
     ]
 
 
-class SonareEngineGraphConnection(ctypes.Structure):
+class SonareEngineGraphConnection(CStruct):
     """Maps to SonareEngineGraphConnection in sonare_c.h."""
 
     _fields_ = [
@@ -520,7 +522,7 @@ class SonareEngineGraphConnection(ctypes.Structure):
     ]
 
 
-class SonareEngineGraphParameterBinding(ctypes.Structure):
+class SonareEngineGraphParameterBinding(CStruct):
     """Maps to SonareEngineGraphParameterBinding in sonare_c.h."""
 
     _fields_ = [
@@ -529,7 +531,7 @@ class SonareEngineGraphParameterBinding(ctypes.Structure):
     ]
 
 
-class SonareEngineGraphSpec(ctypes.Structure):
+class SonareEngineGraphSpec(CStruct):
     """Maps to SonareEngineGraphSpec in sonare_c.h."""
 
     _fields_ = [

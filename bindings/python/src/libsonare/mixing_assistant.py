@@ -26,6 +26,8 @@ from ._runtime import (
     _check,
     _get_lib,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
 )
 
 # Keyword argument -> C-ABI param key. The C side accepts both spellings, but
@@ -212,9 +214,9 @@ def _suggest(
         arrays.names,
         arrays.lengths,
         ctypes.c_size_t(arrays.count),
-        ctypes.c_int(int(sample_rate)),
+        _to_c_int(int(sample_rate), "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
     _check(rc)

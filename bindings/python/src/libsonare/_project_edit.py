@@ -46,6 +46,8 @@ from ._runtime import (
     _check,
     _get_lib,
     _to_c_float_array,
+    _to_c_size_t,
+    _to_c_uint32,
     _warp_mode_value,
 )
 
@@ -809,7 +811,7 @@ class _ProjectEditMixin:
                 lib.sonare_project_edit_automation_lane(
                     self._require_handle(),
                     int(track_id),
-                    ctypes.c_uint32(target_id),
+                    _to_c_uint32(target_id, "target_id"),
                     ctypes.byref(desc),
                 )
             )
@@ -826,7 +828,7 @@ class _ProjectEditMixin:
                 lib.sonare_project_edit_automation_lane_ex(
                     self._require_handle(),
                     int(track_id),
-                    ctypes.c_uint32(target_id),
+                    _to_c_uint32(target_id, "target_id"),
                     ctypes.byref(desc_ex),
                 )
             )
@@ -839,7 +841,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_remove_automation_lane(
                 self._require_handle(),
                 int(track_id),
-                ctypes.c_uint32(target_id),
+                _to_c_uint32(target_id, "target_id"),
             )
         )
 
@@ -860,7 +862,7 @@ class _ProjectEditMixin:
         _check(
             _get_lib().sonare_project_set_max_undo_depth(
                 self._require_handle(),
-                ctypes.c_size_t(int(depth)),
+                _to_c_size_t(int(depth), "depth"),
             )
         )
 
@@ -890,7 +892,9 @@ class _ProjectEditMixin:
                 "Project.set_max_history_bytes"
             )
         _check(
-            lib.sonare_project_set_max_history_bytes(self._require_handle(), ctypes.c_size_t(value))
+            lib.sonare_project_set_max_history_bytes(
+                self._require_handle(), _to_c_size_t(value, "value")
+            )
         )
 
     # -- MIDI ---------------------------------------------------------------

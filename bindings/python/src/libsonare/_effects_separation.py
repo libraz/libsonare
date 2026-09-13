@@ -20,7 +20,9 @@ from ._runtime import (
     _out_float_array,
     _out_int_array,
     _to_c_float_array,
+    _to_c_int,
     _to_c_int_array,
+    _to_c_size_t,
     _validate_effect_fft_options,
     _validate_hpss_kernel,
     _validate_samples,
@@ -77,10 +79,10 @@ def decompose(
         _check(
             lib.sonare_decompose(
                 c_array,
-                ctypes.c_int(n_features),
-                ctypes.c_int(n_frames),
-                ctypes.c_int(n_components),
-                ctypes.c_int(n_iter),
+                _to_c_int(n_features, "n_features"),
+                _to_c_int(n_frames, "n_frames"),
+                _to_c_int(n_components, "n_components"),
+                _to_c_int(n_iter, "n_iter"),
                 ctypes.c_float(beta),
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
@@ -127,10 +129,10 @@ def decompose_with_init(
         _check(
             lib.sonare_decompose_with_init(
                 c_array,
-                ctypes.c_int(n_features),
-                ctypes.c_int(n_frames),
-                ctypes.c_int(n_components),
-                ctypes.c_int(n_iter),
+                _to_c_int(n_features, "n_features"),
+                _to_c_int(n_frames, "n_frames"),
+                _to_c_int(n_components, "n_components"),
+                _to_c_int(n_iter, "n_iter"),
                 ctypes.c_float(beta),
                 init.encode("utf-8") if init else None,
                 ctypes.byref(out_w),
@@ -223,8 +225,8 @@ def decompose_stems(
         _check(
             lib.sonare_decompose_stems(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(component_count),
@@ -282,11 +284,11 @@ def nn_filter(
         _check(
             lib.sonare_nn_filter(
                 c_array,
-                ctypes.c_int(n_features),
-                ctypes.c_int(n_frames),
+                _to_c_int(n_features, "n_features"),
+                _to_c_int(n_frames, "n_frames"),
                 aggregate_bytes,
-                ctypes.c_int(k),
-                ctypes.c_int(width),
+                _to_c_int(k, "k"),
+                _to_c_int(width, "width"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -324,8 +326,8 @@ def remix(
         _check(
             lib.sonare_remix(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 intervals_array,
                 ctypes.c_size_t(n_ints // 2),
                 ctypes.c_int(1 if align_zeros else 0),
@@ -373,8 +375,8 @@ def remix_aligned_intervals(
         _check(
             lib.sonare_remix_aligned_intervals(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 intervals_array,
                 ctypes.c_size_t(n_ints // 2),
                 ctypes.c_int(1 if align_zeros else 0),
@@ -441,13 +443,13 @@ def hpss_with_residual(
     residual = ctypes.POINTER(ctypes.c_float)()
     rc = lib.sonare_hpss_ex(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(kernel_harmonic),
-        ctypes.c_int(kernel_percussive),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(use_soft_mask),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(kernel_harmonic, "kernel_harmonic"),
+        _to_c_int(kernel_percussive, "kernel_percussive"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(use_soft_mask, "use_soft_mask"),
         ctypes.c_int(1),
         ctypes.byref(out),
         ctypes.byref(residual),
@@ -485,10 +487,10 @@ def _hpss_with_residual_legacy(
         _check(
             lib.sonare_hpss_with_residual(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
-                ctypes.c_int(kernel_harmonic),
-                ctypes.c_int(kernel_percussive),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(kernel_harmonic, "kernel_harmonic"),
+                _to_c_int(kernel_percussive, "kernel_percussive"),
                 ctypes.byref(out_harmonic),
                 ctypes.byref(out_percussive),
                 ctypes.byref(out_residual),
@@ -537,11 +539,11 @@ def phase_vocoder(
         _check(
             lib.sonare_phase_vocoder(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.c_float(rate),
-                ctypes.c_int(n_fft),
-                ctypes.c_int(hop_length),
+                _to_c_int(n_fft, "n_fft"),
+                _to_c_int(hop_length, "hop_length"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )

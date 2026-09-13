@@ -35,6 +35,8 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _to_c_float_array,
+    _to_c_size_t,
+    _to_c_uint8,
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
 
@@ -115,7 +117,7 @@ class _ProjectInspectionMixin:
             _get_lib().sonare_project_analyze_tempo_with_options(
                 self._require_handle(),
                 c_array,
-                ctypes.c_size_t(length),
+                _to_c_size_t(length, "length"),
                 int(sample_rate),
                 ctypes.byref(options),
                 candidates,
@@ -177,11 +179,11 @@ class _ProjectInspectionMixin:
             _get_lib().sonare_project_auto_tempo_with_options(
                 self._require_handle(),
                 c_array,
-                ctypes.c_size_t(length),
+                _to_c_size_t(length, "length"),
                 int(sample_rate),
                 ctypes.byref(options),
-                ctypes.c_size_t(candidate_index),
-                ctypes.c_uint8(apply_time_signatures),
+                _to_c_size_t(candidate_index, "candidate_index"),
+                _to_c_uint8(1 if apply_time_signatures else 0, "apply_time_signatures"),
                 ctypes.byref(out_bpm),
             )
         )
@@ -232,7 +234,7 @@ class _ProjectInspectionMixin:
                 c_keys[i].mode = int(seq[3])
         _check(
             _get_lib().sonare_project_annotate_keys(
-                self._require_handle(), c_keys, ctypes.c_size_t(count)
+                self._require_handle(), c_keys, _to_c_size_t(count, "count")
             )
         )
 
@@ -271,13 +273,13 @@ class _ProjectInspectionMixin:
                 c_chords[i].root_pc = int(cast(int, c.get("root_pc", 255)))
                 c_chords[i].quality = int(cast(int, c.get("quality", 0)))
                 c_chords[i].extensions = c_ext
-                c_chords[i].extension_count = ctypes.c_size_t(ext_count)
+                c_chords[i].extension_count = _to_c_size_t(ext_count, "ext_count")
                 c_chords[i].slash_bass_pc = int(cast(int, c.get("slash_bass_pc", 255)))
                 c_chords[i].roman_numeral = roman_bytes
                 c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
         _check(
             _get_lib().sonare_project_annotate_chords(
-                self._require_handle(), c_chords, ctypes.c_size_t(count)
+                self._require_handle(), c_chords, _to_c_size_t(count, "count")
             )
         )
         del backing
@@ -458,14 +460,14 @@ class _ProjectInspectionMixin:
         raw = SonareProjectMarker()
         _check(
             _get_lib().sonare_project_marker_by_index(
-                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(raw)
             )
         )
         full_name = ctypes.c_char_p()
         lib = _get_lib()
         _check(
             lib.sonare_project_marker_name_by_index(
-                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(full_name)
+                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(full_name)
             )
         )
         try:
@@ -607,7 +609,7 @@ class _ProjectInspectionMixin:
             c_segments[i].end_bpm = end_bpm
         _check(
             _get_lib().sonare_project_set_tempo_segments(
-                self._require_handle(), c_segments, ctypes.c_size_t(count)
+                self._require_handle(), c_segments, _to_c_size_t(count, "count")
             )
         )
 
@@ -643,7 +645,7 @@ class _ProjectInspectionMixin:
             c_segments[i].denominator = denominator
         _check(
             _get_lib().sonare_project_set_time_signatures(
-                self._require_handle(), c_segments, ctypes.c_size_t(count)
+                self._require_handle(), c_segments, _to_c_size_t(count, "count")
             )
         )
 
@@ -686,7 +688,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectTempoSegment()
         _check(
             _get_lib().sonare_project_tempo_segment_by_index(
-                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(raw)
             )
         )
         return {
@@ -704,7 +706,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectTimeSignatureSegment()
         _check(
             _get_lib().sonare_project_time_signature_by_index(
-                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(raw)
             )
         )
         return {

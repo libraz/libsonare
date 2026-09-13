@@ -41,12 +41,17 @@ _FFI_TYPES_GLOB = "bindings/python/src/libsonare/_ffi_types_*.py"
 _PADDING_NAMES = ("reserved", "_pad", "pad", "padding")
 
 
+# The binding's own base, which adds a range check on integer field assignment
+# and changes nothing about the layout a record is read from.
+_STRUCTURE_BASES = ("Structure", "Union", "CStruct")
+
+
 def _is_ctypes_structure(node: ast.ClassDef) -> bool:
     """True when ``node`` derives from ``ctypes.Structure`` / ``Structure``."""
     for base in node.bases:
-        if isinstance(base, ast.Attribute) and base.attr in ("Structure", "Union"):
+        if isinstance(base, ast.Attribute) and base.attr in _STRUCTURE_BASES:
             return True
-        if isinstance(base, ast.Name) and base.id in ("Structure", "Union"):
+        if isinstance(base, ast.Name) and base.id in _STRUCTURE_BASES:
             return True
     return False
 

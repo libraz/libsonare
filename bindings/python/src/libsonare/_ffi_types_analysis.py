@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 
+from ._cstruct import CStruct
 from ._ffi_types_core import SonareTimeSignature
 
 # Progress callback: void(float progress, const char* stage, void* user_data).
@@ -16,7 +17,7 @@ SonareAnalyzeProgressCallback = ctypes.CFUNCTYPE(
 )
 
 
-class SonareLufsResult(ctypes.Structure):
+class SonareLufsResult(CStruct):
     """Maps to SonareLufsResult in sonare_c.h."""
 
     _fields_ = [
@@ -29,7 +30,7 @@ class SonareLufsResult(ctypes.Structure):
     ]
 
 
-class SonareMixMeterSnapshot(ctypes.Structure):
+class SonareMixMeterSnapshot(CStruct):
     """Maps to SonareMixMeterSnapshot in sonare_c.h."""
 
     _fields_ = [
@@ -58,7 +59,7 @@ class SonareMixMeterSnapshot(ctypes.Structure):
     ]
 
 
-class SonareMixGoniometerPoint(ctypes.Structure):
+class SonareMixGoniometerPoint(CStruct):
     """Maps to SonareMixGoniometerPoint in sonare_c.h."""
 
     _fields_ = [
@@ -67,7 +68,7 @@ class SonareMixGoniometerPoint(ctypes.Structure):
     ]
 
 
-class SonareSurroundPan(ctypes.Structure):
+class SonareSurroundPan(CStruct):
     """Maps to SonareSurroundPan in sonare_c.h."""
 
     _fields_ = [
@@ -79,7 +80,7 @@ class SonareSurroundPan(ctypes.Structure):
     ]
 
 
-class SonareBpmCandidate(ctypes.Structure):
+class SonareBpmCandidate(CStruct):
     """Maps to SonareBpmCandidate in sonare_c.h."""
 
     _fields_ = [
@@ -88,7 +89,7 @@ class SonareBpmCandidate(ctypes.Structure):
     ]
 
 
-class SonareBpmAnalysisResult(ctypes.Structure):
+class SonareBpmAnalysisResult(CStruct):
     """Maps to SonareBpmAnalysisResult in sonare_c.h."""
 
     _fields_ = [
@@ -103,7 +104,7 @@ class SonareBpmAnalysisResult(ctypes.Structure):
     ]
 
 
-class SonareAcousticResult(ctypes.Structure):
+class SonareAcousticResult(CStruct):
     """Maps to SonareAcousticResult in sonare_c.h."""
 
     _fields_ = [
@@ -122,7 +123,7 @@ class SonareAcousticResult(ctypes.Structure):
     ]
 
 
-class SonareRirSynthConfig(ctypes.Structure):
+class SonareRirSynthConfig(CStruct):
     """Maps to SonareRirSynthConfig in sonare_c_acoustic.h."""
 
     _fields_ = [
@@ -158,7 +159,7 @@ class SonareRirSynthConfig(ctypes.Structure):
     ]
 
 
-class SonareRirSynthResult(ctypes.Structure):
+class SonareRirSynthResult(CStruct):
     """Maps to SonareRirSynthResult in sonare_c_acoustic.h."""
 
     _fields_ = [
@@ -169,7 +170,7 @@ class SonareRirSynthResult(ctypes.Structure):
     ]
 
 
-class SonareRoomEstimateConfig(ctypes.Structure):
+class SonareRoomEstimateConfig(CStruct):
     """Maps to SonareRoomEstimateConfig in sonare_c_acoustic.h."""
 
     _fields_ = [
@@ -184,7 +185,7 @@ class SonareRoomEstimateConfig(ctypes.Structure):
     ]
 
 
-class SonareRoomEstimate(ctypes.Structure):
+class SonareRoomEstimate(CStruct):
     """Maps to SonareRoomEstimate in sonare_c_acoustic.h."""
 
     _fields_ = [
@@ -200,7 +201,7 @@ class SonareRoomEstimate(ctypes.Structure):
     ]
 
 
-class SonareRoomMorphConfig(ctypes.Structure):
+class SonareRoomMorphConfig(CStruct):
     """Maps to SonareRoomMorphConfig in sonare_c_acoustic.h."""
 
     _fields_ = [
@@ -235,7 +236,7 @@ class SonareRoomMorphConfig(ctypes.Structure):
     ]
 
 
-class SonareRhythmResult(ctypes.Structure):
+class SonareRhythmResult(CStruct):
     """Maps to SonareRhythmResult in sonare_c.h."""
 
     _fields_ = [
@@ -250,7 +251,7 @@ class SonareRhythmResult(ctypes.Structure):
     ]
 
 
-class SonareDynamicsResult(ctypes.Structure):
+class SonareDynamicsResult(CStruct):
     """Maps to SonareDynamicsResult in sonare_c.h."""
 
     _fields_ = [
@@ -266,7 +267,7 @@ class SonareDynamicsResult(ctypes.Structure):
     ]
 
 
-class SonareClippingRegion(ctypes.Structure):
+class SonareClippingRegion(CStruct):
     """Maps to SonareClippingRegion in sonare_c.h."""
 
     _fields_ = [
@@ -277,7 +278,7 @@ class SonareClippingRegion(ctypes.Structure):
     ]
 
 
-class SonareClippingResult(ctypes.Structure):
+class SonareClippingResult(CStruct):
     """Maps to SonareClippingResult in sonare_c.h."""
 
     _fields_ = [
@@ -289,7 +290,7 @@ class SonareClippingResult(ctypes.Structure):
     ]
 
 
-class SonareDynamicRangeResult(ctypes.Structure):
+class SonareDynamicRangeResult(CStruct):
     """Maps to SonareDynamicRangeResult in sonare_c.h."""
 
     _fields_ = [
@@ -301,7 +302,7 @@ class SonareDynamicRangeResult(ctypes.Structure):
     ]
 
 
-class SonareVectorscopePoint(ctypes.Structure):
+class SonareVectorscopePoint(CStruct):
     """Maps to SonareVectorscopePoint in sonare_c.h."""
 
     _fields_ = [
@@ -310,7 +311,7 @@ class SonareVectorscopePoint(ctypes.Structure):
     ]
 
 
-class SonareVectorscopeResult(ctypes.Structure):
+class SonareVectorscopeResult(CStruct):
     """Maps to SonareVectorscopeResult in sonare_c.h."""
 
     _fields_ = [
@@ -319,7 +320,7 @@ class SonareVectorscopeResult(ctypes.Structure):
     ]
 
 
-class SonarePhaseScopePoint(ctypes.Structure):
+class SonarePhaseScopePoint(CStruct):
     """Maps to SonarePhaseScopePoint in sonare_c.h."""
 
     _fields_ = [
@@ -330,7 +331,7 @@ class SonarePhaseScopePoint(ctypes.Structure):
     ]
 
 
-class SonarePhaseScopeResult(ctypes.Structure):
+class SonarePhaseScopeResult(CStruct):
     """Maps to SonarePhaseScopeResult in sonare_c.h."""
 
     _fields_ = [
@@ -342,7 +343,7 @@ class SonarePhaseScopeResult(ctypes.Structure):
     ]
 
 
-class SonareSpectrumResult(ctypes.Structure):
+class SonareSpectrumResult(CStruct):
     """Maps to SonareSpectrumResult in sonare_c.h."""
 
     _fields_ = [
@@ -356,7 +357,7 @@ class SonareSpectrumResult(ctypes.Structure):
     ]
 
 
-class SonareWaveformPeaksResult(ctypes.Structure):
+class SonareWaveformPeaksResult(CStruct):
     """Maps to SonareWaveformPeaksResult in sonare_c.h."""
 
     _fields_ = [
@@ -368,7 +369,7 @@ class SonareWaveformPeaksResult(ctypes.Structure):
     ]
 
 
-class SonareWaveformPeakPyramidResult(ctypes.Structure):
+class SonareWaveformPeakPyramidResult(CStruct):
     """Maps to SonareWaveformPeakPyramidResult in sonare_c.h."""
 
     _fields_ = [
@@ -380,7 +381,7 @@ class SonareWaveformPeakPyramidResult(ctypes.Structure):
 SONARE_MAX_METER_CANDIDATE_NUMERATORS = 16
 
 
-class SonareMusicAnalyzeOptions(ctypes.Structure):
+class SonareMusicAnalyzeOptions(CStruct):
     """Maps to SonareMusicAnalyzeOptions in sonare_c_types_functions.h."""
 
     _fields_ = [
@@ -407,7 +408,7 @@ class SonareMusicAnalyzeOptions(ctypes.Structure):
     ]
 
 
-class SonareMeterOptions(ctypes.Structure):
+class SonareMeterOptions(CStruct):
     """Maps to SonareMeterOptions in sonare_c_types_functions.h."""
 
     _fields_ = [

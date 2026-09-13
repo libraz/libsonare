@@ -20,6 +20,8 @@ from ._runtime import (
     _guard_buffer,
     _to_c_float_array,
     _to_c_float_array_owned,
+    _to_c_int,
+    _to_c_size_t,
     _validate_samples,
 )
 from .types import (
@@ -98,13 +100,13 @@ class StreamingMasteringChain:
             )
             handle = lib.sonare_streaming_mastering_chain_create_ex(
                 param_array,
-                ctypes.c_size_t(param_count),
+                _to_c_size_t(param_count, "param_count"),
                 ctypes.c_float(float(loudness_static_gain_db)),
                 ctypes.c_float(peak),
             )
         else:
             handle = lib.sonare_streaming_mastering_chain_create(
-                param_array, ctypes.c_size_t(param_count)
+                param_array, _to_c_size_t(param_count, "param_count")
             )
         if not handle:
             detail = ""
@@ -134,9 +136,9 @@ class StreamingMasteringChain:
         self._ensure_open()
         rc = self._lib.sonare_streaming_mastering_chain_prepare(
             self._handle,
-            ctypes.c_int(int(sample_rate)),
-            ctypes.c_int(int(max_block_size)),
-            ctypes.c_int(int(num_channels)),
+            _to_c_int(int(sample_rate), "sample_rate"),
+            _to_c_int(int(max_block_size), "max_block_size"),
+            _to_c_int(int(num_channels), "num_channels"),
         )
         _check(rc)
         self._prepared_channels = int(num_channels)
@@ -151,7 +153,7 @@ class StreamingMasteringChain:
         self._ensure_open()
         c_array, length = _to_c_float_array_owned(samples)
         rc = self._lib.sonare_streaming_mastering_chain_process_mono(
-            self._handle, c_array, ctypes.c_size_t(length)
+            self._handle, c_array, _to_c_size_t(length, "length")
         )
         _check(rc)
         return [float(c_array[i]) for i in range(length)]
@@ -172,7 +174,7 @@ class StreamingMasteringChain:
         if left_length != right_length:
             raise SonareValueError("left and right channel lengths must match")
         rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
-            self._handle, left_array, right_array, ctypes.c_size_t(left_length)
+            self._handle, left_array, right_array, _to_c_size_t(left_length, "left_length")
         )
         _check(rc)
         return (
@@ -191,7 +193,10 @@ class StreamingMasteringChain:
         block = (ctypes.c_float * self._max_block_size)()
         written = ctypes.c_size_t()
         rc = self._lib.sonare_streaming_mastering_chain_flush_mono(
-            self._handle, block, ctypes.c_size_t(self._max_block_size), ctypes.byref(written)
+            self._handle,
+            block,
+            _to_c_size_t(self._max_block_size, "max_block_size"),
+            ctypes.byref(written),
         )
         _check(rc)
         return [float(block[i]) for i in range(written.value)]
@@ -206,7 +211,7 @@ class StreamingMasteringChain:
             self._handle,
             left,
             right,
-            ctypes.c_size_t(self._max_block_size),
+            _to_c_size_t(self._max_block_size, "max_block_size"),
             ctypes.byref(written),
         )
         _check(rc)
@@ -316,7 +321,7 @@ class StreamingEqualizer:
         self._ensure_open()
         payload = band if isinstance(band, str) else json.dumps(band, separators=(",", ":"))
         rc = self._lib.sonare_eq_set_band(
-            self._handle, ctypes.c_int(int(index)), payload.encode("utf-8")
+            self._handle, _to_c_int(int(index), "index"), payload.encode("utf-8")
         )
         _check(rc)
 
@@ -335,7 +340,7 @@ class StreamingEqualizer:
             value = self._PHASES[key]
         else:
             value = int(mode)
-        _check(self._lib.sonare_eq_set_phase_mode(self._handle, ctypes.c_int(value)))
+        _check(self._lib.sonare_eq_set_phase_mode(self._handle, _to_c_int(value, "value")))
 
     def set_auto_gain(self, enabled: bool) -> None:
         """Enable or disable auto-gain compensation."""
@@ -394,7 +399,7 @@ class StreamingEqualizer:
         )
         _check(
             self._lib.sonare_eq_set_sidechain(
-                self._handle, channels, ctypes.c_int(2), ctypes.c_int(left_length)
+                self._handle, channels, ctypes.c_int(2), _to_c_int(left_length, "left_length")
             )
         )
         self._sidechain_refs = (left_array, right_array, channels)
@@ -426,9 +431,9 @@ class StreamingEqualizer:
             self._handle,
             source_array,
             reference_array,
-            ctypes.c_size_t(source_length),
-            ctypes.c_int(self.sample_rate),
-            ctypes.c_int(int(max_bands)),
+            _to_c_size_t(source_length, "source_length"),
+            _to_c_int(self.sample_rate, "sample_rate"),
+            _to_c_int(int(max_bands), "max_bands"),
         )
         _check(rc)
 
@@ -468,7 +473,7 @@ class StreamingEqualizer:
         )
         _check(
             self._lib.sonare_eq_process(
-                self._handle, channels, ctypes.c_int(2), ctypes.c_int(left_length)
+                self._handle, channels, ctypes.c_int(2), _to_c_int(left_length, "left_length")
             )
         )
         self._sidechain_refs = None
@@ -542,9 +547,9 @@ class StreamingEqualizer:
         _check(
             self._lib.sonare_eq_magnitude_response(
                 self._handle,
-                ctypes.c_int(ordinal),
+                _to_c_int(ordinal, "ordinal"),
                 c_frequencies,
-                ctypes.c_size_t(count),
+                _to_c_size_t(count, "count"),
                 out,
             )
         )

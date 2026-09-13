@@ -8,7 +8,15 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ._runtime import _check, _get_lib, _guard_buffer, _out_float_array, _to_c_float_array
+from ._runtime import (
+    _check,
+    _get_lib,
+    _guard_buffer,
+    _out_float_array,
+    _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
+)
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -259,8 +267,8 @@ class Audio:
         handle = ctypes.c_void_p()
         rc = lib.sonare_audio_from_buffer(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(handle),
         )
         _check(rc)
@@ -282,7 +290,7 @@ class Audio:
         handle = ctypes.c_void_p()
         rc = lib.sonare_audio_from_memory(
             c_array,
-            ctypes.c_size_t(length),
+            _to_c_size_t(length, "length"),
             ctypes.byref(handle),
         )
         _check(rc)

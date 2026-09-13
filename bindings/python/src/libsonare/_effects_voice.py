@@ -32,6 +32,8 @@ from ._runtime import (
     _get_lib,
     _out_float_array,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
     _validate_samples,
 )
 
@@ -60,8 +62,8 @@ def voice_change(
         _check(
             lib.sonare_voice_change(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.c_float(pitch_semitones),
                 ctypes.c_float(formant_factor),
                 ctypes.byref(out),
@@ -96,9 +98,9 @@ class RealtimeVoiceChanger:
         self._channels = int(channels)
         rc = self._lib.sonare_realtime_voice_changer_create_json(
             _voice_config_to_json(preset),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(max_block_size),
-            ctypes.c_int(channels),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(max_block_size, "max_block_size"),
+            _to_c_int(channels, "channels"),
             ctypes.byref(self._handle),
         )
         _check(rc)
@@ -213,7 +215,7 @@ class RealtimeVoiceChanger:
             c_in = (ctypes.c_float * length).from_buffer(in_block)
             c_out = (ctypes.c_float * length).from_buffer(out_block)
             rc = self._lib.sonare_realtime_voice_changer_process_mono(
-                self._handle, c_in, c_out, ctypes.c_size_t(length)
+                self._handle, c_in, c_out, _to_c_size_t(length, "length")
             )
             _check_realtime(rc)
         return out_buf
@@ -248,8 +250,8 @@ class RealtimeVoiceChanger:
                 self._handle,
                 c_in,
                 c_out,
-                ctypes.c_size_t(block_frames),
-                ctypes.c_int(ch),
+                _to_c_size_t(block_frames, "block_frames"),
+                _to_c_int(ch, "ch"),
             )
             _check_realtime(rc)
         return out_buf
@@ -282,7 +284,7 @@ class RealtimeVoiceChanger:
             c_left = (ctypes.c_float * length).from_buffer(l_block)
             c_right = (ctypes.c_float * length).from_buffer(r_block)
             rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
-                self._handle, c_left, c_right, ctypes.c_size_t(length)
+                self._handle, c_left, c_right, _to_c_size_t(length, "length")
             )
             _check_realtime(rc)
         return out_left, out_right
@@ -323,10 +325,10 @@ def voice_change_realtime(
         _check(
             lib.sonare_voice_change_realtime(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 _voice_config_to_json(preset),
-                ctypes.c_int(channels),
+                _to_c_int(channels, "channels"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -397,7 +399,7 @@ def voice_character_preset_id(preset: int) -> str | None:
         ordinal is out of range. This is the reverse of
         :data:`_VC_PRESET_NAME_TO_ORDINAL`.
     """
-    raw = _get_lib().sonare_voice_character_preset_id(ctypes.c_int(preset))
+    raw = _get_lib().sonare_voice_character_preset_id(_to_c_int(preset, "preset"))
     if not raw:
         return None
     return cast(str, raw.decode("utf-8"))
@@ -416,7 +418,8 @@ def _neutral_monitor_defaults() -> dict[str, float]:
     pod = SonareRealtimeVoiceChangerConfig()
     _check(
         _get_lib().sonare_realtime_voice_changer_preset_config(
-            ctypes.c_int(SONARE_VC_PRESET_NEUTRAL_MONITOR), ctypes.byref(pod)
+            _to_c_int(SONARE_VC_PRESET_NEUTRAL_MONITOR, "SONARE_VC_PRESET_NEUTRAL_MONITOR"),
+            ctypes.byref(pod),
         )
     )
     return {name: getattr(pod, name) for name, *_ in pod._fields_}
@@ -595,7 +598,7 @@ class StreamingRetune:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         handle = self._lib.sonare_streaming_retune_create(
-            ctypes.c_float(semitones), ctypes.c_float(mix), ctypes.c_int(grain_size)
+            ctypes.c_float(semitones), ctypes.c_float(mix), _to_c_int(grain_size, "grain_size")
         )
         if not handle:
             raise SonareValueError("streaming retune: semitones and mix must be finite")
@@ -627,7 +630,9 @@ class StreamingRetune:
         """Allocate native state for ``sample_rate`` and resolve the grain size."""
         _check(
             self._lib.sonare_streaming_retune_prepare(
-                self._handle, ctypes.c_double(sample_rate), ctypes.c_int(max_block_size)
+                self._handle,
+                ctypes.c_double(sample_rate),
+                _to_c_int(max_block_size, "max_block_size"),
             )
         )
 
@@ -657,7 +662,7 @@ class StreamingRetune:
                 self._handle,
                 ctypes.c_float(current["semitones"] if semitones is None else semitones),
                 ctypes.c_float(current["mix"] if mix is None else mix),
-                ctypes.c_int(requested_grain_size),
+                _to_c_int(requested_grain_size, "requested_grain_size"),
             )
         )
         self._requested_grain_size = requested_grain_size

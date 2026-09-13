@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import ctypes
 
+from ._cstruct import CStruct
 from ._ffi_types_core import SonareAutomationPoint
 
 
-class SonareMasteringConfig(ctypes.Structure):
+class SonareMasteringConfig(CStruct):
     """Maps to SonareMasteringConfig in sonare_c.h."""
 
     _fields_ = [
@@ -19,7 +20,7 @@ class SonareMasteringConfig(ctypes.Structure):
     ]
 
 
-class SonareMasteringResult(ctypes.Structure):
+class SonareMasteringResult(CStruct):
     """Maps to SonareMasteringResult in sonare_c.h."""
 
     _fields_ = [
@@ -34,7 +35,7 @@ class SonareMasteringResult(ctypes.Structure):
     ]
 
 
-class SonareMasteringParam(ctypes.Structure):
+class SonareMasteringParam(CStruct):
     """Maps to SonareMasteringParam in sonare_c.h."""
 
     _fields_ = [
@@ -43,7 +44,7 @@ class SonareMasteringParam(ctypes.Structure):
     ]
 
 
-class SonareMasteringStereoResult(ctypes.Structure):
+class SonareMasteringStereoResult(CStruct):
     """Maps to SonareMasteringStereoResult in sonare_c.h."""
 
     _fields_ = [
@@ -59,7 +60,7 @@ class SonareMasteringStereoResult(ctypes.Structure):
     ]
 
 
-class SonareMasteringLoudnessSummary(ctypes.Structure):
+class SonareMasteringLoudnessSummary(CStruct):
     """Maps to SonareMasteringLoudnessSummary in sonare_c.h."""
 
     _fields_ = [
@@ -71,7 +72,7 @@ class SonareMasteringLoudnessSummary(ctypes.Structure):
     ]
 
 
-class SonareMasteringReport(ctypes.Structure):
+class SonareMasteringReport(CStruct):
     """Maps to SonareMasteringReport in sonare_c.h."""
 
     _fields_ = [
@@ -84,7 +85,7 @@ class SonareMasteringReport(ctypes.Structure):
     ]
 
 
-class SonareMasteringChainResult(ctypes.Structure):
+class SonareMasteringChainResult(CStruct):
     """Maps to SonareMasteringChainResult in sonare_c.h."""
 
     _fields_ = [
@@ -106,7 +107,7 @@ class SonareMasteringChainResult(ctypes.Structure):
     ]
 
 
-class SonareMasteringChainStereoResult(ctypes.Structure):
+class SonareMasteringChainStereoResult(CStruct):
     """Maps to SonareMasteringChainStereoResult in sonare_c.h."""
 
     _fields_ = [
@@ -129,7 +130,7 @@ class SonareMasteringChainStereoResult(ctypes.Structure):
     ]
 
 
-class SonareStreamingPlatform(ctypes.Structure):
+class SonareStreamingPlatform(CStruct):
     """Maps to SonareStreamingPlatform in sonare_c.h."""
 
     _fields_ = [
@@ -144,7 +145,7 @@ SONARE_EQ_SPECTRUM_STREAM_CAPACITY = 256
 SONARE_EQ_SPECTRUM_PROFILE_BANDS = 16
 
 
-class SonareEqSnapshot(ctypes.Structure):
+class SonareEqSnapshot(CStruct):
     """Maps to SonareEqSnapshot in sonare_c.h."""
 
     _fields_ = [
@@ -179,7 +180,7 @@ SONARE_TRACK_MIDI = 1
 SONARE_TRACK_AUX = 2
 
 
-class SonareProjectTrackDesc(ctypes.Structure):
+class SonareProjectTrackDesc(CStruct):
     """Maps to SonareProjectTrackDesc in sonare_c_project.h."""
 
     _fields_ = [
@@ -188,7 +189,7 @@ class SonareProjectTrackDesc(ctypes.Structure):
     ]
 
 
-class SonareProjectClipDesc(ctypes.Structure):
+class SonareProjectClipDesc(CStruct):
     """Maps to SonareProjectClipDesc in sonare_c_project.h."""
 
     _fields_ = [
@@ -206,7 +207,7 @@ class SonareProjectClipDesc(ctypes.Structure):
     ]
 
 
-class SonareExternalStemDesc(ctypes.Structure):
+class SonareExternalStemDesc(CStruct):
     """Maps to SonareExternalStemDesc in sonare_c_project.h."""
 
     _fields_ = [
@@ -219,7 +220,7 @@ class SonareExternalStemDesc(ctypes.Structure):
     ]
 
 
-class SonareExternalStemImportRequest(ctypes.Structure):
+class SonareExternalStemImportRequest(CStruct):
     """Maps to SonareExternalStemImportRequest in sonare_c_project.h."""
 
     _fields_ = [
@@ -230,7 +231,7 @@ class SonareExternalStemImportRequest(ctypes.Structure):
     ]
 
 
-class SonareExternalStemImportResult(ctypes.Structure):
+class SonareExternalStemImportResult(CStruct):
     """Maps to SonareExternalStemImportResult in sonare_c_project.h."""
 
     _fields_ = [
@@ -240,7 +241,7 @@ class SonareExternalStemImportResult(ctypes.Structure):
     ]
 
 
-class SonareProjectWarpAnchor(ctypes.Structure):
+class SonareProjectWarpAnchor(CStruct):
     """Maps to SonareProjectWarpAnchor in sonare_c_project.h."""
 
     _fields_ = [
@@ -249,7 +250,7 @@ class SonareProjectWarpAnchor(ctypes.Structure):
     ]
 
 
-class SonareProjectWarpMapDesc(ctypes.Structure):
+class SonareProjectWarpMapDesc(CStruct):
     """Maps to SonareProjectWarpMapDesc in sonare_c_project.h."""
 
     _fields_ = [
@@ -260,7 +261,7 @@ class SonareProjectWarpMapDesc(ctypes.Structure):
     ]
 
 
-class SonareProjectDiagnostic(ctypes.Structure):
+class SonareProjectDiagnostic(CStruct):
     """Maps to SonareProjectDiagnostic in sonare_c_project.h."""
 
     _fields_ = [
@@ -270,7 +271,7 @@ class SonareProjectDiagnostic(ctypes.Structure):
     ]
 
 
-class SonareProjectCompileResult(ctypes.Structure):
+class SonareProjectCompileResult(CStruct):
     """Maps to SonareProjectCompileResult in sonare_c_project.h."""
 
     _fields_ = [
@@ -281,7 +282,7 @@ class SonareProjectCompileResult(ctypes.Structure):
     ]
 
 
-class SonareProjectBounceOptions(ctypes.Structure):
+class SonareProjectBounceOptions(CStruct):
     """Maps to SonareProjectBounceOptions in sonare_c_project.h."""
 
     _fields_ = [
@@ -293,7 +294,7 @@ class SonareProjectBounceOptions(ctypes.Structure):
     ]
 
 
-class SonareMidiEventPod(ctypes.Structure):
+class SonareMidiEventPod(CStruct):
     """Maps to SonareMidiEventPod in sonare_c_project.h."""
 
     _fields_ = [
@@ -303,7 +304,7 @@ class SonareMidiEventPod(ctypes.Structure):
     ]
 
 
-class SonareNotePairValidation(ctypes.Structure):
+class SonareNotePairValidation(CStruct):
     """Maps to SonareNotePairValidation in sonare_c_project.h."""
 
     _fields_ = [
@@ -313,7 +314,7 @@ class SonareNotePairValidation(ctypes.Structure):
     ]
 
 
-class SonareMidiRouteConfig(ctypes.Structure):
+class SonareMidiRouteConfig(CStruct):
     """Maps to SonareMidiRouteConfig in sonare_c_project.h (sizeof 16)."""
 
     _fields_ = [
@@ -324,7 +325,7 @@ class SonareMidiRouteConfig(ctypes.Structure):
     ]
 
 
-class SonareMidiCcBinding(ctypes.Structure):
+class SonareMidiCcBinding(CStruct):
     """Maps to SonareMidiCcBinding in sonare_c_project.h (sizeof 20).
 
     The `reserved` uint16 at offset 6 is load-bearing: drop it and every
@@ -345,7 +346,7 @@ class SonareMidiCcBinding(ctypes.Structure):
     ]
 
 
-class SonareEngineMidiEvent(ctypes.Structure):
+class SonareEngineMidiEvent(CStruct):
     """Maps to SonareEngineMidiEvent in sonare_c_effects.h."""
 
     _fields_ = [
@@ -361,7 +362,7 @@ class SonareEngineMidiEvent(ctypes.Structure):
     ]
 
 
-class SonareEngineMidiClipSchedule(ctypes.Structure):
+class SonareEngineMidiClipSchedule(CStruct):
     """Maps to SonareEngineMidiClipSchedule in sonare_c_effects.h."""
 
     _fields_ = [
@@ -378,7 +379,7 @@ class SonareEngineMidiClipSchedule(ctypes.Structure):
     ]
 
 
-class SonareProjectTempoSegment(ctypes.Structure):
+class SonareProjectTempoSegment(CStruct):
     """Maps to SonareProjectTempoSegment in sonare_c_project.h (sizeof 32)."""
 
     _fields_ = [
@@ -389,7 +390,7 @@ class SonareProjectTempoSegment(ctypes.Structure):
     ]
 
 
-class SonareProjectTimeSignatureSegment(ctypes.Structure):
+class SonareProjectTimeSignatureSegment(CStruct):
     """Maps to SonareProjectTimeSignatureSegment in sonare_c_project.h (sizeof 16)."""
 
     _fields_ = [
@@ -399,7 +400,7 @@ class SonareProjectTimeSignatureSegment(ctypes.Structure):
     ]
 
 
-class SonareProjectTempoOptions(ctypes.Structure):
+class SonareProjectTempoOptions(CStruct):
     """Maps to SonareProjectTempoOptions in sonare_c_project_annotate.h (sizeof 16)."""
 
     _fields_ = [
@@ -410,7 +411,7 @@ class SonareProjectTempoOptions(ctypes.Structure):
     ]
 
 
-class SonareProjectTempoCandidate(ctypes.Structure):
+class SonareProjectTempoCandidate(CStruct):
     """Maps to SonareProjectTempoCandidate in sonare_c_project.h."""
 
     _fields_ = [
@@ -429,7 +430,7 @@ SONARE_SYNTH_WAVEFORM_SQUARE = 2
 SONARE_SYNTH_WAVEFORM_TRIANGLE = 3
 
 
-class SonareBuiltinSynthConfig(ctypes.Structure):
+class SonareBuiltinSynthConfig(CStruct):
     """Maps to SonareBuiltinSynthConfig in sonare_c_project.h.
 
     Every numeric field uses "0 (or non-positive) => sensible default", so a
@@ -453,7 +454,7 @@ class SonareBuiltinSynthConfig(ctypes.Structure):
     ]
 
 
-class SonareBuiltinInstrumentBinding(ctypes.Structure):
+class SonareBuiltinInstrumentBinding(CStruct):
     """Maps to SonareBuiltinInstrumentBinding in sonare_c_project.h."""
 
     _fields_ = [
@@ -467,7 +468,7 @@ SONARE_SOURCE_BACKEND_SYNTH = 0
 SONARE_SOURCE_BACKEND_SF2 = 1
 
 
-class SonareSf2ProgramStatus(ctypes.Structure):
+class SonareSf2ProgramStatus(CStruct):
     """Maps to SonareSf2ProgramStatus in sonare_c_project.h."""
 
     _fields_ = [
@@ -479,7 +480,7 @@ class SonareSf2ProgramStatus(ctypes.Structure):
     ]
 
 
-class SonareSf2InstrumentConfig(ctypes.Structure):
+class SonareSf2InstrumentConfig(CStruct):
     """Maps to SonareSf2InstrumentConfig in sonare_c_project.h.
 
     Versioned struct: struct_version 0/1 preserve version 1; version 2 adds
@@ -499,7 +500,7 @@ class SonareSf2InstrumentConfig(ctypes.Structure):
     ]
 
 
-class SonareSf2InstrumentBinding(ctypes.Structure):
+class SonareSf2InstrumentBinding(CStruct):
     """Maps to SonareSf2InstrumentBinding in sonare_c_project.h."""
 
     _fields_ = [
@@ -514,7 +515,7 @@ class SonareSf2InstrumentBinding(ctypes.Structure):
 # leaves that C struct's layout unverified on a live Python call path.
 
 
-class SonareSynthModRouting(ctypes.Structure):
+class SonareSynthModRouting(CStruct):
     """Maps to SonareSynthModRouting in sonare_c_types.h."""
 
     _fields_ = [
@@ -562,7 +563,7 @@ SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ = 1 << 28
 SONARE_SYNTH_FIELD_BIT_DEPTH = 1 << 29
 
 
-class SonareSynthPatch(ctypes.Structure):
+class SonareSynthPatch(CStruct):
     """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 5).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
@@ -622,7 +623,7 @@ class SonareSynthPatch(ctypes.Structure):
     ]
 
 
-class SonareSampleDesc(ctypes.Structure):
+class SonareSampleDesc(CStruct):
     """Maps to SonareSampleDesc in sonare_c_sample_bank.h.
 
     Tuning and looping of one sample. Zero-initialise then override: an
@@ -640,7 +641,7 @@ class SonareSampleDesc(ctypes.Structure):
     ]
 
 
-class SonareSampleZoneDesc(ctypes.Structure):
+class SonareSampleZoneDesc(CStruct):
     """Maps to SonareSampleZoneDesc in sonare_c_sample_bank.h.
 
     One key/velocity rectangle mapped onto a sample. Every bound defaults on
@@ -660,7 +661,7 @@ class SonareSampleZoneDesc(ctypes.Structure):
     ]
 
 
-class SonareSynthInstrumentBinding(ctypes.Structure):
+class SonareSynthInstrumentBinding(CStruct):
     """Maps to SonareSynthInstrumentBinding in sonare_c_project.h."""
 
     _fields_ = [
@@ -703,7 +704,7 @@ SonareInstrumentRenderCallback = ctypes.CFUNCTYPE(
 )
 
 
-class SonareInstrumentCallbacks(ctypes.Structure):
+class SonareInstrumentCallbacks(CStruct):
     """Maps to SonareInstrumentCallbacks in sonare_c_project.h."""
 
     _fields_ = [
@@ -716,7 +717,7 @@ class SonareInstrumentCallbacks(ctypes.Structure):
     ]
 
 
-class SonareInstrumentBinding(ctypes.Structure):
+class SonareInstrumentBinding(CStruct):
     """Maps to SonareInstrumentBinding in sonare_c_project.h."""
 
     _fields_ = [
@@ -736,7 +737,7 @@ SONARE_LOOP_MODE_OFF = 0
 SONARE_LOOP_MODE_LOOP = 1
 
 
-class SonareProjectClipFade(ctypes.Structure):
+class SonareProjectClipFade(CStruct):
     """Maps to SonareProjectClipFade in sonare_c_project.h."""
 
     _fields_ = [
@@ -745,7 +746,7 @@ class SonareProjectClipFade(ctypes.Structure):
     ]
 
 
-class SonareProjectClipTake(ctypes.Structure):
+class SonareProjectClipTake(CStruct):
     """Maps to SonareProjectClipTake in sonare_c_project.h."""
 
     _fields_ = [
@@ -756,7 +757,7 @@ class SonareProjectClipTake(ctypes.Structure):
     ]
 
 
-class SonareProjectClipCompSegment(ctypes.Structure):
+class SonareProjectClipCompSegment(CStruct):
     """Maps to SonareProjectClipCompSegment in sonare_c_project.h."""
 
     _fields_ = [
@@ -766,7 +767,7 @@ class SonareProjectClipCompSegment(ctypes.Structure):
     ]
 
 
-class SonareProjectLoopRecordingDesc(ctypes.Structure):
+class SonareProjectLoopRecordingDesc(CStruct):
     """Maps to SonareProjectLoopRecordingDesc in sonare_c_project.h."""
 
     _fields_ = [
@@ -781,7 +782,7 @@ class SonareProjectLoopRecordingDesc(ctypes.Structure):
     ]
 
 
-class SonareAutomationLaneDesc(ctypes.Structure):
+class SonareAutomationLaneDesc(CStruct):
     """Maps to SonareAutomationLaneDesc in sonare_c_project.h."""
 
     _fields_ = [
@@ -796,7 +797,7 @@ SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1
 SONARE_AUTOMATION_TARGET_TRACK_PAN = 2
 
 
-class SonareAutomationLaneDescEx(ctypes.Structure):
+class SonareAutomationLaneDescEx(CStruct):
     """Maps to SonareAutomationLaneDescEx in sonare_c_project.h."""
 
     _fields_ = [
@@ -810,7 +811,7 @@ class SonareAutomationLaneDescEx(ctypes.Structure):
     ]
 
 
-class SonareProjectKeySegment(ctypes.Structure):
+class SonareProjectKeySegment(CStruct):
     """Maps to SonareProjectKeySegment in sonare_c_project.h."""
 
     _fields_ = [
@@ -821,7 +822,7 @@ class SonareProjectKeySegment(ctypes.Structure):
     ]
 
 
-class SonareProjectChordSymbol(ctypes.Structure):
+class SonareProjectChordSymbol(CStruct):
     """Maps to SonareProjectChordSymbol in sonare_c_project.h."""
 
     _fields_ = [
@@ -837,7 +838,7 @@ class SonareProjectChordSymbol(ctypes.Structure):
     ]
 
 
-class SonareProjectAssistSidecar(ctypes.Structure):
+class SonareProjectAssistSidecar(CStruct):
     """Maps to SonareProjectAssistSidecar in sonare_c_project.h."""
 
     _fields_ = [

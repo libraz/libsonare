@@ -32,6 +32,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _to_c_size_t,
 )
 
 
@@ -65,7 +66,7 @@ class _ProjectMidiMixin:
                 self._require_handle(),
                 int(clip_id),
                 c_events if count else None,
-                ctypes.c_size_t(count),
+                _to_c_size_t(count, "count"),
             )
         )
 
@@ -226,7 +227,7 @@ class _ProjectMidiMixin:
                 int(clip_id),
                 config,
                 buffer,
-                ctypes.c_size_t(expected),
+                _to_c_size_t(expected, "expected"),
                 ctypes.byref(written),
             )
         )
@@ -453,10 +454,10 @@ class _ProjectMidiMixin:
         _check(
             lib.sonare_midi_route_events(
                 c_in if n else None,
-                ctypes.c_size_t(n),
+                _to_c_size_t(n, "n"),
                 ctypes.byref(cfg),
                 out,
-                ctypes.c_size_t(n),
+                _to_c_size_t(n, "n"),
                 ctypes.byref(out_count),
                 ctypes.byref(overflowed),
                 ctypes.byref(overflow_count),
@@ -499,7 +500,7 @@ class _ProjectMidiMixin:
         out_binding = SonareMidiCcBinding()
         rc = lib.sonare_midi_cc_learn(
             c_in if n else None,
-            ctypes.c_size_t(n),
+            _to_c_size_t(n, "n"),
             ctypes.c_uint32(int(param_id) & 0xFFFFFFFF),
             ctypes.c_float(float(min_value)),
             ctypes.c_float(float(max_value)),
@@ -536,7 +537,7 @@ class _ProjectMidiMixin:
         pt = SonareAutomationPoint()
         rc = lib.sonare_midi_cc_to_breakpoint(
             c_bindings if m else None,
-            ctypes.c_size_t(m),
+            _to_c_size_t(m, "m"),
             ctypes.byref(ev),
             ctypes.byref(pt),
         )
@@ -565,7 +566,7 @@ class _ProjectMidiMixin:
         out_event = SonareMidiEventPod()
         rc = lib.sonare_midi_param_to_cc(
             c_bindings if m else None,
-            ctypes.c_size_t(m),
+            _to_c_size_t(m, "m"),
             ctypes.c_uint32(int(param_id) & 0xFFFFFFFF),
             ctypes.c_float(float(unit_value)),
             ctypes.c_uint8(int(group) & 0xFF),

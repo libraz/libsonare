@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ctypes
-import operator
 from collections.abc import Sequence
 from typing import Any, cast
 
@@ -17,7 +16,6 @@ from ._runtime import (
     SonareStreamFramesU8,
     SonareStreamQuantizeConfig,
     SonareStreamStats,
-    SonareValueError,
     StreamBarChord,
     StreamChordChange,
     StreamConfig,
@@ -31,24 +29,8 @@ from ._runtime import (
     _from_c_int_array,
     _get_lib,
     _to_c_float_array,
+    _to_c_size_t,
 )
-
-_SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
-
-
-def _checked_size_t(value: int, name: str) -> ctypes.c_size_t:
-    """Convert an integer to ``size_t`` without truncation or modulo wrapping."""
-    if isinstance(value, bool):
-        raise SonareValueError(f"{name} must be a non-negative integer within size_t range")
-    try:
-        integer = operator.index(value)
-    except TypeError:
-        raise SonareValueError(
-            f"{name} must be a non-negative integer within size_t range"
-        ) from None
-    if integer < 0 or integer > _SIZE_T_MAX:
-        raise SonareValueError(f"{name} must be a non-negative integer within size_t range")
-    return ctypes.c_size_t(integer)
 
 
 def _quantize_config_to_c(
@@ -158,7 +140,7 @@ class StreamAnalyzer:
         c_array, length = _to_c_float_array(samples)
         _check(
             _get_lib().sonare_stream_analyzer_process(
-                self._require_handle(), c_array, ctypes.c_size_t(length)
+                self._require_handle(), c_array, _to_c_size_t(length, "length")
             )
         )
 
@@ -171,13 +153,13 @@ class StreamAnalyzer:
         :meth:`finalize` is rejected. Call :meth:`reset` first to discard the
         buffered partial frame and anchor a new timeline segment.
         """
-        offset = _checked_size_t(sample_offset, "sample_offset")
+        offset = _to_c_size_t(sample_offset, "sample_offset")
         c_array, length = _to_c_float_array(samples)
         _check(
             _get_lib().sonare_stream_analyzer_process_with_offset(
                 self._require_handle(),
                 c_array,
-                ctypes.c_size_t(length),
+                _to_c_size_t(length, "length"),
                 offset,
             )
         )
@@ -212,7 +194,7 @@ class StreamAnalyzer:
         raw = SonareStreamFrames()
         _check(
             lib.sonare_stream_analyzer_read_frames(
-                self._require_handle(), _checked_size_t(max_frames, "max_frames"), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(max_frames, "max_frames"), ctypes.byref(raw)
             )
         )
         try:
@@ -235,7 +217,7 @@ class StreamAnalyzer:
             lib.sonare_stream_analyzer_read_frames_u8_ex(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
-                _checked_size_t(max_frames, "max_frames"),
+                _to_c_size_t(max_frames, "max_frames"),
                 ctypes.byref(raw),
             )
         )
@@ -259,7 +241,7 @@ class StreamAnalyzer:
             lib.sonare_stream_analyzer_read_frames_i16_ex(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
-                _checked_size_t(max_frames, "max_frames"),
+                _to_c_size_t(max_frames, "max_frames"),
                 ctypes.byref(raw),
             )
         )
@@ -272,7 +254,7 @@ class StreamAnalyzer:
         """Reset analyzer state for a new stream."""
         _check(
             _get_lib().sonare_stream_analyzer_reset(
-                self._require_handle(), _checked_size_t(base_sample_offset, "base_sample_offset")
+                self._require_handle(), _to_c_size_t(base_sample_offset, "base_sample_offset")
             )
         )
 

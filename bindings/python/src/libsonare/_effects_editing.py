@@ -46,7 +46,10 @@ from ._runtime import (
     _require_power_of_two,
     _resolve_enum,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_int32,
     _to_c_int_array,
+    _to_c_size_t,
     _validate_c_int_field,
     _validate_effect_fft_options,
     _validate_hpss_kernel,
@@ -120,13 +123,13 @@ def hpss(
     out = SonareHpssResult()
     rc = lib.sonare_hpss_ex(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(kernel_harmonic),
-        ctypes.c_int(kernel_percussive),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(use_soft_mask),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(kernel_harmonic, "kernel_harmonic"),
+        _to_c_int(kernel_percussive, "kernel_percussive"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(use_soft_mask, "use_soft_mask"),
         ctypes.c_int(0),
         ctypes.byref(out),
         None,
@@ -156,10 +159,10 @@ def _hpss_legacy(
     out = SonareHpssResult()
     rc = lib.sonare_hpss(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(kernel_harmonic),
-        ctypes.c_int(kernel_percussive),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(kernel_harmonic, "kernel_harmonic"),
+        _to_c_int(kernel_percussive, "kernel_percussive"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -193,7 +196,7 @@ def harmonic(
         List of harmonic component samples.
     """
     _validate_samples("harmonic", samples, validate=validate)
-    return _call_float_transform("sonare_harmonic", samples, ctypes.c_int(sample_rate))
+    return _call_float_transform("sonare_harmonic", samples, _to_c_int(sample_rate, "sample_rate"))
 
 
 def percussive(
@@ -214,7 +217,9 @@ def percussive(
         List of percussive component samples.
     """
     _validate_samples("percussive", samples, validate=validate)
-    return _call_float_transform("sonare_percussive", samples, ctypes.c_int(sample_rate))
+    return _call_float_transform(
+        "sonare_percussive", samples, _to_c_int(sample_rate, "sample_rate")
+    )
 
 
 def time_stretch(
@@ -251,15 +256,18 @@ def time_stretch(
         if not hasattr(lib, "sonare_time_stretch"):
             raise _unsupported_effect_symbol("sonare_time_stretch")
         return _call_float_transform(
-            "sonare_time_stretch", samples, ctypes.c_int(sample_rate), ctypes.c_float(rate)
+            "sonare_time_stretch",
+            samples,
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.c_float(rate),
         )
     return _call_float_transform(
         "sonare_time_stretch_ex",
         samples,
-        ctypes.c_int(sample_rate),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
     )
 
 
@@ -297,15 +305,18 @@ def pitch_shift(
         if not hasattr(lib, "sonare_pitch_shift"):
             raise _unsupported_effect_symbol("sonare_pitch_shift")
         return _call_float_transform(
-            "sonare_pitch_shift", samples, ctypes.c_int(sample_rate), ctypes.c_float(semitones)
+            "sonare_pitch_shift",
+            samples,
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.c_float(semitones),
         )
     return _call_float_transform(
         "sonare_pitch_shift_ex",
         samples,
-        ctypes.c_int(sample_rate),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(semitones),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
     )
 
 
@@ -337,7 +348,7 @@ def pitch_correct_to_midi(
     return _call_float_transform(
         "sonare_pitch_correct_to_midi",
         samples,
-        ctypes.c_int(sample_rate),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(current_midi),
         ctypes.c_float(target_midi),
     )
@@ -402,13 +413,13 @@ def pitch_correct_to_midi_timevarying(
         _check(
             lib.sonare_pitch_correct_to_midi_timevarying(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 f0_array,
                 prob_array,
                 voiced_array,
-                ctypes.c_size_t(n_frames),
-                ctypes.c_int(hop_length),
+                _to_c_size_t(n_frames, "n_frames"),
+                _to_c_int(hop_length, "hop_length"),
                 ctypes.c_float(target_midi),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -512,13 +523,13 @@ def pitch_correct_timevarying(
         _check(
             lib.sonare_pitch_correct_timevarying(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 f0_array,
                 prob_array,
                 voiced_array,
-                ctypes.c_size_t(n_frames),
-                ctypes.c_int(hop_length),
+                _to_c_size_t(n_frames, "n_frames"),
+                _to_c_int(hop_length, "hop_length"),
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -551,9 +562,9 @@ def note_stretch(
     return _call_float_transform(
         "sonare_note_stretch",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(onset_sample),
-        ctypes.c_int(resolved_offset),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(onset_sample, "onset_sample"),
+        _to_c_int(resolved_offset, "resolved_offset"),
         ctypes.c_float(stretch_ratio),
     )
 
@@ -571,10 +582,10 @@ def note_move(
     return _call_float_transform(
         "sonare_note_move",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(onset_sample),
-        ctypes.c_int(resolved_offset),
-        ctypes.c_int(target_onset_sample),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(onset_sample, "onset_sample"),
+        _to_c_int(resolved_offset, "resolved_offset"),
+        _to_c_int(target_onset_sample, "target_onset_sample"),
     )
 
 
@@ -792,12 +803,12 @@ def extract_notes(
     out = SonareNoteObjectsResult()
     rc = lib.sonare_extract_notes(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         f0_array,
         prob_array,
         voiced_array,
-        ctypes.c_size_t(n_frames),
+        _to_c_size_t(n_frames, "n_frames"),
         ctypes.c_float(frame_rate),
         ctypes.byref(config),
         ctypes.byref(out),
@@ -1025,14 +1036,14 @@ def render_notes(
         _check(
             lib.sonare_render_notes(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 c_notes,
-                ctypes.c_size_t(note_count),
+                _to_c_size_t(note_count, "note_count"),
                 envelopes,
-                ctypes.c_size_t(envelope_count),
+                _to_c_size_t(envelope_count, "envelope_count"),
                 f0_array,
-                ctypes.c_size_t(n_frames),
+                _to_c_size_t(n_frames, "n_frames"),
                 ctypes.c_float(c_frame_rate),
                 ctypes.byref(config),
                 ctypes.byref(out),
@@ -1128,7 +1139,7 @@ def decompose_note_pitch(
     out = SonarePitchDecompositionResult()
     rc = lib.sonare_decompose_note_pitch(
         f0_array,
-        ctypes.c_size_t(n_frames),
+        _to_c_size_t(n_frames, "n_frames"),
         ctypes.c_float(frame_rate),
         ctypes.c_float(median_hz),
         ctypes.c_float(0.0 if vibrato_cutoff_hz is None else vibrato_cutoff_hz),
@@ -1185,18 +1196,18 @@ def _note_set_edit(
     out = SonareNoteObjectsResult()
     rc = getattr(lib, symbol)(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         f0_array,
         prob_array,
         voiced_array,
-        ctypes.c_size_t(n_frames),
+        _to_c_size_t(n_frames, "n_frames"),
         ctypes.c_float(frame_rate),
         ctypes.byref(config),
         c_notes,
-        ctypes.c_size_t(note_count),
+        _to_c_size_t(note_count, "note_count"),
         envelopes,
-        ctypes.c_size_t(envelope_count),
+        _to_c_size_t(envelope_count, "envelope_count"),
         *cut,
         ctypes.byref(out),
     )
@@ -1292,7 +1303,7 @@ def split_note(
         ),
         (
             ctypes.c_size_t(_note_set_index("split_note", "index", index)),
-            ctypes.c_int32(int(frame)),
+            _to_c_int32(int(frame), "frame"),
         ),
     )
 
@@ -1637,8 +1648,8 @@ def extract_percussive_events(
     out = SonarePercussiveEventsResult()
     rc = lib.sonare_extract_percussive_events(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(config),
         ctypes.byref(out),
     )
@@ -1744,10 +1755,10 @@ def render_percussive_events(
         _check(
             lib.sonare_render_percussive_events(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 c_events,
-                ctypes.c_size_t(count),
+                _to_c_size_t(count, "count"),
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -1902,11 +1913,11 @@ def spectral_edit(
         _check(
             lib.sonare_spectral_edit(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(config),
                 c_ops,
-                ctypes.c_size_t(n_ops),
+                _to_c_size_t(n_ops, "n_ops"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )

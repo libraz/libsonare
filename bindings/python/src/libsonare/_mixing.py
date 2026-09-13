@@ -25,6 +25,11 @@ from ._runtime import (
     _pan_mode_value,
     _send_timing_value,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_int64,
+    _to_c_size_t,
+    _to_c_uint,
+    _to_c_uint32,
     _validate_samples,
 )
 from .types import GoniometerPoint
@@ -117,7 +122,9 @@ class Mixer:
         if not hasattr(lib, "sonare_mixer_from_scene_json"):
             raise RuntimeError("libsonare was built without mixing support")
         handle = lib.sonare_mixer_from_scene_json(
-            json.encode("utf-8"), ctypes.c_int(sample_rate), ctypes.c_int(block_size)
+            json.encode("utf-8"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(block_size, "block_size"),
         )
         if not handle:
             raise RuntimeError("failed to build mixer from scene JSON")
@@ -293,7 +300,7 @@ class Mixer:
             if not handle:
                 raise KeyError(f"mixer strip id not found: {strip}")
         else:
-            handle = lib.sonare_mixer_strip_at(self._handle, ctypes.c_size_t(strip))
+            handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(strip, "strip"))
             if not handle:
                 raise IndexError("mixer strip index out of range")
         return ctypes.c_void_p(int(handle))
@@ -310,7 +317,7 @@ class Mixer:
         if not target:
             raise KeyError(f"mixer strip id not found: {strip_id}")
         for index in range(self.strip_count()):
-            handle = lib.sonare_mixer_strip_at(self._handle, ctypes.c_size_t(index))
+            handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(index, "index"))
             if handle and int(handle) == int(target):
                 return index
         raise KeyError(f"mixer strip id not found: {strip_id}")
@@ -349,7 +356,9 @@ class Mixer:
         """Set a per-strip channel delay in samples (recompiled on next compile)."""
         handle = self._strip_handle(strip)
         _check(
-            _get_lib().sonare_strip_set_channel_delay_samples(handle, ctypes.c_int(delay_samples))
+            _get_lib().sonare_strip_set_channel_delay_samples(
+                handle, _to_c_int(delay_samples, "delay_samples")
+            )
         )
 
     def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None:
@@ -416,7 +425,9 @@ class Mixer:
         """
         handle = self._strip_handle(strip)
         mode = -1 if pan_mode is None else _pan_mode_value(pan_mode)
-        _check(_get_lib().sonare_strip_set_pan(handle, ctypes.c_float(pan), ctypes.c_int(mode)))
+        _check(
+            _get_lib().sonare_strip_set_pan(handle, ctypes.c_float(pan), _to_c_int(mode, "mode"))
+        )
 
     def set_width(self, strip: StripRef, width: float) -> None:
         """Set a strip's stereo width."""
@@ -461,7 +472,9 @@ class Mixer:
         """Set the level in dB of an existing send on a strip (by send index)."""
         handle = self._strip_handle(strip)
         _check(
-            _get_lib().sonare_strip_set_send_db(handle, ctypes.c_size_t(index), ctypes.c_float(db))
+            _get_lib().sonare_strip_set_send_db(
+                handle, _to_c_size_t(index, "index"), ctypes.c_float(db)
+            )
         )
 
     def remove_send(self, strip: StripRef, index: int) -> None:
@@ -475,7 +488,7 @@ class Mixer:
         lib = _get_lib()
         if not hasattr(lib, "sonare_strip_remove_send"):
             raise RuntimeError("libsonare was built without strip remove_send support")
-        _check(lib.sonare_strip_remove_send(handle, ctypes.c_uint32(index)))
+        _check(lib.sonare_strip_remove_send(handle, _to_c_uint32(index, "index")))
 
     def strip_meter(
         self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
@@ -545,7 +558,7 @@ class Mixer:
         count = _get_lib().sonare_strip_read_goniometer_latest(
             handle,
             ctypes.cast(buffer, ctypes.POINTER(SonareMixGoniometerPoint)),
-            ctypes.c_size_t(capped),
+            _to_c_size_t(capped, "capped"),
         )
         return [
             GoniometerPoint(left=float(buffer[i].left), right=float(buffer[i].right))
@@ -564,7 +577,7 @@ class Mixer:
         _check(
             _get_lib().sonare_strip_schedule_fader_automation(
                 handle,
-                ctypes.c_int64(sample_pos),
+                _to_c_int64(sample_pos, "sample_pos"),
                 ctypes.c_float(fader_db),
                 ctypes.c_int(_curve_value(curve)),
             )
@@ -582,7 +595,7 @@ class Mixer:
         _check(
             _get_lib().sonare_strip_schedule_pan_automation(
                 handle,
-                ctypes.c_int64(sample_pos),
+                _to_c_int64(sample_pos, "sample_pos"),
                 ctypes.c_float(pan),
                 ctypes.c_int(_curve_value(curve)),
             )
@@ -600,7 +613,7 @@ class Mixer:
         _check(
             _get_lib().sonare_strip_schedule_width_automation(
                 handle,
-                ctypes.c_int64(sample_pos),
+                _to_c_int64(sample_pos, "sample_pos"),
                 ctypes.c_float(width),
                 ctypes.c_int(_curve_value(curve)),
             )
@@ -619,8 +632,8 @@ class Mixer:
         _check(
             _get_lib().sonare_strip_schedule_send_automation(
                 handle,
-                ctypes.c_size_t(send_index),
-                ctypes.c_int64(sample_pos),
+                _to_c_size_t(send_index, "send_index"),
+                _to_c_int64(sample_pos, "sample_pos"),
                 ctypes.c_float(db),
                 ctypes.c_int(_curve_value(curve)),
             )
@@ -654,9 +667,9 @@ class Mixer:
         _check(
             lib.sonare_strip_schedule_insert_automation(
                 handle,
-                ctypes.c_uint(insert_index),
-                ctypes.c_uint(param_id),
-                ctypes.c_int64(sample_pos),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_uint(param_id, "param_id"),
+                _to_c_int64(sample_pos, "sample_pos"),
                 ctypes.c_float(value),
                 ctypes.c_int(_curve_value(curve)),
             )
@@ -719,7 +732,7 @@ class Mixer:
                 ctypes.c_size_t(len(left_arrays)),
                 out_left,
                 out_right,
-                ctypes.c_size_t(length),
+                _to_c_size_t(length, "length"),
             )
         )
         return MixerStereoResult(
@@ -775,7 +788,7 @@ class Mixer:
                 self._handle,
                 out_left,
                 out_right,
-                ctypes.c_size_t(count),
+                _to_c_size_t(count, "count"),
             )
         )
         return MixerStereoResult(
@@ -909,7 +922,9 @@ def mix_stereo(
         # indistinguishable from a real mix of silence.
         raise SonareValueError("mix_stereo: every strip is empty; there is no audio to mix")
 
-    mixer = lib.sonare_mixer_create(ctypes.c_int(sample_rate), ctypes.c_int(length))
+    mixer = lib.sonare_mixer_create(
+        _to_c_int(sample_rate, "sample_rate"), _to_c_int(length, "length")
+    )
     if not mixer:
         raise RuntimeError("failed to create mixer")
 
@@ -975,7 +990,7 @@ def mix_stereo(
             ctypes.c_size_t(len(strips)),
             out_left,
             out_right,
-            ctypes.c_size_t(length),
+            _to_c_size_t(length, "length"),
         )
         _check(rc)
 

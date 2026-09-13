@@ -6,6 +6,7 @@ import contextlib
 import ctypes
 import functools
 import inspect
+import operator
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import IntEnum
 from numbers import Integral
@@ -524,6 +525,98 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
     # Pin the numpy buffer so the backing memory outlives the C call.
     setattr(c_array, "_np_backing", buf)  # noqa: B010 -- ctypes arrays allow dynamic pinning.
     return c_array, length
+
+
+# Bounds are measured from the host's ctypes rather than assumed, so the size_t
+# ceiling is the one the loaded library actually uses.
+_SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
+_UINT_MAX = (1 << (ctypes.sizeof(ctypes.c_uint) * 8)) - 1
+
+
+def _narrow_int(value: object, name: str, low: int, high: int) -> int:
+    """Return ``value`` as a plain ``int``, or refuse what a C type would change.
+
+    The one implementation behind every ``_to_c_*`` conversion below: the target
+    range is the only thing that differs between them, and all of them refuse the
+    same silent value change. A ctypes integer constructor applies the C
+    conversion, so ``c_int(2**32)`` is 0 — which every versioned config field
+    reads as "keep the default" — ``c_int(2**32 + 1)`` is 1, and
+    ``c_size_t(-1)`` is the largest representable size. A wrapped value is always
+    inside the target type, so no downstream range check can tell it from a
+    request the caller meant.
+
+    A ``bool`` is refused rather than read as 0/1: it is an ``int`` subclass, so
+    it can never fail the range check, and the entry points that genuinely take a
+    flag spell the conversion out at the call site.
+
+    Args:
+        value: Caller-supplied number.
+        name: Field or argument name, named in the error message.
+        low: Smallest value the target type represents.
+        high: Largest value the target type represents.
+
+    Returns:
+        The value as a plain ``int``.
+
+    Raises:
+        SonareValueError: If ``value`` is not an integer, or does not fit.
+    """
+    if not isinstance(value, bool):
+        try:
+            integer = operator.index(value)
+        except TypeError:
+            pass
+        else:
+            if low <= integer <= high:
+                return integer
+    raise SonareValueError(_narrowing_error(name, low, high))
+
+
+def _narrowing_error(name: str, low: int, high: int) -> str:
+    """Word one refusal for both halves of the family, unsigned reading as such."""
+    if low == 0:
+        return f"{name} must be a non-negative integer within [0, {high}]"
+    return f"{name} must be an integer within [{low}, {high}]"
+
+
+def _to_c_int(value: object, name: str) -> ctypes.c_int:
+    """Narrow a caller-supplied integer onto a C ``int``; see :func:`_narrow_int`."""
+    return ctypes.c_int(_narrow_int(value, name, _C_INT_MIN, _C_INT_MAX))
+
+
+def _to_c_int32(value: object, name: str) -> ctypes.c_int32:
+    """Narrow a caller-supplied integer onto ``int32_t``; see :func:`_narrow_int`."""
+    return ctypes.c_int32(_narrow_int(value, name, _C_INT_MIN, _C_INT_MAX))
+
+
+def _to_c_int64(value: object, name: str) -> ctypes.c_int64:
+    """Narrow a caller-supplied integer onto ``int64_t``; see :func:`_narrow_int`."""
+    return ctypes.c_int64(_narrow_int(value, name, -(2**63), 2**63 - 1))
+
+
+def _to_c_uint(value: object, name: str) -> ctypes.c_uint:
+    """Narrow a caller-supplied integer onto ``unsigned``; see :func:`_narrow_int`."""
+    return ctypes.c_uint(_narrow_int(value, name, 0, _UINT_MAX))
+
+
+def _to_c_uint32(value: object, name: str) -> ctypes.c_uint32:
+    """Narrow a caller-supplied integer onto ``uint32_t``; see :func:`_narrow_int`."""
+    return ctypes.c_uint32(_narrow_int(value, name, 0, 2**32 - 1))
+
+
+def _to_c_uint16(value: object, name: str) -> ctypes.c_uint16:
+    """Narrow a caller-supplied integer onto ``uint16_t``; see :func:`_narrow_int`."""
+    return ctypes.c_uint16(_narrow_int(value, name, 0, 2**16 - 1))
+
+
+def _to_c_uint8(value: object, name: str) -> ctypes.c_uint8:
+    """Narrow a caller-supplied integer onto ``uint8_t``; see :func:`_narrow_int`."""
+    return ctypes.c_uint8(_narrow_int(value, name, 0, 2**8 - 1))
+
+
+def _to_c_size_t(value: object, name: str) -> ctypes.c_size_t:
+    """Narrow a caller-supplied integer onto ``size_t``; see :func:`_narrow_int`."""
+    return ctypes.c_size_t(_narrow_int(value, name, 0, _SIZE_T_MAX))
 
 
 _PAN_MODE_NAMES = {

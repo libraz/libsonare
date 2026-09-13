@@ -31,7 +31,9 @@ from ._runtime import (
     _out_float_array,
     _out_int_array,
     _to_c_float_array,
+    _to_c_int,
     _to_c_int_array,
+    _to_c_size_t,
     _validate_samples,
 )
 from .types import (
@@ -144,10 +146,10 @@ def stft(
     out = SonareStftResult()
     rc = lib.sonare_stft(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -191,10 +193,10 @@ def stft_db(
     out_db = ctypes.POINTER(ctypes.c_float)()
     rc = lib.sonare_stft_db(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.byref(out_n_bins),
         ctypes.byref(out_n_frames),
         ctypes.byref(out_db),
@@ -248,11 +250,11 @@ def mel_spectrogram(
     out = SonareMelResult()
     rc = lib.sonare_mel_spectrogram_ex(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(n_mels),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(n_mels, "n_mels"),
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_int(1 if htk else 0),
@@ -308,12 +310,12 @@ def mfcc(
     out = SonareMfccResult()
     rc = lib.sonare_mfcc_ex(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(n_mels),
-        ctypes.c_int(n_mfcc),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(n_mels, "n_mels"),
+        _to_c_int(n_mfcc, "n_mfcc"),
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_int(1 if htk else 0),
@@ -349,9 +351,9 @@ def mel_delta(
     out = ctypes.POINTER(ctypes.c_float)()
     rc = lib.sonare_mel_delta(
         c_array,
-        ctypes.c_int(n_features),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(width),
+        _to_c_int(n_features, "n_features"),
+        _to_c_int(n_frames, "n_frames"),
+        _to_c_int(width, "width"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -396,10 +398,10 @@ def chroma(
     out = SonareChromaResult()
     rc = lib.sonare_chroma(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -435,13 +437,13 @@ def _chroma_variant(
     out = SonareChromaResult()
     args: list[object] = [
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(n_chroma),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(n_chroma, "n_chroma"),
     ]
     if bins_per_octave is not None:
-        args.append(ctypes.c_int(bins_per_octave))
+        args.append(_to_c_int(bins_per_octave, "bins_per_octave"))
     args.append(ctypes.byref(out))
     rc = getattr(lib, fn_name)(*args)
     _check(rc)
@@ -540,9 +542,9 @@ def spectral_centroid(
     return _call_float_transform(
         "sonare_spectral_centroid",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
     )
 
 
@@ -569,9 +571,9 @@ def spectral_bandwidth(
     return _call_float_transform(
         "sonare_spectral_bandwidth_ex",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(p),
     )
 
@@ -588,10 +590,10 @@ def spectral_flux(
     return _call_float_transform(
         "sonare_spectral_flux",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(lag),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(lag, "lag"),
     )
 
 
@@ -606,9 +608,9 @@ def onset_backtrack(
         _check(
             lib.sonare_onset_backtrack(
                 event_array,
-                ctypes.c_size_t(event_count),
+                _to_c_size_t(event_count, "event_count"),
                 energy_array,
-                ctypes.c_size_t(energy_count),
+                _to_c_size_t(energy_count, "energy_count"),
                 ctypes.byref(out),
                 ctypes.byref(out_count),
             )
@@ -639,9 +641,9 @@ def spectral_rolloff(
     return _call_float_transform(
         "sonare_spectral_rolloff",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(roll_percent),
     )
 
@@ -667,9 +669,9 @@ def spectral_flatness(
     return _call_float_transform(
         "sonare_spectral_flatness",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
     )
 
 
@@ -694,9 +696,9 @@ def zero_crossing_rate(
     return _call_float_transform(
         "sonare_zero_crossing_rate",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(frame_length, "frame_length"),
+        _to_c_int(hop_length, "hop_length"),
     )
 
 
@@ -721,9 +723,9 @@ def rms_energy(
     return _call_float_transform(
         "sonare_rms_energy",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(frame_length, "frame_length"),
+        _to_c_int(hop_length, "hop_length"),
     )
 
 
@@ -773,11 +775,11 @@ def spectral_contrast(
     with _out_float_array(lib) as (out, _out_length):
         rc = lib.sonare_spectral_contrast(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_fft),
-            ctypes.c_int(hop_length),
-            ctypes.c_int(n_bands),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(n_bands, "n_bands"),
             ctypes.c_float(fmin),
             ctypes.c_float(quantile),
             ctypes.byref(out),
@@ -818,11 +820,11 @@ def poly_features(
     with _out_float_array(lib) as (out, _out_length):
         rc = lib.sonare_poly_features(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_fft),
-            ctypes.c_int(hop_length),
-            ctypes.c_int(order),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(order, "order"),
             ctypes.byref(out),
             ctypes.byref(out_rows),
             ctypes.byref(out_cols),
@@ -861,7 +863,7 @@ def zero_crossings(
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_zero_crossings(
             c_array,
-            ctypes.c_size_t(length),
+            _to_c_size_t(length, "length"),
             ctypes.c_float(threshold),
             ctypes.c_int(1 if ref_magnitude else 0),
             ctypes.c_int(1 if pad else 0),
@@ -903,9 +905,9 @@ def pitch_tuning(
     out = ctypes.c_float(0.0)
     rc = lib.sonare_pitch_tuning(
         c_array,
-        ctypes.c_size_t(length),
+        _to_c_size_t(length, "length"),
         ctypes.c_float(resolution),
-        ctypes.c_int(bins_per_octave),
+        _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -941,12 +943,12 @@ def estimate_tuning(
     out = ctypes.c_float(0.0)
     rc = lib.sonare_estimate_tuning(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(resolution),
-        ctypes.c_int(bins_per_octave),
+        _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -972,10 +974,10 @@ def piptrack(
     magnitudes = ctypes.POINTER(ctypes.c_float)()
     rc = lib.sonare_piptrack(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_float(threshold),
@@ -1017,10 +1019,10 @@ def reassigned_spectrogram(
     out = SonareReassignedSpectrogramResult()
     rc = lib.sonare_reassigned_spectrogram(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(ref_power),
         ctypes.c_int(bool(fill_nan)),
         ctypes.byref(out),
@@ -1277,10 +1279,10 @@ def pitch_yin(
     out = SonarePitchResult()
     rc = lib.sonare_pitch_yin(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(frame_length, "frame_length"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_float(threshold),
@@ -1334,10 +1336,10 @@ def pitch_pyin(
     out = SonarePitchResult()
     rc = lib.sonare_pitch_pyin(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(frame_length, "frame_length"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_float(threshold),
@@ -1394,9 +1396,9 @@ def note_segments(
     out = SonareNoteSegmentsResult()
     rc = lib.sonare_note_segments(
         f0_array,
-        ctypes.c_size_t(f0_count),
+        _to_c_size_t(f0_count, "f0_count"),
         probability_array,
-        ctypes.c_size_t(probability_count),
+        _to_c_size_t(probability_count, "probability_count"),
         ctypes.c_float(frame_rate),
         ctypes.byref(config),
         ctypes.byref(out),

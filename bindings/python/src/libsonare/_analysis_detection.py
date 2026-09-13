@@ -20,7 +20,9 @@ from ._runtime import (
     _out_float_array,
     _profile_value,
     _to_c_float_array,
+    _to_c_int,
     _to_c_int_array,
+    _to_c_size_t,
 )
 from .types import (
     AnalysisBeatObservations,
@@ -70,7 +72,10 @@ def detect_bpm(
     c_array, length = _to_c_float_array(samples)
     out_bpm = ctypes.c_float()
     rc = lib.sonare_detect_bpm(
-        c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out_bpm)
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(out_bpm),
     )
     _check(rc)
     return float(out_bpm.value)
@@ -118,15 +123,15 @@ def detect_key(
     out_key = SonareKey()
     rc = lib.sonare_detect_key_with_extended_options(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_int(1 if use_hpss else 0),
         ctypes.c_int(1 if loudness_weighted else 0),
         ctypes.c_float(high_pass_hz),
         mode_array,
-        ctypes.c_size_t(mode_count),
+        _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
         genre_hint.encode("utf-8") if genre_hint else None,
         ctypes.byref(out_key),
@@ -161,15 +166,15 @@ def detect_key_candidates(
     out_count = ctypes.c_size_t()
     rc = lib.sonare_detect_key_candidates_with_extended_options(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_int(1 if use_hpss else 0),
         ctypes.c_int(1 if loudness_weighted else 0),
         ctypes.c_float(high_pass_hz),
         mode_array,
-        ctypes.c_size_t(mode_count),
+        _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
         genre_hint.encode("utf-8") if genre_hint else None,
         ctypes.byref(out_candidates),
@@ -215,8 +220,8 @@ def detect_beats(
     with _out_float_array(lib) as (out_times, out_count):
         rc = lib.sonare_detect_beats(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(out_times),
             ctypes.byref(out_count),
         )
@@ -236,8 +241,8 @@ def detect_downbeats(
     with _out_float_array(lib) as (out_times, out_count):
         rc = lib.sonare_detect_downbeats(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(out_times),
             ctypes.byref(out_count),
         )
@@ -293,8 +298,8 @@ def detect_onsets(
         )
         rc = lib.sonare_detect_onsets_ex(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(config),
             ctypes.byref(out_times),
             ctypes.byref(out_count),

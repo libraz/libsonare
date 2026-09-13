@@ -78,6 +78,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _to_c_size_t,
 )
 from .types import (
     AutomationCurve,
@@ -284,7 +285,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             c_segments[i].end_bpm = end_bpm
         _check(
             _get_lib().sonare_engine_set_tempo_segments(
-                self._require_handle(), c_segments, ctypes.c_size_t(count)
+                self._require_handle(), c_segments, _to_c_size_t(count, "count")
             )
         )
 
@@ -320,7 +321,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             c_segments[i].denominator = denominator
         _check(
             _get_lib().sonare_engine_set_time_signature_segments(
-                self._require_handle(), c_segments, ctypes.c_size_t(count)
+                self._require_handle(), c_segments, _to_c_size_t(count, "count")
             )
         )
 

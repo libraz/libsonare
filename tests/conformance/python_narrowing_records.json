@@ -1,0 +1,38 @@
+{
+  "floor": {
+    "files": 60,
+    "narrowings": 60,
+    "shared_reader_calls": 600
+  },
+  "shapes": [
+    {
+      "name": "flag-rendered-as-0-or-1",
+      "argument_pattern": "(?:0|1) if .+ else (?:0|1)|bool\\(.+\\)",
+      "reason": "A boolean rendered to 0/1 at the call site cannot leave any integer range."
+    },
+    {
+      "name": "integer-literal",
+      "argument_pattern": "-?\\d+",
+      "reason": "A literal written in this file is not a caller value."
+    },
+    {
+      "name": "container-length",
+      "argument_pattern": "len\\(.+\\)|.+\\.count|.+ // \\d+|length // channels",
+      "unsigned_only": true,
+      "reason": "Derived from a container this call already holds, so it is bounded by the allocation behind it."
+    },
+    {
+      "name": "bit-masked",
+      "argument_pattern": ".+ & (?:255|65535|4294967295)",
+      "reason": "The mask is the target type's own width, so the value is in range by construction."
+    },
+    {
+      "name": "domain-validated-helper",
+      "argument_pattern": "_(?:profile|pan_law|pan_mode|send_timing|meter_tap|curve)_value\\(.+\\)|_resolve_preset_ordinal\\(.+\\)|_note_set_index\\(.+\\)|_unsigned\\(.+\\)|_narrow_int\\(.+\\)",
+      "reason": "The argument is a resolver that refuses anything outside the field's own domain before the conversion sees it."
+    }
+  ],
+  "narrowings": [],
+  "plain_structs": [],
+  "readers": []
+}

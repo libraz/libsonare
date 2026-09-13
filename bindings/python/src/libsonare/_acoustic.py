@@ -26,6 +26,8 @@ from ._runtime import (
     _guard_buffer,
     _optional_float_array_result,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
 )
 from .types import RirResult, RoomEstimate
 
@@ -169,7 +171,7 @@ def synthesize_rir(
     out = SonareRirSynthResult()
     rc = lib.sonare_synthesize_rir(
         ctypes.byref(config),
-        ctypes.c_int(sample_rate),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -242,8 +244,8 @@ def estimate_room(
     out = SonareRoomEstimate()
     rc = lib.sonare_estimate_room(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(config),
         ctypes.byref(out),
     )
@@ -362,8 +364,8 @@ def room_morph(
     out_length = ctypes.c_size_t()
     rc = lib.sonare_room_morph(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(config),
         ctypes.byref(out),
         ctypes.byref(out_length),

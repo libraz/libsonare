@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import ctypes
 
+from ._cstruct import CStruct
 
-class SonareDeclickConfig(ctypes.Structure):
+
+class SonareDeclickConfig(CStruct):
     """Maps to SonareDeclickConfig in sonare_c.h."""
 
     _fields_ = [
@@ -23,7 +25,7 @@ SONARE_COMPRESSOR_DETECTOR_RMS = 1
 SONARE_COMPRESSOR_DETECTOR_LOG_RMS = 2
 
 
-class SonareCompressorConfig(ctypes.Structure):
+class SonareCompressorConfig(CStruct):
     """Maps to SonareCompressorConfig in sonare_c.h."""
 
     _fields_ = [
@@ -42,7 +44,7 @@ class SonareCompressorConfig(ctypes.Structure):
     ]
 
 
-class SonareGateConfig(ctypes.Structure):
+class SonareGateConfig(CStruct):
     """Maps to SonareGateConfig in sonare_c.h."""
 
     _fields_ = [
@@ -56,7 +58,7 @@ class SonareGateConfig(ctypes.Structure):
     ]
 
 
-class SonareTransientShaperConfig(ctypes.Structure):
+class SonareTransientShaperConfig(CStruct):
     """Maps to SonareTransientShaperConfig in sonare_c.h."""
 
     _fields_ = [
@@ -84,7 +86,7 @@ SONARE_DENOISE_NOISE_ESTIMATOR_MCRA = 1
 SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA = 2
 
 
-class SonareDenoiseClassicalConfig(ctypes.Structure):
+class SonareDenoiseClassicalConfig(CStruct):
     """Maps to SonareDenoiseClassicalConfig in sonare_c.h."""
 
     _fields_ = [
@@ -102,7 +104,7 @@ class SonareDenoiseClassicalConfig(ctypes.Structure):
     ]
 
 
-class SonareDeclipConfig(ctypes.Structure):
+class SonareDeclipConfig(CStruct):
     """Maps to SonareDeclipConfig in sonare_c.h."""
 
     _fields_ = [
@@ -118,7 +120,7 @@ SONARE_DECRACKLE_MODE_MEDIAN = 0
 SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE = 1
 
 
-class SonareDecrackleConfig(ctypes.Structure):
+class SonareDecrackleConfig(CStruct):
     """Maps to SonareDecrackleConfig in sonare_c.h."""
 
     _fields_ = [
@@ -128,7 +130,7 @@ class SonareDecrackleConfig(ctypes.Structure):
     ]
 
 
-class SonareDehumConfig(ctypes.Structure):
+class SonareDehumConfig(CStruct):
     """Maps to SonareDehumConfig in sonare_c.h."""
 
     _fields_ = [
@@ -143,7 +145,7 @@ class SonareDehumConfig(ctypes.Structure):
     ]
 
 
-class SonareDereverbClassicalConfig(ctypes.Structure):
+class SonareDereverbClassicalConfig(CStruct):
     """Maps to SonareDereverbClassicalConfig in sonare_c.h."""
 
     _fields_ = [
@@ -167,7 +169,7 @@ SONARE_TRIM_SILENCE_MODE_PEAK = 0
 SONARE_TRIM_SILENCE_MODE_LUFS_GATED = 1
 
 
-class SonareTrimSilenceConfig(ctypes.Structure):
+class SonareTrimSilenceConfig(CStruct):
     """Maps to SonareTrimSilenceConfig in sonare_c.h."""
 
     _fields_ = [
@@ -186,7 +188,7 @@ SONARE_SPECTRAL_EDIT_MODE_MUTE = 2
 SONARE_SPECTRAL_EDIT_MODE_HEAL = 3
 
 
-class SonareSpectralEditConfig(ctypes.Structure):
+class SonareSpectralEditConfig(CStruct):
     """Maps to SonareSpectralEditConfig in sonare_c_effects.h."""
 
     _fields_ = [
@@ -197,7 +199,7 @@ class SonareSpectralEditConfig(ctypes.Structure):
     ]
 
 
-class SonareSpectralRegionOp(ctypes.Structure):
+class SonareSpectralRegionOp(CStruct):
     """Maps to SonareSpectralRegionOp in sonare_c_effects.h."""
 
     _fields_ = [
@@ -210,7 +212,7 @@ class SonareSpectralRegionOp(ctypes.Structure):
     ]
 
 
-class SonareNoteExtractorConfig(ctypes.Structure):
+class SonareNoteExtractorConfig(CStruct):
     """Maps to SonareNoteExtractorConfig in sonare_c_effects.h."""
 
     _fields_ = [
@@ -222,7 +224,7 @@ class SonareNoteExtractorConfig(ctypes.Structure):
     ]
 
 
-class SonareNoteRenderConfig(ctypes.Structure):
+class SonareNoteRenderConfig(CStruct):
     """Maps to SonareNoteRenderConfig in sonare_c_effects.h."""
 
     _fields_ = [
@@ -232,7 +234,7 @@ class SonareNoteRenderConfig(ctypes.Structure):
     ]
 
 
-class SonareNoteEdit(ctypes.Structure):
+class SonareNoteEdit(CStruct):
     """Maps to SonareNoteEdit in sonare_c_effects.h."""
 
     _fields_ = [
@@ -249,7 +251,7 @@ class SonareNoteEdit(ctypes.Structure):
     ]
 
 
-class SonareNoteObject(ctypes.Structure):
+class SonareNoteObject(CStruct):
     """Maps to SonareNoteObject in sonare_c_effects.h."""
 
     _fields_ = [
@@ -265,7 +267,7 @@ class SonareNoteObject(ctypes.Structure):
     ]
 
 
-class SonareNoteObjectsResult(ctypes.Structure):
+class SonareNoteObjectsResult(CStruct):
     """Maps to SonareNoteObjectsResult in sonare_c_effects.h."""
 
     _fields_ = [
@@ -278,7 +280,7 @@ class SonareNoteObjectsResult(ctypes.Structure):
     ]
 
 
-class SonarePercussiveEventConfig(ctypes.Structure):
+class SonarePercussiveEventConfig(CStruct):
     """Maps to SonarePercussiveEventConfig in sonare_c_effects.h."""
 
     _fields_ = [
@@ -294,7 +296,7 @@ class SonarePercussiveEventConfig(ctypes.Structure):
     ]
 
 
-class SonarePercussiveRenderConfig(ctypes.Structure):
+class SonarePercussiveRenderConfig(CStruct):
     """Maps to SonarePercussiveRenderConfig in sonare_c_effects.h."""
 
     _fields_ = [
@@ -307,7 +309,7 @@ class SonarePercussiveRenderConfig(ctypes.Structure):
     ]
 
 
-class SonarePercussiveEventEdit(ctypes.Structure):
+class SonarePercussiveEventEdit(CStruct):
     """Maps to SonarePercussiveEventEdit in sonare_c_effects.h."""
 
     _fields_ = [
@@ -317,7 +319,7 @@ class SonarePercussiveEventEdit(ctypes.Structure):
     ]
 
 
-class SonarePercussiveEvent(ctypes.Structure):
+class SonarePercussiveEvent(CStruct):
     """Maps to SonarePercussiveEvent in sonare_c_effects.h."""
 
     _fields_ = [
@@ -330,7 +332,7 @@ class SonarePercussiveEvent(ctypes.Structure):
     ]
 
 
-class SonarePercussiveEventsResult(ctypes.Structure):
+class SonarePercussiveEventsResult(CStruct):
     """Maps to SonarePercussiveEventsResult in sonare_c_effects.h."""
 
     _fields_ = [
@@ -339,7 +341,7 @@ class SonarePercussiveEventsResult(ctypes.Structure):
     ]
 
 
-class SonarePitchDecompositionResult(ctypes.Structure):
+class SonarePitchDecompositionResult(CStruct):
     """Maps to SonarePitchDecompositionResult in sonare_c_effects.h."""
 
     _fields_ = [
@@ -350,7 +352,7 @@ class SonarePitchDecompositionResult(ctypes.Structure):
     ]
 
 
-class SonarePolyphonicConfig(ctypes.Structure):
+class SonarePolyphonicConfig(CStruct):
     """Maps to SonarePolyphonicConfig in sonare_c_polyphony.h."""
 
     _fields_ = [

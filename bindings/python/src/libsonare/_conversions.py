@@ -20,7 +20,9 @@ from ._runtime import (
     _out_float_array,
     _out_int_array,
     _to_c_float_array,
+    _to_c_int,
     _to_c_int_array,
+    _to_c_size_t,
 )
 
 
@@ -72,7 +74,9 @@ def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float
     """Convert frame count to time in seconds."""
     lib = _get_lib()
     return float(
-        lib.sonare_frames_to_time(ctypes.c_int(frames), ctypes.c_int(sr), ctypes.c_int(hop_length))
+        lib.sonare_frames_to_time(
+            _to_c_int(frames, "frames"), _to_c_int(sr, "sr"), _to_c_int(hop_length, "hop_length")
+        )
     )
 
 
@@ -80,7 +84,9 @@ def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int:
     """Convert time in seconds to frame count."""
     lib = _get_lib()
     return int(
-        lib.sonare_time_to_frames(ctypes.c_float(time), ctypes.c_int(sr), ctypes.c_int(hop_length))
+        lib.sonare_time_to_frames(
+            ctypes.c_float(time), _to_c_int(sr, "sr"), _to_c_int(hop_length, "hop_length")
+        )
     )
 
 
@@ -89,7 +95,9 @@ def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int = 0) -> int
     lib = _get_lib()
     return int(
         lib.sonare_frames_to_samples(
-            ctypes.c_int(frames), ctypes.c_int(hop_length), ctypes.c_int(n_fft)
+            _to_c_int(frames, "frames"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(n_fft, "n_fft"),
         )
     )
 
@@ -99,7 +107,9 @@ def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int = 0) -> in
     lib = _get_lib()
     return int(
         lib.sonare_samples_to_frames(
-            ctypes.c_int(samples), ctypes.c_int(hop_length), ctypes.c_int(n_fft)
+            _to_c_int(samples, "samples"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(n_fft, "n_fft"),
         )
     )
 
@@ -197,10 +207,10 @@ def trim_silence(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_trim_silence(
             c_array,
-            ctypes.c_size_t(length),
+            _to_c_size_t(length, "length"),
             ctypes.c_float(top_db),
-            ctypes.c_int(frame_length),
-            ctypes.c_int(hop_length),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(start),
@@ -223,10 +233,10 @@ def split_silence(
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_split_silence(
             c_array,
-            ctypes.c_size_t(length),
+            _to_c_size_t(length, "length"),
             ctypes.c_float(top_db),
-            ctypes.c_int(frame_length),
-            ctypes.c_int(hop_length),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_count),
         )
@@ -247,9 +257,9 @@ def frame_signal(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_frame_signal(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(frame_length),
-            ctypes.c_int(hop_length),
+            _to_c_size_t(length, "length"),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(n_frames),
@@ -269,7 +279,7 @@ def pad_center(
     return _call_float_transform(
         "sonare_pad_center",
         values,
-        ctypes.c_size_t(target_size),
+        _to_c_size_t(target_size, "target_size"),
         ctypes.c_float(pad_value),
         arg_name="values",
     )
@@ -286,7 +296,7 @@ def fix_length(
     return _call_float_transform(
         "sonare_fix_length",
         values,
-        ctypes.c_size_t(target_size),
+        _to_c_size_t(target_size, "target_size"),
         ctypes.c_float(pad_value),
         arg_name="values",
     )
@@ -305,9 +315,9 @@ def fix_frames(
     with _out_int_array(lib) as (out, out_length):
         rc = lib.sonare_fix_frames(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(x_min),
-            ctypes.c_int(x_max),
+            _to_c_size_t(length, "length"),
+            _to_c_int(x_min, "x_min"),
+            _to_c_int(x_max, "x_max"),
             ctypes.c_int(1 if pad else 0),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -340,13 +350,13 @@ def peak_pick(
     with _out_int_array(lib) as (out, out_length):
         rc = lib.sonare_peak_pick(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(pre_max),
-            ctypes.c_int(post_max),
-            ctypes.c_int(pre_avg),
-            ctypes.c_int(post_avg),
+            _to_c_size_t(length, "length"),
+            _to_c_int(pre_max, "pre_max"),
+            _to_c_int(post_max, "post_max"),
+            _to_c_int(pre_avg, "pre_avg"),
+            _to_c_int(post_avg, "post_avg"),
             ctypes.c_float(delta),
-            ctypes.c_int(wait),
+            _to_c_int(wait, "wait"),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
@@ -363,7 +373,7 @@ def vector_normalize(
     return _call_float_transform(
         "sonare_vector_normalize",
         values,
-        ctypes.c_int(norm_type),
+        _to_c_int(norm_type, "norm_type"),
         ctypes.c_float(threshold),
         arg_name="values",
     )
@@ -389,10 +399,10 @@ def pcen(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_pcen(
             c_array,
-            ctypes.c_int(n_bins),
-            ctypes.c_int(n_frames),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(hop_length),
+            _to_c_int(n_bins, "n_bins"),
+            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(hop_length, "hop_length"),
             ctypes.c_float(time_constant),
             ctypes.c_float(gain),
             ctypes.c_float(bias),
@@ -415,8 +425,8 @@ def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: 
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tonnetz(
             c_array,
-            ctypes.c_int(n_chroma),
-            ctypes.c_int(n_frames),
+            _to_c_int(n_chroma, "n_chroma"),
+            _to_c_int(n_frames, "n_frames"),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
@@ -443,13 +453,13 @@ def tempogram(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tempogram_with_mode(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(hop_length),
-            ctypes.c_int(win_length),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(win_length, "win_length"),
             ctypes.c_int(1 if center else 0),
             ctypes.c_int(1 if norm else 0),
-            ctypes.c_int(mode_id),
+            _to_c_int(mode_id, "mode_id"),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(n_frames),
@@ -473,12 +483,12 @@ def cyclic_tempogram(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_cyclic_tempogram(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(hop_length),
-            ctypes.c_int(win_length),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(win_length, "win_length"),
             ctypes.c_float(bpm_min),
-            ctypes.c_int(n_bins),
+            _to_c_int(n_bins, "n_bins"),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(n_frames),
@@ -499,11 +509,11 @@ def plp(
     return _call_float_transform(
         "sonare_plp",
         onset_envelope,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(tempo_min),
         ctypes.c_float(tempo_max),
-        ctypes.c_int(win_length),
+        _to_c_int(win_length, "win_length"),
         arg_name="onset_envelope",
     )
 
@@ -523,10 +533,10 @@ def onset_envelope(
     return _call_float_transform(
         "sonare_onset_strength",
         samples,
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(n_mels),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(n_mels, "n_mels"),
     )
 
 
@@ -546,12 +556,12 @@ def onset_strength_multi(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_onset_strength_multi(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_fft),
-            ctypes.c_int(hop_length),
-            ctypes.c_int(n_mels),
-            ctypes.c_int(n_bands),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(n_mels, "n_mels"),
+            _to_c_int(n_bands, "n_bands"),
             ctypes.byref(out),
             ctypes.byref(out_length),
             ctypes.byref(n_frames),
@@ -579,10 +589,10 @@ def fourier_tempogram(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_fourier_tempogram(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(hop_length),
-            ctypes.c_int(win_length),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(hop_length, "hop_length"),
+            _to_c_int(win_length, "win_length"),
             ctypes.c_int(1 if center else 0),
             ctypes.c_int(1 if norm else 0),
             ctypes.byref(out),
@@ -624,11 +634,11 @@ def tempogram_ratio(
     return _call_float_transform(
         "sonare_tempogram_ratio",
         tempogram_data,
-        ctypes.c_int(win_length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
+        _to_c_int(win_length, "win_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
         factors_ptr,
-        ctypes.c_size_t(n_factors),
+        _to_c_size_t(n_factors, "n_factors"),
     )
 
 
@@ -685,12 +695,12 @@ def nnls_chroma(
         if hasattr(lib, "sonare_nnls_chroma_ex2"):
             rc = lib.sonare_nnls_chroma_ex2(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
-                ctypes.c_int(int(enable_stft_blend)),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(int(enable_stft_blend), "enable_stft_blend"),
                 ctypes.c_float(blend_weight_c),
-                ctypes.c_int(stft_blend_n_fft_value),
-                ctypes.c_int(hop_length_value),
+                _to_c_int(stft_blend_n_fft_value, "stft_blend_n_fft_value"),
+                _to_c_int(hop_length_value, "hop_length_value"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
                 ctypes.byref(n_frames),
@@ -700,11 +710,11 @@ def nnls_chroma(
         elif hasattr(lib, "sonare_nnls_chroma_ex"):
             rc = lib.sonare_nnls_chroma_ex(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
-                ctypes.c_int(int(enable_stft_blend)),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(int(enable_stft_blend), "enable_stft_blend"),
                 ctypes.c_float(blend_weight_c),
-                ctypes.c_int(stft_blend_n_fft_value),
+                _to_c_int(stft_blend_n_fft_value, "stft_blend_n_fft_value"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
                 ctypes.byref(n_frames),
@@ -718,8 +728,8 @@ def nnls_chroma(
         else:
             rc = lib.sonare_nnls_chroma(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
                 ctypes.byref(n_frames),
@@ -749,9 +759,9 @@ def resample(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_resample(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(src_sr),
-            ctypes.c_int(target_sr),
+            _to_c_size_t(length, "length"),
+            _to_c_int(src_sr, "src_sr"),
+            _to_c_int(target_sr, "target_sr"),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )

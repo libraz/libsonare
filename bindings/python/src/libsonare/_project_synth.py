@@ -24,6 +24,7 @@ from ._runtime import (
     _generic_error,
     _get_lib,
     _to_c_float_array,
+    _to_c_size_t,
     _validate_samples,
 )
 from ._runtime import _synth_enum_value as _synth_enum_value
@@ -340,7 +341,7 @@ class SampleBank:
             _get_lib().sonare_sample_bank_add_sample(
                 self._require_handle(),
                 c_array,
-                ctypes.c_size_t(length),
+                _to_c_size_t(length, "length"),
                 ctypes.byref(desc),
                 ctypes.byref(out_index),
             )

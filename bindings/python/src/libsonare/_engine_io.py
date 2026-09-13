@@ -55,6 +55,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _planar_channel_arrays,
+    _to_c_int64,
 )
 
 
@@ -386,7 +387,7 @@ class _EngineIoMixin:
             raise RuntimeError("libsonare was built without clip-page look-ahead support")
         _check(
             lib.sonare_engine_set_clip_page_prefetch_frames(
-                self._require_handle(), ctypes.c_int64(int(frames))
+                self._require_handle(), _to_c_int64(int(frames), "frames")
             )
         )
 

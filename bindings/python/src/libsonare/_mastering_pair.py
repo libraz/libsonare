@@ -11,7 +11,15 @@ from ._ffi import (
     SonareStreamingPlatform,
 )
 from ._mastering_offline import _assistant_params, _mastering_params
-from ._runtime import SonareValueError, _check, _get_lib, _guard_buffer, _to_c_float_array
+from ._runtime import (
+    SonareValueError,
+    _check,
+    _get_lib,
+    _guard_buffer,
+    _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
+)
 from .types import (
     MasteringResult,
 )
@@ -39,12 +47,12 @@ def mastering_pair_process(
     rc = lib.sonare_mastering_apply_pair_processor_ex(
         processor_name.encode("utf-8"),
         source_array,
-        ctypes.c_size_t(source_length),
+        _to_c_size_t(source_length, "source_length"),
         reference_array,
-        ctypes.c_size_t(reference_length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(reference_length, "reference_length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -81,12 +89,12 @@ def mastering_pair_analyze(
     rc = lib.sonare_mastering_analyze_pair_ex(
         analysis_name.encode("utf-8"),
         source_array,
-        ctypes.c_size_t(source_length),
+        _to_c_size_t(source_length, "source_length"),
         reference_array,
-        ctypes.c_size_t(reference_length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(reference_length, "reference_length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
     _check(rc)
@@ -119,10 +127,10 @@ def mastering_stereo_analyze(
         analysis_name.encode("utf-8"),
         left_array,
         right_array,
-        ctypes.c_size_t(left_length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
     _check(rc)
@@ -171,10 +179,10 @@ def mastering_streaming_preview(
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_streaming_preview(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         platform_array,
-        ctypes.c_size_t(platform_count),
+        _to_c_size_t(platform_count, "platform_count"),
         ctypes.byref(json_ptr),
     )
     _check(rc)
@@ -204,10 +212,10 @@ def mastering_assistant_suggest(
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_assistant_suggest(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
     _check(rc)
@@ -233,10 +241,10 @@ def mastering_audio_profile(
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_audio_profile(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
     _check(rc)
@@ -275,10 +283,10 @@ def _stereo_analysis_json(
     rc = getattr(lib, symbol)(
         left_array,
         right_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),
     )
     _check(rc)

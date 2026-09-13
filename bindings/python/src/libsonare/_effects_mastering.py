@@ -49,6 +49,8 @@ from ._runtime import (
     _require_power_of_two,
     _resolve_enum,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
     _validate_samples,
     _validate_scalar,
 )
@@ -105,8 +107,8 @@ def normalize(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_normalize(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.c_float(target_db),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -151,8 +153,8 @@ def normalize_rms(
         _check(
             lib.sonare_normalize_rms(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.c_float(target_db_c),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -245,8 +247,8 @@ def mastering_repair_declick(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_mastering_repair_declick(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(config),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -324,8 +326,8 @@ def mastering_repair_denoise_classical(
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_mastering_repair_denoise_classical(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(config),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -386,8 +388,8 @@ def _run_repair(
     with _out_float_array(lib) as (out, out_length):
         rc = lib_fn(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(config),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -695,19 +697,19 @@ def trim(
         if fn_name == "sonare_trim_ex":
             rc = lib.sonare_trim_ex(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.c_float(threshold_db),
-                ctypes.c_int(frame_length),
-                ctypes.c_int(hop_length),
+                _to_c_int(frame_length, "frame_length"),
+                _to_c_int(hop_length, "hop_length"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
         else:
             rc = lib.sonare_trim(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.c_float(threshold_db),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -761,8 +763,8 @@ def _run_dynamics(
     with _out_float_array(lib) as (out, out_length):
         rc = lib_fn(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(config),
             ctypes.byref(out),
             ctypes.byref(out_length),

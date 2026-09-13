@@ -17,7 +17,15 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
-from ._runtime import SonareValueError, _check, _get_lib, _guard_buffer, _to_c_float_array
+from ._runtime import (
+    SonareValueError,
+    _check,
+    _get_lib,
+    _guard_buffer,
+    _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
+)
 from .types import (
     CapabilityCatalog,
     MasteringChainResult,
@@ -67,8 +75,8 @@ def mastering(
     out = SonareMasteringResult()
     rc = lib.sonare_mastering_process(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(config),
         ctypes.byref(out),
     )
@@ -295,10 +303,10 @@ def mastering_process(
     rc = lib.sonare_mastering_apply_processor(
         processor_name.encode("utf-8"),
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -338,10 +346,10 @@ def mastering_process_stereo(
         processor_name.encode("utf-8"),
         left_array,
         right_array,
-        ctypes.c_size_t(left_length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
         param_array,
-        ctypes.c_size_t(param_count),
+        _to_c_size_t(param_count, "param_count"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -516,10 +524,10 @@ def mastering_chain(
     if on_progress is None and cancel is None:
         rc = lib.sonare_mastering_chain(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_mastering_chain_with_progress_ex"):
@@ -532,10 +540,10 @@ def mastering_chain(
         cancel_cb = make_cancel_trampoline(state)
         rc = lib.sonare_mastering_chain_with_progress_ex(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),
@@ -552,10 +560,10 @@ def mastering_chain(
         cb = _make_progress_trampoline(on_progress, CancellationState(None))
         rc = lib.sonare_mastering_chain_with_progress(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),
@@ -612,10 +620,10 @@ def mastering_chain_stereo(
         rc = lib.sonare_mastering_chain_stereo(
             left_array,
             right_array,
-            ctypes.c_size_t(left_length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(left_length, "left_length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_mastering_chain_stereo_with_progress_ex"):
@@ -629,10 +637,10 @@ def mastering_chain_stereo(
         rc = lib.sonare_mastering_chain_stereo_with_progress_ex(
             left_array,
             right_array,
-            ctypes.c_size_t(left_length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(left_length, "left_length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),
@@ -650,10 +658,10 @@ def mastering_chain_stereo(
         rc = lib.sonare_mastering_chain_stereo_with_progress(
             left_array,
             right_array,
-            ctypes.c_size_t(left_length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(left_length, "left_length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),
@@ -748,10 +756,10 @@ def master_audio(
         rc = lib.sonare_master_audio(
             preset_name.encode("utf-8"),
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_master_audio_with_progress_ex"):
@@ -765,10 +773,10 @@ def master_audio(
         rc = lib.sonare_master_audio_with_progress_ex(
             preset_name.encode("utf-8"),
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),
@@ -786,10 +794,10 @@ def master_audio(
         rc = lib.sonare_master_audio_with_progress(
             preset_name.encode("utf-8"),
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),
@@ -847,10 +855,10 @@ def master_audio_stereo(
             preset_name.encode("utf-8"),
             left_array,
             right_array,
-            ctypes.c_size_t(left_length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(left_length, "left_length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_master_audio_stereo_with_progress_ex"):
@@ -865,10 +873,10 @@ def master_audio_stereo(
             preset_name.encode("utf-8"),
             left_array,
             right_array,
-            ctypes.c_size_t(left_length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(left_length, "left_length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),
@@ -887,10 +895,10 @@ def master_audio_stereo(
             preset_name.encode("utf-8"),
             left_array,
             right_array,
-            ctypes.c_size_t(left_length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(left_length, "left_length"),
+            _to_c_int(sample_rate, "sample_rate"),
             param_array,
-            ctypes.c_size_t(param_count),
+            _to_c_size_t(param_count, "param_count"),
             cb,
             None,
             ctypes.byref(out),

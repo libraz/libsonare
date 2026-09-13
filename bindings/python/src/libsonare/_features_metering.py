@@ -27,6 +27,9 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
+    _to_c_uint16,
     _validate_samples,
     _validate_scalar,
 )
@@ -60,8 +63,8 @@ def lufs(
     out = SonareLufsResult()
     rc = lib.sonare_lufs(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -90,7 +93,7 @@ def momentary_lufs(
     return _call_float_transform(
         "sonare_momentary_lufs",
         sample_buf,
-        ctypes.c_int(sample_rate),
+        _to_c_int(sample_rate, "sample_rate"),
     )
 
 
@@ -109,7 +112,7 @@ def short_term_lufs(
     return _call_float_transform(
         "sonare_short_term_lufs",
         sample_buf,
-        ctypes.c_int(sample_rate),
+        _to_c_int(sample_rate, "sample_rate"),
     )
 
 
@@ -146,9 +149,9 @@ def lufs_interleaved(
     out = SonareLufsResult()
     rc = lib.sonare_lufs_interleaved(
         c_array,
-        ctypes.c_size_t(frames),
-        ctypes.c_int(channels),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(frames, "frames"),
+        _to_c_int(channels, "channels"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -179,8 +182,8 @@ def ebur128_loudness_range(
     out = ctypes.c_float(0.0)
     rc = lib.sonare_ebur128_loudness_range(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -206,7 +209,10 @@ def _metering_scalar(
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
     rc = getattr(lib, name)(
-        c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out)
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(out),
     )
     _check(rc)
     return float(out.value)
@@ -248,11 +254,11 @@ def metering_silence_ratio(
     out = ctypes.c_float(0.0)
     rc = lib.sonare_metering_silence_ratio(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(threshold_db),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
+        _to_c_int(frame_length, "frame_length"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -302,8 +308,8 @@ def metering_crest_factor_db_stereo(
     rc = lib.sonare_metering_crest_factor_db_stereo(
         left_array,
         right_array,
-        ctypes.c_size_t(left_length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -338,9 +344,9 @@ def metering_true_peak_db(
     out = ctypes.c_float(0.0)
     rc = lib.sonare_metering_true_peak_db(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(oversample_factor),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(oversample_factor, "oversample_factor"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -364,10 +370,10 @@ def metering_detect_clipping(
     out = SonareClippingResult()
     rc = lib.sonare_metering_detect_clipping(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(threshold),
-        ctypes.c_size_t(min_region_samples),
+        _to_c_size_t(min_region_samples, "min_region_samples"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -413,8 +419,8 @@ def _stereo_scalar(
     rc = getattr(lib, name)(
         left_array,
         right_array,
-        ctypes.c_size_t(left_len),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(left_len, "left_len"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -524,8 +530,8 @@ def metering_vectorscope(
     rc = lib.sonare_metering_vectorscope(
         left_array,
         right_array,
-        ctypes.c_size_t(left_len),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(left_len, "left_len"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -570,9 +576,9 @@ def metering_vectorscope_decimated(
     rc = lib.sonare_metering_vectorscope_decimated(
         left_array,
         right_array,
-        ctypes.c_size_t(left_len),
-        ctypes.c_int(sample_rate),
-        ctypes.c_size_t(max_points),
+        _to_c_size_t(left_len, "left_len"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_size_t(max_points, "max_points"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -618,8 +624,8 @@ def metering_phase_scope(
     rc = lib.sonare_metering_phase_scope(
         left_array,
         right_array,
-        ctypes.c_size_t(left_len),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(left_len, "left_len"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -672,9 +678,9 @@ def metering_phase_scope_decimated(
     rc = lib.sonare_metering_phase_scope_decimated(
         left_array,
         right_array,
-        ctypes.c_size_t(left_len),
-        ctypes.c_int(sample_rate),
-        ctypes.c_size_t(max_points),
+        _to_c_size_t(left_len, "left_len"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_size_t(max_points, "max_points"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -720,11 +726,11 @@ def metering_spectrum(
     out = SonareSpectrumResult()
     rc = lib.sonare_metering_spectrum(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
         ctypes.c_int(1 if apply_octave_smoothing else 0),
-        ctypes.c_int(octave_fraction),
+        _to_c_int(octave_fraction, "octave_fraction"),
         ctypes.c_float(db_ref),
         ctypes.c_float(db_amin),
         ctypes.byref(out),
@@ -777,12 +783,12 @@ def metering_spectrum_frame(
     out = SonareSpectrumResult()
     rc = lib.sonare_metering_spectrum_frame(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_size_t(frame_offset),
-        ctypes.c_int(n_fft),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_size_t(frame_offset, "frame_offset"),
+        _to_c_int(n_fft, "n_fft"),
         ctypes.c_int(1 if apply_octave_smoothing else 0),
-        ctypes.c_int(octave_fraction),
+        _to_c_int(octave_fraction, "octave_fraction"),
         ctypes.c_float(db_ref),
         ctypes.c_float(db_amin),
         ctypes.byref(out),
@@ -841,8 +847,8 @@ def waveform_peaks(
     rc = lib.sonare_waveform_peaks(
         c_array,
         ctypes.c_size_t(length // channels),
-        ctypes.c_int(channels),
-        ctypes.c_size_t(samples_per_bucket),
+        _to_c_int(channels, "channels"),
+        _to_c_size_t(samples_per_bucket, "samples_per_bucket"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -884,7 +890,7 @@ def waveform_peak_pyramid(
     rc = lib.sonare_waveform_peak_pyramid(
         c_array,
         ctypes.c_size_t(length // channels),
-        ctypes.c_int(channels),
+        _to_c_int(channels, "channels"),
         c_levels,
         ctypes.c_size_t(len(levels)),
         ctypes.byref(out),
@@ -921,8 +927,8 @@ def metering_dynamic_range(
     out = SonareDynamicRangeResult()
     rc = lib.sonare_metering_dynamic_range(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(window_sec),
         ctypes.c_float(hop_sec),
         ctypes.c_float(low_percentile),
@@ -953,8 +959,8 @@ def _scale_scalar(
     lib = _get_lib()
     out = ctypes.c_float(0.0)
     rc = getattr(lib, name)(
-        ctypes.c_int(root),
-        ctypes.c_uint16(mode_mask),
+        _to_c_int(root, "root"),
+        _to_c_uint16(mode_mask, "mode_mask"),
         ctypes.c_float(reference_midi),
         ctypes.c_float(midi),
         ctypes.byref(out),
@@ -993,9 +999,9 @@ def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bo
     lib = _get_lib()
     out = ctypes.c_int(0)
     rc = lib.sonare_scale_pitch_class_enabled(
-        ctypes.c_int(root),
-        ctypes.c_uint16(mode_mask),
-        ctypes.c_int(pitch_class),
+        _to_c_int(root, "root"),
+        _to_c_uint16(mode_mask, "mode_mask"),
+        _to_c_int(pitch_class, "pitch_class"),
         ctypes.byref(out),
     )
     _check(rc)

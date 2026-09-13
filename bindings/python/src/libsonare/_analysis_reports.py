@@ -32,6 +32,8 @@ from ._runtime import (
     _guard_buffer,
     _optional_float_array_result,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
 )
 from .types import (
     AcousticResult,
@@ -197,16 +199,16 @@ def analyze(
             )
             rc = lib.sonare_analyze_json_ex(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(options),
                 ctypes.byref(out_json),
             )
         else:
             rc = lib.sonare_analyze_json(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(out_json),
             )
         _check(rc)
@@ -221,7 +223,10 @@ def analyze(
     # Fallback for builds that only have the older flat struct API.
     out = SonareAnalysisResult()
     rc = lib.sonare_analyze(
-        c_array, ctypes.c_size_t(length), ctypes.c_int(sample_rate), ctypes.byref(out)
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(out),
     )
     _check(rc)
     try:
@@ -338,8 +343,8 @@ def analyze_with_progress(
         cancel_cb = make_cancel_trampoline(state)
         rc = lib.sonare_analyze_json_with_progress_ex(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             c_cb,
             None,
             ctypes.byref(out_json),
@@ -356,8 +361,8 @@ def analyze_with_progress(
         )
         rc = lib.sonare_analyze_json_with_progress(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
             c_cb,
             None,
             ctypes.byref(out_json),
@@ -487,7 +492,7 @@ def estimate_meter(
     rc = lib.sonare_estimate_meter_json(
         c_times,
         c_strengths,
-        ctypes.c_size_t(time_count),
+        _to_c_size_t(time_count, "time_count"),
         ctypes.byref(options),
         ctypes.byref(out_json),
     )
@@ -548,14 +553,14 @@ def analyze_bpm(
     out = SonareBpmAnalysisResult()
     rc = lib.sonare_analyze_bpm(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(bpm_min),
         ctypes.c_float(bpm_max),
         ctypes.c_float(start_bpm),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(max_candidates),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(max_candidates, "max_candidates"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -621,9 +626,9 @@ def analyze_impulse_response(
     if hasattr(lib, "sonare_analyze_impulse_response_ex"):
         rc = lib.sonare_analyze_impulse_response_ex(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_octave_bands_value),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_octave_bands_value, "n_octave_bands_value"),
             ctypes.c_float(decay_db_c),
             ctypes.byref(out),
         )
@@ -632,9 +637,9 @@ def analyze_impulse_response(
     else:
         rc = lib.sonare_analyze_impulse_response(
             c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_octave_bands_value),
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_octave_bands_value, "n_octave_bands_value"),
             ctypes.byref(out),
         )
     _check(rc)
@@ -672,10 +677,10 @@ def detect_acoustic(
     out = SonareAcousticResult()
     rc = lib.sonare_detect_acoustic(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_octave_bands),
-        ctypes.c_int(n_third_octave_subbands),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_octave_bands, "n_octave_bands"),
+        _to_c_int(n_third_octave_subbands, "n_third_octave_subbands"),
         ctypes.c_float(min_decay_db),
         ctypes.c_float(noise_floor_margin_db),
         ctypes.byref(out),
@@ -725,13 +730,13 @@ def analyze_rhythm(
     out = SonareRhythmResult()
     rc = lib.sonare_analyze_rhythm(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(bpm_min),
         ctypes.c_float(bpm_max),
         ctypes.c_float(start_bpm),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -768,10 +773,10 @@ def analyze_dynamics(
     out = SonareDynamicsResult()
     rc = lib.sonare_analyze_dynamics(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
         ctypes.c_float(window_sec),
-        ctypes.c_int(hop_length),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(compression_threshold),
         ctypes.byref(out),
     )
@@ -807,12 +812,12 @@ def analyze_timbre(
     out = SonareTimbreResult()
     rc = lib.sonare_analyze_timbre(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(n_mels),
-        ctypes.c_int(n_mfcc),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
+        _to_c_int(n_mels, "n_mels"),
+        _to_c_int(n_mfcc, "n_mfcc"),
         ctypes.c_float(window_sec),
         ctypes.byref(out),
     )

@@ -252,8 +252,9 @@ _SCANNED: tuple[str, ...] = (
 # by a pattern.
 _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
-        "ctypes plumbing: Structure mirrors and argtypes registration, no public signatures",
+        "ctypes plumbing: the Structure base, the Structure mirrors and argtypes registration, no public signatures",
         (
+            "_cstruct.py",
             "_ffi.py",
             "_ffi_types.py",
             "_ffi_types_analysis.py",

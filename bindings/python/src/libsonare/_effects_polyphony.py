@@ -48,6 +48,8 @@ from ._runtime import (
     _guard_buffer,
     _out_float_array,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
     _validate_samples,
 )
 
@@ -270,8 +272,8 @@ class PolyphonicAnalysis:
         _check(
             lib.sonare_polyphonic_analyze(
                 c_array,
-                ctypes.c_size_t(length),
-                ctypes.c_int(sample_rate),
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(config),
                 ctypes.byref(handle),
             )
@@ -372,7 +374,9 @@ class PolyphonicAnalysis:
         rows = (SonareNoteObject * count)()
         written = ctypes.c_size_t()
         _check(
-            lib.sonare_polyphonic_notes(handle, rows, ctypes.c_size_t(count), ctypes.byref(written))
+            lib.sonare_polyphonic_notes(
+                handle, rows, _to_c_size_t(count, "count"), ctypes.byref(written)
+            )
         )
         return [self._note_from_c(rows[i], i) for i in range(int(written.value))]
 
@@ -393,7 +397,7 @@ class PolyphonicAnalysis:
         written = ctypes.c_size_t()
         _check(
             lib.sonare_polyphonic_polyphony(
-                handle, out, ctypes.c_size_t(capacity), ctypes.byref(written)
+                handle, out, _to_c_size_t(capacity, "capacity"), ctypes.byref(written)
             )
         )
         return _from_c_int_array(out, int(written.value))
@@ -495,7 +499,7 @@ class PolyphonicAnalysis:
         if edit is None:
             _check(
                 lib.sonare_polyphonic_set_note_edit(
-                    handle, ctypes.c_size_t(index), None, None, ctypes.c_size_t(0)
+                    handle, _to_c_size_t(index, "index"), None, None, ctypes.c_size_t(0)
                 )
             )
             return
@@ -519,10 +523,10 @@ class PolyphonicAnalysis:
         _check(
             lib.sonare_polyphonic_set_note_edit(
                 handle,
-                ctypes.c_size_t(index),
+                _to_c_size_t(index, "index"),
                 ctypes.byref(c_edit),
                 envelope,
-                ctypes.c_size_t(envelope_count),
+                _to_c_size_t(envelope_count, "envelope_count"),
             )
         )
 
@@ -592,9 +596,9 @@ class PolyphonicAnalysis:
         _check(
             getattr(lib, symbol)(
                 handle,
-                ctypes.c_size_t(index),
+                _to_c_size_t(index, "index"),
                 out,
-                ctypes.c_size_t(capacity),
+                _to_c_size_t(capacity, "capacity"),
                 ctypes.byref(written),
             )
         )
@@ -613,7 +617,9 @@ class PolyphonicAnalysis:
         rows = (SonareNoteObject * count)()
         written = ctypes.c_size_t()
         _check(
-            lib.sonare_polyphonic_notes(handle, rows, ctypes.c_size_t(count), ctypes.byref(written))
+            lib.sonare_polyphonic_notes(
+                handle, rows, _to_c_size_t(count, "count"), ctypes.byref(written)
+            )
         )
         if int(written.value) <= index:
             return 0
@@ -632,9 +638,9 @@ class PolyphonicAnalysis:
         _check(
             lib.sonare_polyphonic_note_envelope(
                 handle,
-                ctypes.c_size_t(index),
+                _to_c_size_t(index, "index"),
                 out,
-                ctypes.c_size_t(capacity),
+                _to_c_size_t(capacity, "capacity"),
                 ctypes.byref(written),
             )
         )

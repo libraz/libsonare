@@ -72,9 +72,12 @@ test-install:
 	$(CMAKE) --build build-install-consumer -j
 	ctest --test-dir build-install-consumer --output-on-failure --no-tests=error
 
+# This path builds the full bundle only, so it attests that module alone;
+# build:js attests the tsup output it writes.
 wasm:
 	emcmake $(CMAKE) -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build build-wasm -j
+	cd bindings/wasm && node scripts/dist-source-manifest.mjs --write sonare
 	cd bindings/wasm && yarn build:js
 
 # The K-weighting cases compare against a reference this script computes, and
@@ -418,6 +421,8 @@ conformance:
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
 	python3 tests/conformance/check_wasm_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py
+	python3 tests/conformance/check_python_narrowing_scope.py
+	python3 -m unittest tests/conformance/test_python_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_bank_versions.py
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py

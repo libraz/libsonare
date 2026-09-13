@@ -33,6 +33,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _out_float_array,
+    _to_c_size_t,
 )
 
 
@@ -180,7 +181,7 @@ class _ProjectRenderMixin:
                     self._require_handle(),
                     ctypes.byref(options),
                     c_bindings if count else None,
-                    ctypes.c_size_t(count),
+                    _to_c_size_t(count, "count"),
                     ctypes.byref(out),
                     ctypes.byref(out_len),
                 )
@@ -255,7 +256,9 @@ class _ProjectRenderMixin:
             # Per binding, because the C struct carries both per binding; an
             # unstated patch field falls back to the per-call argument.
             follow_gm = patch.use_gm_programs
-            c_bindings[i].use_gm_programs = bool(auto_select_gm if follow_gm is None else follow_gm)
+            c_bindings[i].use_gm_programs = (
+                1 if (auto_select_gm if follow_gm is None else follow_gm) else 0
+            )
             bank = patch.sample_bank
             c_bindings[i].sample_bank = bank._require_handle() if bank is not None else None
         options = SonareProjectBounceOptions(
@@ -271,7 +274,7 @@ class _ProjectRenderMixin:
                     self._require_handle(),
                     ctypes.byref(options),
                     c_bindings if count else None,
-                    ctypes.c_size_t(count),
+                    _to_c_size_t(count, "count"),
                     ctypes.byref(out),
                     ctypes.byref(out_len),
                 )
@@ -338,7 +341,7 @@ class _ProjectRenderMixin:
         entries = (SonareSf2ProgramStatus * count)()
         _check(
             lib.sonare_project_soundfont_manifest(
-                handle, entries, ctypes.c_size_t(count), ctypes.byref(total)
+                handle, entries, _to_c_size_t(count, "count"), ctypes.byref(total)
             )
         )
         return [
@@ -416,7 +419,7 @@ class _ProjectRenderMixin:
                     self._require_handle(),
                     ctypes.byref(options),
                     c_bindings if count else None,
-                    ctypes.c_size_t(count),
+                    _to_c_size_t(count, "count"),
                     ctypes.byref(out),
                     ctypes.byref(out_len),
                 )
@@ -501,7 +504,7 @@ class _ProjectRenderMixin:
                 self._require_handle(),
                 ctypes.byref(options),
                 c_bindings if count else None,
-                ctypes.c_size_t(count),
+                _to_c_size_t(count, "count"),
                 ctypes.byref(out),
                 ctypes.byref(out_len),
             )

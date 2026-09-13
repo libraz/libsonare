@@ -17,6 +17,8 @@ from ._runtime import (
     _guard_buffer,
     _out_float_array,
     _to_c_float_array,
+    _to_c_int,
+    _to_c_size_t,
 )
 from .types import (
     CqtResult,
@@ -69,12 +71,12 @@ def cqt(
     out = SonareCqtResult()
     rc = lib.sonare_cqt(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
-        ctypes.c_int(n_bins),
-        ctypes.c_int(bins_per_octave),
+        _to_c_int(n_bins, "n_bins"),
+        _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -100,12 +102,12 @@ def _cqt_variant(
     out = SonareCqtResult()
     rc = getattr(lib, fn_name)(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
-        ctypes.c_int(n_bins),
-        ctypes.c_int(bins_per_octave),
+        _to_c_int(n_bins, "n_bins"),
+        _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -163,14 +165,14 @@ def cqt_to_audio(
     out_length = ctypes.c_size_t()
     rc = lib.sonare_cqt_to_audio_checked(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(n_bins),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(n_bins, "n_bins"),
+        _to_c_int(n_frames, "n_frames"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
-        ctypes.c_int(bins_per_octave),
-        ctypes.c_int(n_iter),
+        _to_c_int(bins_per_octave, "bins_per_octave"),
+        _to_c_int(n_iter, "n_iter"),
         ctypes.byref(out),
         ctypes.byref(out_length),
     )
@@ -226,10 +228,10 @@ def mel_to_stft(
             raise RuntimeError("libsonare was built without HTK inverse-reconstruction support")
         rc = lib.sonare_mel_to_stft_ex(
             c_array,
-            ctypes.c_int(n_mels),
-            ctypes.c_int(n_frames),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_fft),
+            _to_c_int(n_mels, "n_mels"),
+            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_fft, "n_fft"),
             ctypes.c_float(fmin),
             ctypes.c_float(fmax),
             ctypes.c_int(1),
@@ -238,10 +240,10 @@ def mel_to_stft(
     else:
         rc = lib.sonare_mel_to_stft(
             c_array,
-            ctypes.c_int(n_mels),
-            ctypes.c_int(n_frames),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_fft),
+            _to_c_int(n_mels, "n_mels"),
+            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_fft, "n_fft"),
             ctypes.c_float(fmin),
             ctypes.c_float(fmax),
             ctypes.byref(out),
@@ -279,7 +281,7 @@ def _inverse_audio(
                 c_array,
                 *args,
                 *htk_arg,
-                ctypes.c_int(n_iter),
+                _to_c_int(n_iter, "n_iter"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -329,11 +331,11 @@ def mel_to_audio(
         "sonare_mel_to_audio_ex",
         c_array,
         (
-            ctypes.c_int(n_mels),
-            ctypes.c_int(n_frames),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_fft),
-            ctypes.c_int(hop_length),
+            _to_c_int(n_mels, "n_mels"),
+            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(hop_length, "hop_length"),
             ctypes.c_float(fmin),
             ctypes.c_float(fmax),
         ),
@@ -360,13 +362,13 @@ def griffin_lim(
         _check(
             lib.sonare_griffin_lim(
                 data,
-                ctypes.c_size_t(length),
-                ctypes.c_int(n_bins),
-                ctypes.c_int(n_frames),
-                ctypes.c_int(n_fft),
-                ctypes.c_int(hop_length),
-                ctypes.c_int(sample_rate),
-                ctypes.c_int(n_iter),
+                _to_c_size_t(length, "length"),
+                _to_c_int(n_bins, "n_bins"),
+                _to_c_int(n_frames, "n_frames"),
+                _to_c_int(n_fft, "n_fft"),
+                _to_c_int(hop_length, "hop_length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(n_iter, "n_iter"),
                 ctypes.c_float(momentum),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -404,9 +406,9 @@ def mfcc_to_mel(
     if hasattr(lib, "sonare_mfcc_to_mel_ex"):
         rc = lib.sonare_mfcc_to_mel_ex(
             c_array,
-            ctypes.c_int(n_mfcc),
-            ctypes.c_int(n_frames),
-            ctypes.c_int(n_mels),
+            _to_c_int(n_mfcc, "n_mfcc"),
+            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(n_mels, "n_mels"),
             ctypes.c_float(lifter),
             ctypes.byref(out),
         )
@@ -415,9 +417,9 @@ def mfcc_to_mel(
             raise RuntimeError("this libsonare build does not support inverse MFCC liftering")
         rc = lib.sonare_mfcc_to_mel(
             c_array,
-            ctypes.c_int(n_mfcc),
-            ctypes.c_int(n_frames),
-            ctypes.c_int(n_mels),
+            _to_c_int(n_mfcc, "n_mfcc"),
+            _to_c_int(n_frames, "n_frames"),
+            _to_c_int(n_mels, "n_mels"),
             ctypes.byref(out),
         )
     _check(rc)
@@ -478,12 +480,12 @@ def mfcc_to_audio(
             "sonare_mfcc_to_audio_ex",
             c_array,
             (
-                ctypes.c_int(n_mfcc),
-                ctypes.c_int(n_frames),
-                ctypes.c_int(n_mels),
-                ctypes.c_int(sample_rate),
-                ctypes.c_int(n_fft),
-                ctypes.c_int(hop_length),
+                _to_c_int(n_mfcc, "n_mfcc"),
+                _to_c_int(n_frames, "n_frames"),
+                _to_c_int(n_mels, "n_mels"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(n_fft, "n_fft"),
+                _to_c_int(hop_length, "hop_length"),
                 ctypes.c_float(fmin),
                 ctypes.c_float(fmax),
             ),
@@ -496,17 +498,17 @@ def mfcc_to_audio(
     out_length = ctypes.c_size_t()
     rc = lib.sonare_mfcc_to_audio_ex2(
         c_array,
-        ctypes.c_int(n_mfcc),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(n_mels),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
+        _to_c_int(n_mfcc, "n_mfcc"),
+        _to_c_int(n_frames, "n_frames"),
+        _to_c_int(n_mels, "n_mels"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_int(1 if htk else 0),
         ctypes.c_float(lifter),
-        ctypes.c_int(n_iter),
+        _to_c_int(n_iter, "n_iter"),
         ctypes.byref(out),
         ctypes.byref(out_length),
     )
@@ -549,12 +551,12 @@ def vqt(
     out = SonareCqtResult()
     rc = lib.sonare_vqt(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
-        ctypes.c_int(n_bins),
-        ctypes.c_int(bins_per_octave),
+        _to_c_int(n_bins, "n_bins"),
+        _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.c_float(gamma),
         ctypes.byref(out),
     )
@@ -584,15 +586,15 @@ def vqt_to_audio(
     out_length = ctypes.c_size_t()
     rc = lib.sonare_vqt_to_audio_checked(
         c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(n_bins),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
+        _to_c_size_t(length, "length"),
+        _to_c_int(n_bins, "n_bins"),
+        _to_c_int(n_frames, "n_frames"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(hop_length, "hop_length"),
         ctypes.c_float(fmin),
-        ctypes.c_int(bins_per_octave),
+        _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.c_float(gamma),
-        ctypes.c_int(n_iter),
+        _to_c_int(n_iter, "n_iter"),
         ctypes.byref(out),
         ctypes.byref(out_length),
     )
