@@ -691,6 +691,11 @@ class NoteObject:
     bare ``NoteObject(onset_sample=..., offset_sample=...)`` for a span it found
     some other way.
 
+    The span has no default, so a note built by hand states it. The other
+    surfaces declare the same two fields mandatory on their own note input and
+    reject an omitted one; a default of 0 here would instead have been a
+    zero-length span, rendering the note's edit as nothing.
+
     Attributes:
         onset_sample: First sample of the note.
         offset_sample: One past the last sample of the note.
@@ -706,8 +711,8 @@ class NoteObject:
             note.
     """
 
-    onset_sample: int = 0
-    offset_sample: int = 0
+    onset_sample: int
+    offset_sample: int
     frame_start: int = 0
     frame_end: int = 0
     median_hz: float = 0.0
@@ -1450,6 +1455,11 @@ class PercussiveEvent:
     ``PercussiveEvent(onset_sample=..., offset_sample=...)`` for a span it found
     some other way.
 
+    The span has no default, so an event built by hand states it. The other
+    surfaces declare the same two fields mandatory on their own event input and
+    reject an omitted one; a default of 0 here would instead have been a
+    zero-length span, rendering the event's edit as nothing.
+
     Attributes:
         onset_sample: First sample of the event, backtracked to the start of the
             transient rather than left where peak-picking landed.
@@ -1469,8 +1479,8 @@ class PercussiveEvent:
             extracted event.
     """
 
-    onset_sample: int = 0
-    offset_sample: int = 0
+    onset_sample: int
+    offset_sample: int
     strength: float = 0.0
     peak_amplitude: float = 0.0
     percussive_ratio: float = 0.0
@@ -1583,7 +1593,8 @@ def extract_percussive_events(
             more of a sustained sound harmonic.
         hpss_kernel_percussive: The same, along frequency; ``None`` keeps 31.
         onset_wait: Minimum frames between consecutive onsets; ``None`` keeps the
-            default (1).
+            default (1). Must be a whole number: 0 is the default's own spelling,
+            so a fractional wait is refused rather than resolved onto it.
         onset_delta: Offset added to the detector's adaptive threshold; raising
             it finds fewer, stronger hits and lowering it finds more. ``None``
             keeps the default (0.06), so exactly 0 is the one value not
@@ -1615,12 +1626,14 @@ def extract_percussive_events(
         detected, which is reported rather than raised.
 
     Raises:
-        SonareValueError: If ``samples`` is empty or non-finite, or a framing or
-            kernel size does not fit in a signed 32-bit integer.
+        SonareValueError: If ``samples`` is empty or non-finite, or a framing,
+            kernel size or ``onset_wait`` is not a whole number fitting in a
+            signed 32-bit integer.
         SonareError: If the C call rejects the request (a framing that breaks
-            overlap-add, a negative or non-finite ``max_event_ms``, or a
-            ``min_percussive_ratio`` outside ``[0, 1]``). 0 is not rejected for
-            any of these: it is the C ABI's spelling of the default.
+            overlap-add, a negative ``onset_wait``, a negative or non-finite
+            ``max_event_ms``, or a ``min_percussive_ratio`` outside ``[0, 1]``).
+            0 is not rejected for any of these: it is the C ABI's spelling of the
+            default.
 
     Example:
         >>> events = libsonare.extract_percussive_events(audio, sr)
@@ -1641,7 +1654,14 @@ def extract_percussive_events(
             hpss_kernel_harmonic,
             hpss_kernel_percussive,
         ),
-        onset_wait=0 if onset_wait is None else int(onset_wait),
+        # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
+        # "keep the default", so a fractional wait would run at the default and
+        # report success.
+        onset_wait=(
+            0
+            if onset_wait is None
+            else _validate_c_int_field("extract_percussive_events", onset_wait, "onset_wait")
+        ),
         onset_delta=0.0 if onset_delta is None else float(onset_delta),
         max_event_ms=0.0 if max_event_ms is None else float(max_event_ms),
         # 0 is this field's own meaning as well as its default, so it is passed

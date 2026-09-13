@@ -13,6 +13,7 @@
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
+#include "util/zero_is_default.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -223,10 +224,17 @@ void RealtimeEngineWasm::setSf2Instrument(uint32_t destination_id, val config) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   sonare::midi::synth::Sf2PlayerConfig cfg;
   if (!config.isUndefined() && !config.isNull()) {
-    const float gain = floatProperty(config, "gain", 0.0f);
-    if (gain > 0.0f) cfg.gain = gain;
+    // 0 selects the player's own default; a value the player would replace in
+    // silence is refused here instead.
+    cfg.gain = sonare::ZeroIsDefault(floatProperty(config, "gain", 0.0f))
+                   .checked_non_negative(cfg.gain, "gain");
     const int polyphony = intProperty(config, "polyphony", 0);
-    if (polyphony > 0) cfg.polyphony = polyphony;
+    if (polyphony < 0) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "polyphony must be 0 (the library default) or a positive voice count");
+    }
+    if (polyphony != 0) cfg.polyphony = polyphony;
     cfg.prefer_model_for_modeled_families =
         boolProperty(config, "preferModelForModeledFamilies", false);
     cfg.bank_rig_binding = !boolProperty(config, "clearBankRig", false);

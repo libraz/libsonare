@@ -6,6 +6,7 @@
 
 #include "c_api/project_internal.h"
 #include "util/numeric_validation.h"
+#include "util/zero_is_default.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include <cmath>
@@ -307,11 +308,13 @@ sonare::midi::BuiltinSynthConfig synth_config_from_c(const SonareBuiltinSynthCon
 // struct_version 0/1 preserve the original layout; version 2 enables the
 // model-first field and version 3 the rig clear. Anything newer is rejected by
 // the caller). The player clamps polyphony itself.
-sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
-    const SonareSf2InstrumentConfig& c) noexcept {
+sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(const SonareSf2InstrumentConfig& c) {
   sonare::midi::synth::Sf2PlayerConfig cfg;
-  if (c.gain > 0.0f) cfg.gain = c.gain;
-  if (c.polyphony > 0) cfg.polyphony = c.polyphony;
+  // Passed through, the player's constructor would substitute for it in silence.
+  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(cfg.gain, "gain");
+  SONARE_CHECK_MSG(c.polyphony >= 0, sonare::ErrorCode::InvalidParameter,
+                   "polyphony must be 0 (the library default) or a positive voice count");
+  if (c.polyphony != 0) cfg.polyphony = c.polyphony;
   if (c.struct_version >= 2) {
     cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
   }

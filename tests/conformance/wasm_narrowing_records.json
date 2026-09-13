@@ -28,18 +28,23 @@
   "readers": [
     {
       "file": "bindings/analysis/quick.cpp",
+      "symbol": "onsetWindowFrames",
+      "reason": "Not a conversion: the narrowing is delegated whole to the shared intProperty, and what is local is the field's own domain. The shared reader guarantees the value survived the conversion unchanged, which a negative frame count does, and nothing downstream asks whether one means anything -- the peak picker returned an ordinary onset list for -1. The six onset window fields are the only place that domain applies, so asking it at the field keeps it off every other integer option."
+    },
+    {
+      "file": "bindings/analysis/quick.cpp",
       "symbol": "seedFromVal",
       "reason": "A default seeder rather than an options-bag reader: it rejects a non-number, turns a non-positive value into a deterministic seed, and refuses anything past the type's maximum by name. Every value in the type's range is a legal seed, so truncating a fractional one cannot land outside the domain -- driving it, a seed moves the synthesized response, 4294967296 and Infinity are refused, and 0 / -1 / NaN all fall back to the documented default."
     },
     {
       "file": "bindings/effects/repair.cpp",
-      "symbol": "repairIntOption",
-      "reason": "Delegates its narrowing to the shared checkedIntFromVal rather than casting, so the conversion contract is single-sourced and only the default-and-absence handling is local. Kept out of the shared header because its options bag is positional in a way the generic reader is not."
+      "symbol": "repairFloatOption",
+      "reason": "Delegates its narrowing to the shared checkedFloatFromVal rather than casting, so the conversion contract is single-sourced and only the default-and-absence handling is local. Kept out of the shared header for the same reason as its integer sibling: its options bag is positional in a way the generic reader is not. Not the same defect as the integer one and it had to be measured separately -- an overflow here produces inf rather than a plausible in-domain number, and the config validator refuses NaN but accepted inf, so four distinct absurd requests reached one identical result."
     },
     {
       "file": "bindings/effects/repair.cpp",
-      "symbol": "repairFloatOption",
-      "reason": "Delegates its narrowing to the shared checkedFloatFromVal rather than casting, so the conversion contract is single-sourced and only the default-and-absence handling is local. Kept out of the shared header for the same reason as its integer sibling: its options bag is positional in a way the generic reader is not. Not the same defect as the integer one and it had to be measured separately -- an overflow here produces inf rather than a plausible in-domain number, and the config validator refuses NaN but accepted inf, so four distinct absurd requests reached one identical result."
+      "symbol": "repairIntOption",
+      "reason": "Delegates its narrowing to the shared checkedIntFromVal rather than casting, so the conversion contract is single-sourced and only the default-and-absence handling is local. Kept out of the shared header because its options bag is positional in a way the generic reader is not."
     },
     {
       "file": "bindings/mixing/mixing.cpp",

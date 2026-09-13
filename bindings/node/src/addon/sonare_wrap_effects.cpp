@@ -513,12 +513,36 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
   return true;
 }
 
+/// Rejects a row whose declared-mandatory sample bound is absent or not a
+/// number, in place of the type-checked reader's silent fallback. Throws the
+/// error class the WASM surface throws for the same omission, so the two agree
+/// on the rejection as well as on the policy. Shared by the note and the
+/// percussive-event readers, whose input types declare the same two fields.
+void RequireSpanKey(const char* fn, const char* subject, const Napi::Object& row, const char* key) {
+  const Napi::Value value = row.Get(key);
+  if (value.IsUndefined() || value.IsNull()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(fn) + " " + subject + "." + key + " is required");
+  }
+  if (!value.IsNumber()) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        std::string(fn) + " " + subject + "." + key + " must be a number");
+  }
+}
+
 /// Reads a JS note array onto the C structs, plus the envelope pool their edits
 /// index into. A render reads the sample spans and a curve edit the frame
 /// bounds; split and merge re-derive both from the frame bounds alone, so all
 /// of them are read here and the entry point decides what it needs.
+///
+/// @p require_span demands the sample bounds the NoteObjectInput type declares
+/// mandatory. Only a render reads them, and an omitted one used to default to
+/// 0, which is a zero-length span: the note's edit silently rendered as nothing
+/// while the same request threw on the WASM surface. The note-set entries split
+/// and merge take do not declare the bounds at all, so they keep the default.
 void ReadNotes(const char* fn, const Napi::Array& js_notes, std::vector<SonareNoteObject>* notes,
-               std::vector<float>* envelopes) {
+               std::vector<float>* envelopes, bool require_span = false) {
   const uint32_t count = js_notes.Length();
   notes->assign(count, SonareNoteObject{});
   for (uint32_t i = 0; i < count; ++i) {
@@ -528,6 +552,10 @@ void ReadNotes(const char* fn, const Napi::Array& js_notes, std::vector<SonareNo
     }
     Napi::Object note = item.As<Napi::Object>();
     SonareNoteObject& row = (*notes)[i];
+    if (require_span) {
+      RequireSpanKey(fn, "note", note, "onsetSample");
+      RequireSpanKey(fn, "note", note, "offsetSample");
+    }
     row.onset_sample = node_int64_option(note, "onsetSample", 0);
     row.offset_sample = node_int64_option(note, "offsetSample", 0);
     row.frame_start = node_int_option(note, "frameStart", 0);
@@ -631,7 +659,9 @@ void ReadPercussiveEventEdit(const char* fn, const Napi::Object& event,
 
 /// Reads a JS event array onto the C structs. Only the span and the edit are
 /// read: rendering ignores the measured figures, so an event straight from an
-/// extraction round-trips without them having to survive the trip.
+/// extraction round-trips without them having to survive the trip. The span is
+/// required, as PercussiveEventInput declares it — an omitted bound defaulted to
+/// 0, and a zero-length span renders the event's edit as nothing.
 void ReadPercussiveEvents(const char* fn, const Napi::Array& js_events,
                           std::vector<SonarePercussiveEvent>* events) {
   const uint32_t count = js_events.Length();
@@ -643,6 +673,8 @@ void ReadPercussiveEvents(const char* fn, const Napi::Array& js_events,
     }
     Napi::Object event = item.As<Napi::Object>();
     SonarePercussiveEvent& row = (*events)[i];
+    RequireSpanKey(fn, "event", event, "onsetSample");
+    RequireSpanKey(fn, "event", event, "offsetSample");
     row.onset_sample = node_int64_option(event, "onsetSample", 0);
     row.offset_sample = node_int64_option(event, "offsetSample", 0);
     ReadPercussiveEventEdit(fn, event, &row.edit);
@@ -756,7 +788,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
 
   std::vector<SonareNoteObject> notes;
   std::vector<float> envelopes;
-  ReadNotes("renderNotes", info[2].As<Napi::Array>(), &notes, &envelopes);
+  ReadNotes("renderNotes", info[2].As<Napi::Array>(), &notes, &envelopes, /*require_span=*/true);
 
   float* out = nullptr;
   size_t out_length = 0;

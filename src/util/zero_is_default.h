@@ -53,6 +53,20 @@ class ZeroIsDefault {
     return or_default(library_default);
   }
 
+  /// @brief `or_default()` after checking what the caller passed: the sentinel,
+  ///        or a finite value at or above zero.
+  /// @throws SonareException(InvalidParameter) for a negative or non-finite
+  ///         request. For entry points whose core substitutes its own default
+  ///         for such a value, or consumes it without validating, rather than
+  ///         reporting it -- passing the request through would replace it just
+  ///         as silently one layer down.
+  float checked_non_negative(float library_default, const char* field) const {
+    SONARE_CHECK_MSG(
+        numeric::finite_non_negative(caller_value_), ErrorCode::InvalidParameter,
+        std::string(field) + " must be 0 (the library default) or a finite non-negative value");
+    return or_default(library_default);
+  }
+
  private:
   float caller_value_;
 };

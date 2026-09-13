@@ -1,6 +1,11 @@
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
+import { assertSamples, assertSamplesInWindow } from './validation.js';
+
+// The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
+// here so the windowed pre-scan covers exactly the span the call will read; a
+// test pins it against the `nFft` the library reports back for a 0 request.
+const DEFAULT_SPECTRUM_N_FFT = 2048;
 
 /** One contiguous run of clipped samples reported by `meteringDetectClipping`. */
 export interface ClippingRegion {
@@ -518,6 +523,12 @@ export function meteringSpectrum(
  * `nFft`-length FFT), for spectrum-analyzer "moment" snapshots that must not be
  * time-averaged like {@link meteringSpectrum}. The analysis frame spans
  * `[frameOffset, frameOffset + nFft)`; samples past the end are zero-padded.
+ *
+ * The frame is also the only span validated: a non-finite sample inside it is
+ * rejected, while one outside it neither reaches the FFT nor refuses the call.
+ * The emptiness and `sampleRate` checks still cover the whole buffer. Cost per
+ * call is therefore set by `nFft` rather than by the length of the buffer, so an
+ * analyzer may poll a long recording frame by frame.
  */
 export function meteringSpectrumFrame(request: MeteringSpectrumFrameRequest): SpectrumReport;
 export function meteringSpectrumFrame(
@@ -535,7 +546,14 @@ export function meteringSpectrumFrame(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, frameOffset, ...options } : samples;
   const validate = request.validate !== false;
-  assertSamples('meteringSpectrumFrame', request.samples, validate);
+  const nFft = request.nFft ?? 0;
+  assertSamplesInWindow(
+    'meteringSpectrumFrame',
+    request.samples,
+    validate,
+    request.frameOffset ?? 0,
+    nFft > 0 ? nFft : DEFAULT_SPECTRUM_N_FFT,
+  );
   return addon.meteringSpectrumFrame(
     request.samples,
     request.sampleRate ?? 22050,

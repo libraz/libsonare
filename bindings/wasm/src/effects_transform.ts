@@ -317,7 +317,11 @@ export interface ExtractPercussiveEventsRequest
    * rate, so a wrong/omitted value caps the spans differently.
    */
   sampleRate: number;
-  /** Minimum frames between consecutive onsets. Default 1; negative is rejected. */
+  /**
+   * Minimum frames between consecutive onsets. Default 1, and a whole number:
+   * 0 is how the default is spelled, so a fractional wait is refused rather
+   * than truncated onto it. Negative is rejected.
+   */
   onsetWait?: number;
   /**
    * Offset added to the detector's adaptive threshold; raising it finds fewer,
@@ -1156,9 +1160,9 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
  * @throws RangeError when the samples or sample rate fail the shared input checks
  * @throws SonareError (`InvalidParameter`) on a kernel size that is not an
  *   integer within the 32-bit range, a framing size that is negative or outside
- *   that range, a framing that breaks constant overlap-add, a negative or
- *   non-finite `onsetWait` / `onsetDelta` / `maxEventMs`, or a
- *   `minPercussiveRatio` outside `[0, 1]`
+ *   that range, a framing that breaks constant overlap-add, an `onsetWait` that
+ *   is fractional, negative or non-finite, a negative or non-finite `onsetDelta`
+ *   / `maxEventMs`, or a `minPercussiveRatio` outside `[0, 1]`
  *
  * @example
  * ```ts

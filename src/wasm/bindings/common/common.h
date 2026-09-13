@@ -194,6 +194,15 @@ std::vector<float> float32ArrayToVector(val arr);
 /// so the WASM surface rejects the same inputs even though it bypasses the
 /// C-ABI translation unit. @throws SonareException(InvalidParameter).
 Audio loadValidatedAudio(val samples, int sample_rate);
+/// @brief loadValidatedAudio for an entry point that reads one window of the
+/// buffer. The null/empty, sampleRate and buffer-size rules still cover the
+/// whole buffer; only the non-finite scan narrows, to
+/// [@p scan_offset, @p scan_offset + @p scan_count) clamped to the end. A
+/// sample outside that window is never read, so its value is not a precondition
+/// -- the contract the C ABI states for its windowed calls.
+/// @throws SonareException(InvalidParameter).
+Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_offset,
+                               std::size_t scan_count);
 /// @brief Interleaved sibling for the (samples, channels, sampleRate) facade.
 /// Validates channels > 0, the shared offline-input rules over the whole buffer,
 /// and that the length is a whole number of frames (no silent truncation of a
@@ -277,8 +286,17 @@ int64_t int64Property(val object, const char* key, int64_t default_value);
 ///          accepted result.
 /// @throws SonareException(InvalidParameter) naming @p key.
 float checkedFloatFromVal(const val& value, const char* key);
-/// @brief Presence-checked double reader. No narrowing happens -- it is here so
-///        the double half of an options bag reads through the same family.
+/// @brief Refuses a non-finite double. No narrowing to do -- a JS number is a
+///        double already -- so finiteness is the whole check.
+/// @details Every field reading through this today is also checked by the site
+///          that reads it (the tempo and time-signature segment validators, and
+///          an explicit isfinite on the marker id and the MIDI clip start), so
+///          this is the family's guarantee rather than the only guard. It is
+///          what a field added to one of those bags inherits.
+/// @throws SonareException(InvalidParameter) naming @p key.
+double checkedDoubleFromVal(const val& value, const char* key);
+/// @brief Presence-checked double reader: an absent field takes @p default_value,
+///        a present one is validated by @ref checkedDoubleFromVal.
 double doubleProperty(val object, const char* key, double default_value);
 /// @brief Resolves a built-in oscillator waveform given as a JS string or a JS
 ///        number to its @ref SonareSynthWaveform ordinal.

@@ -23,6 +23,7 @@
 any = [
   "init",                  # WASM async module init
   "assert_samples",        # exported input validators (Node + WASM)
+  "assert_samples_in_window",  # same family, scoped to a windowed call's analysis frame
   "assert_finite_samples",
   "assert_finite_scalar",
   "assert_non_empty_samples",

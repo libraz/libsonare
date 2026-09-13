@@ -3,6 +3,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <limits>
+
+#include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -322,20 +325,12 @@ val js_metering_spectrum(val samples, int sample_rate, val options) {
       if (f > 0) cfg.octave_fraction = f;
     }
     if (hasProperty(options, "dbRef")) {
-      const float ref = options["dbRef"].as<float>();
-      if (ref < 0.0f) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrum: dbRef must be non-negative");
-      }
-      if (ref > 0.0f) cfg.db_ref = ref;
+      cfg.db_ref = sonare::ZeroIsDefault(options["dbRef"].as<float>())
+                       .checked_non_negative(cfg.db_ref, "meteringSpectrum: dbRef");
     }
     if (hasProperty(options, "dbAmin")) {
-      const float amin = options["dbAmin"].as<float>();
-      if (amin < 0.0f) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrum: dbAmin must be non-negative");
-      }
-      if (amin > 0.0f) cfg.db_amin = amin;
+      cfg.db_amin = sonare::ZeroIsDefault(options["dbAmin"].as<float>())
+                        .checked_non_negative(cfg.db_amin, "meteringSpectrum: dbAmin");
     }
   }
   if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
@@ -357,8 +352,24 @@ val js_metering_spectrum(val samples, int sample_rate, val options) {
 // of the window [frameOffset, frameOffset + nFft), zero-padded past the end. NOT
 // time-averaged like js_metering_spectrum. Backs the C ABI
 // sonare_metering_spectrum_frame.
-val js_metering_spectrum_frame(val samples, int sample_rate, size_t frame_offset, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_metering_spectrum_frame(val samples, int sample_rate, double frame_offset_arg, val options) {
+  // Declared double and checked here rather than taken as a size_t: embind
+  // converts a positional size_t by a JS numeric rule that WRAPS, and the core's
+  // clamp only catches an offset past the end. A wrap lands INSIDE the buffer --
+  // 2^32 + 100 returned the window at 100 and NaN returned the window at 0, both
+  // as a plausible spectrum of audio the caller never asked about.
+  //
+  // The addressability bound is here rather than in wasmCountArg because this is
+  // an offset INTO a buffer. That helper also serves capped requests, where a
+  // number past the address space legitimately means "as much as there is".
+  if (frame_offset_arg > static_cast<double>(std::numeric_limits<size_t>::max())) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "meteringSpectrumFrame: frameOffset is larger than this build can address");
+  }
+  const size_t frame_offset = wasmCountArg(frame_offset_arg, "meteringSpectrumFrame frameOffset");
+  // Options before the buffer: nFft is what makes the analysis frame, and the
+  // frame is the only span this call reads or holds the caller to.
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "nFft")) {
@@ -381,26 +392,20 @@ val js_metering_spectrum_frame(val samples, int sample_rate, size_t frame_offset
       if (f > 0) cfg.octave_fraction = f;
     }
     if (hasProperty(options, "dbRef")) {
-      const float ref = options["dbRef"].as<float>();
-      if (ref < 0.0f) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrumFrame: dbRef must be non-negative");
-      }
-      if (ref > 0.0f) cfg.db_ref = ref;
+      cfg.db_ref = sonare::ZeroIsDefault(options["dbRef"].as<float>())
+                       .checked_non_negative(cfg.db_ref, "meteringSpectrumFrame: dbRef");
     }
     if (hasProperty(options, "dbAmin")) {
-      const float amin = options["dbAmin"].as<float>();
-      if (amin < 0.0f) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrumFrame: dbAmin must be non-negative");
-      }
-      if (amin > 0.0f) cfg.db_amin = amin;
+      cfg.db_amin = sonare::ZeroIsDefault(options["dbAmin"].as<float>())
+                        .checked_non_negative(cfg.db_amin, "meteringSpectrumFrame: dbAmin");
     }
   }
   if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "meteringSpectrumFrame: nFft must be a power of two");
   }
+  Audio audio = loadValidatedAudioWindow(samples, sample_rate, frame_offset,
+                                         static_cast<std::size_t>(cfg.n_fft));
   metering::SpectrumResult result = metering::spectrum_frame(audio, frame_offset, cfg);
   val out = val::object();
   out.set("frequencies", vectorToFloat32Array(result.frequencies));

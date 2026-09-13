@@ -225,7 +225,9 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
 /// @brief Mel spectrogram with an explicit Mel range, so a forward transform can
 ///        round-trip with the inverse API (sonare_mel_to_stft / _to_audio).
 /// @param fmin Minimum Mel frequency in Hz (0.0 keeps the librosa default).
-/// @param fmax Maximum Mel frequency in Hz (0.0 = sr/2).
+///   A negative or non-finite bound is rejected with
+///   @c SONARE_ERROR_INVALID_PARAMETER rather than resolving to the default.
+/// @param fmax Maximum Mel frequency in Hz (0.0 = sr/2), same rejection as @p fmin.
 /// @param htk Non-zero to use the HTK Mel formula instead of Slaney.
 /// @param out Receives heap-owned arrays; free with sonare_free_mel_result.
 SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int sample_rate,

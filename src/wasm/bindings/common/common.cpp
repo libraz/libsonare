@@ -174,6 +174,13 @@ Audio loadValidatedAudio(val samples, int sample_rate) {
   return Audio::from_buffer(data.data(), data.size(), sample_rate);
 }
 
+Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_offset,
+                               std::size_t scan_count) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_window(data.data(), data.size(), sample_rate, scan_offset, scan_count);
+  return Audio::from_buffer(data.data(), data.size(), sample_rate);
+}
+
 std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
                                             size_t* frames) {
   if (channels <= 0) {
@@ -388,9 +395,22 @@ float checkedFloatFromVal(const val& value, const char* key) {
   return static_cast<float>(number);
 }
 
+double checkedDoubleFromVal(const val& value, const char* key) {
+  // No narrowing to do -- double is what a JS number already is -- so finiteness
+  // is the whole check. Every field reading through this today is also checked
+  // by the site that reads it; the check is here so a field added to one of
+  // those bags is covered without someone having to repeat it.
+  const double number = value.as<double>();
+  if (!std::isfinite(number)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " must be a finite number");
+  }
+  return number;
+}
+
 double doubleProperty(val object, const char* key, double default_value) {
   val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : value.as<double>();
+  return value.isUndefined() ? default_value : checkedDoubleFromVal(value, key);
 }
 
 int builtinWaveformFromVal(const val& value) {

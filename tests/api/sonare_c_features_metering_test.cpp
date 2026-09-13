@@ -972,4 +972,104 @@ TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
               SONARE_ERROR_INVALID_PARAMETER);
     }
   }
+
+  SECTION("reference_midi is applied or refused rather than replaced by the default") {
+    float out = 0.0f;
+
+    // The documented sentinel, and a legal origin that moves the grid off it.
+    // Anchoring at 60.5 shifts the whole 12-TET grid up a half semitone, which
+    // puts C# at 60.5 and C at 59.5, so quantizing 60.0 lands on 59.5 instead
+    // of the default grid's 60.0 -- the request is consumed, not just accepted.
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, 60.0f, &out) == SONARE_OK);
+    REQUIRE(out == Catch::Approx(60.0f).margin(0.01f));
+    REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 60.5f, 60.0f, &out) == SONARE_OK);
+    REQUIRE(out == Catch::Approx(59.5f).margin(0.01f));
+
+    // A negative or out-of-range origin used to be discarded for the library
+    // default. The quantizer is noexcept and rounds the origin to an int, so
+    // there is nothing downstream to refuse it.
+    for (float bad : {-1.0f, -69.0f, 128.0f, 1.0e30f}) {
+      REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, bad, 60.0f, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, bad, 60.0f, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+    }
+    for (float bad :
+         {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+          -std::numeric_limits<float>::infinity()}) {
+      REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, bad, 60.0f, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, bad, 60.0f, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+}
+
+TEST_CASE("sonare mel range is applied or refused rather than defaulted", "[c_api]") {
+  const auto samples = generate_sine(440.0f, 22050, 0.5f);
+
+  auto mel_power = [&](float fmin, float fmax, SonareError* err) {
+    SonareMelResult result{};
+    *err = sonare_mel_spectrogram_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, fmin,
+                                     fmax, 0, &result);
+    std::vector<float> power;
+    if (*err == SONARE_OK) {
+      const size_t total = static_cast<size_t>(result.n_mels) * result.n_frames;
+      power.assign(result.power, result.power + total);
+      sonare_free_mel_result(&result);
+    }
+    return power;
+  };
+
+  SECTION("0 keeps the librosa default and a legal range is consumed") {
+    SonareError err = SONARE_OK;
+    const std::vector<float> defaulted = mel_power(0.0f, 0.0f, &err);
+    REQUIRE(err == SONARE_OK);
+    REQUIRE_FALSE(defaulted.empty());
+
+    // fmax == 0 documents sr/2, so spelling it out must land on the same bands.
+    const std::vector<float> nyquist = mel_power(0.0f, 11025.0f, &err);
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(nyquist.size() == defaulted.size());
+    for (size_t i = 0; i < nyquist.size(); ++i) {
+      REQUIRE(nyquist[i] == Catch::Approx(defaulted[i]).margin(1.0e-6f));
+    }
+
+    // A legal non-sentinel range must move the filterbank off the default one,
+    // or a refusal-only test would pass against a reader that ignores the range.
+    const std::vector<float> ranged = mel_power(500.0f, 4000.0f, &err);
+    REQUIRE(err == SONARE_OK);
+    REQUIRE(ranged.size() == defaulted.size());
+    bool differs = false;
+    for (size_t i = 0; i < ranged.size() && !differs; ++i) {
+      differs = std::abs(ranged[i] - defaulted[i]) > 1.0e-6f;
+    }
+    REQUIRE(differs);
+  }
+
+  SECTION("a negative or non-finite bound is refused rather than defaulted") {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    SonareError err = SONARE_OK;
+    for (float bad : {-1.0f, -11025.0f, nan, inf, -inf}) {
+      mel_power(bad, 0.0f, &err);
+      REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+      mel_power(0.0f, bad, &err);
+      REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+
+  SECTION("the MFCC entry point carries the same contract") {
+    SonareMfccResult result{};
+    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f, 0.0f, 0,
+                           0.0f, &result) == SONARE_OK);
+    REQUIRE(result.n_frames > 0);
+    sonare_free_mfcc_result(&result);
+
+    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, -1.0f, 0.0f, 0,
+                           0.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f,
+                           std::numeric_limits<float>::quiet_NaN(), 0, 0.0f,
+                           &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
 }

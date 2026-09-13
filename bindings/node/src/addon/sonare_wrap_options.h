@@ -31,7 +31,10 @@ namespace sonare_node {
 ///   Truncation is deliberately left alone: ToInt32 already dropped the
 ///   fraction at every one of these sites and 31.5 reaching the callee as 31
 ///   does not change a magnitude, so refusing it would be a separate contract
-///   change rather than closing this wrap.
+///   change rather than closing this wrap. It is not inert on a field whose 0
+///   means "keep the default" -- there anything in (-1, 1) selects the default
+///   and reports success, which is a category change rather than a magnitude
+///   one, so such a field takes its integrality check in the TS facade.
 ///
 ///   The refusal UNWINDS rather than leaving a pending JS exception, because
 ///   these readers are called from entry points that keep working afterwards.

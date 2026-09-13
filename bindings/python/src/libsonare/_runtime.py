@@ -163,6 +163,7 @@ def _validate_samples(
     validate: bool = True,
     arg_name: str = "samples",
     allow_empty: bool = False,
+    window: tuple[int, int] | None = None,
 ) -> np.ndarray:
     """Coerce ``samples`` to a contiguous float32 buffer and apply input guards.
 
@@ -180,16 +181,28 @@ def _validate_samples(
     several buffers together and reports "nothing to work on" once rather than
     per buffer. The non-finite scan is unaffected — it is a no-op on an empty
     buffer — so the NaN / Inf message stays defined in this one place.
+
+    ``window`` is ``(start, length)`` for an entry point that reads one span of
+    the buffer rather than all of it. It narrows the non-finite scan to that
+    span, clamped to the buffer, and leaves the emptiness check covering the
+    whole thing — the contract the C ABI states for its windowed calls, and the
+    cost model they promise: per call the scan is bounded by the window, not by
+    the buffer an analyzer is polling. The reported index stays absolute.
     """
     buf = _as_float32_buffer(samples, fn_name=fn_name, arg_name=arg_name)
-    if not allow_empty and int(buf.shape[0]) == 0:
+    length = int(buf.shape[0])
+    if not allow_empty and length == 0:
         raise SonareValueError(f"{fn_name}: {arg_name} must not be empty")
     if validate:
+        start, stop = 0, length
+        if window is not None:
+            start = min(max(window[0], 0), length)
+            stop = min(start + max(window[1], 0), length)
         # `np.isfinite` is vectorised C, so this stays cheap relative to the
         # actual DSP call but lets us surface the *index* of the bad value.
-        finite = np.isfinite(buf)
+        finite = np.isfinite(buf[start:stop])
         if not bool(finite.all()):
-            bad = int(np.argmin(finite))
+            bad = start + int(np.argmin(finite))
             raise SonareValueError(f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}")
     return buf
 

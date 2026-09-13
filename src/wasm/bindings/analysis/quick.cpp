@@ -384,24 +384,33 @@ val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_le
   return out;
 }
 
+// The field's own domain, asked at the field rather than in the shared reader:
+// the reader guarantees the value survived the conversion unchanged, and -1
+// survives it. Nothing downstream asks whether a negative frame count means
+// anything, so the peak picker returned a normal onset list for one.
+int onsetWindowFrames(val options, const char* key, int default_value) {
+  const int frames = intProperty(options, key, default_value);
+  if (frames < 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " must be a non-negative frame count");
+  }
+  return frames;
+}
+
 val js_detect_onsets(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   OnsetDetectConfig config;
-  const auto number = [&](const char* name, float fallback) {
-    const val value = options[name];
-    return value.isUndefined() ? fallback : value.as<float>();
-  };
   config.n_fft = intProperty(options, "nFft", config.n_fft);
   config.hop_length = intProperty(options, "hopLength", config.hop_length);
-  config.threshold = number("threshold", config.threshold);
-  config.pre_max = intProperty(options, "preMax", config.pre_max);
-  config.post_max = intProperty(options, "postMax", config.post_max);
-  config.pre_avg = intProperty(options, "preAvg", config.pre_avg);
-  config.post_avg = intProperty(options, "postAvg", config.post_avg);
-  config.delta = number("delta", config.delta);
-  config.wait = intProperty(options, "wait", config.wait);
+  config.threshold = floatProperty(options, "threshold", config.threshold);
+  config.pre_max = onsetWindowFrames(options, "preMax", config.pre_max);
+  config.post_max = onsetWindowFrames(options, "postMax", config.post_max);
+  config.pre_avg = onsetWindowFrames(options, "preAvg", config.pre_avg);
+  config.post_avg = onsetWindowFrames(options, "postAvg", config.post_avg);
+  config.delta = floatProperty(options, "delta", config.delta);
+  config.wait = onsetWindowFrames(options, "wait", config.wait);
   config.backtrack = !options["backtrack"].isUndefined() && options["backtrack"].as<bool>();
-  config.backtrack_range = intProperty(options, "backtrackRange", config.backtrack_range);
+  config.backtrack_range = onsetWindowFrames(options, "backtrackRange", config.backtrack_range);
   std::vector<float> onsets = detect_onsets(audio, config);
   return vectorToFloat32Array(onsets);
 }

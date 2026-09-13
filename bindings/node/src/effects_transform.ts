@@ -251,7 +251,11 @@ export interface ExtractPercussiveEventsRequest extends PercussiveSeparationOpti
    * rate, so a wrong or omitted value caps the spans differently.
    */
   sampleRate: number;
-  /** Minimum frames between consecutive onsets. Default 1. */
+  /**
+   * Minimum frames between consecutive onsets. Default 1, and a whole number:
+   * 0 is how the default is spelled, so a fractional wait is refused rather
+   * than truncated onto it.
+   */
   onsetWait?: number;
   /**
    * Offset added to the detector's adaptive threshold; raising it finds fewer,
@@ -792,9 +796,10 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * @returns The rendered audio, the same length as `samples`.
  * @throws {TypeError} `notes` is not an array, or `f0Hz` is not a `Float32Array`.
  * @throws {RangeError} `sampleRate` is out of the supported range.
- * @throws {SonareError} A note carries `vibratoDepthChange` or `driftChange`
- *   without an `f0Hz` covering its frame span, or an `amplitudeEnvelope` value
- *   is not a finite non-negative gain.
+ * @throws {SonareError} A note is missing `onsetSample` or `offsetSample`, or
+ *   carries `vibratoDepthChange` or `driftChange` without an `f0Hz` covering its
+ *   frame span, or an `amplitudeEnvelope` value is not a finite non-negative
+ *   gain.
  *
  * @example
  * ```ts
@@ -1024,6 +1029,11 @@ export function extractPercussiveEvents(
   const { samples, sampleRate, ...options } = request;
   assertSampleRate('extractPercussiveEvents', sampleRate);
   assertPercussiveSeparation('extractPercussiveEvents', options);
+  if (options.onsetWait !== undefined) {
+    // Checked here with its four bag-siblings, and for the same reason: 0 is
+    // this field's default, and the addon's narrowing truncates onto it.
+    assertInt32('extractPercussiveEvents', options.onsetWait, 'onsetWait');
+  }
   return addon.extractPercussiveEvents(toSamples(samples), sampleRate, options);
 }
 

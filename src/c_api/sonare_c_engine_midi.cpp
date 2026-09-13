@@ -10,6 +10,7 @@
 #include "rt/command.h"
 #include "sonare_c_internal.h"
 #include "util/resource_limits.h"
+#include "util/zero_is_default.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
@@ -270,8 +271,12 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   // the data-free floor, so live MIDI stays audible with zero data.
   SONARE_C_TRY
   sonare::midi::synth::Sf2PlayerConfig cfg;
-  if (config->gain > 0.0f) cfg.gain = config->gain;
-  if (config->polyphony > 0) cfg.polyphony = config->polyphony;
+  // 0 selects the player's own default for both; the player clamps the rest. A
+  // negative or non-finite gain it would substitute in silence is refused here.
+  cfg.gain = sonare::ZeroIsDefault(config->gain).checked_non_negative(cfg.gain, "gain");
+  SONARE_CHECK_MSG(config->polyphony >= 0, sonare::ErrorCode::InvalidParameter,
+                   "polyphony must be 0 (the library default) or a positive voice count");
+  if (config->polyphony != 0) cfg.polyphony = config->polyphony;
   if (config->struct_version >= 2) {
     cfg.prefer_model_for_modeled_families = config->prefer_model_for_modeled_families != 0;
   }

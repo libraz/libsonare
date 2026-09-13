@@ -385,3 +385,56 @@ TEST_CASE("sonare_metering_spectrum_frame's per-call cost does not track buffer 
   // call shows up here; with every per-sample term bounded by n_fft it cannot.
   CHECK(long_us < short_us * 10.0);
 }
+
+TEST_CASE("the spectrum dB knobs refuse a non-finite request rather than defaulting it",
+          "[c_api][metering][spectrum]") {
+  const std::vector<float> samples = make_spectrum_frame_fixture();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  const auto averaged = [&samples](float db_ref, float db_amin, SonareSpectrumResult* out) {
+    return sonare_metering_spectrum(samples.data(), samples.size(), kSpectrumFrameSampleRate, 2048,
+                                    0, 0, db_ref, db_amin, out);
+  };
+  const auto single_frame = [&samples](float db_ref, float db_amin, SonareSpectrumResult* out) {
+    return sonare_metering_spectrum_frame(samples.data(), samples.size(), kSpectrumFrameSampleRate,
+                                          0, 2048, 0, 0, db_ref, db_amin, out);
+  };
+
+  SECTION("a NaN or an infinity is an invalid parameter on both entry points") {
+    for (float bad : {nan, inf, -inf, -1.0f}) {
+      CAPTURE(bad);
+      SonareSpectrumResult result = {};
+      CHECK(averaged(bad, 0.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(averaged(0.0f, bad, &result) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(single_frame(bad, 0.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(single_frame(0.0f, bad, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+
+  // Without this the section above passes on an entry point that refuses every
+  // request, and it passed before the fix for every value except NaN and +inf:
+  // a NaN resolved to the default and an infinite db_amin returned a spectrum of
+  // infinities, both with SONARE_OK.
+  SECTION("the sentinel and a legal value are both still accepted, and differ") {
+    SonareSpectrumResult defaulted = {};
+    REQUIRE(single_frame(0.0f, 0.0f, &defaulted) == SONARE_OK);
+    REQUIRE(defaulted.bin_count > 0);
+
+    SonareSpectrumResult referenced = {};
+    REQUIRE(single_frame(2.0f, 0.0f, &referenced) == SONARE_OK);
+    REQUIRE(referenced.bin_count == defaulted.bin_count);
+
+    bool differs = false;
+    bool all_finite = true;
+    for (size_t i = 0; i < defaulted.bin_count; ++i) {
+      differs = differs || referenced.db[i] != defaulted.db[i];
+      all_finite = all_finite && std::isfinite(defaulted.db[i]);
+    }
+    CHECK(differs);
+    CHECK(all_finite);
+
+    sonare_free_spectrum_result(&referenced);
+    sonare_free_spectrum_result(&defaulted);
+  }
+}

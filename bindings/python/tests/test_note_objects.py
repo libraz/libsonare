@@ -295,6 +295,24 @@ def test_hand_built_note_needs_only_a_span_and_an_edit() -> None:
     )
 
 
+def test_a_hand_built_note_has_to_state_its_span() -> None:
+    # The span has no default, so a note built without one does not exist to be
+    # rendered. A default of 0 made the two bounds equal, and a zero-length span
+    # renders as nothing: the edit below would have been dropped in silence
+    # while the call reported success, which is what the sibling surfaces reject.
+    audio, _, _ = _melody()
+    with pytest.raises(TypeError):
+        libsonare.NoteObject()  # type: ignore[call-arg]
+
+    stated = libsonare.NoteObject(onset_sample=0, offset_sample=len(audio) // 2)
+    stated.edit.gain_db = -60.0
+    rendered = libsonare.render_notes(audio, SR, [stated])
+    # The control: the span that IS stated reaches the render and changes it.
+    assert _rms(rendered[FADE_MARGIN : len(audio) // 2 - FADE_MARGIN]) < _rms(
+        audio[FADE_MARGIN : len(audio) // 2 - FADE_MARGIN]
+    )
+
+
 def test_unvoiced_track_segments_into_no_notes() -> None:
     audio = sine(220.0, 0.5, SR, amp=0.4)
     n_frames = len(audio) // HOP

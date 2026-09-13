@@ -15,8 +15,10 @@ val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = target_lufs;
   config.ceiling_db = ceiling_db;
-  // Keep C-ABI sentinel semantics: 0 requests the default oversample factor.
-  if (true_peak_oversample > 0) config.true_peak_oversample = true_peak_oversample;
+  // Keep C-ABI sentinel semantics: 0 requests the default oversample factor,
+  // and any other value reaches the validator that rejects it rather than
+  // being swapped for the default it would have failed against.
+  if (true_peak_oversample != 0) config.true_peak_oversample = true_peak_oversample;
   // release_ms == 0 requests the library default; any other value is applied as
   // asked and rejected by the shared loudness validator if it is not positive.
   // Filtering on `> 0` here instead would discard a negative or non-finite

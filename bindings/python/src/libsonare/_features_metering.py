@@ -46,6 +46,11 @@ from .types import (
     WaveformPeaksReport,
 )
 
+# The FFT size the library falls back to when ``n_fft`` is 0. Mirrored here so
+# the windowed pre-scan covers exactly the span the call will read; a test pins
+# it against the ``n_fft`` the library reports back for a 0 request.
+_DEFAULT_SPECTRUM_N_FFT = 2048
+
 
 def lufs(
     samples: Sequence[float] | list[float],
@@ -776,8 +781,24 @@ def metering_spectrum_frame(
     zero-padded. Pass 0 for ``frame_offset`` for the first frame and 0 for
     ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin`` for the library
     defaults (2048 / 3 / 1.0 / kEpsilon).
+
+    The frame is also the only span validated: a non-finite sample inside it is
+    rejected, while one outside it neither reaches the FFT nor refuses the call.
+    The emptiness and ``sample_rate`` checks still cover the whole buffer. Cost
+    per call is therefore set by ``n_fft`` rather than by the length of the
+    buffer, so an analyzer may poll a long recording frame by frame.
     """
-    sample_buf = _validate_samples("metering_spectrum_frame", samples, validate=validate)
+    # Narrowed before the scan uses them: these two decide which span is read, so
+    # a value that is not a usable index has to be refused as such rather than
+    # slicing the buffer with it.
+    c_frame_offset = _to_c_size_t(frame_offset, "frame_offset")
+    c_n_fft = _to_c_int(n_fft, "n_fft")
+    sample_buf = _validate_samples(
+        "metering_spectrum_frame",
+        samples,
+        validate=validate,
+        window=(frame_offset, n_fft if n_fft > 0 else _DEFAULT_SPECTRUM_N_FFT),
+    )
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_spectrum_frame"):
         raise RuntimeError("libsonare was built without sonare_metering_spectrum_frame")
@@ -787,8 +808,8 @@ def metering_spectrum_frame(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_size_t(frame_offset, "frame_offset"),
-        _to_c_int(n_fft, "n_fft"),
+        c_frame_offset,
+        c_n_fft,
         ctypes.c_int(1 if apply_octave_smoothing else 0),
         _to_c_int(octave_fraction, "octave_fraction"),
         ctypes.c_float(db_ref),

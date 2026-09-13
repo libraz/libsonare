@@ -315,9 +315,11 @@ SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2P
 ///        treated as version 1; version 2 adds model-first selection; version 3
 ///        adds clearing the bank's default rig).
 typedef struct {
-  int struct_version;                    /* 0 or 1 => version 1; 3 => current version */
-  float gain;                            /* master output gain (linear); 0 => 0.5 */
-  int polyphony;                         /* max simultaneous voices; 0 => 48, clamped to [1, 64] */
+  int struct_version; /* 0 or 1 => version 1; 3 => current version */
+  float gain;         /* master output gain (linear); 0 => 0.5. A negative or non-finite gain is
+                         rejected with SONARE_ERROR_INVALID_PARAMETER, not promoted to the default */
+  int polyphony;      /* max simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is
+                         rejected with SONARE_ERROR_INVALID_PARAMETER rather than promoted to 48 */
   int prefer_model_for_modeled_families; /* v2: non-zero selects dedicated melodic models;
                                             drums remain SF2-first */
   int clear_bank_rig;                    /* v3: non-zero renders the instrument alone, without the

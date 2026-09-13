@@ -358,7 +358,7 @@ std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings);
 val js_midi_cc_learn(val events, uint32_t param_id, float min_value, float max_value,
                      int min_movement);
 val js_midi_cc_to_breakpoint(val bindings, val event);
-val js_midi_param_to_cc(val bindings, uint32_t param_id, float unit_value, int group, double ppq);
+val js_midi_param_to_cc(val bindings, val param_id, float unit_value, int group, double ppq);
 val js_midi_route_events(val events, val config);
 
 // NativeSynth preset / enum free functions (bodies in project_bounce.cpp).

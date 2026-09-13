@@ -5,6 +5,8 @@
 
 #include <algorithm>
 
+#include "editing/pitch_editor/scale_quantizer.h"
+#include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -190,7 +192,9 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
   cfg.mode_mask = static_cast<uint16_t>(mode_mask);
-  if (reference_midi > 0.0f) cfg.reference_midi = reference_midi;
+  cfg.reference_midi = ZeroIsDefault(reference_midi)
+                           .checked(cfg.reference_midi, 0.0f,
+                                    editing::pitch_editor::kMaxReferenceMidi, "reference_midi");
   return cfg;
 }
 

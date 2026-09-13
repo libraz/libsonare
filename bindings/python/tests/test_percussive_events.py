@@ -374,6 +374,29 @@ def test_onset_wait_reaches_the_config() -> None:
     assert libsonare.extract_percussive_events(audio, SR, onset_wait=1) == relaxed
 
 
+def test_a_fractional_onset_wait_is_refused_rather_than_truncated() -> None:
+    audio, relaxed = _extract_three()
+
+    # Positive control, so a guard that refused every value could not pass: a
+    # whole-number wait is accepted and returns a different set from the default.
+    spaced = libsonare.extract_percussive_events(audio, SR, onset_wait=64)
+    assert spaced != relaxed
+
+    # The outcome is recorded rather than asserted directly, because the claim is
+    # not "it raises". int(-0.5) is the 0 this field reads as "keep the default",
+    # so the defect's signature is a success returning exactly `relaxed`, which
+    # an accepted row names.
+    outcomes = []
+    for onset_wait in (0.5, -0.5, 0.9, float("nan")):
+        try:
+            events = libsonare.extract_percussive_events(audio, SR, onset_wait=onset_wait)
+        except SonareValueError:
+            outcomes.append("refused")
+        else:
+            outcomes.append(f"accepted, default set: {events == relaxed}")
+    assert outcomes == ["refused"] * 4
+
+
 def test_the_separation_fields_reach_both_configs() -> None:
     # One separation, two structs: extraction measures against it and rendering
     # repeats it, so each field is checked on both sides.
@@ -763,6 +786,24 @@ def test_render_percussive_events_rejects_invalid_arguments() -> None:
     # Positive control: the same event with nothing poisoned renders, so none of
     # the above passes by rejecting every render.
     assert libsonare.render_percussive_events(audio, SR, [edited(4410, 15435)]).shape == audio.shape
+
+
+def test_a_hand_built_event_has_to_state_its_span() -> None:
+    # The span has no default, so an event built without one does not exist to be
+    # rendered. A default of 0 made the two bounds equal, and a zero-length span
+    # renders as nothing: the edit below would have been dropped in silence while
+    # the call reported success, which is what the sibling surfaces reject.
+    audio = _two_hits()
+    with pytest.raises(TypeError):
+        libsonare.PercussiveEvent()  # type: ignore[call-arg]
+
+    stated = libsonare.PercussiveEvent(onset_sample=4410, offset_sample=15435)
+    stated.edit.muted = True
+    rendered = libsonare.render_percussive_events(audio, SR, [stated])
+    # The control: the span that IS stated reaches the render and changes it.
+    assert rendered.shape == audio.shape
+    assert not np.array_equal(rendered[4410:15435], audio[4410:15435])
+    np.testing.assert_array_equal(rendered[15435:], audio[15435:])
 
 
 def test_a_broken_framing_is_rejected_even_for_an_identity_set() -> None:

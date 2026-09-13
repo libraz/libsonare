@@ -209,11 +209,11 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -14.0f;
   config.ceiling_db =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : -1.0f;
-  // 0 is the C-ABI sentinel for the library default; only a positive explicit
-  // value overrides the configured default.
+  // 0 is the C-ABI sentinel for the library default; any other value reaches
+  // the loudness validator instead of being replaced by the default.
   if (info.Length() >= 5 && info[4].IsNumber()) {
     const int oversample = node_narrow_int(env, info[4], "oversample");
-    if (oversample > 0) config.true_peak_oversample = oversample;
+    if (oversample != 0) config.true_peak_oversample = oversample;
   }
   // release_ms: 0 selects the library default; any other value is applied as
   // asked and rejected by the shared loudness validator if it is not positive.

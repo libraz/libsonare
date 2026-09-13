@@ -9,6 +9,11 @@
 
 namespace sonare::editing::pitch_editor {
 
+/// Highest accepted chromatic origin. quantize_midi is noexcept and rounds the
+/// reference to an int, so a caller-supplied origin is bounded to the MIDI note
+/// range by the public entry points before it reaches the cast.
+inline constexpr float kMaxReferenceMidi = 127.0f;
+
 struct ScaleQuantizerConfig {
   int root = 0;
   uint16_t mode_mask = 0b101010110101;  // major scale, C as bit 0

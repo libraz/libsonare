@@ -26,6 +26,7 @@
 #include "metering/true_peak.h"
 #include "metering/waveform.h"
 #include "sonare_c_internal.h"
+#include "util/zero_is_default.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -346,12 +347,14 @@ void sonare_free_phase_scope_result(SonarePhaseScopeResult* result) {
 namespace {
 
 // Decode the shared spectrum config knobs (n_fft / smoothing / dB) from the C
-// args, applying the "0 = default, negative = error" convention. Returns false
-// (and the error code via *err) on an invalid value.
+// args, applying the "0 = default, anything else outside the domain = error"
+// convention. Returns false (and the error code via *err) on an invalid value.
 bool decode_spectrum_config(int n_fft, int apply_octave_smoothing, int octave_fraction,
                             float db_ref, float db_amin, metering::SpectrumConfig* cfg,
                             SonareError* err) {
-  if (n_fft < 0 || octave_fraction < 0 || db_ref < 0.0f || db_amin < 0.0f) {
+  // A `< 0` test would leave NaN and +Inf to the `> 0` substitution below.
+  if (n_fft < 0 || octave_fraction < 0 || !numeric::finite_non_negative(db_ref) ||
+      !numeric::finite_non_negative(db_amin)) {
     *err = SONARE_ERROR_INVALID_PARAMETER;
     return false;
   }
@@ -566,7 +569,9 @@ editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
   cfg.mode_mask = mode_mask;
-  if (reference_midi > 0.0f) cfg.reference_midi = reference_midi;
+  cfg.reference_midi = ZeroIsDefault(reference_midi)
+                           .checked(cfg.reference_midi, 0.0f,
+                                    editing::pitch_editor::kMaxReferenceMidi, "reference_midi");
   return cfg;
 }
 

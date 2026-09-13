@@ -47,6 +47,41 @@ export function assertSamples(
   assertFiniteSamples(fnName, samples, validate, argName);
 }
 
+/**
+ * `assertSamples` restricted to the span a windowed entry point actually reads.
+ *
+ * The emptiness check still covers the whole buffer, and the reported index is
+ * the absolute one, so the message keeps naming the sample the caller passed.
+ * What narrows is the scan: a windowed call refuses a non-finite sample inside
+ * its frame and is indifferent to one outside it, which is the contract the C
+ * ABI states and the cost model it promises -- per call the scan is bounded by
+ * the frame, not by the length of the buffer being polled.
+ */
+export function assertSamplesInWindow(
+  fnName: string,
+  samples: ArrayLike<number>,
+  validate: boolean,
+  windowStart: number,
+  windowLength: number,
+  argName = 'samples',
+): void {
+  assertNonEmptySamples(fnName, samples, argName);
+  if (!validate) {
+    return;
+  }
+  // Floored and ceiled before use: a fractional offset is refused by the layer
+  // that owns it, but an index of 100.5 reads `undefined` out of the buffer and
+  // would be reported here as a non-finite sample that is not there.
+  const start = Math.min(Math.max(Math.floor(windowStart), 0), samples.length);
+  const stop = Math.min(start + Math.max(Math.ceil(windowLength), 0), samples.length);
+  for (let i = start; i < stop; i++) {
+    const v = samples[i] as number;
+    if (!Number.isFinite(v)) {
+      throw new RangeError(`${fnName}: ${argName} contains NaN or Inf at index ${i}`);
+    }
+  }
+}
+
 export function assertFiniteScalar(fnName: string, value: number, argName: string): void {
   if (!Number.isFinite(value)) {
     throw new RangeError(`${fnName}: ${argName} must be a finite number`);

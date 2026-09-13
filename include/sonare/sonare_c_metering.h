@@ -228,7 +228,10 @@ typedef struct {
 ///        the library default (3).
 /// @param db_ref Linear reference for the dB conversion. Pass 0.0f for 1.0.
 /// @param db_amin Linear floor used to avoid log(0). Pass 0.0f for the library
-///        default (sonare::constants::kEpsilon).
+///        default (sonare::constants::kEpsilon). For both, exactly 0.0f selects
+///        the default; every other value outside [0, inf) -- negative, NaN or
+///        infinite -- is rejected with SONARE_ERROR_INVALID_PARAMETER rather
+///        than promoted to it.
 SonareError sonare_metering_spectrum(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int apply_octave_smoothing, int octave_fraction,
                                      float db_ref, float db_amin, SonareSpectrumResult* out);
@@ -253,7 +256,10 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
 ///        the library default (3).
 /// @param db_ref Linear reference for the dB conversion. Pass 0.0f for 1.0.
 /// @param db_amin Linear floor used to avoid log(0). Pass 0.0f for the library
-///        default (sonare::constants::kEpsilon).
+///        default (sonare::constants::kEpsilon). For both, exactly 0.0f selects
+///        the default; every other value outside [0, inf) -- negative, NaN or
+///        infinite -- is rejected with SONARE_ERROR_INVALID_PARAMETER rather
+///        than promoted to it.
 SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, int sample_rate,
                                            size_t frame_offset, int n_fft,
                                            int apply_octave_smoothing, int octave_fraction,

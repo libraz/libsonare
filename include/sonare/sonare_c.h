@@ -61,7 +61,10 @@ uint32_t sonare_abi_version(void);
 /// @param mode_mask 12-bit mask. Bit i (LSB = 0) is the i-th pitch class
 ///                  relative to @p root. E.g. 0b101010110101 = natural major.
 /// @param reference_midi MIDI number used as the chromatic origin (e.g. 69 for
-///                  A4 = 440 Hz). Pass 0.0f for the library default.
+///                  A4 = 440 Hz). Pass 0.0f for the library default. Anything
+///                  outside [0, 127], and anything non-finite, is rejected with
+///                  @c SONARE_ERROR_INVALID_PARAMETER rather than resolving to
+///                  the default.
 /// @param midi Input MIDI value (may be fractional).
 /// @param out_quantized_midi Receives the quantized MIDI value.
 SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float reference_midi,

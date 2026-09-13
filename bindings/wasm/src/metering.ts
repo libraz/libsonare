@@ -1,7 +1,12 @@
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type { ValidateOptions } from './validation';
-import { assertSamples } from './validation';
+import { assertSamples, assertSamplesInWindow } from './validation';
+
+// The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
+// here so the windowed pre-scan covers exactly the span the call will read; a
+// test pins it against the `nFft` the library reports back for a 0 request.
+const DEFAULT_SPECTRUM_N_FFT = 2048;
 
 /**
  * Validates a true-peak oversample factor: `0` (meaning "use the default 4") or
@@ -655,6 +660,12 @@ export function meteringSpectrum(
  * `nFft`-length FFT), for spectrum-analyzer "moment" snapshots that must not be
  * time-averaged like {@link meteringSpectrum}. The analysis frame spans
  * `[frameOffset, frameOffset + nFft)`; samples past the end are zero-padded.
+ *
+ * The frame is also the only span validated: a non-finite sample inside it is
+ * rejected, while one outside it neither reaches the FFT nor refuses the call.
+ * The emptiness and `sampleRate` checks still cover the whole buffer. Cost per
+ * call is therefore set by `nFft` rather than by the length of the buffer, so an
+ * analyzer may poll a long recording frame by frame.
  */
 export function meteringSpectrumFrame(request: MeteringSpectrumFrameRequest): SpectrumReport;
 export function meteringSpectrumFrame(
@@ -671,7 +682,14 @@ export function meteringSpectrumFrame(
 ): SpectrumReport {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, frameOffset, ...options } : samples;
-  assertSamples('meteringSpectrumFrame', request.samples, request.validate !== false);
+  const nFft = request.nFft ?? 0;
+  assertSamplesInWindow(
+    'meteringSpectrumFrame',
+    request.samples,
+    request.validate !== false,
+    request.frameOffset ?? 0,
+    nFft > 0 ? nFft : DEFAULT_SPECTRUM_N_FFT,
+  );
   return requireModule().meteringSpectrumFrame(
     request.samples,
     request.sampleRate ?? 22050,

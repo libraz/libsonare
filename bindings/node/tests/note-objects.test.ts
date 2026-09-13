@@ -265,6 +265,67 @@ describe('renderNotes', () => {
       }),
     ).toThrow();
   });
+
+  it('rejects a note that omits a sample bound the type declares mandatory', () => {
+    // The bound used to default to 0, which makes onset and offset equal: the
+    // note's edit rendered as nothing while the call reported success. The same
+    // request throws on the WASM surface, so this is the policy the exported
+    // NoteObjectInput has always declared rather than a new restriction.
+    const missing = (note: Record<string, unknown>): unknown => {
+      try {
+        renderNotes({
+          samples: tone.samples,
+          sampleRate: SR,
+          notes: [note as unknown as NoteObjectInput],
+        });
+        return undefined;
+      } catch (error) {
+        return error;
+      }
+    };
+
+    for (const note of [
+      { offsetSample: 5000, edit: { gainDb: -6 } },
+      { onsetSample: 0, edit: { gainDb: -6 } },
+      { onsetSample: 0, offsetSample: undefined, edit: { gainDb: -6 } },
+      { onsetSample: '0', offsetSample: 5000 },
+    ]) {
+      const caught = missing(note);
+      expect(isSonareError(caught), `expected a SonareError for ${JSON.stringify(note)}`).toBe(
+        true,
+      );
+      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    }
+
+    // The control. A reader that had started refusing every note would satisfy
+    // every assertion above and fail here, and the gain has to be visible in the
+    // output or a rejected span would read the same as an applied one.
+    const stated = renderNotes({
+      samples: tone.samples,
+      sampleRate: SR,
+      notes: [{ onsetSample: 0, offsetSample: 5000, edit: { gainDb: -20 } }],
+    });
+    expect(rms(stated, 2000, 4000)).toBeCloseTo(rms(tone.samples, 2000, 4000) * 0.1, 5);
+  });
+
+  it('keeps the note-set entries split and merge take free of the sample bounds', () => {
+    // NoteSetEntry does not declare the bounds at all — both entry points
+    // re-derive every note from the audio and the track — so requiring them
+    // here would have been a new disagreement rather than one fewer.
+    const source = {
+      samples: steppedTone(SET_FRAMES),
+      sampleRate: SR,
+      f0Hz: new Float32Array(SET_FRAMES).fill(441),
+      voiced: new Int32Array(SET_FRAMES).fill(1),
+      frameRate: FRAME_RATE,
+    };
+    const entries: NoteSetEntry[] = extractNotes(source).map((note) => ({
+      frameStart: note.frameStart,
+      frameEnd: note.frameEnd,
+    }));
+    const split = splitNote({ ...source, notes: entries, index: 0, frame: 20 });
+    expect(split).toHaveLength(entries.length + 1);
+  });
 });
 
 describe('renderNotes amplitude envelope', () => {

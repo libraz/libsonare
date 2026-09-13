@@ -189,6 +189,38 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     }
   }
 
+  SECTION("an out-of-domain oversample or release is refused, not defaulted") {
+    auto samples = generate_sine(440.0f, 22050, 0.5f);
+    for (auto& sample : samples) sample *= 0.2f;
+
+    auto run = [&](int oversample, float release_ms) {
+      SonareMasteringConfig config{};
+      config.target_lufs = -14.0f;
+      config.ceiling_db = -1.0f;
+      config.true_peak_oversample = oversample;
+      config.release_ms = release_ms;
+      SonareMasteringResult result{};
+      const SonareError err =
+          sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result);
+      if (err == SONARE_OK) sonare_free_mastering_result(&result);
+      return err;
+    };
+
+    // The positive control the refusals are read against: an in-range invalid
+    // oversample is refused, so the validator is live and reachable on this
+    // path and a negative reaching the default is a substitution rather than a
+    // check happening somewhere else.
+    REQUIRE(run(3, 50.0f) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(run(4, 50.0f) == SONARE_OK);
+    REQUIRE(run(0, 0.0f) == SONARE_OK);
+
+    REQUIRE(run(-1, 50.0f) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(run(-4, 50.0f) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(run(4, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(run(4, std::numeric_limits<float>::quiet_NaN()) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(run(4, std::numeric_limits<float>::infinity()) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
   SECTION("rejects invalid parameters") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);
     SonareMasteringConfig config{};

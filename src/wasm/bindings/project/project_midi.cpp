@@ -388,12 +388,18 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
   return out;
 }
 
-val js_midi_param_to_cc(val bindings, uint32_t param_id, float unit_value, int group, double ppq) {
+// paramId arrives as a val rather than as a declared uint32_t because embind
+// converts a positional integer by the JS ToUint32 rule, which WRAPS: 2^32 + 5
+// selected the binding whose id is 5, and 5.5 selected it too. The object-field
+// spelling of the same field reads through checkedUintFromVal, so both paths
+// refuse what neither can represent.
+val js_midi_param_to_cc(val bindings, val param_id, float unit_value, int group, double ppq) {
+  const uint32_t requested_param_id = checkedUintFromVal(param_id, "paramId");
   std::vector<SonareMidiCcBinding> cc_bindings = js_cc_bindings_from_val(bindings);
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
-      cc_bindings.empty() ? nullptr : cc_bindings.data(), cc_bindings.size(), param_id, unit_value,
-      static_cast<uint8_t>(group), ppq, &event);
+      cc_bindings.empty() ? nullptr : cc_bindings.data(), cc_bindings.size(), requested_param_id,
+      unit_value, static_cast<uint8_t>(group), ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
     throwCError(err, "invalid MIDI param-to-CC arguments");

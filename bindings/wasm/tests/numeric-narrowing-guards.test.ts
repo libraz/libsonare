@@ -20,6 +20,7 @@ import {
   init,
   isSonareError,
   masteringRepairDereverbClassical,
+  meteringSpectrumFrame,
   Project,
   RealtimeEngine,
   type SonareError,
@@ -266,6 +267,62 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
   });
 });
 
+describe('a positional parameter id refuses what the positional path used to wrap', () => {
+  // The object-field and the positional spelling of the same uint32 disagreed:
+  // embind converts a declared `uint32_t` parameter by ToUint32, which WRAPS, so
+  // 2**32 + 5 asked for a parameter that does not exist and was answered with
+  // the binding whose id is 5. A wrapped id is in the legal domain by
+  // construction, so no downstream range check could see it.
+  type CcBinding = Parameters<typeof Project.midiParamToCc>[0][number];
+  const bindings = [
+    { ccNumber: 7, channel: 0, kind: 0, paramId: 5, minValue: 0, maxValue: 1 },
+    { ccNumber: 64, channel: 0, kind: 0, paramId: 9, minValue: 0, maxValue: 1 },
+  ] as unknown as CcBinding[];
+
+  /** The controller number the requested id selected, or null for no match. */
+  const selectedCc = (paramId: number): number | null => {
+    const event = Project.midiParamToCc(bindings, paramId, 0.5, 0, 0);
+    return event === null ? null : (event.data0 >>> 8) & 0xff;
+  };
+
+  it('selects a different controller for each of two legal ids', () => {
+    // The control. Without it every refusal below would also hold for a call
+    // that ignored the id entirely.
+    expect(selectedCc(5)).toBe(7);
+    expect(selectedCc(9)).toBe(64);
+  });
+
+  it('refuses an id that used to fold onto a legal neighbour', () => {
+    // 2**32 + 5 wrapped onto 5 and 5.5 truncated onto it, so both returned
+    // controller 7 for a parameter the caller never named. The saturating
+    // constants shared by this file are deliberately NOT reused here: most of
+    // them are legal uint32 ids, so refusing them would be the wrong answer.
+    for (const value of [2 ** 32 + 5, 5.5, -1, 2 ** 40, 2 ** 53 + 1, ...NON_FINITE]) {
+      expectInvalidParameter(() => selectedCc(value));
+    }
+  });
+
+  it('answers a legal id that matches nothing with no event rather than a refusal', () => {
+    // The other half of the boundary: 4294967295 is a representable id, so the
+    // reader passes it and the map reports no match. Without this the refusals
+    // above could not be told from a call that had started refusing the whole
+    // top of the range.
+    expect(selectedCc(4294967295)).toBeNull();
+  });
+
+  it('names the field the object-field spelling names', () => {
+    // Both spellings now read through the same checked conversion, so the
+    // refusal a caller sees does not depend on which door the id came through.
+    let caught: unknown;
+    try {
+      selectedCc(5.5);
+    } catch (e) {
+      caught = e;
+    }
+    expect((caught as SonareError).message).toContain('paramId');
+  });
+});
+
 describe('realtime-engine options-bag readers refuse a silently coerced value', () => {
   const midi1Word = (status: number, channel: number, data1: number, data2: number): number =>
     ((0x2 << 28) | ((status & 0xf) << 20) | ((channel & 0xf) << 16) | (data1 << 8) | data2) >>> 0;
@@ -384,5 +441,111 @@ describe('float options refuse a value the float type cannot hold', () => {
     for (const value of [3.5e38, 1e39, 1e300, Number.POSITIVE_INFINITY]) {
       expectInvalidParameter(() => dereverb(value));
     }
+  });
+});
+
+describe('a positional offset refuses what the positional path used to wrap', () => {
+  // The sibling of the parameter-id case above, and the one where the core's own
+  // clamp is not the backstop it looks like: it only catches an offset PAST the
+  // buffer, and a wrapped offset lands inside it by construction. Declared
+  // `size_t`, 2**32 + 100 returned the window at 100 and NaN the window at 0,
+  // each a perfectly plausible spectrum of audio nobody asked about.
+  const sampleRate = 22050;
+  const length = 8192;
+  // Two halves with different content, so the window a request landed on is
+  // readable from the result rather than inferred.
+  const samples = new Float32Array(length).map((_, i) =>
+    Math.sin((2 * Math.PI * (i < length / 2 ? 440 : 1760) * i) / sampleRate),
+  );
+
+  /** The frequency of the loudest bin of the window starting at `frameOffset`. */
+  const peakHz = (frameOffset: number): number => {
+    const result = meteringSpectrumFrame(samples, sampleRate, frameOffset, { nFft: 1024 });
+    let best = 0;
+    let bin = 0;
+    for (let i = 0; i < result.magnitude.length; i += 1) {
+      if (result.magnitude[i] > best) {
+        best = result.magnitude[i];
+        bin = i;
+      }
+    }
+    return result.frequencies[bin];
+  };
+
+  it('reads a different window for each of two legal offsets', () => {
+    // The control, and it has to be content rather than a bare success: an
+    // offset that is ignored returns a result too.
+    expect(peakHz(0)).toBeCloseTo(430.7, 0);
+    expect(peakHz(5000)).toBeCloseTo(1765.7, 0);
+  });
+
+  it('refuses an offset that used to fold onto a real window', () => {
+    for (const value of [2 ** 32 + 100, 100.5, -1, 2 ** 40, ...NON_FINITE]) {
+      expectInvalidParameter(() => peakHz(value));
+    }
+  });
+
+  it('still accepts an offset past the end, which the core zero-pads', () => {
+    // The boundary the guard must not eat: past-the-end is a legal request with
+    // a documented answer, and refusing it would be a different regression.
+    expect(() => peakHz(length)).not.toThrow();
+    expect(peakHz(length)).toBe(0);
+  });
+});
+
+describe('the double reader refuses a non-finite number at the read', () => {
+  // Every one of this reader's fields is also checked by the site that reads it,
+  // so what moved is WHERE the refusal happens, not whether it happens. That is
+  // the point: the check belongs to the reader so the next field added to one of
+  // these bags inherits it, and the assertions below are written on the message
+  // because that is the only thing a caller can see change.
+  const refusalFor = (fn: () => unknown): SonareError => {
+    let caught: unknown;
+    try {
+      fn();
+    } catch (e) {
+      caught = e;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    return caught as SonareError;
+  };
+
+  const withEngine = <T>(fn: (engine: RealtimeEngine) => T): T => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      return fn(engine);
+    } finally {
+      engine.destroy();
+    }
+  };
+
+  it('accepts a legal tempo map and a legal marker', () => {
+    // The control. Without it a reader that refused every double would satisfy
+    // both assertions below.
+    withEngine((engine) => {
+      expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 120, endBpm: 140 }])).not.toThrow();
+      expect(() => engine.setMarkers([{ ppq: 0, id: 3 }])).not.toThrow();
+    });
+  });
+
+  it('names the field rather than the entry point when a tempo field is not finite', () => {
+    for (const value of [...NON_FINITE, Number.NEGATIVE_INFINITY]) {
+      const error = withEngine((engine) =>
+        refusalFor(() => engine.setTempoSegments([{ startPpq: 0, bpm: value }])),
+      );
+      expect(error.code).toBe(ErrorCode.InvalidParameter);
+      expect(error.message).toContain('bpm must be a finite number');
+      // The site's own composite check is the fallback, not the first line of
+      // defence; seeing its wording here would mean the reader let the value by.
+      expect(error.message).not.toContain('setTempoSegments:');
+    }
+  });
+
+  it('refuses a non-finite marker id, which no later lookup could match', () => {
+    const error = withEngine((engine) =>
+      refusalFor(() => engine.setMarkers([{ ppq: 0, id: Number.NaN }])),
+    );
+    expect(error.code).toBe(ErrorCode.InvalidParameter);
+    expect(error.message).toContain('id must be a finite number');
   });
 });

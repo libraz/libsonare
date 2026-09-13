@@ -353,6 +353,36 @@ def test_mel_spectrogram_explicit_range() -> None:
     assert sum((a - b) ** 2 for a, b in zip(base.power, htk.power, strict=True)) > 1e-6
 
 
+def test_mel_range_is_applied_or_refused_never_defaulted() -> None:
+    """A negative or non-finite Mel bound reaches a refusal, not the default.
+
+    The positive controls are consumed rather than merely accepted: the sentinel
+    0 must land on the same bands as spelling sample_rate / 2 out, and a legal
+    range must move the filterbank off the default one. A refusal-only test
+    passes against a reader that rejects everything, and the defect this covers
+    is a *successful* call carrying a value the caller did not choose.
+    """
+    import math
+
+    import pytest
+
+    from libsonare import SonareError, mel_spectrogram
+
+    tone = _generate_sine(440, 22050, 0.5)
+    defaulted = mel_spectrogram(tone, sample_rate=22050, n_mels=40)
+    nyquist = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax=11025.0)
+    ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=500.0, fmax=4000.0)
+
+    assert defaulted.power == pytest.approx(nyquist.power, abs=1e-6)
+    assert sum((a - b) ** 2 for a, b in zip(defaulted.power, ranged.power, strict=True)) > 1e-6
+
+    for bad in (-1.0, -11025.0, math.nan, math.inf, -math.inf):
+        with pytest.raises(SonareError):
+            mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=bad)
+        with pytest.raises(SonareError):
+            mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax=bad)
+
+
 def test_mfcc() -> None:
     """mfcc returns correct coefficient dimensions."""
     from libsonare import mfcc

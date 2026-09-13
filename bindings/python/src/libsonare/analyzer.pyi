@@ -625,8 +625,8 @@ class NoteObject:
     edit: NoteEdit
     def __init__(
         self,
-        onset_sample: int = 0,
-        offset_sample: int = 0,
+        onset_sample: int,
+        offset_sample: int,
         frame_start: int = 0,
         frame_end: int = 0,
         median_hz: float = 0.0,
@@ -680,8 +680,8 @@ class PercussiveEvent:
     edit: PercussiveEventEdit
     def __init__(
         self,
-        onset_sample: int = 0,
-        offset_sample: int = 0,
+        onset_sample: int,
+        offset_sample: int,
         strength: float = 0.0,
         peak_amplitude: float = 0.0,
         percussive_ratio: float = 0.0,

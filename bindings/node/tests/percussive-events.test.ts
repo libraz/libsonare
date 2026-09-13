@@ -439,6 +439,30 @@ describe('extractPercussiveEvents', () => {
     expect(threeEvents).toHaveLength(3);
   });
 
+  it('refuses a fractional onsetWait instead of resolving it onto the default', () => {
+    // Positive control, so a guard that refused every value could not pass: 100
+    // frames is accepted and returns a different set from the default wait.
+    const spaced = extractPercussiveEvents({ samples: three, sampleRate: SR, onsetWait: 100 });
+    expect(measuredSet(spaced)).not.toEqual(measuredSet(threeEvents));
+
+    // The outcome is recorded rather than asserted directly, because the claim
+    // is not "it throws". Truncation put -0.5 on the 0 that means "keep the
+    // default", so the defect's signature is a success whose events are exactly
+    // the default-wait set — which an `ok:` row names.
+    const fractional = [0.5, -0.5, 0.9, Number.NaN];
+    const outcomes = fractional.map((onsetWait) => {
+      const error = capture(() =>
+        extractPercussiveEvents({ samples: three, sampleRate: SR, onsetWait }),
+      );
+      if (error === undefined) {
+        const events = extractPercussiveEvents({ samples: three, sampleRate: SR, onsetWait });
+        return `ok:${JSON.stringify(measuredSet(events))}`;
+      }
+      return isSonareError(error) ? `refused:${(error as SonareError).code}` : 'threw non-Sonare';
+    });
+    expect(outcomes).toEqual(fractional.map(() => `refused:${ErrorCode.InvalidParameter}`));
+  });
+
   it('raises the detector threshold with onsetDelta', () => {
     // The onset envelope is unnormalised spectral flux, so an offset this far
     // above any flux the fixture can produce leaves nothing over the threshold.
@@ -624,6 +648,49 @@ describe('renderPercussiveEvents', () => {
 
     // And the emptiest set there is.
     expectIdentical(renderPercussiveEvents({ samples: three, sampleRate: SR, events: [] }), three);
+  });
+
+  it('rejects an event that omits a sample bound the type declares mandatory', () => {
+    // The bound used to default to 0, which makes onset and offset equal: the
+    // event's edit rendered as nothing while the call reported success. The same
+    // request throws on the WASM surface, so this is the policy the exported
+    // PercussiveEventInput has always declared rather than a new restriction.
+    const attempt = (event: Record<string, unknown>): unknown => {
+      try {
+        renderPercussiveEvents({
+          samples: three,
+          sampleRate: SR,
+          events: [event as unknown as PercussiveEventInput],
+        });
+        return undefined;
+      } catch (error) {
+        return error;
+      }
+    };
+
+    for (const event of [
+      { offsetSample: 22050, edit: { gainDb: -6 } },
+      { onsetSample: 0, edit: { gainDb: -6 } },
+      { onsetSample: 0, offsetSample: undefined, edit: { gainDb: -6 } },
+      { onsetSample: '0', offsetSample: 22050 },
+    ]) {
+      const caught = attempt(event);
+      expect(isSonareError(caught), `expected a SonareError for ${JSON.stringify(event)}`).toBe(
+        true,
+      );
+      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
+    }
+
+    // The control. A reader that had started refusing every event would satisfy
+    // every assertion above, so the accepted span has to be seen in the output:
+    // a muted span is silent and the rest of the buffer is untouched.
+    const muted = renderPercussiveEvents({
+      samples: three,
+      sampleRate: SR,
+      events: [{ onsetSample: 0, offsetSample: 22050, edit: { muted: true } }],
+    });
+    expect(firstMismatch(three, muted, 0, 22050)).not.toBe(-1);
+    expect(firstMismatch(three, muted, 22050, three.length)).toBe(-1);
   });
 
   it('renders a set whose edits were changed and nothing else', () => {

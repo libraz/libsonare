@@ -422,6 +422,27 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
                                                      &out_len) == SONARE_ERROR_INVALID_PARAMETER);
   binding.config.struct_version = 0;
 
+  // A gain the player's constructor would silently replace with its own default
+  // is refused here instead, so it cannot arrive as a successful bounce carrying
+  // a level the caller never chose. The sentinel restored below is the control.
+  for (float bad :
+       {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    CAPTURE(bad);
+    binding.config.gain = bad;
+    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
+                                                     &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out == nullptr);
+  }
+  binding.config.gain = 0.0f;
+  for (int bad : {-1, -48}) {
+    CAPTURE(bad);
+    binding.config.polyphony = bad;
+    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
+                                                     &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out == nullptr);
+  }
+  binding.config.polyphony = 0;
+
   REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
                                                      &out_len) == SONARE_OK);
   REQUIRE(out != nullptr);
@@ -563,3 +584,46 @@ TEST_CASE("the project and engine SF2 loaders agree on their error codes", "[pro
   sonare_engine_destroy(engine);
   sonare_project_destroy(project);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("an SF2 patch gain outside the domain is refused, not replaced", "[c_api][sf2]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  const std::vector<uint8_t> sf2 = make_sf2_bytes();
+  REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
+
+  SonareEngineSf2InstrumentConfig config{};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  for (float bad : {-1.0f, -0.0001f, nan, inf, -inf}) {
+    CAPTURE(bad);
+    config.gain = bad;
+    CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  // The player's constructor substitutes its own default for exactly these
+  // values, so a pass-through would have looked identical to the sentinel from
+  // outside. Both accepted spellings are pinned here: without them the loop
+  // above is satisfied by an entry point that refuses every gain.
+  config.gain = 0.0f;
+  CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+  config.gain = 0.25f;
+  CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+
+  // polyphony sits one line from gain and its constructor replaces a negative
+  // count with the same silence, so it carries the same contract.
+  for (int bad : {-1, -48}) {
+    CAPTURE(bad);
+    config.polyphony = bad;
+    CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  config.polyphony = 0;
+  CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+  config.polyphony = 16;
+  CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+#endif
