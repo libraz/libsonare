@@ -3,6 +3,7 @@
 #include <string>
 
 #include "sonare_wrap.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
@@ -35,6 +36,7 @@ const char* SectionTypeName(SonareSectionType type) {
 
 Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
       !info[2].IsFunction() || (info.Length() > 3 && !info[3].IsFunction())) {
@@ -58,7 +60,7 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sample_rate = info[1].As<Napi::Number>().Int32Value();
+  const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   Napi::Function js_cb = info[2].As<Napi::Function>();
 
   // The C-ABI progress callback cannot hold a Napi reference (it is called
@@ -125,10 +127,12 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   }
 
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
@@ -136,12 +140,9 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  const int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  const int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  const int sample_rate = node_arg_int(info, 1, 22050);
+  const int n_fft = node_arg_int(info, 2, 2048);
+  const int hop_length = node_arg_int(info, 3, 512);
   const float min_section_sec =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 4.0f;
 
@@ -167,10 +168,12 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   }
   sonare_free_section_result(&result);
   return sections;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
@@ -178,16 +181,13 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  const int sample_rate = node_arg_int(info, 1, 22050);
   const float fmin =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 65.0f;
   const float fmax =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 2093.0f;
-  const int frame_length =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
-  const int hop_length =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 256;
+  const int frame_length = node_arg_int(info, 4, 2048);
+  const int hop_length = node_arg_int(info, 5, 256);
   const float threshold =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.1f;
   const int use_pyin =
@@ -224,4 +224,5 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   out.Set("vibratoRate", Napi::Number::New(env, result.vibrato_rate));
   sonare_free_melody_result(&result);
   return out;
+  SONARE_NODE_CATCH(env)
 }

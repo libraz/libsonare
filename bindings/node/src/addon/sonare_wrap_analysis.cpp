@@ -16,6 +16,7 @@ using namespace sonare_node;
 
 Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -35,6 +36,7 @@ Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   }
 
   return Napi::Number::New(env, static_cast<double>(bpm));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
@@ -147,6 +149,7 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -172,10 +175,12 @@ Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
     sonare_free_floats(times);
   }
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectDownbeats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -201,10 +206,12 @@ Napi::Value SonareWrap::DetectDownbeats(const Napi::CallbackInfo& info) {
     sonare_free_floats(times);
   }
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "estimateMeter: beatTimes must be a Float32Array") ||
       !RequireFloat32Array(info, 1, "estimateMeter: beatStrengths must be a Float32Array")) {
@@ -249,10 +256,12 @@ Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return ParseJsonObjectAndFree(env, json_str, "Failed to parse meter estimation JSON");
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -305,10 +314,12 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
     sonare_free_floats(times);
   }
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -323,6 +334,7 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
   if (env.IsExceptionPending()) return env.Undefined();
   return FullAnalysisJsonToObject(env, data, length, sample_rate, has_options ? &options : nullptr);
+  SONARE_NODE_CATCH(env)
 }
 
 namespace {
@@ -411,6 +423,7 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 
 Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     auto deferred = Napi::Promise::Deferred::New(env);
     deferred.Reject(Napi::TypeError::New(env, "Expected (Float32Array, sampleRate?)").Value());
@@ -433,10 +446,12 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   Napi::Promise promise = worker->GetPromise();
   worker->Queue();
   return promise;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -489,6 +504,7 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
 
   sonare_free_bpm_analysis_result(&analysis);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 namespace {
@@ -514,6 +530,7 @@ Napi::Float32Array acoustic_band_array(Napi::Env env, const float* source, size_
 
 Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -554,10 +571,12 @@ Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
 
   sonare_free_acoustic_result(&acoustic);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectAcoustic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -601,10 +620,12 @@ Napi::Value SonareWrap::DetectAcoustic(const Napi::CallbackInfo& info) {
 
   sonare_free_acoustic_result(&acoustic);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -653,10 +674,12 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
 
   sonare_free_rhythm_result(&rhythm);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -697,10 +720,12 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
 
   sonare_free_dynamics_result(&dynamics);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -767,6 +792,7 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
 
   sonare_free_timbre_result(&timbre);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 namespace {
@@ -821,6 +847,7 @@ std::string ChordSymbol(const SonareChord& chord) {
 
 Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -891,10 +918,12 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   result.Set("chords", chords);
   sonare_free_chord_analysis_result(&analysis);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -951,20 +980,26 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   }
   sonare_free_string_array(&labels);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Version(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::String::New(env, sonare_version());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AbiVersion(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::Number::New(env, sonare_abi_version());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   const char* json = sonare_capabilities_json();
   if (json == nullptr) {
     Napi::Error::New(env, "Native capabilities JSON is unavailable").ThrowAsJavaScriptException();
@@ -982,9 +1017,12 @@ Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return parsed;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::HasFfmpegSupport(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::Boolean::New(env, sonare_has_ffmpeg_support() != 0);
+  SONARE_NODE_CATCH(env)
 }

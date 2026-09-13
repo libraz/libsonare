@@ -167,6 +167,7 @@ ProjectWrap::~ProjectWrap() {
 
 Napi::Value ProjectWrap::ToJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (project_ == nullptr) {
     Napi::Error::New(env, "Project is destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -178,10 +179,12 @@ Napi::Value ProjectWrap::ToJson(const Napi::CallbackInfo& info) {
   Napi::String out = Napi::String::New(env, json != nullptr ? json : "", len);
   if (json != nullptr) sonare_free_string(json);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "fromJson expects a JSON string").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -208,10 +211,12 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   }
   if (diag != nullptr) sonare_free_string(diag);
   return ProjectWrap::Wrap(info, handle);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "fromJsonWithDiagnostics expects a JSON string")
         .ThrowAsJavaScriptException();
@@ -243,51 +248,63 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
   out.Set("project", ProjectWrap::Wrap(info, handle));
   out.Set("diagnostics", diagnostics);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetSampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   double sample_rate = 0.0;
   if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_sample_rate(project_, sample_rate));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::GetSampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   double out = 0.0;
   ThrowIfError(env, sonare_project_get_sample_rate(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetOverlapPolicy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   uint32_t policy = 0;
   if (!OptionalUint32Arg(env, info, 0, "policy", 0, &policy)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_overlap_policy(project_, policy));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::GetOverlapPolicy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   uint32_t out = 0;
   ThrowIfError(env, sonare_project_get_overlap_policy(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   std::string scene = info.Length() > 0 && info[0].IsString()
                           ? info[0].As<Napi::String>().Utf8Value()
                           : std::string();
   ThrowIfError(env, sonare_project_set_mixer_scene_json(project_, scene.c_str()));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   uint32_t marker_id = 0;
   double ppq = 0.0;
   if (!OptionalUint32Arg(env, info, 0, "markerId", 0, &marker_id) ||
@@ -301,10 +318,12 @@ Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_set_marker(project_, marker_id, ppq, name.c_str(), &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() <= 0 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "expected a marker object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -323,10 +342,12 @@ Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_set_marker_ex_name(project_, &marker, name.c_str(), &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectMarker marker{};
@@ -344,10 +365,12 @@ Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
   out.Set("keyFifths", Napi::Number::New(env, marker.key_fifths));
   out.Set("keyMinor", Napi::Boolean::New(env, marker.key_minor != 0));
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTrack track{};
@@ -363,10 +386,12 @@ Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   out.Set("solo", track.solo != 0);
   out.Set("name", track.name);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectClip clip{};
@@ -384,10 +409,12 @@ Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
   out.Set("loopMode", clip.loop_mode);
   out.Set("loopLengthPpq", clip.loop_length_ppq);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectSource source{};
@@ -415,10 +442,12 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   out.Set("externalStemRole",
           metadata.value.external_stem_role != nullptr ? metadata.value.external_stem_role : "");
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTempoSegment seg{};
@@ -433,10 +462,12 @@ Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
   out.Set("bpm", Napi::Number::New(env, seg.bpm));
   out.Set("endBpm", Napi::Number::New(env, seg.end_bpm));
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTimeSignatureSegment seg{};
@@ -447,10 +478,12 @@ Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
   out.Set("numerator", Napi::Number::New(env, seg.numerator));
   out.Set("denominator", Napi::Number::New(env, seg.denominator));
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   std::vector<SonareProjectTempoSegment> segments;
   if (info.Length() > 0 && info[0].IsArray()) {
     Napi::Array input = info[0].As<Napi::Array>();
@@ -476,10 +509,12 @@ Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_set_tempo_segments(
                         project_, segments.empty() ? nullptr : segments.data(), segments.size()));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   std::vector<SonareProjectTimeSignatureSegment> segments;
   if (info.Length() > 0 && info[0].IsArray()) {
     Napi::Array input = info[0].As<Napi::Array>();
@@ -505,34 +540,42 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_set_time_signatures(
                         project_, segments.empty() ? nullptr : segments.data(), segments.size()));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::TrackCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t out = 0;
   ThrowIfError(env, sonare_project_track_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::ClipCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t out = 0;
   ThrowIfError(env, sonare_project_clip_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SourceCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t out = 0;
   ThrowIfError(env, sonare_project_source_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::UnresolvedAudioSourceIds(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t count = 0;
   ThrowIfError(env, sonare_project_unresolved_audio_source_count(project_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -544,10 +587,12 @@ Napi::Value ProjectWrap::UnresolvedAudioSourceIds(const Napi::CallbackInfo& info
     ids.Set(static_cast<uint32_t>(i), Napi::Number::New(env, source_id));
   }
   return ids;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 4 || !sonare_node::IsFloat32Array(info[1])) {
     Napi::TypeError::New(env,
                          "setSourceAudio expects (sourceId, Float32Array, channels, sampleRate)")
@@ -573,36 +618,45 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
                         static_cast<int64_t>(audio.ElementLength() / static_cast<size_t>(channels)),
                         channels, sample_rate));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::TempoSegmentCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t out = 0;
   ThrowIfError(env, sonare_project_tempo_segment_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::TimeSignatureCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t out = 0;
   ThrowIfError(env, sonare_project_time_signature_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectWrap::MarkerCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   size_t out = 0;
   ThrowIfError(env, sonare_project_marker_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
+  SONARE_NODE_CATCH(env)
 }
 
 void ProjectWrap::Destroy(const Napi::CallbackInfo& info) {
-  (void)info;
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY(void) info;
   if (project_ != nullptr) {
     sonare_project_destroy(project_);
     project_ = nullptr;
   }
+  SONARE_NODE_CATCH_VOID(env)
 }

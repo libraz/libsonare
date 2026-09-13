@@ -51,7 +51,7 @@ Napi::Value SonareWrap::Hpss(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   HpssArguments args;
   if (!ReadHpssArguments(env, info, &args)) return env.Undefined();
 
@@ -98,7 +98,7 @@ Napi::Value SonareWrap::Harmonic(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -121,7 +121,7 @@ Napi::Value SonareWrap::Percussive(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -145,12 +145,10 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   float rate = info[2].As<Napi::Number>().FloatValue();
-  int n_fft =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 512;
+  int n_fft = node_arg_int(info, 3, 2048);
+  int hop_length = node_arg_int(info, 4, 512);
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -178,12 +176,10 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   float semitones = info[2].As<Napi::Number>().FloatValue();
-  int n_fft =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 512;
+  int n_fft = node_arg_int(info, 3, 2048);
+  int hop_length = node_arg_int(info, 4, 512);
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -217,7 +213,7 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   float current_midi = info[2].As<Napi::Number>().FloatValue();
   float target_midi = info[3].As<Napi::Number>().FloatValue();
 
@@ -246,10 +242,10 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   float target_midi = info[3].As<Napi::Number>().FloatValue();
-  int hop_length = info[4].As<Napi::Number>().Int32Value();
+  int hop_length = node_narrow_int(env, info[4], "hopLength");
   const size_t n_frames = f0.ElementLength();
 
   sonare::editing::pitch_editor::F0Track track;
@@ -302,10 +298,10 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
-  int hop_length = info[3].As<Napi::Number>().Int32Value();
+  int hop_length = node_narrow_int(env, info[3], "hopLength");
 
   SonarePitchCorrectionConfig config{};
   sonare_pitch_correction_config_default(&config);
@@ -399,9 +395,9 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
-  int onset_sample = info[2].As<Napi::Number>().Int32Value();
-  int offset_sample = info[3].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
+  int onset_sample = node_narrow_int(env, info[2], "onsetSample");
+  int offset_sample = node_narrow_int(env, info[3], "offsetSample");
   float stretch_ratio = info[4].As<Napi::Number>().FloatValue();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
@@ -432,14 +428,15 @@ Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::NoteRegion region;
-  region.onset_sample = info[2].As<Napi::Number>().Int32Value();
-  region.offset_sample = info[3].As<Napi::Number>().Int32Value();
+  region.onset_sample = node_narrow_int(env, info[2], node_arg_label(2).c_str());
+  region.offset_sample = node_narrow_int(env, info[3], node_arg_label(3).c_str());
   sonare::editing::pitch_editor::NoteEditor editor;
-  sonare::Audio result = editor.move_note(audio, region, info[4].As<Napi::Number>().Int32Value());
+  sonare::Audio result =
+      editor.move_note(audio, region, node_narrow_int(env, info[4], node_arg_label(4).c_str()));
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)
@@ -697,7 +694,7 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = info[3].As<Napi::Number>().FloatValue();
@@ -734,7 +731,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
 
   SonareNoteRenderConfig config{};
   config.struct_version = 1;
@@ -833,14 +830,14 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = info[3].As<Napi::Number>().FloatValue();
   // A negative index arrives as a size_t past every note, which the C ABI
   // rejects as the out-of-range index it is.
-  const size_t index = static_cast<size_t>(info[5].As<Napi::Number>().Int64Value());
-  const int32_t frame = info[6].As<Napi::Number>().Int32Value();
+  const size_t index = static_cast<size_t>(node_narrow_int64(env, info[5], "index"));
+  const int32_t frame = node_narrow_int(env, info[6], "frame");
 
   NoteTrackOptions options;
   if (!ReadNoteTrackOptions(env, info[7], n_frames, &options)) {
@@ -883,12 +880,12 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = info[3].As<Napi::Number>().FloatValue();
-  const size_t first = static_cast<size_t>(info[5].As<Napi::Number>().Int64Value());
-  const size_t last = static_cast<size_t>(info[6].As<Napi::Number>().Int64Value());
+  const size_t first = static_cast<size_t>(node_narrow_int64(env, info[5], "first"));
+  const size_t last = static_cast<size_t>(node_narrow_int64(env, info[6], "last"));
 
   NoteTrackOptions options;
   if (!ReadNoteTrackOptions(env, info[7], n_frames, &options)) {
@@ -926,7 +923,7 @@ Napi::Value SonareWrap::ExtractPercussiveEvents(const Napi::CallbackInfo& info) 
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
 
   SonarePercussiveEventConfig config{};
   ReadPercussiveEventConfig(info[2], &config);
@@ -959,7 +956,7 @@ Napi::Value SonareWrap::RenderPercussiveEvents(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
 
   SonarePercussiveRenderConfig config{};
   ReadPercussiveRenderConfig(info[3], &config);
@@ -996,7 +993,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   float pitch_semitones = info[2].As<Napi::Number>().FloatValue();
   float formant_factor = info[3].As<Napi::Number>().FloatValue();
 
@@ -1015,6 +1012,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsString() ||
       !info[3].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, preset, channels)")
@@ -1023,9 +1021,9 @@ Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
   }
 
   auto samples = info[0].As<Napi::Float32Array>();
-  const int sample_rate = info[1].As<Napi::Number>().Int32Value();
+  const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   const std::string preset = info[2].As<Napi::String>().Utf8Value();
-  const int channels = info[3].As<Napi::Number>().Int32Value();
+  const int channels = node_narrow_int(env, info[3], "channels");
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError err =
@@ -1039,6 +1037,7 @@ Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
   std::vector<float> result(output, output + output_length);
   sonare_free_floats(output);
   return VecToFloat32(env, result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
@@ -1054,7 +1053,7 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   float target_db =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
   std::string mode =
@@ -1080,11 +1079,55 @@ namespace {
 /// @brief Map a lowercase window string to the SonareWindowType integer.
 /// Returns -1 on an unrecognised name (caller should throw).
 int parse_window_type(const std::string& s) {
-  if (s == "hann") return 0;
-  if (s == "hamming") return 1;
-  if (s == "blackman") return 2;
-  if (s == "rectangular" || s == "rect") return 3;
+  if (s == "hann") return SONARE_WINDOW_HANN;
+  if (s == "hamming") return SONARE_WINDOW_HAMMING;
+  if (s == "blackman") return SONARE_WINDOW_BLACKMAN;
+  if (s == "rectangular" || s == "rect") return SONARE_WINDOW_RECTANGULAR;
   return -1;
+}
+
+/// @brief Resolve a window given as a name or as a @ref SonareWindowType ordinal.
+/// @details Both spellings reach the same rejection, matching the C ABI and the
+///   WASM reader. Validating only the name leaves the numeric form -- the one a
+///   generated binding produces -- as a type error, and the ordinal is bounded
+///   by the enumerators rather than by a literal, so a member added later
+///   widens the accepted set instead of silently changing what 4 means.
+/// @throws SonareException(InvalidParameter) for a value that is neither, or an
+///   ordinal outside the enum.
+int read_window_type(Napi::Env env, const Napi::Value& value) {
+  if (value.IsNumber()) {
+    // An ordinal is a member, not a magnitude, so the fraction is refused here
+    // rather than truncated: the positional readers let 31.5 reach a callee as
+    // 31 because that does not change what was asked for, but 1.5 selecting
+    // hamming is a window the caller never named. A domain check, not a
+    // narrowing one -- node_narrow_int has already accepted the value.
+    const double number = value.As<Napi::Number>().DoubleValue();
+    if (std::isfinite(number) && std::trunc(number) != number) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "spectralEdit: window ordinal must be an integer, not " + std::to_string(number));
+    }
+    const int ordinal = sonare_node::node_narrow_int(env, value, "window");
+    if (ordinal < SONARE_WINDOW_HANN || ordinal > SONARE_WINDOW_RECTANGULAR) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "spectralEdit: unknown window type: " + std::to_string(ordinal));
+    }
+    return ordinal;
+  }
+  if (!value.IsString()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "spectralEdit: window must be a window name or a window ordinal");
+  }
+  std::string name = value.As<Napi::String>().Utf8Value();
+  std::transform(name.begin(), name.end(), name.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const int mapped = parse_window_type(name);
+  if (mapped < 0) {
+    throw std::runtime_error("spectralEdit: unknown window type: " +
+                             value.As<Napi::String>().Utf8Value());
+  }
+  return mapped;
 }
 
 /// @brief Map a lowercase spectral-edit mode string to SonareSpectralEditMode.
@@ -1114,7 +1157,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
 
   // Build config (optional fourth argument).
   SonareSpectralEditConfig config{};  // zero-init = all defaults
@@ -1125,21 +1168,10 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
     config.hop_length = node_int_option(opts, "hopLength", 0);
     config.heal_radius_frames = node_int_option(opts, "healRadiusFrames", 0);
 
-    // Parse optional window string.
+    // Optional window, by name or by ordinal.
     Napi::Value win_val = opts.Get("window");
     if (!win_val.IsUndefined() && !win_val.IsNull()) {
-      if (!win_val.IsString()) {
-        throw std::runtime_error("spectralEdit: window must be a string");
-      }
-      std::string win_str = win_val.As<Napi::String>().Utf8Value();
-      std::transform(win_str.begin(), win_str.end(), win_str.begin(),
-                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-      int win_int = parse_window_type(win_str);
-      if (win_int < 0) {
-        throw std::runtime_error("spectralEdit: unknown window type: " +
-                                 win_val.As<Napi::String>().Utf8Value());
-      }
-      config.window = win_int;
+      config.window = read_window_type(env, win_val);
     }
     config_ptr = &config;
   }

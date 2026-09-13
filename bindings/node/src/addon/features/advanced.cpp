@@ -12,6 +12,7 @@
 #include "feature/spectral.h"
 #include "features/common.h"
 #include "sonare_wrap.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/constants.h"
 
@@ -55,17 +56,13 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  const int hop_length =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
+  const int sr = node_arg_int(info, 1, 22050);
+  const int hop_length = node_arg_int(info, 2, 512);
   const float fmin = info.Length() >= 4 && info[3].IsNumber()
                          ? info[3].As<Napi::Number>().FloatValue()
                          : sonare::constants::kC1Hz;
-  const int n_bins =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 84;
-  const int bins_per_octave =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 12;
+  const int n_bins = node_arg_int(info, 4, 84);
+  const int bins_per_octave = node_arg_int(info, 5, 12);
 
   SonareCqtResult result{};
   SonareError err = fn(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
@@ -81,18 +78,29 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
 
 }  // namespace
 
-Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) { return CqtLike(info, sonare_cqt); }
+Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY return CqtLike(info, sonare_cqt);
+  SONARE_NODE_CATCH(env)
+}
 
 Napi::Value SonareWrap::PseudoCqt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return CqtLike(info, sonare_pseudo_cqt);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::HybridCqt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return CqtLike(info, sonare_hybrid_cqt);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
@@ -100,17 +108,13 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  const int hop_length =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
+  const int sr = node_arg_int(info, 1, 22050);
+  const int hop_length = node_arg_int(info, 2, 512);
   const float fmin = info.Length() >= 4 && info[3].IsNumber()
                          ? info[3].As<Napi::Number>().FloatValue()
                          : sonare::constants::kC1Hz;
-  const int n_bins =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 84;
-  const int bins_per_octave =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 12;
+  const int n_bins = node_arg_int(info, 4, 84);
+  const int bins_per_octave = node_arg_int(info, 5, 12);
   const float gamma =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : -1.0f;
 
@@ -124,10 +128,12 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   Napi::Value out = CqtResultToObject(env, result);
   sonare_free_cqt_result(&result);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env,
                          "Expected (Float32Array, nBins, nFrames, sampleRate?, hopLength?, "
@@ -136,19 +142,15 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto magnitude = info[0].As<Napi::Float32Array>();
-  const int n_bins = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
-  const int sample_rate =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
-  const int hop_length =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 512;
+  const int n_bins = node_narrow_int(env, info[1], "nBins");
+  const int n_frames = node_narrow_int(env, info[2], "nFrames");
+  const int sample_rate = node_arg_int(info, 3, 22050);
+  const int hop_length = node_arg_int(info, 4, 512);
   const float fmin = info.Length() >= 6 && info[5].IsNumber()
                          ? info[5].As<Napi::Number>().FloatValue()
                          : sonare::constants::kC1Hz;
-  const int bins_per_octave =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 12;
-  const int n_iter =
-      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().Int32Value() : 32;
+  const int bins_per_octave = node_arg_int(info, 6, 12);
+  const int n_iter = node_arg_int(info, 7, 32);
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError error = sonare_cqt_to_audio_checked(
@@ -158,10 +160,12 @@ Napi::Value SonareWrap::CqtToAudio(const Napi::CallbackInfo& info) {
   std::vector<float> owned(output, output + output_length);
   sonare_free_floats(output);
   return VecToFloat32(env, owned);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env,
                          "Expected (Float32Array, nBins, nFrames, sampleRate?, hopLength?, "
@@ -170,21 +174,17 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto magnitude = info[0].As<Napi::Float32Array>();
-  const int n_bins = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
-  const int sample_rate =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
-  const int hop_length =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 512;
+  const int n_bins = node_narrow_int(env, info[1], "nBins");
+  const int n_frames = node_narrow_int(env, info[2], "nFrames");
+  const int sample_rate = node_arg_int(info, 3, 22050);
+  const int hop_length = node_arg_int(info, 4, 512);
   const float fmin = info.Length() >= 6 && info[5].IsNumber()
                          ? info[5].As<Napi::Number>().FloatValue()
                          : sonare::constants::kC1Hz;
-  const int bins_per_octave =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 12;
+  const int bins_per_octave = node_arg_int(info, 6, 12);
   const float gamma =
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : -1.0f;
-  const int n_iter =
-      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().Int32Value() : 32;
+  const int n_iter = node_arg_int(info, 8, 32);
   float* output = nullptr;
   size_t output_length = 0;
   const SonareError error = sonare_vqt_to_audio_checked(
@@ -194,6 +194,7 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   std::vector<float> owned(output, output + output_length);
   sonare_free_floats(output);
   return VecToFloat32(env, owned);
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -225,15 +226,13 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int n_mels = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  const int n_mels = node_narrow_int(env, info[1], "nMels");
+  const int n_frames = node_narrow_int(env, info[2], "nFrames");
   if (!ValidateMatrixDims(env, "melToStft", n_mels, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
-  const int sr =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
-  const int n_fft =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
+  const int sr = node_arg_int(info, 3, 22050);
+  const int n_fft = node_arg_int(info, 4, 2048);
   const float fmin =
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 0.0f;
   const float fmax =
@@ -273,23 +272,19 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int n_mels = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  const int n_mels = node_narrow_int(env, info[1], "nMels");
+  const int n_frames = node_narrow_int(env, info[2], "nFrames");
   if (!ValidateMatrixDims(env, "melToAudio", n_mels, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
-  const int sr =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
-  const int n_fft =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
-  const int hop_length =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
+  const int sr = node_arg_int(info, 3, 22050);
+  const int n_fft = node_arg_int(info, 4, 2048);
+  const int hop_length = node_arg_int(info, 5, 512);
   const float fmin =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
   const float fmax =
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
-  const int n_iter =
-      info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().Int32Value() : 32;
+  const int n_iter = node_arg_int(info, 8, 32);
   const bool htk =
       info.Length() >= 10 && info[9].IsBoolean() ? info[9].As<Napi::Boolean>().Value() : false;
 
@@ -318,19 +313,15 @@ Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   const auto magnitude = info[0].As<Napi::Float32Array>();
-  const int n_bins = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  const int n_bins = node_narrow_int(env, info[1], "nBins");
+  const int n_frames = node_narrow_int(env, info[2], "nFrames");
   if (!ValidateMatrixDims(env, "griffinLim", n_bins, n_frames, magnitude.ElementLength())) {
     return env.Undefined();
   }
-  const int sample_rate =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
-  const int n_fft =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
-  const int hop_length =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
-  const int n_iter =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 32;
+  const int sample_rate = node_arg_int(info, 3, 22050);
+  const int n_fft = node_arg_int(info, 4, 2048);
+  const int hop_length = node_arg_int(info, 5, 512);
+  const int n_iter = node_arg_int(info, 6, 32);
   const float momentum =
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.99f;
   float* out = nullptr;
@@ -356,13 +347,12 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int n_mfcc = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  const int n_mfcc = node_narrow_int(env, info[1], "nMfcc");
+  const int n_frames = node_narrow_int(env, info[2], "nFrames");
   if (!ValidateMatrixDims(env, "mfccToMel", n_mfcc, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
-  const int n_mels =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
+  const int n_mels = node_arg_int(info, 3, 128);
   const float lifter =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 0.0f;
 
@@ -392,25 +382,20 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int n_mfcc = info[1].As<Napi::Number>().Int32Value();
-  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  const int n_mfcc = node_narrow_int(env, info[1], "nMfcc");
+  const int n_frames = node_narrow_int(env, info[2], "nFrames");
   if (!ValidateMatrixDims(env, "mfccToAudio", n_mfcc, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
-  const int n_mels =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
-  const int sr =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 22050;
-  const int n_fft =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 2048;
-  const int hop_length =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 512;
+  const int n_mels = node_arg_int(info, 3, 128);
+  const int sr = node_arg_int(info, 4, 22050);
+  const int n_fft = node_arg_int(info, 5, 2048);
+  const int hop_length = node_arg_int(info, 6, 512);
   const float fmin =
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
   const float fmax =
       info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().FloatValue() : 0.0f;
-  const int n_iter =
-      info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().Int32Value() : 32;
+  const int n_iter = node_arg_int(info, 9, 32);
   const bool htk =
       info.Length() >= 11 && info[10].IsBoolean() ? info[10].As<Napi::Boolean>().Value() : false;
   const float lifter =
@@ -437,19 +422,16 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
-  int n_bands =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 6;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  int n_bands = node_arg_int(info, 4, 6);
   float fmin =
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 200.0f;
   float quantile =
@@ -466,23 +448,21 @@ Napi::Value SonareWrap::SpectralContrast(const Napi::CallbackInfo& info) {
   result.Set("cols", Napi::Number::New(env, out_cols));
   result.Set("data", FloatResult(env, out, count));
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
-  int order =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 1;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  int order = node_arg_int(info, 4, 1);
   float* out = nullptr;
   int out_rows = 0;
   int out_cols = 0;
@@ -495,10 +475,12 @@ Napi::Value SonareWrap::PolyFeatures(const Napi::CallbackInfo& info) {
   result.Set("cols", Napi::Number::New(env, out_cols));
   result.Set("data", FloatResult(env, out, count));
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::ZeroCrossings(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -518,10 +500,12 @@ Napi::Value SonareWrap::ZeroCrossings(const Napi::CallbackInfo& info) {
                                           pad, zero_pos, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return IntResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::PitchTuning(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array of frequencies").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -529,35 +513,33 @@ Napi::Value SonareWrap::PitchTuning(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   float resolution =
       info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 0.01f;
-  int bins_per_octave =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 12;
+  int bins_per_octave = node_arg_int(info, 2, 12);
   float out_tuning = 0.0f;
   SonareError err = sonare_pitch_tuning(arr.Data(), arr.ElementLength(), resolution,
                                         bins_per_octave, &out_tuning);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return Napi::Number::New(env, out_tuning);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::EstimateTuning(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
   float resolution =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 0.01f;
-  int bins_per_octave =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 12;
+  int bins_per_octave = node_arg_int(info, 5, 12);
   float out_tuning = 0.0f;
   SonareError err = sonare_estimate_tuning(arr.Data(), arr.ElementLength(), sr, n_fft, hop_length,
                                            resolution, bins_per_octave, &out_tuning);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return Napi::Number::New(env, out_tuning);
+  SONARE_NODE_CATCH(env)
 }

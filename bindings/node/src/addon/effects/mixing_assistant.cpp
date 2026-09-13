@@ -4,6 +4,7 @@
 
 #include "mastering/api/named_processor.h"
 #include "sonare_wrap.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
@@ -190,7 +191,8 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info, SuggestEntry entry) 
   const SonareError err =
       entry(tracks.left.data(), tracks.any_right ? tracks.right.data() : nullptr,
             tracks.id_pointers.data(), tracks.any_name ? tracks.name_pointers.data() : nullptr,
-            tracks.lengths.data(), tracks.left.size(), info[4].As<Napi::Number>().Int32Value(),
+            tracks.lengths.data(), tracks.left.size(),
+            node_narrow_int(env, info[4], node_arg_label(4).c_str()),
             c_params.empty() ? nullptr : c_params.data(), c_params.size(), &json);
   if (err != SONARE_OK) {
     sonare_free_string(json);
@@ -206,22 +208,32 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info, SuggestEntry entry) 
 }  // namespace
 
 Napi::Value SonareWrap::MixingAssistantSuggest(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return SuggestMixScene(info, &sonare_mixing_assistant_suggest);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MixingAssistantSuggestSceneJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return SuggestMixScene(info, &sonare_mixing_assistant_suggest_scene_json);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MixingAssistantSourceClassNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   // sonare_mixing_assistant_source_class_names() returns a thread-local
   // '\n'-joined const char* (NOT to be freed); split it into a JS string[] like
   // the other *_names getters.
   return JoinedNamesToArray(info.Env(), sonare_mixing_assistant_source_class_names());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MixingAssistantSourceClassFromName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (name: string)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -230,4 +242,5 @@ Napi::Value SonareWrap::MixingAssistantSourceClassFromName(const Napi::CallbackI
   // An unknown name resolves to -1 rather than an error; the caller decides
   // whether that is a failure.
   return Napi::Number::New(env, sonare_mixing_assistant_source_class_from_name(name.c_str()));
+  SONARE_NODE_CATCH(env)
 }

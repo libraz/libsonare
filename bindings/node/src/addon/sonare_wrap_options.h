@@ -18,29 +18,103 @@
 
 namespace sonare_node {
 
+/// @brief The one narrowing every integer reader below performs.
+/// @details Int32Value(), Uint32Value() and Int64Value() are the ECMAScript
+///   ToInt32 / ToUint32 / ToBigInt64 conversions, which WRAP: 2^32 arrives as 0
+///   -- what most of these fields read as "keep the default" -- 2^32 + 1 as 1,
+///   and -1 as the largest unsigned value, which on more than one field here is
+///   the all-or-none wildcard. A wrapped value is always inside the target type,
+///   so no guard downstream, in the C ABI or in the core, can tell it from a
+///   setting the caller chose. The range is the only thing that differs between
+///   the widths, so this is written once rather than per reader.
+///
+///   Truncation is deliberately left alone: ToInt32 already dropped the
+///   fraction at every one of these sites and 31.5 reaching the callee as 31
+///   does not change a magnitude, so refusing it would be a separate contract
+///   change rather than closing this wrap.
+///
+///   The refusal UNWINDS rather than leaving a pending JS exception, because
+///   these readers are called from entry points that keep working afterwards.
+///   A pending exception makes every later N-API allocation return null, and the
+///   result builders memcpy into it, so a reader that merely reported the error
+///   would trade a silently wrong answer for a crash. A thrown Napi::Error stops
+///   the entry point where it stands and SONARE_NODE_CATCH turns it back into
+///   the same JS RangeError.
+/// @throws Napi::RangeError naming @p name.
+inline double node_narrow_number(Napi::Env env, const Napi::Value& value, const char* name,
+                                 double low, double high) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  const double truncated = std::trunc(number);
+  if (!std::isfinite(number) || truncated < low || truncated > high) {
+    throw Napi::RangeError::New(env, std::string(name) + " must be a finite number within [" +
+                                         std::to_string(static_cast<long long>(low)) + ", " +
+                                         std::to_string(static_cast<long long>(high)) + "]");
+  }
+  return truncated;
+}
+
+/// @brief int-width sibling of @ref node_narrow_number.
+inline int node_narrow_int(Napi::Env env, const Napi::Value& value, const char* name) {
+  return static_cast<int>(node_narrow_number(env, value, name,
+                                             static_cast<double>(std::numeric_limits<int>::min()),
+                                             static_cast<double>(std::numeric_limits<int>::max())));
+}
+
+/// @brief uint32 sibling of @ref node_narrow_number.
+inline uint32_t node_narrow_uint32(Napi::Env env, const Napi::Value& value, const char* name) {
+  return static_cast<uint32_t>(node_narrow_number(
+      env, value, name, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max())));
+}
+
+/// @brief Raw 32-bit word sibling of @ref node_narrow_number (a UMP word, a
+///        packed MIDI 1.0 message).
+/// @details Deliberately NOT @ref node_narrow_uint32: the whole 32-bit range is
+///   legal here, and the idiomatic JS spelling `(0x4 << 28) | ...` is a SIGNED
+///   int once bit 31 is set, so a negative is reinterpreted as its two's
+///   complement word rather than refused. Only a value outside [-2^31, 2^32) is
+///   a caller error. Matches the WASM reader of the same name.
+/// @throws Napi::RangeError naming @p name.
+inline uint32_t node_narrow_word(Napi::Env env, const Napi::Value& value, const char* name) {
+  static constexpr double kSignedMin = -2147483648.0;   // -2^31
+  static constexpr double kUnsignedMax = 4294967295.0;  // 2^32 - 1
+  const double number = node_narrow_number(env, value, name, kSignedMin, kUnsignedMax);
+  return number < 0.0 ? static_cast<uint32_t>(static_cast<int64_t>(number))
+                      : static_cast<uint32_t>(number);
+}
+
+/// @brief int64 sibling of @ref node_narrow_number.
+/// @details The bounds are written as powers of two rather than as
+///   numeric_limits: INT64_MAX is not representable as a double, and converting
+///   it rounds the bound up past the values it is meant to exclude. 2^63 - 1024
+///   is the largest double below 2^63, so it is the inclusive bound.
+inline int64_t node_narrow_int64(Napi::Env env, const Napi::Value& value, const char* name) {
+  static constexpr double kBound = 9223372036854775808.0;  // 2^63
+  static constexpr double kMax = 9223372036854774784.0;    // 2^63 - 1024
+  return static_cast<int64_t>(node_narrow_number(env, value, name, -kBound, kMax));
+}
+
+/// @brief The subject an out-of-range positional argument is named by.
+inline std::string node_arg_label(size_t index) { return "argument " + std::to_string(index); }
+
 // Canonical positional-argument readers, shared by every addon TU. Semantics
 // match the recurring inline sites: a missing OR present-but-non-number
 // argument at @p index falls back to @p fallback (a type-checked fallback, not
 // a presence-only check). Preserve the int/float/double distinction per call
 // site (Int32Value vs FloatValue vs DoubleValue).
 
-/// @brief Read an int positional argument, falling back if absent or non-number.
+/// @brief Read an int positional argument, falling back if absent or non-number,
+///        and refusing a number the narrowing would wrap (@ref node_narrow_number).
 inline int node_arg_int(const Napi::CallbackInfo& info, size_t index, int fallback) {
-  return index < info.Length() && info[index].IsNumber()
-             ? info[index].As<Napi::Number>().Int32Value()
-             : fallback;
+  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
+  return node_narrow_int(info.Env(), info[index], node_arg_label(index).c_str());
 }
 
 /// @brief Read an int positional argument with this family's type-checked
 ///        fallback, but refuse a NUMBER the narrowing would wrap.
-/// @details The one member of this family that can fail, because its two halves
-///          pull apart. A missing or non-number argument still falls back,
-///          exactly as above. A number cannot: Int32Value() is ToInt32 and
-///          WRAPS, so 2^32 arrives as 0 and 2^32 + 1 as 1 -- values the
-///          downstream guards accept, so the call succeeds on a setting the
-///          caller never asked for and no refusal downstream can see it.
-///          Truncation is deliberately left alone: 31.5 still reaches the callee
-///          as 31, which is what ToInt32 did and does not change a magnitude.
+/// @details Reads through @ref node_narrow_int like the rest of the family, so
+///          the refusal is the same one; what this adds is a bool return, for a
+///          caller that wants to stop explicitly rather than let the throw
+///          unwind past it. A missing or non-number argument still falls back.
 ///          Use Int32Arg where a wrong TYPE should be refused too; this is for
 ///          the sites whose documented contract is the fallback.
 ///
@@ -51,8 +125,7 @@ inline int node_arg_int(const Napi::CallbackInfo& info, size_t index, int fallba
 ///          int itself, where the value has no faithful representation at all,
 ///          which is the addon's own RangeError class (MidiByteProperty,
 ///          Int32Arg). A facade caller never reaches this check.
-/// @return false with one pending JS RangeError when a number would wrap; the
-///         caller must return before any further N-API call.
+/// @return false when the argument could not be read; a refused number throws.
 inline bool node_arg_int_no_wrap(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                                  const char* name, int fallback, int* out) {
   if (env.IsExceptionPending() || out == nullptr) return false;
@@ -60,28 +133,22 @@ inline bool node_arg_int_no_wrap(Napi::Env env, const Napi::CallbackInfo& info, 
     *out = fallback;
     return true;
   }
-  const double number = info[index].As<Napi::Number>().DoubleValue();
-  if (env.IsExceptionPending()) return false;
-  // Compared after the truncation ToInt32 applies first, so a fractional value
-  // just inside the range is accepted rather than read as out of it.
-  const double truncated = std::trunc(number);
-  constexpr double kMinInt = static_cast<double>(std::numeric_limits<int>::min());
-  constexpr double kMaxInt = static_cast<double>(std::numeric_limits<int>::max());
-  if (!std::isfinite(number) || truncated < kMinInt || truncated > kMaxInt) {
-    Napi::RangeError::New(
-        env, std::string(name) + " must be a finite number within the native int range")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = static_cast<int>(truncated);
+  *out = node_narrow_int(env, info[index], name);
   return true;
 }
 
-/// @brief Read a uint32 positional argument, falling back if absent or non-number.
+/// @brief Read a uint32 positional argument, falling back if absent or non-number,
+///        and refusing a number the narrowing would wrap (@ref node_narrow_number).
 inline uint32_t node_arg_uint32(const Napi::CallbackInfo& info, size_t index, uint32_t fallback) {
-  return index < info.Length() && info[index].IsNumber()
-             ? info[index].As<Napi::Number>().Uint32Value()
-             : fallback;
+  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
+  return node_narrow_uint32(info.Env(), info[index], node_arg_label(index).c_str());
+}
+
+/// @brief Read an int64 positional argument, falling back if absent or non-number,
+///        and refusing a number the narrowing would wrap (@ref node_narrow_number).
+inline int64_t node_arg_int64(const Napi::CallbackInfo& info, size_t index, int64_t fallback) {
+  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
+  return node_narrow_int64(info.Env(), info[index], node_arg_label(index).c_str());
 }
 
 /// @brief Read a float positional argument, falling back if absent or non-number.
@@ -117,7 +184,8 @@ inline bool node_arg_bool(const Napi::CallbackInfo& info, size_t index, bool fal
 /// @brief Read an integer option from a JS object, falling back if missing.
 inline int node_int_option(const Napi::Object& object, const char* key, int fallback) {
   Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().Int32Value() : fallback;
+  if (!value.IsNumber()) return fallback;
+  return node_narrow_int(object.Env(), value, key);
 }
 
 /// @brief Read a float option from a JS object, falling back if missing.
@@ -135,7 +203,8 @@ inline double node_double_option(const Napi::Object& object, const char* key, do
 /// @brief Read an int64 option from a JS object, falling back if missing.
 inline int64_t node_int64_option(const Napi::Object& object, const char* key, int64_t fallback) {
   Napi::Value value = object.Get(key);
-  return value.IsNumber() ? static_cast<int64_t>(value.As<Napi::Number>().Int64Value()) : fallback;
+  if (!value.IsNumber()) return fallback;
+  return node_narrow_int64(object.Env(), value, key);
 }
 
 /// @brief Read a boolean option from a JS object, falling back if missing.
@@ -155,14 +224,24 @@ inline std::string node_string_option(const Napi::Object& object, const char* ke
 ///        typed read (a non-number raises a pending JS exception; see note above).
 inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().Int32Value();
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_int(obj.Env(), value, key);
+}
+
+/// @brief Read a raw 32-bit word property, accepting both the unsigned and the
+///        bit-31-signed spelling (@ref node_narrow_word).
+inline uint32_t WordProperty(const Napi::Object& obj, const char* key, uint32_t fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_word(obj.Env(), value, key);
 }
 
 /// @brief Read a uint32 property: undefined/null returns the fallback, otherwise a
 ///        typed read (a non-number raises a pending JS exception).
 inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_t fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().Uint32Value();
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_uint32(obj.Env(), value, key);
 }
 
 /// @brief Read a MIDI-byte-wide property destined for a uint8_t C-ABI field.
@@ -194,9 +273,8 @@ inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const ch
 ///        typed read (a non-number raises a pending JS exception).
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() || value.IsNull()
-             ? fallback
-             : static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_int64(obj.Env(), value, key);
 }
 
 /// @brief Read a float property: undefined/null returns the fallback, otherwise a
@@ -277,16 +355,24 @@ inline bool RequireNumberValue(Napi::Env env, const Napi::Value& value, const st
 inline bool RequiredIntValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                              int* out) {
   if (!RequireNumberValue(env, value, label)) return false;
-  *out = value.As<Napi::Number>().Int32Value();
-  return !env.IsExceptionPending();
+  *out = node_narrow_int(env, value, label.c_str());
+  return true;
 }
 
 /// @brief Read a required uint32 value.
 inline bool RequiredUint32Value(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 uint32_t* out) {
   if (!RequireNumberValue(env, value, label)) return false;
-  *out = value.As<Napi::Number>().Uint32Value();
-  return !env.IsExceptionPending();
+  *out = node_narrow_uint32(env, value, label.c_str());
+  return true;
+}
+
+/// @brief Read a required raw 32-bit word value (@ref node_narrow_word).
+inline bool RequiredWordValue(Napi::Env env, const Napi::Value& value, const std::string& label,
+                              uint32_t* out) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  *out = node_narrow_word(env, value, label.c_str());
+  return true;
 }
 
 /// @brief Read a required float value.
@@ -309,8 +395,8 @@ inline bool RequiredDoubleValue(Napi::Env env, const Napi::Value& value, const s
 inline bool RequiredInt64Value(Napi::Env env, const Napi::Value& value, const std::string& label,
                                int64_t* out) {
   if (!RequireNumberValue(env, value, label)) return false;
-  *out = static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
-  return !env.IsExceptionPending();
+  *out = node_narrow_int64(env, value, label.c_str());
+  return true;
 }
 
 /// @brief Read a required boolean value.
@@ -485,10 +571,10 @@ inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t
 ///        argument reads as @p fallback; a non-number is a TypeError and a
 ///        non-finite, fractional or out-of-int-range number a RangeError.
 ///
-/// This is the strict sibling of OptionalIntArg: that one narrows through
-/// Int32Value(), whose result is undefined for NaN, an infinity, or a magnitude
-/// past INT_MAX, so an argument headed for an int C-ABI parameter that must not
-/// silently wrap is checked here instead.
+/// This is the strict sibling of OptionalIntArg. Both refuse a value the int
+/// cannot hold; this one additionally refuses a wrong TYPE and rejects a
+/// fractional number, and it reports by leaving a pending exception rather than
+/// unwinding, so a caller that must stage several fields can bail on the first.
 inline bool Int32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index, const char* name,
                      int fallback, int* out) {
   if (env.IsExceptionPending() || out == nullptr) return false;

@@ -106,7 +106,7 @@ sonare::mastering::dynamics::DetectorMode parse_compressor_detector(
   Napi::Value value = options.Get("detector");
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (value.IsNumber()) {
-    int mode = value.As<Napi::Number>().Int32Value();
+    int mode = node_narrow_int(value.Env(), value, "mode");
     switch (mode) {
       case 0:
         return sonare::mastering::dynamics::DetectorMode::Peak;
@@ -172,7 +172,7 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::CompressorConfig config;
@@ -211,7 +211,7 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::GateConfig config;
@@ -244,7 +244,7 @@ Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInf
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::TransientShaperConfig config;
@@ -280,7 +280,7 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclickConfig config;
@@ -317,7 +317,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DenoiseClassicalConfig config;
@@ -397,7 +397,7 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclipConfig config;
@@ -425,7 +425,7 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DecrackleConfig config;
@@ -452,7 +452,7 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DehumConfig config;
@@ -484,7 +484,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DereverbClassicalConfig config;
@@ -554,7 +554,7 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::TrimSilenceConfig config;
@@ -595,7 +595,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr = info[1].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
   float threshold_db =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -60.0f;
   auto parse_frame_option = [&](size_t index, const char* name, int fallback, int* output) {

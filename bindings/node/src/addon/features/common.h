@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "sonare_wrap.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
-
 namespace sonare_node::features {
 
 inline Napi::Float32Array FloatResult(Napi::Env env, float* data, size_t count) {
@@ -41,7 +41,7 @@ using sonare_node::IntVectorFromValue;
 inline int TempogramModeFromValue(const Napi::Value& value) {
   if (value.IsUndefined() || value.IsNull()) return SONARE_TEMPOGRAM_AUTOCORRELATION;
   if (value.IsNumber()) {
-    const int mode = value.As<Napi::Number>().Int32Value();
+    const int mode = sonare_node::node_narrow_int(value.Env(), value, "mode");
     if (mode == SONARE_TEMPOGRAM_AUTOCORRELATION || mode == SONARE_TEMPOGRAM_COSINE) return mode;
   }
   if (value.IsString()) {

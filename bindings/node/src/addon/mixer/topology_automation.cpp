@@ -3,12 +3,14 @@
 #include <vector>
 
 #include "sonare_wrap_mixer.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node {
 
 Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -25,10 +27,12 @@ Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to add bus: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -43,10 +47,12 @@ Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to remove bus: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::BusCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -58,10 +64,12 @@ Napi::Value MixerWrap::BusCount(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -100,10 +108,12 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to add VCA group: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -118,10 +128,12 @@ Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to remove VCA group: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -137,10 +149,12 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to set VCA group gain: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -171,10 +185,12 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err, "failed to set VCA group members: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (mixer_ == nullptr) {
     Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -186,10 +202,12 @@ Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, samplePos, faderDb, curve?)")
         .ThrowAsJavaScriptException();
@@ -199,19 +217,20 @@ Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const int64_t sample_pos = info[1].As<Napi::Number>().Int64Value();
+  const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
   const float fader_db = info[2].As<Napi::Number>().FloatValue();
-  const int curve =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 0;
+  const int curve = node_arg_int(info, 3, 0);
   SonareError err = sonare_strip_schedule_fader_automation(strip, sample_pos, fader_db, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule fader automation: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, samplePos, pan, curve?)")
         .ThrowAsJavaScriptException();
@@ -221,19 +240,20 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const int64_t sample_pos = info[1].As<Napi::Number>().Int64Value();
+  const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
   const float pan = info[2].As<Napi::Number>().FloatValue();
-  const int curve =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 0;
+  const int curve = node_arg_int(info, 3, 0);
   SonareError err = sonare_strip_schedule_pan_automation(strip, sample_pos, pan, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule pan automation: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, samplePos, width, curve?)")
         .ThrowAsJavaScriptException();
@@ -243,19 +263,20 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const int64_t sample_pos = info[1].As<Napi::Number>().Int64Value();
+  const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
   const float width = info[2].As<Napi::Number>().FloatValue();
-  const int curve =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 0;
+  const int curve = node_arg_int(info, 3, 0);
   SonareError err = sonare_strip_schedule_width_automation(strip, sample_pos, width, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule width automation: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 4 || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, sendIndex, samplePos, db, curve?)")
         .ThrowAsJavaScriptException();
@@ -265,16 +286,17 @@ Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const size_t send_index = static_cast<size_t>(info[1].As<Napi::Number>().Int64Value());
-  const int64_t sample_pos = info[2].As<Napi::Number>().Int64Value();
+  const size_t send_index =
+      static_cast<size_t>(sonare_node::node_narrow_int64(env, info[1], "sendIndex"));
+  const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[2], "samplePos");
   const float db = info[3].As<Napi::Number>().FloatValue();
-  const int curve =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 0;
+  const int curve = node_arg_int(info, 4, 0);
   SonareError err = sonare_strip_schedule_send_automation(strip, send_index, sample_pos, db, curve);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to schedule send automation: ");
   }
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 }  // namespace sonare_node

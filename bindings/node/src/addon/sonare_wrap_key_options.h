@@ -9,12 +9,14 @@
 #include <string>
 #include <vector>
 
+#include "sonare_wrap_options.h"
+
 namespace sonare_node {
 
 /// @brief Parse a single key mode from a JS value (numeric ordinal or name).
 inline SonareMode node_mode_from_value(const Napi::Value& value) {
   if (value.IsNumber()) {
-    const int mode = value.As<Napi::Number>().Int32Value();
+    const int mode = sonare_node::node_narrow_int(value.Env(), value, "keyMode");
     if (mode < SONARE_MODE_MAJOR || mode > SONARE_MODE_LOCRIAN) {
       throw Napi::Error::New(value.Env(), "invalid key mode");
     }
@@ -73,7 +75,7 @@ inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
     return SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
   }
   if (value.IsNumber()) {
-    const int profile = value.As<Napi::Number>().Int32Value();
+    const int profile = sonare_node::node_narrow_int(value.Env(), value, "keyProfile");
     if (profile < SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER ||
         profile > SONARE_KEY_PROFILE_BELLMAN_BUDGE) {
       throw Napi::Error::New(value.Env(), "invalid key profile");

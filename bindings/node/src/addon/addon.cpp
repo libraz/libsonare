@@ -16,15 +16,24 @@
 namespace {
 
 Napi::Value EngineAbiVersion(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::Number::New(info.Env(), sonare_engine_abi_version());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value VoiceChangerAbiVersion(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::Number::New(info.Env(), sonare_voice_changer_abi_version());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value ProjectAbiVersion(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::Number::New(info.Env(), sonare_project_abi_version());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value NullableString(Napi::Env env, const char* value) {
@@ -32,68 +41,102 @@ Napi::Value NullableString(Napi::Env env, const char* value) {
 }
 
 Napi::Value MidiGmInstrumentName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(), sonare_midi_gm_instrument_name(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGmProgramForName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   std::string name;
   if (!sonare_node::RequiredStringValue(env, info[0], "name", &name)) return env.Undefined();
   return Napi::Number::New(env, sonare_midi_gm_program_for_name(name.c_str()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGmFamilyName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(), sonare_midi_gm_family_name(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGmFamilyFirstProgram(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::Number::New(info.Env(),
                            sonare_midi_gm_family_first_program(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGm2InstrumentName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(), sonare_midi_gm2_instrument_name(info[0].As<Napi::Number>(),
                                                                     info[1].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGmDrumName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(), sonare_midi_gm_drum_name(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGmDrumNoteForName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   std::string name;
   if (!sonare_node::RequiredStringValue(env, info[0], "name", &name)) return env.Undefined();
   return Napi::Number::New(env, sonare_midi_gm_drum_note_for_name(name.c_str()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGm2DrumSetName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(), sonare_midi_gm2_drum_set_name(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiGm2DrumName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(), sonare_midi_gm2_drum_name(info[0].As<Napi::Number>(),
                                                               info[1].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiCcName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(), sonare_midi_cc_name(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiCcIndexForName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   std::string name;
   if (!sonare_node::RequiredStringValue(env, info[0], "name", &name)) return env.Undefined();
   return Napi::Number::New(env, sonare_midi_cc_index_for_name(name.c_str()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiPerNoteControllerName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return NullableString(info.Env(),
                         sonare_midi_per_note_controller_name(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   for (size_t i = 0; i < 6; ++i) {
     if (info.Length() <= i || !info[i].IsNumber()) {
       Napi::TypeError::New(env,
@@ -129,6 +172,7 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
     out.Set(i, event);
   }
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 // Required fields are validated explicitly so a missing/wrong-typed one raises a
@@ -144,8 +188,8 @@ bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* 
   }
   *out = SonareMidiEventPod{};
   out->ppq = ppq.As<Napi::Number>().DoubleValue();
-  out->data0 = data0.As<Napi::Number>().Uint32Value();
-  out->data1 = sonare_node::Uint32Property(event, "data1", 0);
+  out->data0 = sonare_node::node_narrow_word(env, data0, "data0");
+  out->data1 = sonare_node::WordProperty(event, "data1", 0);
   return !env.IsExceptionPending();
 }
 
@@ -180,7 +224,7 @@ bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding
   out->selector_msb = sonare_node::MidiByteProperty(env, object, "selectorMsb", 0u);
   out->selector_lsb = sonare_node::MidiByteProperty(env, object, "selectorLsb", 0u);
   if (env.IsExceptionPending()) return false;
-  out->param_id = param_id.As<Napi::Number>().Uint32Value();
+  out->param_id = sonare_node::node_narrow_uint32(env, param_id, "paramId");
   out->min_value = sonare_node::FloatProperty(object, "minValue", 0.0f);
   out->max_value = sonare_node::FloatProperty(object, "maxValue", 1.0f);
   return !env.IsExceptionPending();
@@ -215,6 +259,7 @@ bool CcBindingsFromArray(Napi::Env env, Napi::Array array, std::vector<SonareMid
 
 Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (events, paramId, minValue?, maxValue?, minMovement?)")
         .ThrowAsJavaScriptException();
@@ -240,18 +285,21 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   SonareMidiCcBinding learned{};
   const SonareError err = sonare_midi_cc_learn(
       events.empty() ? nullptr : events.data(), events.size(),
-      info[1].As<Napi::Number>().Uint32Value(), sonare_node::node_arg_float(info, 2, 0.0f),
-      sonare_node::node_arg_float(info, 3, 1.0f), min_movement, &learned);
+      sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
+      sonare_node::node_arg_float(info, 2, 0.0f), sonare_node::node_arg_float(info, 3, 1.0f),
+      min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return CcBindingToObject(env, learned);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsObject()) {
     Napi::TypeError::New(env, "Expected (bindings: object[], event: object)")
         .ThrowAsJavaScriptException();
@@ -274,10 +322,12 @@ Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
   out.Set("value", Napi::Number::New(env, point.value));
   out.Set("curveToNext", Napi::Number::New(env, point.curve_to_next));
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber() ||
       !info[3].IsNumber()) {
     Napi::TypeError::New(env, "Expected (bindings: object[], paramId, value, group, ppq?)")
@@ -292,18 +342,21 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
       bindings.empty() ? nullptr : bindings.data(), bindings.size(),
-      info[1].As<Napi::Number>().Uint32Value(), info[2].As<Napi::Number>().FloatValue(), group,
-      sonare_node::node_arg_double(info, 4, 0.0), &event);
+      sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
+      info[2].As<Napi::Number>().FloatValue(), group, sonare_node::node_arg_double(info, 4, 0.0),
+      &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI param-to-CC arguments").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return MidiEventToObject(env, event);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!info[0].IsArray()) {
     Napi::TypeError::New(env, "events must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -355,6 +408,7 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   result.Set("overflowed", overflowed != 0);
   result.Set("overflowCount", Napi::Number::New(env, overflow_count));
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 // Splits a '\n'-joined C-ABI catalog string into a JS string[]. Every catalog
@@ -381,7 +435,10 @@ Napi::Array SplitJoinedNames(Napi::Env env, const char* joined) {
 // NativeSynth preset catalog: '\n'-joined program-lifetime string from the C
 // ABI, split into a JS string[] like masteringInsertNames.
 Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return SplitJoinedNames(info.Env(), sonare_synth_preset_names());
+  SONARE_NODE_CATCH(env)
 }
 
 // Fetches a named catalog preset as a SynthPatch object (the preset name plus
@@ -389,6 +446,7 @@ Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
 // A "va:" routing prefix is accepted; unknown names throw.
 Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "synthPresetPatch expects a preset name string")
         .ThrowAsJavaScriptException();
@@ -403,10 +461,12 @@ Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return sonare_node::SynthPatchToObject(env, patch);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   Napi::Object out = Napi::Object::New(env);
   out.Set("engineModes",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)));
@@ -424,15 +484,18 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
   out.Set("modDestinations",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)));
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SynthPatchRoundTrip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   SonareSynthPatch patch{};
   if (!sonare_node::ReadSynthPatch(env, info.Length() > 0 ? info[0] : env.Undefined(), &patch)) {
     return env.Undefined();
   }
   return sonare_node::SynthPatchToObject(env, patch);
+  SONARE_NODE_CATCH(env)
 }
 
 }  // namespace

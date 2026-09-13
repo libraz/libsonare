@@ -533,6 +533,7 @@ SonareWrap::~SonareWrap() {
 
 Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected string path argument").ThrowAsJavaScriptException();
@@ -554,10 +555,12 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
   auto result = info.This().As<Napi::Function>().New({external});
   audio_guard.release();
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::FileChannelCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected string path argument").ThrowAsJavaScriptException();
@@ -572,10 +575,12 @@ Napi::Value SonareWrap::FileChannelCount(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, channels);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
@@ -588,7 +593,7 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
 
   int sample_rate = 48000;
   if (info.Length() >= 2 && info[1].IsNumber()) {
-    sample_rate = info[1].As<Napi::Number>().Int32Value();
+    sample_rate = node_narrow_int(env, info[1], node_arg_label(1).c_str());
   }
 
   SonareAudio* audio_raw = nullptr;
@@ -604,10 +609,12 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   auto result = info.This().As<Napi::Function>().New({external});
   audio_guard.release();
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   const uint8_t* data = nullptr;
   size_t len = 0;
@@ -645,12 +652,14 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   auto result = info.This().As<Napi::Function>().New({external});
   audio_guard.release();
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 // --- Instance methods ---
 
 Napi::Value SonareWrap::GetData(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
@@ -665,10 +674,12 @@ Napi::Value SonareWrap::GetData(const Napi::CallbackInfo& info) {
     std::memcpy(result.Data(), data, length * sizeof(float));
   }
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::GetLength(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
@@ -676,10 +687,12 @@ Napi::Value SonareWrap::GetLength(const Napi::CallbackInfo& info) {
   }
 
   return Napi::Number::New(env, static_cast<double>(sonare_audio_length(audio_)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::GetSampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
@@ -687,10 +700,12 @@ Napi::Value SonareWrap::GetSampleRate(const Napi::CallbackInfo& info) {
   }
 
   return Napi::Number::New(env, sonare_audio_sample_rate(audio_));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::GetDuration(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
@@ -698,10 +713,12 @@ Napi::Value SonareWrap::GetDuration(const Napi::CallbackInfo& info) {
   }
 
   return Napi::Number::New(env, static_cast<double>(sonare_audio_duration(audio_)));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -715,6 +732,7 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(bpm));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
@@ -821,6 +839,7 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -841,10 +860,12 @@ Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
     sonare_free_floats(times);
   }
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectDownbeatsInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -865,10 +886,12 @@ Napi::Value SonareWrap::DetectDownbeatsInstance(const Napi::CallbackInfo& info) 
     sonare_free_floats(times);
   }
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectOnsetsInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -889,10 +912,12 @@ Napi::Value SonareWrap::DetectOnsetsInstance(const Napi::CallbackInfo& info) {
     sonare_free_floats(times);
   }
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AnalyzeInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!audio_) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -904,11 +929,15 @@ Napi::Value SonareWrap::AnalyzeInstance(const Napi::CallbackInfo& info) {
   return FullAnalysisJsonToObject(env, sonare_audio_data(audio_), sonare_audio_length(audio_),
                                   sonare_audio_sample_rate(audio_),
                                   has_options ? &options : nullptr);
+  SONARE_NODE_CATCH(env)
 }
 
-void SonareWrap::Destroy(const Napi::CallbackInfo& /*info*/) {
+void SonareWrap::Destroy(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (audio_) {
     sonare_audio_free(audio_);
     audio_ = nullptr;
   }
+  SONARE_NODE_CATCH_VOID(env)
 }

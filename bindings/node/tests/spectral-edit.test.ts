@@ -118,6 +118,63 @@ describe('spectralEdit (Node)', () => {
     );
   });
 
+  it('takes a window ordinal and reaches the same window the name does', () => {
+    // Both spellings are accepted on every surface, so a generated binding that
+    // emits the ordinal must not fall through to a different window. The name
+    // and the ordinal have to produce a bit-identical signal, and the members
+    // have to separate from each other, or the comparison proves nothing.
+    const samples = sine(440, 0.2);
+    const ops = [
+      {
+        mode: 'attenuate' as const,
+        startFrame: 2,
+        endFrame: 20,
+        lowBin: 60,
+        highBin: 120,
+        gainDb: -18,
+      },
+    ];
+    const render = (window: unknown) =>
+      spectralEdit(samples, SR, ops, { nFft: 1024, hopLength: 256, window: window as never });
+    const members: [string, number][] = [
+      ['hann', 0],
+      ['hamming', 1],
+      ['blackman', 2],
+      ['rectangular', 3],
+    ];
+    const byName = new Map(members.map(([name]) => [name, render(name)]));
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        expect(
+          byName.get(members[i][0]),
+          `${members[i][0]} and ${members[j][0]} render identically, so this comparison cannot see which window was used`,
+        ).not.toEqual(byName.get(members[j][0]));
+      }
+    }
+    for (const [name, ordinal] of members) {
+      expect(render(ordinal), `ordinal ${ordinal} did not reach ${name}`).toEqual(byName.get(name));
+    }
+  });
+
+  it('rejects a window ordinal outside the enum, and a fractional one', () => {
+    const samples = sine(440, 0.1);
+    const render = (window: unknown) => spectralEdit(samples, SR, [], { window: window as never });
+    // The bound is the enum's own, so a member added later widens the accepted
+    // set rather than changing what the first rejected value means.
+    for (const value of [4, 5, -1]) {
+      expect(() => render(value), `ordinal ${value}`).toThrow(/unknown window/i);
+    }
+    // An ordinal is a member, not a magnitude: truncating 1.5 would select a
+    // window the caller never named.
+    for (const value of [0.5, 1.5]) {
+      expect(() => render(value), `ordinal ${value}`).toThrow(/must be an integer/i);
+    }
+    for (const value of [2 ** 32, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => render(value), `ordinal ${value}`).toThrow(RangeError);
+    }
+    expect(() => render(true)).toThrow(/window name or a window ordinal/i);
+  });
+
   it('rejects a non-array ops argument', () => {
     const samples = sine(440, 0.1);
     // biome-ignore lint/suspicious/noExplicitAny: deliberately wrong-typed arg

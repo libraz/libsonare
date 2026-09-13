@@ -122,10 +122,6 @@ const GM_NAME_LOOKUP_POPULATION = { reads: 15, functions: 10 } as const;
  * site guarded from a distance has to say so here rather than read as safe.
  */
 const INLINE_READ_ALLOWLIST: ReadonlyMap<string, string> = new Map([
-  [
-    'effects/mixing_assistant.cpp:SuggestMixScene',
-    'info[4] is type-checked by ReadTrackArrays (`!info[4].IsNumber()` -> TypeError) at the top of this body, and a false return there exits before the read. A local re-check would be unreachable code, not a guard.',
-  ],
   ...[
     'MidiGmInstrumentName',
     'MidiGmFamilyName',
@@ -414,6 +410,7 @@ interface NativeProject {
     bank?: unknown,
   ): void;
   bakeMidiFx(clipId: unknown, config?: unknown): void;
+  setMidiFx(clipId: unknown, config?: unknown): void;
   bakeMidiFxWithSourceIndex(clipId: unknown, config?: unknown): Int32Array;
   previewMidiFxCount(clipId: unknown, config?: unknown): number;
   validateMidiNotes(clipId: unknown): unknown;
@@ -1856,6 +1853,15 @@ const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    // Delegates to bakeMidiFx, so it reaches the same bail-out reader through a
+    // call the entry point itself does not spell.
+    name: 'Project.setMidiFx',
+    missingRequired: [],
+    badProjectArguments: [
+      { argument: 'clipId', call: ({ project }) => project.setMidiFx('2', '{}') },
+    ],
+  },
+  {
     name: 'Project.bakeMidiFxWithSourceIndex',
     missingRequired: [],
     badProjectArguments: [
@@ -2372,8 +2378,13 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     expect(bailoutReaderCalls().length).toBeGreaterThan(80);
     expect(positionalArgEntryPoints().length).toBeGreaterThan(80);
     // This one reports its whole population, not just its violations, so the
-    // floor is what proves a clean sweep swept something.
-    expect(inlineTypedArgumentReads().length).toBeGreaterThan(400);
+    // floor is what proves a clean sweep swept something. What remains is the
+    // non-integer half: every integer read moved onto the shared narrowing
+    // family, either as a hand-written node_arg_int copy folded back onto the
+    // reader (outside this population by design, since that family is the
+    // lenience decision) or as a bare info[i] read routed through
+    // node_narrow_int, which is a call rather than an inline accessor.
+    expect(inlineTypedArgumentReads().length).toBeGreaterThan(150);
     // The floor alone would not notice the implicit-conversion form being
     // dropped again: without it the population is 474 rather than 489, and both
     // clear 400. So pin that form where it is concentrated. Measured on

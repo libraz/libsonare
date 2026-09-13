@@ -104,6 +104,7 @@ Napi::Object MixMeterToObject(Napi::Env env, const SonareMixMeterSnapshot& snaps
 
 Napi::Value SonareWrap::MixingScenePresetNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   const char* raw = sonare_mixing_scene_preset_names();
   Napi::Array out = Napi::Array::New(env);
   if (raw == nullptr || raw[0] == '\0') {
@@ -120,10 +121,12 @@ Napi::Value SonareWrap::MixingScenePresetNames(const Napi::CallbackInfo& info) {
     start = end + 1;
   }
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MixingScenePresetJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected preset name").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -138,6 +141,7 @@ Napi::Value SonareWrap::MixingScenePresetJson(const Napi::CallbackInfo& info) {
   std::string result = json != nullptr ? json : "";
   sonare_free_string(json);
   return Napi::String::New(env, result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
@@ -192,7 +196,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     right_ptrs.push_back(right_arrays.back().Data());
   }
 
-  const int sample_rate = info[2].As<Napi::Number>().Int32Value();
+  const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
   Napi::Object options = info.Length() >= 4 && info[3].IsObject() ? info[3].As<Napi::Object>()
                                                                   : Napi::Object::New(env);
 

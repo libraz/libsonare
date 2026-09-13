@@ -303,7 +303,7 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate = info[1].As<Napi::Number>().Int32Value();
+  const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
   if (!ValidateAcousticInput(env, typed.Data(), typed.ElementLength())) return env.Undefined();
   const sonare::Audio audio =
@@ -378,7 +378,7 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = info[1].As<Napi::Number>().Int32Value();
+  const int sr = node_narrow_int(env, info[1], "sr");
   if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
   if (!ValidateAcousticInput(env, typed.Data(), typed.ElementLength())) return env.Undefined();
   const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);

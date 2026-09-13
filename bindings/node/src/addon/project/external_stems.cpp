@@ -20,6 +20,7 @@ size_t channel_count(uint32_t layout) {
 
 Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() != 1 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "importExternalStems expects a request object")
         .ThrowAsJavaScriptException();
@@ -120,4 +121,5 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
   output.Set("trackIds", track_ids);
   output.Set("clipIds", clip_ids);
   return output;
+  SONARE_NODE_CATCH(env)
 }

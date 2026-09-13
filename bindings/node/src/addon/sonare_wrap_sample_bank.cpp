@@ -38,7 +38,7 @@ bool ReadSampleLoopMode(Napi::Env env, const Napi::Value& value, int* out) {
   if (env.IsExceptionPending() || out == nullptr) return false;
   if (value.IsUndefined() || value.IsNull()) return true;
   if (value.IsNumber()) {
-    *out = value.As<Napi::Number>().Int32Value();
+    *out = sonare_node::node_narrow_int(env, value, "loopMode");
     return !env.IsExceptionPending();
   }
   if (!value.IsString()) {
@@ -130,6 +130,7 @@ bool SampleBankWrap::ReadHandle(Napi::Env env, const Napi::Value& value, SonareS
 // (copied into the bank, so the caller may reuse the array afterwards).
 Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (bank_ == nullptr) {
     Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -158,6 +159,7 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
       env, sonare_sample_bank_add_sample(bank_, data.Data(), data.ElementLength(), &desc, &index));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, index);
+  SONARE_NODE_CATCH(env)
 }
 
 // addZone(setIndex?, zone?) — appends a key/velocity rectangle to a keymap set.
@@ -165,6 +167,7 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
 // "unset" for that edge alone.
 Napi::Value SampleBankWrap::AddZone(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (bank_ == nullptr) {
     Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -189,10 +192,12 @@ Napi::Value SampleBankWrap::AddZone(const Napi::CallbackInfo& info) {
 
   ThrowIfError(env, sonare_sample_bank_add_zone(bank_, set_index, &zone));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SampleBankWrap::SampleCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (bank_ == nullptr) {
     Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -201,10 +206,12 @@ Napi::Value SampleBankWrap::SampleCount(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_sample_bank_sample_count(bank_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SampleBankWrap::SetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (bank_ == nullptr) {
     Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -213,12 +220,15 @@ Napi::Value SampleBankWrap::SetCount(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_sample_bank_set_count(bank_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
 }
 
 void SampleBankWrap::Destroy(const Napi::CallbackInfo& info) {
-  (void)info;
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY(void) info;
   if (bank_ != nullptr) {
     sonare_sample_bank_destroy(bank_);
     bank_ = nullptr;
   }
+  SONARE_NODE_CATCH_VOID(env)
 }

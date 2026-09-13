@@ -70,7 +70,7 @@ inline bool ReadParameter(const Napi::CallbackInfo& info, size_t index, SonarePa
     Napi::TypeError::New(env, "parameter id must be a number").ThrowAsJavaScriptException();
     return false;
   }
-  out->id = id_val.As<Napi::Number>().Uint32Value();
+  out->id = node_narrow_uint32(id_val.Env(), id_val, "id");
   // Optional name/unit: only copy when present as strings; a non-string leaves
   // the zero-initialized empty string.
   const Napi::Value name = obj.Get("name");
@@ -273,7 +273,13 @@ using sonare_node::node_arg_bool;
 using sonare_node::node_arg_double;
 using sonare_node::node_arg_float;
 using sonare_node::node_arg_int;
+using sonare_node::node_arg_int64;
+using sonare_node::node_arg_label;
 using sonare_node::node_arg_uint32;
+using sonare_node::node_narrow_int;
+using sonare_node::node_narrow_int64;
+using sonare_node::node_narrow_uint32;
+using sonare_node::node_narrow_word;
 using sonare_node::NonNegativeSizeTArg;
 using sonare_node::OptionalBoolArg;
 using sonare_node::OptionalDoubleArg;
@@ -291,8 +297,10 @@ using sonare_node::RequiredIntProperty;
 using sonare_node::RequiredMidiByteValue;
 using sonare_node::RequiredStringProperty;
 using sonare_node::RequiredUint32Property;
+using sonare_node::RequiredWordValue;
 using sonare_node::ThrowIfError;
 using sonare_node::ThrowIfRealtimeError;
 using sonare_node::Uint32Property;
+using sonare_node::WordProperty;
 
 }  // namespace sonare_node::engine

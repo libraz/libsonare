@@ -141,11 +141,11 @@ export function bareHasSites(): BareHasSite[] {
  * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(/;
 
 /** Matches a reader call and captures its literal key, for either arity. */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
 
 /**
  * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter
@@ -550,4 +550,223 @@ export function addonEntryPoints(): AddonEntryPoint[] {
     }
   }
   return [...found.values()].sort((a, b) => a.jsName.localeCompare(b.jsName));
+}
+
+/** A `.As<Napi::Number>().<width>Value()` conversion of a caller's number. */
+export interface NarrowingSite {
+  file: string;
+  line: number;
+  /** `Int32Value`, `Uint32Value` or `Int64Value`. */
+  accessor: string;
+  /** The expression the conversion is taken on. */
+  receiver: string;
+  /** `file:receiver:accessor` — stable across line moves, so allowlists do not rot. */
+  id: string;
+}
+
+/**
+ * The N-API accessors that WRAP. `DoubleValue` and `FloatValue` are absent on
+ * purpose: neither is a modular conversion, so neither can turn a caller's
+ * number into a different legal one the way ToInt32 does.
+ */
+const WRAPPING_ACCESSOR =
+  /\.\s*As<Napi::Number>\(\)\s*\.\s*(Int32Value|Uint32Value|Int64Value)\s*\(\s*\)/g;
+
+/**
+ * Every integer narrowing of a caller's number, across the addon sources.
+ *
+ * `Int32Value()` is ToInt32 and therefore WRAPS: `2**32` arrives as 0, which is
+ * what most of these fields read as "keep the default", and `2**32 + 1` as 1.
+ * A wrapped value is always inside the target type, so nothing downstream can
+ * tell it from a setting the caller chose — which is why the conversion has to
+ * live in one place that range-checks it, rather than being spelled out per
+ * site. The shared header is that place, and it is the only file where a hit
+ * here is expected.
+ *
+ * Takes its sources so the self-tests can drive this exact function rather than
+ * a re-implementation of it, which would only ever agree with itself.
+ */
+export function integerNarrowingSites(sources: AddonSource[] = addonSources()): NarrowingSite[] {
+  const sites: NarrowingSite[] = [];
+  for (const { file, text } of sources) {
+    const code = withoutComments(text);
+    for (const match of code.matchAll(new RegExp(WRAPPING_ACCESSOR.source, 'g'))) {
+      const at = match.index ?? 0;
+      const before = code.slice(0, at);
+      const receiver = (/([\w[\]().>"'-]+)$/.exec(before)?.[1] ?? '').slice(-60);
+      sites.push({
+        file,
+        line: before.split('\n').length,
+        accessor: match[1],
+        receiver,
+        id: `${file}:${receiver}:${match[1]}`,
+      });
+    }
+  }
+  return sites;
+}
+
+/** A registered entry point and whether its body carries the catch harness. */
+export interface EntryPointGuardSite {
+  jsName: string;
+  symbol: string;
+  file: string;
+  guarded: boolean;
+}
+
+/** Function bodies keyed by their bare name, located by brace balance. */
+function bodiesByName(sources: AddonSource[]): Map<string, { file: string; body: string }> {
+  const found = new Map<string, { file: string; body: string }>();
+  for (const { file, text } of sources) {
+    const code = withoutComments(text);
+    for (const match of code.matchAll(
+      // `}` is excluded from the parameter list on purpose: without it the
+      // class spans a newline and swallows the previous function's closing
+      // brace, so the NEXT declaration is read as that macro's parameters and
+      // disappears from the population.
+      /^[\w:<>,&*\s]*?\b(?:[\w]+::)?(\w+)\s*\(([^;{}]*?)\)\s*(?:const\s*)?\{/gm,
+    )) {
+      if (!match[2].includes('CallbackInfo')) {
+        continue;
+      }
+      const open = code.indexOf('{', (match.index ?? 0) + match[0].length - 1);
+      let depth = 0;
+      for (let i = open; i < code.length; i++) {
+        if (code[i] === '{') {
+          depth++;
+        } else if (code[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            found.set(match[1], { file, body: code.slice(open, i + 1) });
+            break;
+          }
+        }
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Every registered entry point, with whether its body can catch.
+ *
+ * A reader that refuses a value does it by THROWING, because the alternative —
+ * leaving a pending JS exception and returning a fallback — lets the entry point
+ * keep working, and every N-API allocation after a pending exception returns
+ * null for the result builders to write into. So an entry point without the
+ * harness turns a refusal into an uncaught exception and takes the process with
+ * it: the harness is the precondition that makes the refusal reportable.
+ *
+ * Takes its sources so the self-tests can drive this exact function.
+ */
+export function entryPointGuards(sources: AddonSource[] = addonSources()): EntryPointGuardSite[] {
+  const bodies = bodiesByName(sources);
+  const out: EntryPointGuardSite[] = [];
+  for (const entry of addonEntryPointsFrom(sources)) {
+    const bare = entry.symbol.includes('::') ? entry.symbol.split('::')[1] : entry.symbol;
+    const found = bodies.get(bare);
+    if (!found) {
+      continue;
+    }
+    out.push({
+      jsName: entry.jsName,
+      symbol: entry.symbol,
+      file: found.file,
+      guarded: found.body.includes('SONARE_NODE_TRY') || /\bcatch\s*\(/.test(found.body),
+    });
+  }
+  return out.sort((a, b) => a.jsName.localeCompare(b.jsName));
+}
+
+/** {@link addonEntryPoints} over an explicit source set, for the self-tests. */
+function addonEntryPointsFrom(sources: AddonSource[]): { jsName: string; symbol: string }[] {
+  const found = new Map<string, string>();
+  for (const { text } of sources) {
+    const flat = text.replace(/\s+/g, ' ');
+    for (const m of flat.matchAll(
+      /(?:Instance|Static)Method<&([\w:]+)>\s*\(\s*"([A-Za-z0-9_]+)"/g,
+    )) {
+      found.set(m[2], m[1]);
+    }
+    for (const m of flat.matchAll(
+      /exports\.Set\(\s*"([A-Za-z0-9_]+)"\s*,\s*Napi::Function::New\(\s*env\s*,\s*&?([\w:]+)/g,
+    )) {
+      found.set(m[1], m[2]);
+    }
+  }
+  return [...found].map(([jsName, symbol]) => ({ jsName, symbol }));
+}
+
+/** One failure class, with the lines that made it fire. */
+export interface NarrowingFinding {
+  heading: string;
+  lines: string[];
+}
+
+/**
+ * Every narrowing-scope failure class, as data.
+ *
+ * Separated from the assertions so the self-tests can revert one class at a
+ * time and require exactly that class to fire: a class asserted through a
+ * re-implementation of this function would only ever agree with itself.
+ */
+export function evaluateNarrowingScope(
+  sources: AddonSource[] = addonSources(),
+  allowlist: ReadonlyMap<string, string> = new Map(),
+  floor = { sources: 40, entryPoints: 400 },
+): NarrowingFinding[] {
+  const findings: NarrowingFinding[] = [];
+  const narrowings = integerNarrowingSites(sources);
+  const guards = entryPointGuards(sources);
+
+  // Two empty sets agree perfectly: with either scan matching nothing, every
+  // check below passes and certifies a scanner that has stopped working.
+  const shrunk: string[] = [];
+  if (sources.length < floor.sources) {
+    shrunk.push(`sources: found ${sources.length}, floor is ${floor.sources}`);
+  }
+  if (guards.length < floor.entryPoints) {
+    shrunk.push(`entry points: found ${guards.length}, floor is ${floor.entryPoints}`);
+  }
+  if (shrunk.length > 0) {
+    findings.push({
+      heading: 'The scan no longer finds the population it is sized for',
+      lines: shrunk,
+    });
+  }
+
+  const stray = narrowings
+    .filter((site) => site.file !== SHARED_READER_FILE)
+    .filter((site) => !allowlist.has(site.id));
+  if (stray.length > 0) {
+    findings.push({
+      heading:
+        'These integer narrowings sit outside the shared header, so a value the target type ' +
+        'cannot hold arrives as a different legal one',
+      lines: stray.map((site) => `${site.file}:${site.line} ${site.receiver}.${site.accessor}()`),
+    });
+  }
+
+  const unguarded = guards.filter((entry) => !entry.guarded);
+  if (unguarded.length > 0) {
+    findings.push({
+      heading:
+        'These registered entry points have nowhere to catch a refusal, so a reader that ' +
+        'throws escapes the N-API callback and terminates the process',
+      lines: unguarded.map((entry) => `${entry.file} ${entry.symbol} (${entry.jsName})`),
+    });
+  }
+
+  const live = new Set(narrowings.map((site) => site.id));
+  const stale = [...allowlist.keys()].filter((id) => !live.has(id));
+  if (stale.length > 0) {
+    findings.push({
+      heading:
+        'These allowlist entries matched nothing. One that suppresses nothing still asserts a ' +
+        'reviewed decision about a spelling, so the next narrowing to take it inherits the ' +
+        'blessing unexamined',
+      lines: stale,
+    });
+  }
+  return findings;
 }

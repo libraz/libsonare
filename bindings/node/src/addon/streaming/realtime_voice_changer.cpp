@@ -13,6 +13,7 @@
 #include "mastering/eq/spectrum_engine.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_streaming.h"
 #include "sonare_wrap_utils.h"
 
@@ -92,8 +93,11 @@ void RealtimeVoiceChangerWrap::ReleaseNative() noexcept {
 }
 
 Napi::Value RealtimeVoiceChangerWrap::Destroy(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   ReleaseNative();
   return info.Env().Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
@@ -106,10 +110,8 @@ Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   const double sample_rate = info[0].As<Napi::Number>().DoubleValue();
-  const int max_block_size =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 128;
-  const int channels =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 1;
+  const int max_block_size = node_arg_int(info, 1, 128);
+  const int channels = node_arg_int(info, 2, 1);
   changer_->prepare(sample_rate, max_block_size, channels);
   prepared_ = true;
   max_block_size_ = max_block_size;
@@ -151,15 +153,21 @@ Napi::Value RealtimeVoiceChangerWrap::SetConfig(const Napi::CallbackInfo& info) 
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ConfigJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!EnsureAlive(info.Env())) return info.Env().Undefined();
   return Napi::String::New(
       info.Env(),
       sonare::editing::voice_changer::realtime_voice_changer_config_to_json(changer_->config()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeVoiceChangerWrap::LatencySamples(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!EnsureAlive(info.Env())) return info.Env().Undefined();
   return Napi::Number::New(info.Env(), changer_->latency_samples());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessMono(const Napi::CallbackInfo& info) {
@@ -230,7 +238,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleaved(const Napi::CallbackInf
   }
   SONARE_NODE_TRY
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
-  const int channels = info[1].As<Napi::Number>().Int32Value();
+  const int channels = sonare_node::node_narrow_int(env, info[1], "channels");
   if (channels < 1 || channels > channels_ ||
       input.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::RangeError::New(env, "invalid channel count").ThrowAsJavaScriptException();
@@ -279,7 +287,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedInto(const Napi::Callbac
   }
   SONARE_NODE_TRY
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
-  const int channels = info[1].As<Napi::Number>().Int32Value();
+  const int channels = sonare_node::node_narrow_int(env, info[1], "channels");
   Napi::Float32Array output = info[2].As<Napi::Float32Array>();
   if (input.ElementLength() != output.ElementLength()) {
     Napi::RangeError::New(env, "input and output lengths must match").ThrowAsJavaScriptException();

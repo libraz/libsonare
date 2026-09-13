@@ -27,6 +27,12 @@ using sonare_node::FloatProperty;
 using sonare_node::Int32Arg;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
+using sonare_node::node_arg_int64;
+using sonare_node::node_arg_label;
+using sonare_node::node_narrow_int;
+using sonare_node::node_narrow_int64;
+using sonare_node::node_narrow_uint32;
+using sonare_node::node_narrow_word;
 using sonare_node::NonNegativeSizeTArg;
 using sonare_node::OptionalDoubleArg;
 using sonare_node::OptionalFloatArg;
@@ -42,8 +48,10 @@ using sonare_node::RequiredIntProperty;
 using sonare_node::RequiredStringProperty;
 using sonare_node::RequiredUint32Property;
 using sonare_node::RequiredUint32Value;
+using sonare_node::RequiredWordValue;
 using sonare_node::RequireNumberValue;
 using sonare_node::ThrowIfError;
 using sonare_node::Uint32Property;
+using sonare_node::WordProperty;
 
 }  // namespace sonare_node::project

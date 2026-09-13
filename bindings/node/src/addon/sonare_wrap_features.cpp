@@ -303,6 +303,7 @@ Napi::Value SonareWrap::ReassignedSpectrogram(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected X Float32Array") ||
       !RequireFloat32Array(info, 3, "Expected Y Float32Array"))
     return env.Undefined();
@@ -330,10 +331,12 @@ Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
       x.Data(), x_rows, x_cols, y.Data(), y_rows, y_cols, k, metric.c_str(), mode.c_str(), &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
   const auto data = info[0].As<Napi::Float32Array>();
   const int rows = node_arg_int(info, 1, 0);
@@ -353,10 +356,12 @@ Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) 
       data.Data(), rows, cols, k, width, sym ? 1 : 0, metric.c_str(), mode.c_str(), &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SegmentRecurrenceToLag(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected recurrence Float32Array")) return env.Undefined();
   const auto recurrence = info[0].As<Napi::Float32Array>();
   const int n = node_arg_int(info, 1, 0);
@@ -366,10 +371,12 @@ Napi::Value SonareWrap::SegmentRecurrenceToLag(const Napi::CallbackInfo& info) {
       recurrence.Data(), n, node_arg_bool(info, 2, false) ? 1 : 0, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected lag Float32Array")) return env.Undefined();
   const auto lag = info[0].As<Napi::Float32Array>();
   const int rows = node_arg_int(info, 1, 0);
@@ -379,6 +386,7 @@ Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
   const SonareError err = sonare_segment_lag_to_recurrence(lag.Data(), rows, lags, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
@@ -408,6 +416,7 @@ Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
   const auto data = info[0].As<Napi::Float32Array>();
   const int rows = node_arg_int(info, 1, 0);
@@ -421,10 +430,12 @@ Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
       sonare_segment_agglomerative(data.Data(), rows, cols, k, linkage.c_str(), &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentIndicesResult(env, &result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SegmentPathEnhance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected recurrence Float32Array")) return env.Undefined();
   const auto recurrence = info[0].As<Napi::Float32Array>();
   const int n = node_arg_int(info, 1, 0);
@@ -438,6 +449,7 @@ Napi::Value SonareWrap::SegmentPathEnhance(const Napi::CallbackInfo& info) {
                                                       min_ratio, n_filters, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return SegmentMatrixResult(env, &result);
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -496,6 +508,7 @@ using ChromaExFn = SonareError (*)(const float*, size_t, int, int, int, int, Son
 
 Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn, ChromaExFn ex_fn = nullptr) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
@@ -534,20 +547,30 @@ Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn, ChromaExF
   out.Set("meanEnergy", mean);
   sonare_free_chroma_result(&result);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 }  // namespace
 
 Napi::Value SonareWrap::ChromaCens(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return ChromaVariant(info, nullptr, sonare_chroma_cens_ex);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::ChromaCqt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return ChromaVariant(info, nullptr, sonare_chroma_cqt_ex);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::BassChroma(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return ChromaVariant(info, sonare_bass_chroma);
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -844,6 +867,7 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() != 1 || !info[0].IsObject() || info[0].IsArray()) {
     Napi::TypeError::New(env, "noteSegments expects one request object")
         .ThrowAsJavaScriptException();
@@ -902,6 +926,7 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   }
   sonare_free_note_segments(&result);
   return segments;
+  SONARE_NODE_CATCH(env)
 }
 
 // ============================================================================
@@ -1001,9 +1026,9 @@ Napi::Value SonareWrap::FramesToTime(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  int frames = info[0].As<Napi::Number>().Int32Value();
-  int sr = info[1].As<Napi::Number>().Int32Value();
-  int hop_length = info[2].As<Napi::Number>().Int32Value();
+  int frames = node_narrow_int(env, info[0], "frames");
+  int sr = node_narrow_int(env, info[1], "sr");
+  int hop_length = node_narrow_int(env, info[2], "hopLength");
 
   return Napi::Number::New(env,
                            static_cast<double>(sonare::frames_to_time(frames, sr, hop_length)));
@@ -1020,8 +1045,8 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   float time = info[0].As<Napi::Number>().FloatValue();
-  int sr = info[1].As<Napi::Number>().Int32Value();
-  int hop_length = info[2].As<Napi::Number>().Int32Value();
+  int sr = node_narrow_int(env, info[1], "sr");
+  int hop_length = node_narrow_int(env, info[2], "hopLength");
 
   return Napi::Number::New(env, sonare::time_to_frames(time, sr, hop_length));
   SONARE_NODE_CATCH(env)
@@ -1029,30 +1054,35 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsNumber()) {
     Napi::TypeError::New(env, "Expected (frames, hopLength?, nFft?)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int frames = info[0].As<Napi::Number>().Int32Value();
+  int frames = node_narrow_int(env, info[0], "frames");
   int hop = node_arg_int(info, 1, 512);
   int n_fft = node_arg_int(info, 2, 0);
   return Napi::Number::New(env, sonare_frames_to_samples(frames, hop, n_fft));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SamplesToFrames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsNumber()) {
     Napi::TypeError::New(env, "Expected (samples, hopLength?, nFft?)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int samples = info[0].As<Napi::Number>().Int32Value();
+  int samples = node_narrow_int(env, info[0], "samples");
   int hop = node_arg_int(info, 1, 512);
   int n_fft = node_arg_int(info, 2, 0);
   return Napi::Number::New(env, sonare_samples_to_frames(samples, hop, n_fft));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
@@ -1066,10 +1096,12 @@ Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
       sonare_power_to_db(arr.Data(), arr.ElementLength(), ref, amin, top_db, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
@@ -1083,10 +1115,12 @@ Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
       sonare_amplitude_to_db(arr.Data(), arr.ElementLength(), ref, amin, top_db, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DbToPower(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
@@ -1097,10 +1131,12 @@ Napi::Value SonareWrap::DbToPower(const Napi::CallbackInfo& info) {
   SonareError err = sonare_db_to_power(arr.Data(), arr.ElementLength(), ref, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DbToAmplitude(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
@@ -1111,10 +1147,12 @@ Napi::Value SonareWrap::DbToAmplitude(const Napi::CallbackInfo& info) {
   SonareError err = sonare_db_to_amplitude(arr.Data(), arr.ElementLength(), ref, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
@@ -1128,10 +1166,12 @@ Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
       sonare_preemphasis(arr.Data(), arr.ElementLength(), coef, zi, use_zi ? 1 : 0, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
@@ -1145,4 +1185,5 @@ Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
       sonare_deemphasis(arr.Data(), arr.ElementLength(), coef, zi, use_zi ? 1 : 0, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }

@@ -261,8 +261,11 @@ StreamAnalyzerWrap::~StreamAnalyzerWrap() = default;
 // to be stopped; every method guards on a null analyzer_, so a call afterwards
 // throws instead of touching freed state.
 Napi::Value StreamAnalyzerWrap::Destroy(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   analyzer_.reset();
   return info.Env().Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamAnalyzerWrap::Process(const Napi::CallbackInfo& info) {
@@ -315,11 +318,13 @@ Napi::Value StreamAnalyzerWrap::FinalizeStream(const Napi::CallbackInfo& info) {
 
 Napi::Value StreamAnalyzerWrap::AvailableFrames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!analyzer_) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(analyzer_->available_frames()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamAnalyzerWrap::ReadFramesSoa(const Napi::CallbackInfo& info) {
@@ -539,25 +544,31 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
 
 Napi::Value StreamAnalyzerWrap::FrameCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!analyzer_) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return Napi::Number::New(env, analyzer_->frame_count());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamAnalyzerWrap::CurrentTime(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!analyzer_) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   return Napi::Number::New(env, analyzer_->current_time());
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamAnalyzerWrap::SampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Napi::Number::New(env, config_.sample_rate);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamAnalyzerWrap::SetExpectedDuration(const Napi::CallbackInfo& info) {

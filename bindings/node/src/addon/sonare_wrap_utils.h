@@ -9,8 +9,8 @@
 #include <vector>
 
 #include "mastering/api/named_processor.h"
+#include "sonare_wrap_options.h"
 #include "util/exception.h"
-
 namespace sonare_node {
 
 const char* ErrorMessageForCode(SonareError err);
@@ -167,7 +167,7 @@ inline std::vector<int> IntVectorFromValue(const Napi::Value& value) {
     auto arr = value.As<Napi::Array>();
     std::vector<int> out(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out[i] = arr.Get(i).As<Napi::Number>().Int32Value();
+      out[i] = node_narrow_int(value.Env(), arr.Get(i), "value");
     }
     return out;
   }
@@ -260,6 +260,27 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
   catch (...) {                                                                               \
     Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();                      \
     return env.Undefined();                                                                   \
+  }
+
+// Void-returning sibling of SONARE_NODE_CATCH, for the entry points registered
+// as InstanceVoidMethod. Same arms, no return value: the pending JS exception is
+// what the caller sees.
+#define SONARE_NODE_CATCH_VOID(env)                                                           \
+  }                                                                                           \
+  catch (const Napi::Error& e) {                                                              \
+    e.ThrowAsJavaScriptException();                                                           \
+  }                                                                                           \
+  catch (const sonare::SonareException& e) {                                                  \
+    sonare_node::ThrowSonareErrorMessage(env, sonare_node::CErrorFromException(e), e.what()); \
+  }                                                                                           \
+  catch (const std::bad_alloc&) {                                                             \
+    sonare_node::ThrowSonareError(env, SONARE_ERROR_OUT_OF_MEMORY);                           \
+  }                                                                                           \
+  catch (const std::exception& e) {                                                           \
+    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();                             \
+  }                                                                                           \
+  catch (...) {                                                                               \
+    Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();                      \
   }
 
 #endif  // SONARE_NODE_SONARE_WRAP_UTILS_H_

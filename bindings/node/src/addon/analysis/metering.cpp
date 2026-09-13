@@ -61,13 +61,13 @@ Napi::Value EmitWaveformPeaksResult(Napi::Env env, const SonareWaveformPeaksResu
 
 Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
 
   SonareLufsResult lufs{};
   SonareError err = sonare_lufs(typed.Data(), typed.ElementLength(), sr, &lufs);
@@ -84,17 +84,18 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
   result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
 
   float* out = nullptr;
   size_t count = 0;
@@ -109,17 +110,18 @@ Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
   }
   sonare_free_floats(out);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
 
   float* out = nullptr;
   size_t count = 0;
@@ -134,19 +136,20 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
   }
   sonare_free_floats(out);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, channels, sampleRate?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int channels = info[1].As<Napi::Number>().Int32Value();
-  int sr =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
+  int channels = node_narrow_int(env, info[1], "channels");
+  int sr = node_arg_int(info, 2, 22050);
   if (channels <= 0) {
     Napi::RangeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -173,17 +176,18 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
   result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::Ebur128LoudnessRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
 
   float out_lra = 0.0f;
   SonareError err =
@@ -193,6 +197,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRange(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, out_lra);
+  SONARE_NODE_CATCH(env)
 }
 
 namespace {
@@ -209,8 +214,7 @@ Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn,
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
   float out_value = 0.0f;
   SonareError err = fn(typed.Data(), typed.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
@@ -223,29 +227,33 @@ Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn,
 }  // namespace
 
 Napi::Value SonareWrap::MeteringPeakDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return MeteringScalar(info, &sonare_metering_peak_db, "meteringPeakDb");
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringRmsDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return MeteringScalar(info, &sonare_metering_rms_db, "meteringRmsDb");
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "meteringSilenceRatio: expected Float32Array argument")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto samples = info[0].As<Napi::Float32Array>();
-  const int sample_rate =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  const int sample_rate = node_arg_int(info, 1, 22050);
   const float threshold_db =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -45.0f;
-  const int frame_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 1024;
-  const int hop_length =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 256;
+  const int frame_length = node_arg_int(info, 3, 1024);
+  const int hop_length = node_arg_int(info, 4, 256);
   float ratio = 0.0f;
   const SonareError err =
       sonare_metering_silence_ratio(samples.Data(), samples.ElementLength(), sample_rate,
@@ -255,28 +263,34 @@ Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, ratio);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringCrestFactorDb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return MeteringScalar(info, &sonare_metering_crest_factor_db, "meteringCrestFactorDb");
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringDcOffset(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return MeteringScalar(info, &sonare_metering_dc_offset, "meteringDcOffset");
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "meteringTruePeakDb: expected Float32Array argument")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int oversample =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 4;
+  int sr = node_arg_int(info, 1, 22050);
+  int oversample = node_arg_int(info, 2, 4);
   float out_value = 0.0f;
   SonareError err =
       sonare_metering_true_peak_db(typed.Data(), typed.ElementLength(), sr, oversample, &out_value);
@@ -285,22 +299,22 @@ Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "meteringDetectClipping: expected Float32Array argument")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
   float threshold =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.999f;
-  const int64_t min_region_value =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int64Value() : 1;
+  const int64_t min_region_value = node_arg_int64(info, 3, 1);
   if (min_region_value < 0) {
     Napi::RangeError::New(env, "minRegionSamples must be non-negative")
         .ThrowAsJavaScriptException();
@@ -332,18 +346,19 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   out.Set("regions", regions);
   sonare_free_clipping_result(&result);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "meteringDynamicRange: expected Float32Array argument")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
   float window_sec =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
   float hop_sec =
@@ -372,6 +387,7 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   out.Set("windowRmsDb", windows);
   sonare_free_dynamic_range_result(&result);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 namespace {
@@ -381,8 +397,8 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
   if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
     return false;
   }
-  *root = info[0].As<Napi::Number>().Int32Value();
-  int mask_int = info[1].As<Napi::Number>().Int32Value();
+  *root = node_narrow_int(info.Env(), info[0], node_arg_label(0).c_str());
+  int mask_int = node_narrow_int(info.Env(), info[1], "maskInt");
   // modeMask is a 12-bit pitch-class set (one bit per semitone). Validate the
   // range explicitly: the narrowing cast to uint16_t would otherwise turn -1
   // into 0xFFFF and any value > 4095 into an unrelated mask.
@@ -401,6 +417,7 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
 
 Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   int root = 0;
   uint16_t mask = 0;
   float ref = 0.0f;
@@ -418,10 +435,12 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   int root = 0;
   uint16_t mask = 0;
   float ref = 0.0f;
@@ -440,18 +459,20 @@ Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "scalePitchClassEnabled: expected (root, modeMask, pitchClass)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int root = info[0].As<Napi::Number>().Int32Value();
-  uint16_t mask = static_cast<uint16_t>(info[1].As<Napi::Number>().Int32Value());
-  int pitch_class = info[2].As<Napi::Number>().Int32Value();
+  int root = node_narrow_int(env, info[0], "root");
+  uint16_t mask = static_cast<uint16_t>(node_narrow_int(env, info[1], "mask"));
+  int pitch_class = node_narrow_int(env, info[2], "pitchClass");
   int out_enabled = 0;
   SonareError err = sonare_scale_pitch_class_enabled(root, mask, pitch_class, &out_enabled);
   if (err != SONARE_OK) {
@@ -459,6 +480,7 @@ Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Boolean::New(env, out_enabled != 0);
+  SONARE_NODE_CATCH(env)
 }
 
 namespace {
@@ -494,8 +516,7 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn, cons
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int sr =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 2, 22050);
   float out_value = 0.0f;
   SonareError err = fn(left.Data(), right.Data(), left.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
@@ -508,15 +529,22 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn, cons
 }  // namespace
 
 Napi::Value SonareWrap::MeteringStereoCorrelation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return StereoScalar(info, &sonare_metering_stereo_correlation, "meteringStereoCorrelation");
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringStereoWidth(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return StereoScalar(info, &sonare_metering_stereo_width, "meteringStereoWidth");
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
     Napi::TypeError::New(env,
                          "meteringVectorscope: expected (Float32Array left, Float32Array right)")
@@ -530,12 +558,11 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int sr =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
-  size_t max_points =
-      info.Length() >= 4 && info[3].IsNumber()
-          ? static_cast<size_t>(std::max<int64_t>(0, info[3].As<Napi::Number>().Int64Value()))
-          : 0;
+  int sr = node_arg_int(info, 2, 22050);
+  size_t max_points = info.Length() >= 4 && info[3].IsNumber()
+                          ? static_cast<size_t>(std::max<int64_t>(
+                                0, node_narrow_int64(env, info[3], node_arg_label(3).c_str())))
+                          : 0;
   SonareVectorscopeResult result{};
   SonareError err = sonare_metering_vectorscope_decimated(
       left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
@@ -554,10 +581,12 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   out.Set("mid", mid);
   out.Set("side", side);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
     Napi::TypeError::New(env,
                          "meteringPhaseScope: expected (Float32Array left, Float32Array right)")
@@ -571,12 +600,11 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int sr =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
-  size_t max_points =
-      info.Length() >= 4 && info[3].IsNumber()
-          ? static_cast<size_t>(std::max<int64_t>(0, info[3].As<Napi::Number>().Int64Value()))
-          : 0;
+  int sr = node_arg_int(info, 2, 22050);
+  size_t max_points = info.Length() >= 4 && info[3].IsNumber()
+                          ? static_cast<size_t>(std::max<int64_t>(
+                                0, node_narrow_int64(env, info[3], node_arg_label(3).c_str())))
+                          : 0;
   SonarePhaseScopeResult result{};
   SonareError err = sonare_metering_phase_scope_decimated(
       left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
@@ -604,18 +632,19 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   out.Set("averageAbsAngleRad", Napi::Number::New(env, result.average_abs_angle_rad));
   out.Set("maxRadius", Napi::Number::New(env, result.max_radius));
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "meteringSpectrum: expected Float32Array samples")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int sr = node_arg_int(info, 1, 22050);
   int n_fft = 0;
   int smooth = 0;
   int octave = 0;
@@ -638,22 +667,23 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
   }
   CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
   return EmitSpectrumResult(env, result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "meteringSpectrumFrame: expected Float32Array samples")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  size_t frame_offset =
-      info.Length() >= 3 && info[2].IsNumber()
-          ? static_cast<size_t>(std::max<int64_t>(0, info[2].As<Napi::Number>().Int64Value()))
-          : 0;
+  int sr = node_arg_int(info, 1, 22050);
+  size_t frame_offset = info.Length() >= 3 && info[2].IsNumber()
+                            ? static_cast<size_t>(std::max<int64_t>(
+                                  0, node_narrow_int64(env, info[2], node_arg_label(2).c_str())))
+                            : 0;
   int n_fft = 0;
   int smooth = 0;
   int octave = 0;
@@ -677,10 +707,12 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   }
   CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
   return EmitSpectrumResult(env, result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(
         env, "waveformPeaks: expected (Float32Array samples, channels, samplesPerBucket)")
@@ -688,9 +720,9 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int channels = info[1].As<Napi::Number>().Int32Value();
-  size_t samples_per_bucket =
-      static_cast<size_t>(std::max<int64_t>(0, info[2].As<Napi::Number>().Int64Value()));
+  int channels = node_narrow_int(env, info[1], "channels");
+  size_t samples_per_bucket = static_cast<size_t>(
+      std::max<int64_t>(0, node_narrow_int64(env, info[2], node_arg_label(2).c_str())));
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::TypeError::New(env, "waveformPeaks: samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();
@@ -706,10 +738,12 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   }
   CResultGuard<SonareWaveformPeaksResult, sonare_free_waveform_peaks_result> guard(&result);
   return EmitWaveformPeaksResult(env, result);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
     Napi::TypeError::New(env,
                          "waveformPeakPyramid: expected (Float32Array samples, channels, levels)")
@@ -717,7 +751,7 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  int channels = info[1].As<Napi::Number>().Int32Value();
+  int channels = node_narrow_int(env, info[1], "channels");
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::TypeError::New(env, "waveformPeakPyramid: samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();
@@ -734,7 +768,7 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     levels.push_back(
-        static_cast<size_t>(std::max<int64_t>(0, item.As<Napi::Number>().Int64Value())));
+        static_cast<size_t>(std::max<int64_t>(0, node_narrow_int64(env, item, "levels"))));
   }
   SonareWaveformPeakPyramidResult result{};
   const size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
@@ -751,4 +785,5 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
     out.Set(i, EmitWaveformPeaksResult(env, result.levels[i]));
   }
   return out;
+  SONARE_NODE_CATCH(env)
 }

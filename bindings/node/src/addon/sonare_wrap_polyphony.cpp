@@ -180,18 +180,23 @@ bool PolyphonicAnalysisWrap::RequireOpen(Napi::Env env) {
 
 Napi::Value PolyphonicAnalysisWrap::NoteCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(spans_.size()));
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value PolyphonicAnalysisWrap::FrameCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
   return Napi::Number::New(env, frame_count_);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value PolyphonicAnalysisWrap::Notes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
 
   std::vector<SonareNoteObject> notes(spans_.size());
@@ -239,6 +244,7 @@ Napi::Value PolyphonicAnalysisWrap::Notes(const Napi::CallbackInfo& info) {
                            envelope_count));
   }
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) {
@@ -271,6 +277,7 @@ Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) 
 
 Napi::Value PolyphonicAnalysisWrap::Polyphony(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
 
   std::vector<int32_t> counts(frame_count_ > 0 ? static_cast<size_t>(frame_count_) : 0, 0);
@@ -286,6 +293,7 @@ Napi::Value PolyphonicAnalysisWrap::Polyphony(const Napi::CallbackInfo& info) {
     std::memcpy(out.Data(), counts.data(), written * sizeof(int32_t));
   }
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value PolyphonicAnalysisWrap::Curve(const Napi::CallbackInfo& info, CurveReader reader) {
@@ -310,15 +318,24 @@ Napi::Value PolyphonicAnalysisWrap::Curve(const Napi::CallbackInfo& info, CurveR
 }
 
 Napi::Value PolyphonicAnalysisWrap::NoteF0(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Curve(info, &sonare_polyphonic_note_f0);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value PolyphonicAnalysisWrap::NoteAmplitude(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Curve(info, &sonare_polyphonic_note_amplitude);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value PolyphonicAnalysisWrap::NoteSalience(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return Curve(info, &sonare_polyphonic_note_salience);
+  SONARE_NODE_CATCH(env)
 }
 
 bool PolyphonicAnalysisWrap::ReadEnvelopeCount(Napi::Env env, size_t note, size_t* out) {
@@ -338,6 +355,7 @@ bool PolyphonicAnalysisWrap::ReadEnvelopeCount(Napi::Env env, size_t note, size_
 
 Napi::Value PolyphonicAnalysisWrap::NoteEnvelope(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
 
   size_t note = 0;
@@ -357,10 +375,12 @@ Napi::Value PolyphonicAnalysisWrap::NoteEnvelope(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   return CopyToFloat32(env, points.data(), written);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
 
   SonareNoteRenderConfig config{};
@@ -388,8 +408,13 @@ Napi::Value PolyphonicAnalysisWrap::Render(const Napi::CallbackInfo& info) {
   auto result = CopyToFloat32(env, out, out_length);
   sonare_free_floats(out);
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
-void PolyphonicAnalysisWrap::Destroy(const Napi::CallbackInfo& /*info*/) { Release(); }
+void PolyphonicAnalysisWrap::Destroy(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY Release();
+  SONARE_NODE_CATCH_VOID(env)
+}
 
 }  // namespace sonare_node
