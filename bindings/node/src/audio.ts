@@ -2,6 +2,7 @@ import type { MusicAnalyzeOptions } from './analysis.js';
 import {
   analyzeBpm as analyzeBpmFn,
   analyzeDynamics as analyzeDynamicsFn,
+  analyzeImpulseResponse as analyzeImpulseResponseFn,
   analyzeRhythm as analyzeRhythmFn,
   analyzeTimbre as analyzeTimbreFn,
   chordFunctionalAnalysis as chordFunctionalAnalysisFn,
@@ -10,13 +11,43 @@ import {
 } from './analysis.js';
 import type { VoiceChangeOptions } from './effects_mastering.js';
 import {
+  harmonic as harmonicFn,
+  hpss as hpssFn,
   masterAudio as masterAudioFn,
   masteringChain as masteringChainFn,
   mastering as masteringFn,
+  masteringProcess as masteringProcessFn,
+  normalize as normalizeFn,
   noteMove as noteMoveFn,
   noteStretch as noteStretchFn,
+  percussive as percussiveFn,
+  pitchCorrectToMidi as pitchCorrectToMidiFn,
+  pitchShift as pitchShiftFn,
+  timeStretch as timeStretchFn,
   voiceChange as voiceChangeFn,
 } from './effects_mastering.js';
+import {
+  chroma as chromaFn,
+  lufs as lufsFn,
+  melSpectrogram as melSpectrogramFn,
+  mfcc as mfccFn,
+  momentaryLufs as momentaryLufsFn,
+  nnlsChroma as nnlsChromaFn,
+  onsetEnvelope as onsetEnvelopeFn,
+  pitchPyin as pitchPyinFn,
+  pitchYin as pitchYinFn,
+  rmsEnergy as rmsEnergyFn,
+  shortTermLufs as shortTermLufsFn,
+  spectralBandwidth as spectralBandwidthFn,
+  spectralCentroid as spectralCentroidFn,
+  spectralFlatness as spectralFlatnessFn,
+  spectralRolloff as spectralRolloffFn,
+  stftDb as stftDbFn,
+  stft as stftFn,
+  trim as trimFn,
+  zeroCrossingRate as zeroCrossingRateFn,
+} from './features.js';
+import { resample as resampleFn } from './mixer.js';
 import { addon } from './native.js';
 import type {
   AcousticOptions,
@@ -53,7 +84,6 @@ import type {
   TimbreResult,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
 
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
@@ -149,15 +179,18 @@ export class Audio {
 
   // -- Analysis --
 
+  // The seven methods below stay on the native handle rather than delegating to
+  // their standalone facade counterparts: the handle reads its own buffer in
+  // native memory, so routing through data() would copy it out first. Nothing is
+  // given up by not delegating — those facades are plain forwarders with no
+  // guard of their own, and none of these methods takes an integer positionally.
+
   detectBpm(): number {
     this.requireAlive();
     return this.native.detectBpm();
   }
 
   detectKey(options: KeyDetectionOptions = {}): Key {
-    // Native instance method reads the handle's buffer directly (same options
-    // and result shape as the standalone addon.detectKey); routing through
-    // getData() would copy the whole buffer out of native memory first.
     this.requireAlive();
     return this.native.detectKey(options);
   }
@@ -192,7 +225,7 @@ export class Audio {
   }
 
   analyzeImpulseResponse(nOctaveBands = 6): AcousticResult {
-    return addon.analyzeImpulseResponse(this.data(), this.getSampleRate(), nOctaveBands);
+    return analyzeImpulseResponseFn(this.data(), this.getSampleRate(), nOctaveBands);
   }
 
   detectAcoustic(options: AcousticOptions = {}): AcousticResult {
@@ -226,27 +259,27 @@ export class Audio {
   // -- Effects --
 
   hpss(kernelHarmonic = 31, kernelPercussive = 31): HpssResult {
-    return addon.hpss(this.data(), this.getSampleRate(), kernelHarmonic, kernelPercussive);
+    return hpssFn(this.data(), this.getSampleRate(), kernelHarmonic, kernelPercussive);
   }
 
   harmonic(): Float32Array {
-    return addon.harmonic(this.data(), this.getSampleRate());
+    return harmonicFn(this.data(), this.getSampleRate());
   }
 
   percussive(): Float32Array {
-    return addon.percussive(this.data(), this.getSampleRate());
+    return percussiveFn(this.data(), this.getSampleRate());
   }
 
   timeStretch(rate: number): Float32Array {
-    return addon.timeStretch(this.data(), this.getSampleRate(), rate);
+    return timeStretchFn(this.data(), this.getSampleRate(), rate);
   }
 
   pitchShift(semitones: number): Float32Array {
-    return addon.pitchShift(this.data(), this.getSampleRate(), semitones);
+    return pitchShiftFn(this.data(), this.getSampleRate(), semitones);
   }
 
   pitchCorrectToMidi(currentMidi = 69.0, targetMidi = 69.0): Float32Array {
-    return addon.pitchCorrectToMidi(this.data(), this.getSampleRate(), currentMidi, targetMidi);
+    return pitchCorrectToMidiFn(this.data(), this.getSampleRate(), currentMidi, targetMidi);
   }
 
   noteStretch(options: NoteStretchOptions = {}): Float32Array {
@@ -262,7 +295,7 @@ export class Audio {
   }
 
   normalize(targetDb = 0.0): Float32Array {
-    return addon.normalize(this.data(), this.getSampleRate(), targetDb);
+    return normalizeFn(this.data(), this.getSampleRate(), targetDb);
   }
 
   mastering(options: MasteringOptions = {}): MasteringResult {
@@ -273,7 +306,7 @@ export class Audio {
     processorName: SoloProcessor,
     params: Record<string, number | boolean> = {},
   ): MasteringResult {
-    return addon.masteringProcess(processorName, this.data(), this.getSampleRate(), params);
+    return masteringProcessFn(processorName, this.data(), this.getSampleRate(), params);
   }
 
   masteringChain(
@@ -292,17 +325,17 @@ export class Audio {
   }
 
   trim(thresholdDb = -60.0): Float32Array {
-    return addon.trim(this.data(), this.getSampleRate(), thresholdDb);
+    return trimFn(this.data(), this.getSampleRate(), thresholdDb);
   }
 
   // -- Features --
 
   stft(nFft = 2048, hopLength = 512): StftResult {
-    return addon.stft(this.data(), this.getSampleRate(), nFft, hopLength);
+    return stftFn(this.data(), this.getSampleRate(), nFft, hopLength);
   }
 
   stftDb(nFft = 2048, hopLength = 512): StftDbResult {
-    return addon.stftDb(this.data(), this.getSampleRate(), nFft, hopLength);
+    return stftDbFn(this.data(), this.getSampleRate(), nFft, hopLength);
   }
 
   melSpectrogram(
@@ -313,7 +346,7 @@ export class Audio {
     fmax = 0,
     htk = false,
   ): MelSpectrogramResult {
-    return addon.melSpectrogram(
+    return melSpectrogramFn(
       this.data(),
       this.getSampleRate(),
       nFft,
@@ -334,7 +367,7 @@ export class Audio {
     fmax = 0,
     htk = false,
   ): MfccResult {
-    return addon.mfcc(
+    return mfccFn(
       this.data(),
       this.getSampleRate(),
       nFft,
@@ -348,31 +381,31 @@ export class Audio {
   }
 
   chroma(nFft = 2048, hopLength = 512): ChromaResult {
-    return addon.chroma(this.data(), this.getSampleRate(), nFft, hopLength);
+    return chromaFn(this.data(), this.getSampleRate(), nFft, hopLength);
   }
 
   spectralCentroid(nFft = 2048, hopLength = 512): Float32Array {
-    return addon.spectralCentroid(this.data(), this.getSampleRate(), nFft, hopLength);
+    return spectralCentroidFn(this.data(), this.getSampleRate(), nFft, hopLength);
   }
 
   spectralBandwidth(nFft = 2048, hopLength = 512): Float32Array {
-    return addon.spectralBandwidth(this.data(), this.getSampleRate(), nFft, hopLength);
+    return spectralBandwidthFn(this.data(), this.getSampleRate(), nFft, hopLength);
   }
 
   spectralRolloff(nFft = 2048, hopLength = 512, rollPercent = 0.85): Float32Array {
-    return addon.spectralRolloff(this.data(), this.getSampleRate(), nFft, hopLength, rollPercent);
+    return spectralRolloffFn(this.data(), this.getSampleRate(), nFft, hopLength, rollPercent);
   }
 
   spectralFlatness(nFft = 2048, hopLength = 512): Float32Array {
-    return addon.spectralFlatness(this.data(), this.getSampleRate(), nFft, hopLength);
+    return spectralFlatnessFn(this.data(), this.getSampleRate(), nFft, hopLength);
   }
 
   zeroCrossingRate(frameLength = 2048, hopLength = 512): Float32Array {
-    return addon.zeroCrossingRate(this.data(), this.getSampleRate(), frameLength, hopLength);
+    return zeroCrossingRateFn(this.data(), this.getSampleRate(), frameLength, hopLength);
   }
 
   rmsEnergy(frameLength = 2048, hopLength = 512): Float32Array {
-    return addon.rmsEnergy(this.data(), this.getSampleRate(), frameLength, hopLength);
+    return rmsEnergyFn(this.data(), this.getSampleRate(), frameLength, hopLength);
   }
 
   pitchYin(
@@ -383,7 +416,7 @@ export class Audio {
     threshold = 0.1,
     fillNa = false,
   ): PitchResult {
-    return addon.pitchYin(
+    return pitchYinFn(
       this.data(),
       this.getSampleRate(),
       frameLength,
@@ -403,7 +436,7 @@ export class Audio {
     threshold = 0.1,
     fillNa = false,
   ): PitchResult {
-    return addon.pitchPyin(
+    return pitchPyinFn(
       this.data(),
       this.getSampleRate(),
       frameLength,
@@ -416,32 +449,26 @@ export class Audio {
   }
 
   resample(targetSr: number): Float32Array {
-    return addon.resample(this.data(), this.getSampleRate(), targetSr);
+    return resampleFn(this.data(), this.getSampleRate(), targetSr);
   }
 
   onsetEnvelope(nFft = 2048, hopLength = 512, nMels = 128): Float32Array {
-    return addon.onsetEnvelope(this.data(), this.getSampleRate(), nFft, hopLength, nMels);
+    return onsetEnvelopeFn(this.data(), this.getSampleRate(), nFft, hopLength, nMels);
   }
 
   nnlsChroma(): { nChroma: number; nFrames: number; data: Float32Array } {
-    return addon.nnlsChroma(this.data(), this.getSampleRate());
+    return nnlsChromaFn(this.data(), this.getSampleRate());
   }
 
   lufs(options: ValidateOptions = {}): LufsResult {
-    const data = this.data();
-    assertSamples('lufs', data, options.validate !== false);
-    return addon.lufs(data, this.getSampleRate());
+    return lufsFn(this.data(), this.getSampleRate(), options);
   }
 
   momentaryLufs(options: ValidateOptions = {}): Float32Array {
-    const data = this.data();
-    assertSamples('momentaryLufs', data, options.validate !== false);
-    return addon.momentaryLufs(data, this.getSampleRate());
+    return momentaryLufsFn(this.data(), this.getSampleRate(), options);
   }
 
   shortTermLufs(options: ValidateOptions = {}): Float32Array {
-    const data = this.data();
-    assertSamples('shortTermLufs', data, options.validate !== false);
-    return addon.shortTermLufs(data, this.getSampleRate());
+    return shortTermLufsFn(this.data(), this.getSampleRate(), options);
   }
 }
