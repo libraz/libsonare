@@ -15,6 +15,35 @@
 /// replays that geometry and a geometry read from the data could replay
 /// differently. The fitted stretch is handed back to the caller, which passes it
 /// to @ref build_note_masks explicitly.
+///
+/// **What it reaches**, measured on real piano references at the default polyphony
+/// framing -- @c n_fft 4096 at 48 kHz, so one window main lobe is 46.9 Hz. It is
+/// opt-in and a refusal falls back on the declared value, so it improves where it
+/// reaches and is neutral where it does not:
+///
+/// - An isolated note from about C2 to C4 fits, 20 partials at a misfit of 0.07 to
+///   0.24 of a bin.
+/// - A0 is refused for too few partials: under about 55 Hz the claim half-width
+///   leaves no search window inside the harmonic spacing.
+/// - C6 is refused on the misfit, 0.95 to 1.97 bins over 7 partials. C8 is refused
+///   for an unrefinable f0 -- every partial of it is above @ref refine_track_f0's
+///   alias ceiling, which is 1470 Hz at that function's default tolerance.
+/// - **A real chord does not fit at this framing**, and the reason is arithmetic
+///   rather than material: where the rival partials times twice the main lobe cover
+///   the span, every partial of every note is contested. C3+E3+G3 puts 28 rival
+///   partials under 2616 Hz at 93.8 Hz of exclusion each, which is 2626 Hz, so all
+///   three notes are left with no uncontested partial at all.
+/// - Resolution is the lever, and it is not a complete one. At @c n_fft 16384 the
+///   same chord admits 15 and 17 partials for C3 and E3 and E3 fits at 1.63e-4,
+///   while G3 still admits none: a fifth's partials coincide with every third one of
+///   the note below exactly, which no framing separates.
+/// - Eight notes under a held pedal are refused at every framing for an unrefinable
+///   f0, which is @c SharedBinConfig::f0_tolerance_cents' own documented price.
+///
+/// So the reach at the default framing is isolated notes in the middle register.
+/// Raising @c n_fft is the caller's decision and not this file's: the default is the
+/// whole polyphony pipeline's, and moving it would move detection, masking and
+/// division with it.
 
 #include <vector>
 
@@ -115,6 +144,17 @@ struct InharmonicityConfig {
 ///            0.1x to 0.4x the declared displacement. **There is therefore no
 ///            per-harmonic accuracy gate to be had** -- a gate of that shape could
 ///            only ever fire as the scalar comparison, which needs the true stretch.
+///
+///          **What no refusal covers**: @c min_partials is a count, and the count is
+///          not the quantity that decides whether a fit can place the claims it will
+///          be spent on. A fit from few partials placing many claims extrapolates --
+///          at 0 dB SNR three partials miss a twenty-claim band twenty times over,
+///          while three partials placing three claims are exact to a tenth of it --
+///          and no count separates those two. What would is the fit's own precision
+///          carried to the highest claim, and that is deliberately not a refusal
+///          here: the precision estimate runs about 15x pessimistic, so it refuses a
+///          correct fit, and a refusal spends the declared value, which is wrong by
+///          orders rather than by a fraction of a band.
 ///
 ///          A claim above the note's own highest partial is a separate limit that
 ///          this does not touch: @ref build_note_masks carries what a spare claim
