@@ -227,6 +227,72 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    # sonare_polyphonic_* (the handle door onto the same note objects)
+    if hasattr(lib, "sonare_polyphonic_analyze"):
+        lib.sonare_polyphonic_analyze.restype = ctypes.c_int32
+        lib.sonare_polyphonic_analyze.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonarePolyphonicConfig),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sonare_polyphonic_analysis_destroy.restype = None
+        lib.sonare_polyphonic_analysis_destroy.argtypes = [ctypes.c_void_p]
+        lib.sonare_polyphonic_note_count.restype = ctypes.c_int32
+        lib.sonare_polyphonic_note_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_polyphonic_frame_count.restype = ctypes.c_int32
+        lib.sonare_polyphonic_frame_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int32),
+        ]
+        lib.sonare_polyphonic_notes.restype = ctypes.c_int32
+        lib.sonare_polyphonic_notes.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareNoteObject),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_polyphonic_set_note_edit.restype = ctypes.c_int32
+        lib.sonare_polyphonic_set_note_edit.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareNoteEdit),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+        ]
+        lib.sonare_polyphonic_polyphony.restype = ctypes.c_int32
+        lib.sonare_polyphonic_polyphony.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int32),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        for curve in (
+            "sonare_polyphonic_note_f0",
+            "sonare_polyphonic_note_amplitude",
+            "sonare_polyphonic_note_salience",
+            "sonare_polyphonic_note_envelope",
+        ):
+            getattr(lib, curve).restype = ctypes.c_int32
+            getattr(lib, curve).argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+        lib.sonare_polyphonic_render.restype = ctypes.c_int32
+        lib.sonare_polyphonic_render.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareNoteRenderConfig),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     # sonare_extract_percussive_events + sonare_free_percussive_events
     # + sonare_render_percussive_events
     if hasattr(lib, "sonare_extract_percussive_events"):

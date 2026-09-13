@@ -212,6 +212,7 @@ _SCANNED: tuple[str, ...] = (
     "streaming.py",
     "_effects.py",
     "_effects_editing.py",
+    "_effects_polyphony.py",
     "_effects_mastering.py",
     "mixing_assistant.pyi",
     "mixing_assistant.py",

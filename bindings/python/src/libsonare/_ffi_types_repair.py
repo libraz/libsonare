@@ -348,3 +348,43 @@ class SonarePitchDecompositionResult(ctypes.Structure):
         ("vibrato_cents", ctypes.POINTER(ctypes.c_float)),
         ("count", ctypes.c_size_t),
     ]
+
+
+class SonarePolyphonicConfig(ctypes.Structure):
+    """Maps to SonarePolyphonicConfig in sonare_c_polyphony.h."""
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int32),
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("win_length", ctypes.c_int32),
+        ("cent_ref_hz", ctypes.c_float),
+        ("cents_per_bin", ctypes.c_float),
+        ("cent_max_hz", ctypes.c_float),
+        ("tonality_off", ctypes.c_int32),
+        ("salience_harmonics", ctypes.c_int32),
+        ("f0_min_hz", ctypes.c_float),
+        ("f0_max_hz", ctypes.c_float),
+        ("salience_alpha_hz", ctypes.c_float),
+        ("salience_beta_hz", ctypes.c_float),
+        ("salience_inharmonicity", ctypes.c_float),
+        ("max_polyphony", ctypes.c_int32),
+        ("min_frame_peak_ratio", ctypes.c_float),
+        ("min_separation_cents", ctypes.c_float),
+        ("subtraction_factor", ctypes.c_float),
+        ("max_jump_cents", ctypes.c_float),
+        ("min_ridge_peak_ratio", ctypes.c_float),
+        ("min_ridge_duration_ms", ctypes.c_float),
+        ("mask_harmonics", ctypes.c_int32),
+        ("claim_lobes", ctypes.c_float),
+        ("inharmonicity", ctypes.c_float),
+        ("window_frames", ctypes.c_int32),
+        ("min_partial_separation", ctypes.c_float),
+        ("max_fit_residual", ctypes.c_float),
+        ("max_weight_modulus", ctypes.c_float),
+        ("max_refine_hz", ctypes.c_float),
+        ("f0_tolerance_cents", ctypes.c_float),
+        ("segmentation_threshold_cents", ctypes.c_float),
+        ("min_note_ms", ctypes.c_float),
+        ("reference_hz", ctypes.c_float),
+    ]

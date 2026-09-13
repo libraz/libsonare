@@ -4685,6 +4685,210 @@
     ],
     "size": 40
   },
+  "SonarePolyphonicConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "win_length",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "cent_ref_hz",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "cents_per_bin",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "cent_max_hz",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "tonality_off",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "salience_harmonics",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "f0_min_hz",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "f0_max_hz",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "salience_alpha_hz",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "salience_beta_hz",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "salience_inharmonicity",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "max_polyphony",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_frame_peak_ratio",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_separation_cents",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "subtraction_factor",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_jump_cents",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_ridge_peak_ratio",
+        "offset": 76,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_ridge_duration_ms",
+        "offset": 80,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "mask_harmonics",
+        "offset": 84,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "claim_lobes",
+        "offset": 88,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "inharmonicity",
+        "offset": 92,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "window_frames",
+        "offset": 96,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_partial_separation",
+        "offset": 100,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_fit_residual",
+        "offset": 104,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_weight_modulus",
+        "offset": 108,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_refine_hz",
+        "offset": 112,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "f0_tolerance_cents",
+        "offset": 116,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "segmentation_threshold_cents",
+        "offset": 120,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_note_ms",
+        "offset": 124,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reference_hz",
+        "offset": 128,
+        "size": 4
+      }
+    ],
+    "size": 132
+  },
   "SonareProjectAssistSidecar": {
     "align": 8,
     "fields": [

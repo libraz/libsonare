@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ._effects_polyphony import PolyphonicAnalysis as PolyphonicAnalysis
 from ._project import AssistSidecar as AssistSidecar
 from ._project import BuiltinSynthConfig as BuiltinSynthConfig
 from ._project import ExternalInstrument as ExternalInstrument

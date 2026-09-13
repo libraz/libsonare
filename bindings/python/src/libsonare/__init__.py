@@ -3,6 +3,7 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
+from ._effects_polyphony import PolyphonicAnalysis
 from ._project import (
     AssistSidecar,
     BuiltinSynthConfig,
@@ -700,6 +701,7 @@ __all__ = [
     "NoteEdit",
     "NoteObject",
     "PitchDecomposition",
+    "PolyphonicAnalysis",
     "extract_percussive_events",
     "render_percussive_events",
     "PercussiveEvent",
