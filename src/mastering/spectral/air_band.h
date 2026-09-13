@@ -51,6 +51,9 @@ class AirBand : public rt::ProcessorBase {
  private:
   void ensure_state(int num_channels);
   void rebuild_filters(int num_channels);
+  /// @brief Returns the channel's recursive cells to rest when a non-finite
+  ///        value has reached them (see util/non_finite_state.h).
+  void discard_non_finite_state(size_t channel) noexcept;
 
   AirBandConfig config_{};
   bool prepared_ = false;

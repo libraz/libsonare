@@ -9,10 +9,13 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::spectral {
 namespace {
 
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 using sonare::constants::kInvSqrt2D;
 using sonare::constants::kPiD;
 
@@ -201,7 +204,21 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
     band_rms_sq_[static_cast<size_t>(ch)] = band_rms_sq;
     harmonic_rms_sq_[static_cast<size_t>(ch)] = harmonic_rms_sq;
     harmonic_gain_[static_cast<size_t>(ch)] = harmonic_gain;
+    discard_non_finite_state(static_cast<size_t>(ch));
   }
+}
+
+void AirBand::discard_non_finite_state(size_t channel) noexcept {
+  // Ten floats per channel, once per block. The detector feeds the envelope
+  // that programmes the shelf, so the three sections and the four followers
+  // they drive come back together.
+  discard_group_if_non_finite(shelf_[channel].z1, shelf_[channel].z2);
+  discard_group_if_non_finite(detector_[channel].z1, detector_[channel].z2);
+  discard_group_if_non_finite(harmonic_filter_[channel].z1, harmonic_filter_[channel].z2);
+  discard_if_non_finite(envelope_[channel], 0.0f);
+  discard_if_non_finite(shelf_gain_db_[channel], 0.0f);
+  discard_group_if_non_finite(band_rms_sq_[channel], harmonic_rms_sq_[channel],
+                              harmonic_gain_[channel]);
 }
 
 void AirBand::reset() {

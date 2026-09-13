@@ -9,6 +9,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::saturation {
 
@@ -111,6 +112,9 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
         const float wet = apply_miller_filter(ch, process_model(channels[ch][i], tube_config_));
         channels[ch][i] = channels[ch][i] * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
       }
+      // One float per channel, once per block: the Miller low-pass is the only
+      // cell that recirculates its own output.
+      sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
     }
     return;
   }
@@ -139,6 +143,7 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
       const float dry = dry_delays_[static_cast<size_t>(ch)].process(input[i]);
       channels[ch][i] = dry * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
     }
+    sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
   }
 }
 

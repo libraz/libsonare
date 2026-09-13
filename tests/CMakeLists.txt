@@ -109,6 +109,7 @@ add_executable(sonare_tests
   rt/adaa2_test.cpp
   rt/nonlinearities_test.cpp
   rt/biquad_design_test.cpp
+  rt/biquad_state_non_finite_recovery_test.cpp
   rt/k_weighting_freq_response_test.cpp
   rt/spsc_queue_test.cpp
   rt/partitioned_convolver_test.cpp

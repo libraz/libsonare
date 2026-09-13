@@ -3,11 +3,13 @@
 #include <algorithm>
 
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kButterworthQ;
 
 /// GAIN centre. `34`-`4C` reads as -12..+12 dB in 1 dB steps around it.
@@ -67,10 +69,14 @@ void GsMasterEqFilter::process(float* left, float* right, int n) noexcept {
     if (low_active_) {
       rt::BiquadState& state = low_[ch];
       for (int i = 0; i < n; ++i) buf[i] = state.process(buf[i]);
+      // Two floats per shelf per channel, once per block. Nothing else clears
+      // this filter: it survives every note-on and only prepare() resets it.
+      discard_group_if_non_finite(state.z1, state.z2);
     }
     if (high_active_) {
       rt::BiquadState& state = high_[ch];
       for (int i = 0; i < n; ++i) buf[i] = state.process(buf[i]);
+      discard_group_if_non_finite(state.z1, state.z2);
     }
   }
 }

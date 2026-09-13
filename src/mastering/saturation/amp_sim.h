@@ -513,6 +513,12 @@ class AmpSim : public rt::ProcessorBase {
     /// Zeroes every filter/envelope state and the delay lines while keeping the
     /// lines' capacity, so reset() never allocates.
     void clear() noexcept;
+
+    /// @brief Returns to rest every recursive cell a non-finite value has
+    ///        reached (see util/non_finite_state.h). Called once per block.
+    /// @details The delay lines are left alone: they are read at an offset
+    ///          rather than fed back, so a non-finite entry leaves on its own.
+    void discard_non_finite() noexcept;
   };
 
   /// The push-pull power stage plus its optional feedback loop. Shared by both

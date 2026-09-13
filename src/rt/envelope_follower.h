@@ -13,6 +13,12 @@ class EnvelopeFollower {
   float smooth_bidirectional(float target, bool attack_when_decreasing = true);
   float smooth_bidirectional(float target, float release_coeff, bool attack_when_decreasing);
   float value() const { return envelope_; }
+  /// @brief Returns a non-finite envelope to rest (see util/non_finite_state.h).
+  /// @details The envelope is recursive, so an owner calls this once per block;
+  ///          it cannot be reached through @ref reset, which a live stream has
+  ///          no reason to call.
+  /// @return true when the envelope was discarded.
+  bool discard_if_non_finite() noexcept;
 
  private:
   double sample_rate_ = 48000.0;

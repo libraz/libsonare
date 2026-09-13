@@ -75,6 +75,9 @@ class IspLimiter {
   void process_block(float* buffer, int num_samples) noexcept;
   /// @brief Reports the limiter's signal-path latency in samples.
   int latency_samples() const noexcept;
+  /// @brief Returns the gain follower to unity when a non-finite value has
+  ///        reached it (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
 
  private:
   void update_time_constants();

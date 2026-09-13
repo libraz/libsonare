@@ -5,6 +5,7 @@
 
 #include "effects/formant_warp.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::editing::voice_changer {
 namespace {
@@ -148,6 +149,15 @@ void StreamingFormant::process_block(const float* input, float* output, int num_
     float y = input[i];
     for (auto& filter : filters_) y = filter.process(y);
     output[i] = y;
+  }
+  discard_non_finite();
+}
+
+void StreamingFormant::discard_non_finite() noexcept {
+  // The four sections are in series, so one non-finite section makes the chain
+  // unusable; the smoothed factor rides on config values and stays finite.
+  for (auto& filter : filters_) {
+    sonare::discard_group_if_non_finite(filter.z1, filter.z2);
   }
 }
 

@@ -9,11 +9,13 @@
 #include "rt/processor_base.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::multiband {
 
 namespace {
 
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kPiD;
 
 struct SectionSpec {
@@ -234,6 +236,29 @@ void Crossover::process_block_iir(float* const* channels, int num_channels, int 
         remainder = high;
       }
       out_bands.back()[static_cast<size_t>(ch)][static_cast<size_t>(i)] = remainder;
+    }
+    discard_non_finite_state(ch, splits);
+  }
+}
+
+void Crossover::discard_non_finite_state(int channel, int splits) noexcept {
+  // Two floats per second-order section, once per block. The bands are summed
+  // downstream, so one non-finite section is enough to ruin the whole split and
+  // the sections come back together.
+  const auto discard_stages = [](std::vector<Biquad>& stages) noexcept {
+    for (Biquad& stage : stages) {
+      discard_group_if_non_finite(stage.z1, stage.z2);
+    }
+  };
+  for (int split_index = 0; split_index < splits; ++split_index) {
+    auto& split = states_[static_cast<size_t>(split_index)][static_cast<size_t>(channel)];
+    discard_stages(split.lowpass);
+    discard_stages(split.highpass);
+  }
+  for (auto& band_states : compensation_states_) {
+    if (static_cast<size_t>(channel) >= band_states.size()) continue;
+    for (auto& split_states : band_states[static_cast<size_t>(channel)].allpass_by_split) {
+      discard_stages(split_states);
     }
   }
 }

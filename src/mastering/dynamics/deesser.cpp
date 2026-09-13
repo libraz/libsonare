@@ -10,11 +10,13 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::dynamics {
 
 namespace {
 
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kPiD;
 
 }  // namespace
@@ -87,6 +89,10 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
       channels[ch][i] = input + sibilant * (linear_reduction - 1.0f);
       max_reduction = std::min(max_reduction, reduction_db);
     }
+    // Five floats per channel, once per block. The two bandpass sections feed
+    // the follower, so one non-finite section makes the whole detector unusable.
+    discard_group_if_non_finite(filter.z1, filter.z2, filter2.z1, filter2.z2);
+    follower.discard_if_non_finite();
   }
 
   last_gain_reduction_db_ = max_reduction;

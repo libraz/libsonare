@@ -29,6 +29,9 @@ class StreamingFormant {
   void set_config(const StreamingFormantConfig& config);
   const StreamingFormantConfig& config() const noexcept { return config_; }
   void process_block(const float* input, float* output, int num_samples) noexcept;
+  /// @brief Returns the four sections to rest when a non-finite value has
+  ///        reached them (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
 
  private:
   void update_filters() noexcept;

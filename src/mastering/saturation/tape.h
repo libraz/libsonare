@@ -81,6 +81,9 @@ class Tape : public rt::ProcessorBase {
   float process_sample(common::JilesAthertonState& state, float input) const;
   void ensure_state(int num_channels);
   void update_filters(double sample_rate);
+  /// @brief Returns the channel's recursive cells to rest when a non-finite
+  ///        value has reached them (see util/non_finite_state.h).
+  void discard_non_finite_state(size_t channel) noexcept;
 
   using Biquad = rt::BiquadState;
 

@@ -12,11 +12,14 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::saturation {
 
 using constants::kButterworthQ;
 using constants::kTwoPi;
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 
 namespace {
 
@@ -487,6 +490,39 @@ void AmpSim::ChannelChain::clear() noexcept {
   mic_b_write = 0;
 }
 
+void AmpSim::ChannelChain::discard_non_finite() noexcept {
+  const auto discard_cab = [](CabStage& stage) noexcept {
+    discard_group_if_non_finite(stage.hp.z1, stage.hp.z2);
+    discard_group_if_non_finite(stage.bump.z1, stage.bump.z2);
+    discard_group_if_non_finite(stage.presence.z1, stage.presence.z2);
+    discard_group_if_non_finite(stage.lp1.z1, stage.lp1.z2);
+    discard_group_if_non_finite(stage.lp2.z1, stage.lp2.z2);
+    discard_group_if_non_finite(stage.mic_prox.z1, stage.mic_prox.z2);
+    discard_group_if_non_finite(stage.mic_presence.z1, stage.mic_presence.z2);
+    discard_group_if_non_finite(stage.mic_top.z1, stage.mic_top.z2);
+  };
+  discard_group_if_non_finite(pre.z1, pre.z2);
+  discard_group_if_non_finite(bass.z1, bass.z2);
+  discard_group_if_non_finite(mid.z1, mid.z2);
+  discard_group_if_non_finite(treble.z1, treble.z2);
+  discard_group_if_non_finite(nfb_shape.z1, nfb_shape.z2);
+  discard_cab(cab_a);
+  discard_cab(cab_b);
+  for (PreampStage& stage : stages) {
+    // The coupling cap, the cathode shelf and the tracked grid current are one
+    // triode: a stage holding any non-finite cell is not half-usable.
+    discard_group_if_non_finite(stage.hp_x1, stage.hp_y1, stage.cathode.z1, stage.cathode.z2,
+                                stage.grid_env);
+  }
+  discard_group_if_non_finite(stack.s1, stack.s2, stack.s3);
+  discard_if_non_finite(sag_env, 0.0f);
+  discard_if_non_finite(xf_lp, 0.0f);
+  discard_if_non_finite(nfb_fb, 0.0f);
+  // The cone excursion steers the Doppler read position, so a non-finite value
+  // here indexes the delay line as well as colouring the output.
+  discard_group_if_non_finite(cone_lp, cone_dc);
+}
+
 void AmpSim::allocate_delay_lines() {
   // The Doppler line spans the full modulation swing plus the Lagrange stencil's
   // two-sample lookahead; the mic lines are sized from the configured path-length
@@ -706,6 +742,10 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
     process_voiced_head(channels, num_channels, num_samples);
   }
   process_tail(channels, num_channels, num_samples);
+
+  for (int ch = 0; ch < num_channels; ++ch) {
+    chains_[static_cast<size_t>(ch)].discard_non_finite();
+  }
 }
 
 float AmpSim::run_power_stage(float s, ChannelChain& chain, size_t channel) noexcept {

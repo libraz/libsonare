@@ -10,10 +10,12 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::saturation {
 
 namespace {
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kPiD;
 
 constexpr double kEvenDcCutoffHz = 20.0;
@@ -99,6 +101,10 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
         channels[ch][i] += aligned * 0.05f * config_.amount + harmonic * config_.amount;
       }
       even_dc_[static_cast<size_t>(ch)] = even_dc;
+      // Five floats per channel, once per block. The allpass and the DC tracker
+      // both read the bandpass output, so the three come back together.
+      discard_group_if_non_finite(bandpass.z1, bandpass.z2, allpass.z1, allpass.z2,
+                                  even_dc_[static_cast<size_t>(ch)]);
     }
     return;
   }
@@ -151,6 +157,8 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
       channels[ch][i] = dry + aligned * 0.05f * config_.amount +
                         harmonic_scratch_[static_cast<size_t>(i)] * config_.amount;
     }
+    discard_group_if_non_finite(bandpass.z1, bandpass.z2, allpass.z1, allpass.z2,
+                                even_dc_[static_cast<size_t>(ch)]);
   }
 }
 

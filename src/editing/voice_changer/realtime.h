@@ -286,6 +286,12 @@ class RealtimeVoiceChanger {
   ///        values. Called at a bounded cadence from the audio thread.
   void update_output_filters(ChannelState& state) noexcept;
   void reset_channel(ChannelState& state);
+  /// @brief Returns the channel's recursive cells to rest when a non-finite
+  ///        value has reached them (see util/non_finite_state.h).
+  /// @details The block loop flushes a non-finite *input* sample to zero, which
+  ///          a finite sample large enough to overflow a filter recurrence gets
+  ///          past. Called once per block, on the audio thread.
+  static void discard_non_finite_state(ChannelState& state) noexcept;
   /// @brief Mirrors the resolved retune grain size into @c config_ so config()
   ///        reports the effective (prepared) grain rather than the requested
   ///        one. No-op before prepare(). Control-thread only.

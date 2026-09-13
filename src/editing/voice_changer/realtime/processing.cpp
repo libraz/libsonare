@@ -6,9 +6,13 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::editing::voice_changer {
 namespace {
+
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 
 float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
 
@@ -280,7 +284,33 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     if (config.limiter.enable_isp_limiter) {
       channel.isp_limiter.process_block(channels[ch], num_samples);
     }
+    discard_non_finite_state(channel);
   }
+}
+
+void RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcept {
+  // Seventeen floats per channel, once per block. The retune ring and the OLA
+  // accumulators are read at an offset rather than fed back, so they flush on
+  // their own; the formant and ISP stages own their cells and clear them there.
+  discard_group_if_non_finite(state.hpf.z1, state.hpf.z2);
+  discard_group_if_non_finite(state.body.z1, state.body.z2);
+  discard_group_if_non_finite(state.presence.z1, state.presence.z2);
+  discard_group_if_non_finite(state.air.z1, state.air.z2);
+  discard_group_if_non_finite(state.deess_band.z1, state.deess_band.z2);
+  // A detector and the gain it drives recover together: the gain a discarded
+  // detector produced is not usable either, and unity is where each rests.
+  if (discard_if_non_finite(state.gate_env, 0.0f)) state.gate_gain = 1.0f;
+  discard_if_non_finite(state.gate_gain, 1.0f);
+  if (discard_if_non_finite(state.comp_env, 0.0f)) state.comp_gain = 1.0f;
+  discard_if_non_finite(state.comp_gain, 1.0f);
+  if (discard_if_non_finite(state.deess_env, 0.0f)) state.deess_gain = 1.0f;
+  discard_if_non_finite(state.deess_gain, 1.0f);
+  discard_if_non_finite(state.limiter_gain, 1.0f);
+  state.formant.discard_non_finite();
+  state.isp_limiter.discard_non_finite();
+  // The reverb's bound is one comb delay period rather than this block; see
+  // StreamingReverb::discard_non_finite.
+  state.reverb.discard_non_finite();
 }
 
 int RealtimeVoiceChanger::latency_samples() const noexcept {

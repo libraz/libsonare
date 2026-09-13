@@ -8,10 +8,12 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::spectral {
 namespace {
 
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kPiD;
 
 PresenceEnhancer::Biquad make_bandpass(double frequency_hz, double sample_rate, double q) {
@@ -71,11 +73,14 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
     for (int ch = 0; ch < num_channels; ++ch) {
       if (channels[ch] == nullptr)
         throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
+      auto& bandpass = bandpass_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
-        const float presence = bandpass_[static_cast<size_t>(ch)].process(channels[ch][i]);
+        const float presence = bandpass.process(channels[ch][i]);
         const float harmonic = std::tanh(presence * config_.drive);
         channels[ch][i] += harmonic * config_.amount;
       }
+      // Two floats per channel, once per block.
+      discard_group_if_non_finite(bandpass.z1, bandpass.z2);
     }
     return;
   }
@@ -116,6 +121,8 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
       const float dry = dry_delays_[static_cast<size_t>(ch)].process(channels[ch][i]);
       channels[ch][i] = dry + harmonic_scratch_[static_cast<size_t>(i)] * config_.amount;
     }
+    auto& bandpass = bandpass_[static_cast<size_t>(ch)];
+    discard_group_if_non_finite(bandpass.z1, bandpass.z2);
   }
 }
 

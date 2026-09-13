@@ -7,9 +7,11 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mixing {
 
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 
@@ -122,6 +124,28 @@ void MeterProcessor::reset_integrated() noexcept {
   histogram_dirty_ = false;
 }
 
+void MeterProcessor::discard_non_finite_loudness_state(int lufs_channels) noexcept {
+  // Four doubles per channel plus the two running sums, once per block.
+  for (int ch = 0; ch < lufs_channels; ++ch) {
+    const size_t c = static_cast<size_t>(ch);
+    discard_group_if_non_finite(k_state_pre_[c].z1, k_state_pre_[c].z2);
+    discard_group_if_non_finite(k_state_rlb_[c].z1, k_state_rlb_[c].z2);
+  }
+  // A sliding sum cannot drop one term: the value it subtracts when the sample
+  // leaves the window is the same non-finite value it added. The window goes
+  // instead, and the meter reports nothing until it has refilled, as it does at
+  // the start of a stream. The ring walk runs only when the sums have tripped.
+  if (std::isfinite(momentary_sum_) && std::isfinite(short_term_sum_)) {
+    return;
+  }
+  std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0f);
+  ring_pos_ = 0;
+  filled_ = 0;
+  momentary_sum_ = 0.0;
+  short_term_sum_ = 0.0;
+  gate_hop_counter_ = 0;
+}
+
 void MeterProcessor::process(float* const* channels, int num_channels, int num_samples) {
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
@@ -232,6 +256,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 
   if (config_.measure_lufs && !energy_ring_.empty()) {
     const int lufs_channels = std::min(num_channels, kLufsChannels);
+    discard_non_finite_loudness_state(lufs_channels);
     // Combined K-weighted squared energy summed across the present channels, each
     // scaled by its BS.1770-4 weight. This matches the offline reference exactly
     // (metering::lufs / the C-ABI lufs_interleaved oracle): a true-mono bus

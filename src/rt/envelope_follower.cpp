@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "util/dsp_primitives.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::rt {
 
@@ -14,6 +15,10 @@ void EnvelopeFollower::prepare(double sample_rate, float attack_ms, float releas
 }
 
 void EnvelopeFollower::reset(float value) { envelope_ = std::max(0.0f, value); }
+
+bool EnvelopeFollower::discard_if_non_finite() noexcept {
+  return sonare::discard_if_non_finite(envelope_, 0.0f);
+}
 
 float EnvelopeFollower::process(float input) {
   const float detector = std::abs(input);

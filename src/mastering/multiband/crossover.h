@@ -139,6 +139,9 @@ class Crossover {
   float lowpass(float sample, int split_index, int channel);
   float highpass(float sample, int split_index, int channel);
   float allpass(float sample, int band_index, int split_index, int channel);
+  /// @brief Returns the channel's split and compensation sections to rest when a
+  ///        non-finite value has reached them (see util/non_finite_state.h).
+  void discard_non_finite_state(int channel, int splits) noexcept;
 
   struct SplitChannelState {
     std::vector<Biquad> lowpass;

@@ -7,6 +7,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::editing::voice_changer {
 namespace {
@@ -90,6 +91,12 @@ void IspLimiter::reset() noexcept {
   ceiling_dbtp_.reset(ceiling_dbtp_.target());
   release_ms_.reset(release_ms_.target());
   update_cached_controls();
+}
+
+void IspLimiter::discard_non_finite() noexcept {
+  // The gain is the one cell that recirculates: the lookahead, the FIR history
+  // and the sliding peak window are all read at an offset and flush on their own.
+  sonare::discard_if_non_finite(gain_, 1.0f);
 }
 
 void IspLimiter::set_config(const IspLimiterConfig& config) noexcept {

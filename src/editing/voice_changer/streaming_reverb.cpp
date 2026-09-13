@@ -143,6 +143,21 @@ float StreamingReverb::process_sample(float input) noexcept {
   return input * (1.0f - mix) + ap_out * mix;
 }
 
+bool StreamingReverb::discard_non_finite() noexcept {
+  const std::size_t ap_cap = allpass_buf_.size();
+  const float newest_diffusion =
+      ap_cap == 0 ? 0.0f : allpass_buf_[(allpass_pos_ + ap_cap - 1) % ap_cap];
+  bool resting = std::isfinite(newest_diffusion);
+  for (const float lp : comb_lp_) resting = resting && std::isfinite(lp);
+  if (resting) return false;
+  // The delay lines are the feedback, so a usable damping cell over a poisoned
+  // line is not half a tank. The walk is O(line) and only on the recovery path.
+  for (auto& buf : comb_buf_) std::fill(buf.begin(), buf.end(), 0.0f);
+  std::fill(comb_lp_.begin(), comb_lp_.end(), 0.0f);
+  std::fill(allpass_buf_.begin(), allpass_buf_.end(), 0.0f);
+  return true;
+}
+
 void StreamingReverb::process_block(const float* input, float* output, int num_samples) noexcept {
   if (input == nullptr || output == nullptr || num_samples <= 0) return;
   for (int i = 0; i < num_samples; ++i) {

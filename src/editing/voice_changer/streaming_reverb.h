@@ -78,6 +78,21 @@ class StreamingReverb {
   /// @brief Processes a contiguous block sample-by-sample.
   void process_block(const float* input, float* output, int num_samples) noexcept;
 
+  /// @brief Returns the tank to rest when a non-finite value has reached it
+  ///        (see util/non_finite_state.h).
+  /// @details Bounded more weakly than a filter's history taps, and the reason is
+  ///          structural. The only write into a comb line is
+  ///          `input + feedback * comb_lp_`, so a non-finite value reaches the
+  ///          line through the damping cell alone, and the read tap sweeps the
+  ///          whole line once per delay period. Inspecting the damping cells and
+  ///          the newest diffusion sample therefore finds any non-finite value
+  ///          resident anywhere in the tank, but only within one delay period of
+  ///          its arrival rather than inside the block that carried it. Closing
+  ///          that gap would take a check at the write, which is the per-sample
+  ///          scan the realtime contract exists to avoid.
+  /// @return true when the tank was discarded.
+  bool discard_non_finite() noexcept;
+
  private:
   static constexpr int kNumCombs = 2;
 

@@ -118,6 +118,10 @@ class MeterProcessor : public rt::ProcessorBase {
 
  private:
   double filter_sample(int channel, double x) noexcept;
+  /// @brief Returns the K-weighting filters and the sliding loudness windows to
+  ///        rest when a non-finite value has reached them (see
+  ///        util/non_finite_state.h).
+  void discard_non_finite_loudness_state(int lufs_channels) noexcept;
   float energy_to_lufs(double energy) const noexcept;
   void publish(const MeterSnapshot& next) noexcept;
 
