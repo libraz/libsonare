@@ -61,8 +61,9 @@ void validate_config(const MusicAnalyzerConfig& config) {
         "MusicAnalyzerConfig: meterCandidateNumerators entries must be in [2, 32]");
   }
   // Only a power of two is a note value, and the estimator reports 8 itself
-  // when it resolves a compound meter, so a non-power-of-two here could never
-  // round-trip through the reported signature.
+  // when it resolves a compound meter, so a non-power-of-two could never
+  // round-trip through the reported signature. The ceiling is a separate
+  // question, on kMaxMeterDenominator.
   SONARE_CHECK_MSG(config.meter_denominator > 0 &&
                        config.meter_denominator <= kMaxMeterDenominator &&
                        (config.meter_denominator & (config.meter_denominator - 1)) == 0,

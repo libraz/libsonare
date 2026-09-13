@@ -22,6 +22,10 @@ constexpr int kMinMeterCandidateNumerator = 2;
 constexpr int kMaxMeterCandidateNumerator = 32;
 
 /// @brief Largest meter denominator (beat unit) that can be requested.
+/// @details A cap rather than a limit of the estimator, which carries the
+///          denominator into the reported signature rather than scoring it: 64
+///          and 128 are note values too, and nothing records why they are
+///          refused.
 constexpr int kMaxMeterDenominator = 32;
 
 /// @brief Widest numerator whose internal grouping is searched.

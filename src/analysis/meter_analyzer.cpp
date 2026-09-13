@@ -517,7 +517,8 @@ void validate_meter_config(const MeterConfig& config) {
   }
   // Only a power of two is a note value, and the estimator reports 8 itself
   // when it resolves a compound meter, so a non-power-of-two could never
-  // round-trip through the reported signature.
+  // round-trip through the reported signature. The ceiling is a separate
+  // question, on kMaxMeterDenominator.
   SONARE_CHECK_MSG(config.denominator > 0 && config.denominator <= kMaxMeterDenominator &&
                        (config.denominator & (config.denominator - 1)) == 0,
                    ErrorCode::InvalidParameter,

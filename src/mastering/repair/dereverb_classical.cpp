@@ -197,9 +197,9 @@ void apply_room_measurement(DereverbClassicalConfig& config, float rt60_mid_sec,
   if (std::isfinite(rt60_mid_sec) && rt60_mid_sec > 0.0f) config.t60_sec = rt60_mid_sec;
   if (std::isfinite(volume_m3) && volume_m3 > 0.0f) {
     // Polack: the response stops being separable reflections and becomes a
-    // diffuse tail at roughly sqrt(V) milliseconds. Bounded below by one STFT
-    // hop's worth of room -- under a few metres cubed there is no late field to
-    // separate -- and above at a second, past which no room mixes later.
+    // diffuse tail at roughly sqrt(V) milliseconds. The ceiling is a second,
+    // past which no room mixes later; the floor is a guard on an absurd volume
+    // rather than a mixing time, reached only under 1 m^3.
     config.late_delay_ms = std::clamp(std::sqrt(volume_m3), 1.0f, 1000.0f);
   }
 }

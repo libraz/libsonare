@@ -34,8 +34,8 @@ struct LiveRidge {
 
 MultiF0Estimator::MultiF0Estimator(const CentAxis& spectrum_axis, const MultiF0Config& config)
     : kernel_(spectrum_axis, config.salience), config_(config) {
-  // Bounded above as well as below: the iteration count is derived from it, so
-  // "at least one" leaves the loop bound to overflow on a large value.
+  // Bounded above as well as below because the iteration count is derived from
+  // it; what 64 refuses is on MultiF0Config::max_polyphony.
   SONARE_CHECK(config.max_polyphony >= 1 && config.max_polyphony <= 64,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.min_frame_peak_ratio) && config.min_frame_peak_ratio >= 0.0f &&

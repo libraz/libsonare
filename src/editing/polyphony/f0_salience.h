@@ -40,9 +40,9 @@ struct CentAxis {
   /// coarse enough to keep the surface small.
   ///
   /// Everything that takes an axis rejects one finer than one cent or wider than
-  /// 32768 bins, including an axis built by hand rather than by
-  /// @ref compute_cent_spectrum -- so the bound is the axis's, not that
-  /// function's.
+  /// 32768 bins -- including a hand-built axis, so the bound is the axis's and
+  /// not @ref compute_cent_spectrum's. Both are size budgets, and what a caller
+  /// needing a finer axis loses is unmeasured.
   float cents_per_bin = 100.0f / 3.0f;
   /// Covers [ref_hz, max_hz] inclusive: @c ceil(cents(max_hz) / cents_per_bin)
   /// plus one, so the last bin is at or above @c max_hz rather than under it.
@@ -85,10 +85,10 @@ std::vector<float> tonality_weights(const float* inst_freq_hz, int n_bins, float
 struct CentSpectrumConfig {
   float ref_hz = 55.0f;
   /// Rejected under one cent, and the axis it builds is rejected over 32768
-  /// bins. Finer than the estimator's own 50-cent separation rule buys nothing
-  /// and only sizes the spectrum, and positive-and-finite bounds a size not at
-  /// all: what an unbounded axis costs is then the allocator's decision, which
-  /// is a refusal on one platform and a long stall on another.
+  /// bins: positive-and-finite bounds a size not at all, and an unbounded axis
+  /// costs whatever the allocator decides. Where the floor lands is a budget --
+  /// finer buys this estimator nothing against its own 50-cent separation rule,
+  /// and what another read of the surface would want is unmeasured.
   float cents_per_bin = 100.0f / 3.0f;
   /// Top of the axis. The harmonic sum reads partial positions rather than F0s,
   /// so a partial over it contributes nothing, and a candidate high enough for

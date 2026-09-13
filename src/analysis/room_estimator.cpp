@@ -93,6 +93,7 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   // The inverse Sabine/Eyring problem fixes only V * alpha, so anchor the volume
   // scale with the absorption prior. Use the same statistical model the forward
   // synthesis path uses (Eyring by default) so the round-trip is consistent.
+  // Clamped silently; the interval's width is a budget. See RoomEstimateConfig.
   const bool use_eyring = config.prefer_eyring;
   const double a0 = std::clamp(static_cast<double>(config.reference_absorption), 0.01, 0.99);
   const double absn0 = use_eyring ? -std::log(1.0 - a0) : a0;

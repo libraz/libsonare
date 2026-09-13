@@ -14,14 +14,16 @@ namespace sonare::resource {
 
 /// Maximum number of float samples accepted by one offline audio operation.
 inline constexpr std::size_t kMaxOfflineAudioSamples = 500'000'000;
-/// Peak memory budget for an engine-owned offline bounce/freeze result. Bounce
-/// paths can hold planar, interleaved, and binding-owned copies concurrently;
-/// the helper below accounts for that multiplier before any allocation.
+/// Peak memory budget for an engine-owned offline bounce/freeze result, and an
+/// unmeasured one. Bounce paths hold planar, interleaved and binding-owned
+/// copies concurrently, which the helper below multiplies by, so the budget
+/// refuses a stereo 48 kHz bounce past roughly 15 minutes -- 7 when it resamples.
 inline constexpr std::size_t kMaxEngineOfflinePeakBytes = 1024u * 1024u * 1024u;
 
-/// Peak working-set budget for a synthesized acoustic RIR. The RIR path can
-/// retain four full-length float buffers while colouring early reflections;
-/// keep the sample count below this budget before any allocation is attempted.
+/// Peak working-set budget for a synthesized acoustic RIR, chosen as a budget
+/// rather than measured. The RIR path can retain four full-length float buffers
+/// while colouring early reflections, and the division below turns the budget
+/// into a sample cap: about 350 seconds at 48 kHz, longer than any real decay.
 inline constexpr std::size_t kMaxAcousticRirPeakBytes = 256u * 1024u * 1024u;
 inline constexpr std::size_t kAcousticRirLiveFloatBuffers = 4u;
 inline constexpr std::size_t kMaxAcousticRirSamples =
