@@ -37,6 +37,11 @@
 
 namespace sonare::editing::polyphony {
 
+/// Ceiling on @ref NoteMaskConfig::n_harmonics, and on anything derived from it.
+/// Nothing is sized by it -- it caps a loop -- so it is not the salience side's
+/// ceiling despite sharing a value with it.
+inline constexpr int kMaxNoteMaskHarmonics = 128;
+
 struct NoteMaskConfig {
   /// Partials claimed per note. A partial over Nyquist claims nothing, so a
   /// count high for the register costs only the loop. At most 128.

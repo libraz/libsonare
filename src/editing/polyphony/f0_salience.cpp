@@ -21,10 +21,6 @@ using sonare::constants::kTwoPiD;
 /// refuses or merely stalls is the allocator's decision rather than this code's.
 constexpr int kMaxAxisBins = 32768;
 
-/// Partial 128 of the lowest F0 any usable axis reaches is already past audio,
-/// so this bounds the kernel's tables without bounding a caller.
-constexpr int kMaxHarmonics = 128;
-
 /// Bins spanning [ref_hz, max_hz] inclusive at @p cents_per_bin.
 int axis_bins(float ref_hz, float max_hz, float cents_per_bin) {
   const double span =
@@ -197,7 +193,7 @@ SalienceKernel::SalienceKernel(const CentAxis& spectrum_axis, const SalienceConf
   SONARE_CHECK(std::isfinite(spectrum_axis.cents_per_bin) && spectrum_axis.cents_per_bin >= 1.0f,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(spectrum_axis.n_bins <= kMaxAxisBins, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_harmonics > 0 && config.n_harmonics <= kMaxHarmonics,
+  SONARE_CHECK(config.n_harmonics > 0 && config.n_harmonics <= kMaxSalienceHarmonics,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.f0_min_hz) && std::isfinite(config.f0_max_hz) &&
                    config.f0_max_hz > config.f0_min_hz,

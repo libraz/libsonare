@@ -14,10 +14,6 @@
 namespace sonare::editing::polyphony {
 namespace {
 
-/// The salience kernel's own bound: partial 128 of any F0 an STFT resolves is
-/// already past audio.
-constexpr int kMaxHarmonics = 128;
-
 /// Past this a claim spans the whole spectrum at every framing, so the width is
 /// sizing a loop rather than describing a window.
 constexpr float kMaxClaimLobes = 64.0f;
@@ -71,7 +67,7 @@ void check_geometry(const Spectrogram& spec, const NoteMaskConfig& config) {
   SONARE_CHECK(
       spec.n_fft() > 0 && spec.win_length() > 0 && spec.hop_length() > 0 && spec.sample_rate() > 0,
       ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_harmonics >= 1 && config.n_harmonics <= kMaxHarmonics,
+  SONARE_CHECK(config.n_harmonics >= 1 && config.n_harmonics <= kMaxNoteMaskHarmonics,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.claim_lobes) && config.claim_lobes > 0.0f &&
                    config.claim_lobes <= kMaxClaimLobes,

@@ -24,9 +24,6 @@ using sonare::constants::kSpectrumEpsilon;
 /// caller sets its own floor.
 constexpr int kMinFitPartials = 2;
 
-/// @ref partial_claims' own ceiling on a harmonic count.
-constexpr int kMaxHarmonics = 128;
-
 /// Half-widths of the fitted stretch's own uncertainty the next partial is searched
 /// over. Every measured fixture is identical from 0.5 to 6; at 7 a 55 Hz note's
 /// window reaches its neighbour before the stretch is pinned and it is refused.
@@ -59,9 +56,9 @@ void check_config(const InharmonicityConfig& config) {
   // Named rather than bare: these are the caller's own values, and a refusal is the
   // only place a caller learns where their range ends. The spelling is the one a
   // binding will expose rather than the core's.
-  SONARE_CHECK_MSG(config.min_partials >= kMinFitPartials && config.min_partials <= kMaxHarmonics,
-                   ErrorCode::InvalidParameter,
-                   "InharmonicityConfig: minPartials must be in [2, 128]");
+  SONARE_CHECK_MSG(
+      config.min_partials >= kMinFitPartials && config.min_partials <= kMaxNoteMaskHarmonics,
+      ErrorCode::InvalidParameter, "InharmonicityConfig: minPartials must be in [2, 128]");
   // One-sided ranges admit both NaN and infinity, so finiteness is checked rather
   // than left to the comparison.
   SONARE_CHECK_MSG(std::isfinite(config.max_residual_bins) && config.max_residual_bins > 0.0f,
@@ -164,7 +161,7 @@ void rival_partials(const Spectrogram& spec, const MultiF0Track& track, const No
                     size_t note, int first_frame, int last_frame, double lobe_hz, double error_rel,
                     std::vector<RivalPartial>& rivals) {
   const double nyquist_hz = 0.5 * spec.sample_rate();
-  const int n_harmonics = std::min(masks.config.n_harmonics, kMaxHarmonics);
+  const int n_harmonics = std::min(masks.config.n_harmonics, kMaxNoteMaskHarmonics);
   rivals.clear();
   for (size_t other = 0; other < track.ridges.size(); ++other) {
     if (other == note) continue;
@@ -264,7 +261,7 @@ float estimate_one(const Spectrogram& spec, const MultiF0Track& track, const Not
   const int n_bins = spec.n_bins();
   const double bin_hz = static_cast<double>(spec.sample_rate()) / spec.n_fft();
   const double nyquist_hz = 0.5 * spec.sample_rate();
-  const int n_harmonics = std::min(masks.config.n_harmonics, kMaxHarmonics);
+  const int n_harmonics = std::min(masks.config.n_harmonics, kMaxNoteMaskHarmonics);
 
   // The widest stretch the caller believes, narrowed by every partial that lands,
   // and the f0 the windows are predicted from, which starts refined and moves to

@@ -44,6 +44,10 @@ struct F0Candidate {
   float harmonic_share = 0.0f;
 };
 
+/// Ceiling on @ref MultiF0Config::max_polyphony. The iteration bound is derived
+/// from that field, so this is what bounds the iteration too.
+inline constexpr int kMaxPolyphonyVoices = 64;
+
 struct MultiF0Config {
   SalienceConfig salience{};
 

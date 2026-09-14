@@ -36,7 +36,7 @@ MultiF0Estimator::MultiF0Estimator(const CentAxis& spectrum_axis, const MultiF0C
     : kernel_(spectrum_axis, config.salience), config_(config) {
   // Bounded above as well as below because the iteration count is derived from
   // it; what 64 refuses is on MultiF0Config::max_polyphony.
-  SONARE_CHECK(config.max_polyphony >= 1 && config.max_polyphony <= 64,
+  SONARE_CHECK(config.max_polyphony >= 1 && config.max_polyphony <= kMaxPolyphonyVoices,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.min_frame_peak_ratio) && config.min_frame_peak_ratio >= 0.0f &&
                    config.min_frame_peak_ratio <= 1.0f,

@@ -93,6 +93,25 @@ CONSTANTS: dict[str, Constant] = {
     "max_grain_size": Constant("src/editing/voice_changer/streaming_retune.cpp", "kMaxGrainSize"),
     "max_retune_semitones": Constant("src/editing/voice_changer/streaming_retune.cpp", "kMaxSemitones"),
     "max_metronome_click_samples": Constant("src/engine/metronome.h", "kMaxMetronomeClickSamples"),
+    "max_salience_harmonics": Constant("src/editing/polyphony/f0_salience.h", "kMaxSalienceHarmonics"),
+    "max_note_mask_harmonics": Constant("src/editing/polyphony/note_mask.h", "kMaxNoteMaskHarmonics"),
+    "max_polyphony_voices": Constant("src/editing/polyphony/multi_f0.h", "kMaxPolyphonyVoices"),
+}
+
+# Bounds deliberately left without a constant, and why. A family named here is
+# absent from CONSTANTS on purpose, so the "registered but no claim reads it"
+# guard never sees it; this table is what keeps that absence a decision.
+UNMIRRORED: dict[str, str] = {
+    "true-peak oversample factor": (
+        "`is_supported_polyphase_oversample_factor` (src/rt/true_peak_fir.cpp) admits the set "
+        "{1, 2, 4, 8, 16}, each a separately designed FIR rather than a point in a range, so a "
+        "constant naming the largest would put a mirrorable number on one endpoint of a "
+        "composite condition and invite a reader to believe the interval between the members is "
+        "legal. The five documents state the set, not an endpoint, and are correct as written. "
+        "bindings/wasm/src/metering.ts re-states the condition in TypeScript ((n & (n - 1)) === 0) "
+        "instead of calling the predicate; that copy is real exposure a number-to-constant check "
+        "cannot compare."
+    ),
 }
 
 # The interval brackets a doc writes around a pair, with the markup (backticks,
@@ -230,6 +249,36 @@ CLAIMS: tuple[Claim, ...] = (
         key="explicit metronome click length ceiling",
         pattern=r"click lengths are limited to\s+(?P<max>\d+)\s+samples",
         groups={"max": ("max_metronome_click_samples", 0)},
+        floor=1,
+    ),
+    # The two polyphony harmonic ceilings hold the same number on separate
+    # fields of separate stages, so each anchors on what its partials are for --
+    # matching on 128 would let either claim answer for both.
+    Claim(
+        key="polyphony salience harmonic ceiling",
+        pattern=r"[Pp]artials summed per (?:F0 )?candidate.{0,60}?at most\s+(?P<max>\d+)",
+        groups={"max": ("max_salience_harmonics", 0)},
+        floor=4,
+    ),
+    Claim(
+        key="polyphony note mask harmonic ceiling",
+        pattern=r"[Pp]artials claimed per note.{0,60}?at most\s+(?P<max>\d+)",
+        groups={"max": ("max_note_mask_harmonics", 0)},
+        floor=4,
+    ),
+    Claim(
+        key="polyphony voice ceiling",
+        pattern=r"[Vv]oices (?:a|one) frame (?:is allowed|may hold).{0,40}?at most\s+(?P<max>\d+)",
+        groups={"max": ("max_polyphony_voices", 0)},
+        floor=3,
+    ),
+    # The C header states the same ceiling as a bare sentinel-and-limit pair,
+    # sharing no wording with the three facades, so it reads the constant
+    # through a claim of its own rather than widening theirs to reach it.
+    Claim(
+        key="polyphony voice ceiling in the C header",
+        pattern=r"0 => 4, at most\s+(?P<max>\d+)",
+        groups={"max": ("max_polyphony_voices", 0)},
         floor=1,
     ),
 )

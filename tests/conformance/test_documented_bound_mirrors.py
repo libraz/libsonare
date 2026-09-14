@@ -51,6 +51,29 @@ HPSS_DOC = "include/sonare/sonare_c_effects.h"
 # ambiguity, not the absence.
 SECOND_DECLARATION = "inline constexpr int kSpectralEditMaxNFft = 4096;\n"
 
+# The shared-number case: two ceilings of 128 on two stages of one pipeline,
+# documented in the same four files. Everything below drives all four polyphony
+# claims over one tree holding all three cores, because what has to be shown is
+# that a move in one core reaches its own documents and stops there.
+SALIENCE = CLAIMS["polyphony salience harmonic ceiling"]
+MASK = CLAIMS["polyphony note mask harmonic ceiling"]
+VOICES = CLAIMS["polyphony voice ceiling"]
+VOICES_HEADER = CLAIMS["polyphony voice ceiling in the C header"]
+POLYPHONY_CLAIMS = (SALIENCE, MASK, VOICES, VOICES_HEADER)
+
+SALIENCE_CORE = "src/editing/polyphony/f0_salience.h"
+MASK_CORE = "src/editing/polyphony/note_mask.h"
+VOICES_CORE = "src/editing/polyphony/multi_f0.h"
+POLYPHONY_CORES = (SALIENCE_CORE, MASK_CORE, VOICES_CORE)
+
+POLYPHONY_C_HEADER = "include/sonare/sonare_c_polyphony.h"
+POLYPHONY_FACADE_DOCS = (
+    "bindings/node/src/types_mastering.ts",
+    "bindings/wasm/src/public_types_spectral.ts",
+    "bindings/python/src/libsonare/_effects_polyphony.py",
+)
+POLYPHONY_DOCS = (POLYPHONY_C_HEADER, *POLYPHONY_FACADE_DOCS)
+
 
 class _CopiedTree(unittest.TestCase):
     """A throwaway tree holding named files, optionally with one edit each."""
@@ -231,6 +254,97 @@ class UnreadConstantTest(unittest.TestCase):
         failures = check.evaluate()
         self.assertEqual(len(failures), 1, failures)
         self.assertIn("registered but no claim reads it", failures[0])
+
+
+class PolyphonyCeilingTest(_CopiedTree):
+    """Two ceilings holding 128 and one holding 64, across the same four documents."""
+
+    def polyphony(self, edits=None) -> list[str]:
+        root = self.tree((*POLYPHONY_CORES, *POLYPHONY_DOCS), edits)
+        return check.evaluate(root, POLYPHONY_CLAIMS)
+
+    def sites(self) -> dict[str, list]:
+        return check.collect(check.ROOT, check.doc_blocks(check.ROOT), POLYPHONY_CLAIMS)
+
+    def test_each_claim_reaches_exactly_the_documents_it_was_written_for(self) -> None:
+        expected = {
+            SALIENCE.key: set(POLYPHONY_DOCS),
+            MASK.key: set(POLYPHONY_DOCS),
+            VOICES.key: set(POLYPHONY_FACADE_DOCS),
+            VOICES_HEADER.key: {POLYPHONY_C_HEADER},
+        }
+        sites = self.sites()
+        for key, documents in expected.items():
+            with self.subTest(claim=key):
+                self.assertEqual({site.path for site in sites[key]}, documents)
+                self.assertEqual(len(sites[key]), len(documents))
+
+    def test_the_two_ceilings_of_128_reach_disjoint_documents(self) -> None:
+        """A shared number is what makes one claim answering for both easy to miss."""
+        sites = self.sites()
+        salience = {(site.path, site.line) for site in sites[SALIENCE.key]}
+        mask = {(site.path, site.line) for site in sites[MASK.key]}
+        self.assertEqual(salience & mask, set())
+
+    def test_an_untouched_copy_passes(self) -> None:
+        self.assertEqual(self.polyphony(), [])
+
+    def test_moving_the_salience_ceiling_leaves_the_mask_documents_alone(self) -> None:
+        failure = self.only(
+            self.polyphony({SALIENCE_CORE: ("kMaxSalienceHarmonics = 128", "kMaxSalienceHarmonics = 96")}),
+            "kMaxSalienceHarmonics is 96",
+            "4 document(s)",
+        )
+        for document in POLYPHONY_DOCS:
+            self.assertIn(document, failure)
+        self.assertNotIn(MASK.key, failure)
+        self.assertNotIn(MASK_CORE, failure)
+
+    def test_moving_the_mask_ceiling_leaves_the_salience_documents_alone(self) -> None:
+        failure = self.only(
+            self.polyphony({MASK_CORE: ("kMaxNoteMaskHarmonics = 128", "kMaxNoteMaskHarmonics = 96")}),
+            "kMaxNoteMaskHarmonics is 96",
+            "4 document(s)",
+        )
+        for document in POLYPHONY_DOCS:
+            self.assertIn(document, failure)
+        self.assertNotIn(SALIENCE.key, failure)
+        self.assertNotIn(SALIENCE_CORE, failure)
+
+    def test_moving_the_voice_ceiling_reports_both_wordings_in_one_failure(self) -> None:
+        """The C header reads the constant through its own claim, so it must move too."""
+        failure = self.only(
+            self.polyphony({VOICES_CORE: ("kMaxPolyphonyVoices = 64", "kMaxPolyphonyVoices = 32")}),
+            "kMaxPolyphonyVoices is 32",
+            "4 document(s)",
+        )
+        for document in POLYPHONY_DOCS:
+            self.assertIn(document, failure)
+        self.assertIn(VOICES.key, failure)
+        self.assertIn(VOICES_HEADER.key, failure)
+
+    def test_the_voice_claim_does_not_reach_the_synth_voice_documents(self) -> None:
+        """`max_synth_voices` is a different 64 in the same tree."""
+        sites = check.collect(check.ROOT, check.doc_blocks(check.ROOT))
+        synth = {site.path for site in sites["simultaneous voice ceiling"]}
+        polyphony = {site.path for site in sites[VOICES.key]} | {
+            site.path for site in sites[VOICES_HEADER.key]
+        }
+        self.assertEqual(synth & polyphony, set())
+
+
+class UnmirroredRecordTest(unittest.TestCase):
+    """A bound left without a constant on purpose is recorded, not merely absent."""
+
+    def test_the_record_holds_the_true_peak_family(self) -> None:
+        self.assertIn("true-peak oversample factor", check.UNMIRRORED)
+
+    def test_nothing_recorded_as_unmirrored_is_also_registered(self) -> None:
+        """A family in both tables would be claimed and excused at once."""
+        self.assertEqual(set(check.UNMIRRORED) & set(check.CONSTANTS), set())
+
+    def test_the_record_does_not_trip_the_unread_constant_guard(self) -> None:
+        self.assertEqual(check.evaluate(), [])
 
 
 if __name__ == "__main__":

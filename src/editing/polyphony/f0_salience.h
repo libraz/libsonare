@@ -142,6 +142,11 @@ struct CentSpectrum {
 ///         @c ref_hz, or an axis of over 32768 bins.
 CentSpectrum compute_cent_spectrum(const Spectrogram& spec, const CentSpectrumConfig& config = {});
 
+/// Ceiling on @ref SalienceConfig::n_harmonics. The kernel's two tables are
+/// sized by axis bins times this, so it bounds an allocation rather than a loop
+/// and is set independently of the mask side's ceiling on every surface.
+inline constexpr int kMaxSalienceHarmonics = 128;
+
 struct SalienceConfig {
   float f0_min_hz = 55.0f;
   float f0_max_hz = 1760.0f;
