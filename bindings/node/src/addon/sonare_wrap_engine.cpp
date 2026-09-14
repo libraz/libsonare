@@ -691,7 +691,7 @@ Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
   config.enabled = BoolProperty(obj, "enabled", false) ? 1 : 0;
   config.beat_gain = FloatProperty(obj, "beatGain", 0.35f);
   config.accent_gain = FloatProperty(obj, "accentGain", 0.7f);
-  config.click_samples = IntProperty(obj, "clickSamples", 0);
+  config.click_samples = IntProperty(obj, "clickSamples", kZeroIsSentinel);
   config.click_seconds = DoubleProperty(obj, "clickSeconds", 0.0);
   if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_metronome(engine_, &config));
@@ -815,9 +815,9 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
     clip.track_id = Uint32Property(obj, "trackId", 0);
     clip.start_sample = Int64Property(obj, "startSample", 0);
     clip.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
-    clip.length_samples = Int64Property(obj, "lengthSamples", 0);
+    clip.length_samples = Int64Property(obj, "lengthSamples", kZeroIsSentinel);
     clip.loop = obj.Get("loop").ToBoolean().Value() ? 1 : 0;
-    clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", 0);
+    clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", kZeroIsSentinel);
     clip.destination_id = Uint32Property(obj, "destinationId", Uint32Property(obj, "trackId", 0));
     if (env.IsExceptionPending()) return env.Undefined();
     clip.events = event_storage[i].data();

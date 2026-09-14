@@ -100,7 +100,7 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
     CopyString(node.id, sizeof(node.id), text);
     node.type = IntProperty(obj, "type", 0);
     node.gain_db = FloatProperty(obj, "gainDb", 0.0f);
-    node.num_ports = IntProperty(obj, "numPorts", 0);
+    node.num_ports = IntProperty(obj, "numPorts", kZeroIsSentinel);
     // A wrong-typed optional field left one pending JS exception; stop here so
     // no further N-API throw lands on top of it (that would be a fatal abort).
     if (env.IsExceptionPending()) return env.Undefined();
@@ -283,7 +283,7 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   options.target_lufs = FloatProperty(obj, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
   options.dither = IntProperty(obj, "dither", 0);
   options.dither_bits = IntProperty(obj, "ditherBits", 16);
-  options.dither_seed = static_cast<uint32_t>(Int64Property(obj, "ditherSeed", 0));
+  options.dither_seed = static_cast<uint32_t>(Int64Property(obj, "ditherSeed", kZeroIsSentinel));
   SonareEngineBounceResult result{};
   ThrowIfError(env, sonare_engine_bounce_offline(engine_, &options, &result));
   if (env.IsExceptionPending()) return env.Undefined();

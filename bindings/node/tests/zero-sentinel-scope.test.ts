@@ -19,10 +19,10 @@
  * WHAT A GREEN RUN HERE DOES AND DOES NOT MEAN. Green says every literal-zero
  * read is accounted for, NOT that every read is benign:
  * {@link UNTAGGED_SENTINEL_READS} holds reads already established to select a
- * library default, which cannot be tagged without a C++ change. While that list
- * is non-empty this file's green is conditional on it, and the list is a ratchet
- * — it may shrink, never grow. Read it before treating a green run as a clean
- * bill of health.
+ * library default, which cannot be tagged without a C++ change, and while that
+ * list is non-empty this file's green is conditional on it. It is empty, so
+ * green stands on its own; the list is a ratchet — it may shrink, never grow —
+ * so read it before treating a green run as a clean bill of health.
  *
  * A REASON IS WRITTEN ABOUT THE FIELD, NEVER ABOUT THE READER. A site is keyed
  * `file:key`, so a reason that argues from the reader ("this one refuses a
@@ -245,46 +245,25 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
 
 /**
  * Reads ESTABLISHED to select a library default, still spelled with a literal 0
- * because tagging them is a C++ change.
+ * because tagging them is a C++ change. Empty: every established sentinel read
+ * carries `kZeroIsSentinel`.
  *
  * These are not reasoned-away sites and must not be merged back into
  * {@link ZERO_FALLBACK_REASONS}: that map answers "this zero is a quantity", and
  * routing a known sentinel through the same door makes one green mean two
- * different things. Each entry states what the zero actually selects, cites the
+ * different things. An entry states what the zero actually selects, cites the
  * line that settles it, and says whether a control that would demonstrate the
  * substitution can be built from the JS surface today — which is where anyone
- * picking this up should start.
+ * picking one up should start.
  *
  * THIS LIST IS A RATCHET: it may shrink, never grow. An entry leaves when the
- * read is tagged; the assertions below fail both on a sixth entry and on an
- * entry whose read has already been tagged. A non-empty list deliberately does
- * NOT fail on its own — the tag needs a native build — so the cost of leaving
- * one here is that this file's green is conditional, which the header says.
- *
- * Ordered by whether a control exists today, readiest first.
+ * read is tagged; the assertions below fail both on an entry that
+ * {@link EXPECTED_UNTAGGED_SENTINELS} does not also name and on an entry whose
+ * read has already been tagged. A non-empty list deliberately does NOT fail on
+ * its own — the tag needs a native build — so the cost of leaving one here is
+ * that this file's green is conditional, which the header says.
  */
-const UNTAGGED_SENTINEL_READS: ReadonlyMap<string, string> = new Map([
-  [
-    'engine/graph_offline.cpp:ditherSeed',
-    "0 keeps the dither generator's own seed instead of the caller's, so this zero does select a default. Control available today: dither noise differs between seeds, so a bounce at seed 0 against one at a chosen seed separates them.",
-  ],
-  [
-    'sonare_wrap_engine.cpp:clickSamples',
-    'The C ABI documents 0 as "use the sample-rate-derived default", deriving the click length from clickSeconds instead, so this zero does select a default. Control available today: the rendered click changes length, so a metronome at 0 against one at an explicit sample count separates them.',
-  ],
-  [
-    'sonare_wrap_engine.cpp:lengthSamples',
-    'The sequencer reads a non-positive length as "no clip end" rather than as a zero-length clip, so this zero does select a behaviour. Control constructible but not built: it needs a clip whose events extend past its own length, so that a bounded and an unbounded clip emit different events.',
-  ],
-  [
-    'sonare_wrap_engine.cpp:loopLengthSamples',
-    'The sequencer wraps only while loop_length_samples > 0, so 0 plays the clip through even with loop set, and this zero does select a behaviour. Control constructible but not built: it needs a render long enough to cross the wrap point.',
-  ],
-  [
-    'engine/graph_offline.cpp:numPorts',
-    "0 makes the capture path derive the port count from the target's channel count, so this zero does select a default. No control today: the derivation is on the capture path, which needs a configured capture target rather than a graph alone.",
-  ],
-]);
+const UNTAGGED_SENTINEL_READS: ReadonlyMap<string, string> = new Map<string, string>();
 
 /**
  * Readers the shared header defines that the zero-fallback scan does NOT cover,
@@ -348,15 +327,9 @@ const ACCOUNTED: ReadonlyMap<string, string> = new Map([
 
 /**
  * The ratchet. Written out rather than derived from the map, so that adding a
- * sixth sentinel is a conscious edit in two places instead of a quiet append.
+ * sentinel is a conscious edit in two places instead of a quiet append.
  */
-const EXPECTED_UNTAGGED_SENTINELS = [
-  'engine/graph_offline.cpp:ditherSeed',
-  'engine/graph_offline.cpp:numPorts',
-  'sonare_wrap_engine.cpp:clickSamples',
-  'sonare_wrap_engine.cpp:lengthSamples',
-  'sonare_wrap_engine.cpp:loopLengthSamples',
-];
+const EXPECTED_UNTAGGED_SENTINELS: readonly string[] = [];
 
 describe('a literal-zero fallback is tagged or reasoned', () => {
   it('reports nothing about the addon as it stands', () => {
@@ -379,9 +352,10 @@ describe('a literal-zero fallback is tagged or reasoned', () => {
   });
 
   it('holds the untagged-sentinel list to exactly the reads already established', () => {
-    // A ratchet in both directions. A sixth entry fails here, so a newly found
-    // sentinel cannot be filed away quietly; and the list must shrink to nothing
-    // as the tags land, so the frozen list has to be edited to let one go.
+    // A ratchet in both directions. An unlisted entry fails here, so a newly
+    // found sentinel cannot be filed away quietly; and the list must shrink to
+    // nothing as the tags land, so the frozen list has to be edited to let one
+    // go.
     expect(
       [...UNTAGGED_SENTINEL_READS.keys()].sort(),
       'A read newly established to select a library default is not a bookkeeping entry. Add it ' +
