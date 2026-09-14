@@ -47,12 +47,19 @@ constexpr int kPoisonIndex = 100;
 // Blocks the stream is allowed to take to rejoin its control. A cell returns to
 // its post-reset value at once; the stream rejoins only once the state behind
 // that cell has re-converged, so each bound follows the slowest time constant in
-// its path. Bounds sit at roughly twice their measured crossing (144 / 49 / 3 /
-// 15): the crossing is where an exponential tail passes one float ULP, and a
-// one-ULP difference in the platform's math library moved a comparable fixture's
-// by 45%. The last two are a larger multiple of a crossing too small for a
-// proportional bound to be worth anything.
+// its path. Bounds sit at roughly twice their measured crossing (49 / 3 / 15):
+// the crossing is where an exponential tail passes one float ULP, and a one-ULP
+// difference in the platform's math library moved a comparable fixture's by 45%.
+// The last two are a larger multiple of a crossing too small for a proportional
+// bound to be worth anything.
+// The crossover is the exception: its difference falls to a rounding floor by
+// block 4 and then neither decays nor grows, so whether a run coincides with its
+// control is a property of the target's arithmetic -- arm64 lands on it at block
+// 144 and x86_64 never does. Its bound is where the residual is read instead,
+// and the ceiling is a decade above the largest measured on either target
+// (4.8e-5). That ceiling moves with the fixture.
 constexpr int kCrossoverRecoveryBlocks = 300;
+constexpr double kCrossoverResidual = 1.0e-3;
 constexpr int kAirBandRecoveryBlocks = 100;
 constexpr int kPresenceRecoveryBlocks = 12;
 constexpr int kExciterRecoveryBlocks = 40;
@@ -218,6 +225,16 @@ void require_rejoins_control(const Blocks& control, const Blocks& poisoned, int 
   REQUIRE(residual_from(control, poisoned, recovery_blocks) == 0.0);
 }
 
+/// The same claim for an owner that reaches a rounding floor instead of bit
+/// identity: past @p from the streams stay within @p ceiling of each other.
+void require_rejoins_within(const Blocks& control, const Blocks& poisoned, int from,
+                            double ceiling) {
+  const double residual = residual_from(control, poisoned, from);
+  INFO("first identical " << first_identical_block(control, poisoned) << " of " << control.size());
+  INFO("residual " << residual);
+  REQUIRE(residual < ceiling);
+}
+
 using NonVacuity = std::function<void(const Blocks&)>;
 
 /// An in-place owner is non-vacuous when it changed the signal at all.
@@ -226,9 +243,13 @@ void require_processor_effect(const Blocks& control) { REQUIRE(control_effect(co
 /// Drives one owner twice -- clean and poisoned -- and asserts the invariant.
 /// @param make Builds a prepared, configured processor as a block callable.
 /// @param reach The window the owner's structure reaches; see Reach.
+/// @param residual_ceiling Set for an owner that reaches a rounding floor rather
+///        than bit identity; @p recovery_blocks is then where its residual is
+///        read.
 void check_owner(const std::function<BlockProcessor()>& make, int recovery_blocks,
                  float poison_value, const Reach& reach = {},
-                 const NonVacuity& require_non_vacuous = require_processor_effect) {
+                 const NonVacuity& require_non_vacuous = require_processor_effect,
+                 std::optional<double> residual_ceiling = std::nullopt) {
   const int block_count = std::max(recovery_blocks + kHorizonSlack, kMinimumCleanBlocks);
   const auto control = run_stream(make(), block_count, 0.0f, false);
 
@@ -241,7 +262,11 @@ void check_owner(const std::function<BlockProcessor()>& make, int recovery_block
 
   const auto poisoned = run_stream(make(), block_count, poison_value, true);
   require_non_finite_bounded(poisoned, reach);
-  require_rejoins_control(control, poisoned, recovery_blocks);
+  if (residual_ceiling) {
+    require_rejoins_within(control, poisoned, recovery_blocks, *residual_ceiling);
+  } else {
+    require_rejoins_control(control, poisoned, recovery_blocks);
+  }
 }
 
 }  // namespace
@@ -294,7 +319,8 @@ TEST_CASE("the crossover bounds a non-finite sample to its own block", "[masteri
 
   for (const float poison_value : poison_values()) {
     INFO("poison value " << poison_value);
-    check_owner(make, kCrossoverRecoveryBlocks, poison_value, Reach{}, require_split);
+    check_owner(make, kCrossoverRecoveryBlocks, poison_value, Reach{}, require_split,
+                kCrossoverResidual);
   }
 }
 

@@ -25,6 +25,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "editing/voice_changer/realtime.h"
@@ -47,21 +48,25 @@ constexpr int kPoisonIndex = 100;
 // Blocks the stream is allowed to take to rejoin its control. A cell returns to
 // its post-reset value at once; the stream rejoins only once the state behind
 // that cell has re-converged, so each bound follows the slowest time constant in
-// its path. Bounds sit at roughly twice their measured crossing (3 / 90 / 552 /
-// 158): the crossing is where an exponential tail passes one float ULP, and a
-// one-ULP difference in the platform's math library moved a comparable fixture's
-// by 45%. The de-esser's is the exception, at two and a half times a crossing
-// too small for a proportional bound to be worth anything.
+// its path. Bounds sit at roughly twice their measured crossing (3 / 552 / 158):
+// the crossing is where an exponential tail passes one float ULP, and a one-ULP
+// difference in the platform's math library moved a comparable fixture's by 45%.
+// The de-esser's is the exception, at two and a half times a crossing too small
+// for a proportional bound to be worth anything.
 constexpr int kDeEsserRecoveryBlocks = 8;
-constexpr int kTapeRecoveryBlocks = 180;
 constexpr int kAmpSimRecoveryBlocks = 1100;
 constexpr int kGsMasterEqRecoveryBlocks = 320;
-// The voice changer rejoins nothing inside any practical horizon, so this is
-// where its residual is read rather than a crossing it has to reach.
+// Two owners rejoin nothing inside any practical horizon. The tape's difference
+// falls to a rounding floor by block 6 and then neither decays nor grows, so
+// whether a run coincides with its control is a property of the target's
+// arithmetic: arm64 lands on it at block 90 and x86_64 never does. These are
+// where the residual is read, not a crossing either has to reach.
+constexpr int kTapeRecoveryBlocks = 180;
 constexpr int kVoiceChangerRecoveryBlocks = 300;
-// Bound on that residual, a decade above the largest measured (2.6e-5 against a
-// 0.15-peak signal). It is the chain's memory of a one-sample perturbation, not
-// a floor the state sets, so it moves with the fixture.
+// Bounds on those residuals, a decade above the largest measured on either
+// target: 1.3e-5 for the tape, 2.6e-5 for the voice changer against a 0.15-peak
+// signal. Both move with the fixture.
+constexpr double kTapeResidual = 1.0e-4;
 constexpr double kVoiceChangerResidual = 1.0e-3;
 // An ordinary in-range sample, substituted where the poison goes: it cannot make
 // any cell non-finite, so what it leaves behind is the chain's own memory.
@@ -188,11 +193,15 @@ void require_rejoins_control(const std::vector<std::vector<float>>& control,
   REQUIRE(first_identical_block(control, poisoned) <= recovery_blocks);
 }
 
-void require_bounded(const std::vector<std::vector<float>>& control,
-                     const std::vector<std::vector<float>>& poisoned, int last_affected_block,
-                     int recovery_blocks) {
-  require_non_finite_bounded(poisoned, last_affected_block);
-  require_rejoins_control(control, poisoned, recovery_blocks);
+/// The same claim for an owner that reaches a rounding floor instead of bit
+/// identity: past @p from the streams stay within @p ceiling of each other.
+void require_rejoins_within(const std::vector<std::vector<float>>& control,
+                            const std::vector<std::vector<float>>& poisoned, int from,
+                            double ceiling) {
+  const double residual = residual_from(control, poisoned, from);
+  INFO("first identical " << first_identical_block(control, poisoned) << " of " << control.size());
+  INFO("residual " << residual);
+  REQUIRE(residual < ceiling);
 }
 
 /// Drives one owner twice — clean and poisoned — and asserts the invariant.
@@ -200,8 +209,12 @@ void require_bounded(const std::vector<std::vector<float>>& control,
 /// @param last_affected_block Last block the sample may legitimately reach.
 ///        The carrying block, unless the owner holds a delay line whose history
 ///        straddles the boundary.
+/// @param residual_ceiling Set for an owner that reaches a rounding floor rather
+///        than bit identity; @p recovery_blocks is then where its residual is
+///        read.
 void check_owner(const std::function<BlockProcessor()>& make, int recovery_blocks,
-                 float poison_value, int last_affected_block = kPoisonBlock) {
+                 float poison_value, int last_affected_block = kPoisonBlock,
+                 std::optional<double> residual_ceiling = std::nullopt) {
   const int block_count = recovery_blocks + kHorizonSlack;
   const auto control = run_stream(make(), block_count, 0.0f, false);
 
@@ -209,7 +222,12 @@ void check_owner(const std::function<BlockProcessor()>& make, int recovery_block
   REQUIRE(control_effect(control) > 0.0f);
 
   const auto poisoned = run_stream(make(), block_count, poison_value, true);
-  require_bounded(control, poisoned, last_affected_block, recovery_blocks);
+  require_non_finite_bounded(poisoned, last_affected_block);
+  if (residual_ceiling) {
+    require_rejoins_within(control, poisoned, recovery_blocks, *residual_ceiling);
+  } else {
+    require_rejoins_control(control, poisoned, recovery_blocks);
+  }
 }
 
 }  // namespace
@@ -258,7 +276,8 @@ TEST_CASE("the tape stage bounds a non-finite sample to its own block", "[master
     });
   };
 
-  check_owner(make, kTapeRecoveryBlocks, std::numeric_limits<float>::quiet_NaN());
+  check_owner(make, kTapeRecoveryBlocks, std::numeric_limits<float>::quiet_NaN(), kPoisonBlock,
+              kTapeResidual);
 }
 
 TEST_CASE("the amp sim bounds a non-finite sample to its own block", "[mastering][saturation]") {
