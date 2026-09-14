@@ -13,7 +13,7 @@
        check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
        check-c-api-type-home check-binding-warning-flags
 
-BUILD_DIR := build
+BUILD_DIR ?= build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
 ACCURACY_REPORT_JSON ?= $(CURDIR)/build-optional-fixtures/accuracy-report.json
 INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
