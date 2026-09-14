@@ -1,7 +1,12 @@
 /// @file dynamics_processors_test.cpp
 /// @brief Transient, parallel, rider, sidechain, and linked behavior tests.
 
+#include <array>
+#include <memory>
+
 #include "dynamics_test_helpers.h"
+#include "util/db.h"
+#include "util/exception.h"
 
 TEST_CASE("DeEsser attenuates sibilant band more than low band", "[mastering][dynamics]") {
   // Split-band de-esser: the gain reduction is applied only to the detected
@@ -551,3 +556,288 @@ TEST_CASE("DeEsser preserves low-frequency energy while reducing the sibilant ba
 // process() back-to-back without producing torn reads (NaN/Inf samples) or
 // losing the most recently published configuration.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// A non-finite sample must not outlive the block that carried it. An owner's
+// detector state is recursive, so a non-finite value that reaches it comes back
+// out of every later block of an otherwise clean stream; the owner applies the
+// shared rule (util/non_finite_state.h) once per block over its own cells.
+//
+// The stranding is not visible as a non-finite output. Every fold these owners
+// use -- std::max, std::min, an ordered comparison -- answers false to a
+// non-finite operand and returns its other argument, so a stranded detector
+// reads as silence or as no reduction at all and the owner quietly stops doing
+// its job. The cases below therefore assert on the reduction against a clean-run
+// control, never on finiteness.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr int kRecoverySampleRate = 48000;
+constexpr int kRecoveryBlockSize = 512;
+constexpr int kRecoveryBlocks = 120;
+// Block by which a poisoned stream must be bit-identical to its control. A
+// discarded cell returns to its post-reset value at once; the stream rejoins
+// only once the state behind it has re-converged, so each bound follows the
+// slowest time constant in its own path. Both sit at roughly twice their
+// measured crossing (28 for the router, 44 and 39 for the compressor's two
+// configurations), where the difference passes one float ULP -- a one-ULP
+// difference in the platform's math library moved a comparable fixture's by 45%.
+constexpr int kSidechainRecoveryBlocks = 60;
+constexpr int kCompressorRecoveryBlocks = 90;
+constexpr int kRecoveryPoisonBlock = 1;
+constexpr int kRecoveryPoisonIndex = 100;
+
+/// @brief One block of the stream the recovery cases are driven with.
+/// @details Loud enough to sit above the thresholds configured below, so the
+///          control run is reducing gain rather than passing the signal through.
+std::vector<float> recovery_block(int block_index) {
+  std::vector<float> out(static_cast<size_t>(kRecoveryBlockSize));
+  for (int i = 0; i < kRecoveryBlockSize; ++i) {
+    const double t =
+        static_cast<double>(block_index * kRecoveryBlockSize + i) / kRecoverySampleRate;
+    out[static_cast<size_t>(i)] =
+        static_cast<float>(0.5 * std::sin(2.0 * sonare::constants::kPiD * 220.0 * t));
+  }
+  return out;
+}
+
+using RecoveryBlocks = std::vector<std::vector<float>>;
+
+/// @brief What one run of the stream produced.
+struct RecoveryRun {
+  RecoveryBlocks blocks;
+  /// The reduction the owner reported for each block. This is the observable a
+  /// stranded detector changes, and it stays finite while it is wrong.
+  std::vector<float> reduction_db;
+};
+
+/// @brief Runs the stream block by block, optionally poisoning one sample of one
+///        block, and returns every output block.
+template <typename Processor>
+RecoveryRun run_recovery_stream(Processor& processor, float poison_value, bool poison) {
+  RecoveryRun run;
+  run.blocks.reserve(static_cast<size_t>(kRecoveryBlocks));
+  run.reduction_db.reserve(static_cast<size_t>(kRecoveryBlocks));
+  for (int k = 0; k < kRecoveryBlocks; ++k) {
+    std::vector<float> block = recovery_block(k);
+    if (poison && k == kRecoveryPoisonBlock) {
+      block[static_cast<size_t>(kRecoveryPoisonIndex)] = poison_value;
+    }
+    float* channels[] = {block.data()};
+    processor.process(channels, 1, kRecoveryBlockSize);
+    run.blocks.push_back(std::move(block));
+    run.reduction_db.push_back(processor.last_gain_reduction_db());
+  }
+  return run;
+}
+
+bool recovery_block_has_non_finite(const std::vector<float>& block) {
+  return std::any_of(block.begin(), block.end(), [](float v) { return !std::isfinite(v); });
+}
+
+/// @brief Block from which every later block is bit-identical to the control
+///        run, or the block count when the stream never rejoins it.
+/// @details Scanned from the end: a single coincidentally-identical block is not
+///          convergence.
+int first_identical_recovery_block(const RecoveryBlocks& control, const RecoveryBlocks& poisoned) {
+  int k = static_cast<int>(control.size());
+  while (k > kRecoveryPoisonBlock + 1 &&
+         control[static_cast<size_t>(k - 1)] == poisoned[static_cast<size_t>(k - 1)]) {
+    --k;
+  }
+  return k;
+}
+
+/// @brief The largest change the control run makes to the signal.
+/// @details Zero means the owner passed the stream through, and no recovery
+///          result read from it would say anything about the state under test.
+float recovery_control_effect(const RecoveryBlocks& control) {
+  float largest = 0.0f;
+  for (size_t k = 0; k < control.size(); ++k) {
+    const std::vector<float> source = recovery_block(static_cast<int>(k));
+    for (int i = 0; i < kRecoveryBlockSize; ++i) {
+      largest = std::max(
+          largest, std::abs(control[k][static_cast<size_t>(i)] - source[static_cast<size_t>(i)]));
+    }
+  }
+  return largest;
+}
+
+/// @brief Drives one owner twice -- clean and poisoned -- and asserts that the
+///        non-finite sample reaches its state and does not outlive it.
+/// @param make Builds a prepared, configured owner.
+/// @param recovery_blocks Block by which the poisoned stream must be
+///        bit-identical to the control again.
+template <typename Make>
+void check_detector_recovery(const Make& make, int recovery_blocks) {
+  const std::array<float, 3> poison_values = {std::numeric_limits<float>::quiet_NaN(),
+                                              std::numeric_limits<float>::infinity(),
+                                              -std::numeric_limits<float>::infinity()};
+  for (const float poison_value : poison_values) {
+    INFO("poison value " << poison_value);
+    auto control_owner = make();
+    const RecoveryRun control = run_recovery_stream(*control_owner, 0.0f, false);
+    // Read before any recovery result. An owner that passed the stream through
+    // cannot support the claim; neither can one whose control run has stopped
+    // reducing, because a stranded detector also reports no reduction and the
+    // two would agree.
+    REQUIRE(recovery_control_effect(control.blocks) > 0.0f);
+    REQUIRE(control.reduction_db.back() < 0.0f);
+    REQUIRE_FALSE(
+        std::any_of(control.blocks.begin(), control.blocks.end(), recovery_block_has_non_finite));
+
+    auto poisoned_owner = make();
+    const RecoveryRun poisoned = run_recovery_stream(*poisoned_owner, poison_value, true);
+    // Positive control: an owner that sanitized its input instead of its own
+    // state would leave every block finite and satisfy everything below.
+    REQUIRE(recovery_block_has_non_finite(poisoned.blocks[kRecoveryPoisonBlock]));
+    // The reduction is read separately from the samples: it is what a stranded
+    // detector gets wrong while staying finite, and it does not depend on how
+    // convergence is scanned for.
+    INFO("reduction " << poisoned.reduction_db.back() << " against control "
+                      << control.reduction_db.back());
+    REQUIRE(poisoned.reduction_db.back() == control.reduction_db.back());
+    INFO("first identical " << first_identical_recovery_block(control.blocks, poisoned.blocks)
+                            << " of " << control.blocks.size());
+    REQUIRE(first_identical_recovery_block(control.blocks, poisoned.blocks) <= recovery_blocks);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("SidechainRouter bounds a non-finite sample to the block that carried it",
+          "[mastering][dynamics]") {
+  // Mono summing is what puts the follower in the sample's path: the peak
+  // detector folds with std::max, which answers false to a non-finite operand
+  // and drops it, while the mono sum carries it into the follower.
+  SidechainRouterConfig config;
+  config.mono_summing = true;
+  // A stranded follower reads as a permanent range_db of reduction, because the
+  // fold that derives the reduction drops its non-finite operand and returns the
+  // range instead. The threshold and ratio therefore have to put the control run
+  // nowhere near that range, or the two agree and the case proves nothing.
+  config.threshold_db = -12.0f;
+  config.ratio = 2.0f;
+
+  const auto make = [config]() {
+    auto router = std::make_unique<SidechainRouter>(config);
+    router->prepare(kRecoverySampleRate, kRecoveryBlockSize);
+    return router;
+  };
+
+  check_detector_recovery(make, kSidechainRecoveryBlocks);
+}
+
+TEST_CASE("Compressor bounds a non-finite sample to the block that carried it",
+          "[mastering][dynamics]") {
+  // The RMS detector is what puts the sample in the owner's path: the peak
+  // detector folds with std::max and drops a non-finite operand, while the power
+  // sum carries it into rms_state_, which persists across blocks.
+  CompressorConfig config;
+  config.detector = DetectorMode::Rms;
+  // A stranded detector reads as no reduction at all, so the control run has to
+  // be reducing by a margin the assertion can see.
+  config.threshold_db = -12.0f;
+  config.ratio = 2.0f;
+
+  SECTION("through the RMS detector") {
+    const auto make = [config]() {
+      auto compressor = std::make_unique<Compressor>(config);
+      compressor->prepare(kRecoverySampleRate, kRecoveryBlockSize);
+      return compressor;
+    };
+    check_detector_recovery(make, kCompressorRecoveryBlocks);
+  }
+
+  SECTION("through the soft knee, which reaches two more cells") {
+    // A hard knee derives the reduction through an ordered comparison that
+    // answers false for a non-finite level, so the level is laundered to no
+    // reduction before it reaches the release state or the smoother. The knee
+    // branch is arithmetic instead, so the non-finite value passes into both.
+    CompressorConfig knee = config;
+    knee.knee_db = 6.0f;
+    knee.pdr_time_ms = 50.0f;
+    const auto make = [knee]() {
+      auto compressor = std::make_unique<Compressor>(knee);
+      compressor->prepare(kRecoverySampleRate, kRecoveryBlockSize);
+      return compressor;
+    };
+    check_detector_recovery(make, kCompressorRecoveryBlocks);
+  }
+}
+
+TEST_CASE("Limiter holds its ceiling across a window it cannot evaluate", "[mastering][dynamics]") {
+  // The sliding-window maximum keeps a non-finite entry -- nothing compares
+  // greater than it, so no push evicts it -- and hands it to the detector fold
+  // when it reaches the front of the window. std::max then drops it and the
+  // window reads as SILENCE rather than as a peak of unknown size, so the gain
+  // takes one release step toward unity while the owner is blind.
+  //
+  // That is one sample wide, because the entry pushed just before it is still
+  // live and expires one index earlier. This case pins that: it is what keeps
+  // the ceiling from breaking, so a change to the window's eviction that widened
+  // the blind stretch would surface here rather than in a listening test.
+  LimiterConfig config;
+  config.threshold_db = -12.0f;
+  // The widest window and the steepest release the owner is configured for in
+  // practice, which is where a blind stretch would cost the most.
+  config.lookahead_ms = 5.0f;
+  config.release_ms = 1.0f;
+
+  const float ceiling = sonare::db_to_linear(config.threshold_db);
+  const int blocks = 8;
+  const int poison_block = 1;
+  const int poison_index = 100;
+  // Well above the ceiling, so the owner is limiting throughout.
+  const float amplitude = 0.9f;
+
+  const auto run = [&](float poison_value, bool poison) {
+    Limiter limiter(config);
+    limiter.prepare(kRecoverySampleRate, kRecoveryBlockSize);
+    float loudest = 0.0f;
+    for (int k = 0; k < blocks; ++k) {
+      std::vector<float> block(static_cast<size_t>(kRecoveryBlockSize));
+      for (int i = 0; i < kRecoveryBlockSize; ++i) {
+        const double t = static_cast<double>(k * kRecoveryBlockSize + i) / kRecoverySampleRate;
+        block[static_cast<size_t>(i)] =
+            static_cast<float>(amplitude * std::sin(2.0 * sonare::constants::kPiD * 220.0 * t));
+      }
+      if (poison && k == poison_block) {
+        block[static_cast<size_t>(poison_index)] = poison_value;
+      }
+      float* channels[] = {block.data()};
+      limiter.process(channels, 1, kRecoveryBlockSize);
+      // The non-finite sample itself passes through the delay line and leaves as
+      // it arrived; no gain can make it finite. What is read here is what
+      // happened to the finite samples around it.
+      for (float v : block) {
+        if (std::isfinite(v)) loudest = std::max(loudest, std::abs(v));
+      }
+    }
+    return loudest;
+  };
+
+  // Non-vacuity, before any ceiling result: the source is above the ceiling and
+  // the owner is holding it there rather than attenuating to nothing.
+  const float control = run(0.0f, false);
+  REQUIRE(amplitude > ceiling);
+  INFO("control peak " << control << " against ceiling " << ceiling);
+  REQUIRE(control <= ceiling * 1.01f);
+  REQUIRE(control > ceiling * 0.5f);
+
+  SECTION("a window carrying a NaN") {
+    const float poisoned = run(std::numeric_limits<float>::quiet_NaN(), true);
+    INFO("poisoned peak " << poisoned << " against ceiling " << ceiling);
+    REQUIRE(poisoned <= ceiling * 1.01f);
+  }
+
+  SECTION("a window carrying an infinity, which the detector can evaluate") {
+    // Control for the case above: an infinite peak orders normally, so the
+    // detector reads it as unbounded and the owner ducks. It is the value that
+    // orders against nothing that strands the fold.
+    const float poisoned = run(std::numeric_limits<float>::infinity(), true);
+    INFO("poisoned peak " << poisoned << " against ceiling " << ceiling);
+    REQUIRE(poisoned <= ceiling * 1.01f);
+  }
+}

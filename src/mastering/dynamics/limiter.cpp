@@ -126,6 +126,14 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
     min_gain = std::min(min_gain, gain);
   }
 
+  // The detector cannot reach this cell -- a non-finite peak is dropped by the
+  // fold above -- but release_coeff_ can: validate_config checks finiteness of
+  // threshold_db only, and a non-finite release_ms passes its ordered comparison
+  // and makes the coefficient non-finite, which the smoother multiplies into its
+  // own state. Bounding that to one block is not a repair of it; the coefficient
+  // stays non-finite and poisons the next block's first sample.
+  gain_smoother_.discard_if_non_finite();
+
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));
 }
 

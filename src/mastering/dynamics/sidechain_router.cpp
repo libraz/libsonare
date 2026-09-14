@@ -97,6 +97,10 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
     max_reduction = std::min(max_reduction, reduction_db);
   }
 
+  // One float, once per block: the follower is recursive, so a non-finite
+  // detector value that reached it would otherwise outlive every later block.
+  follower_.discard_if_non_finite();
+
   last_gain_reduction_db_ = max_reduction;
 }
 

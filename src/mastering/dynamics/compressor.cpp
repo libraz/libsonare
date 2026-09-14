@@ -11,11 +11,14 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::dynamics {
 
 namespace {
 
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 
 constexpr float kRmsWindowMs = 10.0f;
@@ -211,6 +214,18 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     }
     max_reduction = std::min(max_reduction, reduction_state_db);
   }
+
+  // Every cell carried between blocks, once per block. A stranded detector does
+  // not surface as a non-finite output: the fold that derives the reduction
+  // answers false for a non-finite level and returns no reduction at all, so the
+  // owner silently stops compressing for the rest of the handle.
+  discard_if_non_finite(rms_state_, 0.0f);
+  discard_if_non_finite(pdr_state_db_, 0.0f);
+  // The two taps of a one-pole section are meaningful only together.
+  for (size_t ch = 0; ch < hpf_x1_.size(); ++ch) {
+    discard_group_if_non_finite(hpf_x1_[ch], hpf_y1_[ch]);
+  }
+  reduction_smoother_.discard_if_non_finite();
 
   last_gain_reduction_db_ = max_reduction;
 }
