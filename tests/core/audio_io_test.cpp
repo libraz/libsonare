@@ -14,6 +14,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -1321,6 +1322,88 @@ TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating"
   for (size_t i = 0; i < expected.size(); ++i) {
     const long stored = std::lround(static_cast<double>(loaded[i]) * 32768.0);
     REQUIRE(stored == expected[i]);
+  }
+}
+
+TEST_CASE("a non-finite sample is written as silence and counted, not as full scale",
+          "[audio_io]") {
+  // The clamp the writers apply cannot separate these inputs: every comparison
+  // against a non-finite value is false, so std::min returns its other argument
+  // and each non-finite sample took the same code as the +1.0 peak beside it --
+  // a value the encoder could equally have meant to produce. The stored code and
+  // the reported count are what tell the two apart.
+  const std::vector<float> samples = {
+      1.0f,
+      std::numeric_limits<float>::quiet_NaN(),
+      std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+      -1.0f,
+  };
+
+  SECTION("16-bit") {
+    const std::string path = "test_pcm16_non_finite.wav";
+    size_t non_finite = 0;
+    save_wav(path, samples, 48000, 16, &non_finite);
+    auto [loaded, sr] = load_wav(path);
+    std::remove(path.c_str());
+
+    REQUIRE(sr == 48000);
+    REQUIRE(loaded.size() == samples.size());
+    // dr_wav reconstructs int16 V as V / 32768, so the stored integer comes back
+    // exactly by rounding the loaded float.
+    const std::vector<int16_t> expected = {32767, 0, 0, 0, -32767};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(std::lround(static_cast<double>(loaded[i]) * 32768.0) == expected[i]);
+    }
+    REQUIRE(non_finite == 3);
+  }
+
+  SECTION("24-bit") {
+    const std::string path = "test_pcm24_non_finite.wav";
+    size_t non_finite = 0;
+    save_wav(path, samples, 48000, 24, &non_finite);
+    auto [loaded, sr] = load_wav(path);
+    std::remove(path.c_str());
+
+    REQUIRE(sr == 48000);
+    REQUIRE(loaded.size() == samples.size());
+    const std::vector<int32_t> expected = {8388607, 0, 0, 0, -8388607};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(std::lround(static_cast<double>(loaded[i]) * 8388608.0) == expected[i]);
+    }
+    REQUIRE(non_finite == 3);
+  }
+
+  SECTION("the multichannel writers pack the same way") {
+    // Both branches of save_wav_multichannel: stereo goes through plain PCM,
+    // 5.1 through the hand-written EXTENSIBLE serializer, and they share one
+    // packer. The data chunk is read directly so the assertion is on the byte
+    // the file carries.
+    const std::string stereo_path = "test_stereo_non_finite.wav";
+    size_t stereo_non_finite = 0;
+    save_wav_multichannel(stereo_path, samples.data(), samples.size() / 2, 2, ChannelLayout::Stereo,
+                          48000, 16, &stereo_non_finite);
+    std::remove(stereo_path.c_str());
+
+    const std::string surround_path = "test_surround_non_finite.wav";
+    std::vector<float> interleaved(12, 0.25f);
+    interleaved[0] = 1.0f;
+    interleaved[1] = std::numeric_limits<float>::quiet_NaN();
+    interleaved[2] = -std::numeric_limits<float>::infinity();
+    size_t surround_non_finite = 0;
+    save_wav_multichannel(surround_path, interleaved.data(), 2, 6, ChannelLayout::FivePointOne,
+                          48000, 16, &surround_non_finite);
+    const std::vector<uint8_t> bytes = read_file_bytes(surround_path);
+    std::remove(surround_path.c_str());
+
+    const size_t data_off = 68;
+    REQUIRE(static_cast<int16_t>(le16(bytes, data_off)) == 32767);
+    REQUIRE(static_cast<int16_t>(le16(bytes, data_off + 2)) == 0);
+    REQUIRE(static_cast<int16_t>(le16(bytes, data_off + 4)) == 0);
+    REQUIRE(stereo_non_finite == 3);
+    REQUIRE(surround_non_finite == 2);
   }
 }
 
