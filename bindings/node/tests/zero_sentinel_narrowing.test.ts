@@ -83,7 +83,8 @@ const PITCHED = twoNoteTone();
 function digest(samples: Float32Array | number[]): string {
   let accumulator = 2166136261;
   for (let i = 0; i < samples.length; i += 1) {
-    accumulator = Math.imul((accumulator ^ (Math.round(samples[i] * 1e6) | 0)) >>> 0, 16777619) >>> 0;
+    accumulator =
+      Math.imul((accumulator ^ (Math.round(samples[i] * 1e6) | 0)) >>> 0, 16777619) >>> 0;
   }
   return `${samples.length}:${accumulator.toString(16)}`;
 }
@@ -252,7 +253,11 @@ describe('note and event edit offsets', () => {
       );
     expectSentinelRefused(
       (timeOffsetSamples) =>
-        renderPercussiveEvents({ samples: MIXED, sampleRate: SR, events: shifted(timeOffsetSamples) }),
+        renderPercussiveEvents({
+          samples: MIXED,
+          sampleRate: SR,
+          events: shifted(timeOffsetSamples),
+        }),
       digest,
       512,
     );
@@ -299,10 +304,7 @@ describe('note and event edit offsets', () => {
         const analysis = analyzePolyphonic({ samples: PITCHED.samples, sampleRate: SR });
         try {
           expect(analysis.notes().length).toBeGreaterThan(0);
-          analysis.setNoteEdit(
-            0,
-            timeOffsetSamples === undefined ? {} : { timeOffsetSamples },
-          );
+          analysis.setNoteEdit(0, timeOffsetSamples === undefined ? {} : { timeOffsetSamples });
           return analysis.render();
         } finally {
           analysis.destroy();
@@ -392,7 +394,7 @@ describe('project bounce and take selection', () => {
           );
           return project.toJson();
         }),
-      (json) => (json.match(/"takes":\[[^\]]*\]/)?.[0] ?? 'absent'),
+      (json) => json.match(/"takes":\[[^\]]*\]/)?.[0] ?? 'absent',
       control,
     );
   });
@@ -412,7 +414,7 @@ describe('project bounce and take selection', () => {
           }
           return project.toJson();
         }),
-      (json) => (json.match(/"active_take_id":\d+/)?.[0] ?? 'absent'),
+      (json) => json.match(/"active_take_id":\d+/)?.[0] ?? 'absent',
       2,
     );
   });
@@ -434,7 +436,7 @@ describe('project bounce and take selection', () => {
           ]);
           return project.toJson();
         }),
-      (json) => (json.match(/"comp_segments":\[[^\]]*\]/)?.[0] ?? 'absent'),
+      (json) => json.match(/"comp_segments":\[[^\]]*\]/)?.[0] ?? 'absent',
       2,
     );
   });
