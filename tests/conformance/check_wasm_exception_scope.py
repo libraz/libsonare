@@ -41,6 +41,20 @@ rather than hardcoded, because a hardcoded answer is what drifted before:
   catch.  That is how ``SONARE_C_TRY`` / ``SONARE_C_CATCH`` are recognised
   without naming them here.
 
+Both directions of the mismatch are checked, and they are not symmetric:
+
+* **A unit that catches without the flag** is a defect in whichever single
+  configuration shows it -- its catch arms are gone from that shipped module.
+* **A unit that carries the flag and catches nowhere** is only a defect if it
+  catches nowhere in *every* configuration.  ``SONARE_WASM_EXCEPTION_SOURCES``
+  is one unconditional list, while catch reachability is feature-gated: a gate
+  can remove the only catching header from a unit's closure, so the same entry
+  is load-bearing in the full build and dead weight in the analysis-only one.
+  Judging one configuration alone would demand deleting an entry the other
+  needs.  The rule is therefore a union over the configurations passed in one
+  invocation -- pass every shipped ``--build-dir`` at once, since a single one
+  can only report this direction, never fail on it.
+
 Known limitation: only repo-owned headers (``src/``, ``include/``) are scanned.
 A ``catch`` inside a libc++ or third-party inline function is elided just the
 same, but flagging it would flag every unit in the build while naming no source
@@ -55,6 +69,7 @@ import re
 import shlex
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BUILD = ROOT / "bindings" / "wasm" / "build-wasm"
@@ -292,12 +307,24 @@ def _target_of(obj: Path) -> str:
     return match.group(1) if match else "?"
 
 
-def audit(build_dir: Path) -> tuple[list[str], list[str], list[str], int]:
-    """Return (covered, uncovered, unanalysable, linked-object count).
+class AuditResult(NamedTuple):
+    """One configuration's classification of the units linked into the module.
 
-    ``covered`` and ``uncovered`` name catching units; ``unanalysable`` names
-    units whose text or header closure could not be read, which are neither.
+    ``covered`` and ``uncovered`` name catching units, split by the flag;
+    ``idle`` names units carrying the flag that catch nowhere; ``unanalysable``
+    names units whose text or header closure could not be read, which are none
+    of the three.
     """
+
+    covered: list[str]
+    uncovered: list[str]
+    unanalysable: list[str]
+    idle: list[str]
+    linked: int
+
+
+def audit(build_dir: Path) -> AuditResult:
+    """Classify every unit linked into the WASM module in ``build_dir``."""
     database = build_dir / "compile_commands.json"
     if not database.is_file():
         raise SystemExit(
@@ -315,6 +342,7 @@ def audit(build_dir: Path) -> tuple[list[str], list[str], list[str], int]:
     covered: list[str] = []
     uncovered: list[str] = []
     unanalysable: list[str] = []
+    idle: list[str] = []
     for obj in objects:
         entry = by_output.get(obj)
         if entry is None:
@@ -338,32 +366,67 @@ def audit(build_dir: Path) -> tuple[list[str], list[str], list[str], int]:
             header_scan = scanner.scan(header)
             if header_scan is not None and scanner.catches(header_scan):
                 sites.append(_display(header))
-        if not sites:
-            continue
+        flagged = "-fexceptions" in entry["command"]
         name = f"{_target_of(obj)}: {_display(source)}"
+        if not sites:
+            # Nothing to cite, so no `[via ...]` suffix: the point is the absence.
+            if flagged:
+                idle.append(name)
+            continue
         via = [site for site in sites if site != "itself"]
         if "itself" not in sites:
             name += f"  [via {', '.join(via)}]"
-        (covered if "-fexceptions" in entry["command"] else uncovered).append(name)
-    return sorted(covered), sorted(uncovered), sorted(unanalysable), len(objects)
+        (covered if flagged else uncovered).append(name)
+    return AuditResult(
+        sorted(covered),
+        sorted(uncovered),
+        sorted(unanalysable),
+        sorted(idle),
+        len(objects),
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--build-dir", type=Path, default=DEFAULT_BUILD)
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        action="append",
+        dest="build_dirs",
+        help="a WASM build tree; repeat to judge the flag-without-catch "
+        "direction across every shipped configuration",
+    )
     args = parser.parse_args()
+    build_dirs = args.build_dirs or [DEFAULT_BUILD]
 
-    covered, uncovered, unanalysable, linked = audit(args.build_dir)
-    if linked == 0:
-        raise SystemExit(
-            f"no objects resolved from the module link line in {args.build_dir}; "
-            "the build database does not look like a WASM module build"
-        )
-    # A feature-reduced configuration can legitimately compile no catching unit
-    # at all, so an empty set is a pass, not a broken database.
-    print(f"linked translation units: {linked}")
-    print(f"  of which catch: {len(covered) + len(uncovered)}")
-    print(f"  compiled with -fexceptions: {len(covered)}")
+    results: dict[Path, AuditResult] = {}
+    for build_dir in build_dirs:
+        result = audit(build_dir)
+        if result.linked == 0:
+            raise SystemExit(
+                f"no objects resolved from the module link line in {build_dir}; "
+                "the build database does not look like a WASM module build"
+            )
+        results[build_dir] = result
+        # A feature-reduced configuration can legitimately compile no catching
+        # unit at all, so an empty set is a pass, not a broken database.
+        print(f"{build_dir}:")
+        print(f"  linked translation units: {result.linked}")
+        print(f"  of which catch: {len(result.covered) + len(result.uncovered)}")
+        print(f"  compiled with -fexceptions: {len(result.covered)}")
+        print(f"  carry -fexceptions but catch nowhere: {len(result.idle)}")
+
+    many = len(results) > 1
+    unanalysable = [
+        f"{build_dir}: {name}" if many else name
+        for build_dir, result in results.items()
+        for name in result.unanalysable
+    ]
+    uncovered = [
+        f"{build_dir}: {name}" if many else name
+        for build_dir, result in results.items()
+        for name in result.uncovered
+    ]
     if unanalysable:
         print(
             "\nThese linked units could not be analysed, so whether their catch arms",
@@ -383,7 +446,46 @@ def main() -> int:
             sep="\n",
             file=sys.stderr,
         )
-    return 1 if uncovered or unanalysable else 0
+
+    idle_sets = [set(result.idle) for result in results.values()]
+    in_every = set.intersection(*idle_sets)
+    in_any = set.union(*idle_sets)
+    dead = sorted(in_every)
+    gated = sorted(in_any - in_every)
+    if not many:
+        # One configuration cannot tell a dead entry from a gated one, so this
+        # direction only ever reports here.
+        if in_any:
+            print(
+                "\nThese units carry -fexceptions but catch nowhere in this",
+                "configuration. The other configurations were not consulted, so this",
+                "is a note, not a finding: a gate can remove the only catching header",
+                "from a unit's closure while another configuration still needs the",
+                "flag. Pass every shipped --build-dir to judge them:",
+                *(f"  {name}" for name in sorted(in_any)),
+                sep="\n",
+            )
+    else:
+        if gated:
+            print(
+                "\nThese units carry -fexceptions and catch nowhere in some",
+                "configurations but do catch in others -- the expected consequence of",
+                "an unconditional source list over feature-gated reachability, and not",
+                "a finding:",
+                *(f"  {name}" for name in gated),
+                sep="\n",
+            )
+        if dead:
+            print(
+                "\nThese units carry -fexceptions but reach no catch in any",
+                "configuration, so the flag is dead in every shipped build:",
+                *(f"  {name}" for name in dead),
+                "\nDrop them from SONARE_WASM_EXCEPTION_SOURCES in src/CMakeLists.txt.",
+                sep="\n",
+                file=sys.stderr,
+            )
+
+    return 1 if uncovered or unanalysable or (many and dead) else 0
 
 
 if __name__ == "__main__":

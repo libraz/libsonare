@@ -428,12 +428,13 @@ jobs:
       # Reads the built compile_commands.json, so it has to follow the build. A
       # catch compiled without -fexceptions is deleted silently: no compile
       # error, no link error, no failing test, just a throw that walks past its
-      # handler. Both configurations run because a feature-off build compiles a
-      # different set of units.
+      # handler. One invocation over both configurations, not two: a dead flag
+      # is one that reaches no catch in every configuration, and a single build
+      # dir cannot tell that from a flag a feature gate idled here alone.
       - name: Check WASM exception scope
         run: |
-          python3 tests/conformance/check_wasm_exception_scope.py
           python3 tests/conformance/check_wasm_exception_scope.py \
+            --build-dir bindings/wasm/build-wasm \
             --build-dir bindings/wasm/build-wasm-analysis
       # `yarn check:wasm-size` is deliberately not run as a gate. Its budget is
       # measured against a baseline that only moves when it is rebased by hand,
