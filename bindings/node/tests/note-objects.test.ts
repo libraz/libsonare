@@ -284,18 +284,41 @@ describe('renderNotes', () => {
       }
     };
 
-    for (const note of [
-      { offsetSample: 5000, edit: { gainDb: -6 } },
-      { onsetSample: 0, edit: { gainDb: -6 } },
-      { onsetSample: 0, offsetSample: undefined, edit: { gainDb: -6 } },
-      { onsetSample: '0', offsetSample: 5000 },
-    ]) {
+    // Each row carries the message its refusal has to name, because a refusal
+    // for an unrelated reason is indistinguishable from this one on the code
+    // alone -- and the defect this replaced returned success, not another error.
+    const malformed: ReadonlyArray<readonly [Record<string, unknown>, string]> = [
+      [{ offsetSample: 5000, edit: { gainDb: -6 } }, 'note.onsetSample is required'],
+      [{ onsetSample: 0, edit: { gainDb: -6 } }, 'note.offsetSample is required'],
+      // Present-but-undefined and present-but-null both read as absent, so the
+      // three spellings of "not given" land on one answer instead of three.
+      [
+        { onsetSample: 0, offsetSample: undefined, edit: { gainDb: -6 } },
+        'note.offsetSample is required',
+      ],
+      [
+        { onsetSample: 0, offsetSample: null, edit: { gainDb: -6 } },
+        'note.offsetSample is required',
+      ],
+      [{ onsetSample: '0', offsetSample: 5000 }, 'note.onsetSample must be a number'],
+    ];
+
+    for (const [note, fragment] of malformed) {
       const caught = missing(note);
       expect(isSonareError(caught), `expected a SonareError for ${JSON.stringify(note)}`).toBe(
         true,
       );
       expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect((caught as { message: string }).message).toContain(`renderNotes ${fragment}`);
     }
+
+    // A non-finite bound is refused too, but by the TS facade's own int64 range
+    // check ahead of the addon, so it is a RangeError rather than a SonareError.
+    // Stated rather than folded into the loop: the class is the surface's, and a
+    // sweep that "unified" it would be changing behaviour, not tidying a test.
+    expect(
+      missing({ onsetSample: 0, offsetSample: Number.NaN, edit: { gainDb: -6 } }),
+    ).toBeInstanceOf(RangeError);
 
     // The control. A reader that had started refusing every note would satisfy
     // every assertion above and fail here, and the gain has to be visible in the
@@ -312,19 +335,35 @@ describe('renderNotes', () => {
     // NoteSetEntry does not declare the bounds at all — both entry points
     // re-derive every note from the audio and the track — so requiring them
     // here would have been a new disagreement rather than one fewer.
+    //
+    // Two unvoiced gaps, so the set holds three notes -- a merge needs a
+    // neighbour to join to, which a single-note track cannot supply.
+    const f0Hz = new Float32Array(SET_FRAMES).fill(441);
+    const voiced = new Int32Array(SET_FRAMES).fill(1);
+    for (const start of [10, 25]) {
+      for (let frame = start; frame < start + 2; frame += 1) {
+        f0Hz[frame] = 0;
+        voiced[frame] = 0;
+      }
+    }
     const source = {
       samples: steppedTone(SET_FRAMES),
       sampleRate: SR,
-      f0Hz: new Float32Array(SET_FRAMES).fill(441),
-      voiced: new Int32Array(SET_FRAMES).fill(1),
+      f0Hz,
+      voiced,
       frameRate: FRAME_RATE,
     };
     const entries: NoteSetEntry[] = extractNotes(source).map((note) => ({
       frameStart: note.frameStart,
       frameEnd: note.frameEnd,
     }));
-    const split = splitNote({ ...source, notes: entries, index: 0, frame: 20 });
+    expect(entries).toHaveLength(3);
+    expect(entries.every((entry) => !('onsetSample' in entry))).toBe(true);
+
+    const split = splitNote({ ...source, notes: entries, index: 0, frame: 5 });
     expect(split).toHaveLength(entries.length + 1);
+    const merged = mergeNotes({ ...source, notes: entries, first: 0, last: 1 });
+    expect(merged).toHaveLength(entries.length - 1);
   });
 });
 

@@ -21,8 +21,10 @@ import {
   mergeNotes,
   type NoteObject,
   type NoteObjectInput,
+  type NoteSetEntry,
   pitchPyin,
   renderNotes,
+  type SonareError,
   splitNote,
 } from '../src/index';
 
@@ -481,6 +483,107 @@ describe('renderNotes', () => {
       }),
     );
     expect(() => renderNotes({ samples, sampleRate: 7999, notes })).toThrow(RangeError);
+  });
+});
+
+describe('renderNotes refuses a note that omits a sample bound', () => {
+  // `NoteObjectInput` declares onsetSample and offsetSample mandatory, and the
+  // reader enforces it rather than defaulting. An omitted bound used to read as
+  // 0, which on a hand-built note makes onset and offset equal: a zero-length
+  // span renders as nothing, so the note's edit was dropped in silence while the
+  // call reported success.
+  const render = (note: Record<string, unknown>): unknown => {
+    try {
+      renderNotes({ samples, sampleRate, notes: [note as unknown as NoteObjectInput] });
+      return undefined;
+    } catch (error) {
+      return error;
+    }
+  };
+
+  /** A malformed note, and the message the refusal has to carry. */
+  const MALFORMED: ReadonlyArray<readonly [string, Record<string, unknown>, string]> = [
+    [
+      'onsetSample absent',
+      { offsetSample: 8192, edit: { gainDb: -20 } },
+      'onsetSample is required',
+    ],
+    [
+      'offsetSample absent',
+      { onsetSample: 4096, edit: { gainDb: -20 } },
+      'offsetSample is required',
+    ],
+    // Present-but-undefined and present-but-null read as absent here, so the
+    // three spellings of "not given" land on one answer instead of three.
+    [
+      'onsetSample undefined',
+      { onsetSample: undefined, offsetSample: 8192 },
+      'onsetSample is required',
+    ],
+    ['offsetSample null', { onsetSample: 4096, offsetSample: null }, 'offsetSample is required'],
+    [
+      'onsetSample a string',
+      { onsetSample: '4096', offsetSample: 8192 },
+      'onsetSample must be a number',
+    ],
+    [
+      'offsetSample NaN',
+      { onsetSample: 4096, offsetSample: Number.NaN },
+      'offsetSample must be finite',
+    ],
+  ];
+
+  for (const [name, note, fragment] of MALFORMED) {
+    it(`refuses a note whose ${name}, naming the field`, () => {
+      const caught = render(note);
+      expect(isSonareError(caught), `expected a SonareError for ${name}`).toBe(true);
+      const error = caught as SonareError;
+      expect(error.code).toBe(ErrorCode.InvalidParameter);
+      // The field, not merely "something threw". A refusal for an unrelated
+      // reason is indistinguishable from this one without it, which is exactly
+      // the case the defect produced.
+      expect(error.message).toContain(`renderNotes note.${fragment}`);
+    });
+  }
+
+  it('renders the very same note once its span is stated', () => {
+    // The control, and it is mandatory: a reader that had started refusing every
+    // note satisfies every assertion above. The gain has to be visible in the
+    // output too, or a note that was silently dropped reads the same as one that
+    // was applied.
+    const rendered = renderNotes({
+      samples,
+      sampleRate,
+      notes: [{ onsetSample: 4096, offsetSample: 8192, edit: { gainDb: -20 } }],
+    });
+    expect(rendered).toHaveLength(samples.length);
+    // -20 dB is a factor of 0.1 over the span, measured clear of the edge fades,
+    // and nothing outside the span moves at all.
+    expect(rms(rendered, 5000, 7000)).toBeCloseTo(rms(samples, 5000, 7000) * 0.1, 4);
+    expect(rms(samples, 5000, 7000)).toBeGreaterThan(0.1);
+    expect(rendered[0]).toBe(samples[0]);
+    expect(rendered[12288]).toBe(samples[12288]);
+  });
+
+  it('keeps the note-set entries splitNote and mergeNotes take free of the bounds', () => {
+    // Intended, not an oversight: `NoteSetEntry` does not declare the sample
+    // bounds at all, because both entry points re-derive every note from the
+    // audio and the track. Requiring them here would be a new disagreement
+    // between the surfaces rather than one fewer.
+    const source = gappedSource();
+    const entries: NoteSetEntry[] = extractNotes(source).map((note) => ({
+      frameStart: note.frameStart,
+      frameEnd: note.frameEnd,
+    }));
+    expect(entries).toHaveLength(3);
+    expect(entries.every((entry) => !('onsetSample' in entry))).toBe(true);
+
+    expect(splitNote({ ...source, notes: entries, index: 1, frame: 18 })).toHaveLength(
+      entries.length + 1,
+    );
+    expect(mergeNotes({ ...source, notes: entries, first: 0, last: 1 })).toHaveLength(
+      entries.length - 1,
+    );
   });
 });
 

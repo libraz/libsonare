@@ -300,9 +300,33 @@ def test_a_hand_built_note_has_to_state_its_span() -> None:
     # rendered. A default of 0 made the two bounds equal, and a zero-length span
     # renders as nothing: the edit below would have been dropped in silence
     # while the call reported success, which is what the sibling surfaces reject.
+    #
+    # The refusal arrives in a different currency here, deliberately: the bounds
+    # are declared fields with no default, so a note missing one cannot be built
+    # at all and the answer is a TypeError from the dataclass rather than a
+    # library error from the render. Node and WASM read a plain object at the
+    # call and answer with a SonareError carrying InvalidParameter. Both name the
+    # field; only Python refuses before the call exists.
+    #
+    # There is no split/merge asymmetry to record on this surface either:
+    # split_note and merge_notes take Sequence[NoteObject], the same type, where
+    # Node and WASM have a separate NoteSetEntry that omits the bounds on
+    # purpose. So a Python note always carries a span, everywhere.
     audio, _, _ = _melody()
-    with pytest.raises(TypeError):
-        libsonare.NoteObject()  # type: ignore[call-arg]
+    # One field at a time as well as both, so the message has to name the field
+    # that is actually missing rather than merely mentioning the constructor.
+    for kwargs, missing in (
+        ({}, ("onset_sample", "offset_sample")),
+        ({"onset_sample": 0}, ("offset_sample",)),
+        ({"offset_sample": len(audio) // 2}, ("onset_sample",)),
+    ):
+        with pytest.raises(TypeError) as raised:
+            libsonare.NoteObject(**kwargs)  # type: ignore[call-arg]
+        for field in missing:
+            assert field in str(raised.value)
+        # And the field that WAS given is not reported missing.
+        for given in kwargs:
+            assert f"'{given}'" not in str(raised.value)
 
     stated = libsonare.NoteObject(onset_sample=0, offset_sample=len(audio) // 2)
     stated.edit.gain_db = -60.0
