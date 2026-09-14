@@ -577,6 +577,8 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
 # ceiling is the one the loaded library actually uses.
 _SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
 _UINT_MAX = (1 << (ctypes.sizeof(ctypes.c_uint) * 8)) - 1
+# Fixed-width, unlike the two above: a uint32_t field is 32 bits on every host.
+_UINT32_MAX = 2**32 - 1
 
 
 def _narrow_int(value: object, name: str, low: int, high: int) -> int:
@@ -647,7 +649,7 @@ def _to_c_uint(value: object, name: str) -> ctypes.c_uint:
 
 def _to_c_uint32(value: object, name: str) -> ctypes.c_uint32:
     """Narrow a caller-supplied integer onto ``uint32_t``; see :func:`_narrow_int`."""
-    return ctypes.c_uint32(_narrow_int(value, name, 0, 2**32 - 1))
+    return ctypes.c_uint32(_narrow_int(value, name, 0, _UINT32_MAX))
 
 
 def _to_c_uint16(value: object, name: str) -> ctypes.c_uint16:

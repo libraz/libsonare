@@ -937,7 +937,12 @@ def _notes_to_c(fn_name: str, notes: Sequence[NoteObject]) -> tuple[object, int,
         c_notes[i].frame_end = int(note.frame_end)
         c_notes[i].median_hz = float(note.median_hz)
         c_notes[i].edit = SonareNoteEdit(
-            time_offset_samples=int(note.edit.time_offset_samples),
+            # Narrowed rather than coerced: int(0.5) is 0, which is this field's
+            # identity, so a sub-sample shift would render unmoved and report
+            # success.
+            time_offset_samples=_validate_c_int_field(
+                fn_name, note.edit.time_offset_samples, f"notes[{i}].edit.time_offset_samples"
+            ),
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),
             pitch_shift_semitones=float(note.edit.pitch_shift_semitones),
@@ -1543,7 +1548,14 @@ def _percussive_events_to_c(events: Sequence[PercussiveEvent]) -> tuple[object, 
         c_events[i].onset_sample = int(event.onset_sample)
         c_events[i].offset_sample = int(event.offset_sample)
         c_events[i].edit = SonarePercussiveEventEdit(
-            time_offset_samples=int(event.edit.time_offset_samples),
+            # Narrowed rather than coerced: int(0.5) is 0, which is this field's
+            # identity, so a sub-sample shift would render unmoved and report
+            # success.
+            time_offset_samples=_validate_c_int_field(
+                "render_percussive_events",
+                event.edit.time_offset_samples,
+                f"events[{i}].edit.time_offset_samples",
+            ),
             gain_db=float(event.edit.gain_db),
             muted=1 if event.edit.muted else 0,
         )
@@ -1897,6 +1909,14 @@ def spectral_edit(
         delegate every rejection to the core. The accepted input range is
         identical across surfaces.
     """
+    # Narrowed ahead of the range checks below, and for a reason of its own: 0 is
+    # the C sentinel for "keep the default" on all three, and int(0.5) is that 0,
+    # so a fractional count would run at the default and report success.
+    n_fft = _validate_c_int_field("spectral_edit", n_fft, "n_fft")
+    hop_length = _validate_c_int_field("spectral_edit", hop_length, "hop_length")
+    heal_radius_frames = _validate_c_int_field(
+        "spectral_edit", heal_radius_frames, "heal_radius_frames"
+    )
     # spectral_edit is deliberately stricter than the shared even-size rule:
     # src/effects/spectral_edit.cpp requires a power of two, so checking it here
     # reports the same rejection eagerly and by name instead of as a generic
@@ -1911,10 +1931,10 @@ def spectral_edit(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     config = SonareSpectralEditConfig(
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft,
+        hop_length=hop_length,
         window=int(window_value),
-        heal_radius_frames=int(heal_radius_frames),
+        heal_radius_frames=heal_radius_frames,
     )
 
     n_ops = len(ops)

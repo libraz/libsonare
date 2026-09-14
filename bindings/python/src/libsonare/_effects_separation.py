@@ -23,6 +23,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _validate_c_int_field,
     _validate_effect_fft_options,
     _validate_hpss_kernel,
     _validate_samples,
@@ -198,6 +199,11 @@ def decompose_stems(
     """
     _validate_samples("decompose_stems", samples, validate=validate)
     n_fft, hop_length = _validate_effect_fft_options("decompose_stems", n_fft, hop_length)
+    # Narrowed ahead of the positivity check below, and for a reason of its own:
+    # 0 is the C sentinel for "keep the default" on both, and int(0.5) is that 0,
+    # so a fractional count passes `<= 0` and then runs at the default.
+    n_components = _validate_c_int_field("decompose_stems", n_components, "n_components")
+    n_iter = _validate_c_int_field("decompose_stems", n_iter, "n_iter")
     if n_components <= 0 or n_iter <= 0:
         raise SonareValueError("decompose_stems: n_components and n_iter must be positive")
     if mask_power < 1.0:
@@ -207,10 +213,10 @@ def decompose_stems(
         raise _unsupported_effect_symbol("sonare_decompose_stems")
     config = SonareDecomposeStemsConfig(
         struct_version=1,
-        n_components=int(n_components),
+        n_components=n_components,
         n_fft=n_fft,
         hop_length=hop_length,
-        n_iter=int(n_iter),
+        n_iter=n_iter,
         beta=float(beta),
         init=init.encode("utf-8") if init else None,
         mask_power=float(mask_power),

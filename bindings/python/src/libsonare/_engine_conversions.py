@@ -38,6 +38,7 @@ from ._runtime import (
     SonareScopeTelemetryRecord,
     SonareValueError,
     _planar_channel_arrays,
+    _validate_c_int_field,
     _warp_mode_value,
 )
 from ._types_engine import EngineTrackMonitorMode
@@ -158,7 +159,12 @@ def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfi
     raw.enabled = int(config.enabled)
     raw.beat_gain = float(config.beat_gain)
     raw.accent_gain = float(config.accent_gain)
-    raw.click_samples = int(config.click_samples)
+    # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "derive
+    # the length from click_seconds", so a fractional length would run at the
+    # derived one and report success.
+    raw.click_samples = _validate_c_int_field(
+        "set_metronome", config.click_samples, "click_samples"
+    )
     raw.click_seconds = float(config.click_seconds)
     return raw
 
@@ -262,7 +268,10 @@ def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
     raw.id = _fixed_bytes(node.id, 64)
     raw.type = int(EngineGraphNodeType(node.type))
     raw.gain_db = float(node.gain_db)
-    raw.num_ports = int(node.num_ports)
+    # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "take
+    # the spec's channel count", so a fractional port count would build the node
+    # at that count and report success.
+    raw.num_ports = _validate_c_int_field("set_graph", node.num_ports, "num_ports")
     return raw
 
 

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 
 from ._engine_conversions import _band_json_arg
 from ._runtime import (
+    _UINT32_MAX,
     PanLawInput,
     SendTiming,
     SonareEngineBus,
@@ -15,6 +16,7 @@ from ._runtime import (
     SonareEngineTrackSend,
     _check,
     _get_lib,
+    _narrow_int,
     _pan_law_value,
     _pan_mode_value,
     _send_timing_value,
@@ -67,13 +69,16 @@ class _EngineMixingMixin:
                     raw[i].sends = send_array
                     raw[i].send_count = len(sends)
                     send_arrays.append(send_array)
-                raw[i].output_bus_id = int(
-                    cast(
-                        int,
-                        lane["output_bus_id"]
-                        if "output_bus_id" in lane
-                        else lane.get("outputBusId", 0),
-                    )
+                # Narrowed rather than coerced: int(0.5) is the 0 this field
+                # reads as "stay on the master mix", so a fractional bus id
+                # would leave the lane unrouted and report success.
+                raw[i].output_bus_id = _narrow_int(
+                    lane["output_bus_id"]
+                    if "output_bus_id" in lane
+                    else lane.get("outputBusId", 0),
+                    f"set_track_lanes: lanes[{i}].output_bus_id",
+                    0,
+                    _UINT32_MAX,
                 )
                 if "source_channel_layout" in lane or "sourceChannelLayout" in lane:
                     raw[i].source_channel_layout = int(

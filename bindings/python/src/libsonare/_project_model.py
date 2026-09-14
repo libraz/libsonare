@@ -107,6 +107,7 @@ from ._runtime import (
     _get_lib,
     _resolve_enum,
     _to_c_size_t,
+    _validate_c_int_field,
 )
 
 # Mirrors SONARE_ERROR_INVALID_STATE in sonare_c.h. The pure MIDI conversion
@@ -506,7 +507,10 @@ class BuiltinSynthConfig:
             decay_ms=float(self.decay_ms),
             sustain=float(self.sustain),
             release_ms=float(self.release_ms),
-            polyphony=int(self.polyphony),
+            # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
+            # "keep the default 16", so a fractional voice count would run at the
+            # default and report success.
+            polyphony=_validate_c_int_field("BuiltinSynthConfig", self.polyphony, "polyphony"),
         )
 
 
@@ -540,7 +544,8 @@ class Sf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
             struct_version=3,
             gain=float(self.gain),
-            polyphony=int(self.polyphony),
+            # Same sentinel as BuiltinSynthConfig.polyphony, at a different default (48).
+            polyphony=_validate_c_int_field("Sf2InstrumentConfig", self.polyphony, "polyphony"),
             prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
             clear_bank_rig=int(self.clear_bank_rig),
         )

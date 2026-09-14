@@ -29,6 +29,7 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _UINT32_MAX,
     SonareAutomationLaneDescEx,
     SonareExternalStemDesc,
     SonareExternalStemImportRequest,
@@ -45,6 +46,7 @@ from ._runtime import (
     _as_float32_buffer,
     _check,
     _get_lib,
+    _narrow_int,
     _to_c_float_array,
     _to_c_size_t,
     _to_c_uint32,
@@ -416,7 +418,7 @@ class _ProjectEditMixin:
         for i, item in enumerate(take_items):
             if isinstance(item, Mapping):
                 take_id = int(item.get("id", 0))
-                source_id = int(item.get("source_id", item.get("sourceId", 0)))
+                source_id = item.get("source_id", item.get("sourceId", 0))
                 source_offset = float(
                     item.get("source_offset_ppq", item.get("sourceOffsetPpq", 0.0))
                 )
@@ -424,7 +426,12 @@ class _ProjectEditMixin:
             else:
                 take_id, source_id, source_offset, name = cast(tuple[int, int, float, str], item)
             c_takes[i].id = int(take_id)
-            c_takes[i].source_id = int(source_id)
+            # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
+            # "use the clip's current source", so a fractional source id would
+            # attach the clip's own source and report success.
+            c_takes[i].source_id = _narrow_int(
+                source_id, f"set_clip_takes: takes[{i}].source_id", 0, _UINT32_MAX
+            )
             c_takes[i].source_offset_ppq = float(source_offset)
             if name:
                 encoded = str(name).encode("utf-8")
@@ -436,7 +443,11 @@ class _ProjectEditMixin:
                 int(clip_id),
                 c_takes if take_items else None,
                 len(take_items),
-                int(active_take_id),
+                # Narrowed rather than coerced, like takes[].source_id above:
+                # int(0.5) is the 0 this argument reads as "use the clip's base
+                # source", so a fractional take id would select that and report
+                # success.
+                _to_c_uint32(active_take_id, "set_clip_takes: active_take_id"),
             )
         )
         del name_backing
@@ -453,12 +464,17 @@ class _ProjectEditMixin:
             if isinstance(item, Mapping):
                 start_ppq = float(item.get("start_ppq", item.get("startPpq", 0.0)))
                 end_ppq = float(item.get("end_ppq", item.get("endPpq", 0.0)))
-                take_id = int(item.get("take_id", item.get("takeId", 0)))
+                take_id = item.get("take_id", item.get("takeId", 0))
             else:
                 start_ppq, end_ppq, take_id = cast(tuple[float, float, int], item)
             c_segments[i].start_ppq = float(start_ppq)
             c_segments[i].end_ppq = float(end_ppq)
-            c_segments[i].take_id = int(take_id)
+            # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
+            # "fall back to the base/active take", so a fractional take id would
+            # select that fallback and report success.
+            c_segments[i].take_id = _narrow_int(
+                take_id, f"set_clip_comp_segments: segments[{i}].take_id", 0, _UINT32_MAX
+            )
         _check(
             _get_lib().sonare_project_set_clip_comp_segments(
                 self._require_handle(),

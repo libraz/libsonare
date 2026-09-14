@@ -50,6 +50,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _validate_c_int_field,
     _validate_samples,
 )
 
@@ -57,9 +58,13 @@ from ._runtime import (
 _POLYPHONIC_STRUCT_VERSION = 1
 
 
-def _count_field(value: int | None) -> int:
-    """0 is the C sentinel for "take the default" on every count field."""
-    return 0 if value is None else int(value)
+def _count_field(name: str, value: int | None) -> int:
+    """0 is the C sentinel for "take the default" on every count field.
+
+    Narrowed rather than coerced for that reason: int(0.5) is the sentinel, so a
+    fractional count would run at the default and report success.
+    """
+    return 0 if value is None else _validate_c_int_field("PolyphonicAnalysis", value, name)
 
 
 def _value_field(value: float | None) -> float:
@@ -251,34 +256,36 @@ class PolyphonicAnalysis:
 
         config = SonarePolyphonicConfig(
             struct_version=_POLYPHONIC_STRUCT_VERSION,
-            n_fft=_count_field(n_fft),
-            hop_length=_count_field(hop_length),
-            win_length=_count_field(win_length),
+            n_fft=_count_field("n_fft", n_fft),
+            hop_length=_count_field("hop_length", hop_length),
+            win_length=_count_field("win_length", win_length),
             cent_ref_hz=_value_field(cent_ref_hz),
             cents_per_bin=_value_field(cents_per_bin),
             cent_max_hz=_value_field(cent_max_hz),
             tonality_off=1 if tonality_off else 0,
-            salience_harmonics=_count_field(salience_harmonics),
+            salience_harmonics=_count_field("salience_harmonics", salience_harmonics),
             f0_min_hz=_value_field(f0_min_hz),
             f0_max_hz=_value_field(f0_max_hz),
             salience_alpha_hz=_value_field(salience_alpha_hz),
             salience_beta_hz=_value_field(salience_beta_hz),
             salience_inharmonicity=_value_field(salience_inharmonicity),
-            max_polyphony=_count_field(max_polyphony),
+            max_polyphony=_count_field("max_polyphony", max_polyphony),
             min_frame_peak_ratio=_value_field(min_frame_peak_ratio),
             min_separation_cents=_value_field(min_separation_cents),
             subtraction_factor=_value_field(subtraction_factor),
             max_jump_cents=_value_field(max_jump_cents),
             min_ridge_peak_ratio=_value_field(min_ridge_peak_ratio),
             min_ridge_duration_ms=_value_field(min_ridge_duration_ms),
-            mask_harmonics=_count_field(mask_harmonics),
+            mask_harmonics=_count_field("mask_harmonics", mask_harmonics),
             claim_lobes=_value_field(claim_lobes),
             inharmonicity=_value_field(inharmonicity),
             estimate_inharmonicity=1 if estimate_inharmonicity else 0,
-            inharmonicity_min_partials=_count_field(inharmonicity_min_partials),
+            inharmonicity_min_partials=_count_field(
+                "inharmonicity_min_partials", inharmonicity_min_partials
+            ),
             inharmonicity_max_residual_bins=_value_field(inharmonicity_max_residual_bins),
             inharmonicity_max_stretch=_value_field(inharmonicity_max_stretch),
-            window_frames=_count_field(window_frames),
+            window_frames=_count_field("window_frames", window_frames),
             min_partial_separation=_value_field(min_partial_separation),
             max_fit_residual=_value_field(max_fit_residual),
             max_weight_modulus=_value_field(max_weight_modulus),
@@ -565,7 +572,12 @@ class PolyphonicAnalysis:
         # envelope_offset / envelope_count are inert on this door: the points are
         # the argument below and the analysis keeps its own copy.
         c_edit = SonareNoteEdit(
-            time_offset_samples=int(edit.time_offset_samples),
+            # Narrowed rather than coerced: int(0.5) is 0, which is this field's
+            # identity, so a sub-sample shift would render unmoved and report
+            # success.
+            time_offset_samples=_validate_c_int_field(
+                "set_note_edit", edit.time_offset_samples, "edit.time_offset_samples"
+            ),
             pitch_shift_semitones=float(edit.pitch_shift_semitones),
             gain_db=float(edit.gain_db),
             time_stretch_ratio=float(edit.time_stretch_ratio),
