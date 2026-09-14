@@ -316,8 +316,21 @@ float floatProperty(val object, const char* key, float default_value) {
 float floatOption(val object, const char* key, float default_value) {
   val value = objectProperty(object, key);
   if (value.isUndefined()) return default_value;
-  const float number = value.as<float>();
-  return std::isfinite(number) ? number : default_value;
+  // Type first, and by the sibling surface's rule: the addon's node_*_option
+  // family answers a wrong-typed value with the default, so a string reaching a
+  // number here would make one options bag read two ways.
+  if (value.typeOf().as<std::string>() != "number") return default_value;
+  // Read as double, because as<float>() turns a finite value the float cannot
+  // hold into an infinity, which then takes the substitution below -- the field
+  // beside this one refuses that same value by name.
+  const double number = value.as<double>();
+  if (std::isfinite(number) &&
+      std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        std::string(key) + " must be a finite number within the 32-bit float range");
+  }
+  return std::isfinite(number) ? static_cast<float>(number) : default_value;
 }
 
 int checkedIntFromVal(const val& value, const char* key) {

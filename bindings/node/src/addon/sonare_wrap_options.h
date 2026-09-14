@@ -96,6 +96,25 @@ inline int64_t node_narrow_int64(Napi::Env env, const Napi::Value& value, const 
   return static_cast<int64_t>(node_narrow_number(env, value, name, -kBound, kMax));
 }
 
+/// @brief Refuses a finite value no 32-bit float can hold, giving the float
+///        readers the range discipline @ref node_narrow_number gives the integer
+///        ones.
+/// @details Non-finite is passed through rather than refused: an infinity or a
+///   NaN is the "unspecified" spelling several of these fields document, and
+///   which of them mean it is a separate question from this one. What this
+///   reader settles is that a caller who wrote a number gets that number or an
+///   error, never an infinity the overflow invented for them.
+/// @throws Napi::RangeError naming @p name.
+inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const char* name) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (std::isfinite(number) &&
+      std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
+    throw Napi::RangeError::New(
+        env, std::string(name) + " must be a finite number within the 32-bit float range");
+  }
+  return static_cast<float>(number);
+}
+
 /// @brief The subject an out-of-range positional argument is named by.
 inline std::string node_arg_label(size_t index) { return "argument " + std::to_string(index); }
 
@@ -194,7 +213,7 @@ inline int node_int_option(const Napi::Object& object, const char* key, int fall
 /// @brief Read a float option from a JS object, falling back if missing.
 inline float node_float_option(const Napi::Object& object, const char* key, float fallback) {
   Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().FloatValue() : fallback;
+  return value.IsNumber() ? node_narrow_float(object.Env(), value, key) : fallback;
 }
 
 /// @brief Read a double option from a JS object, falling back if missing.

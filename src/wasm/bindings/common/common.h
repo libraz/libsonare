@@ -241,15 +241,23 @@ val objectProperty(val object, const char* key);
 ///          documented "non-finite means unspecified" convention.
 /// @throws SonareException(InvalidParameter) naming @p key.
 float floatProperty(val object, const char* key, float default_value);
-/// @brief Fallback float reader: a field that is absent, or present but not a
-///        finite number, takes @p default_value.
+/// @brief Fallback float reader: a field that is absent, of the wrong type, or
+///        present but not a finite number, takes @p default_value. A finite
+///        value outside the 32-bit float range is refused rather than
+///        substituted.
 /// @details The sibling of @ref floatProperty for a field whose owner documents
 ///          a non-finite value as "unspecified" -- the WASM half of the Node
 ///          addon's node_*_option / *Property split, where the _option family is
 ///          the one that substitutes rather than rejects. Reserved for that case:
 ///          a reader that silently eats a bad number reports success with a
 ///          plausible result, so every call site must be able to point at the
-///          convention it is honouring.
+///          convention it is honouring. The substitution covers a value that is
+///          non-finite in the caller's own arithmetic, never one the narrowing
+///          made non-finite on the way in -- a caller who wrote 1e300 chose a
+///          number, and answering it with the default reports success carrying a
+///          value they did not choose.
+/// @throws SonareException(InvalidParameter) naming @p key, for a finite value
+///         wider than a 32-bit float.
 float floatOption(val object, const char* key, float default_value);
 /// @brief Narrows a JS number to int, rejecting anything out of range or
 ///        fractional.
