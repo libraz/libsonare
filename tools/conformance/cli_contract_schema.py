@@ -24,6 +24,7 @@ _TOP_LEVEL_KEYS = {
     "active_paths",
     "parser_cases",
     "fixtures",
+    "payload_property_exemptions",
 }
 _CLASSIFICATIONS = {"shared", "native_only", "python_only", "intentional_variant"}
 _STATUSES = {"active", "pending", "native_only", "python_only", "intentional_variant"}
@@ -581,7 +582,13 @@ def _validate_closed_payload_schema(value: Any, label: str, errors: list[str]) -
 
 
 def _validate_payload_property_names(
-    value: Any, path: str, label: str, errors: list[str]
+    value: Any,
+    path: str,
+    label: str,
+    errors: list[str],
+    exempt: frozenset[str] = frozenset(),
+    pointer: str | None = None,
+    suppressed: set[str] | None = None,
 ) -> None:
     """Require snake_case property names throughout one payload schema.
 
@@ -589,33 +596,64 @@ def _validate_payload_property_names(
     Python surfaces, so a camelCase or PascalCase field is drift even when both
     surfaces emit it.  Each offender is reported as ``path:property`` so a
     rename can be traced back to the command that owns the key.
+
+    ``exempt`` holds property pointers (``doctor.features``, or a bare command
+    name for a whole payload) whose field names come from a schema shared with
+    the other bindings rather than from the CLI.  The exemption covers the
+    subtree below the pointer only, so a CLI-owned key beside a transported
+    document is still held to the rule.  Pointers that actually suppress a
+    rejection are recorded in ``suppressed`` so a stale entry can be failed.
     """
 
+    if pointer is None:
+        pointer = path
     if isinstance(value, list):
         for index, item in enumerate(value):
-            _validate_payload_property_names(item, path, f"{label}[{index}]", errors)
+            _validate_payload_property_names(
+                item, path, f"{label}[{index}]", errors, exempt, pointer, suppressed
+            )
         return
     if not isinstance(value, dict):
         return
+    inside_document = pointer in exempt
     for source in ("keys", "properties", "required", "optional"):
         fields = value.get(source)
         if not isinstance(fields, dict):
             continue
         for key, child in fields.items():
+            child_pointer = f"{pointer}.{key}" if isinstance(key, str) else pointer
             if isinstance(key, str) and not _PAYLOAD_PROPERTY_NAME_RE.match(key):
-                errors.append(
-                    f"{path}:{key}: payload property name is not snake_case (at {label}.{source})"
-                )
+                if inside_document or child_pointer in exempt:
+                    if suppressed is not None:
+                        suppressed.add(pointer if inside_document else child_pointer)
+                else:
+                    errors.append(
+                        f"{path}:{key}: payload property name is not snake_case "
+                        f"(at {label}.{source})"
+                    )
             _validate_payload_property_names(
-                child, path, f"{label}.{source}.{key}", errors
+                child,
+                path,
+                f"{label}.{source}.{key}",
+                errors,
+                exempt,
+                child_pointer,
+                suppressed,
             )
     if "items" in value:
-        _validate_payload_property_names(value["items"], path, f"{label}.items", errors)
+        # An array's items are the same property subtree as the array itself.
+        _validate_payload_property_names(
+            value["items"], path, f"{label}.items", errors, exempt, pointer, suppressed
+        )
     for key in ("one_of", "any_of", "oneOf", "anyOf", "variants"):
         if isinstance(value.get(key), list):
-            _validate_payload_property_names(value[key], path, f"{label}.{key}", errors)
+            _validate_payload_property_names(
+                value[key], path, f"{label}.{key}", errors, exempt, pointer, suppressed
+            )
     if isinstance(value.get("type"), list):
-        _validate_payload_property_names(value["type"], path, f"{label}.type", errors)
+        _validate_payload_property_names(
+            value["type"], path, f"{label}.type", errors, exempt, pointer, suppressed
+        )
 
 
 def _require_schema_keys(
@@ -801,12 +839,59 @@ def _validate_canonical_payload_schema(
         )
 
 
+def _validate_payload_property_exemptions(manifest: Any, errors: list[str]) -> frozenset[str]:
+    """Validate the snake_case exemption registry and return its pointer set.
+
+    An exemption is a named category rather than a per-command escape, so a
+    command that transports a shared document inherits a decision that was
+    already argued instead of an omission nobody notices.  The reason is
+    mandatory for the same purpose: the next reader has to be able to see why
+    the CLI does not own these names without reconstructing the argument.
+    """
+
+    registry = manifest.get("payload_property_exemptions")
+    if not isinstance(registry, dict) or not registry:
+        errors.append(
+            "manifest.payload_property_exemptions: expected a non-empty object"
+        )
+        return frozenset()
+    commands = manifest.get("commands")
+    pointers: set[str] = set()
+    for name, entry in registry.items():
+        label = f"manifest.payload_property_exemptions.{name}"
+        if not isinstance(name, str) or not _PAYLOAD_PROPERTY_NAME_RE.match(name):
+            errors.append(f"{label}: category name must be snake_case")
+        if not _exact(entry, {"reason", "properties"}, label, errors):
+            continue
+        reason = entry["reason"]
+        if not isinstance(reason, str) or not reason.strip():
+            errors.append(f"{label}.reason: expected a non-empty string")
+        properties = entry["properties"]
+        if not _strings(properties, f"{label}.properties", errors):
+            continue
+        if not properties:
+            errors.append(f"{label}.properties: expected a non-empty array")
+        for pointer in properties:
+            command = pointer.split(".", 1)[0]
+            # A dotted command name (project.bounce) owns the first two segments.
+            if isinstance(commands, dict) and command not in commands:
+                command = ".".join(pointer.split(".", 2)[:2])
+            if isinstance(commands, dict) and command not in commands:
+                errors.append(f"{label}.properties: unknown command in {pointer!r}")
+            if pointer in pointers:
+                errors.append(f"{label}.properties: duplicate pointer {pointer!r}")
+            pointers.add(pointer)
+    return frozenset(pointers)
+
+
 def validate_manifest(manifest: Any) -> list[str]:
     """Return schema errors for a decoded manifest (empty means valid)."""
 
     errors: list[str] = []
     if not _exact(manifest, _TOP_LEVEL_KEYS, "manifest", errors):
         return errors
+    exempt_properties = _validate_payload_property_exemptions(manifest, errors)
+    suppressed_exemptions: set[str] = set()
     if manifest["schema_version"] != 2:
         errors.append("manifest.schema_version: expected 2")
     if manifest["contract"] != "cli-json-v2":
@@ -1039,6 +1124,9 @@ def validate_manifest(manifest: Any) -> list[str]:
                         path if isinstance(path, str) else label,
                         f"{label}.payloads.{payload_name}",
                         errors,
+                        exempt_properties,
+                        None,
+                        suppressed_exemptions,
                     )
                 if path in {
                     "analyze",
@@ -1213,6 +1301,14 @@ def validate_manifest(manifest: Any) -> list[str]:
         errors.append(
             "manifest.active_paths: paths must exactly match commands with status active "
             f"(active_paths={sorted(active_paths)!r}, commands={sorted(active_from_commands)!r})"
+        )
+    # An exemption that suppresses nothing is not inert: it keeps asserting a
+    # reviewed decision about a name, so the next property to take that name
+    # inherits the blessing unexamined.  It expires with the divergence.
+    for pointer in sorted(exempt_properties - suppressed_exemptions):
+        errors.append(
+            f"manifest.payload_property_exemptions: {pointer!r} suppressed nothing; "
+            "delete the entry with the divergence"
         )
     parser_cases = manifest["parser_cases"]
     if not isinstance(parser_cases, list) or not parser_cases:

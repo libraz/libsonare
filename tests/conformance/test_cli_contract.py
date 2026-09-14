@@ -664,12 +664,12 @@ class CliContractSelfTest(unittest.TestCase):
         manifest = copy.deepcopy(self.manifest)
         native = self._fake_inventory(manifest, "native")
         python = self._fake_inventory(manifest, "python")
-        self.assertEqual(manifest["commands"]["bpm"]["status"], "pending")
-        self.assertEqual(manifest["commands"]["bpm"]["option_status"], "active")
-        native_bpm = next(
-            command for command in native["commands"] if command["path"] == "bpm"
+        self.assertEqual(manifest["commands"]["chords"]["status"], "pending")
+        self.assertEqual(manifest["commands"]["chords"]["option_status"], "active")
+        native_chords = next(
+            command for command in native["commands"] if command["path"] == "chords"
         )
-        native_bpm["options"][0]["default"] = True
+        native_chords["options"][0]["default"] = True
 
         report: list[tuple[str, str]] = []
         CHECKER._compare_active_inventory_options(
@@ -678,7 +678,9 @@ class CliContractSelfTest(unittest.TestCase):
             manifest,
             report,
         )
-        self.assertTrue(any("inventory.shared.bpm" in message for _, message in report), report)
+        self.assertTrue(
+            any("inventory.shared.chords" in message for _, message in report), report
+        )
 
     def _fake_inventory(self, manifest, surface):
         expected = manifest["inventory"]["expected_options"]
@@ -695,6 +697,94 @@ class CliContractSelfTest(unittest.TestCase):
             "surface": surface,
             "commands": list(commands.values()),
         }
+
+    def test_only_a_transported_document_is_exempt_from_snake_case(self) -> None:
+        """The exemption covers a shared schema's names, not a whole command.
+
+        ``doctor`` publishes a CLI-owned payload with one transported object
+        inside it, so exempting the command would have let a future CLI-owned
+        key arrive in camelCase unnoticed. The exemption is a pointer to the
+        subtree, and everything beside it is still held to the rule.
+        """
+        exemptions = self.manifest["payload_property_exemptions"]
+        self.assertEqual(set(exemptions), {"shared_schema_document"})
+        self.assertEqual(
+            exemptions["shared_schema_document"]["properties"],
+            ["doctor.features", "mixing-preset", "voice-preset"],
+        )
+        self.assertTrue(exemptions["shared_schema_document"]["reason"].strip())
+
+        # Outside the pointer the rule still bites, on the very same command.
+        outside = copy.deepcopy(self.manifest)
+        doctor = next(
+            item for item in outside["active_paths"] if item["path"] == "doctor"
+        )
+        keys = doctor["payloads"]["success"]["keys"]
+        keys["hardwareConcurrency"] = keys.pop("hardware_concurrency")
+        self.assertTrue(
+            any(
+                "doctor:hardwareConcurrency" in error and "snake_case" in error
+                for error in CHECKER.validate_manifest(outside)
+            ),
+        )
+
+        # Non-vacuity: without the entry the transported names are rejected, so
+        # the clean baseline above cannot be passing for want of a check.
+        without = copy.deepcopy(self.manifest)
+        without["payload_property_exemptions"]["shared_schema_document"][
+            "properties"
+        ] = ["mixing-preset", "voice-preset"]
+        self.assertTrue(
+            any(
+                "doctor:instrumentParamAutomation" in error
+                for error in CHECKER.validate_manifest(without)
+            ),
+        )
+
+    def test_an_exemption_that_suppresses_nothing_is_rejected(self) -> None:
+        """An exemption expires with its divergence.
+
+        A stale entry is not inert: it keeps asserting a reviewed decision about
+        a name, so the next property to take that name inherits the blessing
+        without anyone looking at it again.
+        """
+        stale = copy.deepcopy(self.manifest)
+        stale["payload_property_exemptions"]["shared_schema_document"][
+            "properties"
+        ].append("resample")
+        self.assertTrue(
+            any(
+                "'resample' suppressed nothing" in error
+                for error in CHECKER.validate_manifest(stale)
+            ),
+        )
+
+        blank = copy.deepcopy(self.manifest)
+        blank["payload_property_exemptions"]["shared_schema_document"]["reason"] = "   "
+        self.assertTrue(
+            any(
+                "reason: expected a non-empty string" in error
+                for error in CHECKER.validate_manifest(blank)
+            ),
+        )
+
+    def test_chords_is_the_only_shared_command_left_unpinned(self) -> None:
+        """The remaining gap is one named command, not an open set.
+
+        ``chords`` publishes a quality name on the Python CLI that the native
+        CLI has no name for: the value is on the struct it already reads, but
+        the camelCase quality names live in a hand-written table replicated
+        across the bindings and the C ABI exposes no quality-name function.
+        Emitting it from the native tool means one more copy of that table, so
+        the name has to be given a single home first. Anything else arriving in
+        this set is an omission and fails here.
+        """
+        pending = {
+            path
+            for path, record in self.manifest["commands"].items()
+            if record["classification"] == "shared" and record["status"] == "pending"
+        }
+        self.assertEqual(pending, {"chords"})
 
     def test_all_shared_paths_have_active_canonical_option_contracts(self) -> None:
         shared = {

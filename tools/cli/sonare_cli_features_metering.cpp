@@ -646,6 +646,15 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
   if (args.json_output) {
+    // The two band vectors are independent estimates and either can come back
+    // empty on its own. The C ABI publishes both at one band count, padding the
+    // shorter with NaN, so match it here: reading the core struct directly
+    // otherwise gives a script a shorter array from this CLI than from the other.
+    const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
+    auto pad_with_nan = [band_count](std::vector<float> values) {
+      values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
+      return values;
+    };
     JsonBuilder()
         .begin_object()
         .kv("volume", est.volume)
@@ -655,9 +664,9 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
         .kv("drr_db", est.drr_db)
         .kv("confidence", est.confidence)
         .key("rt60_bands")
-        .float_array(est.rt60_bands)
+        .float_array(pad_with_nan(est.rt60_bands))
         .key("absorption_bands")
-        .float_array(est.absorption_bands)
+        .float_array(pad_with_nan(est.absorption_bands))
         .end_object()
         .print();
   } else {

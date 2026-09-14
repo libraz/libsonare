@@ -59,6 +59,17 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     paths["preset_missing"] = str(directory / "preset-does-not-exist.json")
     paths["output"] = str(directory / "rejected-output.wav")
     paths["rir_output"] = str(directory / "rir-output.wav")
+    paths["render_output"] = str(directory / "render-output.wav")
+    paths["resample_output"] = str(directory / "resample-output.wav")
+    paths["morph_output"] = str(directory / "morph-output.wav")
+    paths["bounce_output"] = str(directory / "bounce-output.wav")
+    paths["new_project_output"] = str(directory / "new-project.json")
+    # The import paths read what the export paths write, so the export contracts
+    # are ordered ahead of them in the manifest.
+    paths["smf_output"] = str(directory / "export.mid")
+    paths["midi2_output"] = str(directory / "export.midi2")
+    paths["smf_import_output"] = str(directory / "import-smf.json")
+    paths["midi2_import_output"] = str(directory / "import-midi2.json")
     return paths
 
 

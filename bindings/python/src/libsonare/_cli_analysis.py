@@ -91,7 +91,7 @@ def cmd_bpm(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     bpm = detect_bpm(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps({"bpm": round(bpm, 2)}))
+        print(_strict_json_dumps({"bpm": bpm}))
     else:
         print(f"  BPM: {bpm:.2f}")
     return 0
@@ -143,7 +143,7 @@ def cmd_key(args: argparse.Namespace) -> int:
         payload: dict[str, object] = {
             "root": key.root.value,
             "mode": key.mode.value,
-            "confidence": round(key.confidence, 4),
+            "confidence": key.confidence,
             "name": name,
         }
         if candidates:
@@ -151,10 +151,10 @@ def cmd_key(args: argparse.Namespace) -> int:
                 {
                     "root": candidate.key.root.value,
                     "mode": candidate.key.mode.value,
-                    "confidence": round(candidate.key.confidence, 4),
+                    "confidence": candidate.key.confidence,
                     "name": f"{PITCH_NAMES[candidate.key.root.value]} "
                     f"{MODE_NAMES[candidate.key.mode.value]}",
-                    "correlation": round(candidate.correlation, 6),
+                    "correlation": candidate.correlation,
                 }
                 for candidate in candidates
             ]
@@ -182,7 +182,7 @@ def cmd_beats(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     beats = detect_beats(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps([round(b, 4) for b in beats]))
+        print(_strict_json_dumps(list(beats)))
     else:
         print(f"  Beat times ({len(beats)} beats):")
         for i, b in enumerate(beats[:20]):
@@ -198,7 +198,7 @@ def cmd_downbeats(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     downbeats = detect_downbeats(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps([round(d, 4) for d in downbeats]))
+        print(_strict_json_dumps(list(downbeats)))
     else:
         print(f"  Downbeat times ({len(downbeats)} downbeats):")
         for i, d in enumerate(downbeats[:20]):
@@ -214,7 +214,7 @@ def cmd_onsets(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     onsets = detect_onsets(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps([round(o, 4) for o in onsets]))
+        print(_strict_json_dumps(list(onsets)))
     else:
         print(f"  Onset times ({len(onsets)} onsets):")
         for i, o in enumerate(onsets[:20]):
@@ -260,9 +260,9 @@ def cmd_chords(args: argparse.Namespace) -> int:
                             # PitchClass.C == 0 is falsy, so a plain ``or`` would
                             # drop a C bass note back to the root. Guard on None.
                             "bass": (chord.root if chord.bass is None else chord.bass).value,
-                            "start": round(chord.start, 6),
-                            "end": round(chord.end, 6),
-                            "confidence": round(chord.confidence, 4),
+                            "start": chord.start,
+                            "end": chord.end,
+                            "confidence": chord.confidence,
                         }
                         for chord in result.chords
                     ],

@@ -761,12 +761,12 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "rt60": round(result.rt60, 4),
-                    "edt": round(result.edt, 4),
+                    "rt60": result.rt60,
+                    "edt": result.edt,
                     "c50": result.c50,
                     "c80": result.c80,
                     "d50": result.d50,
-                    "confidence": round(result.confidence, 4),
+                    "confidence": result.confidence,
                     "is_blind": result.is_blind,
                     "rt60_bands": [float(value) for value in result.rt60_bands],
                     "edt_bands": [float(value) for value in result.edt_bands],
@@ -812,14 +812,14 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "volume": round(est.volume, 3),
-                    "length": round(est.length, 3),
-                    "width": round(est.width, 3),
-                    "height": round(est.height, 3),
-                    "drr_db": round(est.drr_db, 3),
-                    "confidence": round(est.confidence, 4),
-                    "rt60_bands": [round(b, 4) for b in est.rt60_bands],
-                    "absorption_bands": [round(b, 4) for b in est.absorption_bands],
+                    "volume": est.volume,
+                    "length": est.length,
+                    "width": est.width,
+                    "height": est.height,
+                    "drr_db": est.drr_db,
+                    "confidence": est.confidence,
+                    "rt60_bands": [float(value) for value in est.rt60_bands],
+                    "absorption_bands": [float(value) for value in est.absorption_bands],
                 }
             )
         )

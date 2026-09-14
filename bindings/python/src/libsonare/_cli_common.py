@@ -548,10 +548,13 @@ def _emit_effect_result(
     return 0
 
 
-def _array_stats(
-    vals: list[float], *, digits: int = 6, with_count: bool = True
-) -> dict[str, float | int]:
-    """Summary statistics for a numeric array (avoids dumping huge arrays)."""
+def _array_stats(vals: list[float], *, with_count: bool = True) -> dict[str, float | int]:
+    """Summary statistics for a numeric array (avoids dumping huge arrays).
+
+    Values are published at full precision: the native CLI serializes floats at
+    round-trip precision, so rounding here for display made the same statistic
+    differ between the two CLIs.
+    """
     import statistics
 
     if not vals:
@@ -560,10 +563,10 @@ def _array_stats(
             return {"count": 0, **stats}
         return stats
     stats = {
-        "mean": round(statistics.mean(vals), digits),
-        "std": round(statistics.pstdev(vals), digits) if len(vals) > 1 else 0.0,
-        "min": round(min(vals), digits),
-        "max": round(max(vals), digits),
+        "mean": statistics.mean(vals),
+        "std": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
+        "min": min(vals),
+        "max": max(vals),
     }
     if with_count:
         return {"count": len(vals), **stats}

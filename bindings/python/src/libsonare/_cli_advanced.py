@@ -87,11 +87,11 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "dynamic_range_db": round(r.dynamic_range_db, 4),
-                    "peak_db": round(r.peak_db, 4),
-                    "rms_db": round(r.rms_db, 4),
-                    "crest_factor": round(r.crest_factor, 4),
-                    "loudness_range_db": round(r.loudness_range_db, 4),
+                    "dynamic_range_db": r.dynamic_range_db,
+                    "peak_db": r.peak_db,
+                    "rms_db": r.rms_db,
+                    "crest_factor": r.crest_factor,
+                    "loudness_range_db": r.loudness_range_db,
                     "is_compressed": r.is_compressed,
                     "loudness": _array_stats(r.loudness_rms_db),
                 }
@@ -120,11 +120,11 @@ def cmd_timbre(args: argparse.Namespace) -> int:
         print(
             _strict_json_dumps(
                 {
-                    "brightness": round(r.brightness, 4),
-                    "warmth": round(r.warmth, 4),
-                    "density": round(r.density, 4),
-                    "roughness": round(r.roughness, 4),
-                    "complexity": round(r.complexity, 4),
+                    "brightness": r.brightness,
+                    "warmth": r.warmth,
+                    "density": r.density,
+                    "roughness": r.roughness,
+                    "complexity": r.complexity,
                     "spectral_centroid": _array_stats(r.spectral_centroid),
                     "spectral_flatness": _array_stats(r.spectral_flatness),
                     "spectral_rolloff": _array_stats(r.spectral_rolloff),
@@ -148,10 +148,10 @@ def cmd_lufs(args: argparse.Namespace) -> int:
     r = lufs(samples, sample_rate=sr)
 
     payload: dict[str, object] = {
-        "integrated_lufs": round(r.integrated_lufs, 4),
-        "momentary_lufs": round(r.momentary_lufs, 4),
-        "short_term_lufs": round(r.short_term_lufs, 4),
-        "loudness_range": round(r.loudness_range, 4),
+        "integrated_lufs": r.integrated_lufs,
+        "momentary_lufs": r.momentary_lufs,
+        "short_term_lufs": r.short_term_lufs,
+        "loudness_range": r.loudness_range,
     }
     momentary_series: list[float] = []
     short_term_series: list[float] = []
@@ -161,8 +161,8 @@ def cmd_lufs(args: argparse.Namespace) -> int:
 
     if args.json:
         if args.series:
-            payload["momentary_series"] = [round(v, 4) for v in momentary_series]
-            payload["short_term_series"] = [round(v, 4) for v in short_term_series]
+            payload["momentary_series"] = list(momentary_series)
+            payload["short_term_series"] = list(short_term_series)
         print(_strict_json_dumps(payload))
     else:
         print("  Loudness (LUFS):")

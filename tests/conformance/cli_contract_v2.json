@@ -3013,27 +3013,27 @@
     },
     "bpm": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "key": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "beats": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "downbeats": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "onsets": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "chords": {
@@ -3043,12 +3043,12 @@
     },
     "timbre": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "dynamics": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "rhythm": {
@@ -3058,12 +3058,12 @@
     },
     "acoustic": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "estimate-room": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "synthesize-rir": {
@@ -3073,12 +3073,12 @@
     },
     "room-morph": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "lufs": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "pitch-shift": {
@@ -3113,7 +3113,7 @@
     },
     "voice-preset": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "hpss": {
@@ -3133,7 +3133,7 @@
     },
     "resample": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "mel": {
@@ -3188,57 +3188,57 @@
     },
     "mastering-processors": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "mastering-pair-processors": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "mastering-pair-analyses": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "mastering-pair-analyze": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "mixing-presets": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "mixing-preset": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "info": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "doctor": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.abi": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.synth-presets": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.new": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.compile": {
@@ -3248,27 +3248,27 @@
     },
     "project.bounce": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.export-smf": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.import-smf": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.export-midi2": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "project.import-midi2": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "sections": {
@@ -3313,12 +3313,12 @@
     },
     "polyphonic-notes": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "polyphonic-render": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "preemphasis": {
@@ -7090,6 +7090,2449 @@
         }
       ],
       "artifacts": {}
+    },
+    {
+      "path": "bpm",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "bpm": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "bpm",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "beats",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "beats",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "downbeats",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "downbeats",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "onsets",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": "number"
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "onsets",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "key",
+      "options": [
+        {
+          "name": "candidates",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "genre-hint",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "high-pass-hz",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "loudness-weighted",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "modes",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 4096,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "profile",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "use-hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [
+            "hpss"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "root": "integer",
+            "mode": "integer",
+            "confidence": "number",
+            "name": "string"
+          }
+        },
+        "candidates": {
+          "keys": {
+            "root": "integer",
+            "mode": "integer",
+            "confidence": "number",
+            "name": "string",
+            "candidates": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "root": "integer",
+                  "mode": "integer",
+                  "confidence": "number",
+                  "name": "string",
+                  "correlation": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "key",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "candidates",
+          "argv": [
+            "key",
+            "{audio}",
+            "--candidates",
+            "3",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "candidates",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "info",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "path": "string",
+            "duration": "number",
+            "sample_rate": "integer",
+            "channels": "integer",
+            "samples": "integer",
+            "peak_db": "number",
+            "rms_db": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "info",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "dynamics",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "window-sec",
+          "type": "number",
+          "default": 0.4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "peak_db": "number",
+            "rms_db": "number",
+            "dynamic_range_db": "number",
+            "crest_factor": "number",
+            "loudness_range_db": "number",
+            "is_compressed": "boolean",
+            "loudness": {
+              "keys": {
+                "count": "integer",
+                "mean": "number",
+                "std": "number",
+                "min": "number",
+                "max": "number"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "dynamics",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "timbre",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": 128,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "brightness": "number",
+            "warmth": "number",
+            "density": "number",
+            "roughness": "number",
+            "complexity": "number",
+            "spectral_centroid": {
+              "keys": {
+                "count": "integer",
+                "mean": "number",
+                "std": "number",
+                "min": "number",
+                "max": "number"
+              }
+            },
+            "spectral_flatness": {
+              "keys": {
+                "count": "integer",
+                "mean": "number",
+                "std": "number",
+                "min": "number",
+                "max": "number"
+              }
+            },
+            "spectral_rolloff": {
+              "keys": {
+                "count": "integer",
+                "mean": "number",
+                "std": "number",
+                "min": "number",
+                "max": "number"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "timbre",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "lufs",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "series",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "integrated_lufs": "number",
+            "momentary_lufs": "number",
+            "short_term_lufs": "number|null",
+            "loudness_range": "number"
+          }
+        },
+        "series": {
+          "keys": {
+            "integrated_lufs": "number",
+            "momentary_lufs": "number",
+            "short_term_lufs": "number|null",
+            "loudness_range": "number",
+            "momentary_series": {
+              "type": "array",
+              "items": "number"
+            },
+            "short_term_series": {
+              "type": "array",
+              "items": "number"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "lufs",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "series",
+          "argv": [
+            "lufs",
+            "{audio}",
+            "--series",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "series",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "acoustic",
+      "options": [
+        {
+          "name": "ir",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-decay-db",
+          "type": "number",
+          "default": 30,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-bands",
+          "type": "integer",
+          "default": 6,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "noise-floor-margin-db",
+          "type": "number",
+          "default": 10,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "rt60": "number|null",
+            "edt": "number|null",
+            "c50": "number|null",
+            "c80": "number|null",
+            "d50": "number|null",
+            "confidence": "number",
+            "is_blind": "boolean",
+            "rt60_bands": {
+              "type": "array",
+              "items": "number|null"
+            },
+            "edt_bands": {
+              "type": "array",
+              "items": "number|null"
+            },
+            "c50_bands": {
+              "type": "array",
+              "items": "number|null"
+            },
+            "c80_bands": {
+              "type": "array",
+              "items": "number|null"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "acoustic",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "polyphonic-notes",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "sample_rate": "integer",
+            "frame_count": "integer",
+            "note_count": "integer",
+            "polyphony": {
+              "type": "array",
+              "items": "integer"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "index": "integer",
+                  "onset_sample": "integer",
+                  "offset_sample": "integer",
+                  "frame_start": "integer",
+                  "frame_end": "integer",
+                  "median_hz": "number",
+                  "median_cents": "number",
+                  "f0_stability": "number",
+                  "f0_hz": {
+                    "type": "array",
+                    "items": "number"
+                  },
+                  "amplitude": {
+                    "type": "array",
+                    "items": "number"
+                  },
+                  "salience": {
+                    "type": "array",
+                    "items": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "polyphonic-notes",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "polyphonic-render",
+      "options": [
+        {
+          "name": "edit",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "note_count": "integer",
+            "edits": "integer",
+            "length": "integer",
+            "sample_rate": "integer",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "polyphonic-render",
+            "{audio}",
+            "-o",
+            "{render_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "resample",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "target-rate",
+          "type": "integer",
+          "default": null,
+          "aliases": [
+            "target-sr"
+          ],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "length": "integer",
+            "source_rate": "integer",
+            "sample_rate": "integer",
+            "output": "string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "resample",
+            "{audio}",
+            "--target-rate",
+            "44100",
+            "-o",
+            "{resample_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "room-morph",
+      "options": [
+        {
+          "name": "absorption",
+          "type": "number",
+          "default": 0.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "ism-order",
+          "type": "integer",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "length",
+          "type": "number",
+          "default": 7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "listener-x",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "listener-y",
+          "type": "number",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "listener-z",
+          "type": "number",
+          "default": 1.7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "max-seconds",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sabine",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "source-x",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "source-y",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "source-z",
+          "type": "number",
+          "default": 1.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "suppression",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "wet",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "samples": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "room-morph",
+            "{audio}",
+            "-o",
+            "{morph_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-processors",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "processors": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-processors",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-pair-processors",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "processors": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-pair-processors",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-pair-analyses",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "analyses": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-pair-analyses",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-pair-analyze",
+      "options": [
+        {
+          "name": "analysis",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "reference_loudness": {
+          "keys": {
+            "gain_to_match_db": "number",
+            "reference_lufs": "number",
+            "source_lufs": "number"
+          }
+        },
+        "tonal_balance": {
+          "keys": {
+            "bands": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "deviation_db": "number",
+                  "high_hz": "number",
+                  "low_hz": "number",
+                  "reference_db": "number",
+                  "source_db": "number"
+                }
+              }
+            }
+          }
+        },
+        "tonal_balance_log_bands": {
+          "keys": {
+            "bands": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "deviation_db": "number",
+                  "high_hz": "number",
+                  "low_hz": "number",
+                  "reference_db": "number",
+                  "source_db": "number"
+                }
+              }
+            }
+          }
+        },
+        "match_eq_curve": {
+          "keys": {
+            "frequencies": {
+              "type": "array",
+              "items": "number"
+            },
+            "gain_db": {
+              "type": "array",
+              "items": "number"
+            }
+          }
+        },
+        "reference_delay": {
+          "keys": {
+            "delay_samples": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "reference_loudness",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "match.referenceLoudness",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "reference_loudness",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "tonal_balance",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "match.tonalBalance",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "tonal_balance",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "tonal_balance_log_bands",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "match.tonalBalanceLogBands",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "tonal_balance_log_bands",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "match_eq_curve",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "match.matchEqCurve",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "match_eq_curve",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_delay",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "match.estimateReferenceDelaySamples",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "reference_delay",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mixing-presets",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "presets": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mixing-presets",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.abi",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "abi_version": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "abi",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.synth-presets",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "presets": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "synth-presets",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.new",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "bytes": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "new",
+            "-o",
+            "{new_project_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.bounce",
+      "options": [
+        {
+          "name": "block-size",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "channels",
+          "type": "integer",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "frames",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "instrument-latency",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "synth",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "frames": "integer",
+            "channels": "integer",
+            "sample_rate": "integer",
+            "synth": "boolean"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "bounce",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.export-smf",
+      "options": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "bytes": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "export-smf",
+            "--in",
+            "{project_clean}",
+            "-o",
+            "{smf_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.export-midi2",
+      "options": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "bytes": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "export-midi2",
+            "--in",
+            "{project_clean}",
+            "-o",
+            "{midi2_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.import-smf",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "smf",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "first_clip_id": "integer",
+            "bytes": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "import-smf",
+            "--smf",
+            "{smf_output}",
+            "-o",
+            "{smf_import_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.import-midi2",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "midi2",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "first_clip_id": "integer",
+            "bytes": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "import-midi2",
+            "--midi2",
+            "{midi2_output}",
+            "-o",
+            "{midi2_import_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "estimate-room",
+      "options": [
+        {
+          "name": "aspect-lh",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "aspect-lw",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-octave-bands",
+          "type": "integer",
+          "default": null,
+          "aliases": [
+            "n-bands"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-absorption",
+          "type": "number",
+          "default": 0.15,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sabine",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "volume": "number",
+            "length": "number",
+            "width": "number",
+            "height": "number",
+            "drr_db": "number",
+            "confidence": "number",
+            "rt60_bands": {
+              "type": "array",
+              "items": "number|null"
+            },
+            "absorption_bands": {
+              "type": "array",
+              "items": "number|null"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "estimate-room",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "doctor",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "abi": {
+              "keys": {
+                "engine": "integer",
+                "project": "integer"
+              }
+            },
+            "decode": {
+              "keys": {
+                "builtin": {
+                  "type": "array",
+                  "items": "string"
+                },
+                "ffmpeg": {
+                  "type": "array",
+                  "items": "string"
+                }
+              }
+            },
+            "features": {
+              "keys": {
+                "ffmpeg": "boolean",
+                "fx": "boolean",
+                "instrumentParamAutomation": "boolean",
+                "mastering": "boolean",
+                "mixing": "boolean",
+                "mixingAssistant": "boolean"
+              }
+            },
+            "hardware_concurrency": "integer",
+            "platform": "string",
+            "simd": "string",
+            "version": "string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "doctor",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mixing-preset",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "vocalReverbSend",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "version": "integer",
+            "strips": {
+              "type": "array",
+              "items": "any"
+            },
+            "buses": {
+              "type": "array",
+              "items": "any"
+            },
+            "connections": {
+              "type": "array",
+              "items": "any"
+            },
+            "vcaGroups": {
+              "type": "array",
+              "items": "any"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mixing-preset",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_vocal_reverb_send",
+          "argv": [
+            "mixing-preset",
+            "--preset",
+            "vocalReverbSend",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_drum_bus_subgroup",
+          "argv": [
+            "mixing-preset",
+            "--preset",
+            "drumBusSubgroup",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_commentary_ducking",
+          "argv": [
+            "mixing-preset",
+            "--preset",
+            "commentaryDucking",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "voice-preset",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "neutral-monitor",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "schemaVersion": "integer",
+            "id": "string",
+            "name": "string",
+            "category": "string",
+            "dsp": "any"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "voice-preset",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_bright_idol",
+          "argv": [
+            "voice-preset",
+            "--preset",
+            "bright-idol",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_soft_whisper",
+          "argv": [
+            "voice-preset",
+            "--preset",
+            "soft-whisper",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_deep_narrator",
+          "argv": [
+            "voice-preset",
+            "--preset",
+            "deep-narrator",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_robot_mascot",
+          "argv": [
+            "voice-preset",
+            "--preset",
+            "robot-mascot",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_dark_villain",
+          "argv": [
+            "voice-preset",
+            "--preset",
+            "dark-villain",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
     }
   ],
   "parser_cases": [
@@ -7509,6 +9952,16 @@
         "category": "custom",
         "schemaVersion": 1
       }
+    }
+  },
+  "payload_property_exemptions": {
+    "shared_schema_document": {
+      "reason": "The payload transports a document whose field names are fixed by a schema shared with the Node and WASM bindings. The names belong to that schema, not to the CLI, so the CLI must publish them unchanged; renaming them here would break the other surfaces to satisfy a rule about this one.",
+      "properties": [
+        "doctor.features",
+        "mixing-preset",
+        "voice-preset"
+      ]
     }
   }
 }

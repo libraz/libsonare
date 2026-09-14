@@ -1042,10 +1042,16 @@ def test_analyze_human_output_has_no_ansi_when_not_a_tty(tmp_path) -> None:
 
 
 def test_array_stats_uses_population_standard_deviation() -> None:
-    """Spectral summary ``std`` matches the native population statistic."""
+    """Spectral summary ``std`` matches the native population statistic.
+
+    The sample deviation of the same input is 1.2909944, so the tolerance here
+    is far tighter than the gap the assertion has to discriminate.
+    """
     from libsonare._cli_common import _array_stats
 
-    assert _array_stats([1.0, 2.0, 3.0, 4.0], with_count=False)["std"] == 1.118034
+    assert _array_stats([1.0, 2.0, 3.0, 4.0], with_count=False)["std"] == pytest.approx(
+        1.118033988749895
+    )
 
 
 @pytest.mark.parametrize(
