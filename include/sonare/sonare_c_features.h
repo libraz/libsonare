@@ -13,6 +13,13 @@ extern "C" {
 // Detailed analysis primitives
 // ============================================================================
 
+/// @brief Tempo analysis with an explicit search range and framing.
+/// @details Analyses at the caller's @p sample_rate. @ref sonare_detect_bpm
+///          resamples to the shared analysis rate first, so the two can report
+///          slightly different tempi for the same recording -- measured against
+///          synthesized click trains, this entry is the closer of the two at
+///          rates above the analysis rate. @p n_fft and @p hop_length are
+///          therefore in samples of the caller's buffer, not of a resampled one.
 /// @param out Receives heap-owned arrays; free with sonare_free_bpm_analysis_result.
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
