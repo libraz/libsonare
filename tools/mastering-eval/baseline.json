@@ -2,7 +2,7 @@
   "meta": {
     "schema": 1,
     "contract": "tools/mastering-eval/docs/objective.md",
-    "head": "6b4fc28e823fa4d5f56210ae80901261f5687311",
+    "head": "e61167d4166b3152b4b374d78ffcd98b88b0c3f7",
     "library": "build-mr-w2-shared/lib/libsonare.dylib (Release, BUILD_SHARED=ON)",
     "corpus_seed": 20250915,
     "corpus_digest": "e6cde34d093b2d79bef654925bf8679ff56f7a440cc5bd2c42f08c6abd4e7c9c",
@@ -204,7 +204,15 @@
               "spectral_floor": 0.1829
             }
           },
-          "resolves_every_knob": [],
+          "clears_floor_for_every_knob": [
+            "log_kurtosis_ratio"
+          ],
+          "clears_with_room_to_spare": {
+            "log_kurtosis_ratio": [
+              "gain_floor",
+              "over_subtraction"
+            ]
+          },
           "marginal": {
             "log_kurtosis_ratio": {
               "noise_estimation_quantile": 1.1797,
@@ -217,7 +225,13 @@
               "over_subtraction": 1.511
             }
           },
-          "marginal_note": "a ratio at or above 1 cleared the floor; below 2 it did so without room to spare, which is not the same claim",
+          "silent_for_every_knob": [
+            "band_energy_delta",
+            "seg_snr_db",
+            "stoi",
+            "true_peak_dbtp"
+          ],
+          "marginal_note": "a ratio at or above 1 cleared the floor; below 2 it did so without room to spare, which is not the same claim and is reported separately",
           "reading": "a metric whose ratio is under 1 did not adjudicate that knob. It abstained; it did not vote that the change was neutral, and a change may not be accepted on the strength of its silence"
         }
       }
