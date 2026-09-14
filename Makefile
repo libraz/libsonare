@@ -11,7 +11,7 @@
        spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch \
        check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
-       check-c-api-type-home
+       check-c-api-type-home check-binding-warning-flags
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -419,7 +419,6 @@ conformance:
 	python3 tools/conformance/check_lint_scope.py
 	python3 -m unittest tests/conformance/test_cli_contract.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
-	python3 tests/conformance/check_binding_warning_flags.py
 	python3 -m unittest tests/conformance/test_binding_warning_flags.py
 	python3 tests/conformance/check_wasm_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py
@@ -482,6 +481,15 @@ check-c-api-header-self-contained:
 # take, while a sibling's do. Text-only, no build tree.
 check-c-api-type-home:
 	python3 tests/conformance/check_c_api_type_home.py --floor 150
+
+# Holds both hand-written binding layers to the core's warning bar, read off the
+# compilation database each layer's own build wrote. It therefore needs the WASM
+# module and the Node addon built, and refuses an absent database rather than
+# passing on it, so it stays out of `conformance`: the gate that runs on a push
+# builds neither. The unittest beside it does stay in `conformance` — it works
+# on synthetic databases and skips a layer this tree has not built.
+check-binding-warning-flags:
+	python3 tests/conformance/check_binding_warning_flags.py
 
 # Opt-in GM-program project bounce acceptance across the C, Python, Node, and
 # WASM public surfaces. The check deliberately does not build the bindings: it
