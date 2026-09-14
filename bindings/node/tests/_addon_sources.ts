@@ -141,11 +141,19 @@ export function bareHasSites(): BareHasSite[] {
  * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|String|MidiByte)Property|OptionAt)\s*\(/;
 
-/** Matches a reader call and captures its literal key, for either arity. */
+/**
+ * Matches a reader call and captures its literal key, for either arity.
+ *
+ * `StringProperty` carries a lookbehind the other members do not need: this
+ * pattern has no leading boundary, so without it `RequiredStringProperty` — a
+ * member of the Required* family, whose keys are not options — would read as a
+ * `StringProperty` call and put six required field names into the option-key
+ * set of the graph entry points.
+ */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|MidiByte)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
 
 /**
  * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter
@@ -426,16 +434,15 @@ export function positionalArgEntryPoints(): string[] {
       break;
     }
   }
-  // The constructor-aware enumeration, not addonEntryPoints: an ObjectWrap
-  // constructor reads positional arguments through the same family, and the
-  // registration-based scan cannot name one.
-  return addonEntryPointsFrom(addonSources())
-    .filter((entry) => {
-      const bare = entry.symbol.includes('::') ? entry.symbol.split('::')[1] : entry.symbol;
-      return reads.has(entry.symbol) || reads.has(bare);
-    })
-    .map((entry) => entry.jsName)
-    .sort();
+  const named = new Set(
+    addonEntryPointRegistrations(addonSources())
+      .filter((entry) => {
+        const bare = entry.symbol.includes('::') ? entry.symbol.split('::')[1] : entry.symbol;
+        return reads.has(entry.symbol) || reads.has(bare);
+      })
+      .map((entry) => entry.jsName),
+  );
+  return [...named].sort();
 }
 
 /** Function definitions, as `name -> body`, across every addon translation unit. */
@@ -527,29 +534,23 @@ export function optionKeysFor(symbol: string): string[] {
   return [...keys].sort();
 }
 
-/** Every JS-visible addon entry point, with whether it reads an options bag. */
+/**
+ * Every JS-visible addon entry point, with whether it reads an options bag.
+ *
+ * One jsName can be registered by several symbols — `setConfig` and `destroy`
+ * are each on more than one ObjectWrap class — so the options-reading one wins:
+ * the coverage register is keyed by jsName, and letting a no-options namesake
+ * take the slot would drop a 25-key entry point out of it.
+ */
 export function addonEntryPoints(): AddonEntryPoint[] {
   const reads = optionReadingFunctions();
   const found = new Map<string, AddonEntryPoint>();
-  const add = (jsName: string, symbol: string) => {
+  for (const { jsName, symbol } of addonEntryPointRegistrations(addonSources())) {
     const bare = symbol.includes('::') ? symbol.split('::')[1] : symbol;
     const readsOptionsBag = reads.has(symbol) || reads.has(bare);
     const previous = found.get(jsName);
     if (previous === undefined || (!previous.readsOptionsBag && readsOptionsBag)) {
       found.set(jsName, { jsName, symbol, readsOptionsBag });
-    }
-  };
-  for (const { text } of addonSources()) {
-    const flat = text.replace(/\s+/g, ' ');
-    for (const m of flat.matchAll(
-      /(?:Instance|Static)Method<&([\w:]+)>\s*\(\s*"([A-Za-z0-9_]+)"/g,
-    )) {
-      add(m[2], m[1]);
-    }
-    for (const m of flat.matchAll(
-      /exports\.Set\(\s*"([A-Za-z0-9_]+)"\s*,\s*Napi::Function::New\(\s*env\s*,\s*&?([\w:]+)/g,
-    )) {
-      add(m[1], m[2]);
     }
   }
   return [...found.values()].sort((a, b) => a.jsName.localeCompare(b.jsName));
@@ -665,12 +666,14 @@ function bodiesByName(sources: AddonSource[]): Map<string, { file: string; body:
 export function entryPointGuards(sources: AddonSource[] = addonSources()): EntryPointGuardSite[] {
   const bodies = bodiesByName(sources);
   const out: EntryPointGuardSite[] = [];
-  for (const entry of addonEntryPointsFrom(sources)) {
+  const seen = new Set<string>();
+  for (const entry of addonEntryPointRegistrations(sources)) {
     const bare = entry.symbol.includes('::') ? entry.symbol.split('::')[1] : entry.symbol;
     const found = bodies.get(bare);
-    if (!found) {
+    if (!found || seen.has(`${entry.jsName}:${entry.symbol}`)) {
       continue;
     }
+    seen.add(`${entry.jsName}:${entry.symbol}`);
     out.push({
       jsName: entry.jsName,
       symbol: entry.symbol,
@@ -681,20 +684,35 @@ export function entryPointGuards(sources: AddonSource[] = addonSources()): Entry
   return out.sort((a, b) => a.jsName.localeCompare(b.jsName));
 }
 
-/** {@link addonEntryPoints} over an explicit source set, for the self-tests. */
-function addonEntryPointsFrom(sources: AddonSource[]): { jsName: string; symbol: string }[] {
-  const found = new Map<string, string>();
+/**
+ * Every (jsName, symbol) registration in the addon, in all three spellings.
+ *
+ * THE one matcher. It used to exist twice, once here and once inside
+ * {@link addonEntryPoints}, and the population function has been wrong twice —
+ * so a correction applied to one copy left the other asserting the old
+ * population with nothing comparing them.
+ *
+ * Deliberately NOT deduplicated: one jsName can be registered by several
+ * symbols, and which one a caller wants differs (the coverage register wants the
+ * options-reading one; the catch-harness check wants all of them, since a
+ * namesake hiding another symbol's missing harness is the failure it exists to
+ * find).
+ */
+function addonEntryPointRegistrations(
+  sources: AddonSource[],
+): Array<{ jsName: string; symbol: string }> {
+  const found: Array<{ jsName: string; symbol: string }> = [];
   for (const { text } of sources) {
     const flat = text.replace(/\s+/g, ' ');
     for (const m of flat.matchAll(
       /(?:Instance|Static)Method<&([\w:]+)>\s*\(\s*"([A-Za-z0-9_]+)"/g,
     )) {
-      found.set(m[2], m[1]);
+      found.push({ jsName: m[2], symbol: m[1] });
     }
     for (const m of flat.matchAll(
       /exports\.Set\(\s*"([A-Za-z0-9_]+)"\s*,\s*Napi::Function::New\(\s*env\s*,\s*&?([\w:]+)/g,
     )) {
-      found.set(m[1], m[2]);
+      found.push({ jsName: m[1], symbol: m[2] });
     }
     // An ObjectWrap class reaches JS as DefineClass plus `exports.Set(name,
     // func)`, so neither spelling above names its CONSTRUCTOR — and a
@@ -715,10 +733,10 @@ function addonEntryPointsFrom(sources: AddonSource[]): { jsName: string; symbol:
               .slice(init)
               .replace(/\s+/g, ' ')
               .match(/DefineClass\(\s*env\s*,\s*"([A-Za-z0-9_]+)"/);
-      found.set(declared ? declared[1] : cls, `${cls}::${cls}`);
+      found.push({ jsName: declared ? declared[1] : cls, symbol: `${cls}::${cls}` });
     }
   }
-  return [...found].map(([jsName, symbol]) => ({ jsName, symbol }));
+  return found;
 }
 
 /** One failure class, with the lines that made it fire. */
@@ -789,6 +807,157 @@ export function evaluateNarrowingScope(
         'These allowlist entries matched nothing. One that suppresses nothing still asserts a ' +
         'reviewed decision about a spelling, so the next narrowing to take it inherits the ' +
         'blessing unexamined',
+      lines: stale,
+    });
+  }
+  return findings;
+}
+
+/** An integer key read whose fallback is a literal 0 or the sentinel tag. */
+export interface ZeroFallbackSite {
+  file: string;
+  line: number;
+  /** The literal JS key the reader was given. */
+  key: string;
+  /** `node_int_option`, `IntProperty`, ... */
+  reader: string;
+  /** True when the fallback is spelled `kZeroIsSentinel` rather than `0`. */
+  tagged: boolean;
+  /** `file:key` — stable across line moves, so the register does not rot. */
+  id: string;
+}
+
+/**
+ * The object-key integer readers whose fallback position can hold either a
+ * literal 0 or the sentinel tag.
+ *
+ * Only four of these carry a `ZeroIsSentinel` overload; the rest are here
+ * because their zero poses the same question, and a site that cannot be tagged
+ * must still answer it in writing.
+ *
+ * Positional arguments are deliberately out of scope: their family puts the
+ * fallback after an index that is itself usually 0, so one match cannot separate
+ * the two, and only `OptionalUint32Arg` carries the overload at all.
+ *
+ * The key is matched after ONE OR TWO leading arguments, because the family is
+ * not uniform about a leading `Napi::Env`. Anchoring on the single-argument
+ * spelling made the other arity invisible rather than uncovered: no site, no
+ * reason owed, no finding. `0u` is matched for the same reason — a suffix is not
+ * a different value, and requiring the bare spelling hid whole files.
+ *
+ * `MidiByteProperty` is absent on purpose, and the accompanying test records
+ * why: it refuses a non-integer outright, so nothing can truncate onto its zero.
+ * That is a property of the READER, not of the field, so writing it as a
+ * per-site reason would keep blessing `file:key` after the site moved to a
+ * truncating reader. Excluding the reader instead makes exactly that move
+ * surface as a site owing a reason.
+ */
+const ZERO_FALLBACK_READER_NAMES = [
+  'node_int_option',
+  'node_int64_option',
+  'IntProperty',
+  'Int64Property',
+  'Uint32Property',
+  'WordProperty',
+] as const;
+
+const ZERO_FALLBACK_READER = new RegExp(
+  `\\b(${ZERO_FALLBACK_READER_NAMES.join('|')})\\s*\\(\\s*(?:[^,;()]+\\s*,\\s*){1,2}` +
+    // `0u` is the same literal zero as `0`; matching only the bare spelling hid
+    // a whole file's worth of reads behind a suffix.
+    '"([A-Za-z0-9_]+)"\\s*,\\s*(0[uUlL]*|kZeroIsSentinel)\\s*\\)',
+  'g',
+);
+
+/** Whether {@link ZERO_FALLBACK_READER} recognises a reader named @p name. */
+export function isScannedZeroFallbackReader(name: string): boolean {
+  return (ZERO_FALLBACK_READER_NAMES as readonly string[]).includes(name);
+}
+
+/**
+ * Every integer key read whose fallback is a literal 0, plus every one that
+ * carries the sentinel tag instead.
+ *
+ * `kZeroIsSentinel` made "this key's zero selects the library default" a
+ * property of the SPELLING rather than a fact living in the callee, which is
+ * what lets a scan read it. Both halves are returned so a caller can require the
+ * tagged population to be large before requiring the untagged one to be
+ * accounted for: with the regex dead, an empty untagged set would read as a
+ * clean sweep.
+ *
+ * Takes its sources so the self-tests can drive this exact function.
+ */
+export function zeroFallbackSites(sources: AddonSource[] = addonSources()): ZeroFallbackSite[] {
+  const sites: ZeroFallbackSite[] = [];
+  for (const { file, text } of sources) {
+    const code = withoutComments(text);
+    for (const match of code.matchAll(new RegExp(ZERO_FALLBACK_READER.source, 'g'))) {
+      const at = match.index ?? 0;
+      sites.push({
+        file,
+        line: code.slice(0, at).split('\n').length,
+        key: match[2],
+        reader: match[1],
+        tagged: match[3] === 'kZeroIsSentinel',
+        id: `${file}:${match[2]}`,
+      });
+    }
+  }
+  return sites;
+}
+
+/**
+ * Every zero-fallback failure class, as data.
+ *
+ * Separated from the assertions for the same reason {@link
+ * evaluateNarrowingScope} is: a class asserted through a re-implementation of
+ * this function would only ever agree with itself.
+ */
+export function evaluateZeroSentinelScope(
+  sources: AddonSource[] = addonSources(),
+  reasons: ReadonlyMap<string, string> = new Map(),
+  floor = { tagged: 20, sites: 50 },
+): NarrowingFinding[] {
+  const findings: NarrowingFinding[] = [];
+  const sites = zeroFallbackSites(sources);
+  const tagged = sites.filter((site) => site.tagged);
+  const untagged = sites.filter((site) => !site.tagged);
+
+  // With the regex dead both sets are empty, every check below passes, and the
+  // scan certifies itself. Pin both halves: an untagged population alone would
+  // go quiet the day someone tags the last site.
+  const shrunk: string[] = [];
+  if (tagged.length < floor.tagged) {
+    shrunk.push(`tagged reads: found ${tagged.length}, floor is ${floor.tagged}`);
+  }
+  if (sites.length < floor.sites) {
+    shrunk.push(`zero-fallback reads: found ${sites.length}, floor is ${floor.sites}`);
+  }
+  if (shrunk.length > 0) {
+    findings.push({
+      heading: 'The scan no longer finds the population it is sized for',
+      lines: shrunk,
+    });
+  }
+
+  const unaccounted = untagged.filter((site) => !reasons.has(site.id));
+  if (unaccounted.length > 0) {
+    findings.push({
+      heading:
+        'These integer reads fall back to a literal 0 with neither the sentinel tag nor a ' +
+        'recorded reason, so nothing says whether their zero is a quantity or a default',
+      lines: unaccounted.map((site) => `${site.id} (${site.file}:${site.line} ${site.reader})`),
+    });
+  }
+
+  const open = new Set(untagged.map((site) => site.id));
+  const stale = [...reasons.keys()].filter((id) => !open.has(id));
+  if (stale.length > 0) {
+    findings.push({
+      heading:
+        'These recorded reasons matched no untagged read. One that excuses nothing still ' +
+        'asserts a reviewed decision about a key, so the next read to take that name inherits ' +
+        'the blessing unexamined',
       lines: stale,
     });
   }

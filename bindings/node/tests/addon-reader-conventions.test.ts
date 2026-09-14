@@ -25,6 +25,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   analyze,
+  analyzePolyphonic,
   decomposeStems,
   estimateMeter,
   extractNotes,
@@ -51,7 +52,10 @@ import {
   renderPercussiveEvents,
   roomMorph,
   SampleBank,
+  StreamAnalyzer,
   StreamingEqualizer,
+  StreamingMasteringChain,
+  StreamingRetune,
   spectralEdit,
   splitNote,
   synthesizeRir,
@@ -145,7 +149,7 @@ const BARE_HAS_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   ],
   [
     'effects/dynamics_repair.cpp:maxClickSamples',
-    'The value is read with the type-checked node_int_option and the default (8) is positive, so undefined cannot trip the positivity check.',
+    'The value is read with the presence-checked IntProperty and the default (8) is positive, so undefined cannot trip the positivity check.',
   ],
   [
     'effects/dynamics_repair.cpp:paddingSamples',
@@ -589,6 +593,81 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         return [Array.from(eq.spectrum().bandGainDb), Array.from(out.left)];
       } finally {
         eq.destroy();
+      }
+    },
+  },
+  // The ObjectWrap CONSTRUCTORS. A constructor takes an options bag like any
+  // method, and each of these reads one; the entry-point scan named none of them
+  // until it learned the DefineClass spelling.
+  {
+    jsName: 'PolyphonicAnalysis',
+    invoke: (o) => {
+      const analysis = analyzePolyphonic({ ...o, samples: sine(8192, 220), sampleRate: SR });
+      try {
+        return [
+          analysis.noteCount,
+          analysis.frameCount,
+          Array.from(analysis.render()).slice(0, 32),
+        ];
+      } finally {
+        analysis.destroy();
+      }
+    },
+  },
+  {
+    jsName: 'StreamAnalyzer',
+    invoke: (o) => {
+      const analyzer = new StreamAnalyzer({ ...o });
+      try {
+        analyzer.process(sine(8192));
+        analyzer.finalize();
+        return [analyzer.frameCount(), analyzer.sampleRate(), analyzer.stats()];
+      } finally {
+        analyzer.destroy();
+      }
+    },
+  },
+  {
+    jsName: 'StreamingEqualizer',
+    invoke: (o) => {
+      const eq = new StreamingEqualizer({ ...o });
+      try {
+        eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 6, enabled: true });
+        const block = sine(512, 1000);
+        const out = eq.processStereo(block, block);
+        return [Array.from(eq.spectrum().bandGainDb), Array.from(out.left)];
+      } finally {
+        eq.destroy();
+      }
+    },
+  },
+  {
+    jsName: 'StreamingMasteringChain',
+    invoke: (o) => {
+      const chain = new StreamingMasteringChain({ ...o });
+      try {
+        chain.prepare(SR, 512, 2);
+        const block = sine(512, 1000);
+        const out = chain.processStereo(block, block);
+        return [chain.latencySamples(), chain.stageNames(), Array.from(out.left)];
+      } finally {
+        chain.destroy();
+      }
+    },
+  },
+  {
+    jsName: 'StreamingRetune',
+    invoke: (o) => {
+      const retune = new StreamingRetune({ ...o });
+      try {
+        retune.prepare(SR, 512);
+        return [
+          retune.latencySamples(),
+          retune.config(),
+          Array.from(retune.processMono(sine(512))),
+        ];
+      } finally {
+        retune.destroy();
       }
     },
   },
