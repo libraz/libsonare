@@ -218,7 +218,9 @@ describe('setBuiltinInstrument optional scalars', () => {
       let peak = 0;
       for (let block = 0; block < 12; block++) {
         const out = engine.process([new Float32Array(BLOCK), new Float32Array(BLOCK)])[0];
-        for (const sample of out) peak = Math.max(peak, Math.abs(sample));
+        for (const sample of out) {
+          peak = Math.max(peak, Math.abs(sample));
+        }
       }
       return peak;
     } finally {
