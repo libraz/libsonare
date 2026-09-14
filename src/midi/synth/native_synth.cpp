@@ -855,7 +855,10 @@ void NativeSynth::process_impl(float* const* channels,
     // Scrub any non-finite bus sample before it reaches the DC blocker: a single
     // NaN/Inf reaching dc_x1_/dc_y1_ would persist in the IIR state and poison
     // every subsequent sample for the whole render. Bit-identical for finite
-    // input. Mirrors the host-side scrub in au_instrument_provider.
+    // input, which is not the same as safe for it -- the blocker is a feedback
+    // cell whose worst-case gain is well over unity, so a large enough finite
+    // sample still leaves float range. Mirrors the host-side scrub in
+    // au_instrument_provider.
     if (!std::isfinite(mix_l)) mix_l = 0.0f;
     if (!std::isfinite(mix_r)) mix_r = 0.0f;
     if (config_.dc_block) {

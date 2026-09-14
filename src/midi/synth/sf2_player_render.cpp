@@ -234,8 +234,10 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       // Scrub any non-finite voice sample before it reaches a shared IIR state:
       // a single NaN/Inf would persist in the part's body resonators, the
       // insert bus and the reverb/chorus tanks and poison every later sample
-      // for the whole render. Bit-identical for finite input. The same guard
-      // the NativeSynth host applies to its own physical-model mix bus.
+      // for the whole render. Bit-identical for finite input, which is not the
+      // same as safe for it -- those states are feedback cells, so a large
+      // enough finite sample still leaves float range. The same guard the
+      // NativeSynth host applies to its own physical-model mix bus.
       const float rendered = v.render(mod, wind.pitch_ratio, wind.gain);
       const float s = std::isfinite(rendered) ? rendered : 0.0f;
       float l = s * v.gain_left;
@@ -469,8 +471,10 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   // host-injected processors and the effect returns are their own IIR state, so
   // whatever they produced has already been added by this point. A single
   // NaN/Inf reaching dc_x1_/dc_y1_ would persist there and poison every
-  // remaining sample of the render. Bit-identical for finite input; the same
-  // guard the NativeSynth host applies ahead of its blocker.
+  // remaining sample of the render. Bit-identical for finite input, which is not
+  // the same as safe for it -- the blocker is a feedback cell whose worst-case
+  // gain is well over unity, so a large enough finite sample still leaves float
+  // range. The same guard the NativeSynth host applies ahead of its blocker.
   for (int i = 0; i < n; ++i) {
     if (!std::isfinite(mix_l_[static_cast<size_t>(i)])) mix_l_[static_cast<size_t>(i)] = 0.0f;
     if (!std::isfinite(mix_r_[static_cast<size_t>(i)])) mix_r_[static_cast<size_t>(i)] = 0.0f;

@@ -248,14 +248,15 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     auto& channel = channels_[static_cast<std::size_t>(ch)];
     const std::uint64_t block_start = channel.control_cadence.sample_position();
     for (int i = 0; i < num_samples; ++i) {
-      // Sanitize non-finite (NaN/Inf) input to silence before it can enter any
-      // IIR state. A single upstream NaN would otherwise poison the HPF/EQ
-      // biquads, the retune history ring, the formant filter, and the reverb
-      // permanently (until reset()), because each recirculates its own output
-      // as state. This must be RT-safe (no throw/alloc), so we flush the sample
-      // to 0 rather than rejecting the block. The cleaned value is written back
-      // in place so the dry read in the mix loop below stays finite too. Finite
-      // samples pass through bit-identically (same value, same bits).
+      // Non-finite input is flushed to silence rather than refused: every stage
+      // below recirculates its own output, so one NaN would hold the HPF/EQ
+      // biquads, the retune ring, the formant filter and the reverb until
+      // reset(), and this runs where a throw is not available. Written back in
+      // place so the dry read in the mix loop stays finite too. It keeps a
+      // non-finite sample out of the state and does NOT bound what the state
+      // can become -- a finite sample large enough leaves float range inside the
+      // highpass recurrence on the next line. discard_non_finite_state is what
+      // catches that, one block later.
       const float raw = channels[ch][i];
       const float clean = std::isfinite(raw) ? raw : 0.0f;
       channels[ch][i] = clean;
