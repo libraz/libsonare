@@ -56,6 +56,12 @@ std::vector<float> detect_onsets(const float* samples, size_t size, int sample_r
   return sonare::detect_onsets(audio);
 }
 
+std::vector<float> detect_onsets(const float* samples, size_t size, int sample_rate,
+                                 const OnsetDetectConfig& config) {
+  Audio audio = prepare_audio(samples, size, sample_rate);
+  return sonare::detect_onsets(audio, config);
+}
+
 std::vector<float> detect_beats(const float* samples, size_t size, int sample_rate) {
   Audio audio = prepare_audio(samples, size, sample_rate);
   return sonare::detect_beats(audio);

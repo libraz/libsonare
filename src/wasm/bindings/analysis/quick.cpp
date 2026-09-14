@@ -411,7 +411,10 @@ val js_detect_onsets(val samples, int sample_rate, val options) {
   config.wait = onsetWindowFrames(options, "wait", config.wait);
   config.backtrack = !options["backtrack"].isUndefined() && options["backtrack"].as<bool>();
   config.backtrack_range = onsetWindowFrames(options, "backtrackRange", config.backtrack_range);
-  std::vector<float> onsets = detect_onsets(audio, config);
+  // Through quick:: for the same reason the C ABI does: the peak-picking fields
+  // are frame counts, and a frame is hop_length over the rate in force.
+  std::vector<float> onsets =
+      quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate(), config);
   return vectorToFloat32Array(onsets);
 }
 

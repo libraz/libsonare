@@ -108,6 +108,14 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 /// @brief Controls peak-picking for @ref sonare_detect_onsets_ex.
 /// @details Zero-initialize this POD, then set every field explicitly; the
 ///          legacy @ref sonare_detect_onsets function retains its defaults.
+///
+///          @p pre_max, @p post_max, @p pre_avg, @p post_avg, @p wait and
+///          @p backtrack_range are FRAME counts, and a frame is @p hop_length
+///          divided by the analysis rate. That rate is 22050 Hz on both entry
+///          points -- input above it is resampled down before detection -- so a
+///          field means the same span of audio whatever rate the caller's buffer
+///          carries, and filling this struct with the values listed as defaults
+///          reproduces @ref sonare_detect_onsets exactly.
 typedef struct {
   int32_t n_fft;
   int32_t hop_length;

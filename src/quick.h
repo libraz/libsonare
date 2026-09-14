@@ -11,6 +11,7 @@
 #include "analysis/acoustic_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/music_analyzer.h"
+#include "analysis/onset_analyzer.h"
 
 namespace sonare {
 namespace quick {
@@ -47,6 +48,22 @@ std::vector<KeyCandidate> detect_key_candidates(const float* samples, size_t siz
 /// @param sample_rate Sample rate in Hz
 /// @return Vector of onset times in seconds
 std::vector<float> detect_onsets(const float* samples, size_t size, int sample_rate);
+
+/// @brief Detects onset times with an explicit detector configuration.
+/// @param samples Pointer to audio samples (mono, float32)
+/// @param size Number of samples
+/// @param sample_rate Sample rate in Hz
+/// @param config Detector configuration
+/// @return Vector of onset times in seconds
+/// @details Resamples above the analysis rate exactly as the form without a
+///          configuration does, so the two differ only in the configuration.
+///          Every peak-picking field is counted in FRAMES and a frame is
+///          hop_length divided by the rate in force, so a form that skipped the
+///          resample would silently reinterpret all of them -- a
+///          default-filled config would then read as a no-op and return a
+///          different answer.
+std::vector<float> detect_onsets(const float* samples, size_t size, int sample_rate,
+                                 const OnsetDetectConfig& config);
 
 /// @brief Detects beat times from audio samples.
 /// @param samples Pointer to audio samples (mono, float32)

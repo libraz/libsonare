@@ -221,7 +221,12 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
   native.backtrack = config->backtrack != 0;
   native.backtrack_range = config->backtrack_range;
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    return copy_vector(sonare::detect_onsets(audio, native), out_times, out_count);
+    // Through quick:: rather than the core, so this differs from
+    // sonare_detect_onsets only in the configuration. Going direct also dropped
+    // the resample, which reinterprets every frame-counted field in the config.
+    std::vector<float> onsets =
+        quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate(), native);
+    return copy_vector(onsets, out_times, out_count);
   });
 }
 

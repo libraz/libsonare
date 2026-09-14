@@ -60,6 +60,96 @@ TEST_CASE("sonare_detect_onsets_ex", "[c_api]") {
           SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("the configured onset entry agrees with the plain one at every rate", "[c_api][onsets]") {
+  // The two are documented as the same quantity with and without a configuration,
+  // and every field of the config defaults to the core default, so a
+  // default-filled config reads as a no-op. It has to BE one: every peak-picking
+  // field is a FRAME count and a frame is hop_length over the rate in force, so
+  // an entry that analysed at a different rate would reinterpret all of them
+  // while looking like it had been handed nothing.
+  SonareOnsetDetectConfig config{};
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.threshold = 0.0f;
+  config.pre_max = 1;
+  config.post_max = 1;
+  config.pre_avg = 3;
+  config.post_avg = 4;
+  config.delta = 0.06f;
+  config.wait = 1;
+  config.backtrack = 0;
+  config.backtrack_range = 10;
+
+  // Two rates above the analysis rate, resampling by different ratios, so a fix
+  // that happened to work at one ratio is not mistaken for agreement. 22050 is
+  // at the analysis rate, where the resample is a no-op and the two must agree
+  // trivially -- the case that says the comparison can tell agreement from
+  // coincidence.
+  for (int rate : {44100, 48000, 22050}) {
+    CAPTURE(rate);
+    const std::vector<float> samples = generate_clicks(120.0f, rate, 4.0f);
+
+    float* plain = nullptr;
+    size_t plain_count = 0;
+    REQUIRE(sonare_detect_onsets(samples.data(), samples.size(), rate, &plain, &plain_count) ==
+            SONARE_OK);
+    float* configured = nullptr;
+    size_t configured_count = 0;
+    REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), rate, &config, &configured,
+                                    &configured_count) == SONARE_OK);
+
+    // Element by element: a count comparison passes while the positions differ.
+    CHECK(configured_count == plain_count);
+    for (size_t i = 0; i < std::min(plain_count, configured_count); ++i) {
+      CAPTURE(i);
+      CHECK(configured[i] == plain[i]);
+    }
+    // Two empty lists agree perfectly, so the fixture has to produce onsets.
+    CHECK(plain_count > 0);
+
+    sonare_free_floats(plain);
+    sonare_free_floats(configured);
+  }
+}
+
+TEST_CASE("a configured onset detector still answers to its configuration", "[c_api][onsets]") {
+  // The control for the agreement above. Without it that equality also holds for
+  // an entry point that ignored the configuration and called the plain path.
+  const std::vector<float> samples = generate_clicks(120.0f, 44100, 4.0f);
+  SonareOnsetDetectConfig config{};
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.threshold = 0.0f;
+  config.pre_max = 1;
+  config.post_max = 1;
+  config.pre_avg = 3;
+  config.post_avg = 4;
+  config.delta = 0.06f;
+  config.wait = 1;
+  config.backtrack = 0;
+  config.backtrack_range = 10;
+
+  const auto onset_count = [&samples](const SonareOnsetDetectConfig& cfg) {
+    float* times = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 44100, &cfg, &times, &count) ==
+            SONARE_OK);
+    sonare_free_floats(times);
+    return count;
+  };
+
+  const size_t as_defaulted = onset_count(config);
+  // A threshold this far above the envelope leaves nothing to pick, and a wait
+  // this long admits at most one onset per second.
+  SonareOnsetDetectConfig strict = config;
+  strict.delta = 10.0f;
+  CHECK(onset_count(strict) < as_defaulted);
+
+  SonareOnsetDetectConfig sparse = config;
+  sparse.wait = 200;
+  CHECK(onset_count(sparse) < as_defaulted);
+}
+
 TEST_CASE("sonare_resample returns the standard empty C-array result", "[c_api]") {
   float* output = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t output_length = 99;
