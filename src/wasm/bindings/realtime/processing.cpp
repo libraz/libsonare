@@ -380,7 +380,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || source_sample_rate <= 0 ||
       target_sample_rate <= 0 || dither_bits < 0 || dither < 0 || dither > 3 ||
       !sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
-                                                  target_sample_rate)) {
+                                                  target_sample_rate, dither != 0)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
   }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,

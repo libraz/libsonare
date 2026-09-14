@@ -14,11 +14,15 @@ namespace sonare::resource {
 
 /// Maximum number of float samples accepted by one offline audio operation.
 inline constexpr std::size_t kMaxOfflineAudioSamples = 500'000'000;
-/// Peak memory budget for an engine-owned offline bounce/freeze result, and an
-/// unmeasured one. Bounce paths hold planar, interleaved and binding-owned
-/// copies concurrently, which the helper below multiplies by, so the budget
-/// refuses a stereo 48 kHz bounce past roughly 15 minutes -- 7 when it resamples.
+/// Peak memory budget for an engine-owned offline bounce/freeze result. One
+/// constant serves both the 64-bit host and WASM, so it is sized for wasm32's
+/// practical heap inside a 4 GiB address space, not for the host.
 inline constexpr std::size_t kMaxEngineOfflinePeakBytes = 1024u * 1024u * 1024u;
+/// Full-size float copies a bounce holds at once: planar, interleaved, and the
+/// caller-owned result. Dither adds one, because dither() copies its input into
+/// a new buffer while the interleaved source it was built from is still live.
+inline constexpr std::size_t kEngineBounceLiveFloatCopies = 3u;
+inline constexpr std::size_t kEngineBounceDitherLiveFloatCopies = 4u;
 
 /// Peak working-set budget for a synthesized acoustic RIR, chosen as a budget
 /// rather than measured. The RIR path can retain four full-length float buffers
@@ -275,16 +279,19 @@ inline bool engine_offline_shape_fits(
                                        &peak_bytes);
 }
 
-/// Bounce adds resampler double buffers when rates differ, so validate both the
-/// source allocation and the rounded output size using a conservative
-/// float-equivalent copy multiplier. This mirrors core/resample.cpp's rounded
-/// output-length contract while rejecting before its floating-to-size_t cast.
+/// Validates both the source allocation and the rounded output size against the
+/// same copy count. Resampling needs no higher count: it holds the source planar
+/// set beside the projected one, which two checks at the same multiplier already
+/// bound, and core/resample.cpp converts one block at a time rather than
+/// retaining a whole-input double buffer. Checking the projected length here also
+/// mirrors that file's rounded output-length contract while rejecting before its
+/// floating-to-size_t cast.
 inline bool engine_bounce_shape_fits(
-    int64_t frames, int channels, int source_sample_rate, int target_sample_rate,
+    int64_t frames, int channels, int source_sample_rate, int target_sample_rate, bool dithering,
     const EngineOfflineLimits& limits = kDefaultEngineOfflineLimits) noexcept {
   if (source_sample_rate <= 0 || target_sample_rate <= 0) return false;
-  const bool resampling = source_sample_rate != target_sample_rate;
-  const std::size_t live_float_copies = resampling ? 7u : 3u;
+  const std::size_t live_float_copies =
+      dithering ? kEngineBounceDitherLiveFloatCopies : kEngineBounceLiveFloatCopies;
   if (!engine_offline_shape_fits(frames, channels, live_float_copies, limits)) return false;
 
   const long double projected =

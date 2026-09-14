@@ -278,6 +278,24 @@ class _EngineIoMixin:
         _check(_get_lib().sonare_engine_finish_offline_render(self._require_handle()))
 
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
+        """Render the whole span in one call and return the interleaved mix.
+
+        The whole result is held in memory, so the span is capped by a 1 GiB
+        peak budget over the full-size float buffers a bounce holds at once, and
+        exceeding it raises :class:`SonareError` (invalid parameter).
+
+        The cap is a *frame* count: inversely proportional to ``num_channels``,
+        and independent of the sample rate. Stereo refuses past 44,739,242
+        frames, or past 33,554,432 frames when ``dither`` is non-zero, which
+        adds one more copy; 5.1 refuses past a third of each. Read as a
+        *duration* those two stereo counts are 15 min 32 s and 11 min 39 s at
+        48 kHz, and half that at 96 kHz. When ``source_sample_rate`` and
+        ``target_sample_rate`` differ both the source and the resampled length
+        are checked, so the longer of the two is what binds.
+
+        Render longer material in chunks through
+        ``render_offline(..., finalize=False)``.
+        """
         lib = _get_lib()
         raw_options = SonareEngineBounceOptions()
         # Seeded from the C defaults so a field appended to the struct on the C

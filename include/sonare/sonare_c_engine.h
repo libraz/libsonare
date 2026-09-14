@@ -501,7 +501,20 @@ SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 ///   because a chunked render would re-prime on every chunk; a host driving it
 ///   directly primes once itself (a process() block plus
 ///   sonare_engine_settle_parameters).
+///
+///   The whole result is held in memory, so the span is capped by a 1 GiB peak
+///   budget over the full-size float buffers a bounce holds at once. The cap is
+///   a FRAME count: inversely proportional to @c num_channels, and independent
+///   of the sample rate. Stereo refuses past 44,739,242 frames, or past
+///   33,554,432 frames when @c dither is non-zero, which adds one more copy;
+///   5.1 refuses past a third of each. Read as a DURATION those two stereo
+///   counts are 15 min 32 s and 11 min 39 s at 48 kHz, and half that at 96 kHz.
+///   When the rates differ both the source and the resampled length are checked,
+///   so the longer of the two is what binds. Longer material renders in chunks
+///   through sonare_engine_render_offline_ex.
 /// @param out Receives a heap-owned interleaved buffer; free with sonare_free_bounce_result.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER when the requested span exceeds the
+///         cap above, among the other option validations.
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out);

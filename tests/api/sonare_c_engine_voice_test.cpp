@@ -732,8 +732,8 @@ TEST_CASE("engine-owned offline results reject shapes above the allocation budge
                                                           /*max_peak_bytes=*/3000};
   REQUIRE(sonare::resource::engine_offline_shape_fits(10, 2, 3, tiny_limits));
   REQUIRE_FALSE(sonare::resource::engine_offline_shape_fits(51, 2, 1, tiny_limits));
-  REQUIRE(sonare::resource::engine_bounce_shape_fits(20, 2, 10, 20, tiny_limits));
-  REQUIRE_FALSE(sonare::resource::engine_bounce_shape_fits(60, 2, 10, 20, tiny_limits));
+  REQUIRE(sonare::resource::engine_bounce_shape_fits(20, 2, 10, 20, false, tiny_limits));
+  REQUIRE_FALSE(sonare::resource::engine_bounce_shape_fits(60, 2, 10, 20, false, tiny_limits));
 
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
@@ -762,6 +762,81 @@ TEST_CASE("engine-owned offline results reject shapes above the allocation budge
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(freeze_result.clip_id == 0u);
   REQUIRE(freeze_result.frames == 0);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("the shipped bounce budget refuses a stereo span past its documented length",
+          "[c_api][engine]") {
+  // Frame counts spelled out rather than derived from the constants, so moving
+  // either the copy count or kMaxEngineOfflinePeakBytes turns these red instead
+  // of moving the expectation along with the policy. They are the caller-facing
+  // lengths documented on sonare_engine_bounce_offline.
+  constexpr int64_t kStereoMaxFrames = 44'739'242;        // 15 min 32 s at 48 kHz
+  constexpr int64_t kStereoMaxDitherFrames = 33'554'432;  // 11 min 39 s at 48 kHz
+  constexpr int64_t kFourMinutes = 4 * 60 * 48000;
+
+  REQUIRE(sonare::resource::engine_bounce_shape_fits(kFourMinutes, 2, 48000, 48000, false));
+  REQUIRE(sonare::resource::engine_bounce_shape_fits(kFourMinutes, 2, 48000, 48000, true));
+
+  REQUIRE(sonare::resource::engine_bounce_shape_fits(kStereoMaxFrames, 2, 48000, 48000, false));
+  REQUIRE_FALSE(
+      sonare::resource::engine_bounce_shape_fits(kStereoMaxFrames + 1, 2, 48000, 48000, false));
+
+  // Dither copies the interleaved buffer into a second one while the source is
+  // still live, so its ceiling sits one full copy below the undithered one.
+  REQUIRE(
+      sonare::resource::engine_bounce_shape_fits(kStereoMaxDitherFrames, 2, 48000, 48000, true));
+  REQUIRE_FALSE(sonare::resource::engine_bounce_shape_fits(kStereoMaxDitherFrames + 1, 2, 48000,
+                                                           48000, true));
+  // The same span the undithered branch admits is refused once dither is asked
+  // for; that gap is the whole reason the count depends on the dither request.
+  REQUIRE_FALSE(
+      sonare::resource::engine_bounce_shape_fits(kStereoMaxFrames, 2, 48000, 48000, true));
+
+  // Resampling holds the source planar set beside the projected one, which the
+  // two checks already bound, so it does not lower the ceiling: a ten-minute
+  // 44.1 -> 48 kHz bounce fits on both sides of the conversion.
+  constexpr int64_t kTenMinutesAt441 = 10 * 60 * 44100;
+  REQUIRE(sonare::resource::engine_bounce_shape_fits(kTenMinutesAt441, 2, 44100, 48000, false));
+
+  // Channel count is the only divisor of the frame ceiling: bytes per frame
+  // scale with it, while the sample rate never enters the product.
+  REQUIRE_FALSE(
+      sonare::resource::engine_bounce_shape_fits(kStereoMaxFrames, 6, 48000, 48000, false));
+  // Same counts at 96 kHz, which is the documented claim that the cap is a
+  // frame count and only its reading as a duration moves with the rate.
+  REQUIRE(sonare::resource::engine_bounce_shape_fits(kStereoMaxFrames, 2, 96000, 96000, false));
+  REQUIRE_FALSE(
+      sonare::resource::engine_bounce_shape_fits(kStereoMaxFrames + 1, 2, 96000, 96000, false));
+  REQUIRE(
+      sonare::resource::engine_bounce_shape_fits(kStereoMaxDitherFrames, 2, 96000, 96000, true));
+  REQUIRE_FALSE(sonare::resource::engine_bounce_shape_fits(kStereoMaxDitherFrames + 1, 2, 96000,
+                                                           96000, true));
+}
+
+TEST_CASE("the C bounce entry point charges the budget for the dither request", "[c_api][engine]") {
+  // A span between the two ceilings: the undithered count admits it and the
+  // dithered one does not, so the two branches must answer differently. The
+  // engine is deliberately left unprepared, which makes the admitted branch stop
+  // at the never-prepared check instead of rendering 40M frames -- a wiring
+  // regression then reads as INVALID_STATE in under a millisecond.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 40'000'000;
+
+  SonareEngineBounceResult result{};
+  options.dither = 1;
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.interleaved == nullptr);
+
+  options.dither = 0;
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_ERROR_INVALID_STATE);
 
   sonare_engine_destroy(engine);
 }

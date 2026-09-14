@@ -157,8 +157,8 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
       options->num_channels <= 0 || options->target_sample_rate <= 0 ||
       options->source_sample_rate <= 0 || options->dither_bits < 0 ||
       !resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
-                                          options->source_sample_rate,
-                                          options->target_sample_rate)) {
+                                          options->source_sample_rate, options->target_sample_rate,
+                                          options->dither != 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Reject an out-of-range dither type instead of silently mapping it to None,
