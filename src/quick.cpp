@@ -3,7 +3,6 @@
 
 #include "quick.h"
 
-#include "analysis/acoustic_analyzer.h"
 #include "analysis/beat_analyzer.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/onset_analyzer.h"
@@ -82,16 +81,6 @@ AnalysisResult analyze(const float* samples, size_t size, int sample_rate) {
   Audio audio = Audio::from_buffer(samples, size, sample_rate);
   MusicAnalyzer analyzer(audio);
   return analyzer.analyze();
-}
-
-AcousticParameters detect_acoustic(const float* samples, size_t size, int sample_rate) {
-  Audio audio = Audio::from_buffer(samples, size, sample_rate);
-  return sonare::detect_acoustic(audio);
-}
-
-AcousticParameters analyze_impulse_response(const float* samples, size_t size, int sample_rate) {
-  Audio audio = Audio::from_buffer(samples, size, sample_rate);
-  return sonare::analyze_impulse_response(audio);
 }
 
 }  // namespace quick

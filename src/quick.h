@@ -4,11 +4,17 @@
 /// @brief Simple function API for quick music analysis.
 /// @details Provides stateless functions for common music analysis tasks.
 /// These functions are designed for ease of use and WASM interoperability.
+///
+/// Every entry here resamples to the analysis rate before measuring, which is
+/// the property that makes them interchangeable with each other and NOT
+/// interchangeable with the core call they wrap. An analysis that is meant to
+/// run at the caller's rate therefore has no entry in this file rather than an
+/// entry that skips the resample, because a reader deciding whether a pinned
+/// route exists reads the file and stops at the first name that matches.
 
 #include <cstddef>
 #include <vector>
 
-#include "analysis/acoustic_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
@@ -85,20 +91,6 @@ std::vector<float> detect_downbeats(const float* samples, size_t size, int sampl
 /// @param sample_rate Sample rate in Hz
 /// @return Complete analysis result
 AnalysisResult analyze(const float* samples, size_t size, int sample_rate);
-
-/// @brief Detects acoustic parameters from audio samples.
-/// @param samples Pointer to audio samples (mono, float32)
-/// @param size Number of samples
-/// @param sample_rate Sample rate in Hz
-/// @return Acoustic analysis result
-AcousticParameters detect_acoustic(const float* samples, size_t size, int sample_rate);
-
-/// @brief Computes acoustic parameters from impulse-response samples.
-/// @param samples Pointer to IR samples (mono, float32)
-/// @param size Number of samples
-/// @param sample_rate Sample rate in Hz
-/// @return Acoustic analysis result
-AcousticParameters analyze_impulse_response(const float* samples, size_t size, int sample_rate);
 
 }  // namespace quick
 }  // namespace sonare
