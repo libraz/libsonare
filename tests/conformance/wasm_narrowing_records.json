@@ -76,5 +76,108 @@
       "symbol": "automationTargetKindFromVal",
       "reason": "The sibling enum resolver for the automation target kind. Like automationCurveFromVal it exists to accept both spellings of one enum, and its numeric path requires a finite, integral ordinal inside the enum's bounds before the cast, so a saturated, negative or fractional one is refused rather than landing on a member."
     }
-  ]
+  ],
+  "positional": {
+    "floor": {
+      "registrations": 600,
+      "declarations": 1300,
+      "parameters": 700,
+      "functions": 360,
+      "files": 30
+    },
+    "shapes": [
+      {
+        "name": "sample_position",
+        "types": ["int64_t", "uint64_t"],
+        "parameter_pattern": ".",
+        "count": 27,
+        "status": "benign",
+        "defect": "refuses",
+        "mechanism": [
+          {
+            "file": "bindings/wasm/dist/sonare.js",
+            "built": true,
+            "contains": "if(typeof value==\"number\"){value=BigInt(value)}",
+            "note": "The shipped embind glue, where the 64-bit toWireType lives. It is the build's output and no committed file carries it, so the citation is marked built: an absent dist is not a failure, a dist whose glue no longer reads this way is. The other half of the claim -- that this population is the 64-bit one at all -- is derived from the declared types rather than cited."
+          }
+        ],
+        "reason": "A 64-bit parameter is registered through __embind_register_bigint, not through the integer path: its toWireType converts a JS number with BigInt(value), which throws on a fractional and on a non-finite one, and no number below 2^63 has anything to wrap into. The one residue is a request past 2^63, where the BigInt-to-i64 conversion truncates -- four billion times beyond the longest timeline any of these fields addresses, and integral, so it cannot arrive by the truncation these records exist for."
+      },
+      {
+        "name": "entity_handle",
+        "parameter_pattern": "(?:^|_)id$",
+        "count": 84,
+        "status": "open",
+        "defect": "wraps",
+        "selects": "an existing track, clip, bus, marker, take, page provider or automation parameter",
+        "reason": "A handle resolved against a live registry. A request of 2^32 + n arrives as n and addresses the entity whose id is n, and the guards in front of these are `id == 0` tests, which refuse only the exact multiple of 2^32. Measured on the one this class is named after: midiParamToCc matched the binding whose id is 5 for a requested 4294967301, which is why its paramId is now read as a val through checkedUintFromVal while its siblings are not."
+      },
+      {
+        "name": "slot_index",
+        "parameter_pattern": "(?:^|_)index$",
+        "count": 58,
+        "status": "open",
+        "defect": "wraps",
+        "selects": "a real strip, insert, send, lane, band or candidate slot",
+        "reason": "An ordinal into a container whose bounds are checked after the conversion, so the check sees the wrapped value and not the requested one. setLaneSidechain and setTrackStripInsertBypassed take their insertIndex this way: the engine refuses an index past the end, which a wrapped one is not."
+      },
+      {
+        "name": "midi_selector",
+        "parameter_pattern": "^(?:group|channel|note|velocity|controller|program|bank|bank_msb|bank_lsb|value)$",
+        "count": 49,
+        "status": "open",
+        "defect": "wraps",
+        "selects": "a real MIDI group, channel, note, program or controller",
+        "reason": "A 4-bit or 7-bit selector guarded by an explicit range test -- pushMidiInputCc requires group and channel in [0,15] and controller and value in [0,127] -- and the test runs on the wrapped value. 2^32 + 3 arrives as 3, passes, and sends on channel 3. The object-field spelling of the same defect is already fixed: channel 511 used to arrive as 255, the any-channel wildcard."
+      },
+      {
+        "name": "enumerated_mode",
+        "parameter_pattern": "^(?:mode|mode_mask|pan_mode|pan_law|curve|kind|policy|family|field|timing|placement|loop_mode|norm_type|profile_type|chroma_method|key_root|key_mode|root|pitch_class|preset|division|word0|schema_version)$",
+        "count": 41,
+        "status": "open",
+        "defect": "wraps",
+        "selects": "a named member of a small enum -- a pan law, a warp mode, an automation curve, a key",
+        "reason": "An ordinal whose whole domain is a handful of adjacent values, so a wrapped request lands on a member rather than outside the enum. The bounds check that would refuse an absurd ordinal is downstream of the conversion and never sees one."
+      },
+      {
+        "name": "extent_or_size",
+        "parameter_pattern": ".",
+        "count": 477,
+        "status": "open",
+        "defect": "wraps",
+        "selects": "a different analysis: another sample rate, FFT size, hop, frame count or matrix shape",
+        "reason": "The residue, graded as a family rather than per site, and graded open because open is the answer that does not bless anything: putting a site here claims only that nobody has shown a mechanism. Two members were measured. sample_rate is bounded to [kMinAudioSampleRate, kMaxAudioSampleRate] by validate_offline_audio_extent, so 2^32 + 44100 is accepted and analyses at 44100. The matrix extents looked like the exception -- load_segment_matrix requires length == rows * cols -- and are not: a buffer has several factorisations, so a wrapped rows can land on a different valid reading of the same data."
+      }
+    ],
+    "constructors": [
+      {
+        "file": "bindings/analysis/stream_analyzer.cpp",
+        "arity": 20,
+        "indices": [0, 1, 2, 3, 12, 13, 18, 19],
+        "status": "open",
+        "defect": "wraps",
+        "selects": "a different stream-analysis configuration: sample rate, FFT size, hop",
+        "reason": "The StreamAnalyzer constructor spells its parameter types in the registration, so nothing points at a declaration and the arity is the key. Same shape as extent_or_size, recorded separately because the scan reaches it by a different route."
+      },
+      {
+        "file": "bindings/realtime/engine.cpp",
+        "arity": 4,
+        "indices": [1, 2, 3],
+        "status": "open",
+        "defect": "wraps",
+        "selects": "a different block size or ring capacity for the engine being constructed",
+        "reason": "The four-argument RealtimeEngine constructor. maxBlockSize and the two ring capacities wrap, and the capacity ceiling is applied after the conversion."
+      },
+      {
+        "file": "bindings/realtime/engine.cpp",
+        "arity": 5,
+        "indices": [1, 2, 3, 4],
+        "status": "open",
+        "defect": "wraps",
+        "selects": "a different block size, ring capacity or channel count",
+        "reason": "The five-argument overload of the same constructor, which adds maxChannels. Recorded apart from the four-argument one because two overloads in one file are told apart only by how many arguments they take."
+      }
+    ],
+    "parameters": []
+  }
 }

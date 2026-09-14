@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep every JS-to-C++ numeric narrowing in ``src/wasm`` accounted for.
 
-Two populations, both enforced here, both drifting for the same reason -- a new
+Three populations, all enforced here, all drifting for the same reason -- a new
 translation unit can convert a JS value however it likes and nothing notices:
 
 * **File-local readers.**  A function taking an ``emscripten::val`` and returning
@@ -14,6 +14,34 @@ translation unit can convert a JS value however it likes and nothing notices:
   that any positivity guard waves through.  A narrowing therefore has to go
   through the shared range-checked reader or be recorded with the mechanism that
   makes it harmless.
+* **Positional embind parameters.**  A parameter DECLARED as a narrow integer is
+  converted by embind's own glue, not by any code in this tree, and that glue
+  WRAPS: ``__embind_register_integer`` installs ``toWireType: value => value``,
+  so the JS number reaches the wasm i32 parameter through ToInt32 and 2^32 + 5
+  arrives as 5.  The two paths therefore disagree about the same C++ type --
+  ``val::as<uint32_t>()`` on an object field saturates to ``UINT32_MAX``, the
+  positional spelling wraps -- and the wrapping half is the one no downstream
+  guard can see, because a wrapped value is in the guard's domain by
+  construction.  A site here is recorded with its status: ``benign`` states a
+  mechanism, ``open`` states that a wrapped value is accepted and selects
+  something different and that nobody has fixed it yet.
+
+TWO CONVERSIONS DELIBERATELY OUTSIDE THE POSITIONAL POPULATION
+--------------------------------------------------------------
+Both were read out of the shipped glue in ``bindings/wasm/dist/sonare.js``
+rather than assumed, because each is a different registration function with a
+different contract:
+
+* ``bool`` -- ``toWireType: o => o ? trueValue : falseValue``.  Neither wraps nor
+  saturates; every JS value is a legal argument, so there is no number the
+  conversion silently changes.
+* ``float`` -- ``toWireType: value => value``, and the f32 demotion turns an
+  overflow into Infinity rather than into a plausible in-domain number.  That is
+  the saturating defect, not the wrapping one, and it needs its own per-site
+  triage; none of this tree's float positional parameters is a count or an index,
+  which is the only float shape the wrapping question reaches.  A float
+  parameter whose NAME is count- or index-shaped is reported, so the day one
+  lands it is not absorbed by this boundary.
 
 The records live in ``wasm_narrowing_records.json`` and are read as data.  A
 record that matches nothing is itself an error: a stale one keeps asserting a
@@ -46,6 +74,21 @@ Neither route can produce the other's answer by construction, so:
   with the cast pattern made to match nothing, both checks above go green and
   certify a scanner that has stopped working, so a floor is pinned.
 
+The positional population is counted twice on the same principle, by the two
+directions of one relation:
+
+* **Route R, registration-first.**  Each ``function("js", &sym)`` is resolved to
+  the declaration of ``sym`` and its parameter list is read.
+* **Route D, declaration-first.**  Every declaration in the tree carrying a
+  narrow integer parameter is enumerated, then kept if its name is registered.
+
+The two produce the same set only when resolution is a bijection, so their
+disagreement names exactly the failure that matters: a symbol whose declarations
+do not agree on a signature -- an ``_ex`` overload family, a header and a
+definition that have drifted -- resolves under route R to one of them while
+route D yields both.  A registration whose symbol resolves to nothing is an
+orphan and is reported on its own, because route D cannot see it at all.
+
 KNOWN COMMON MODE
 -----------------
 Both scans classify a cast through the one type list below.  A narrowing whose
@@ -53,7 +96,9 @@ type is spelled outside that list -- an alias, a typedef, a template parameter -
 is invisible to both scans AND to their agreement, so the reconciliation cannot
 detect it.  Widening the list is the only remedy; nothing here will report it.
 The same is true of the declaration side for a parameter type that is an alias
-for ``val``.
+for ``val``, and of the positional routes for a parameter whose declared type is
+an alias for a narrow integer: both routes read the same spelling, so they agree
+on missing it.
 """
 
 from __future__ import annotations
@@ -116,6 +161,38 @@ NUMERIC_RETURNS = INTEGER_TYPES + ("float", "double", "long double")
 # (both take a val and return a number) and only the registration tells them
 # apart.
 _EXPORTED = re.compile(r"\bfunction\s*\(\s*\"[^\"]*\"\s*,\s*&\s*([\w:]+)")
+
+# The same registrations read for their JS name and their C++ symbol together,
+# across every form embind offers a name and an address.
+_REGISTRATION = re.compile(
+    r"\.?\s*\b(function|class_function|property)\s*\(\s*\"([^\"]+)\"\s*,\s*&\s*([\w:]+)"
+)
+
+# `constructor<T...>()` names its parameter types in place rather than pointing
+# at a declaration, so it is matched separately and carries no symbol.
+_CONSTRUCTOR = re.compile(r"\.?\s*\bconstructor\s*<([^>]*)>\s*\(\s*\)")
+
+# Types converted positionally by an integer rule. `float` and `bool` are outside
+# this population by mechanism, for the reasons in the module docstring.
+POSITIONAL_TYPES = frozenset(INTEGER_TYPES) | {"char", "unsigned char", "signed char"}
+
+# The subset embind registers through the bigint glue rather than the integer
+# glue, which is a different conversion and therefore a different defect.
+_BIGINT_TYPES = frozenset(
+    {
+        "int64_t",
+        "uint64_t",
+        "std::int64_t",
+        "std::uint64_t",
+        "long long",
+        "unsigned long long",
+    }
+)
+
+# A float parameter shaped like a count or an index is the one float the wrapping
+# question reaches, and there is none today -- so the pattern is a trip-wire
+# rather than a classifier.
+_COUNT_SHAPED = re.compile(r"^(?:n|num|count)_|_(?:count|index|frames|samples)$|^n$|_n$")
 
 _TYPE_ALTERNATION = "|".join(
     re.escape(name) for name in sorted(INTEGER_TYPES, key=len, reverse=True)
@@ -418,6 +495,339 @@ class Scan:
         return sorted(disagreements)
 
 
+# ---------------------------------------------------------------------------
+# The positional population
+# ---------------------------------------------------------------------------
+
+# How far back a declaration's name and return type can sit from its parameter
+# list. Wide enough for the longest qualified name plus template arguments in
+# this tree; a lookback is what keeps the walk linear in the file's size.
+_LOOKBACK = 200
+
+_DECL_NAME = re.compile(r"([A-Za-z_]\w*(?:\s*::\s*[A-Za-z_]\w*)*)\s*$")
+_NOT_A_RETURN_TYPE = re.compile(r"\b(?:return|new|delete|throw|case|else|co_return)$")
+_STATEMENT_HEADS = frozenset(
+    {"if", "for", "while", "switch", "return", "catch", "sizeof", "else", "do",
+     "case", "new", "delete", "throw"}
+)
+
+
+def bracket_map(code: str, opener: str, closer: str) -> dict[int, int]:
+    """Every matched delimiter pair in one file, as {open index: index past close}.
+
+    One stacked pass rather than a forward scan per opener: the declaration walk
+    below asks about every `(` in the tree, and a per-opener scan that runs to
+    end-of-file on an unbalanced one costs the whole file each time.
+    """
+    pairs: dict[int, int] = {}
+    stack: list[int] = []
+    for i, ch in enumerate(code):
+        if ch == opener:
+            stack.append(i)
+        elif ch == closer and stack:
+            pairs[stack.pop()] = i + 1
+    return pairs
+
+
+def split_top_level(text: str) -> list[str]:
+    """Split on commas that are not inside a bracket of any kind."""
+    parts, depth, current = [], 0, ""
+    for ch in text:
+        if ch in "<([{":
+            depth += 1
+        elif ch in ">)]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    if current.strip():
+        parts.append(current)
+    return [" ".join(part.split()) for part in parts if part.strip()]
+
+
+def declarator_like(parameter: str) -> bool:
+    """Whether one comma-separated item reads as a parameter, not an argument.
+
+    Negative rather than whitelisted, because a whitelist of type names is the
+    same common mode as the cast type list and would silently drop every
+    parameter spelled with a type it had not heard of.  What an argument carries
+    and a declarator cannot: a call, a literal, an operator, a member access --
+    and where an argument is a bare identifier, a named parameter is two tokens.
+    """
+    body = parameter.split("=")[0].strip()
+    if not body:
+        return False
+    if re.search(r"[().\"'+\-/%!?]", body.replace("->", "")):
+        return False
+    body = re.sub(r"\b(?:const|volatile)\b", " ", body)
+    if any(ch in body for ch in "&*<["):
+        return True
+    tokens = body.split()
+    if len(tokens) >= 2:
+        return True
+    # A single token is a type only when it is unnamed: a builtin, or a name
+    # written in the tree's type case.
+    return tokens[0] in POSITIONAL_TYPES or bool(re.match(r"^[A-Z]", tokens[0]))
+
+
+def parameter_type(parameter: str) -> str:
+    """The declared type of one parameter, with its name and default removed."""
+    body = re.sub(r"\bconst\b", " ", parameter.split("=")[0])
+    tokens = " ".join(body.split()).replace("&", " & ").replace("*", " * ").split()
+    if len(tokens) > 1 and re.fullmatch(r"[A-Za-z_]\w*", tokens[-1]):
+        tokens = tokens[:-1]
+    text = " ".join(tokens).replace(" &", "&").replace(" *", "*")
+    # One spelling per type: three headers qualify `val`, so a declaration and
+    # its definition would otherwise read as two different signatures.
+    return text.replace("emscripten::val", "val")
+
+
+def parameter_name(parameter: str) -> str:
+    """The declared name of one parameter, or the empty string if unnamed."""
+    body = parameter.split("=")[0].strip()
+    match = re.search(r"([A-Za-z_]\w*)\s*$", body)
+    if match is None or " ".join(body.split()) == match.group(1):
+        return ""
+    return match.group(1)
+
+
+class Declaration:
+    """One function or method declaration, wherever it was written."""
+
+    def __init__(self, path: Path, line: int, cls: str | None, name: str,
+                 params: list[str]) -> None:
+        self.path, self.line, self.cls, self.name = path, line, cls, name
+        self.params = params
+        self.types = tuple(parameter_type(p) for p in params)
+
+    @property
+    def qualified(self) -> str:
+        return f"{self.cls}::{self.name}" if self.cls else self.name
+
+    @property
+    def display(self) -> str:
+        return f"{_display(self.path)}:{self.line}"
+
+    @property
+    def signature(self) -> str:
+        return f"{self.qualified}({', '.join(self.types)})"
+
+    def narrow_indices(self) -> list[int]:
+        return [i for i, t in enumerate(self.types) if t.rstrip("&* ") in POSITIONAL_TYPES]
+
+
+class Registration:
+    """One embind registration: a JS name bound to a C++ address."""
+
+    def __init__(self, path: Path, line: int, kind: str, js_name: str, symbol: str) -> None:
+        self.path, self.line, self.kind = path, line, kind
+        self.js_name, self.symbol = js_name, symbol
+        self.declaration: Declaration | None = None
+
+    @property
+    def display(self) -> str:
+        return f"{_display(self.path)}:{self.line}"
+
+
+class Positional:
+    """One narrow integer parameter of one registered function."""
+
+    def __init__(self, registration: Registration, declaration: Declaration, index: int) -> None:
+        self.registration, self.declaration, self.index = registration, declaration, index
+        self.name = parameter_name(declaration.params[index])
+        self.type = declaration.types[index].rstrip("&* ")
+
+    @property
+    def key(self) -> tuple[str, str, int]:
+        return (self.registration.js_name, self.declaration.qualified, self.index)
+
+    @property
+    def display(self) -> str:
+        label = self.name or f"#{self.index}"
+        return f"{self.registration.display}  {self.registration.js_name}({label}: {self.type})"
+
+
+def class_spans(code: str, braces: dict[int, int] | None = None) -> list[tuple[str, int, int]]:
+    """Every `class X { … }` / `struct X { … }` body, by brace balance."""
+    if braces is None:
+        braces = bracket_map(code, "{", "}")
+    spans = []
+    for match in re.finditer(r"\b(?:class|struct)\s+([A-Za-z_]\w*)\s*(?::[^{;]*)?\{", code):
+        brace = code.index("{", match.end() - 1)
+        end = braces.get(brace, -1)
+        if end > 0:
+            spans.append((match.group(1), brace, end))
+    return spans
+
+
+def declarations_of(path: Path, readable: str, code: str) -> list[Declaration]:
+    """Every declaration in one file, whether it opens a body or ends in `;`."""
+    parens = bracket_map(code, "(", ")")
+    spans = class_spans(code)
+    found: list[Declaration] = []
+    for open_paren, close in sorted(parens.items()):
+        # A bounded lookback, not the whole prefix: the name is anchored at the
+        # paren, and slicing every prefix in the tree costs more than the scan.
+        window = max(0, open_paren - _LOOKBACK)
+        match = _DECL_NAME.search(code[window:open_paren].rstrip())
+        if match is None:
+            continue
+        name = " ".join(match.group(1).split())
+        if name.split("::")[-1] in _STATEMENT_HEADS:
+            continue
+        tail = _AFTER_PARAMS.match(code, close)
+        stop = tail.end() if tail else close
+        if stop >= len(code) or code[stop] not in "{;:":
+            continue
+        name_at = window + match.start()
+        before = readable[max(0, name_at - _LOOKBACK):name_at].rstrip()
+        # A declaration has a return type; a call has a statement head or an
+        # operator where the return type would be.
+        if not re.search(r"[\w>\]&*]$", before) or _NOT_A_RETURN_TYPE.search(before):
+            continue
+        params = split_top_level(readable[open_paren + 1:close - 1])
+        if params and not all(declarator_like(p) for p in params):
+            continue
+        cls = None
+        if "::" in name:
+            cls, name = name.rsplit("::", 1)
+            cls = cls.split("::")[-1]
+        else:
+            enclosing = [c for c, begin, end in spans if begin <= open_paren < end]
+            if enclosing:
+                cls = enclosing[-1]
+        found.append(
+            Declaration(path, readable.count("\n", 0, name_at) + 1, cls, name, params)
+        )
+    return found
+
+
+class PositionalScan:
+    """Both directions of the registration-to-declaration relation."""
+
+    def __init__(self, tree: Path = WASM_TREE, *, short_name_only: bool = False) -> None:
+        self.tree = tree
+        # Resolving on the short name alone -- kept as an option so the routes'
+        # disagreement can be demonstrated rather than argued.
+        self.short_name_only = short_name_only
+        self.registrations: list[Registration] = []
+        self.declarations: list[Declaration] = []
+        self.constructors: list[tuple[Path, int, tuple[str, ...]]] = []
+        self.float_parameters: list[Positional] = []
+        self.route_r: list[Positional] = []
+        self.route_d: list[Positional] = []
+        self.unresolved: list[Registration] = []
+        self.conflicting: list[tuple[Registration, list[Declaration]]] = []
+        self._run()
+
+    def _files(self) -> list[Path]:
+        return sorted(
+            p for p in self.tree.rglob("*") if p.suffix in _SOURCE_SUFFIXES and p.is_file()
+        )
+
+    def _run(self) -> None:
+        for path in self._files():
+            readable, code = prepare(path.read_text(encoding="utf-8", errors="replace"))
+            for match in _REGISTRATION.finditer(readable):
+                self.registrations.append(
+                    Registration(
+                        path,
+                        readable.count("\n", 0, match.start()) + 1,
+                        match.group(1),
+                        match.group(2),
+                        match.group(3),
+                    )
+                )
+            for match in _CONSTRUCTOR.finditer(code):
+                self.constructors.append(
+                    (
+                        path,
+                        code.count("\n", 0, match.start()) + 1,
+                        tuple(split_top_level(match.group(1))),
+                    )
+                )
+            self.declarations.extend(declarations_of(path, readable, code))
+
+        index: dict[str, list[Declaration]] = {}
+        for declaration in self.declarations:
+            index.setdefault(declaration.qualified, []).append(declaration)
+            if declaration.cls:
+                index.setdefault(declaration.name, []).append(declaration)
+
+        registered: dict[str, list[Registration]] = {}
+        for registration in self.registrations:
+            candidates = self._candidates(index, registration.symbol)
+            if not candidates:
+                self.unresolved.append(registration)
+                continue
+            if len({d.types for d in candidates}) > 1:
+                self.conflicting.append((registration, candidates))
+                continue
+            registration.declaration = candidates[0]
+            registered.setdefault(candidates[0].qualified, []).append(registration)
+            # Route R: the registration's own declaration, read forwards.
+            for i in candidates[0].narrow_indices():
+                self.route_r.append(Positional(registration, candidates[0], i))
+            for i, t in enumerate(candidates[0].types):
+                if t.rstrip("&* ") == "float":
+                    self.float_parameters.append(Positional(registration, candidates[0], i))
+
+        # Route D: every declaration carrying a narrow parameter, kept if
+        # something registered it. Seen declarations are deduplicated by
+        # signature, since a header and its definition are one function.
+        seen: set[tuple[str, int, str]] = set()
+        for declaration in self.declarations:
+            for registration in registered.get(declaration.qualified, []):
+                for i in declaration.narrow_indices():
+                    key = (registration.js_name, declaration.qualified, i)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    self.route_d.append(Positional(registration, declaration, i))
+
+    def _candidates(self, index: dict[str, list[Declaration]], symbol: str) -> list[Declaration]:
+        if self.short_name_only:
+            return index.get(symbol.split("::")[-1], [])
+        for key in (symbol, symbol.split("::", 1)[-1], symbol.split("::")[-1]):
+            if key in index:
+                return index[key]
+        return []
+
+    def reconcile(self) -> list[str]:
+        """Parameters one route found and the other did not, named with both."""
+        by_r = {p.key for p in self.route_r}
+        by_d = {p.key for p in self.route_d}
+        lines = [
+            f"{js}  {qualified} parameter #{i}: route R only"
+            for js, qualified, i in sorted(by_r - by_d)
+        ]
+        lines += [
+            f"{js}  {qualified} parameter #{i}: route D only"
+            for js, qualified, i in sorted(by_d - by_r)
+        ]
+        return sorted(lines)
+
+    def constructor_parameters(self) -> list[tuple[Path, int, int, list[int], list[str]]]:
+        """Each `constructor<T...>()` that takes a narrow integer, and where."""
+        found = []
+        for path, line, types in self.constructors:
+            narrow = [(i, t.rstrip("&* ")) for i, t in enumerate(types)]
+            indices = [i for i, t in narrow if t in POSITIONAL_TYPES]
+            if indices:
+                found.append(
+                    (
+                        path,
+                        line,
+                        len(types),
+                        indices,
+                        [t for i, t in narrow if t in POSITIONAL_TYPES],
+                    )
+                )
+        return found
+
+
 def load_records(path: Path = RECORDS) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -475,6 +885,251 @@ class Records:
         return sorted(name for name in every if name not in self.used)
 
 
+def derive_defect(types: set[str]) -> str | None:
+    """The conversion rule a set of declared types implies, or None if mixed.
+
+    embind picks its glue by the C++ type, so the rule is not a matter of
+    opinion and a record does not get to state it.  Deriving it is what stops a
+    record from being re-labelled: no word in the file can make a ``uint32_t``
+    stop wrapping.  A record covering two rules at once is refused rather than
+    resolved, because one verdict cannot describe both halves.
+    """
+    kinds = set()
+    for name in types:
+        if name in _BIGINT_TYPES:
+            kinds.add("refuses")
+        elif name == "float":
+            kinds.add("saturates")
+        else:
+            kinds.add("wraps")
+    if len(kinds) != 1:
+        return None
+    return kinds.pop()
+
+
+def read_citation(root: Path, citation: dict) -> str | None:
+    """Check one mechanism citation, returning the failure or None.
+
+    A citation is a path plus the text that must be readable at it, so a claim
+    that something is harmless points at where that can be seen rather than
+    asserting it.  ``built`` marks a file the build produces rather than the
+    repo tracking -- the embind glue is the case that matters, since the
+    conversion rules live in emscripten's output and in no committed file -- and
+    only excuses the file being absent, never a quote that is there and wrong.
+    """
+    path = root / citation["file"]
+    if not path.is_file():
+        if citation.get("built"):
+            return None
+        return f"{citation['file']}: no such file, and it is not marked built"
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if citation["contains"] not in text:
+        return f"{citation['file']}: does not contain {citation['contains'][:60]!r}"
+    return None
+
+
+class PositionalRecords:
+    """The recorded positional parameters, graded by what a wrapped value does.
+
+    A shape carries a count, not just a pattern.  A pattern alone would absorb
+    the next parameter to take a covered name -- the very case worth reporting --
+    so a shape whose population has moved is a failure in either direction, and
+    a fix has to delete or decrement its record in the same change.
+
+    ``status`` is what the inline records cannot express, and the two values are
+    deliberately not the same price:
+
+    * ``open`` says the value wraps, is accepted, and selects something
+      different.  It costs a ``selects`` line naming what gets picked.
+    * ``benign`` says no such value exists.  It costs a ``mechanism`` citation --
+      a path and the text that must be readable at it -- AND it is only legal
+      where the defect DERIVED FROM THE DECLARED TYPES is ``refuses``.
+
+    That second condition is the one that matters.  A status flipped by hand
+    would otherwise turn 709 wrapping parameters into reviewed-and-fine on no
+    evidence; deriving the rule from the type means no edit to this file can
+    make a ``uint32_t`` stop wrapping, so ``benign`` is unreachable for them
+    without changing the C++ declaration itself.  A genuinely harmless wrapping
+    parameter -- one pinned by an earlier argument, say -- is not expressible
+    here on purpose: it needs its own status with its own evidence rule, and
+    that friction is the point.
+
+    ``pending`` is refused as it is in the inline records: a suppression whose
+    reason is "nobody has looked" reads downstream exactly like one whose reason
+    is a mechanism.
+    """
+
+    STATUSES = ("benign", "open")
+
+    def __init__(self, data: dict, root: Path | None = None) -> None:
+        section = data.get("positional", {})
+        self.root = root if root is not None else ROOT
+        self.floor = section.get("floor", {})
+        self.shapes = section.get("shapes", [])
+        self.parameters = section.get("parameters", [])
+        self.constructors = section.get("constructors", [])
+        self.used: set[str] = set()
+        self.counted: dict[str, int] = {}
+        self.covered_types: dict[str, set[str]] = {}
+        self._patterns = [
+            (
+                shape,
+                re.compile(shape["parameter_pattern"]),
+                frozenset(shape["types"]) if shape.get("types") else None,
+            )
+            for shape in self.shapes
+        ]
+
+    @staticmethod
+    def label(entry: dict) -> str:
+        return entry.get("name") or entry.get("js") or f"{entry.get('file')}<{entry.get('arity')}>"
+
+    def every_record(self) -> list[dict]:
+        return self.shapes + self.parameters + self.constructors
+
+    def missing_reasons(self) -> list[str]:
+        return sorted(
+            self.label(entry)
+            for entry in self.every_record()
+            if not str(entry.get("reason", "")).strip()
+        )
+
+    def unsupported_open(self) -> list[str]:
+        """Open records that do not say what a wrapped value selects."""
+        return sorted(
+            self.label(entry)
+            for entry in self.every_record()
+            if entry.get("status") == "open" and not str(entry.get("selects", "")).strip()
+        )
+
+    def unsupported_benign(self) -> list[str]:
+        """Benign records whose mechanism is missing, unreadable, or not there."""
+        failures = []
+        for entry in self.every_record():
+            if entry.get("status") != "benign":
+                continue
+            citations = entry.get("mechanism") or []
+            if not citations:
+                failures.append(f"{self.label(entry)}: benign with no mechanism citation")
+                continue
+            for citation in citations:
+                problem = read_citation(self.root, citation)
+                if problem:
+                    failures.append(f"{self.label(entry)}: {problem}")
+        return sorted(failures)
+
+    def shape_of(self, parameter: Positional) -> dict | None:
+        for shape, pattern, types in self._patterns:
+            if types is not None and parameter.type not in types:
+                continue
+            if pattern.search(parameter.name):
+                return shape
+        return None
+
+    def _observe(self, key: str, declared_type: str) -> None:
+        self.covered_types.setdefault(key, set()).add(declared_type)
+
+    def covers(self, parameter: Positional) -> bool:
+        shape = self.shape_of(parameter)
+        if shape is not None:
+            self.used.add(f"shape:{shape['name']}")
+            self.counted[shape["name"]] = self.counted.get(shape["name"], 0) + 1
+            self._observe(self.label(shape), parameter.type)
+            return True
+        for entry in self.parameters:
+            if (entry["js"], entry["symbol"], entry["index"]) == parameter.key:
+                self.used.add(f"parameter:{entry['js']}:{entry['index']}")
+                self._observe(self.label(entry), parameter.type)
+                return True
+        return False
+
+    def covers_constructor(
+        self, file: str, arity: int, indices: list[int], types: list[str]
+    ) -> bool:
+        """Whether one `constructor<T...>()` is recorded with the same shape.
+
+        Keyed on the arity rather than on the line, because a constructor names
+        its types in place: there is no declaration to point at, and two
+        overloads in one file are told apart by how many arguments they take.
+        """
+        for entry in self.constructors:
+            if entry["file"] == file and entry["arity"] == arity:
+                self.used.add(f"constructor:{file}:{arity}")
+                for declared_type in types:
+                    self._observe(self.label(entry), declared_type)
+                return entry["indices"] == indices
+        return False
+
+    def misdeclared_defects(self) -> list[str]:
+        """Records whose stated defect is not the one their types imply.
+
+        Two failures in one, because they are the same mistake seen from either
+        side: a ``defect`` that disagrees with the derivation, and a ``benign``
+        on a population whose derived rule is not ``refuses``.  Neither can be
+        argued out of by editing this file -- both read the C++ declarations.
+        """
+        problems = []
+        for entry in self.every_record():
+            label = self.label(entry)
+            types = self.covered_types.get(label)
+            if not types:
+                continue
+            derived = derive_defect(types)
+            if derived is None:
+                problems.append(
+                    f"{label}: covers {sorted(types)}, which embind converts by "
+                    "more than one rule, so one verdict cannot describe it"
+                )
+                continue
+            if entry.get("defect") != derived:
+                problems.append(
+                    f"{label}: states defect {entry.get('defect')!r}, but "
+                    f"{sorted(types)} is converted by the {derived!r} rule"
+                )
+            if entry.get("status") == "benign" and derived != "refuses":
+                problems.append(
+                    f"{label}: benign is only reachable where the conversion "
+                    f"refuses, and {sorted(types)} {derived}"
+                )
+        return sorted(problems)
+
+    def miscounted(self) -> list[str]:
+        """Shapes whose population is not the size the record claims."""
+        return sorted(
+            f"{shape['name']}: recorded {shape['count']}, "
+            f"found {self.counted.get(shape['name'], 0)}"
+            for shape in self.shapes
+            if shape["count"] != self.counted.get(shape["name"], 0)
+        )
+
+    def ungraded(self) -> list[str]:
+        return sorted(
+            f"{entry.get('name') or entry.get('js') or entry.get('file')}: status "
+            f"{entry.get('status', 'absent')!r}"
+            for entry in self.shapes + self.parameters + self.constructors
+            if entry.get("status") not in self.STATUSES
+        )
+
+    def open_total(self) -> int:
+        return (
+            sum(shape["count"] for shape in self.shapes if shape.get("status") == "open")
+            + sum(1 for entry in self.parameters if entry.get("status") == "open")
+            + sum(
+                len(entry["indices"])
+                for entry in self.constructors
+                if entry.get("status") == "open"
+            )
+        )
+
+    def unused(self) -> list[str]:
+        every = (
+            [f"shape:{s['name']}" for s in self.shapes]
+            + [f"parameter:{e['js']}:{e['index']}" for e in self.parameters]
+            + [f"constructor:{e['file']}:{e['arity']}" for e in self.constructors]
+        )
+        return sorted(name for name in every if name not in self.used)
+
+
 def _self_check(scan: Scan, floor: dict) -> list[str]:
     """The mandatory one. Two empty sets agree perfectly.
 
@@ -496,6 +1151,191 @@ def _self_check(scan: Scan, floor: dict) -> list[str]:
                 "the scan has stopped matching, and an empty population agrees "
                 "with everything"
             )
+    return failures
+
+
+def _positional_self_check(scan: PositionalScan, floor: dict) -> list[str]:
+    """The positional population's own floor, for the same reason as the other."""
+    failures = []
+    measured = {
+        "registrations": len(scan.registrations),
+        "declarations": len(scan.declarations),
+        "parameters": len(scan.route_r),
+        "functions": len({p.registration.js_name for p in scan.route_r}),
+        "files": len({p.registration.path for p in scan.route_r}),
+    }
+    for name, minimum in floor.items():
+        if measured.get(name, 0) < minimum:
+            failures.append(
+                f"{name}: found {measured.get(name, 0)}, floor is {minimum} -- "
+                "the scan has stopped matching, and an empty population agrees "
+                "with everything"
+            )
+    return failures
+
+
+def evaluate_positional(
+    scan: PositionalScan, records: PositionalRecords
+) -> list[tuple[str, list[str]]]:
+    """Every failure class of the positional population, as (heading, lines)."""
+    failures: list[tuple[str, list[str]]] = []
+
+    ungraded = records.ungraded()
+    if ungraded:
+        failures.append(
+            (
+                "These positional records carry no verdict, so they suppress a "
+                "site on no stated mechanism and on no stated defect",
+                [f"  {line}" for line in ungraded],
+            )
+        )
+
+    missing_reasons = records.missing_reasons()
+    if missing_reasons:
+        failures.append(
+            (
+                "These positional records carry no reason, so they suppress a "
+                "site without saying on what grounds",
+                [f"  {name}" for name in missing_reasons],
+            )
+        )
+
+    unsupported_open = records.unsupported_open()
+    if unsupported_open:
+        failures.append(
+            (
+                "These records are open without saying what a wrapped value "
+                "selects, which is the whole content of the claim -- an open "
+                "record that names no consequence is a pending one renamed",
+                [f"  {name}" for name in unsupported_open],
+            )
+        )
+
+    unsupported_benign = records.unsupported_benign()
+    if unsupported_benign:
+        failures.append(
+            (
+                "These records claim a mechanism that cannot be read where they "
+                "say it is. Benign is the expensive verdict on purpose: it points "
+                "at the text, and the text has to be there",
+                [f"  {line}" for line in unsupported_benign],
+            )
+        )
+
+    self_check = _positional_self_check(scan, records.floor)
+    if self_check:
+        failures.append(
+            ("The positional scan no longer finds the population it is sized for", self_check)
+        )
+
+    if scan.unresolved:
+        failures.append(
+            (
+                "These registrations bind a symbol no declaration in the tree "
+                "matches, so nothing can say what their parameters are",
+                [f"  {r.display}  {r.js_name} -> {r.symbol}" for r in scan.unresolved],
+            )
+        )
+
+    if scan.conflicting:
+        failures.append(
+            (
+                "These registrations resolve to declarations that disagree on a "
+                "signature, so the parameter list read here is one of several",
+                [
+                    f"  {r.display}  {r.js_name} -> "
+                    + " | ".join(sorted({d.signature for d in candidates}))
+                    for r, candidates in scan.conflicting
+                ],
+            )
+        )
+
+    disagreements = scan.reconcile()
+    if disagreements:
+        failures.append(
+            (
+                "The two routes disagree on these parameters, so a registration "
+                "resolved to a declaration the other route did not reach",
+                [f"  {line}" for line in disagreements],
+            )
+        )
+
+    unrecorded = [p for p in scan.route_r if not records.covers(p)]
+    if unrecorded:
+        failures.append(
+            (
+                "These positional parameters are declared as a narrow integer and "
+                "are not recorded, so embind converts them by a rule -- wrapping "
+                "modulo 2^32 -- that nothing here has graded",
+                [f"  {p.display}" for p in sorted(unrecorded, key=lambda p: p.display)],
+            )
+        )
+
+    counts = records.miscounted()
+    if counts:
+        failures.append(
+            (
+                "These shapes no longer cover the population they record. A shape "
+                "is a pattern AND a count, because a pattern alone absorbs the "
+                "next parameter to take a covered name",
+                [f"  {line}" for line in counts],
+            )
+        )
+
+    # The float boundary's trip-wire. The population is excluded by mechanism --
+    # a float saturates to Infinity rather than wrapping -- and by role, since
+    # none of this tree's float parameters is a count or an index. Only the
+    # second half can stop being true without anyone noticing.
+    counted_floats = [p for p in scan.float_parameters if _COUNT_SHAPED.search(p.name)]
+    if counted_floats:
+        failures.append(
+            (
+                "These float parameters are named like a count or an index, which "
+                "is the one float shape the wrapping question reaches; the float "
+                "exclusion was written on there being none",
+                [f"  {p.display}" for p in sorted(counted_floats, key=lambda p: p.display)],
+            )
+        )
+
+    unrecorded_constructors = [
+        f"  {_display(path)}:{line}  constructor<{arity}> narrow at {indices}"
+        for path, line, arity, indices, types in scan.constructor_parameters()
+        if not records.covers_constructor(
+            str(path.relative_to(scan.tree)), arity, indices, types
+        )
+    ]
+    if unrecorded_constructors:
+        failures.append(
+            (
+                "These embind constructors take a narrow integer positionally and "
+                "the record does not match. They name their types in place rather "
+                "than pointing at a declaration, so the arity is the only key",
+                unrecorded_constructors,
+            )
+        )
+
+    # After the coverage walks, which are what observe the declared types.
+    misdeclared = records.misdeclared_defects()
+    if misdeclared:
+        failures.append(
+            (
+                "These records state a conversion rule their parameters' types do "
+                "not have. embind picks its glue by the C++ type, so the rule is "
+                "derived here rather than believed",
+                [f"  {line}" for line in misdeclared],
+            )
+        )
+
+    stale = records.unused()
+    if stale:
+        failures.append(
+            (
+                "These positional records matched nothing. A record that "
+                "suppresses nothing still asserts a reviewed decision about a "
+                "spelling, so the next parameter to take it inherits the verdict",
+                [f"  {name}" for name in stale],
+            )
+        )
     return failures
 
 
@@ -612,6 +1452,12 @@ def main() -> int:
         help="stop matching an `emscripten::val` parameter, to show what the "
         "orphan check catches",
     )
+    parser.add_argument(
+        "--short-name-only",
+        action="store_true",
+        help="resolve a registered symbol on its short name alone, to show what "
+        "the two positional routes catch",
+    )
     args = parser.parse_args()
 
     global _VAL_PARAM
@@ -622,11 +1468,21 @@ def main() -> int:
     records = Records(data)
     scan = Scan(args.tree, body_window=args.body_window)
 
+    positional_records = PositionalRecords(data)
+    positional = PositionalScan(args.tree, short_name_only=args.short_name_only)
+
     print(f"val-taking bodies: {len(scan.containers)}")
     print(f"integer narrowings: {len(scan.sites)}")
     print(f"val-taking numeric-returning functions: {len(scan.readers)}")
+    print(f"embind registrations: {len(positional.registrations)}")
+    print(
+        f"narrow positional parameters: {len(positional.route_r)} "
+        f"over {len({p.registration.js_name for p in positional.route_r})} functions, "
+        f"{positional_records.open_total()} of them open"
+    )
 
     failures = evaluate(scan, records, data["floor"])
+    failures += evaluate_positional(positional, positional_records)
 
     for heading, lines in failures:
         print(f"\n{heading}:", *lines, sep="\n", file=sys.stderr)

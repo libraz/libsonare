@@ -305,13 +305,450 @@ val entryPoint(val options) {
             self.assertIn("localIntOption", lines[0])
 
 
+class PositionalFailureClassTest(unittest.TestCase):
+    """Each positional class, reverted one at a time on a scratch tree.
+
+    Separately, and in both directions: a parameter that appears must be
+    reported, a record that stops matching must be reported, and a parameter the
+    record does cover must not be.  One mutation that reddens everything would
+    leave any of the three free to be the check that never fires.
+    """
+
+    SOURCE = """
+#include <emscripten/val.h>
+using emscripten::val;
+
+val setStripGain(unsigned int strip_index, float gain_db) {
+  return val(strip_index);
+}
+
+val analyze(val samples, int sample_rate) {
+  return val(sample_rate);
+}
+
+EMSCRIPTEN_BINDINGS(unit) {
+  function("setStripGain", &setStripGain);
+  function("analyze", &analyze);
+}
+"""
+
+    FLOOR = {"registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1}
+
+    def _records(self, **overrides) -> dict:
+        shapes = [
+            {
+                "name": "slot_index",
+                "parameter_pattern": "(?:^|_)index$",
+                "count": 1,
+                "status": "open",
+                "defect": "wraps",
+                "selects": "a real strip",
+                "reason": "test fixture",
+            },
+            {
+                "name": "extent_or_size",
+                "parameter_pattern": ".",
+                "count": 1,
+                "status": "open",
+                "defect": "wraps",
+                "selects": "a different analysis",
+                "reason": "test fixture",
+            },
+        ]
+        section = {"floor": self.FLOOR, "shapes": shapes, "parameters": [], "constructors": []}
+        section.update(overrides)
+        return {"positional": section}
+
+    def _run(self, root: Path, records: dict, source: str | None = None):
+        tree = root / "src" / "wasm"
+        _write(tree / "bindings" / "domain" / "unit.cpp", source or self.SOURCE)
+        with mock.patch.multiple(CHECKER, ROOT=root, WASM_TREE=tree):
+            scan = CHECKER.PositionalScan(tree)
+            return scan, CHECKER.evaluate_positional(scan, CHECKER.PositionalRecords(records))
+
+    def test_the_fixture_is_clean_with_both_shapes_in_place(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            scan, failures = self._run(Path(tmp), self._records())
+            self.assertEqual(len(scan.route_r), 2)
+            self.assertEqual(failures, [])
+
+    def test_a_new_positional_parameter_is_reported(self) -> None:
+        """Direction one. A registration grows a narrow parameter."""
+        grown = self.SOURCE.replace(
+            "val analyze(val samples, int sample_rate) {",
+            "val analyze(val samples, int sample_rate, int n_fft) {",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            _, failures = self._run(Path(tmp), self._records(), grown)
+            headings = [heading for heading, _ in failures]
+            self.assertEqual(len(failures), 1, failures)
+            self.assertIn("no longer cover the population they record", headings[0])
+            self.assertEqual(failures[0][1], ["  extent_or_size: recorded 1, found 2"])
+
+    def test_a_parameter_no_shape_matches_is_reported(self) -> None:
+        """Direction one again, where the residue shape is not there to absorb it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            records = self._records()
+            records["positional"]["shapes"] = [records["positional"]["shapes"][0]]
+            _, failures = self._run(Path(tmp), records)
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("not recorded", heading)
+            self.assertEqual(len(lines), 1)
+            self.assertIn("analyze(sample_rate: int)", lines[0])
+
+    def test_a_record_matching_nothing_is_reported(self) -> None:
+        """Direction two. A shape whose population is gone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            records = self._records()
+            records["positional"]["shapes"].insert(
+                0,
+                {
+                    "name": "entity_handle",
+                    "parameter_pattern": "(?:^|_)id$",
+                    "count": 3,
+                    "status": "open",
+                    "defect": "wraps",
+                    "selects": "an existing track",
+                    "reason": "test fixture for a record that suppresses nothing",
+                },
+            )
+            _, failures = self._run(Path(tmp), records)
+            headings = [heading for heading, _ in failures]
+            self.assertEqual(len(failures), 2, failures)
+            self.assertIn("no longer cover the population they record", headings[0])
+            self.assertEqual(failures[0][1], ["  entity_handle: recorded 3, found 0"])
+            self.assertIn("matched nothing", headings[1])
+            self.assertEqual(failures[1][1], ["  shape:entity_handle"])
+
+    def test_a_recorded_parameter_is_not_reported(self) -> None:
+        """Direction three. The one that makes the other two mean something."""
+        with tempfile.TemporaryDirectory() as tmp:
+            scan, failures = self._run(Path(tmp), self._records())
+            self.assertEqual(
+                sorted(p.name for p in scan.route_r), ["sample_rate", "strip_index"]
+            )
+            self.assertEqual(failures, [])
+
+    def test_a_record_without_a_verdict_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            records = self._records()
+            records["positional"]["shapes"][0]["status"] = "pending"
+            _, failures = self._run(Path(tmp), records)
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("carry no verdict", heading)
+            self.assertEqual(lines, ["  slot_index: status 'pending'"])
+
+    def test_a_float_named_like_a_count_is_reported(self) -> None:
+        """The float boundary's trip-wire, which nothing in the tree trips today."""
+        counted = self.SOURCE.replace("float gain_db", "float n_frames")
+        with tempfile.TemporaryDirectory() as tmp:
+            _, failures = self._run(Path(tmp), self._records(), counted)
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("named like a count or an index", heading)
+            self.assertEqual(len(lines), 1)
+            self.assertIn("setStripGain(n_frames: float)", lines[0])
+
+    def test_an_unresolvable_registration_is_reported(self) -> None:
+        orphaned = self.SOURCE.replace("&analyze)", "&analyzeElsewhere)")
+        with tempfile.TemporaryDirectory() as tmp:
+            records = self._records()
+            records["positional"]["shapes"][1]["count"] = 0
+            _, failures = self._run(Path(tmp), records, orphaned)
+            headings = [heading for heading, _ in failures]
+            self.assertIn("bind a symbol no declaration in the tree matches", headings[0])
+            self.assertEqual(len(failures[0][1]), 1)
+            self.assertIn("analyzeElsewhere", failures[0][1][0])
+
+    def test_an_empty_population_fails_the_floor(self) -> None:
+        """The mandatory one. Two empty sets agree perfectly."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tree = root / "src" / "wasm"
+            _write(tree / "bindings" / "domain" / "unit.cpp", "// nothing here\n")
+            with mock.patch.multiple(CHECKER, ROOT=root, WASM_TREE=tree):
+                scan = CHECKER.PositionalScan(tree)
+            # Both cross-checks go green on the empty population, which is
+            # exactly why neither can stand in for the floor.
+            self.assertEqual(scan.unresolved, [])
+            self.assertEqual(scan.reconcile(), [])
+            failures = CHECKER._positional_self_check(scan, self.FLOOR)
+            self.assertEqual(len(failures), 5)
+
+
+class PositionalVerdictCostTest(unittest.TestCase):
+    """That `benign` costs more than `open`, measured one rule at a time.
+
+    The two verdicts mean opposite things, so they must not be one word apart.
+    Each rule below is reverted on its own and required to fire alone: a rule
+    asserted only through a clean run is asserted vacuously, and a mutation that
+    reddens several classes leaves any of them free to be the one that never
+    fires.
+    """
+
+    SOURCE = """
+#include <emscripten/val.h>
+using emscripten::val;
+
+void seek(int64_t timeline_sample) {}
+void setStripGain(unsigned int strip_index, float gain_db) {}
+
+EMSCRIPTEN_BINDINGS(unit) {
+  function("seek", &seek);
+  function("setStripGain", &setStripGain);
+}
+"""
+
+    FLOOR = {"registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1}
+    QUOTE = "the mechanism, readable here"
+
+    def _records(self) -> dict:
+        return {
+            "positional": {
+                "floor": self.FLOOR,
+                "shapes": [
+                    {
+                        "name": "sample_position",
+                        "types": ["int64_t"],
+                        "parameter_pattern": ".",
+                        "count": 1,
+                        "status": "benign",
+                        "defect": "refuses",
+                        "mechanism": [{"file": "glue.js", "contains": self.QUOTE}],
+                        "reason": "test fixture",
+                    },
+                    {
+                        "name": "slot_index",
+                        "parameter_pattern": ".",
+                        "count": 1,
+                        "status": "open",
+                        "defect": "wraps",
+                        "selects": "a real strip",
+                        "reason": "test fixture",
+                    },
+                ],
+                "parameters": [],
+                "constructors": [],
+            }
+        }
+
+    def _run(self, root: Path, records: dict):
+        tree = root / "src" / "wasm"
+        _write(tree / "bindings" / "domain" / "unit.cpp", self.SOURCE)
+        _write(root / "glue.js", f"// {self.QUOTE}\n")
+        with mock.patch.multiple(CHECKER, ROOT=root, WASM_TREE=tree):
+            scan = CHECKER.PositionalScan(tree)
+            return CHECKER.evaluate_positional(
+                scan, CHECKER.PositionalRecords(records, root=root)
+            )
+
+    def _only(self, mutate) -> tuple[str, list[str]]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = self._records()
+            mutate(records["positional"])
+            failures = self._run(root, records)
+            self.assertEqual(len(failures), 1, failures)
+            return failures[0]
+
+    def test_the_fixture_is_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._run(Path(tmp), self._records()), [])
+
+    def test_a_record_without_a_reason_is_reported(self) -> None:
+        heading, lines = self._only(lambda p: p["shapes"][0].pop("reason"))
+        self.assertIn("carry no reason", heading)
+        self.assertEqual(lines, ["  sample_position"])
+
+    def test_a_record_whose_reason_is_blank_is_reported(self) -> None:
+        heading, lines = self._only(lambda p: p["shapes"][0].update(reason="   "))
+        self.assertIn("carry no reason", heading)
+        self.assertEqual(lines, ["  sample_position"])
+
+    def test_an_open_record_without_selects_is_reported(self) -> None:
+        heading, lines = self._only(lambda p: p["shapes"][1].pop("selects"))
+        self.assertIn("without saying what a wrapped value selects", heading)
+        self.assertEqual(lines, ["  slot_index"])
+
+    def test_a_benign_record_without_a_mechanism_is_reported(self) -> None:
+        heading, lines = self._only(lambda p: p["shapes"][0].pop("mechanism"))
+        self.assertIn("mechanism that cannot be read", heading)
+        self.assertEqual(lines, ["  sample_position: benign with no mechanism citation"])
+
+    def test_a_mechanism_quote_that_is_not_there_is_reported(self) -> None:
+        heading, lines = self._only(
+            lambda p: p["shapes"][0]["mechanism"][0].update(contains="not in that file")
+        )
+        self.assertIn("mechanism that cannot be read", heading)
+        self.assertIn("does not contain", lines[0])
+
+    def test_a_mechanism_citing_a_missing_tracked_file_is_reported(self) -> None:
+        heading, lines = self._only(
+            lambda p: p["shapes"][0]["mechanism"][0].update(file="nowhere.js")
+        )
+        self.assertIn("mechanism that cannot be read", heading)
+        self.assertIn("no such file, and it is not marked built", lines[0])
+
+    def test_a_missing_file_marked_built_is_not_reported(self) -> None:
+        # The embind glue is the build's output and no committed file carries
+        # it, so `built` has to excuse an absent artifact -- and only that. The
+        # test above pins that it does not excuse a wrong quote.
+        with tempfile.TemporaryDirectory() as tmp:
+            records = self._records()
+            records["positional"]["shapes"][0]["mechanism"][0] = {
+                "file": "dist/never-built.js",
+                "built": True,
+                "contains": "anything at all",
+            }
+            self.assertEqual(self._run(Path(tmp), records), [])
+
+    def test_flipping_an_open_record_to_benign_is_reported(self) -> None:
+        """The one that matters. A citation is pasteable; a declared type is not."""
+
+        def flip(positional: dict) -> None:
+            shape = positional["shapes"][1]
+            shape["status"] = "benign"
+            shape["defect"] = "refuses"
+            shape["selects"] = ""
+            # The realistic attack: a citation that does resolve and does match.
+            shape["mechanism"] = [{"file": "glue.js", "contains": self.QUOTE}]
+
+        heading, lines = self._only(flip)
+        self.assertIn("state a conversion rule their parameters' types do not have", heading)
+        # Both halves of the derivation object, and neither is reachable from
+        # this file: the type says what the rule is, and the rule says which
+        # verdict is available.
+        self.assertEqual(
+            lines,
+            [
+                "  slot_index: benign is only reachable where the conversion "
+                "refuses, and ['unsigned int'] wraps",
+                "  slot_index: states defect 'refuses', but ['unsigned int'] is "
+                "converted by the 'wraps' rule",
+            ],
+        )
+
+    def test_relabelling_the_defect_is_reported(self) -> None:
+        heading, lines = self._only(lambda p: p["shapes"][1].update(defect="refuses"))
+        self.assertIn("state a conversion rule their parameters' types do not have", heading)
+        self.assertIn("is converted by the 'wraps' rule", lines[0])
+
+    def test_a_shape_covering_two_conversion_rules_is_reported(self) -> None:
+        def merge(positional: dict) -> None:
+            positional["shapes"] = [
+                {
+                    "name": "everything",
+                    "parameter_pattern": ".",
+                    "count": 2,
+                    "status": "open",
+                    "defect": "wraps",
+                    "selects": "something",
+                    "reason": "test fixture",
+                }
+            ]
+
+        heading, lines = self._only(merge)
+        self.assertIn("state a conversion rule", heading)
+        self.assertIn("more than one rule", lines[0])
+
+    def test_the_derivation_is_the_one_embind_uses(self) -> None:
+        # Asserted directly as well, because every rule above reads through it.
+        self.assertEqual(CHECKER.derive_defect({"uint32_t", "int", "size_t"}), "wraps")
+        self.assertEqual(CHECKER.derive_defect({"int64_t", "uint64_t"}), "refuses")
+        self.assertEqual(CHECKER.derive_defect({"float"}), "saturates")
+        self.assertIsNone(CHECKER.derive_defect({"int", "int64_t"}))
+
+
+class PositionalRouteTest(unittest.TestCase):
+    """That the two routes can disagree, measured rather than argued."""
+
+    SOURCE = """
+#include <emscripten/val.h>
+using emscripten::val;
+
+namespace other {
+void reset(int generation) {}
+}  // namespace other
+
+struct Engine {
+  void reset(val options);
+};
+
+void Engine::reset(val options) {}
+
+EMSCRIPTEN_BINDINGS(unit) {
+  function("reset", &Engine::reset);
+}
+"""
+
+    def _scan(self, root: Path, **kwargs):
+        tree = root / "src" / "wasm"
+        _write(tree / "bindings" / "domain" / "unit.cpp", self.SOURCE)
+        with mock.patch.multiple(CHECKER, ROOT=root, WASM_TREE=tree):
+            return CHECKER.PositionalScan(tree, **kwargs)
+
+    def test_qualified_resolution_finds_the_right_overload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            scan = self._scan(Path(tmp))
+            self.assertEqual(scan.conflicting, [])
+            self.assertEqual(scan.route_r, [])
+            self.assertEqual(scan.reconcile(), [])
+
+    def test_resolving_on_the_short_name_alone_is_caught(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            scan = self._scan(Path(tmp), short_name_only=True)
+            self.assertEqual(len(scan.conflicting), 1)
+            registration, candidates = scan.conflicting[0]
+            self.assertEqual(registration.js_name, "reset")
+            # The method's header declaration and its definition are both here,
+            # and they agree; the free function is the one that does not.
+            self.assertEqual(
+                sorted({d.signature for d in candidates}),
+                ["Engine::reset(val)", "reset(int)"],
+            )
+
+
 class RecordsTest(unittest.TestCase):
     def test_every_record_carries_a_reason(self) -> None:
         data = CHECKER.load_records()
         entries = data["shapes"] + data["narrowings"] + data["readers"]
+        entries += data["positional"]["shapes"] + data["positional"]["constructors"]
+        entries += data["positional"]["parameters"]
         self.assertTrue(entries)
         for entry in entries:
             self.assertTrue(entry.get("reason", "").strip(), entry)
+
+    def test_every_open_positional_record_says_what_a_wrapped_value_selects(self) -> None:
+        # `open` is a claim about consequence, not a shrug. A record that made it
+        # without naming the thing a wrapped value picks would be `pending` under
+        # another name, which the checker refuses.
+        data = CHECKER.load_records()["positional"]
+        for entry in data["shapes"] + data["constructors"] + data["parameters"]:
+            if entry.get("status") == "open":
+                self.assertTrue(entry.get("selects", "").strip(), entry)
+
+    def test_no_positional_record_is_left_ungraded(self) -> None:
+        records = CHECKER.PositionalRecords(CHECKER.load_records())
+        self.assertEqual(records.ungraded(), [])
+        self.assertEqual(records.missing_reasons(), [])
+        self.assertEqual(records.unsupported_open(), [])
+        self.assertEqual(records.unsupported_benign(), [])
+
+    def test_the_only_benign_positional_record_is_the_one_that_refuses(self) -> None:
+        # The asymmetry, asserted on the shipping records rather than only on a
+        # fixture: every other verdict in the file is open, and the derivation
+        # is what keeps it that way.
+        data = CHECKER.load_records()["positional"]
+        benign = [
+            entry
+            for entry in data["shapes"] + data["constructors"] + data["parameters"]
+            if entry.get("status") == "benign"
+        ]
+        self.assertEqual([entry["name"] for entry in benign], ["sample_position"])
+        self.assertEqual(benign[0]["defect"], "refuses")
+        self.assertTrue(benign[0]["mechanism"])
 
     def test_no_record_is_left_ungraded(self) -> None:
         records = CHECKER.Records(CHECKER.load_records())
@@ -361,6 +798,40 @@ class RealTreeTest(unittest.TestCase):
     def test_the_tree_is_clean(self) -> None:
         self.assertEqual(self.scan.orphans, [])
         self.assertEqual(self.scan.reconcile(), [])
+
+
+class RealTreePositionalTest(unittest.TestCase):
+    """The positional population, against the tree the checker actually guards."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.scan = CHECKER.PositionalScan()
+        cls.records = CHECKER.PositionalRecords(CHECKER.load_records())
+
+    def test_the_population_is_the_size_it_is_pinned_for(self) -> None:
+        self.assertEqual(CHECKER._positional_self_check(self.scan, self.records.floor), [])
+
+    def test_every_registration_resolves_to_one_signature(self) -> None:
+        self.assertEqual(self.scan.unresolved, [])
+        self.assertEqual(self.scan.conflicting, [])
+
+    def test_the_two_routes_agree(self) -> None:
+        self.assertEqual(self.scan.reconcile(), [])
+        self.assertEqual(len(self.scan.route_r), len(self.scan.route_d))
+
+    def test_the_widths_the_tree_has_no_instance_of_are_still_named(self) -> None:
+        # The tree passes none of these positionally today, so the population
+        # check cannot see one dropped -- and the day one lands, a list missing
+        # its spelling reports nothing at all.
+        for name in ("int8_t", "uint8_t", "int16_t", "uint16_t", "uint64_t"):
+            self.assertIn(name, CHECKER.POSITIONAL_TYPES)
+
+    def test_no_float_parameter_is_named_like_a_count(self) -> None:
+        # The float exclusion rests on this, and only this half of it can stop
+        # being true without anyone touching the checker.
+        named = [p.name for p in self.scan.float_parameters if CHECKER._COUNT_SHAPED.search(p.name)]
+        self.assertEqual(named, [])
+        self.assertTrue(self.scan.float_parameters, "the float population is not empty")
 
 
 if __name__ == "__main__":
