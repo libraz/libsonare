@@ -1333,16 +1333,49 @@ TEST_CASE("clearing a bound instrument flushes its sounding notes", "[host]") {
 // ===========================================================================
 
 TEST_CASE("instrument rack rejects bindings past capacity", "[host]") {
+  constexpr size_t kCapacity = sonare::engine::InstrumentRack::kMaxInstruments;
+  constexpr uint32_t kFirstDestination = 1u;
+  constexpr uint32_t kOverflowDestination = 9999u;
+
   sonare::engine::RealtimeEngine engine;
   engine.prepare(48000.0, 64);
+
+  // Positive control for the identity assertions below: a bind that takes does
+  // move what the destination reports. Without it they would read the same
+  // against an engine that never rebinds anything at all.
+  MockInstrument displaced(0);
+  REQUIRE(engine.set_midi_instrument(kFirstDestination, &displaced));
+  REQUIRE(engine.midi_instrument(kFirstDestination) == &displaced);
+
   std::vector<std::unique_ptr<MockInstrument>> insts;
-  for (size_t i = 0; i < sonare::engine::InstrumentRack::kMaxInstruments; ++i) {
+  for (size_t i = 0; i < kCapacity; ++i) {
     insts.push_back(std::make_unique<MockInstrument>(0));
     REQUIRE(engine.set_midi_instrument(static_cast<uint32_t>(i + 1), insts.back().get()));
   }
+  // The loop's first bind replaced the control's binding in place, at a count
+  // that never moved -- the substitution a count cannot see, here on purpose.
+  REQUIRE(engine.midi_instrument(kFirstDestination) == insts.front().get());
+  REQUIRE(engine.midi_instrument_count() == kCapacity);
+
+  std::vector<MidiInstrument*> bound_before;
+  bound_before.reserve(kCapacity);
+  for (size_t i = 0; i < kCapacity; ++i) {
+    bound_before.push_back(engine.midi_instrument(static_cast<uint32_t>(i + 1)));
+  }
+
   MockInstrument overflow(0);
-  REQUIRE_FALSE(engine.set_midi_instrument(9999u, &overflow));
-  REQUIRE(engine.midi_instrument_count() == sonare::engine::InstrumentRack::kMaxInstruments);
+  REQUIRE_FALSE(engine.set_midi_instrument(kOverflowDestination, &overflow));
+
+  // Every destination reports the instrument it reported before the refusal.
+  // The pointer is what discriminates: the count reads full whether a binding
+  // was kept or evicted in favour of the overflow instrument, which the caller
+  // frees as soon as it is handed the false.
+  for (size_t i = 0; i < kCapacity; ++i) {
+    REQUIRE(engine.midi_instrument(static_cast<uint32_t>(i + 1)) == bound_before[i]);
+  }
+  // Nor was it stranded at the destination it was refused for.
+  REQUIRE(engine.midi_instrument(kOverflowDestination) == nullptr);
+  REQUIRE(engine.midi_instrument_count() == kCapacity);
 }
 
 // ===========================================================================
