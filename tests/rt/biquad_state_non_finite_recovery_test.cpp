@@ -180,7 +180,11 @@ void require_non_finite_bounded(const std::vector<std::vector<float>>& poisoned,
 ///        is also true of a handle that rejoins on its last measured block.
 void require_rejoins_control(const std::vector<std::vector<float>>& control,
                              const std::vector<std::vector<float>>& poisoned, int recovery_blocks) {
+  // The residual is in scope before the assertion, so a run that never reaches
+  // identity still reports how far apart the streams stayed — which is what
+  // separates a bound set too tight from a stream that does not converge.
   INFO("first identical " << first_identical_block(control, poisoned) << " of " << control.size());
+  INFO("residual " << residual_from(control, poisoned, recovery_blocks));
   REQUIRE(first_identical_block(control, poisoned) <= recovery_blocks);
 }
 

@@ -206,12 +206,15 @@ void require_non_finite_bounded(const Blocks& poisoned, const Reach& reach) {
 ///        control again. Bounding this is the whole claim: "rejoins eventually"
 ///        is also true of a handle that rejoins on its last measured block.
 void require_rejoins_control(const Blocks& control, const Blocks& poisoned, int recovery_blocks) {
+  // Both messages are in scope before either assertion, so a run that never
+  // reaches identity still reports how far apart the streams stayed — which is
+  // what separates a bound set too tight from a stream that does not converge.
   INFO("first identical " << first_identical_block(control, poisoned) << " of " << control.size());
+  INFO("residual " << residual_from(control, poisoned, recovery_blocks));
   REQUIRE(first_identical_block(control, poisoned) <= recovery_blocks);
   // Bit identity leaves nothing behind it, so the residual past the bound is
   // exactly zero rather than merely small. Read separately: it is the claim a
   // caller cares about, and it does not depend on how identity is scanned for.
-  INFO("residual " << residual_from(control, poisoned, recovery_blocks));
   REQUIRE(residual_from(control, poisoned, recovery_blocks) == 0.0);
 }
 
