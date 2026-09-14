@@ -99,45 +99,43 @@ sonare::mastering::eq::StereoPlacement ParsePlacementInt(int placement) {
 
 sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   sonare::mastering::eq::EqBand band;
-  band.type = ParseBandType(node_string_option(object, "type", "Peak"));
-  band.coeff_mode = ParseCoeffMode(node_string_option(object, "coeffMode", "Rbj"));
-  band.frequency_hz =
-      static_cast<float>(node_double_option(object, "frequencyHz", band.frequency_hz));
-  band.gain_db = static_cast<float>(node_double_option(object, "gainDb", band.gain_db));
-  band.q = static_cast<float>(node_double_option(object, "q", band.q));
-  band.enabled = node_bool_option(object, "enabled", band.enabled);
+  band.type = ParseBandType(StringProperty(object, "type", "Peak"));
+  band.coeff_mode = ParseCoeffMode(StringProperty(object, "coeffMode", "Rbj"));
+  band.frequency_hz = static_cast<float>(DoubleProperty(object, "frequencyHz", band.frequency_hz));
+  band.gain_db = static_cast<float>(DoubleProperty(object, "gainDb", band.gain_db));
+  band.q = static_cast<float>(DoubleProperty(object, "q", band.q));
+  band.enabled = BoolProperty(object, "enabled", band.enabled);
   band.slope_db_oct =
-      static_cast<int>(std::lround(node_double_option(object, "slopeDbOct", band.slope_db_oct)));
-  band.placement = ParsePlacement(node_string_option(object, "placement", "Stereo"));
-  band.phase = ParseBandPhase(node_string_option(object, "phase", "Inherit"));
-  band.soloed = node_bool_option(object, "soloed", band.soloed);
-  band.bypassed = node_bool_option(object, "bypassed", band.bypassed);
-  band.proportional_q = node_bool_option(object, "proportionalQ", band.proportional_q);
+      static_cast<int>(std::lround(DoubleProperty(object, "slopeDbOct", band.slope_db_oct)));
+  band.placement = ParsePlacement(StringProperty(object, "placement", "Stereo"));
+  band.phase = ParseBandPhase(StringProperty(object, "phase", "Inherit"));
+  band.soloed = BoolProperty(object, "soloed", band.soloed);
+  band.bypassed = BoolProperty(object, "bypassed", band.bypassed);
+  band.proportional_q = BoolProperty(object, "proportionalQ", band.proportional_q);
   band.proportional_q_strength = static_cast<float>(
-      node_double_option(object, "proportionalQStrength", band.proportional_q_strength));
-  band.dyn.enabled = node_bool_option(object, "dynamic", band.dyn.enabled);
+      DoubleProperty(object, "proportionalQStrength", band.proportional_q_strength));
+  band.dyn.enabled = BoolProperty(object, "dynamic", band.dyn.enabled);
   band.dyn.threshold_db =
-      static_cast<float>(node_double_option(object, "thresholdDb", band.dyn.threshold_db));
-  band.dyn.auto_threshold = node_bool_option(object, "autoThreshold", band.dyn.auto_threshold);
-  band.dyn.ratio = static_cast<float>(node_double_option(object, "ratio", band.dyn.ratio));
-  band.dyn.range_db = static_cast<float>(node_double_option(object, "rangeDb", band.dyn.range_db));
-  band.dyn.attack_ms =
-      static_cast<float>(node_double_option(object, "attackMs", band.dyn.attack_ms));
+      static_cast<float>(DoubleProperty(object, "thresholdDb", band.dyn.threshold_db));
+  band.dyn.auto_threshold = BoolProperty(object, "autoThreshold", band.dyn.auto_threshold);
+  band.dyn.ratio = static_cast<float>(DoubleProperty(object, "ratio", band.dyn.ratio));
+  band.dyn.range_db = static_cast<float>(DoubleProperty(object, "rangeDb", band.dyn.range_db));
+  band.dyn.attack_ms = static_cast<float>(DoubleProperty(object, "attackMs", band.dyn.attack_ms));
   band.dyn.release_ms =
-      static_cast<float>(node_double_option(object, "releaseMs", band.dyn.release_ms));
+      static_cast<float>(DoubleProperty(object, "releaseMs", band.dyn.release_ms));
   // "lookaheadMs" is the field's former (misleading) spelling; still accepted
   // so a stored config keeps working, but "detectorDelayMs" wins if both are
   // present.
   band.dyn.detector_delay_ms =
-      static_cast<float>(node_double_option(object, "lookaheadMs", band.dyn.detector_delay_ms));
+      static_cast<float>(DoubleProperty(object, "lookaheadMs", band.dyn.detector_delay_ms));
   band.dyn.detector_delay_ms =
-      static_cast<float>(node_double_option(object, "detectorDelayMs", band.dyn.detector_delay_ms));
+      static_cast<float>(DoubleProperty(object, "detectorDelayMs", band.dyn.detector_delay_ms));
   band.dyn.external_sidechain =
-      node_bool_option(object, "externalSidechain", band.dyn.external_sidechain);
+      BoolProperty(object, "externalSidechain", band.dyn.external_sidechain);
   band.dyn.sidechain_freq_hz =
-      static_cast<float>(node_double_option(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz));
+      static_cast<float>(DoubleProperty(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz));
   band.dyn.sidechain_q =
-      static_cast<float>(node_double_option(object, "sidechainQ", band.dyn.sidechain_q));
+      static_cast<float>(DoubleProperty(object, "sidechainQ", band.dyn.sidechain_q));
   return band;
 }
 
@@ -172,12 +170,12 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
     params = ParseChainConfigFromJs(info[0]);
     Napi::Object config_object = info[0].As<Napi::Object>();
     // The presence check the file-local reader used to do here was redundant:
-    // the type-checked reader already returns the fallback it is handed for an
-    // absent, undefined, null or wrong-typed value, and the fallback IS the
-    // current field, so the assignment is a no-op in exactly those cases.
+    // the reader already returns the fallback it is handed for an absent,
+    // undefined or null value, and the fallback IS the current field, so the
+    // assignment is a no-op in exactly those cases.
     options.loudness_static_gain_db = static_cast<float>(
-        node_double_option(config_object, "loudnessStaticGainDb", options.loudness_static_gain_db));
-    options.loudness_static_gain_peak_db = static_cast<float>(node_double_option(
+        DoubleProperty(config_object, "loudnessStaticGainDb", options.loudness_static_gain_db));
+    options.loudness_static_gain_peak_db = static_cast<float>(DoubleProperty(
         config_object, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db));
   }
 
@@ -411,9 +409,9 @@ StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
   int max_block_size = 512;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object config = info[0].As<Napi::Object>();
-    sample_rate = node_double_option(config, "sampleRate", sample_rate);
+    sample_rate = DoubleProperty(config, "sampleRate", sample_rate);
     max_block_size =
-        static_cast<int>(std::lround(node_double_option(config, "maxBlockSize", max_block_size)));
+        static_cast<int>(std::lround(DoubleProperty(config, "maxBlockSize", max_block_size)));
   }
 
   try {
@@ -803,10 +801,8 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   size_t max_bands = 8;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    sample_rate =
-        static_cast<int>(std::lround(node_double_option(options, "sampleRate", sample_rate)));
-    max_bands =
-        static_cast<size_t>(std::lround(node_double_option(options, "maxBands", max_bands)));
+    sample_rate = static_cast<int>(std::lround(DoubleProperty(options, "sampleRate", sample_rate)));
+    max_bands = static_cast<size_t>(std::lround(DoubleProperty(options, "maxBands", max_bands)));
   }
   SONARE_NODE_TRY
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();
@@ -837,13 +833,15 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
 namespace {
 
 // Reads the three scalar controls out of a JS options object using ONLY the
-// shared node_*_option family (type-checked fallback), so this file keeps no
-// reader of its own -- the reader-shape scan in the Node test suite rejects one.
+// shared reader families, so this file keeps no reader of its own -- the
+// reader-shape scan in the Node test suite rejects one. The bag reads two ways:
+// mix refuses a wrong-typed value by name, semitones and grainSize answer one
+// with the default.
 void ReadRetuneConfig(const Napi::Value& value, float* semitones, float* mix, int* grain_size) {
   if (!value.IsObject()) return;
   const Napi::Object object = value.As<Napi::Object>();
   *semitones = node_float_option(object, "semitones", *semitones);
-  *mix = node_float_option(object, "mix", *mix);
+  *mix = FloatProperty(object, "mix", *mix);
   // "grain_size" is the snake_case spelling the WASM surface also accepts; the
   // camelCase key wins when both are present.
   *grain_size =

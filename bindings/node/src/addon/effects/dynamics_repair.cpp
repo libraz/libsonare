@@ -46,18 +46,18 @@ namespace {
 /// @brief Read a dereverb options bag over @p config, leaving absent keys alone.
 sonare::mastering::repair::DereverbClassicalConfig read_dereverb_config(
     const Napi::Object& options, sonare::mastering::repair::DereverbClassicalConfig config) {
-  config.threshold = node_float_option(options, "threshold", config.threshold);
-  config.attenuation = node_float_option(options, "attenuation", config.attenuation);
-  config.n_fft = node_int_option(options, "nFft", config.n_fft);
-  config.hop_length = node_int_option(options, "hopLength", config.hop_length);
-  config.t60_sec = node_float_option(options, "t60Sec", config.t60_sec);
-  config.late_delay_ms = node_float_option(options, "lateDelayMs", config.late_delay_ms);
-  config.over_subtraction = node_float_option(options, "overSubtraction", config.over_subtraction);
-  config.spectral_floor = node_float_option(options, "spectralFloor", config.spectral_floor);
-  config.wpe_enabled = node_bool_option(options, "wpeEnabled", config.wpe_enabled);
-  config.wpe_iterations = node_int_option(options, "wpeIterations", config.wpe_iterations);
-  config.wpe_taps = node_int_option(options, "wpeTaps", config.wpe_taps);
-  config.wpe_strength = node_float_option(options, "wpeStrength", config.wpe_strength);
+  config.threshold = FloatProperty(options, "threshold", config.threshold);
+  config.attenuation = FloatProperty(options, "attenuation", config.attenuation);
+  config.n_fft = IntProperty(options, "nFft", config.n_fft);
+  config.hop_length = IntProperty(options, "hopLength", config.hop_length);
+  config.t60_sec = FloatProperty(options, "t60Sec", config.t60_sec);
+  config.late_delay_ms = FloatProperty(options, "lateDelayMs", config.late_delay_ms);
+  config.over_subtraction = FloatProperty(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = FloatProperty(options, "spectralFloor", config.spectral_floor);
+  config.wpe_enabled = BoolProperty(options, "wpeEnabled", config.wpe_enabled);
+  config.wpe_iterations = IntProperty(options, "wpeIterations", config.wpe_iterations);
+  config.wpe_taps = IntProperty(options, "wpeTaps", config.wpe_taps);
+  config.wpe_strength = FloatProperty(options, "wpeStrength", config.wpe_strength);
   return config;
 }
 
@@ -178,13 +178,13 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
   sonare::mastering::dynamics::CompressorConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold_db = node_float_option(options, "thresholdDb", config.threshold_db);
-    config.ratio = node_float_option(options, "ratio", config.ratio);
-    config.attack_ms = node_float_option(options, "attackMs", config.attack_ms);
-    config.release_ms = node_float_option(options, "releaseMs", config.release_ms);
-    config.knee_db = node_float_option(options, "kneeDb", config.knee_db);
-    config.makeup_gain_db = node_float_option(options, "makeupGainDb", config.makeup_gain_db);
-    config.auto_makeup = node_bool_option(options, "autoMakeup", config.auto_makeup);
+    config.threshold_db = FloatProperty(options, "thresholdDb", config.threshold_db);
+    config.ratio = FloatProperty(options, "ratio", config.ratio);
+    config.attack_ms = FloatProperty(options, "attackMs", config.attack_ms);
+    config.release_ms = FloatProperty(options, "releaseMs", config.release_ms);
+    config.knee_db = FloatProperty(options, "kneeDb", config.knee_db);
+    config.makeup_gain_db = FloatProperty(options, "makeupGainDb", config.makeup_gain_db);
+    config.auto_makeup = BoolProperty(options, "autoMakeup", config.auto_makeup);
     config.detector = parse_compressor_detector(env, options, config.detector);
     config.sidechain_hpf_enabled =
         node_bool_option(options, "sidechainHpfEnabled", config.sidechain_hpf_enabled);
@@ -217,10 +217,10 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
   sonare::mastering::dynamics::GateConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold_db = node_float_option(options, "thresholdDb", config.threshold_db);
-    config.attack_ms = node_float_option(options, "attackMs", config.attack_ms);
-    config.release_ms = node_float_option(options, "releaseMs", config.release_ms);
-    config.range_db = node_float_option(options, "rangeDb", config.range_db);
+    config.threshold_db = FloatProperty(options, "thresholdDb", config.threshold_db);
+    config.attack_ms = FloatProperty(options, "attackMs", config.attack_ms);
+    config.release_ms = FloatProperty(options, "releaseMs", config.release_ms);
+    config.range_db = FloatProperty(options, "rangeDb", config.range_db);
     config.hold_ms = node_float_option(options, "holdMs", config.hold_ms);
     config.close_threshold_db =
         node_float_option(options, "closeThresholdDb", config.close_threshold_db);
@@ -250,17 +250,16 @@ Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInf
   sonare::mastering::dynamics::TransientShaperConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.attack_gain_db = node_float_option(options, "attackGainDb", config.attack_gain_db);
-    config.sustain_gain_db = node_float_option(options, "sustainGainDb", config.sustain_gain_db);
-    config.fast_attack_ms = node_float_option(options, "fastAttackMs", config.fast_attack_ms);
-    config.fast_release_ms = node_float_option(options, "fastReleaseMs", config.fast_release_ms);
-    config.slow_attack_ms = node_float_option(options, "slowAttackMs", config.slow_attack_ms);
-    config.slow_release_ms = node_float_option(options, "slowReleaseMs", config.slow_release_ms);
-    config.sensitivity = node_float_option(options, "sensitivity", config.sensitivity);
-    config.max_gain_db = node_float_option(options, "maxGainDb", config.max_gain_db);
-    config.gain_smoothing_ms =
-        node_float_option(options, "gainSmoothingMs", config.gain_smoothing_ms);
-    config.lookahead_ms = node_float_option(options, "lookaheadMs", config.lookahead_ms);
+    config.attack_gain_db = FloatProperty(options, "attackGainDb", config.attack_gain_db);
+    config.sustain_gain_db = FloatProperty(options, "sustainGainDb", config.sustain_gain_db);
+    config.fast_attack_ms = FloatProperty(options, "fastAttackMs", config.fast_attack_ms);
+    config.fast_release_ms = FloatProperty(options, "fastReleaseMs", config.fast_release_ms);
+    config.slow_attack_ms = FloatProperty(options, "slowAttackMs", config.slow_attack_ms);
+    config.slow_release_ms = FloatProperty(options, "slowReleaseMs", config.slow_release_ms);
+    config.sensitivity = FloatProperty(options, "sensitivity", config.sensitivity);
+    config.max_gain_db = FloatProperty(options, "maxGainDb", config.max_gain_db);
+    config.gain_smoothing_ms = FloatProperty(options, "gainSmoothingMs", config.gain_smoothing_ms);
+    config.lookahead_ms = FloatProperty(options, "lookaheadMs", config.lookahead_ms);
   }
   sonare::mastering::dynamics::TransientShaper processor(config);
   int latency = 0;
@@ -286,19 +285,19 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DeclickConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = node_float_option(options, "threshold", config.threshold);
-    config.neighbor_ratio = node_float_option(options, "neighborRatio", config.neighbor_ratio);
+    config.threshold = FloatProperty(options, "threshold", config.threshold);
+    config.neighbor_ratio = FloatProperty(options, "neighborRatio", config.neighbor_ratio);
     if (options.Has("maxClickSamples")) {
       const int max_click_samples =
-          node_int_option(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
+          IntProperty(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
       if (max_click_samples <= 0) {
         Napi::RangeError::New(env, "maxClickSamples must be positive").ThrowAsJavaScriptException();
         return env.Undefined();
       }
       config.max_click_samples = static_cast<size_t>(max_click_samples);
     }
-    config.lpc_order = node_int_option(options, "lpcOrder", config.lpc_order);
-    config.residual_ratio = node_float_option(options, "residualRatio", config.residual_ratio);
+    config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
+    config.residual_ratio = FloatProperty(options, "residualRatio", config.residual_ratio);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::declick(audio, config);
@@ -325,13 +324,12 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
     Napi::Object options = info[2].As<Napi::Object>();
     config.mode = parse_denoise_mode(options, config.mode);
     config.noise_estimator = parse_denoise_noise_estimator(options, config.noise_estimator);
-    config.n_fft = node_int_option(options, "nFft", config.n_fft);
-    config.hop_length = node_int_option(options, "hopLength", config.hop_length);
-    config.dd_alpha = node_float_option(options, "ddAlpha", config.dd_alpha);
-    config.gain_floor = node_float_option(options, "gainFloor", config.gain_floor);
-    config.over_subtraction =
-        node_float_option(options, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = node_float_option(options, "spectralFloor", config.spectral_floor);
+    config.n_fft = IntProperty(options, "nFft", config.n_fft);
+    config.hop_length = IntProperty(options, "hopLength", config.hop_length);
+    config.dd_alpha = FloatProperty(options, "ddAlpha", config.dd_alpha);
+    config.gain_floor = FloatProperty(options, "gainFloor", config.gain_floor);
+    config.over_subtraction = FloatProperty(options, "overSubtraction", config.over_subtraction);
+    config.spectral_floor = FloatProperty(options, "spectralFloor", config.spectral_floor);
     config.noise_estimation_quantile =
         node_float_option(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
     config.speech_presence_gain =
@@ -404,7 +402,7 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
     config.clip_threshold = node_float_option(options, "clipThreshold", config.clip_threshold);
-    config.lpc_order = node_int_option(options, "lpcOrder", config.lpc_order);
+    config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
     config.iterations = node_int_option(options, "iterations", config.iterations);
     config.lpc_blend = node_float_option(options, "lpcBlend", config.lpc_blend);
   }
@@ -431,7 +429,7 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
   sonare::mastering::repair::DecrackleConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = node_float_option(options, "threshold", config.threshold);
+    config.threshold = FloatProperty(options, "threshold", config.threshold);
     config.mode = parse_decrackle_mode(options, config.mode);
     config.levels = node_int_option(options, "levels", config.levels);
   }
@@ -460,7 +458,7 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
     Napi::Object options = info[2].As<Napi::Object>();
     config.fundamental_hz = node_float_option(options, "fundamentalHz", config.fundamental_hz);
     config.harmonics = node_int_option(options, "harmonics", config.harmonics);
-    config.q = node_float_option(options, "q", config.q);
+    config.q = FloatProperty(options, "q", config.q);
     config.adaptive = node_bool_option(options, "adaptive", config.adaptive);
     config.search_range_hz = node_float_option(options, "searchRangeHz", config.search_range_hz);
     config.adaptation = node_float_option(options, "adaptation", config.adaptation);
@@ -560,7 +558,7 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
   sonare::mastering::repair::TrimSilenceConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = node_float_option(options, "threshold", config.threshold);
+    config.threshold = FloatProperty(options, "threshold", config.threshold);
     if (options.Has("paddingSamples")) {
       const int padding_samples =
           node_int_option(options, "paddingSamples", static_cast<int>(config.padding_samples));

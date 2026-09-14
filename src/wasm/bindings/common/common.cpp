@@ -316,10 +316,14 @@ float floatProperty(val object, const char* key, float default_value) {
 float floatOption(val object, const char* key, float default_value) {
   val value = objectProperty(object, key);
   if (value.isUndefined()) return default_value;
-  // Type first, and by the sibling surface's rule: the addon's node_*_option
-  // family answers a wrong-typed value with the default, so a string reaching a
-  // number here would make one options bag read two ways.
-  if (value.typeOf().as<std::string>() != "number") return default_value;
+  // Type first, and refused rather than substituted: the substitution below is
+  // the field's documented "no measurement" spelling for a NON-FINITE number,
+  // and a wrong-typed value is not that. Answering both with the default made a
+  // numeric string read as an omitted field on one surface and as the number on
+  // the other.
+  if (value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+  }
   // Read as double, because as<float>() turns a finite value the float cannot
   // hold into an infinity, which then takes the substitution below -- the field
   // beside this one refuses that same value by name.

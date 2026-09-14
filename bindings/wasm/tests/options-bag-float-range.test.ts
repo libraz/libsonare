@@ -15,8 +15,9 @@
  * Both readers are driven here on purpose. `floatOption` (the fallback family,
  * for fields whose owner documents a non-finite value as "unspecified") and
  * `floatProperty` / `checkedFloatFromVal` (the presence-checked family) split on
- * NaN by design, and used to split on `1e300` by accident. Keeping them in one
- * file is what makes a change to either one visible.
+ * NaN by design, split on a wrong TYPE by design, and used to split on `1e300`
+ * by accident. Keeping them in one file is what makes a change to either one
+ * visible.
  *
  * Where the contract keeps the substitution — a NaN or an infinity reaching
  * `floatOption` — the signature is a SUCCESSFUL call carrying a value the caller
@@ -54,7 +55,7 @@ const PAST_FLOAT_MAX = [1e300, -1e300, 3.5e38] as const;
 /** Just inside FLT_MAX: the control that keeps the refusal from being a blanket one. */
 const INSIDE_FLOAT_MAX = 3.0e38;
 
-/** Non-number values, for the type rule the two `_option` families share. */
+/** Non-number values, for the type rule the two readers answer differently. */
 const WRONG_TYPES: readonly unknown[] = ['0.8', true, [0.8], {}];
 
 const PCEN_BINS = 8;
@@ -137,13 +138,19 @@ describe('floatOption refuses a finite value wider than a float', () => {
     expect(configForRoom(Number.NEGATIVE_INFINITY)).toEqual(omitted);
   });
 
-  it('substitutes the default for a value that is not a number', () => {
+  it('refuses a value that is not a number instead of substituting', () => {
+    // The substitution is the field's documented "no measurement" spelling for a
+    // non-finite NUMBER; a string, an array, a boolean or a plain object is not
+    // that. Asserted against the default-parameter run as well, so a refusal
+    // that merely threw for an unrelated reason cannot pass: the omitted call
+    // has to still succeed and still read the field.
     const omitted = configForRoom();
+    expect(omitted.lateDelayMs).not.toBe(configForRoom(900).lateDelayMs);
     for (const value of WRONG_TYPES) {
-      // `{}` reached the default through NaN coercion before the type check and
-      // reaches it by type afterwards. The result is the same either way, which
-      // is why the result is what is asserted.
-      expect(configForRoom(value), `volume ${JSON.stringify(value)}`).toEqual(omitted);
+      const caught = capture(() => configForRoom(value));
+      expect(isSonareError(caught), `volume ${JSON.stringify(value)}`).toBe(true);
+      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
+      expect((caught as SonareError).message).toBe('volume must be a number');
     }
   });
 });
@@ -184,9 +191,10 @@ describe('floatProperty refuses a finite value wider than a float', () => {
   it('coerces a non-number rather than type-checking it, unlike floatOption', () => {
     // Recorded, not endorsed: floatProperty has no type check, so a string, an
     // array and a boolean are coerced by val::as<double>() while `{}` becomes
-    // NaN and is refused. floatOption answers all four with its default. This
-    // assertion exists so unifying the two readers shows up here rather than
-    // passing unnoticed.
+    // NaN and is refused. floatOption refuses all four by name. The sibling Node
+    // reader refuses all four too, so this is where the surfaces still part
+    // company on a numeric string. This assertion exists so a change to either
+    // reader shows up here rather than passing unnoticed.
     const omitted = Array.from(pcenWith());
     expect(Array.from(pcenWith('0.8'))).toEqual(Array.from(pcenWith(0.8)));
     expect(Array.from(pcenWith([0.8]))).toEqual(Array.from(pcenWith(0.8)));

@@ -756,8 +756,8 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   std::string genre_hint;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object options = info[0].As<Napi::Object>();
-    n_fft = node_int_option(options, "nFft", n_fft);
-    hop_length = node_int_option(options, "hopLength", hop_length);
+    n_fft = IntProperty(options, "nFft", n_fft);
+    hop_length = IntProperty(options, "hopLength", hop_length);
     use_hpss = node_bool_option(options, "useHpss", use_hpss);
     loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
     high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
@@ -801,8 +801,8 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
   std::string genre_hint;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object options = info[0].As<Napi::Object>();
-    n_fft = node_int_option(options, "nFft", n_fft);
-    hop_length = node_int_option(options, "hopLength", hop_length);
+    n_fft = IntProperty(options, "nFft", n_fft);
+    hop_length = IntProperty(options, "hopLength", hop_length);
     use_hpss = node_bool_option(options, "useHpss", use_hpss);
     loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
     high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);

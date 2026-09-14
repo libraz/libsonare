@@ -150,8 +150,8 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   if (!value.IsObject()) return false;
 
   const Napi::Object object = value.As<Napi::Object>();
-  options->n_fft = node_int_option(object, "nFft", options->n_fft);
-  options->hop_length = node_int_option(object, "hopLength", options->hop_length);
+  options->n_fft = IntProperty(object, "nFft", options->n_fft);
+  options->hop_length = IntProperty(object, "hopLength", options->hop_length);
   options->bpm_min = node_float_option(object, "bpmMin", options->bpm_min);
   options->bpm_max = node_float_option(object, "bpmMax", options->bpm_max);
   options->start_bpm = node_float_option(object, "startBpm", options->start_bpm);

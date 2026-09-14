@@ -326,20 +326,19 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
         return env.Undefined();
       }
     }
-    config.target_midi = sonare_node::node_float_option(opts, "targetMidi", config.target_midi);
-    config.scale_root = sonare_node::node_int_option(opts, "scaleRoot", config.scale_root);
-    config.scale_mode_mask = static_cast<uint32_t>(sonare_node::node_int_option(
-        opts, "scaleModeMask", static_cast<int>(config.scale_mode_mask)));
+    config.target_midi = sonare_node::FloatProperty(opts, "targetMidi", config.target_midi);
+    config.scale_root = sonare_node::IntProperty(opts, "scaleRoot", config.scale_root);
+    config.scale_mode_mask = static_cast<uint32_t>(
+        sonare_node::IntProperty(opts, "scaleModeMask", static_cast<int>(config.scale_mode_mask)));
     config.scale_reference_midi =
-        sonare_node::node_float_option(opts, "referenceMidi", config.scale_reference_midi);
-    config.retune_amount =
-        sonare_node::node_float_option(opts, "retuneAmount", config.retune_amount);
-    config.max_correction_semitones = sonare_node::node_float_option(
-        opts, "maxCorrectionSemitones", config.max_correction_semitones);
+        sonare_node::FloatProperty(opts, "referenceMidi", config.scale_reference_midi);
+    config.retune_amount = sonare_node::FloatProperty(opts, "retuneAmount", config.retune_amount);
+    config.max_correction_semitones =
+        sonare_node::FloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
     config.retune_speed_ms =
-        sonare_node::node_float_option(opts, "retuneSpeedMs", config.retune_speed_ms);
-    config.vibrato_threshold_cents = sonare_node::node_float_option(opts, "vibratoThresholdCents",
-                                                                    config.vibrato_threshold_cents);
+        sonare_node::FloatProperty(opts, "retuneSpeedMs", config.retune_speed_ms);
+    config.vibrato_threshold_cents =
+        sonare_node::FloatProperty(opts, "vibratoThresholdCents", config.vibrato_threshold_cents);
     if (opts.Has("voiced") && IsInt32Array(opts.Get("voiced"))) {
       auto arr = opts.Get("voiced").As<Napi::Int32Array>();
       if (arr.ElementLength() != n_frames) {
@@ -482,13 +481,14 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
     return true;
   }
   Napi::Object opts = value.As<Napi::Object>();
-  // Effects options bag: the type-checked reader family, so an explicit
-  // `undefined` (or any non-number) reads as the documented default.
+  // Effects options bag: the presence-checked reader family, so an explicit
+  // `undefined` reads as the documented default and a wrong-typed value is
+  // refused by name rather than silently taking it.
   out->config.segmentation_threshold_cents =
-      node_float_option(opts, "segmentationThresholdCents", 0.0f);
-  out->config.min_note_ms = node_float_option(opts, "minNoteMs", 0.0f);
-  out->config.reference_hz = node_float_option(opts, "referenceHz", 0.0f);
-  out->config.voiced_threshold = node_float_option(opts, "voicedThreshold", 0.0f);
+      FloatProperty(opts, "segmentationThresholdCents", 0.0f);
+  out->config.min_note_ms = FloatProperty(opts, "minNoteMs", 0.0f);
+  out->config.reference_hz = FloatProperty(opts, "referenceHz", 0.0f);
+  out->config.voiced_threshold = FloatProperty(opts, "voicedThreshold", 0.0f);
 
   const Napi::Value voiced_value = opts.Get("voiced");
   if (IsInt32Array(voiced_value)) {
@@ -556,11 +556,11 @@ void ReadNotes(const char* fn, const Napi::Array& js_notes, std::vector<SonareNo
       RequireSpanKey(fn, "note", note, "onsetSample");
       RequireSpanKey(fn, "note", note, "offsetSample");
     }
-    row.onset_sample = node_int64_option(note, "onsetSample", 0);
-    row.offset_sample = node_int64_option(note, "offsetSample", 0);
-    row.frame_start = node_int_option(note, "frameStart", 0);
-    row.frame_end = node_int_option(note, "frameEnd", 0);
-    row.median_hz = node_float_option(note, "medianHz", 0.0f);
+    row.onset_sample = Int64Property(note, "onsetSample", 0);
+    row.offset_sample = Int64Property(note, "offsetSample", 0);
+    row.frame_start = IntProperty(note, "frameStart", 0);
+    row.frame_end = IntProperty(note, "frameEnd", 0);
+    row.median_hz = FloatProperty(note, "medianHz", 0.0f);
     ReadNoteEdit(fn, note, envelopes, &row.edit);
   }
 }
@@ -602,10 +602,10 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjec
 /// signal out on a framing the other did not measure on.
 void ReadPercussiveSeparation(const Napi::Object& opts, int32_t* n_fft, int32_t* hop_length,
                               int32_t* kernel_harmonic, int32_t* kernel_percussive) {
-  *n_fft = node_int_option(opts, "nFft", kZeroIsSentinel);
-  *hop_length = node_int_option(opts, "hopLength", kZeroIsSentinel);
-  *kernel_harmonic = node_int_option(opts, "hpssKernelHarmonic", kZeroIsSentinel);
-  *kernel_percussive = node_int_option(opts, "hpssKernelPercussive", kZeroIsSentinel);
+  *n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
+  *hop_length = IntProperty(opts, "hopLength", kZeroIsSentinel);
+  *kernel_harmonic = IntProperty(opts, "hpssKernelHarmonic", kZeroIsSentinel);
+  *kernel_percussive = IntProperty(opts, "hpssKernelPercussive", kZeroIsSentinel);
 }
 
 /// Reads the extraction options bag, which may be absent. Every field takes its
@@ -616,16 +616,17 @@ void ReadPercussiveEventConfig(const Napi::Value& value, SonarePercussiveEventCo
     return;
   }
   Napi::Object opts = value.As<Napi::Object>();
-  // Effects options bag: the type-checked reader family, so an explicit
-  // `undefined` (or any non-number) reads as the documented default.
+  // Effects options bag: the presence-checked reader family, so an explicit
+  // `undefined` reads as the documented default and a wrong-typed value is
+  // refused by name rather than silently taking it.
   ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
                            &out->hpss_kernel_percussive);
-  out->onset_wait = node_int_option(opts, "onsetWait", kZeroIsSentinel);
-  out->onset_delta = node_float_option(opts, "onsetDelta", 0.0f);
-  out->max_event_ms = node_float_option(opts, "maxEventMs", 0.0f);
+  out->onset_wait = IntProperty(opts, "onsetWait", kZeroIsSentinel);
+  out->onset_delta = FloatProperty(opts, "onsetDelta", 0.0f);
+  out->max_event_ms = FloatProperty(opts, "maxEventMs", 0.0f);
   // 0 is this field's own meaning as well as its default, and the C ABI assigns
   // it as-is, so "keep everything" stays reachable from here.
-  out->min_percussive_ratio = node_float_option(opts, "minPercussiveRatio", 0.0f);
+  out->min_percussive_ratio = FloatProperty(opts, "minPercussiveRatio", 0.0f);
 }
 
 /// Reads the render options bag, under the same rule.
@@ -637,7 +638,7 @@ void ReadPercussiveRenderConfig(const Napi::Value& value, SonarePercussiveRender
   Napi::Object opts = value.As<Napi::Object>();
   ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
                            &out->hpss_kernel_percussive);
-  out->fade_ms = node_float_option(opts, "fadeMs", 0.0f);
+  out->fade_ms = FloatProperty(opts, "fadeMs", 0.0f);
 }
 
 /// Reads an event's optional `edit`. A zeroed SonarePercussiveEventEdit is the
@@ -652,9 +653,9 @@ void ReadPercussiveEventEdit(const char* fn, const Napi::Object& event,
     throw std::runtime_error(std::string(fn) + ": event.edit must be a plain object");
   }
   Napi::Object edit = edit_value.As<Napi::Object>();
-  out->time_offset_samples = node_int64_option(edit, "timeOffsetSamples", 0);
-  out->gain_db = node_float_option(edit, "gainDb", 0.0f);
-  out->muted = node_bool_option(edit, "muted", false) ? 1 : 0;
+  out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0);
+  out->gain_db = FloatProperty(edit, "gainDb", 0.0f);
+  out->muted = BoolProperty(edit, "muted", false) ? 1 : 0;
 }
 
 /// Reads a JS event array onto the C structs. Only the span and the edit are
@@ -675,8 +676,8 @@ void ReadPercussiveEvents(const char* fn, const Napi::Array& js_events,
     SonarePercussiveEvent& row = (*events)[i];
     RequireSpanKey(fn, "event", event, "onsetSample");
     RequireSpanKey(fn, "event", event, "offsetSample");
-    row.onset_sample = node_int64_option(event, "onsetSample", 0);
-    row.offset_sample = node_int64_option(event, "offsetSample", 0);
+    row.onset_sample = Int64Property(event, "onsetSample", 0);
+    row.offset_sample = Int64Property(event, "offsetSample", 0);
     ReadPercussiveEventEdit(fn, event, &row.edit);
   }
 }
@@ -775,9 +776,9 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   float frame_rate = 0.0f;
   if (info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    config.fade_ms = node_float_option(opts, "fadeMs", 0.0f);
-    config.vibrato_cutoff_hz = node_float_option(opts, "vibratoCutoffHz", 0.0f);
-    frame_rate = node_float_option(opts, "frameRate", 0.0f);
+    config.fade_ms = FloatProperty(opts, "fadeMs", 0.0f);
+    config.vibrato_cutoff_hz = FloatProperty(opts, "vibratoCutoffHz", 0.0f);
+    frame_rate = FloatProperty(opts, "frameRate", 0.0f);
     const Napi::Value f0_value = opts.Get("f0Hz");
     if (IsFloat32Array(f0_value)) {
       f0 = f0_value.As<Napi::Float32Array>();
@@ -1196,8 +1197,8 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   const SonareSpectralEditConfig* config_ptr = nullptr;
   if (info.Length() >= 4 && info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    config.n_fft = node_int_option(opts, "nFft", kZeroIsSentinel);
-    config.hop_length = node_int_option(opts, "hopLength", kZeroIsSentinel);
+    config.n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
+    config.hop_length = IntProperty(opts, "hopLength", kZeroIsSentinel);
     config.heal_radius_frames = node_int_option(opts, "healRadiusFrames", kZeroIsSentinel);
 
     // Optional window, by name or by ordinal.
@@ -1218,13 +1219,16 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
       throw std::runtime_error("spectralEdit: each op must be a plain object");
     }
     Napi::Object op = item.As<Napi::Object>();
-    // Effects options bag: the type-checked reader family, so an explicit
-    // `undefined` (or any non-number) reads as the documented default.
-    ops[i].start_sample = node_int64_option(op, "startSample", 0);
+    // This bag reads two ways. startSample and gainDb here, and nFft and
+    // hopLength in the config object above, refuse a wrong-typed value by name;
+    // endSample, lowHz, highHz and healRadiusFrames answer one with the default.
+    // The WASM binding reads every one of them through an inline
+    // hasProperty/as<T>() pair, which coerces rather than doing either.
+    ops[i].start_sample = Int64Property(op, "startSample", 0);
     ops[i].end_sample = node_int64_option(op, "endSample", static_cast<int64_t>(length));
     ops[i].low_hz = node_float_option(op, "lowHz", 0.0f);
     ops[i].high_hz = node_float_option(op, "highHz", 0.0f);
-    ops[i].gain_db = node_float_option(op, "gainDb", 0.0f);
+    ops[i].gain_db = FloatProperty(op, "gainDb", 0.0f);
 
     // Resolve mode: required string field.
     Napi::Value mode_val = op.Get("mode");

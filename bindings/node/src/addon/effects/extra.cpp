@@ -205,12 +205,12 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   std::string init;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.n_components = node_int_option(options, "nComponents", kZeroIsSentinel);
-    config.n_fft = node_int_option(options, "nFft", kZeroIsSentinel);
-    config.hop_length = node_int_option(options, "hopLength", kZeroIsSentinel);
-    config.n_iter = node_int_option(options, "nIter", kZeroIsSentinel);
-    config.beta = node_float_option(options, "beta", 0.0f);
-    config.mask_power = node_float_option(options, "maskPower", 0.0f);
+    config.n_components = IntProperty(options, "nComponents", kZeroIsSentinel);
+    config.n_fft = IntProperty(options, "nFft", kZeroIsSentinel);
+    config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
+    config.n_iter = IntProperty(options, "nIter", kZeroIsSentinel);
+    config.beta = FloatProperty(options, "beta", 0.0f);
+    config.mask_power = FloatProperty(options, "maskPower", 0.0f);
     Napi::Value init_value = options.Get("init");
     if (init_value.IsString()) {
       init = init_value.As<Napi::String>().Utf8Value();

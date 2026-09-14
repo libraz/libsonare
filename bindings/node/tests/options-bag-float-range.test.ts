@@ -167,17 +167,20 @@ describe('the addon and the WASM binding read one options bag one way', () => {
     expect(() => wasmLateDelayMs(INSIDE_FLOAT_MAX)).not.toThrow();
   });
 
-  it('falls back to the default for a non-number on both', () => {
-    // Compared against each surface's own default-parameter run, because the
-    // two fields are different quantities. `{}` coerced to NaN on the WASM side
-    // before the type check and takes the default by type afterwards; the
-    // result is the same either way, which is why the result is asserted.
+  it("answers a non-number by each field's own contract", () => {
+    // The two fields are not in the same class and must not be asserted as if
+    // they were. `dbRef` is read by the substituting family, whose contract IS
+    // the fallback, so its assertion is the RESULT against the
+    // default-parameter run. `volume` is read by a reader that reserves its
+    // substitution for a non-finite NUMBER, so a wrong type is refused by name.
     const nodeDefault = spectrumDb();
-    const wasmDefault = wasmLateDelayMs();
+    expect(nodeDefault).not.toBe(spectrumDb(2.0));
     for (const value of WRONG_TYPES) {
       const label = JSON.stringify(value);
       expect(spectrumDb(value), `node dbRef ${label}`).toBe(nodeDefault);
-      expect(wasmLateDelayMs(value), `wasm volume ${label}`).toBe(wasmDefault);
+      const caught = capture(() => wasmLateDelayMs(value));
+      expect(caught, `wasm volume ${label}`).toBeInstanceOf(Error);
+      expect((caught as Error).message).toBe('volume must be a number');
     }
   });
 });

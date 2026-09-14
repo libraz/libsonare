@@ -31,14 +31,14 @@ inline Napi::Float32Array CopyToFloat32(Napi::Env env, const float* values, size
 /// door ignores both fields and reads the points out of @p envelopes itself.
 inline void ReadNoteEditFields(const Napi::Object& edit, std::vector<float>* envelopes,
                                SonareNoteEdit* out) {
-  out->time_offset_samples = node_int64_option(edit, "timeOffsetSamples", 0);
-  out->pitch_shift_semitones = node_float_option(edit, "pitchShiftSemitones", 0.0f);
-  out->gain_db = node_float_option(edit, "gainDb", 0.0f);
-  out->time_stretch_ratio = node_float_option(edit, "timeStretchRatio", 0.0f);
-  out->formant_shift_semitones = node_float_option(edit, "formantShiftSemitones", 0.0f);
-  out->vibrato_depth_change = node_float_option(edit, "vibratoDepthChange", 0.0f);
-  out->drift_change = node_float_option(edit, "driftChange", 0.0f);
-  out->muted = node_bool_option(edit, "muted", false) ? 1 : 0;
+  out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0);
+  out->pitch_shift_semitones = FloatProperty(edit, "pitchShiftSemitones", 0.0f);
+  out->gain_db = FloatProperty(edit, "gainDb", 0.0f);
+  out->time_stretch_ratio = FloatProperty(edit, "timeStretchRatio", 0.0f);
+  out->formant_shift_semitones = FloatProperty(edit, "formantShiftSemitones", 0.0f);
+  out->vibrato_depth_change = FloatProperty(edit, "vibratoDepthChange", 0.0f);
+  out->drift_change = FloatProperty(edit, "driftChange", 0.0f);
+  out->muted = BoolProperty(edit, "muted", false) ? 1 : 0;
 
   const std::vector<float> envelope = FloatArrayProperty(edit, "amplitudeEnvelope");
   out->envelope_offset = static_cast<int64_t>(envelopes->size());

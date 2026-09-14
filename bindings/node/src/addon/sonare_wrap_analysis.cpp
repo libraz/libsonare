@@ -63,8 +63,8 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   std::string genre_hint;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = node_int_option(options, "nFft", n_fft);
-    hop_length = node_int_option(options, "hopLength", hop_length);
+    n_fft = IntProperty(options, "nFft", n_fft);
+    hop_length = IntProperty(options, "hopLength", hop_length);
     use_hpss = node_bool_option(options, "useHpss", use_hpss);
     loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
     high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
@@ -111,8 +111,8 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   std::string genre_hint;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = node_int_option(options, "nFft", n_fft);
-    hop_length = node_int_option(options, "hopLength", hop_length);
+    n_fft = IntProperty(options, "nFft", n_fft);
+    hop_length = IntProperty(options, "hopLength", hop_length);
     use_hpss = node_bool_option(options, "useHpss", use_hpss);
     loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
     high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
@@ -287,14 +287,14 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   config.backtrack_range = 10;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.n_fft = node_int_option(options, "nFft", config.n_fft);
-    config.hop_length = node_int_option(options, "hopLength", config.hop_length);
-    config.threshold = node_float_option(options, "threshold", config.threshold);
+    config.n_fft = IntProperty(options, "nFft", config.n_fft);
+    config.hop_length = IntProperty(options, "hopLength", config.hop_length);
+    config.threshold = FloatProperty(options, "threshold", config.threshold);
     config.pre_max = node_int_option(options, "preMax", config.pre_max);
     config.post_max = node_int_option(options, "postMax", config.post_max);
     config.pre_avg = node_int_option(options, "preAvg", config.pre_avg);
     config.post_avg = node_int_option(options, "postAvg", config.post_avg);
-    config.delta = node_float_option(options, "delta", config.delta);
+    config.delta = FloatProperty(options, "delta", config.delta);
     config.wait = node_int_option(options, "wait", config.wait);
     config.backtrack = node_bool_option(options, "backtrack", false) ? 1 : 0;
     config.backtrack_range = node_int_option(options, "backtrackRange", config.backtrack_range);

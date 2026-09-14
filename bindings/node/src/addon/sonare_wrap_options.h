@@ -229,12 +229,29 @@ inline bool node_arg_bool(const Napi::CallbackInfo& info, size_t index, bool fal
 // Two helper families with deliberately different lenience, shared by every
 // addon TU (do not re-declare per-file copies):
 //   * node_*_option  — type-checked: a present-but-wrong-typed value falls
-//     back to the default (used by analysis/effects options bags).
+//     back to the default. Reserved for the keys that document a wrong-typed
+//     value as meaning "unspecified"; a key with no such contract belongs in
+//     the family below, or the same bag reads two ways across the surfaces.
 //   * *Property      — presence + type checked: undefined/null falls back to the
-//     default, but any other value is read with a typed N-API accessor, so a
-//     type mismatch raises a pending JS exception (it does NOT silently fall
-//     back like node_*_option). Used by engine/project structs whose values are
-//     further validated downstream by the C ABI.
+//     default, and any other value of the wrong type is refused by name (it
+//     does NOT silently fall back like node_*_option). Used by engine/project
+//     structs whose values are further validated downstream by the C ABI, and
+//     by the options keys whose value is a quantity rather than a spelling of
+//     "unspecified".
+
+/// @brief Refuses a present value the reader cannot read, naming @p key.
+/// @details The typed N-API accessors report a mismatch by leaving a pending JS
+///   exception and returning a dummy, and the entry point then runs to
+///   completion on it: every later N-API allocation returns null and the result
+///   builders memcpy into it. Checking the type first makes the refusal unwind
+///   instead, which is how @ref node_narrow_number reports and what
+///   SONARE_NODE_CATCH turns back into a JS error.
+/// @throws Napi::TypeError naming @p key.
+inline void node_require_property_type(Napi::Env env, bool ok, const char* key,
+                                       const char* expected) {
+  if (env.IsExceptionPending() || ok) return;
+  throw Napi::TypeError::New(env, std::string(key) + " must be " + expected);
+}
 
 /// @brief Read an integer option from a JS object, falling back if missing.
 inline int node_int_option(const Napi::Object& object, const char* key, int fallback) {
@@ -293,11 +310,12 @@ inline std::string node_string_option(const Napi::Object& object, const char* ke
   return value.IsString() ? value.As<Napi::String>().Utf8Value() : std::string(fallback);
 }
 
-/// @brief Read an int property: undefined/null returns the fallback, otherwise a
-///        typed read (a non-number raises a pending JS exception; see note above).
+/// @brief Read an int property: undefined/null returns the fallback, any other
+///        non-number is refused by name (see note above).
 inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_int(obj.Env(), value, key);
 }
 
@@ -306,6 +324,7 @@ inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
 inline int IntProperty(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return 0;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_int(obj.Env(), value, key);
 }
@@ -315,14 +334,16 @@ inline int IntProperty(const Napi::Object& obj, const char* key, ZeroIsSentinel)
 inline uint32_t WordProperty(const Napi::Object& obj, const char* key, uint32_t fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_word(obj.Env(), value, key);
 }
 
-/// @brief Read a uint32 property: undefined/null returns the fallback, otherwise a
-///        typed read (a non-number raises a pending JS exception).
+/// @brief Read a uint32 property: undefined/null returns the fallback, any other
+///        non-number is refused by name.
 inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_t fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_uint32(obj.Env(), value, key);
 }
 
@@ -351,11 +372,12 @@ inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const ch
   return static_cast<uint8_t>(number);
 }
 
-/// @brief Read an int64 property: undefined/null returns the fallback, otherwise a
-///        typed read (a non-number raises a pending JS exception).
+/// @brief Read an int64 property: undefined/null returns the fallback, any other
+///        non-number is refused by name.
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_int64(obj.Env(), value, key);
 }
 
@@ -364,29 +386,47 @@ inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t f
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return 0;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_int64(obj.Env(), value, key);
 }
 
-/// @brief Read a float property: undefined/null returns the fallback, otherwise a
-///        typed read (a non-number raises a pending JS exception).
+/// @brief Read a float property: undefined/null returns the fallback, any other
+///        non-number is refused by name.
+/// @details Narrows through @ref node_narrow_float, so a finite value no 32-bit
+///   float can hold is refused rather than arriving downstream as an infinity.
 inline float FloatProperty(const Napi::Object& obj, const char* key, float fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().FloatValue();
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return node_narrow_float(obj.Env(), value, key);
 }
 
-/// @brief Read a double property: undefined/null returns the fallback, otherwise a
-///        typed read (a non-number raises a pending JS exception).
+/// @brief Read a double property: undefined/null returns the fallback, any other
+///        non-number is refused by name.
 inline double DoubleProperty(const Napi::Object& obj, const char* key, double fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().DoubleValue();
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return value.As<Napi::Number>().DoubleValue();
 }
 
-/// @brief Read a bool property: undefined/null returns the fallback, otherwise a
-///        typed read (a non-boolean raises a pending JS exception).
+/// @brief Read a bool property: undefined/null returns the fallback, any other
+///        non-boolean is refused by name.
 inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Boolean>().Value();
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsBoolean(), key, "a boolean");
+  return value.As<Napi::Boolean>().Value();
+}
+
+/// @brief Read a UTF-8 string property: undefined/null returns the fallback, any
+///        other non-string is refused by name.
+inline std::string StringProperty(const Napi::Object& obj, const char* key, const char* fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return std::string(fallback);
+  node_require_property_type(obj.Env(), value.IsString(), key, "a string");
+  return value.As<Napi::String>().Utf8Value();
 }
 
 /// @brief Read a float-array property off a record object (a Float32Array, or a

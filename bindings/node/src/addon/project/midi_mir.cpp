@@ -284,14 +284,14 @@ SonareProjectTempoOptions TempoOptionsFrom(Napi::Value value) {
   if (!value.IsObject()) return options;
   Napi::Object object = value.As<Napi::Object>();
   options.adaptive_tempo =
-      sonare_node::node_bool_option(object, "adaptiveTempo", options.adaptive_tempo != 0) ? 1 : 0;
-  options.tempo_update_interval_beats = sonare_node::node_int_option(
+      sonare_node::BoolProperty(object, "adaptiveTempo", options.adaptive_tempo != 0) ? 1 : 0;
+  options.tempo_update_interval_beats = sonare_node::IntProperty(
       object, "tempoUpdateIntervalBeats", options.tempo_update_interval_beats);
   options.ramp_threshold = static_cast<float>(
-      sonare_node::node_double_option(object, "rampThreshold", options.ramp_threshold));
+      sonare_node::DoubleProperty(object, "rampThreshold", options.ramp_threshold));
   options.include_octave_candidates =
-      sonare_node::node_bool_option(object, "includeOctaveCandidates",
-                                    options.include_octave_candidates != 0)
+      sonare_node::BoolProperty(object, "includeOctaveCandidates",
+                                options.include_octave_candidates != 0)
           ? 1
           : 0;
   return options;

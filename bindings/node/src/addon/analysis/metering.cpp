@@ -652,7 +652,7 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
   float db_amin = 0.0f;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object opts = info[2].As<Napi::Object>();
-    n_fft = node_int_option(opts, "nFft", kZeroIsSentinel);
+    n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = node_bool_option(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = node_int_option(opts, "octaveFraction", kZeroIsSentinel);
     db_ref = node_float_option(opts, "dbRef", 0.0f);
@@ -691,7 +691,7 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   float db_amin = 0.0f;
   if (info.Length() >= 4 && info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    n_fft = node_int_option(opts, "nFft", kZeroIsSentinel);
+    n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     smooth = node_bool_option(opts, "applyOctaveSmoothing", false) ? 1 : 0;
     octave = node_int_option(opts, "octaveFraction", kZeroIsSentinel);
     db_ref = node_float_option(opts, "dbRef", 0.0f);

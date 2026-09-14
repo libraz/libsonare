@@ -178,11 +178,11 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       // an unchecked static_cast of an out-of-int-range double is undefined
       // behaviour, and on ARM64 it saturates to INT_MAX, which slips past the
       // core's positivity checks instead of being rejected here.
-      config.sample_rate = CheckedConfigInt(
-          node_double_option(opts, "sampleRate", config.sample_rate), "sampleRate");
-      config.n_fft = CheckedConfigInt(node_double_option(opts, "nFft", config.n_fft), "nFft");
+      config.sample_rate =
+          CheckedConfigInt(DoubleProperty(opts, "sampleRate", config.sample_rate), "sampleRate");
+      config.n_fft = CheckedConfigInt(DoubleProperty(opts, "nFft", config.n_fft), "nFft");
       config.hop_length =
-          CheckedConfigInt(node_double_option(opts, "hopLength", config.hop_length), "hopLength");
+          CheckedConfigInt(DoubleProperty(opts, "hopLength", config.hop_length), "hopLength");
       config.n_mels = CheckedConfigInt(node_double_option(opts, "nMels", config.n_mels), "nMels");
       config.fmin = static_cast<float>(node_double_option(opts, "fmin", config.fmin));
       config.fmax = static_cast<float>(node_double_option(opts, "fmax", config.fmax));

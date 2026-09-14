@@ -299,13 +299,13 @@ Napi::Value SonareWrap::Pcen(const Napi::CallbackInfo& info) {
   float time_constant = 0.4f, gain = 0.98f, bias = 2.0f, power = 0.5f, eps = 1e-6f;
   if (info.Length() >= 4 && info[3].IsObject()) {
     auto opts = info[3].As<Napi::Object>();
-    sr = node_int_option(opts, "sampleRate", sr);
-    hop = node_int_option(opts, "hopLength", hop);
-    time_constant = node_float_option(opts, "timeConstant", time_constant);
-    gain = node_float_option(opts, "gain", gain);
-    bias = node_float_option(opts, "bias", bias);
-    power = node_float_option(opts, "power", power);
-    eps = node_float_option(opts, "eps", eps);
+    sr = IntProperty(opts, "sampleRate", sr);
+    hop = IntProperty(opts, "hopLength", hop);
+    time_constant = FloatProperty(opts, "timeConstant", time_constant);
+    gain = FloatProperty(opts, "gain", gain);
+    bias = FloatProperty(opts, "bias", bias);
+    power = FloatProperty(opts, "power", power);
+    eps = FloatProperty(opts, "eps", eps);
   }
   const int n_bins = node_narrow_int(env, info[1], "nBins");
   const int n_frames = node_narrow_int(env, info[2], "nFrames");
