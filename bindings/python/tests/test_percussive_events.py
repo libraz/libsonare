@@ -390,8 +390,12 @@ def test_a_fractional_onset_wait_is_refused_rather_than_truncated() -> None:
     for onset_wait in (0.5, -0.5, 0.9, float("nan")):
         try:
             events = libsonare.extract_percussive_events(audio, SR, onset_wait=onset_wait)
-        except SonareValueError:
-            outcomes.append("refused")
+        except SonareValueError as error:
+            # The field, not merely "it raised": a rejection for an unrelated
+            # reason reads identically without it, and the sibling surfaces name
+            # the field in the same words.
+            named = "onset_wait" in str(error)
+            outcomes.append("refused" if named else f"refused, unnamed: {error}")
         else:
             outcomes.append(f"accepted, default set: {events == relaxed}")
     assert outcomes == ["refused"] * 4
