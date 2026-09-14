@@ -20,5 +20,5 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 | room acoustics | 5 | 5/5 | 5/5 | 5/5 | 5/5 |
 | sample bank | 5 | 5/5 | 5/5 | 5/5 | 1/5 |
 | streaming | 33 | 31/33 | 31/33 | 31/33 | 7/33 |
-| voice changer | 19 | 19/19 | 19/19 | 18/19 | 3/19 |
-| **all domains** | **726** | **678/726** | **675/726** | **676/726** | **132/726** |
+| voice changer | 20 | 20/20 | 20/20 | 19/20 | 3/20 |
+| **all domains** | **727** | **679/727** | **676/727** | **677/727** | **132/727** |

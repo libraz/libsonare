@@ -26,8 +26,10 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
+#include "editing/voice_changer/isp_limiter.h"
 #include "editing/voice_changer/realtime.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/saturation/amp_sim.h"
@@ -68,6 +70,10 @@ constexpr int kVoiceChangerRecoveryBlocks = 300;
 // signal. Both move with the fixture.
 constexpr double kTapeResidual = 1.0e-4;
 constexpr double kVoiceChangerResidual = 1.0e-3;
+// The limiter driven alone holds the sample for its lookahead and its peak
+// window, both well under one block, and its 50 ms gain release settles inside
+// five more. Long enough that a discard it failed to make would still show.
+constexpr int kIspLimiterBlocks = 24;
 // An ordinary in-range sample, substituted where the poison goes: it cannot make
 // any cell non-finite, so what it leaves behind is the chain's own memory.
 constexpr float kFinitePerturbation = 4.0f;
@@ -355,15 +361,22 @@ TEST_CASE("the realtime voice changer bounds a non-finite sample to its own bloc
     return config;
   };
 
-  const auto make_from = [](RealtimeVoiceChangerConfig config) {
-    return [config]() {
-      auto processor = std::make_shared<RealtimeVoiceChanger>(config);
-      processor->prepare(kSampleRate, kBlockSize, 1);
-      return BlockProcessor([processor](float* buffer, int n) {
-        float* channels[] = {buffer};
-        processor->process_block(channels, 1, n);
-      });
-    };
+  // Two ways in: make_from hides the processor behind the callable, which is all
+  // a section reading the output samples needs. A section reading the chain's
+  // discard count has to keep the instance, so it builds one and wraps it.
+  const auto prepared = [](const RealtimeVoiceChangerConfig& config) {
+    auto processor = std::make_shared<RealtimeVoiceChanger>(config);
+    processor->prepare(kSampleRate, kBlockSize, 1);
+    return processor;
+  };
+  const auto block_processor = [](const std::shared_ptr<RealtimeVoiceChanger>& processor) {
+    return BlockProcessor([processor](float* buffer, int n) {
+      float* channels[] = {buffer};
+      processor->process_block(channels, 1, n);
+    });
+  };
+  const auto make_from = [&prepared, &block_processor](RealtimeVoiceChangerConfig config) {
+    return [config, &prepared, &block_processor]() { return block_processor(prepared(config)); };
   };
 
   // A non-finite input sample is flushed to zero before it reaches any filter,
@@ -433,31 +446,126 @@ TEST_CASE("the realtime voice changer bounds a non-finite sample to its own bloc
     REQUIRE(control_effect(control) > 0.0f);
     const auto poisoned = run_stream(make_from(config)(), block_count, poison_value, true);
     require_non_finite_bounded(poisoned, reverb_last_affected);
-    // The shipped default has the peak limiter on, and it substitutes a finite
-    // value for every non-finite one. The non-finite count then reads zero
-    // whether the tank is poisoned or not, so the residual is the only window
-    // onto this stage recovering at all.
+    // The shipped default has the peak limiter on, and every non-finite sample
+    // it substitutes leaves the output finite. The discard count is what the
+    // positive control reads with that stage in the path; the residual then says
+    // the stream rejoined its control rather than merely reporting.
     RealtimeVoiceChangerConfig limited = config;
     limited.limiter.enable_isp_limiter = true;
-    const auto limited_control = run_stream(make_from(limited)(), block_count, 0.0f, false);
+    auto limited_control_changer = prepared(limited);
+    const auto limited_control =
+        run_stream(block_processor(limited_control_changer), block_count, 0.0f, false);
     REQUIRE(control_effect(limited_control) > 0.0f);
-    const auto limited_poisoned = run_stream(make_from(limited)(), block_count, poison_value, true);
+    REQUIRE(limited_control_changer->non_finite_discard_count() == 0u);
+    auto limited_poisoned_changer = prepared(limited);
+    const auto limited_poisoned =
+        run_stream(block_processor(limited_poisoned_changer), block_count, poison_value, true);
+    REQUIRE(limited_poisoned_changer->non_finite_discard_count() > 0u);
     REQUIRE(residual_from(limited_control, limited_poisoned, kVoiceChangerRecoveryBlocks) <
             kVoiceChangerResidual);
   }
 
+  SECTION("with a sample the output trim takes out of range") {
+    // The output trim runs in front of a clamp that cannot be switched off, so a
+    // finite sample it takes past float range is folded onto the ceiling while
+    // every filter cell is still finite. Nothing on the samples can see that:
+    // the output is in range and no cell is holding anything to discard. The
+    // same poison at unity trim is the control -- it reports nothing, so what
+    // the raised trim reports is this fold and not a recurrence upstream.
+    RealtimeVoiceChangerConfig at_unity = linear_config();
+    at_unity.output_gain_db = 0.0f;
+    RealtimeVoiceChangerConfig with_trim = at_unity;
+    with_trim.output_gain_db = 12.0f;
+
+    // Large enough that 12 dB of trim leaves float range, small enough that the
+    // high-pass's -2x feedback does not.
+    const float large = 1.0e38f;
+    auto unity_changer = prepared(at_unity);
+    const auto unity = run_stream(block_processor(unity_changer), block_count, large, true);
+    INFO("unity-trim discards " << unity_changer->non_finite_discard_count());
+    REQUIRE(unity_changer->non_finite_discard_count() == 0u);
+
+    auto trimmed_changer = prepared(with_trim);
+    const auto trimmed = run_stream(block_processor(trimmed_changer), block_count, large, true);
+    for (const auto& block : trimmed) {
+      REQUIRE_FALSE(block_has_non_finite(block));
+    }
+    INFO("trimmed discards " << trimmed_changer->non_finite_discard_count());
+    REQUIRE(trimmed_changer->non_finite_discard_count() > 0u);
+  }
+
   SECTION("with the inter-sample-peak limiter") {
     // The ISP stage replaces a non-finite sample with silence or full scale, so
-    // the output cannot show what the state is doing and the positive control
-    // cannot be taken here. That substitution is the reason the rule is needed
-    // rather than a reason it is not: without it the chain emits a plausible
-    // finite value forever instead of a value that says something went wrong.
+    // the output is finite whether the state behind it is usable or not and no
+    // assertion on the samples can separate the two runs. The chain reports the
+    // block it discarded its own state in, and that report is the positive
+    // control: the clean run must produce none of them.
     RealtimeVoiceChangerConfig config = linear_config();
     config.limiter.enable_isp_limiter = true;
-    const auto control = run_stream(make_from(config)(), block_count, 0.0f, false);
+    auto control_changer = prepared(config);
+    const auto control = run_stream(block_processor(control_changer), block_count, 0.0f, false);
     REQUIRE(control_effect(control) > 0.0f);
-    const auto poisoned = run_stream(make_from(config)(), block_count, poison_value, true);
+    REQUIRE(control_changer->non_finite_discard_count() == 0u);
+
+    auto poisoned_changer = prepared(config);
+    const auto poisoned =
+        run_stream(block_processor(poisoned_changer), block_count, poison_value, true);
+    INFO("discards " << poisoned_changer->non_finite_discard_count());
+    REQUIRE(poisoned_changer->non_finite_discard_count() > 0u);
     REQUIRE(residual_from(control, poisoned, kVoiceChangerRecoveryBlocks) < kVoiceChangerResidual);
+  }
+}
+
+TEST_CASE("the inter-sample-peak limiter reports the sample it substituted",
+          "[editing][voice-changer]") {
+  using sonare::editing::voice_changer::IspLimiter;
+
+  // Driven alone, so nothing between the poison and the substitution under test:
+  // the sample goes into the lookahead as it stands, where every other owner in
+  // this file needs a recurrence overflowed to reach its state at all.
+  const auto run = [](float poison_value, bool poison) {
+    IspLimiter limiter;
+    limiter.prepare(kSampleRate, kBlockSize);
+    limiter.set_config({-1.0f, 50.0f});
+    std::vector<std::vector<float>> outputs;
+    int discards = 0;
+    for (int k = 0; k < kIspLimiterBlocks; ++k) {
+      std::vector<float> block = stream_block(k);
+      if (poison && k == kPoisonBlock) {
+        block[static_cast<size_t>(kPoisonIndex)] = poison_value;
+      }
+      limiter.process_block(block.data(), kBlockSize);
+      if (limiter.discard_non_finite()) ++discards;
+      outputs.push_back(std::move(block));
+    }
+    return std::make_pair(outputs, discards);
+  };
+
+  const auto clean = run(0.0f, false);
+  // Non-vacuity: the fixture peaks above the ceiling, so the limiter is shaping
+  // gain rather than passing the signal through.
+  REQUIRE(control_effect(clean.first) > 0.0f);
+  // A clean stream must not report, or the count says nothing about a poisoned
+  // one. This is the half of the claim a substitution cannot fake.
+  REQUIRE(clean.second == 0);
+
+  const std::array<float, 3> poison_values{std::numeric_limits<float>::quiet_NaN(),
+                                           std::numeric_limits<float>::infinity(),
+                                           -std::numeric_limits<float>::infinity()};
+  for (const float poison_value : poison_values) {
+    INFO("poison value " << poison_value);
+    const auto poisoned = run(poison_value, true);
+    INFO("discards " << poisoned.second);
+    REQUIRE(poisoned.second > 0);
+
+    // What the report is worth: the stream it describes is finite everywhere and
+    // in range, so every assertion available without it passes on both runs.
+    for (const auto& block : poisoned.first) {
+      REQUIRE_FALSE(block_has_non_finite(block));
+    }
+    // And it did change the samples. A count that rose while the output stayed
+    // identical would be reporting something other than this substitution.
+    REQUIRE(residual_from(clean.first, poisoned.first, kPoisonBlock) > 0.0);
   }
 }
 

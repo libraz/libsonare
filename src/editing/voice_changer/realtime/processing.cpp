@@ -185,7 +185,14 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   smooth_attack_release(state.limiter_gain, limit_target, limiter_attack_,
                         state.limiter_release_alpha,
                         /*attack_when_decreasing=*/true);
-  return std::clamp(x * state.limiter_gain, -ceiling, ceiling);
+  // std::clamp folds an infinity onto the ceiling, which is a sample this stage
+  // could legitimately have produced; a NaN answers false to both comparisons
+  // and propagates instead. Record the fold so the block's discard report covers
+  // this stage by construction, rather than by the recurrence that produced the
+  // value happening to be caught as well.
+  const float limited = x * state.limiter_gain;
+  if (std::isinf(limited)) state.output_limiter_substituted = true;
+  return std::clamp(limited, -ceiling, ceiling);
 }
 
 void RealtimeVoiceChanger::ensure_scratch(int num_samples) noexcept {
@@ -285,33 +292,51 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     if (config.limiter.enable_isp_limiter) {
       channel.isp_limiter.process_block(channels[ch], num_samples);
     }
-    discard_non_finite_state(channel);
+    if (discard_non_finite_state(channel)) non_finite_discard_count_.bump();
   }
 }
 
-void RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcept {
+bool RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcept {
   // Seventeen floats per channel, once per block. The retune ring and the OLA
   // accumulators are read at an offset rather than fed back, so they flush on
   // their own; the formant and ISP stages own their cells and clear them there.
-  discard_group_if_non_finite(state.hpf.z1, state.hpf.z2);
-  discard_group_if_non_finite(state.body.z1, state.body.z2);
-  discard_group_if_non_finite(state.presence.z1, state.presence.z2);
-  discard_group_if_non_finite(state.air.z1, state.air.z2);
-  discard_group_if_non_finite(state.deess_band.z1, state.deess_band.z2);
+  // Every call runs: | rather than || so no cell is skipped once one reports.
+  bool discarded = discard_group_if_non_finite(state.hpf.z1, state.hpf.z2);
+  discarded |= discard_group_if_non_finite(state.body.z1, state.body.z2);
+  discarded |= discard_group_if_non_finite(state.presence.z1, state.presence.z2);
+  discarded |= discard_group_if_non_finite(state.air.z1, state.air.z2);
+  discarded |= discard_group_if_non_finite(state.deess_band.z1, state.deess_band.z2);
   // A detector and the gain it drives recover together: the gain a discarded
   // detector produced is not usable either, and unity is where each rests.
-  if (discard_if_non_finite(state.gate_env, 0.0f)) state.gate_gain = 1.0f;
-  discard_if_non_finite(state.gate_gain, 1.0f);
-  if (discard_if_non_finite(state.comp_env, 0.0f)) state.comp_gain = 1.0f;
-  discard_if_non_finite(state.comp_gain, 1.0f);
-  if (discard_if_non_finite(state.deess_env, 0.0f)) state.deess_gain = 1.0f;
-  discard_if_non_finite(state.deess_gain, 1.0f);
-  discard_if_non_finite(state.limiter_gain, 1.0f);
-  state.formant.discard_non_finite();
-  state.isp_limiter.discard_non_finite();
+  if (discard_if_non_finite(state.gate_env, 0.0f)) {
+    state.gate_gain = 1.0f;
+    discarded = true;
+  }
+  discarded |= discard_if_non_finite(state.gate_gain, 1.0f);
+  if (discard_if_non_finite(state.comp_env, 0.0f)) {
+    state.comp_gain = 1.0f;
+    discarded = true;
+  }
+  discarded |= discard_if_non_finite(state.comp_gain, 1.0f);
+  if (discard_if_non_finite(state.deess_env, 0.0f)) {
+    state.deess_gain = 1.0f;
+    discarded = true;
+  }
+  discarded |= discard_if_non_finite(state.deess_gain, 1.0f);
+  // The output limiter folded an infinity onto its ceiling, so the gain it drove
+  // to was derived from a magnitude the input cannot explain.
+  if (state.output_limiter_substituted) {
+    state.output_limiter_substituted = false;
+    state.limiter_gain = 1.0f;
+    discarded = true;
+  }
+  discarded |= discard_if_non_finite(state.limiter_gain, 1.0f);
+  discarded |= state.formant.discard_non_finite();
+  discarded |= state.isp_limiter.discard_non_finite();
   // The reverb's bound is one comb delay period rather than this block; see
   // StreamingReverb::discard_non_finite.
-  state.reverb.discard_non_finite();
+  discarded |= state.reverb.discard_non_finite();
+  return discarded;
 }
 
 int RealtimeVoiceChanger::latency_samples() const noexcept {

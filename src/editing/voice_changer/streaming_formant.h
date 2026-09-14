@@ -31,10 +31,16 @@ class StreamingFormant {
   void process_block(const float* input, float* output, int num_samples) noexcept;
   /// @brief Returns the four sections to rest when a non-finite value has
   ///        reached them (see util/non_finite_state.h).
-  void discard_non_finite() noexcept;
+  /// @return true when this call, or the block before it, discarded a section.
+  ///         @ref process_block applies the rule itself, so an owner polling
+  ///         afterwards would otherwise never see the discard it performed.
+  bool discard_non_finite() noexcept;
 
  private:
   void update_filters() noexcept;
+
+  /// Set when @ref process_block discarded, cleared by @ref discard_non_finite.
+  bool discarded_in_block_ = false;
 
   StreamingFormantConfig config_{};
   /// @brief Set by @ref prepare. Zero means "not prepared" so @ref process_block

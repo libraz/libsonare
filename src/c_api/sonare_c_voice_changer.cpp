@@ -540,6 +540,20 @@ SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVo
 #endif
 }
 
+SonareError sonare_realtime_voice_changer_non_finite_discard_count(
+    const SonareRealtimeVoiceChanger* handle, uint32_t* out_count) {
+  // Audio-thread entry: see sonare_realtime_voice_changer_process_mono.
+  SONARE_C_RT_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  if (!handle || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = handle->changer.non_finite_discard_count();
+  return SONARE_OK;
+#else
+  if (out_count) *out_count = {};
+  SONARE_C_STUB_NOT_SUPPORTED(handle, out_count);
+#endif
+}
+
 SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceChanger* handle,
                                                       char** out_json) {
   SONARE_C_API_ENTRY;

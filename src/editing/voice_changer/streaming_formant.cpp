@@ -53,6 +53,7 @@ void StreamingFormant::prepare(double sample_rate, int max_block_size) {
 }
 
 void StreamingFormant::reset() {
+  discarded_in_block_ = false;
   for (auto& filter : filters_) filter.reset();
   smoothed_factor_ = effective_factor(config_);
   filter_factor_ = smoothed_factor_;
@@ -150,15 +151,18 @@ void StreamingFormant::process_block(const float* input, float* output, int num_
     for (auto& filter : filters_) y = filter.process(y);
     output[i] = y;
   }
-  discard_non_finite();
+  discarded_in_block_ = discard_non_finite();
 }
 
-void StreamingFormant::discard_non_finite() noexcept {
+bool StreamingFormant::discard_non_finite() noexcept {
   // The four sections are in series, so one non-finite section makes the chain
   // unusable; the smoothed factor rides on config values and stays finite.
+  bool discarded = discarded_in_block_;
+  discarded_in_block_ = false;
   for (auto& filter : filters_) {
-    sonare::discard_group_if_non_finite(filter.z1, filter.z2);
+    discarded |= sonare::discard_group_if_non_finite(filter.z1, filter.z2);
   }
+  return discarded;
 }
 
 }  // namespace sonare::editing::voice_changer

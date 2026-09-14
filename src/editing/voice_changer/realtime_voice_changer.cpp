@@ -66,6 +66,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   // resolved grain. Mirror it into config_ so the two never disagree.
   sync_effective_grain_size();
   update_latency_mirrors();
+  non_finite_discard_count_.reset();
   reset();
   // Re-publish so the audio thread sees the same (post-prepare) config and
   // does NOT re-apply coefficients on its first block (they are already
@@ -285,6 +286,7 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.deess_env = 0.0f;
   state.deess_gain = 1.0f;
   state.limiter_gain = 1.0f;
+  state.output_limiter_substituted = false;
   state.control_cadence.reset();
   // reset() is an explicit state boundary, unlike set_config(): snap ramps so
   // a newly prepared/reset processor never inherits an old transition.

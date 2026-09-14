@@ -225,6 +225,19 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
 ///        omitted. The value is 0 before the handle has been prepared.
 SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
                                                           int* out_latency_samples);
+/// @brief Number of channel-blocks in which the chain discarded its own state
+///        because a non-finite value had reached it.
+/// @details Advisory telemetry, and the only thing that separates a degraded
+///   stream from a clean one. Every stage of this chain replaces a non-finite
+///   sample with an in-domain finite one -- the inter-sample-peak limiter with
+///   silence or full scale, the sample-domain limiter by folding an infinity
+///   onto its ceiling -- so the output stays finite, in range and free of any
+///   error while carrying samples unrelated to the input. A non-zero count is
+///   what says the samples in between were not computed from what was supplied.
+///   Monotonic for the lifetime of the handle; per channel and per block, so a
+///   stereo block that discards on both channels adds two. Realtime-safe.
+SonareError sonare_realtime_voice_changer_non_finite_discard_count(
+    const SonareRealtimeVoiceChanger* handle, uint32_t* out_count);
 /// @brief Returns the live (normalized) configuration of the handle as a JSON
 ///        document. Useful for UI sync and for round-tripping the post-
 ///        normalize state across language boundaries.

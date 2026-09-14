@@ -113,6 +113,7 @@ class RealtimeVoiceChangerWrapper {
   }
 
   int latencySamples() const { return changer_.latency_samples(); }
+  uint32_t nonFiniteDiscardCount() const { return changer_.non_finite_discard_count(); }
   uint32_t bufferGeneration() const { return buffer_generation_; }
 
   // Element-wise legacy path. NOT RT-safe for high block rates; AudioWorklet
@@ -477,6 +478,7 @@ void registerRealtimeVoiceChangerStreamingBindings() {
       .function("setPodConfig", &RealtimeVoiceChangerWrapper::setPodConfig)
       .function("configJson", &RealtimeVoiceChangerWrapper::configJson)
       .function("latencySamples", &RealtimeVoiceChangerWrapper::latencySamples)
+      .function("nonFiniteDiscardCount", &RealtimeVoiceChangerWrapper::nonFiniteDiscardCount)
       .function("bufferGeneration", &RealtimeVoiceChangerWrapper::bufferGeneration)
       .function("processMono", &RealtimeVoiceChangerWrapper::processMono)
       .function("processMonoInto", &RealtimeVoiceChangerWrapper::processMonoInto)

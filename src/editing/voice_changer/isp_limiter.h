@@ -77,11 +77,17 @@ class IspLimiter {
   int latency_samples() const noexcept;
   /// @brief Returns the gain follower to unity when a non-finite value has
   ///        reached it (see util/non_finite_state.h).
-  void discard_non_finite() noexcept;
+  /// @return true when this call, or the block before it, discarded state.
+  /// @details A substituted output sample counts as a discard: the sample the
+  ///          caller received was not computed from its input, and reporting it
+  ///          is the only thing that separates the stream from a clean one.
+  bool discard_non_finite() noexcept;
 
  private:
   void update_time_constants();
   void update_cached_controls() noexcept;
+  /// @brief Drops the detector state a substituted sample is resident in.
+  void discard_detector_state() noexcept;
 
   rt::TruePeakFilter filter_;
   rt::LookaheadBuffer lookahead_;
@@ -104,6 +110,9 @@ class IspLimiter {
   int lookahead_samples_ = 0;
   bool prepared_ = false;
   bool has_processed_ = false;
+  /// Set by process_block when an output sample was substituted, cleared by
+  /// discard_non_finite(). Audio thread only, like every other cell here.
+  bool substituted_ = false;
   float attack_alpha_ = 1.0f;
   float attack_remaining_ = 0.0f;
   float attack_compensation_denominator_ = 1.0f;

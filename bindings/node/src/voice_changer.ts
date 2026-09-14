@@ -43,6 +43,33 @@ export class RealtimeVoiceChanger {
     return this.native.latencySamples();
   }
 
+  /**
+   * Channel-blocks in which the chain discarded its own state because a
+   * non-finite value had reached it.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded stream
+   * from a clean one. Every stage of this chain replaces a non-finite sample
+   * with an in-domain finite one — the inter-sample-peak limiter with silence
+   * or full scale, the sample-domain limiter by folding an infinity onto its
+   * ceiling — so the output stays finite, in range and free of any error while
+   * carrying samples unrelated to the input. A non-zero count is what says the
+   * samples in between were not computed from what you supplied.
+   *
+   * Monotonic for the lifetime of the instance, and counted per channel and per
+   * block: a stereo block that discards on both channels adds two.
+   *
+   * @example
+   * ```ts
+   * changer.processInterleaved(block, 2);
+   * if (changer.nonFiniteDiscardCount() > 0) {
+   *   // the audio just produced is not a function of `block`
+   * }
+   * ```
+   */
+  nonFiniteDiscardCount(): number {
+    return this.native.nonFiniteDiscardCount();
+  }
+
   processMono(input: Float32Array): Float32Array {
     return this.native.processMono(input);
   }

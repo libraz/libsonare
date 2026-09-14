@@ -516,6 +516,11 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_int),
     ]
+    lib.sonare_realtime_voice_changer_non_finite_discard_count.restype = ctypes.c_int32
+    lib.sonare_realtime_voice_changer_non_finite_discard_count.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
     lib.sonare_realtime_voice_changer_config_json.restype = ctypes.c_int32
     lib.sonare_realtime_voice_changer_config_json.argtypes = [
         ctypes.c_void_p,

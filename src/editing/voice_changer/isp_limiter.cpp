@@ -23,9 +23,18 @@ constexpr float kIspAttackMs = 0.1f;
 /// 0.02-0.05 dB above the ceiling at heavily oversampled material.
 constexpr float kCeilingHeadroomDb = 0.05f;
 
-inline float clamp_finite(float value) noexcept {
-  if (std::isnan(value)) return 0.0f;
-  if (std::isinf(value)) return value > 0.0f ? 1.0f : -1.0f;
+/// Keeps a non-finite sample out of the host graph, and sets @p substituted so
+/// the caller can report it. Both replacements are in-domain, so nothing
+/// downstream can tell them from a value the limiter computed.
+inline float clamp_finite(float value, bool& substituted) noexcept {
+  if (std::isnan(value)) {
+    substituted = true;
+    return 0.0f;
+  }
+  if (std::isinf(value)) {
+    substituted = true;
+    return value > 0.0f ? 1.0f : -1.0f;
+  }
   return value;
 }
 
@@ -87,16 +96,28 @@ void IspLimiter::reset() noexcept {
   for (auto& s : scratch_holder_) std::fill(s.begin(), s.end(), 0.0f);
   gain_ = 1.0f;
   has_processed_ = false;
+  substituted_ = false;
   control_cadence_.reset();
   ceiling_dbtp_.reset(ceiling_dbtp_.target());
   release_ms_.reset(release_ms_.target());
   update_cached_controls();
 }
 
-void IspLimiter::discard_non_finite() noexcept {
+void IspLimiter::discard_detector_state() noexcept {
+  // The substituted sample is still resident in the FIR history and the peak
+  // window, and the gain they produced is not a value the input can explain.
+  oversampled_peak_window_.reset();
+  for (auto& h : history_holder_) std::fill(h.begin(), h.end(), 0.0f);
+  gain_ = 1.0f;
+}
+
+bool IspLimiter::discard_non_finite() noexcept {
   // The gain is the one cell that recirculates: the lookahead, the FIR history
   // and the sliding peak window are all read at an offset and flush on their own.
-  sonare::discard_if_non_finite(gain_, 1.0f);
+  const bool gain_discarded = sonare::discard_if_non_finite(gain_, 1.0f);
+  const bool substituted = substituted_;
+  substituted_ = false;
+  return gain_discarded || substituted;
 }
 
 void IspLimiter::set_config(const IspLimiterConfig& config) noexcept {
@@ -153,6 +174,7 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
   // reconstruction error from the truncated FIR.
   const int factor = oversample_factor_;
 
+  bool substituted = false;
   for (int i = 0; i < num_samples; ++i) {
     // Push this base-rate sample's factor oversampled phases into the peak
     // window. The delayed reconstruction and two-latency audio delay keep the
@@ -202,11 +224,18 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
       gain_ += release_alpha_ * (target_gain - gain_);
     }
 
-    const float delayed = clamp_finite(lookahead_.process(buffer[i]));
+    const float delayed = clamp_finite(lookahead_.process(buffer[i]), substituted);
     // Never clip the base-rate waveform here. A sample hard-clamp introduces a
     // discontinuity that the same interpolation FIR can reconstruct above the
     // dBTP ceiling. The gain safety bound above is the final protection.
     buffer[i] = delayed * gain_;
+  }
+
+  // Once per block, not per sample: the rule an owner applies over its own cells
+  // (see util/non_finite_state.h) rather than the scan the RT contract avoids.
+  if (substituted) {
+    discard_detector_state();
+    substituted_ = true;
   }
 }
 

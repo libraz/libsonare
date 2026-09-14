@@ -51,6 +51,7 @@ Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports)
           InstanceMethod<&RealtimeVoiceChangerWrap::SetConfig>("setConfig"),
           InstanceMethod<&RealtimeVoiceChangerWrap::ConfigJson>("configJson"),
           InstanceMethod<&RealtimeVoiceChangerWrap::LatencySamples>("latencySamples"),
+          InstanceMethod<&RealtimeVoiceChangerWrap::NonFiniteDiscardCount>("nonFiniteDiscardCount"),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMono>("processMono"),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessMonoInto>("processMonoInto"),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleaved>("processInterleaved"),
@@ -167,6 +168,14 @@ Napi::Value RealtimeVoiceChangerWrap::LatencySamples(const Napi::CallbackInfo& i
   SONARE_NODE_TRY
   if (!EnsureAlive(info.Env())) return info.Env().Undefined();
   return Napi::Number::New(info.Env(), changer_->latency_samples());
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeVoiceChangerWrap::NonFiniteDiscardCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!EnsureAlive(info.Env())) return info.Env().Undefined();
+  return Napi::Number::New(info.Env(), changer_->non_finite_discard_count());
   SONARE_NODE_CATCH(env)
 }
 

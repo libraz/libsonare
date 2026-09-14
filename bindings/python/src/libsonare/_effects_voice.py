@@ -138,6 +138,28 @@ class RealtimeVoiceChanger:
         _check_realtime(rc)
         return int(out.value)
 
+    def non_finite_discard_count(self) -> int:
+        """Return the channel-blocks in which the chain discarded its own state.
+
+        Advisory telemetry, and the only thing that separates a degraded stream
+        from a clean one. Every stage of this chain replaces a non-finite sample
+        with an in-domain finite one -- the inter-sample-peak limiter with
+        silence or full scale, the sample-domain limiter by folding an infinity
+        onto its ceiling -- so the output stays finite, in range and free of any
+        error while carrying samples unrelated to the input. A non-zero count is
+        what says the samples in between were not computed from what was
+        supplied.
+
+        Monotonic for the lifetime of the handle, and counted per channel and
+        per block: a stereo block that discards on both channels adds two.
+        """
+        out = ctypes.c_uint32()
+        rc = self._lib.sonare_realtime_voice_changer_non_finite_discard_count(
+            self._handle, ctypes.byref(out)
+        )
+        _check_realtime(rc)
+        return int(out.value)
+
     def config_json(self) -> str:
         """Return the live (normalized) configuration as a JSON document.
 

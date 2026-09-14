@@ -165,6 +165,7 @@ class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWra
   Napi::Value SetConfig(const Napi::CallbackInfo& info);
   Napi::Value ConfigJson(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value NonFiniteDiscardCount(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
   Napi::Value ProcessMonoInto(const Napi::CallbackInfo& info);
   Napi::Value ProcessInterleaved(const Napi::CallbackInfo& info);

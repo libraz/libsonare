@@ -17,6 +17,7 @@
 #include "editing/voice_changer/streaming_retune.h"
 #include "editing/voice_changer/streaming_reverb.h"
 #include "rt/biquad_design.h"
+#include "rt/overflow_counter.h"
 #include "rt/param_smoother.h"
 #include "rt/seqlock_cell.h"
 
@@ -195,6 +196,23 @@ class RealtimeVoiceChanger {
   ///          samples combined and are intentionally omitted. Returns 0 before
   ///          prepare() has been called.
   int latency_samples() const noexcept;
+  /// @brief Channel-blocks in which the chain discarded its own state because a
+  ///        non-finite value had reached it.
+  /// @details Any thread; monotonic since @ref prepare, which clears it. The
+  ///          count is per channel and per block, so a stereo block that
+  ///          discards on both channels adds two.
+  ///
+  ///          This is the only observable that separates a degraded stream from
+  ///          a clean one. Every stage below substitutes an in-domain finite
+  ///          value for a non-finite one -- the ISP limiter replaces it with
+  ///          silence or full scale, the sample-domain limiter folds an infinity
+  ///          onto the ceiling -- so the output stays finite, in range and free
+  ///          of any error while carrying samples unrelated to the input. A
+  ///          non-zero count is what says the samples in between were not
+  ///          computed from what the caller supplied.
+  std::uint32_t non_finite_discard_count() const noexcept {
+    return non_finite_discard_count_.load();
+  }
 
  private:
   struct ChannelState {
@@ -212,6 +230,9 @@ class RealtimeVoiceChanger {
     float deess_env = 0.0f;
     float deess_gain = 1.0f;  // Smoothed deesser reduction gain.
     float limiter_gain = 1.0f;
+    /// Set when the output limiter's clamp folded an infinity onto its ceiling,
+    /// cleared by discard_non_finite_state. Audio thread only.
+    bool output_limiter_substituted = false;
     // Derived controls are refreshed at absolute sample positions 0, 32, ...
     // while every parameter smoother continues to advance for every sample.
     ControlCadence control_cadence;
@@ -292,7 +313,8 @@ class RealtimeVoiceChanger {
   /// @details The block loop flushes a non-finite *input* sample to zero, which
   ///          a finite sample large enough to overflow a filter recurrence gets
   ///          past. Called once per block, on the audio thread.
-  static void discard_non_finite_state(ChannelState& state) noexcept;
+  /// @return true when any cell was discarded.
+  static bool discard_non_finite_state(ChannelState& state) noexcept;
   /// @brief Mirrors the resolved retune grain size into @c config_ so config()
   ///        reports the effective (prepared) grain rather than the requested
   ///        one. No-op before prepare(). Control-thread only.
@@ -366,6 +388,10 @@ class RealtimeVoiceChanger {
   /// thread other than the one calling set_config(), so the ISP enable flag is
   /// mirrored atomically instead of reading the mutable config_ directly.
   std::atomic<bool> latency_isp_enabled_{false};
+
+  /// Written by the audio thread, polled by a host thread; see
+  /// non_finite_discard_count().
+  rt::OverflowCounter non_finite_discard_count_{};
 
   /// Fast detector coefficient used by gate/comp to follow |x| with ~1 ms tau;
   /// user-controlled attack/release apply to the resulting *gain* transition,
