@@ -208,6 +208,8 @@ if(BUILD_MASTERING)
     mastering/chain_test.cpp
     mastering/chain_latency_test.cpp
     mastering/common_test.cpp
+    mastering/mastering_metrics_test.cpp
+    mastering/repair_metrics_test.cpp
     mastering/property_test.cpp
     mastering/preset_test.cpp
     mastering/dynamics_compressor_limiter_test.cpp
