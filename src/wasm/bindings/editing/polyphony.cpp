@@ -243,7 +243,7 @@ class PolyphonicAnalysisWasm {
   // anything: embind casts a JS number to size_t, which wraps a negative one into
   // a huge in-range-looking value.
   std::size_t noteIndex(double note) const {
-    const std::size_t index = wasmCountArg(note, "note index");
+    const std::size_t index = wasmIndexArg(note, "note index");
     if (index >= analysis_.notes.size()) {
       throw SonareException(ErrorCode::InvalidParameter, "note index is out of range");
     }

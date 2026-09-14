@@ -1185,3 +1185,78 @@ describe('the documented pitchPyin to extractNotes pipeline', () => {
     expect(renderNotes({ samples: gappedTone, sampleRate, notes })).toHaveLength(pipelineLength);
   });
 });
+
+describe('an index into a note set is refused above the addressable range', () => {
+  // The shared count reader accepts the whole JS safe-integer range, and its
+  // narrowing saturates on wasm32, so 2**32 and 2**40 both arrive as the last
+  // address. For a position in a buffer that is not a clamp, it is a different
+  // note -- and for a PAIR it is worse, because two saturated indices compare
+  // equal and any ordering test they have to satisfy passes on two notes that
+  // do not exist.
+  //
+  // ASSERTING A REFUSAL WOULD BE VACUOUS HERE, which is why these read the
+  // message. A saturated index is out of the note set's range too, so the old
+  // behaviour also threw -- from the set's bound check, about a note that was
+  // never asked for. Only the sender of the refusal tells the two apart.
+  const BEYOND = 2 ** 32;
+  const ADDRESS_REFUSAL = /is larger than this build can address/;
+
+  function expectAddressRefusal(action: () => void): string {
+    let caught: unknown;
+    try {
+      action();
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught, 'expected a refusal, got none').toBeDefined();
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    const message = String((caught as Error).message);
+    expect(message).toMatch(ADDRESS_REFUSAL);
+    return message;
+  }
+
+  it('refuses a splitNote index past the address space, as an index', () => {
+    const source = gappedSource();
+    const before = extractNotes(source);
+    expect(before).toHaveLength(3);
+    // The control, first: a real index is accepted and does split.
+    expect(splitNote({ ...source, notes: before, index: 1, frame: 18 })).toHaveLength(4);
+    for (const bad of [BEYOND, BEYOND + 100, 2 ** 40]) {
+      const message = expectAddressRefusal(() =>
+        splitNote({ ...source, notes: before, index: bad, frame: 18 }),
+      );
+      expect(message).toContain('splitNote index');
+    }
+    // And an index merely past the end of the set is still the set's own
+    // refusal, not this one -- the two failures stay distinguishable.
+    expectInvalidParameter(() => splitNote({ ...source, notes: before, index: 99, frame: 18 }));
+    let pastEnd: unknown;
+    try {
+      splitNote({ ...source, notes: before, index: 99, frame: 18 });
+    } catch (error) {
+      pastEnd = error;
+    }
+    expect(String((pastEnd as Error).message)).not.toMatch(ADDRESS_REFUSAL);
+  });
+
+  it('refuses a mergeNotes pair that is entirely out of range', () => {
+    // The case no single-argument test can reach: saturated, BEYOND + 1 and
+    // BEYOND + 2 are one number, so the ordering the pair must satisfy holds
+    // and the pair reaches the set as a single in-range-looking index.
+    const source = gappedSource();
+    const before = extractNotes(source);
+    expect(before).toHaveLength(3);
+    // The control: a real pair merges and the set shrinks.
+    expect(mergeNotes({ ...source, notes: before, first: 0, last: 1 })).toHaveLength(2);
+
+    const pair = expectAddressRefusal(() =>
+      mergeNotes({ ...source, notes: before, first: BEYOND + 1, last: BEYOND + 2 }),
+    );
+    expect(pair).toContain('mergeNotes first');
+    const single = expectAddressRefusal(() =>
+      mergeNotes({ ...source, notes: before, first: 0, last: BEYOND }),
+    );
+    expect(single).toContain('mergeNotes last');
+  });
+});

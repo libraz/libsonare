@@ -156,11 +156,23 @@ inline constexpr std::size_t kMaxWasmObjectArrayReserve = 1u * 1024u * 1024u;
 ///   plain cast, so by the time a @c size_t parameter is in hand a negative
 ///   value has already wrapped to a huge one and a NaN is undefined behaviour,
 ///   with nothing left to detect. The count must still be bounded by the
-///   caller against whatever it indexes; this only guarantees it is a real,
-///   non-negative, exactly representable integer.
+///   caller against whatever it indexes. What it guarantees is narrower than it
+///   looks: the accepted range is the JS safe-integer range, which is wider than
+///   `std::size_t` on wasm32, and the narrowing SATURATES rather than trapping.
+///   A value at or above 2^32 therefore comes back as the largest address rather
+///   than as itself, which is harmless for a request a real container caps and
+///   is not harmless for anything that addresses memory.
 /// @throws SonareException(InvalidParameter) for a non-finite, negative,
 ///   fractional, or unsafe value.
 std::size_t wasmCountArg(double value, const char* subject);
+/// Validates a caller-supplied INDEX or OFFSET into a buffer: wasmCountArg plus
+/// a refusal above the addressable range, so a request past it is reported
+/// rather than silently landing on the last address. Use this wherever the
+/// number names a position; use wasmCountArg where it names a quantity the
+/// callee will cap against something real.
+/// @throws SonareException(InvalidParameter) for everything wasmCountArg
+///   refuses, and for a value the build cannot address.
+std::size_t wasmIndexArg(double value, const char* subject);
 /// Reads an array-like object's element count after rejecting null, undefined,
 /// non-numeric, fractional, unsafe, and over-budget values. Use this before
 /// indexing arbitrary JS arrays so embind never leaks a raw JS TypeError.

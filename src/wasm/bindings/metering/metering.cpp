@@ -359,15 +359,10 @@ val js_metering_spectrum_frame(val samples, int sample_rate, double frame_offset
   // 2^32 + 100 returned the window at 100 and NaN returned the window at 0, both
   // as a plausible spectrum of audio the caller never asked about.
   //
-  // The addressability bound is here rather than in wasmCountArg because this is
-  // an offset INTO a buffer. That helper also serves capped requests, where a
-  // number past the address space legitimately means "as much as there is".
-  if (frame_offset_arg > static_cast<double>(std::numeric_limits<size_t>::max())) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "meteringSpectrumFrame: frameOffset is larger than this build can address");
-  }
-  const size_t frame_offset = wasmCountArg(frame_offset_arg, "meteringSpectrumFrame frameOffset");
+  // Read as an index rather than as a count, because this is a position INTO a
+  // buffer: the count reader also serves capped requests, where a number past
+  // the address space legitimately means "as much as there is".
+  const size_t frame_offset = wasmIndexArg(frame_offset_arg, "meteringSpectrumFrame frameOffset");
   // Options before the buffer: nFft is what makes the analysis frame, and the
   // frame is the only span this call reads or holds the caller to.
   metering::SpectrumConfig cfg;

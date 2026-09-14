@@ -73,10 +73,6 @@ val vectorToUint8Array(const std::vector<uint8_t>& vec) {
   return result;
 }
 
-// Bulk-copy a JS Float32Array (or any array-like with numeric `.length`) into
-// a freshly-allocated std::vector<float>. The single boundary crossing is
-// `view.set(arr)` inside JS land; the typed_memory_view wraps the destination
-// vector's storage so no intermediate buffer is allocated.
 std::size_t wasmCountArg(double value, const char* subject) {
   constexpr double kMaxSafeInteger = 9007199254740991.0;
   if (!std::isfinite(value) || value < 0.0 || std::floor(value) != value ||
@@ -85,6 +81,20 @@ std::size_t wasmCountArg(double value, const char* subject) {
                           std::string(subject) + " must be a non-negative safe integer");
   }
   return static_cast<std::size_t>(value);
+}
+
+std::size_t wasmIndexArg(double value, const char* subject) {
+  // Before the cast rather than after it: the narrowing wasmCountArg performs
+  // saturates on wasm32, so two requests as far apart as 2^32 and 2^40 both
+  // arrive as the largest address and stop being distinguishable. A count the
+  // caller bounds against a real container survives that; a position in a buffer
+  // does not, and a pair of indices least of all -- saturated, any `first <=
+  // last` test passes on a pair that is entirely out of range.
+  if (value > static_cast<double>(std::numeric_limits<std::size_t>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " is larger than this build can address");
+  }
+  return wasmCountArg(value, subject);
 }
 
 std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char* length_key) {
@@ -156,6 +166,10 @@ void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, c
   }
 }
 
+// Bulk-copy a JS Float32Array (or any array-like with numeric `.length`) into
+// a freshly-allocated std::vector<float>. The single boundary crossing is
+// `view.set(arr)` inside JS land; the typed_memory_view wraps the destination
+// vector's storage so no intermediate buffer is allocated.
 std::vector<float> float32ArrayToVector(val arr) {
   const size_t n = wasmFloat32ArrayLength(arr);
   std::vector<float> result(n);

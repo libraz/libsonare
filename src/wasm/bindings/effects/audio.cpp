@@ -646,7 +646,7 @@ val js_decompose_note_pitch(val f0_hz, float frame_rate, float median_hz, float 
 
 val js_split_note(val samples, int sample_rate, val f0_hz, val voiced_prob, val voiced,
                   float frame_rate, val notes, double index, double frame, val options) {
-  const std::size_t note_index = wasmCountArg(index, "splitNote index");
+  const std::size_t note_index = wasmIndexArg(index, "splitNote index");
   const int cut_frame = noteFrameArg(frame, "splitNote frame");
   const editing::note_model::NoteExtractorConfig config =
       noteExtractorConfigFromVal(options, "splitNote");
@@ -668,8 +668,8 @@ val js_split_note(val samples, int sample_rate, val f0_hz, val voiced_prob, val 
 
 val js_merge_notes(val samples, int sample_rate, val f0_hz, val voiced_prob, val voiced,
                    float frame_rate, val notes, double first, double last, val options) {
-  const std::size_t first_index = wasmCountArg(first, "mergeNotes first");
-  const std::size_t last_index = wasmCountArg(last, "mergeNotes last");
+  const std::size_t first_index = wasmIndexArg(first, "mergeNotes first");
+  const std::size_t last_index = wasmIndexArg(last, "mergeNotes last");
   const editing::note_model::NoteExtractorConfig config =
       noteExtractorConfigFromVal(options, "mergeNotes");
   std::size_t cumulative_count = 0;
