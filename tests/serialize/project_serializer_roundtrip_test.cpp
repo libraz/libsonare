@@ -33,6 +33,13 @@ namespace {
 // src/mastering/api/param_field_tables.h, duplicated rather than included
 // because that header sits behind SONARE_WITH_MASTERING and a serialize test
 // must not depend on it.
+//
+// Two limits, stated here once for every assert below. It counts fields, not
+// names: two same-typed fields swapping meaning stays invisible, and so does a
+// rename. And it reaches plain aggregates only -- three comparison targets here
+// are not aggregates (automation::AutomationLane, mixing::api::Insert,
+// mixing::api::Bus), each of which carries its own guard and its own written
+// exclusion beside its eq() helper.
 template <typename Aggregate>
 struct AnyField {
   template <typename Field>
@@ -229,6 +236,10 @@ Fixture make_fixture() {
   s.surround_pan.divergence = 0.3f;
   s.surround_pan.lfe = 0.2f;
   s.surround_pan.distance = 0.8f;
+  // Metering travels with the scene and is compared by eq(); drive it off the
+  // full-metering default so the round-trip actually carries the object.
+  s.metering.lufs = false;
+  s.metering.true_peak_oversample = 8;
   mixing::api::Insert strip_insert;
   strip_insert.slot = mixing::api::InsertSlot::PreFader;
   strip_insert.processor_name = "sonare.eq";
@@ -288,6 +299,11 @@ bool eq(const transport::TempoSegment& a, const transport::TempoSegment& b) {
   return a.start_ppq == b.start_ppq && a.bpm == b.bpm && a.start_sample == b.start_sample &&
          a.end_bpm == b.end_bpm;
 }
+// end_ppq is populated during normalization rather than supplied or serialized,
+// so eq() skips it on purpose; the count still pins the field list.
+static_assert(field_count<transport::TempoSegment>() == 5,
+              "TempoSegment gained or lost a field: add it to eq(const transport::TempoSegment&) "
+              "above and update this count");
 
 bool eq(const automation::AutomationLane& a, const automation::AutomationLane& b) {
   if (a.target_param_id() != b.target_param_id() || a.target_kind() != b.target_kind())
@@ -300,6 +316,19 @@ bool eq(const automation::AutomationLane& a, const automation::AutomationLane& b
   }
   return true;
 }
+// AutomationLane is a class with private members, so field_count cannot reach
+// it. The stand-in is a zero-padding size identity: its three members end in an
+// 8-aligned vector that leaves no tail padding, so any added member grows the
+// type and breaks this assert. It cannot see a same-sized field swap.
+static_assert(sizeof(automation::AutomationLane) == sizeof(uint32_t) +
+                                                        sizeof(automation::AutomationTargetKind) +
+                                                        sizeof(std::vector<automation::Breakpoint>),
+              "AutomationLane gained, lost, or reordered a member: if it gained one, add it to "
+              "eq(const automation::AutomationLane&) above, then update this member list");
+// Its payload type is an aggregate, so that half is pinned exactly.
+static_assert(field_count<automation::Breakpoint>() == 3,
+              "Breakpoint gained or lost a field: compare it in "
+              "eq(const automation::AutomationLane&) above and update this count");
 
 bool eq(const Track& a, const Track& b) {
   if (a.id != b.id || a.name != b.name || a.kind != b.kind) return false;
@@ -316,11 +345,10 @@ bool eq(const Track& a, const Track& b) {
 }
 // Adding a field to Track without adding it to eq() above leaves this test
 // green while no longer preserving all fields, which is the defect this file
-// exists to catch. The count makes that a compile error instead. Counts fields,
-// not names: two same-typed fields swapping meaning stays invisible.
+// exists to catch. The count makes that a compile error instead.
 static_assert(field_count<Track>() == 11,
               "Track gained or lost a field: add it to eq(const Track&) above, then update this "
-              "count and set it to a non-default value in make_rich_project()");
+              "count and set it to a non-default value in make_fixture()");
 
 bool eq(const SectionSegment& a, const SectionSegment& b) {
   return a.start_ppq == b.start_ppq && a.end_ppq == b.end_ppq && a.label == b.label;
@@ -347,6 +375,21 @@ bool eq(const EditClip& a, const EditClip& b) {
          a.warp_mode == b.warp_mode && a.takes == b.takes && a.active_take_id == b.active_take_id &&
          a.comp_segments == b.comp_segments;
 }
+static_assert(field_count<EditClip>() == 17,
+              "EditClip gained or lost a field: add it to eq(const EditClip&) above, then update "
+              "this count and set it to a non-default value in make_fixture()");
+// Types the helper above reaches into: ClipFade field by field, ClipTake and
+// ClipCompSegment through their own operator==. A field added to one of those
+// and not to its operator== is just as silent, so pin their counts here too.
+static_assert(field_count<ClipFade>() == 2,
+              "ClipFade gained or lost a field: compare it in eq(const EditClip&) above and update "
+              "this count");
+static_assert(field_count<ClipTake>() == 4,
+              "ClipTake gained or lost a field: add it to ClipTake::operator== and update this "
+              "count");
+static_assert(field_count<ClipCompSegment>() == 3,
+              "ClipCompSegment gained or lost a field: add it to ClipCompSegment::operator== and "
+              "update this count");
 
 bool eq(const ChordSymbol& a, const ChordSymbol& b) {
   return a.start_ppq == b.start_ppq && a.end_ppq == b.end_ppq && a.root_pc == b.root_pc &&
@@ -354,31 +397,55 @@ bool eq(const ChordSymbol& a, const ChordSymbol& b) {
          a.slash_bass_pc == b.slash_bass_pc && a.roman_numeral == b.roman_numeral &&
          a.modulation_boundary == b.modulation_boundary;
 }
+static_assert(field_count<ChordSymbol>() == 8,
+              "ChordSymbol gained or lost a field: add it to eq(const ChordSymbol&) above, then "
+              "update this count and set it to a non-default value in make_fixture()");
 
 bool eq(const KeySegment& a, const KeySegment& b) {
   return a.start_ppq == b.start_ppq && a.end_ppq == b.end_ppq && a.tonic_pc == b.tonic_pc &&
          a.mode == b.mode;
 }
+static_assert(field_count<KeySegment>() == 4,
+              "KeySegment gained or lost a field: add it to eq(const KeySegment&) above and update "
+              "this count");
 
 bool eq(const AssistSidecar& a, const AssistSidecar& b) {
   return a.module_id == b.module_id && a.schema_version == b.schema_version &&
          a.payload == b.payload && a.target_track_id == b.target_track_id &&
          a.region_start_ppq == b.region_start_ppq && a.region_end_ppq == b.region_end_ppq;
 }
+static_assert(field_count<AssistSidecar>() == 6,
+              "AssistSidecar gained or lost a field: add it to eq(const AssistSidecar&) above and "
+              "update this count");
 
 bool eq(const WarpMapRef& a, const WarpMapRef& b) {
   return a.id == b.id && a.name == b.name && a.anchors == b.anchors;
 }
+static_assert(field_count<WarpMapRef>() == 3,
+              "WarpMapRef gained or lost a field: add it to eq(const WarpMapRef&) above and update "
+              "this count");
+static_assert(field_count<WarpAnchorRef>() == 2,
+              "WarpAnchorRef gained or lost a field: add it to WarpAnchorRef::operator== and "
+              "update this count");
 
 bool eq(const mixing::api::Insert& a, const mixing::api::Insert& b) {
   return a.slot == b.slot && a.processor_name == b.processor_name &&
          a.params_json == b.params_json && a.sidechain_key == b.sidechain_key;
 }
+// Excluded from field_count: Insert declares a constructor, so is_aggregate_v is
+// false and the probe refuses to compile for it. sizeof is not a usable stand-in
+// either -- the enum leaves 4 bytes of padding ahead of the strings, and adding a
+// bool there was measured to leave sizeof unchanged at 80. The replacement is the
+// key census in "scene insert and bus JSON carry one key per struct field",
+// which is name-level but sees only fields the encoder knows about.
 
 bool eq(const mixing::api::Send& a, const mixing::api::Send& b) {
   return a.id == b.id && a.destination_bus_id == b.destination_bus_id && a.send_db == b.send_db &&
          a.timing == b.timing;
 }
+static_assert(field_count<mixing::api::Send>() == 4,
+              "Send gained or lost a field: add it to eq(const mixing::api::Send&) above, then "
+              "update this count and set it to a non-default value in make_fixture()");
 
 bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
   if (a.id != b.id || a.input_trim_db != b.input_trim_db || a.fader_db != b.fader_db ||
@@ -392,8 +459,11 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
       a.surround_pan.elevation != b.surround_pan.elevation ||
       a.surround_pan.divergence != b.surround_pan.divergence ||
       a.surround_pan.lfe != b.surround_pan.lfe ||
-      a.surround_pan.distance != b.surround_pan.distance || a.inserts.size() != b.inserts.size() ||
-      a.sends.size() != b.sends.size()) {
+      a.surround_pan.distance != b.surround_pan.distance ||
+      a.metering.enabled != b.metering.enabled || a.metering.lufs != b.metering.lufs ||
+      a.metering.true_peak != b.metering.true_peak ||
+      a.metering.true_peak_oversample != b.metering.true_peak_oversample ||
+      a.inserts.size() != b.inserts.size() || a.sends.size() != b.sends.size()) {
     return false;
   }
   for (size_t i = 0; i < a.inserts.size(); ++i) {
@@ -404,6 +474,17 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
   }
   return true;
 }
+static_assert(field_count<mixing::api::Strip>() == 21,
+              "Strip gained or lost a field: add it to eq(const mixing::api::Strip&) above, then "
+              "update this count and set it to a non-default value in make_fixture()");
+// Both nested structs are compared field by field by the helper above rather
+// than through an operator==, so each needs its own count.
+static_assert(field_count<mixing::api::SurroundPan>() == 5,
+              "SurroundPan gained or lost a field: compare it in eq(const mixing::api::Strip&) "
+              "above and update this count");
+static_assert(field_count<mixing::api::StripMetering>() == 4,
+              "StripMetering gained or lost a field: compare it in eq(const mixing::api::Strip&) "
+              "above and update this count");
 
 bool eq(const mixing::api::Bus& a, const mixing::api::Bus& b) {
   if (a.id != b.id || a.role != b.role || a.layout != b.layout ||
@@ -417,14 +498,24 @@ bool eq(const mixing::api::Bus& a, const mixing::api::Bus& b) {
   }
   return true;
 }
+// Excluded from field_count for the same reason as Insert: Bus declares a
+// constructor. sizeof is likewise no help -- the two bools leave 2 bytes of
+// padding ahead of the insert vector, and adding a third was measured to leave
+// sizeof unchanged at 88. Covered by the same key census as Insert.
 
 bool eq(const mixing::api::VcaGroup& a, const mixing::api::VcaGroup& b) {
   return a.id == b.id && a.gain_db == b.gain_db && a.members == b.members;
 }
+static_assert(field_count<mixing::api::VcaGroup>() == 3,
+              "VcaGroup gained or lost a field: add it to eq(const mixing::api::VcaGroup&) above "
+              "and update this count");
 
 bool eq(const mixing::api::Connection& a, const mixing::api::Connection& b) {
   return a.source == b.source && a.destination == b.destination;
 }
+static_assert(field_count<mixing::api::Connection>() == 2,
+              "Connection gained or lost a field: add it to eq(const mixing::api::Connection&) "
+              "above and update this count");
 
 bool eq(const mixing::api::Scene& a, const mixing::api::Scene& b) {
   if (a.version != b.version || a.strips.size() != b.strips.size() ||
@@ -446,6 +537,9 @@ bool eq(const mixing::api::Scene& a, const mixing::api::Scene& b) {
   }
   return true;
 }
+static_assert(field_count<mixing::api::Scene>() == 5,
+              "Scene gained or lost a field: add it to eq(const mixing::api::Scene&) above and "
+              "update this count");
 
 void check_project_equal(const Project& a, const Project& b) {
   CHECK(a.sample_rate() == b.sample_rate());
@@ -686,6 +780,61 @@ TEST_CASE("project scene JSON uses stable camelCase keys", "[serialize]") {
   REQUIRE(bus_insert.is_object());
   CHECK(bus_insert.contains("sidechainKey"));
   CHECK_FALSE(bus_insert.contains("sidechain_key"));
+}
+
+// mixing::api::Insert and mixing::api::Bus declare constructors, so the
+// field_count probe cannot reach them (see the exclusions beside their eq()
+// helpers). This is their stand-in. Both encoders emit exactly one key per
+// struct field once every field is driven off its default, so the emitted key
+// set is a name-level census of the struct -- stronger than field_count on the
+// naming axis, weaker on coverage: a field added to either type but NOT wired
+// into the encoder is invisible here, and that is the part field_count would
+// have caught.
+TEST_CASE("scene insert and bus JSON carry one key per struct field", "[serialize]") {
+  auto key_set = [](const util::json::Value& value) {
+    std::vector<std::string> keys;
+    for (const auto& entry : value.as_object()) keys.push_back(entry.first);
+    return keys;
+  };
+
+  Project p;
+  MidiContentStore midi;
+  mixing::api::Insert insert;
+  insert.slot = mixing::api::InsertSlot::PostFader;
+  insert.processor_name = "sonare.eq";
+  insert.params_json = "{\"gainDb\":1}";
+  insert.sidechain_key = "strip.census";
+
+  mixing::api::Strip strip;
+  strip.id = "strip.census";
+  strip.inserts.push_back(insert);
+  p.scene().strips.push_back(strip);
+
+  mixing::api::Bus bus("bus.census", "master");
+  bus.layout = ChannelLayout::FivePointOne;
+  bus.input_trim_db = -2.0f;
+  bus.width = 0.5f;
+  bus.polarity_invert_left = true;
+  bus.polarity_invert_right = true;
+  bus.inserts.push_back(insert);
+  p.scene().buses.push_back(bus);
+
+  const auto root = util::json::parse(project_to_json(p, midi));
+  REQUIRE(root["scene"].is_object());
+  REQUIRE(root["scene"]["strips"].as_array().size() == 1);
+  REQUIRE(root["scene"]["buses"].as_array().size() == 1);
+
+  // The key set arrives sorted: util::json::Object is a std::map.
+  const auto& insert_json = root["scene"]["strips"].as_array()[0]["inserts"].as_array()[0];
+  REQUIRE(insert_json.is_object());
+  CHECK(key_set(insert_json) ==
+        std::vector<std::string>{"params", "processor", "sidechainKey", "slot"});
+
+  const auto& bus_json = root["scene"]["buses"].as_array()[0];
+  REQUIRE(bus_json.is_object());
+  CHECK(key_set(bus_json) == std::vector<std::string>{"id", "inputTrimDb", "inserts", "layout",
+                                                      "polarityInvertLeft", "polarityInvertRight",
+                                                      "role", "width"});
 }
 
 TEST_CASE("project scene deserializer accepts legacy snake_case scene keys", "[serialize]") {
