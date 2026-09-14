@@ -4439,3 +4439,107 @@ TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for
 
   sonare_engine_destroy(engine);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("a built-in synth field the core would replace in silence is refused", "[c_api][synth]") {
+  // The core reads a non-positive or non-finite field as "use the built-in
+  // default" and reports nothing, so such a request came back as a successful
+  // call configured with something the caller never asked for. The assertion is
+  // on the CONFIGURATION IN FORCE, not on the absence of an error: a call that
+  // merely succeeds passes against both behaviours.
+  constexpr int kBlock = 128;
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  // Four notes at once, so the summed peak reads the voice count rather than
+  // the envelope: a polyphony of one can only sound one of them.
+  const auto chord_peak = [](const SonareEngineBuiltinSynthConfig& synth, SonareError* err) {
+    SonareRealtimeEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
+    *err = sonare_engine_set_builtin_instrument(engine, 7, &synth);
+    float peak = 0.0f;
+    if (*err == SONARE_OK) {
+      for (int note : {60, 64, 67, 72}) {
+        REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, static_cast<uint8_t>(note), 100,
+                                                -1) == SONARE_OK);
+      }
+      std::vector<float> left(kBlock, 0.0f);
+      std::vector<float> right(kBlock, 0.0f);
+      float* channels[] = {left.data(), right.data()};
+      for (int block = 0; block < 12; ++block) {
+        REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+        for (float sample : left) peak = std::max(peak, std::abs(sample));
+      }
+    }
+    sonare_engine_destroy(engine);
+    return peak;
+  };
+
+  SonareError err = SONARE_OK;
+  SonareEngineBuiltinSynthConfig defaulted{};
+  const float by_default = chord_peak(defaulted, &err);
+  REQUIRE(err == SONARE_OK);
+  REQUIRE(by_default > 0.0f);
+
+  SECTION("the voice count really is what this measures") {
+    // The graded control. Without it a polyphony assertion below could not tell
+    // a stolen voice from an unchanged render.
+    SonareEngineBuiltinSynthConfig one = defaulted;
+    one.polyphony = 1;
+    const float single = chord_peak(one, &err);
+    REQUIRE(err == SONARE_OK);
+    SonareEngineBuiltinSynthConfig two = defaulted;
+    two.polyphony = 2;
+    const float pair = chord_peak(two, &err);
+    REQUIRE(err == SONARE_OK);
+    // One voice is quieter than two, and quieter than the default's sixteen.
+    // Two versus sixteen is NOT asserted: past the point where every note of the
+    // chord sounds, adding voices changes phase relationships rather than adding
+    // energy, and the summed peak stops being monotonic in the voice count.
+    CHECK(single < pair);
+    CHECK(single < by_default);
+  }
+
+  SECTION("a negative voice count is refused rather than resolved to the default") {
+    for (int bad : {-1, -48}) {
+      CAPTURE(bad);
+      SonareEngineBuiltinSynthConfig config = defaulted;
+      config.polyphony = bad;
+      chord_peak(config, &err);
+      CHECK(err == SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+
+  SECTION("a negative or non-finite envelope field is refused") {
+    for (float bad : {-1.0f, nan, inf, -inf}) {
+      CAPTURE(bad);
+      for (float SonareEngineBuiltinSynthConfig::*field :
+           {&SonareEngineBuiltinSynthConfig::gain, &SonareEngineBuiltinSynthConfig::attack_ms,
+            &SonareEngineBuiltinSynthConfig::decay_ms, &SonareEngineBuiltinSynthConfig::sustain,
+            &SonareEngineBuiltinSynthConfig::release_ms}) {
+        SonareEngineBuiltinSynthConfig config = defaulted;
+        config.*field = bad;
+        chord_peak(config, &err);
+        CHECK(err == SONARE_ERROR_INVALID_PARAMETER);
+      }
+    }
+  }
+
+  SECTION("the sentinel and a legal value are both still accepted") {
+    // Without this the refusals above are satisfied by an entry point that
+    // rejects every configuration.
+    SonareEngineBuiltinSynthConfig louder = defaulted;
+    louder.gain = 0.8f;
+    const float raised = chord_peak(louder, &err);
+    CHECK(err == SONARE_OK);
+    CHECK(raised > by_default);
+    SonareEngineBuiltinSynthConfig sentinel = defaulted;
+    sentinel.gain = 0.0f;
+    sentinel.polyphony = 0;
+    const float unchanged = chord_peak(sentinel, &err);
+    CHECK(err == SONARE_OK);
+    CHECK(unchanged == by_default);
+  }
+}
+#endif

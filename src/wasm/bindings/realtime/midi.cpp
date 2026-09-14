@@ -44,15 +44,27 @@ void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val confi
       cfg.waveform =
           static_cast<sonare::midi::SynthWaveform>(builtinWaveformFromVal(config["waveform"]));
     }
-    // clamp_synth_config reads a zero, non-positive or non-finite field as "use
-    // the built-in default" (see positive_or_default in midi/builtin_synth.cpp),
-    // which is why 0 is the default here rather than the real one.
-    cfg.gain = floatOption(config, "gain", 0.0f);
-    cfg.attack_ms = floatOption(config, "attackMs", 0.0f);
-    cfg.decay_ms = floatOption(config, "decayMs", 0.0f);
-    cfg.sustain = floatOption(config, "sustain", 0.0f);
-    cfg.release_ms = floatOption(config, "releaseMs", 0.0f);
-    cfg.polyphony = intProperty(config, "polyphony", 0);
+    // clamp_synth_config reads a non-positive or non-finite field as "use the
+    // built-in default" (see positive_or_default in midi/builtin_synth.cpp) and
+    // reports nothing, so a value handed through came back as a successful call
+    // at a level nobody chose. 0 stays the way to ask for the default.
+    cfg.gain = sonare::ZeroIsDefault(floatProperty(config, "gain", 0.0f))
+                   .checked_non_negative(0.0f, "gain");
+    cfg.attack_ms = sonare::ZeroIsDefault(floatProperty(config, "attackMs", 0.0f))
+                        .checked_non_negative(0.0f, "attackMs");
+    cfg.decay_ms = sonare::ZeroIsDefault(floatProperty(config, "decayMs", 0.0f))
+                       .checked_non_negative(0.0f, "decayMs");
+    cfg.sustain = sonare::ZeroIsDefault(floatProperty(config, "sustain", 0.0f))
+                      .checked_non_negative(0.0f, "sustain");
+    cfg.release_ms = sonare::ZeroIsDefault(floatProperty(config, "releaseMs", 0.0f))
+                         .checked_non_negative(0.0f, "releaseMs");
+    const int polyphony = intProperty(config, "polyphony", 0);
+    if (polyphony < 0) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "polyphony must be 0 (the library default) or a positive voice count");
+    }
+    cfg.polyphony = polyphony;
   }
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(sonare::midi::clamp_synth_config(cfg));
   bindInstrument(destination_id, std::move(synth));

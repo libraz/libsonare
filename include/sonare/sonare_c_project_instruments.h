@@ -137,6 +137,9 @@ typedef struct {
   float sustain;    /* ADSR sustain level [0,1]; 0 => 0.7 */
   float release_ms; /* ADSR release in ms; 0 => 120 */
   int polyphony;    /* max simultaneous voices; 0 => 16, clamped to [1, 64] */
+  /* Every field above takes 0 as "use the default". A negative or non-finite
+     value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
+     to the default, which is what it used to do without saying so. */
 } SonareBuiltinSynthConfig;
 
 /// @brief Binds a built-in synth patch to a MIDI destination id (the value set

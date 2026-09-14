@@ -30,14 +30,20 @@ using namespace sonare_c_detail;
 namespace {
 
 sonare::midi::BuiltinSynthConfig engine_synth_config_from_c(
-    const SonareEngineBuiltinSynthConfig& c) noexcept {
+    const SonareEngineBuiltinSynthConfig& c) {
   sonare::midi::BuiltinSynthConfig cfg;
   cfg.waveform = static_cast<sonare::midi::SynthWaveform>(c.waveform);
-  cfg.gain = c.gain;
-  cfg.attack_ms = c.attack_ms;
-  cfg.decay_ms = c.decay_ms;
-  cfg.sustain = c.sustain;
-  cfg.release_ms = c.release_ms;
+  // clamp_synth_config reads a non-positive or non-finite field as "use the
+  // built-in default" and reports nothing, so a request that reached it came
+  // back as a successful call at a level the caller never chose. Refused here,
+  // where it is still visible; 0 stays the documented way to ask for the default.
+  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(0.0f, "gain");
+  cfg.attack_ms = sonare::ZeroIsDefault(c.attack_ms).checked_non_negative(0.0f, "attack_ms");
+  cfg.decay_ms = sonare::ZeroIsDefault(c.decay_ms).checked_non_negative(0.0f, "decay_ms");
+  cfg.sustain = sonare::ZeroIsDefault(c.sustain).checked_non_negative(0.0f, "sustain");
+  cfg.release_ms = sonare::ZeroIsDefault(c.release_ms).checked_non_negative(0.0f, "release_ms");
+  SONARE_CHECK_MSG(c.polyphony >= 0, sonare::ErrorCode::InvalidParameter,
+                   "polyphony must be 0 (the library default) or a positive voice count");
   cfg.polyphony = c.polyphony;
   return sonare::midi::clamp_synth_config(cfg);
 }

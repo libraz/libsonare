@@ -682,6 +682,9 @@ typedef struct {
   float sustain;    /* 0 => 0.7 */
   float release_ms; /* 0 => 120 */
   int polyphony;    /* 0 => 16, clamped to [1,64] */
+  /* Every field above takes 0 as "use the default". A negative or non-finite
+     value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
+     to the default, which is what it used to do without saying so. */
 } SonareEngineBuiltinSynthConfig;
 
 /// @brief Binds/replaces a built-in synth on a realtime MIDI destination.

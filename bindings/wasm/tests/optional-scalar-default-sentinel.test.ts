@@ -198,3 +198,65 @@ describe('setSf2Instrument gain', () => {
     expect(() => render({ polyphony: 16 })).not.toThrow();
   });
 });
+
+describe('setBuiltinInstrument optional scalars', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const DESTINATION = 7;
+  const BLOCK = 128;
+
+  /** Four notes at once, so the summed peak reads the voice count too. */
+  function chordPeak(config: Record<string, number> | undefined): number {
+    const engine = new RealtimeEngine(48000, BLOCK);
+    try {
+      engine.setBuiltinInstrument(config ?? {}, DESTINATION);
+      for (const note of [60, 64, 67, 72]) {
+        engine.pushMidiNoteOn(DESTINATION, 0, 0, note, 100);
+      }
+      let peak = 0;
+      for (let block = 0; block < 12; block++) {
+        const out = engine.process([new Float32Array(BLOCK), new Float32Array(BLOCK)])[0];
+        for (const sample of out) peak = Math.max(peak, Math.abs(sample));
+      }
+      return peak;
+    } finally {
+      engine.destroy();
+    }
+  }
+
+  const FIELDS = ['gain', 'attackMs', 'decayMs', 'sustain', 'releaseMs'] as const;
+
+  it.each(FIELDS)('refuses a negative %s instead of resolving it to the default', (field) => {
+    // The core reads a non-positive or non-finite field as "use the built-in
+    // default" and reports nothing, so a value handed through came back as a
+    // successful call at a setting nobody chose.
+    expect(() => chordPeak({ [field]: -1 })).toThrow(/must be .*non-negative/);
+  });
+
+  it.each(FIELDS)('refuses a non-finite %s', (field) => {
+    expect(() => chordPeak({ [field]: Number.NaN })).toThrow();
+    expect(() => chordPeak({ [field]: Number.POSITIVE_INFINITY })).toThrow();
+    expect(() => chordPeak({ [field]: Number.NEGATIVE_INFINITY })).toThrow();
+  });
+
+  it('refuses a negative polyphony, which the core would have replaced', () => {
+    for (const bad of [-1, -48]) {
+      expect(() => chordPeak({ polyphony: bad })).toThrow(/polyphony must be /);
+    }
+  });
+
+  it('still takes the sentinel and a value that changes the render', () => {
+    // The controls. Without them every refusal above is satisfied by an entry
+    // point that rejects everything, and the equality by one that ignores it.
+    const byDefault = chordPeak(undefined);
+    expect(byDefault).toBeGreaterThan(0);
+    expect(chordPeak({ gain: 0, polyphony: 0 })).toBe(byDefault);
+    expect(chordPeak({ gain: 0.8 })).toBeGreaterThan(byDefault);
+    // One voice cannot sound four notes. Two against the default's sixteen is
+    // not asserted: past the point where every note sounds, more voices move
+    // phase rather than energy and the peak stops tracking the count.
+    expect(chordPeak({ polyphony: 1 })).toBeLessThan(byDefault);
+  });
+});
