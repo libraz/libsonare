@@ -94,10 +94,13 @@ Napi::Object SampleBankWrap::Init(Napi::Env env, Napi::Object exports) {
 
 SampleBankWrap::SampleBankWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<SampleBankWrap>(info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   bank_ = sonare_sample_bank_create();
   if (bank_ == nullptr) {
-    sonare_node::ThrowSonareError(info.Env(), SONARE_ERROR_OUT_OF_MEMORY);
+    sonare_node::ThrowSonareError(env, SONARE_ERROR_OUT_OF_MEMORY);
   }
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 SampleBankWrap::~SampleBankWrap() {

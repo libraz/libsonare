@@ -34,7 +34,7 @@ constexpr int kAcousticMaxSampleRate = 384000;
 // the seed space unreachable. A value past the uint32 range is rejected rather
 // than substituted, since a silent default is what made the gap invisible.
 unsigned SeedFromOptions(const Napi::Object& opts, unsigned fallback) {
-  const int64_t seed_in = node_int64_option(opts, "seed", 0);
+  const int64_t seed_in = node_int64_option(opts, "seed", kZeroIsSentinel);
   if (seed_in <= 0) return fallback;
   if (seed_in > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -322,7 +322,7 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   cfg.reference_absorption =
       node_float_option(opts, "referenceAbsorption", cfg.reference_absorption);
   cfg.prefer_eyring = node_bool_option(opts, "preferEyring", true);
-  const int n_bands = node_int_option(opts, "nOctaveBands", 0);
+  const int n_bands = node_int_option(opts, "nOctaveBands", kZeroIsSentinel);
   if (n_bands != 0) cfg.acoustic.n_octave_bands = n_bands;
   cfg.acoustic.min_decay_db = sonare::ZeroIsDefault(node_float_option(opts, "minDecayDb", 0.0f))
                                   .or_default(cfg.acoustic.min_decay_db);

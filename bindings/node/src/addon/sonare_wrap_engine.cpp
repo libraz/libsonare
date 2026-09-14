@@ -30,7 +30,7 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
   config->decay_ms = FloatProperty(obj, "decayMs", config->decay_ms);
   config->sustain = FloatProperty(obj, "sustain", config->sustain);
   config->release_ms = FloatProperty(obj, "releaseMs", config->release_ms);
-  config->polyphony = IntProperty(obj, "polyphony", config->polyphony);
+  config->polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
   // A wrong-typed field left a pending JS exception; stop before the caller
   // reaches the C ABI with it still set.
   return !env.IsExceptionPending();
@@ -253,6 +253,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
 RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<RealtimeEngineWrap>(info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   const uint32_t abi_version = sonare_engine_abi_version();
   if (abi_version != kExpectedEngineAbiVersion) {
     Napi::Error::New(env, "libsonare engine ABI mismatch: native binary reports version " +
@@ -285,6 +286,7 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
                                             static_cast<size_t>(command_capacity),
                                             static_cast<size_t>(telemetry_capacity), max_channels);
   ThrowIfError(env, err);
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 RealtimeEngineWrap::~RealtimeEngineWrap() { ReleaseNativeResources(); }
@@ -901,7 +903,7 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object obj = info[1].As<Napi::Object>();
     config.gain = FloatProperty(obj, "gain", config.gain);
-    config.polyphony = IntProperty(obj, "polyphony", config.polyphony);
+    config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
     const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
     if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
       config.struct_version = 2;

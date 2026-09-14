@@ -53,7 +53,7 @@ bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
     Napi::Object obj = entry.As<Napi::Object>();
     SonareProjectClipTake take{};
     if (!RequiredUint32Property(env, obj, "id", &take.id)) return false;
-    take.source_id = static_cast<uint32_t>(IntProperty(obj, "sourceId", 0));
+    take.source_id = static_cast<uint32_t>(IntProperty(obj, "sourceId", kZeroIsSentinel));
     if (env.IsExceptionPending()) return false;
     const Napi::Value source_offset = obj.Get("sourceOffsetPpq");
     if (env.IsExceptionPending()) return false;
@@ -279,7 +279,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
                                : obj.Get("sourceOffsetPpq").As<Napi::Number>().DoubleValue();
   desc.gain =
       obj.Get("gain").IsUndefined() ? 1.0f : obj.Get("gain").As<Napi::Number>().FloatValue();
-  desc.audio_channels = IntProperty(obj, "audioChannels", 0);
+  desc.audio_channels = IntProperty(obj, "audioChannels", kZeroIsSentinel);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 0);
 
   // Keep the interleaved samples alive (as a copy) for the duration of the call.
@@ -617,7 +617,7 @@ Napi::Value ProjectWrap::SetClipTakes(const Napi::CallbackInfo& info) {
   uint32_t clip_id = 0;
   uint32_t active_take_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
-      !OptionalUint32Arg(env, info, 2, "activeTakeId", 0, &active_take_id)) {
+      !OptionalUint32Arg(env, info, 2, "activeTakeId", kZeroIsSentinel, &active_take_id)) {
     return env.Undefined();
   }
   std::vector<SonareProjectClipTake> takes;

@@ -602,10 +602,10 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjec
 /// signal out on a framing the other did not measure on.
 void ReadPercussiveSeparation(const Napi::Object& opts, int32_t* n_fft, int32_t* hop_length,
                               int32_t* kernel_harmonic, int32_t* kernel_percussive) {
-  *n_fft = node_int_option(opts, "nFft", 0);
-  *hop_length = node_int_option(opts, "hopLength", 0);
-  *kernel_harmonic = node_int_option(opts, "hpssKernelHarmonic", 0);
-  *kernel_percussive = node_int_option(opts, "hpssKernelPercussive", 0);
+  *n_fft = node_int_option(opts, "nFft", kZeroIsSentinel);
+  *hop_length = node_int_option(opts, "hopLength", kZeroIsSentinel);
+  *kernel_harmonic = node_int_option(opts, "hpssKernelHarmonic", kZeroIsSentinel);
+  *kernel_percussive = node_int_option(opts, "hpssKernelPercussive", kZeroIsSentinel);
 }
 
 /// Reads the extraction options bag, which may be absent. Every field takes its
@@ -620,7 +620,7 @@ void ReadPercussiveEventConfig(const Napi::Value& value, SonarePercussiveEventCo
   // `undefined` (or any non-number) reads as the documented default.
   ReadPercussiveSeparation(opts, &out->n_fft, &out->hop_length, &out->hpss_kernel_harmonic,
                            &out->hpss_kernel_percussive);
-  out->onset_wait = node_int_option(opts, "onsetWait", 0);
+  out->onset_wait = node_int_option(opts, "onsetWait", kZeroIsSentinel);
   out->onset_delta = node_float_option(opts, "onsetDelta", 0.0f);
   out->max_event_ms = node_float_option(opts, "maxEventMs", 0.0f);
   // 0 is this field's own meaning as well as its default, and the C ABI assigns
@@ -1196,9 +1196,9 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   const SonareSpectralEditConfig* config_ptr = nullptr;
   if (info.Length() >= 4 && info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    config.n_fft = node_int_option(opts, "nFft", 0);
-    config.hop_length = node_int_option(opts, "hopLength", 0);
-    config.heal_radius_frames = node_int_option(opts, "healRadiusFrames", 0);
+    config.n_fft = node_int_option(opts, "nFft", kZeroIsSentinel);
+    config.hop_length = node_int_option(opts, "hopLength", kZeroIsSentinel);
+    config.heal_radius_frames = node_int_option(opts, "healRadiusFrames", kZeroIsSentinel);
 
     // Optional window, by name or by ordinal.
     Napi::Value win_val = opts.Get("window");

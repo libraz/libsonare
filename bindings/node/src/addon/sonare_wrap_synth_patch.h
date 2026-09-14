@@ -174,7 +174,7 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
     if (SynthFieldPresent(obj, key)) patch->present_fields |= bit;
   };
   auto read_int = [&](const char* key, uint32_t bit, int* out) {
-    *out = IntProperty(obj, key, 0);
+    *out = IntProperty(obj, key, kZeroIsSentinel);
     if (SynthFieldPresent(obj, key)) patch->present_fields |= bit;
   };
   read_int("unison", SONARE_SYNTH_FIELD_UNISON, &patch->unison);

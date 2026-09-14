@@ -426,7 +426,10 @@ export function positionalArgEntryPoints(): string[] {
       break;
     }
   }
-  return addonEntryPoints()
+  // The constructor-aware enumeration, not addonEntryPoints: an ObjectWrap
+  // constructor reads positional arguments through the same family, and the
+  // registration-based scan cannot name one.
+  return addonEntryPointsFrom(addonSources())
     .filter((entry) => {
       const bare = entry.symbol.includes('::') ? entry.symbol.split('::')[1] : entry.symbol;
       return reads.has(entry.symbol) || reads.has(bare);
@@ -692,6 +695,27 @@ function addonEntryPointsFrom(sources: AddonSource[]): { jsName: string; symbol:
       /exports\.Set\(\s*"([A-Za-z0-9_]+)"\s*,\s*Napi::Function::New\(\s*env\s*,\s*&?([\w:]+)/g,
     )) {
       found.set(m[1], m[2]);
+    }
+    // An ObjectWrap class reaches JS as DefineClass plus `exports.Set(name,
+    // func)`, so neither spelling above names its CONSTRUCTOR — and a
+    // constructor is an entry point like any method: a caller's value reaches a
+    // reader there too, and a throw it cannot catch aborts the process instead
+    // of reporting. Recognised by the definition's shape rather than by the
+    // registration, because `Wrap::Wrap(const Napi::CallbackInfo&)` is the one
+    // spelling an ObjectWrap subclass cannot avoid. The JS name comes from the
+    // DefineClass inside that class's own Init, so a file holding several
+    // classes still names each one correctly.
+    for (const m of text.matchAll(/\b(\w+)::\1\s*\(\s*const\s+Napi::CallbackInfo/g)) {
+      const cls = m[1];
+      const init = text.indexOf(`${cls}::Init`);
+      const declared =
+        init < 0
+          ? null
+          : text
+              .slice(init)
+              .replace(/\s+/g, ' ')
+              .match(/DefineClass\(\s*env\s*,\s*"([A-Za-z0-9_]+)"/);
+      found.set(declared ? declared[1] : cls, `${cls}::${cls}`);
     }
   }
   return [...found].map(([jsName, symbol]) => ({ jsName, symbol }));

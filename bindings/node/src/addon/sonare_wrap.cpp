@@ -516,10 +516,13 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
 SonareWrap::SonareWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<SonareWrap>(info), audio_(nullptr) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   // If called with an External, extract the audio pointer (factory pattern)
   if (info.Length() >= 1 && info[0].IsExternal()) {
     audio_ = info[0].As<Napi::External<SonareAudio>>().Data();
   }
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 SonareWrap::~SonareWrap() {

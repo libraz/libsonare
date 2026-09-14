@@ -65,6 +65,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
 
 MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWrap>(info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (sceneJson, sampleRate?, blockSize?)")
         .ThrowAsJavaScriptException();
@@ -84,6 +85,7 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
   // Capture any non-fatal load warning (e.g. insert params no processor read)
   // immediately, before any later C-ABI call can overwrite the thread-local.
   scene_warning_ = sonare_last_warning_message();
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 MixerWrap::~MixerWrap() {

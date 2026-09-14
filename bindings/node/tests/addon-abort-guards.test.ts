@@ -1972,6 +1972,78 @@ const CASES: AbortGuardCase[] = [
       },
     ],
   },
+
+  // Constructors. Named by the class alone, because for a constructor the class
+  // IS the jsName the coverage register matches on. Each argument below took the
+  // process down before these constructors carried a catch harness, so a
+  // regression is not a failed assertion here — it is a dead test worker, and
+  // the child-process matrix below turns that into an exit code.
+  //
+  // The shapes matter as much as the values: `new Mixer(2 ** 32, 128)` never
+  // reaches the reader, because the sceneJson type check refuses it first.
+  {
+    name: 'PolyphonicAnalysis',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'nFft past the int range',
+        call: () => new addon.PolyphonicAnalysis(samples(1024), 22050, { nFft: 2 ** 32 }),
+        error: RangeError,
+      },
+      {
+        argument: 'sampleRate',
+        call: () => new addon.PolyphonicAnalysis(samples(1024), '22050'),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'maxBlockSize past the int range',
+        call: () => new addon.RealtimeEngine(SR, 2 ** 32),
+        error: RangeError,
+      },
+      {
+        argument: 'commandCapacity past the int64 range',
+        call: () => new addon.RealtimeEngine(SR, BLOCK, 2 ** 63),
+        error: RangeError,
+      },
+    ],
+  },
+  {
+    name: 'Mixer',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'sampleRate past the int range',
+        call: () => new addon.Mixer('{"tracks":[]}', 2 ** 32, 512),
+        error: RangeError,
+      },
+      {
+        argument: 'blockSize past the int range',
+        call: () => new addon.Mixer('{"tracks":[]}', SR, 2 ** 32),
+        error: RangeError,
+      },
+    ],
+  },
+  {
+    name: 'StreamingRetune',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'grainSize past the int range',
+        call: () => new addon.StreamingRetune({ grainSize: 2 ** 32 }),
+        error: RangeError,
+      },
+      {
+        argument: 'semitones past the 32-bit float range',
+        call: () => new addon.StreamingRetune({ semitones: 1e40 }),
+        error: RangeError,
+      },
+    ],
+  },
 ];
 
 /** Proves the process is still usable, not merely that no exception escaped. */
@@ -2586,6 +2658,18 @@ describe('the hostile-input matrix leaves the process alive', () => {
       const addon = require(${JSON.stringify(new URL('../build/Release/sonare-node.node', import.meta.url).pathname)});
       const swallow = (fn) => { try { fn(); } catch { /* a catchable error is the point */ } };
       for (let round = 0; round < 2; round++) {
+        // Constructors first: each of these terminated the process before the
+        // constructors carried a catch harness, so they are the rows this
+        // script's exit code is most worth spending.
+        swallow(() => new addon.PolyphonicAnalysis(new Float32Array(1024), 22050, { nFft: 2 ** 32 }));
+        swallow(() => new addon.PolyphonicAnalysis(new Float32Array(1024), 22050, { nFft: 0.5 }));
+        swallow(() => new addon.RealtimeEngine(${SR}, 2 ** 32));
+        swallow(() => new addon.RealtimeEngine(${SR}, ${BLOCK}, 2 ** 63));
+        swallow(() => new addon.Mixer('{"tracks":[]}', 2 ** 32, 512));
+        swallow(() => new addon.Mixer('{"tracks":[]}', ${SR}, 2 ** 32));
+        swallow(() => new addon.StreamingRetune({ grainSize: 2 ** 32 }));
+        swallow(() => new addon.StreamingRetune({ grain_size: 2 ** 32 }));
+        swallow(() => new addon.StreamingRetune({ semitones: 1e40 }));
         const e = new addon.RealtimeEngine(${SR}, ${BLOCK});
         swallow(() => e.setGraph({ nodes: [{}, {}], connections: [{}, {}] }));
         swallow(() => e.setGraph({ nodes: [{ id: {} }, { id: {} }], connections: [], inputNode: {}, outputNode: {} }));

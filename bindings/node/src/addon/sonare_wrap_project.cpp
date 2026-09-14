@@ -137,6 +137,7 @@ Napi::Object ProjectWrap::Wrap(const Napi::CallbackInfo& info, SonareProject* ha
 
 ProjectWrap::ProjectWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<ProjectWrap>(info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   // Adoption path: fromJson() / Wrap() pass an External wrapping an existing
   // SonareProject* that was created (and ABI-checked) by the static factory.
@@ -156,6 +157,7 @@ ProjectWrap::ProjectWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Proj
     return;
   }
   ThrowIfError(env, sonare_project_create(&project_));
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 ProjectWrap::~ProjectWrap() {

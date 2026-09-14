@@ -873,6 +873,7 @@ Napi::Object StreamingRetuneWrap::Init(Napi::Env env, Napi::Object exports) {
 StreamingRetuneWrap::StreamingRetuneWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<StreamingRetuneWrap>(info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   float semitones = 0.0f;
   float mix = 1.0f;
   int grain_size = 0;
@@ -884,6 +885,7 @@ StreamingRetuneWrap::StreamingRetuneWrap(const Napi::CallbackInfo& info)
   if (retune_ == nullptr) {
     ThrowSonareError(env, SONARE_ERROR_INVALID_PARAMETER, "StreamingRetune: ");
   }
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 StreamingRetuneWrap::~StreamingRetuneWrap() {

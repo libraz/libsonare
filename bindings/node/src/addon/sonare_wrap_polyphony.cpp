@@ -36,23 +36,23 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
   }
   Napi::Object opts = value.As<Napi::Object>();
 
-  out->n_fft = IntProperty(opts, "nFft", 0);
-  out->hop_length = IntProperty(opts, "hopLength", 0);
-  out->win_length = IntProperty(opts, "winLength", 0);
+  out->n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
+  out->hop_length = IntProperty(opts, "hopLength", kZeroIsSentinel);
+  out->win_length = IntProperty(opts, "winLength", kZeroIsSentinel);
 
   out->cent_ref_hz = FloatProperty(opts, "centRefHz", 0.0f);
   out->cents_per_bin = FloatProperty(opts, "centsPerBin", 0.0f);
   out->cent_max_hz = FloatProperty(opts, "centMaxHz", 0.0f);
   out->tonality_off = BoolProperty(opts, "tonalityOff", false) ? 1 : 0;
 
-  out->salience_harmonics = IntProperty(opts, "salienceHarmonics", 0);
+  out->salience_harmonics = IntProperty(opts, "salienceHarmonics", kZeroIsSentinel);
   out->f0_min_hz = FloatProperty(opts, "f0MinHz", 0.0f);
   out->f0_max_hz = FloatProperty(opts, "f0MaxHz", 0.0f);
   out->salience_alpha_hz = FloatProperty(opts, "salienceAlphaHz", 0.0f);
   out->salience_beta_hz = FloatProperty(opts, "salienceBetaHz", 0.0f);
   out->salience_inharmonicity = FloatProperty(opts, "salienceInharmonicity", 0.0f);
 
-  out->max_polyphony = IntProperty(opts, "maxPolyphony", 0);
+  out->max_polyphony = IntProperty(opts, "maxPolyphony", kZeroIsSentinel);
   out->min_frame_peak_ratio = FloatProperty(opts, "minFramePeakRatio", 0.0f);
   out->min_separation_cents = FloatProperty(opts, "minSeparationCents", 0.0f);
   out->subtraction_factor = FloatProperty(opts, "subtractionFactor", 0.0f);
@@ -61,15 +61,15 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
   out->min_ridge_peak_ratio = FloatProperty(opts, "minRidgePeakRatio", 0.0f);
   out->min_ridge_duration_ms = FloatProperty(opts, "minRidgeDurationMs", 0.0f);
 
-  out->mask_harmonics = IntProperty(opts, "maskHarmonics", 0);
+  out->mask_harmonics = IntProperty(opts, "maskHarmonics", kZeroIsSentinel);
   out->claim_lobes = FloatProperty(opts, "claimLobes", 0.0f);
   out->inharmonicity = FloatProperty(opts, "inharmonicity", 0.0f);
   out->estimate_inharmonicity = BoolProperty(opts, "estimateInharmonicity", false) ? 1 : 0;
-  out->inharmonicity_min_partials = IntProperty(opts, "inharmonicityMinPartials", 0);
+  out->inharmonicity_min_partials = IntProperty(opts, "inharmonicityMinPartials", kZeroIsSentinel);
   out->inharmonicity_max_residual_bins = FloatProperty(opts, "inharmonicityMaxResidualBins", 0.0f);
   out->inharmonicity_max_stretch = FloatProperty(opts, "inharmonicityMaxStretch", 0.0f);
 
-  out->window_frames = IntProperty(opts, "windowFrames", 0);
+  out->window_frames = IntProperty(opts, "windowFrames", kZeroIsSentinel);
   out->min_partial_separation = FloatProperty(opts, "minPartialSeparation", 0.0f);
   out->max_fit_residual = FloatProperty(opts, "maxFitResidual", 0.0f);
   out->max_weight_modulus = FloatProperty(opts, "maxWeightModulus", 0.0f);
@@ -109,6 +109,10 @@ Napi::Object PolyphonicAnalysisWrap::Init(Napi::Env env, Napi::Object exports) {
 PolyphonicAnalysisWrap::PolyphonicAnalysisWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<PolyphonicAnalysisWrap>(info) {
   Napi::Env env = info.Env();
+  // The config readers report by throwing, and a constructor is as much an entry
+  // point as a method: without the harness the throw leaves the N-API callback
+  // uncaught and takes the process down instead of reporting a RangeError.
+  SONARE_NODE_TRY
   if (info.Length() < 2 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, config?: object)")
         .ThrowAsJavaScriptException();
@@ -164,6 +168,7 @@ PolyphonicAnalysisWrap::PolyphonicAnalysisWrap(const Napi::CallbackInfo& info)
   for (size_t i = 0; i < written; ++i) {
     spans_.push_back(static_cast<size_t>(std::max(0, notes[i].frame_end - notes[i].frame_start)));
   }
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 PolyphonicAnalysisWrap::~PolyphonicAnalysisWrap() { Release(); }

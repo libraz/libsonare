@@ -31,10 +31,10 @@ namespace sonare_node {
 ///   Truncation is deliberately left alone: ToInt32 already dropped the
 ///   fraction at every one of these sites and 31.5 reaching the callee as 31
 ///   does not change a magnitude, so refusing it would be a separate contract
-///   change rather than closing this wrap. It is not inert on a field whose 0
-///   means "keep the default" -- there anything in (-1, 1) selects the default
-///   and reports success, which is a category change rather than a magnitude
-///   one, so such a field takes its integrality check in the TS facade.
+///   change. It is not inert on a field whose 0 means "keep the default" --
+///   there anything in (-1, 1) selects the default and reports success, a
+///   category change. Read such a field through @ref ZeroIsSentinel; a TS
+///   facade check is an addition, since a direct caller never reaches it.
 ///
 ///   The refusal UNWINDS rather than leaving a pending JS exception, because
 ///   these readers are called from entry points that keep working afterwards.
@@ -113,6 +113,39 @@ inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const ch
         env, std::string(name) + " must be a finite number within the 32-bit float range");
   }
   return static_cast<float>(number);
+}
+
+/// @brief Marks a key whose 0 the library reads as "keep the default" rather
+///        than as a quantity.
+/// @details Written where a fallback would go, because it IS the fallback: such
+///   a key defaults at 0. It selects the reader overloads below, which refuse a
+///   fractional value -- the refusal SynthEnumProperty performs for the enum
+///   fields under the same contract. Use it only where a facade entry point
+///   cannot assert instead; the narrowing note above says why the base readers
+///   keep truncating.
+struct ZeroIsSentinel {};
+inline constexpr ZeroIsSentinel kZeroIsSentinel{};
+
+/// @brief Whether @p value is a finite number carrying a fractional part.
+/// @details Non-finite and out-of-range are left to @ref node_narrow_number, so
+///   each input is reported by the check that owns it.
+inline bool node_is_fraction(const Napi::Value& value) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  return std::isfinite(number) && std::trunc(number) != number;
+}
+
+/// @brief The one wording every @ref ZeroIsSentinel refusal reports.
+inline std::string node_fraction_message(const char* name) {
+  return std::string(name) + " must be a whole number: its zero selects the library default";
+}
+
+/// @brief Refuses a finite value that is not a whole number, naming @p name.
+/// @throws Napi::RangeError naming @p name.
+inline void node_refuse_fraction(Napi::Env env, const Napi::Value& value, const char* name) {
+  if (env.IsExceptionPending()) return;
+  if (node_is_fraction(value)) {
+    throw Napi::RangeError::New(env, node_fraction_message(name));
+  }
 }
 
 /// @brief The subject an out-of-range positional argument is named by.
@@ -210,6 +243,15 @@ inline int node_int_option(const Napi::Object& object, const char* key, int fall
   return node_narrow_int(object.Env(), value, key);
 }
 
+/// @brief Read an integer option whose 0 is the library default
+///        (@ref ZeroIsSentinel), refusing a fraction.
+inline int node_int_option(const Napi::Object& object, const char* key, ZeroIsSentinel) {
+  Napi::Value value = object.Get(key);
+  if (!value.IsNumber()) return 0;
+  node_refuse_fraction(object.Env(), value, key);
+  return node_narrow_int(object.Env(), value, key);
+}
+
 /// @brief Read a float option from a JS object, falling back if missing.
 inline float node_float_option(const Napi::Object& object, const char* key, float fallback) {
   Napi::Value value = object.Get(key);
@@ -226,6 +268,15 @@ inline double node_double_option(const Napi::Object& object, const char* key, do
 inline int64_t node_int64_option(const Napi::Object& object, const char* key, int64_t fallback) {
   Napi::Value value = object.Get(key);
   if (!value.IsNumber()) return fallback;
+  return node_narrow_int64(object.Env(), value, key);
+}
+
+/// @brief Read an int64 option whose 0 is the library default
+///        (@ref ZeroIsSentinel), refusing a fraction.
+inline int64_t node_int64_option(const Napi::Object& object, const char* key, ZeroIsSentinel) {
+  Napi::Value value = object.Get(key);
+  if (!value.IsNumber()) return 0;
+  node_refuse_fraction(object.Env(), value, key);
   return node_narrow_int64(object.Env(), value, key);
 }
 
@@ -247,6 +298,15 @@ inline std::string node_string_option(const Napi::Object& object, const char* ke
 inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_int(obj.Env(), value, key);
+}
+
+/// @brief Read an int property whose 0 is the library default
+///        (@ref ZeroIsSentinel), refusing a fraction.
+inline int IntProperty(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return 0;
+  node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_int(obj.Env(), value, key);
 }
 
@@ -296,6 +356,15 @@ inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const ch
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_int64(obj.Env(), value, key);
+}
+
+/// @brief Read an int64 property whose 0 is the library default
+///        (@ref ZeroIsSentinel), refusing a fraction.
+inline int64_t Int64Property(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return 0;
+  node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_int64(obj.Env(), value, key);
 }
 
@@ -633,6 +702,26 @@ inline bool OptionalUint32Arg(Napi::Env env, const Napi::CallbackInfo& info, siz
   if (value.IsUndefined() || value.IsNull()) {
     *out = fallback;
     return true;
+  }
+  return RequiredUint32Value(env, value, name, out);
+}
+
+/// @brief Read an optional uint32 positional argument whose 0 is the library
+///        default (@ref ZeroIsSentinel), refusing a fraction.
+/// @details Reports by leaving a pending exception rather than unwinding, which
+///   is this family's contract, so the caller still bails on a false return.
+inline bool OptionalUint32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, ZeroIsSentinel, uint32_t* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = 0;
+    return true;
+  }
+  if (!RequireNumberValue(env, value, name)) return false;
+  if (node_is_fraction(value)) {
+    Napi::RangeError::New(env, node_fraction_message(name)).ThrowAsJavaScriptException();
+    return false;
   }
   return RequiredUint32Value(env, value, name, out);
 }

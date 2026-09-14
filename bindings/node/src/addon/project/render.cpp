@@ -17,9 +17,9 @@ namespace {
 
 // Fills `options` from a JS bounce-options object (zero-initialized on entry).
 void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* options) {
-  options->total_frames = Int64Property(obj, "totalFrames", 0);
+  options->total_frames = Int64Property(obj, "totalFrames", kZeroIsSentinel);
   options->block_size = IntProperty(obj, "blockSize", 0);
-  options->num_channels = IntProperty(obj, "numChannels", 0);
+  options->num_channels = IntProperty(obj, "numChannels", kZeroIsSentinel);
   options->sample_rate = IntProperty(obj, "sampleRate", 0);
   options->instrument_latency_samples = IntProperty(obj, "instrumentLatencySamples", 0);
 }
@@ -42,7 +42,7 @@ bool ParseBuiltinInstrument(Napi::Env env, const Napi::Object& obj,
   config.decay_ms = FloatProperty(obj, "decayMs", 0.0f);
   config.sustain = FloatProperty(obj, "sustain", 0.0f);
   config.release_ms = FloatProperty(obj, "releaseMs", 0.0f);
-  config.polyphony = IntProperty(obj, "polyphony", 0);
+  config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
   return true;
 }
 
@@ -306,7 +306,7 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
               ? 0u
               : node_narrow_uint32(obj.Env(), obj.Get("destinationId"), "destinationId");
       binding.config.gain = FloatProperty(obj, "gain", 0.0f);
-      binding.config.polyphony = IntProperty(obj, "polyphony", 0);
+      binding.config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
       const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
       if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
         binding.config.struct_version = 2;
