@@ -56,6 +56,7 @@ from ._runtime import (
     _get_lib,
     _planar_channel_arrays,
     _to_c_int64,
+    _validate_c_int_field,
 )
 
 
@@ -313,7 +314,13 @@ class _EngineIoMixin:
         raw_options.normalize_lufs = int(options.normalize_lufs)
         raw_options.target_lufs = float(options.target_lufs)
         raw_options.dither = int(options.dither)
-        raw_options.dither_bits = int(options.dither_bits)
+        # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
+        # "keep the default 16", so a fractional word length would dither at 16
+        # and report success. block_size and num_channels above are not the same
+        # case -- the core rejects 0 on both.
+        raw_options.dither_bits = _validate_c_int_field(
+            "bounce_offline", options.dither_bits, "dither_bits"
+        )
         raw_options.dither_seed = int(options.dither_seed)
         raw_result = SonareEngineBounceResult()
         _check(

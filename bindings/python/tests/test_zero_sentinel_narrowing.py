@@ -413,6 +413,42 @@ def test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default(
     assert rendered(None) == omitted
 
 
+def test_a_fractional_dither_word_length_is_refused_rather_than_read_as_the_default() -> None:
+    """0 on EngineBounceOptions.dither_bits keeps the default 16-bit word length."""
+    frames = 512
+
+    def bounced(dither_bits) -> str:
+        kwargs = {} if dither_bits is None else {"dither_bits": dither_bits}
+        with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+            rng = np.random.default_rng(5)
+            signal = (0.4 * rng.standard_normal(frames)).astype(np.float32).tolist()
+            engine.set_clips(
+                [
+                    ls.EngineClip(
+                        id=1,
+                        track_id=10,
+                        channels=[signal, signal],
+                        start_ppq=0.0,
+                        length_samples=frames,
+                    )
+                ]
+            )
+            engine.play()
+            result = engine.bounce_offline(
+                ls.EngineBounceOptions(total_frames=frames, dither=1, **kwargs)
+            )
+            return _digest(result.interleaved)
+
+    omitted = bounced(None)  # the dataclass default is already 16
+    assert bounced(0) == omitted
+    assert bounced(16) == omitted
+    assert bounced(8) != omitted  # positive control
+    for value in (0.5, 8.5):
+        with pytest.raises(SonareValueError, match="dither_bits"):
+            bounced(value)
+    assert bounced(None) == omitted
+
+
 # --- identity: zero is the no-op, reached the same way ----------------------
 
 
