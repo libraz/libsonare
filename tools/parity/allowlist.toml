@@ -56,6 +56,7 @@ node = [
   "assert_u7",
   "assert_nibble",
   "assert_u32",
+  "assert_int64",           # safe-integer-range sibling of assert_int32, same family
   "assert_project_midi_events",
   "midi1_event",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names

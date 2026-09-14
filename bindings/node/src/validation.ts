@@ -206,6 +206,24 @@ export function assertU32(fnName: string, value: number, argName: string): void 
   }
 }
 
+/**
+ * {@link assertInt32}'s 64-bit sibling, for a field the addon reads as `int64`.
+ *
+ * The bound is the safe-integer range rather than the C type's, because a JS
+ * number past it no longer denotes one specific `int64` and the value the callee
+ * receives is not the one the caller wrote. Everything inside it is the callee's
+ * to accept or refuse.
+ */
+export function assertInt64(fnName: string, value: number, argName: string): void {
+  if (!Number.isSafeInteger(value)) {
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      `${fnName}: ${argName} must be an integer within the safe-integer range`,
+    );
+  }
+}
+
 export function assertProjectMidiEvents(
   fnName: string,
   events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,

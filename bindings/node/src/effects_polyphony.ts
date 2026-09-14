@@ -5,7 +5,7 @@ import type {
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
 } from './types.js';
-import { assertInt32, assertSampleRate } from './validation.js';
+import { assertInt32, assertInt64, assertSampleRate } from './validation.js';
 
 /** Audio, its sample rate, and the analysis tuning, flat in one request. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
@@ -133,6 +133,11 @@ export class PolyphonicAnalysis {
    * @throws {SonareError} `note` is past the last note.
    */
   setNoteEdit(note: number, edit?: NoteEditInput): void {
+    if (edit?.timeOffsetSamples !== undefined) {
+      // 0 is this field's identity, and the addon truncates onto it, so a
+      // sub-sample shift would render unmoved.
+      assertInt64('setNoteEdit', edit.timeOffsetSamples, 'edit.timeOffsetSamples');
+    }
     this.native.setNoteEdit(note, edit);
   }
 

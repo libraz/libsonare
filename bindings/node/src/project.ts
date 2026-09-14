@@ -43,7 +43,13 @@ import type {
   SynthWaveform,
   WarpMode,
 } from './types.js';
-import { assertProjectMidiEvents, midi1Event } from './validation.js';
+import {
+  assertInt32,
+  assertInt64,
+  assertProjectMidiEvents,
+  assertU32,
+  midi1Event,
+} from './validation.js';
 import {
   normalizeSynthInstrument,
   projectAutomationLaneValue,
@@ -92,6 +98,26 @@ export function synthPresetPatch(name: string): SynthPatch {
 /** Return the canonical NativeSynth enum tables from the native C oracle. */
 export function synthEnumTables(): SynthEnumTables {
   return addon._synthEnumTables();
+}
+
+/**
+ * Check the two bounce fields whose zero is a native default, on every entry
+ * point that takes the bag.
+ *
+ * The addon truncates, so `0.5` arrives as the zero that auto-derives the render
+ * length / picks the stereo default and the call returns exactly what omitting
+ * the field would have. `blockSize` and `sampleRate` are deliberately absent:
+ * the render is block-size independent and the only sample rate the core accepts
+ * is the project's own, so neither can be told from its default.
+ * `instrumentLatencySamples` is a plain quantity whose zero means no latency.
+ */
+function assertBounceOptions(fnName: string, options: ProjectBounceOptions): void {
+  if (options.totalFrames !== undefined) {
+    assertInt64(fnName, options.totalFrames, 'totalFrames');
+  }
+  if (options.numChannels !== undefined) {
+    assertInt32(fnName, options.numChannels, 'numChannels');
+  }
 }
 
 /**
@@ -696,11 +722,25 @@ export class Project {
 
   /** Replace a clip's take list and active take id via an undoable edit. */
   setClipTakes(clipId: number, takes: ReadonlyArray<ProjectClipTake>, activeTakeId = 0): void {
+    takes.forEach((take, index) => {
+      if (take.sourceId !== undefined) {
+        // 0 reuses the clip's current source, and the addon truncates onto it.
+        assertU32('setClipTakes', take.sourceId, `takes[${index}].sourceId`);
+      }
+    });
+    // Same sentinel one argument over: 0 here selects the clip's base source.
+    assertU32('setClipTakes', activeTakeId, 'activeTakeId');
     this.native.setClipTakes(clipId, takes, activeTakeId);
   }
 
   /** Replace a clip's comp segments via an undoable edit. */
   setClipCompSegments(clipId: number, segments: ReadonlyArray<ProjectClipCompSegment>): void {
+    segments.forEach((segment, index) => {
+      if (segment.takeId !== undefined) {
+        // 0 falls back to the active/default take, and the addon truncates onto it.
+        assertU32('setClipCompSegments', segment.takeId, `segments[${index}].takeId`);
+      }
+    });
     this.native.setClipCompSegments(clipId, segments);
   }
 
@@ -1048,6 +1088,7 @@ export class Project {
    * {@link bounceWithBuiltinInstrument} / {@link bounceWithBuiltinInstruments}.
    */
   bounce(options: ProjectBounceOptions = {}): Float32Array {
+    assertBounceOptions('bounce', options);
     return this.native.bounce(options);
   }
 
@@ -1064,6 +1105,7 @@ export class Project {
     instruments: BuiltinInstrumentConfig[] = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
+    assertBounceOptions('bounceWithBuiltinInstruments', options);
     return this.native.bounceWithBuiltinInstruments(instruments, options);
   }
 
@@ -1081,6 +1123,7 @@ export class Project {
     instrument: BuiltinInstrumentConfig | SynthWaveform = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
+    assertBounceOptions('bounceWithBuiltinInstrument', options);
     const config: BuiltinInstrumentConfig =
       typeof instrument === 'string' ? { waveform: instrument } : instrument;
     return this.native.bounceWithBuiltinInstruments([config], options);
@@ -1109,6 +1152,7 @@ export class Project {
     instruments: (SynthPatch | string)[] = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
+    assertBounceOptions('bounceWithSynthInstruments', options);
     return this.native.bounceWithSynthInstruments(
       instruments.map(normalizeSynthInstrument),
       options,
@@ -1125,6 +1169,7 @@ export class Project {
     instrument: SynthPatch | string = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
+    assertBounceOptions('bounceWithSynthInstrument', options);
     return this.native.bounceWithSynthInstruments([normalizeSynthInstrument(instrument)], options);
   }
 
@@ -1175,6 +1220,7 @@ export class Project {
     instruments: Sf2InstrumentConfig[] = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
+    assertBounceOptions('bounceWithSf2Instruments', options);
     return this.native.bounceWithSf2Instruments(instruments, options);
   }
 
@@ -1186,6 +1232,7 @@ export class Project {
     instrument: Sf2InstrumentConfig = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
+    assertBounceOptions('bounceWithSf2Instrument', options);
     return this.native.bounceWithSf2Instruments([instrument], options);
   }
 

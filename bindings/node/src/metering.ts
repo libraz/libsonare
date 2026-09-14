@@ -1,11 +1,25 @@
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples, assertSamplesInWindow } from './validation.js';
+import { assertInt32, assertSamples, assertSamplesInWindow } from './validation.js';
 
 // The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
 // here so the windowed pre-scan covers exactly the span the call will read; a
 // test pins it against the `nFft` the library reports back for a 0 request.
 const DEFAULT_SPECTRUM_N_FFT = 2048;
+
+/**
+ * Check the two spectrum sizes whose zero requests the library default, before
+ * the addon narrows them. Truncation lands a fractional size on that zero, so
+ * the analysis runs at the default and reports success.
+ */
+function assertSpectrumOptions(fnName: string, options: SpectrumOptions): void {
+  for (const field of ['nFft', 'octaveFraction'] as const) {
+    const value = options[field];
+    if (value !== undefined) {
+      assertInt32(fnName, value, field);
+    }
+  }
+}
 
 /** One contiguous run of clipped samples reported by `meteringDetectClipping`. */
 export interface ClippingRegion {
@@ -515,6 +529,7 @@ export function meteringSpectrum(
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const validate = request.validate !== false;
   assertSamples('meteringSpectrum', request.samples, validate);
+  assertSpectrumOptions('meteringSpectrum', request);
   return addon.meteringSpectrum(request.samples, request.sampleRate ?? 22050, request);
 }
 
@@ -546,6 +561,9 @@ export function meteringSpectrumFrame(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, frameOffset, ...options } : samples;
   const validate = request.validate !== false;
+  // Ahead of the pre-scan below, which would otherwise size its window from a
+  // fractional nFft before this saw it.
+  assertSpectrumOptions('meteringSpectrumFrame', request);
   const nFft = request.nFft ?? 0;
   assertSamplesInWindow(
     'meteringSpectrumFrame',

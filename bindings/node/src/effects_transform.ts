@@ -16,7 +16,7 @@ import type {
   SpectralRegionOp,
   VoicedFlags,
 } from './types.js';
-import { assertHpssKernels, assertInt32, assertSampleRate } from './validation.js';
+import { assertHpssKernels, assertInt32, assertInt64, assertSampleRate } from './validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so normalize here rather than at the N-API boundary.
@@ -44,6 +44,24 @@ function assertPercussiveSeparation(fnName: string, options: PercussiveSeparatio
       assertInt32(fnName, value, field);
     }
   }
+}
+
+/**
+ * Check the pending time offsets of a note or event set before the addon
+ * narrows them. Zero is this field's identity rather than a default, so a
+ * truncated sub-sample shift renders the set unmoved and reports success.
+ */
+function assertEditTimeOffsets(
+  fnName: string,
+  entries: ReadonlyArray<{ edit?: { timeOffsetSamples?: number } }>,
+  arrayName: string,
+): void {
+  entries.forEach((entry, index) => {
+    const offset = entry?.edit?.timeOffsetSamples;
+    if (offset !== undefined) {
+      assertInt64(fnName, offset, `${arrayName}[${index}].edit.timeOffsetSamples`);
+    }
+  });
 }
 
 function resolveHardMask(fnName: string, hardMask: unknown): boolean {
@@ -496,6 +514,14 @@ export function spectralEdit(
     ...requestOptions
   } = request;
   assertSampleRate('spectralEdit', requestSampleRate as number);
+  // Each of the three is its own "0 => the documented default" on the C side,
+  // and the addon's narrowing truncates onto that 0.
+  for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {
+    const value = requestOptions[field];
+    if (value !== undefined) {
+      assertInt32('spectralEdit', value, field);
+    }
+  }
   return addon.spectralEdit(input, requestSampleRate as number, requestOps, requestOptions);
 }
 
@@ -831,6 +857,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   if (options.f0Hz !== undefined && !Number.isFinite(options.frameRate)) {
     throw new TypeError('renderNotes: frameRate must be a finite number when f0Hz is given');
   }
+  assertEditTimeOffsets('renderNotes', notes, 'notes');
   return addon.renderNotes(samples, sampleRate, notes, options);
 }
 
@@ -1092,5 +1119,6 @@ export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): 
     throw new TypeError('renderPercussiveEvents: events must be an array');
   }
   assertPercussiveSeparation('renderPercussiveEvents', options);
+  assertEditTimeOffsets('renderPercussiveEvents', events, 'events');
   return addon.renderPercussiveEvents(toSamples(samples), sampleRate, events, options);
 }

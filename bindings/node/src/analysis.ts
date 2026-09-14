@@ -29,7 +29,29 @@ import type {
   Section,
   TimbreResult,
 } from './types.js';
-import { assertFiniteScalar } from './validation.js';
+import { assertFiniteScalar, assertInt32, assertInt64 } from './validation.js';
+
+/**
+ * Check the room-option fields whose zero requests the library default, before
+ * the addon narrows them. Truncation lands a fractional value on that zero, so
+ * the call runs at the default and reports success.
+ *
+ * `materialPreset` is deliberately absent: its zero is the named NONE preset, a
+ * mode of its own rather than a stand-in for an absent value. So is
+ * {@link analyzeImpulseResponse}'s `nOctaveBands`, which is passed through as a
+ * literal band count and analyses no bands at zero.
+ */
+function assertRoomOptions(
+  fnName: string,
+  options: { seed?: number; nOctaveBands?: number },
+): void {
+  if (options.seed !== undefined) {
+    assertInt64(fnName, options.seed, 'seed');
+  }
+  if (options.nOctaveBands !== undefined) {
+    assertInt32(fnName, options.nOctaveBands, 'nOctaveBands');
+  }
+}
 
 export interface SamplesRequest {
   samples: Float32Array;
@@ -290,6 +312,7 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
  * when the source/listener falls outside the room (the RIR is then empty).
  */
 export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
+  assertRoomOptions('synthesizeRir', options);
   return addon.synthesizeRir(options);
 }
 
@@ -310,6 +333,7 @@ export function estimateRoom(
   options: RoomEstimateOptions = {},
 ): RoomEstimateResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertRoomOptions('estimateRoom', request);
   return addon.estimateRoom(request.samples, request.sampleRate ?? 48000, request);
 }
 
@@ -330,6 +354,7 @@ export function roomMorph(
   options: RoomMorphOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertRoomOptions('roomMorph', request);
   return addon.roomMorph(request.samples, request.sampleRate ?? 48000, request);
 }
 

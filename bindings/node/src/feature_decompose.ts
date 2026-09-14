@@ -2,7 +2,7 @@ import { resolveFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
-import { assertHpssKernels, assertSamples } from './validation.js';
+import { assertHpssKernels, assertInt32, assertSamples } from './validation.js';
 
 function resolveHardMaskOption(fnName: string, value: unknown): boolean {
   if (value === undefined) {
@@ -283,6 +283,14 @@ export function decompose(
  */
 export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
   assertSamples('decomposeStems', request.samples, true);
+  // Each of the four is its own "0 => the documented default" on the C side, and
+  // the addon's narrowing truncates onto that 0.
+  for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
+    const value = request[field];
+    if (value !== undefined) {
+      assertInt32('decomposeStems', value, field);
+    }
+  }
   return addon.decomposeStems(request.samples, request.sampleRate ?? 22050, {
     nComponents: request.nComponents,
     nFft: request.nFft,
