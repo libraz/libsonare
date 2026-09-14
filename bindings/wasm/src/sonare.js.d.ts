@@ -971,6 +971,13 @@ export interface WasmEngineBounceOptions {
   targetSampleRate?: number;
   sourceSampleRate?: number;
   normalizeLufs?: boolean;
+  /**
+   * Target integrated loudness when `normalizeLufs` is set. Omitting it, passing
+   * `0`, and passing a non-finite value all mean the library default of
+   * -14 LUFS: the non-finite case resolves rather than being reported, matching
+   * the C ABI, because the loudness stage derives a per-sample gain from this
+   * and checks nothing itself.
+   */
   targetLufs?: number;
   dither?: 0 | 1 | 2 | 3;
   ditherBits?: number;

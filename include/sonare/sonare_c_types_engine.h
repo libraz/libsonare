@@ -385,9 +385,13 @@ typedef struct {
   int normalize_lufs;
   /* Target integrated loudness in LUFS when normalize_lufs != 0. The value
      0.0f is treated as a "use default" sentinel and is normalized to
-     SONARE_DEFAULT_BOUNCE_TARGET_LUFS (-14.0 LUFS). Pass a non-zero value
-     to override. Call sonare_engine_bounce_options_default() to obtain a
-     fully-initialized options struct with documented defaults. */
+     SONARE_DEFAULT_BOUNCE_TARGET_LUFS (-14.0 LUFS). A non-finite value resolves
+     to that same default rather than being reported: the loudness stage
+     multiplies every sample by a gain derived from this field and checks
+     nothing, so the substitution is what keeps a NaN out of the audio. Pass a
+     non-zero finite value to override. Call
+     sonare_engine_bounce_options_default() to obtain a fully-initialized
+     options struct with documented defaults. */
   float target_lufs;
   int dither; /* 0 = none, 1 = RPDF, 2 = TPDF, 3 = noise-shaped */
   int dither_bits;
