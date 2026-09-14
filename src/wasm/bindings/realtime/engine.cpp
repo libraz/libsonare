@@ -19,7 +19,7 @@ void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size)
 }
 
 size_t RealtimeEngineWasm::capacity(int requested) {
-  return requested > 0 ? static_cast<size_t>(requested) : 1024;
+  return requested == 0 ? 1024 : static_cast<size_t>(requested);
 }
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
@@ -49,6 +49,15 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, int max_block_s
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidParameter,
         "prepare: max_channels must be within 1.." + std::to_string(kMaxChannels));
+  }
+  // The C ABI takes both as size_t, so only this surface can express a negative
+  // one. Refuse it here rather than letting capacity() read it as the sentinel,
+  // which would answer a caller error with the default queue.
+  if (command_capacity < 0 || telemetry_capacity < 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "prepare: command_capacity and telemetry_capacity must be 0 (the internal minimum) or "
+        "positive");
   }
   // Mirrors the C ABI: the engine clamps these, but a host asking for more than
   // it can get should hear about it rather than quietly receive a smaller

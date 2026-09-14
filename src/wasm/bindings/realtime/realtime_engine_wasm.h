@@ -249,8 +249,9 @@ class RealtimeEngineWasm {
   float scopeScratchPointRight(uint32_t index) const;
 
  private:
-  // Maps a JS-supplied queue depth to the engine's size_t capacity. A value <= 0
-  // selects the engine default (1024), matching the Node/Python bindings.
+  // Maps a JS-supplied queue depth to the engine's size_t capacity. 0 selects
+  // the engine default (1024), matching the Node/Python bindings; a negative
+  // depth is refused by the caller before reaching this.
   static size_t capacity(int requested);
 
   struct ChannelBlock {

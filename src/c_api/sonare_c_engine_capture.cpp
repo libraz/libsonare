@@ -135,7 +135,10 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
   auto graph = std::make_unique<graph::Graph>();
   for (size_t i = 0; i < spec->node_count; ++i) {
     const SonareEngineGraphNode& node = spec->nodes[i];
-    const int ports = node.num_ports > 0 ? node.num_ports : spec->num_channels;
+    // Only 0 asks for the spec's width. A negative count is a caller error, and
+    // add_node would have refused it, so it must not reach the derivation.
+    if (node.num_ports < 0) return SONARE_ERROR_INVALID_PARAMETER;
+    const int ports = node.num_ports == 0 ? spec->num_channels : node.num_ports;
     auto processor = make_graph_processor(node);
     if (!processor ||
         !graph->add_node(fixed_text(node.id, sizeof(node.id)), std::move(processor), ports)) {

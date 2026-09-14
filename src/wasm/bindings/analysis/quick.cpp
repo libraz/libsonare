@@ -804,22 +804,24 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
 }
 
 // Reads a deterministic late-tail seed, keeping @p fallback when the option is
-// absent, not a number, or <= 0 (the C ABI's "seed == 0 keeps the library
+// absent, not a number, or exactly 0 (the C ABI's "seed == 0 keeps the library
 // default", so seed: 0 yields the same RIR on every surface instead of seeding
 // the PRNG with 0). The value is read as a double because the C ABI's seed is a
 // uint32: intProperty narrows through ToInt32, which turned every seed above
 // 2^31-1 negative and silently substituted the default, leaving half the seed
-// space unreachable. A value past the uint32 range is rejected rather than
-// substituted, since a silent default is what made the gap invisible.
+// space unreachable. Anything outside the uint32 range -- below it as much as
+// above it, NaN included -- is rejected rather than substituted, since a silent
+// default is what made the gap invisible.
 unsigned seedFromVal(val opts, unsigned fallback) {
   const val seed_val = objectProperty(opts, "seed");
   if (seed_val.typeOf().as<std::string>() != "number") return fallback;
   const double seed_in = seed_val.as<double>();
-  if (!(seed_in > 0.0)) return fallback;  // also rejects NaN
-  if (seed_in > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+  if (!sonare::numeric::finite_in_closed_range(
+          seed_in, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "seed must be within [0, 4294967295]");
   }
+  if (seed_in == 0.0) return fallback;
   return static_cast<unsigned>(seed_in);
 }
 

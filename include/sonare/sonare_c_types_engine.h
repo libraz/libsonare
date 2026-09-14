@@ -281,6 +281,9 @@ typedef struct {
   int64_t num_samples;
   double start_ppq;
   int64_t clip_offset_samples;
+  /* Playback length in frames. 0 means "to the end of the source", i.e.
+     num_samples - clip_offset_samples. Any other non-positive value is
+     rejected with SONARE_ERROR_INVALID_PARAMETER. */
   int64_t length_samples;
   int loop;
   float gain;
@@ -426,6 +429,8 @@ typedef struct {
   char id[64];
   int type; /* 0 = pass-through, 1 = gain */
   float gain_db;
+  /* Port count for this node. 0 means "use the spec's num_channels"; a negative
+     count is rejected with SONARE_ERROR_INVALID_PARAMETER. */
   int num_ports;
 } SonareEngineGraphNode;
 

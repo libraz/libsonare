@@ -108,8 +108,10 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     }
     // Compute the default only after validating the offset so the subtraction
     // cannot overflow (INT64_MIN was previously accepted into this expression).
+    // Only 0 asks for the source length; any other non-positive length falls
+    // through to the rejection below rather than being read as that request.
     const int64_t effective_length =
-        clip.length_samples > 0 ? clip.length_samples : source_samples - clip.clip_offset_samples;
+        clip.length_samples == 0 ? source_samples - clip.clip_offset_samples : clip.length_samples;
     if (effective_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
     for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
       const SonareEngineWarpAnchor& anchor = clip.warp_anchors[anchor_index];
@@ -164,7 +166,7 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     const int64_t source_samples =
         paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
     const int64_t effective_length =
-        clip.length_samples > 0 ? clip.length_samples : source_samples - clip.clip_offset_samples;
+        clip.length_samples == 0 ? source_samples - clip.clip_offset_samples : clip.length_samples;
     auto& owned = clip_storage[i];
     owned->channel_ptrs.clear();
     for (const auto& channel : owned->channels) {
