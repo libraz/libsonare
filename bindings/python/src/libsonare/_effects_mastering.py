@@ -36,6 +36,7 @@ from ._ffi import (
     SonareTrimSilenceConfig,
 )
 from ._runtime import (
+    _C_INT_MAX,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -58,7 +59,6 @@ from .types import DereverbClassicalConfig, RoomEstimate
 
 _DEFAULT_EFFECT_FRAME_LENGTH = 2048
 _DEFAULT_EFFECT_HOP_LENGTH = 512
-_C_INT_MAX = 2**31 - 1
 
 
 def _unsupported_effect_symbol(symbol: str) -> SonareError:

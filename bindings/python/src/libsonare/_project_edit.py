@@ -29,6 +29,7 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _SIZE_T_MAX,
     _UINT32_MAX,
     SonareAutomationLaneDescEx,
     SonareExternalStemDesc,
@@ -52,8 +53,6 @@ from ._runtime import (
     _to_c_uint32,
     _warp_mode_value,
 )
-
-_SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
 
 
 class _ProjectEditMixin:
