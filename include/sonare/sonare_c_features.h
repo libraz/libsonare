@@ -40,6 +40,14 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
                                    int n_octave_bands, int n_third_octave_subbands,
                                    float min_decay_db, float noise_floor_margin_db,
                                    SonareAcousticResult* out);
+/// @brief Rhythm analysis: tempo, beat positions, meter and groove together.
+/// @details Its @c bpm is the beat tracker's own estimate, refined from the
+///          local beat period, and is a third figure rather than either tempo
+///          entry's -- measured against synthesized click trains it differs
+///          from both at every rate tested, including the shared analysis rate
+///          where nothing resamples, and lands closer to the known tempo than
+///          either. Analyses at the caller's @p sample_rate, so @p n_fft and
+///          @p hop_length are in samples of the caller's buffer.
 /// @param out Receives heap-owned arrays; free with sonare_free_rhythm_result.
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,

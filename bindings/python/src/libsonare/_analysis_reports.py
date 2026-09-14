@@ -737,6 +737,13 @@ def analyze_rhythm(
 ) -> RhythmResult:
     """Analyze rhythm primitives without generating a summary report.
 
+    The returned ``bpm`` is the beat tracker's own tempo, refined from the local
+    beat period. It is a third figure rather than either tempo entry point's:
+    measured against synthesized click trains it differs from both at every
+    sample rate, and lands closer to the known tempo than either. Analysis runs
+    at ``sample_rate``, so ``n_fft`` and ``hop_length`` are in samples of the
+    buffer you pass.
+
     Note:
         ``bpm_min`` defaults to 60.0 here (higher than :func:`analyze_bpm`'s
         30.0). The narrower search range biases the single tempo estimate

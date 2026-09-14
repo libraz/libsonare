@@ -743,6 +743,13 @@ export interface RhythmAnalysisResult {
   grooveType: string;
   patternRegularity: number;
   tempoStability: number;
+  /**
+   * The beat tracker's own tempo, refined from the local beat period. It is a
+   * third figure rather than either tempo entry point's: measured against
+   * synthesized click trains it differs from both at every sample rate, and
+   * lands closer to the known tempo than either. Analysed at the sample rate
+   * you pass, so `nFft` and `hopLength` are in samples of your buffer.
+   */
   bpm: number;
   beatIntervals: Float32Array;
 }
