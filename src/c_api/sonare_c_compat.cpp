@@ -460,6 +460,12 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
                                            size_t* out_momentary_length, float** out_short_term,
                                            size_t* out_short_term_length) {
   SONARE_C_API_ENTRY;
+  // Define every out-parameter the caller did supply before any return, so a
+  // rejection below still leaves them readable.
+  if (out_momentary) *out_momentary = nullptr;
+  if (out_momentary_length) *out_momentary_length = 0;
+  if (out_short_term) *out_short_term = nullptr;
+  if (out_short_term_length) *out_short_term_length = 0;
   // A pointer without its length cannot be consumed, so a half-given pair is a
   // caller error rather than a request to skip the series.
   if ((out_momentary == nullptr) != (out_momentary_length == nullptr)) {
@@ -467,14 +473,6 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   }
   if ((out_short_term == nullptr) != (out_short_term_length == nullptr)) {
     return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (out_momentary) {
-    *out_momentary = nullptr;
-    *out_momentary_length = 0;
-  }
-  if (out_short_term) {
-    *out_short_term = nullptr;
-    *out_short_term_length = 0;
   }
   const SonareError err = validate_interleaved_lufs_input(samples, frames, channels, sample_rate);
   if (err != SONARE_OK) return err;
