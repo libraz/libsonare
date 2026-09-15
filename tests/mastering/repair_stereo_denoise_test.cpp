@@ -194,12 +194,13 @@ TEST_CASE("mono denoise and dereverb are unchanged", "[repair][stereo][denoise]"
   repair::DereverbClassicalConfig wpe;
   wpe.wpe_enabled = true;
 
-  // Captured from the tree before this module was reorganized. A refactor that
-  // moves a multiply between float and double changes these; nothing else does.
-  CHECK(hash_samples(repair::denoise_classical(audio)) == 0x75a2548dbf1c3a91ull);
-  CHECK(hash_samples(repair::denoise_classical(audio, stsa)) == 0x76aa8b856bf38d3bull);
+  // Two things move these: a refactor that shifts a multiply between float and
+  // double, and any change to a default the gain mask derives from. The
+  // suppression depth is one such default, so it moves the modes that read it.
+  CHECK(hash_samples(repair::denoise_classical(audio)) == 0x15db5a462dd378ccull);
+  CHECK(hash_samples(repair::denoise_classical(audio, stsa)) == 0x2b708e00347f0b26ull);
   CHECK(hash_samples(repair::denoise_classical(audio, berouti)) == 0x1b736c89a790d94bull);
-  CHECK(hash_samples(repair::denoise_classical(audio, mcra)) == 0x94a22b60a0b5530dull);
+  CHECK(hash_samples(repair::denoise_classical(audio, mcra)) == 0xdcbbe46d44350ed7ull);
   CHECK(hash_samples(repair::dereverb_classical(audio)) == 0xaa8454d236697b37ull);
   CHECK(hash_samples(repair::dereverb_classical(audio, wpe)) == 0x3fa27970fd263f44ull);
 }
