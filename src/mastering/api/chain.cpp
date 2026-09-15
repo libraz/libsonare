@@ -225,6 +225,27 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
         config.loudness.target_lufs, config.loudness.ceiling_db, config.loudness.release_ms,
         config.loudness.max_limiter_gain_reduction_db, config.loudness.true_peak_oversample);
   });
+  // Repair's own validators are only reached from inside the repair call, which
+  // is already mid-track, so an invalid stage has to be refused here.
+  if (config.repair.declick.enabled) {
+    check_stage("repair.declick", [&] { repair::validate_config(config.repair.declick.config); });
+  }
+  if (config.repair.declip.enabled) {
+    check_stage("repair.declip", [&] { repair::validate_config(config.repair.declip.config); });
+  }
+  if (config.repair.decrackle.enabled) {
+    check_stage("repair.decrackle",
+                [&] { repair::validate_config(config.repair.decrackle.config); });
+  }
+  if (config.repair.dehum.enabled) {
+    check_stage("repair.dehum", [&] { repair::validate_config(config.repair.dehum.config); });
+  }
+  if (config.repair.dereverb.enabled) {
+    check_stage("repair.dereverb", [&] { repair::validate_config(config.repair.dereverb.config); });
+  }
+  if (config.repair.denoise.enabled) {
+    check_stage("repair.denoise", [&] { repair::validate_config(config.repair.denoise.config); });
+  }
   // Every enabled stage's own static validator, run here rather than where the
   // stage is constructed: construction happens after the repair stages have
   // already processed the whole track. All of these are rate-independent; the
