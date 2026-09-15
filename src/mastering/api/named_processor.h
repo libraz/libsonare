@@ -23,6 +23,11 @@ void validate_params(const Param* params, std::size_t count);
 // dispatch outcome. They are exposed as aliases so callers (binding layers,
 // tests) can keep using `MonoResult` / `StereoResult` while the field
 // definitions live in a single place (@ref result_types.h).
+//
+// @ref MonoAudioResult::non_finite_substitution_count here: whether this can
+// be non-zero depends on which processor was named. One that does not
+// substitute reports zero because it has nothing to replace with, not
+// because nothing needed replacing.
 using MonoResult = MonoProcessorResult;
 using StereoResult = StereoProcessorResult;
 

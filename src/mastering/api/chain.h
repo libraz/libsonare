@@ -223,6 +223,11 @@ void validate_chain_config_for_rate(const MasteringChainConfig& config, int samp
 //
 // @ref StageGainReduction and @ref ChainMetrics are declared in
 // @ref result_types.h.
+//
+// @ref MonoAudioResult::non_finite_substitution_count here: only the
+// true-peak limiters replace anything, so with the maximizer's limiter and
+// the loudness stage both disabled a zero means no stage was able to replace
+// anything rather than that nothing needed replacing.
 
 struct MonoChainResult : public MonoAudioResult, public ChainMetrics {};
 

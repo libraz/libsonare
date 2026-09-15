@@ -1452,10 +1452,16 @@ class MasteringResult:
     applied_gain_db: float
     latency_samples: int = 0
     loudness_target_limited: bool = False
-    #: Non-finite input samples a processor replaced with a finite in-domain
-    #: one. The output is then finite, in range and error-free while carrying
-    #: samples unrelated to the input, so a non-zero count is the only thing
-    #: separating a degraded result from a clean one.
+    #: Samples the named processor replaced with a finite in-domain one,
+    #: keeping the output finite and in range.
+    #:
+    #: A non-finite sample supplied by the caller is rejected before the
+    #: processor runs, so a replacement is always of a value the processor
+    #: itself produced.
+    #:
+    #: Whether this can be non-zero depends on which processor was named:
+    #: one that does not substitute reports zero because it has nothing to
+    #: replace with, not because nothing needed replacing.
     non_finite_substitution_count: int = 0
 
 
@@ -1553,11 +1559,17 @@ class MasteringChainResult:
     #: :attr:`stages`).
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
     report: MasteringReport | None = None
-    #: Non-finite input samples a stage replaced with a finite in-domain one,
-    #: aggregated over every stage the chain ran. The output is then finite, in
-    #: range and error-free while carrying samples unrelated to the input, so a
-    #: non-zero count is the only thing separating a degraded result from a
-    #: clean one.
+    #: Samples a stage replaced with a finite in-domain one, keeping the
+    #: output finite and in range.
+    #:
+    #: A non-finite sample supplied by the caller is rejected before any
+    #: stage runs, so a replacement is always of a value a stage itself
+    #: produced.
+    #:
+    #: Only the true-peak limiters replace anything, so with the maximizer's
+    #: limiter and the loudness stage both disabled a zero here means no
+    #: stage was able to replace anything rather than that nothing needed
+    #: replacing.
     non_finite_substitution_count: int = 0
 
 
@@ -1578,5 +1590,6 @@ class MasteringChainStereoResult:
     loudness_target_limited: bool = False
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
     report: MasteringReport | None = None
-    #: Aggregated over every stage the chain ran and over both channels.
+    #: See :class:`MasteringChainResult` for field semantics. Aggregated over
+    #: both channels.
     non_finite_substitution_count: int = 0

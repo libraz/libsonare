@@ -211,18 +211,18 @@ export interface MasteringResult {
   loudnessTargetLimited?: boolean;
   latencySamples?: number;
   /**
-   * Non-finite input samples a processor replaced with a finite in-domain one.
+   * Samples the named processor replaced with a finite in-domain one,
+   * keeping the output finite and in range.
    *
-   * Advisory telemetry, and the only thing that separates a degraded result
-   * from a clean one. A processor that meets a non-finite sample substitutes an
-   * in-domain value for it — silence or full scale at an inter-sample-peak
-   * limiter, an infinity folded onto the ceiling at a sample-domain one — so
-   * `samples` comes back finite, in range and free of any error while carrying
-   * values that are not a function of the input. This count is what says so.
+   * A non-finite sample supplied by the caller is rejected before the
+   * processor runs, so a replacement is always of a value the processor
+   * itself produced.
    *
-   * Zero means no substitution occurred and the output is a function of the
-   * input throughout. The counter saturates rather than wrapping, because a
-   * wrapped total could read as the one value zero is reserved for.
+   * Whether this can be non-zero depends on which processor was named: one
+   * that does not substitute reports zero because it has nothing to replace
+   * with, not because nothing needed replacing. The counter saturates rather
+   * than wrapping, because a wrapped total could read as the one value zero
+   * is reserved for.
    *
    * @example
    * ```ts
@@ -695,12 +695,16 @@ export interface MasteringChainResult {
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
   /**
-   * Non-finite input samples a stage replaced with a finite in-domain one,
-   * aggregated over every stage the chain ran. See
-   * {@link MasteringResult.nonFiniteSubstitutionCount} for what a non-zero
-   * count says about the audio; zero means no stage substituted a sample.
+   * Samples a stage replaced with a finite in-domain one, keeping the
+   * output finite and in range.
    *
-   * Aggregated, so it does not identify which stage substituted. Run the stages
+   * A non-finite sample supplied by the caller is rejected before any stage
+   * runs, so a replacement is always of a value a stage itself produced.
+   *
+   * Only the true-peak limiters replace anything, so with the maximizer's
+   * limiter and the loudness stage both disabled a zero here means no stage
+   * was able to replace anything rather than that nothing needed replacing.
+   * Aggregated, so it does not identify which one substituted; run a limiter
    * individually through {@link masteringProcess} to attribute a non-zero count.
    */
   nonFiniteSubstitutionCount: number;
@@ -722,9 +726,8 @@ export interface MasteringChainStereoResult {
   outputLra: number;
   loudnessTargetLimited: boolean;
   /**
-   * See {@link MasteringChainResult.nonFiniteSubstitutionCount}. Aggregated over
-   * both channels as well as over every stage, so it does not identify which
-   * channel substituted.
+   * See {@link MasteringChainResult.nonFiniteSubstitutionCount}. Aggregated
+   * over both channels, so it does not identify which channel substituted.
    */
   nonFiniteSubstitutionCount: number;
   stageGainReductions: StageGainReduction[];

@@ -56,10 +56,13 @@ typedef struct {
   int latency_samples;
   /// Non-zero when the true-peak ceiling prevented reaching target_lufs.
   int loudness_target_limited;
-  /// Non-finite input samples a processor replaced with a finite in-domain one.
-  /// The output is then finite, in range and error-free while carrying samples
-  /// unrelated to the input, so a nonzero count is the only thing separating a
-  /// degraded result from a clean one. Zero means no substitution occurred.
+  /// Samples a stage replaced with a finite in-domain one, keeping the output
+  /// finite and in range. A non-finite sample supplied by the caller is
+  /// rejected before any stage runs, so a replacement is always of a value a
+  /// stage itself produced.
+  ///
+  /// Which stages can contribute depends on the call that filled this result,
+  /// so what a zero means is stated on each of them rather than here.
   uint32_t non_finite_substitution_count;
 } SonareMasteringResult;
 
@@ -155,9 +158,14 @@ typedef struct {
   size_t stage_gain_reductions_count;
   /// Aggregated before/after measurements for UI and artifact reporting.
   SonareMasteringReport report;
-  /// See @c SonareMasteringResult::non_finite_substitution_count. Aggregated
-  /// over every stage the chain ran, so a caller learns a substitution happened
-  /// without having to ask which stage produced it.
+  /// Samples a stage replaced with a finite in-domain one, keeping the output
+  /// finite and in range. A non-finite sample supplied by the caller is
+  /// rejected before any stage runs, so a replacement is always of a value a
+  /// stage itself produced.
+  ///
+  /// Only the true-peak limiters replace anything, so with the maximizer's
+  /// limiter and the loudness stage both disabled a zero here means no stage
+  /// was able to replace anything rather than that nothing needed replacing.
   uint32_t non_finite_substitution_count;
 } SonareMasteringChainResult;
 
@@ -188,15 +196,24 @@ typedef struct {
   uint32_t non_finite_substitution_count;
 } SonareMasteringChainStereoResult;
 
+/// @details This call always runs exactly one true-peak limiter, so
+///   @ref SonareMasteringResult::non_finite_substitution_count is non-zero
+///   only when that limiter had a non-finite sample to replace.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out);
+/// @details @ref SonareMasteringResult::non_finite_substitution_count here:
+///   whether this can be non-zero depends on which processor was named. One
+///   that does not substitute reports zero because it has nothing to replace
+///   with, not because nothing needed replacing.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_processor(const char* processor_name, const float* samples,
                                              size_t length, int sample_rate,
                                              const SonareMasteringParam* params, size_t param_count,
                                              SonareMasteringResult* out);
+/// @details See @c sonare_mastering_apply_processor for
+///   @c non_finite_substitution_count semantics.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_stereo_result.
 SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, const float* left,
                                                     const float* right, size_t length,
@@ -450,6 +467,10 @@ const char* sonare_mastering_insert_param_names(const char* name);
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
 
+/// @details @ref SonareMasteringResult::non_finite_substitution_count here:
+///   whether this can be non-zero depends on which processor was named. One
+///   that does not substitute reports zero because it has nothing to replace
+///   with, not because nothing needed replacing.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
                                                   const float* reference, size_t length,
@@ -462,6 +483,8 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor_name, co
 /// source; the underlying match primitives consume each buffer at its own
 /// length. @ref sonare_mastering_apply_pair_processor delegates here with
 /// reference_length == length.
+/// @details See @c sonare_mastering_apply_pair_processor for
+///   @c non_finite_substitution_count semantics.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_pair_processor_ex(
     const char* processor_name, const float* source, size_t source_length, const float* reference,

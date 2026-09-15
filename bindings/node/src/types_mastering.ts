@@ -803,13 +803,16 @@ export interface MasteringResult {
   loudnessTargetLimited?: boolean;
   latencySamples?: number;
   /**
-   * Input samples a processor replaced with a finite in-domain value because
-   * they were not finite.
+   * Samples the named processor replaced with a finite in-domain one,
+   * keeping the output finite and in range.
    *
-   * Advisory telemetry, and the only thing that separates a degraded result
-   * from a clean one: the substitution leaves the output finite, in range and
-   * free of any error while carrying samples that are not a function of what
-   * you supplied. `0` means every output sample was computed from the input.
+   * A non-finite sample supplied by the caller is rejected before the
+   * processor runs, so a replacement is always of a value the processor
+   * itself produced.
+   *
+   * Whether this can be non-zero depends on which processor was named: one
+   * that does not substitute reports zero because it has nothing to replace
+   * with, not because nothing needed replacing.
    *
    * @example
    * ```ts
@@ -833,10 +836,8 @@ export interface MasteringStereoResult {
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
   /**
-   * Input samples a processor replaced with a finite in-domain value because
-   * they were not finite, summed over both channels. See
-   * {@link MasteringResult.nonFiniteSubstitutionCount} for what a non-zero
-   * count means.
+   * See {@link MasteringResult.nonFiniteSubstitutionCount}. Summed over both
+   * channels.
    */
   nonFiniteSubstitutionCount: number;
 }
@@ -1274,13 +1275,15 @@ export interface MasteringChainResult {
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
   /**
-   * Input samples a chain stage replaced with a finite in-domain value because
-   * they were not finite, aggregated over every stage the chain ran.
+   * Samples a stage replaced with a finite in-domain one, keeping the
+   * output finite and in range.
    *
-   * Advisory telemetry, and the only thing that separates a degraded result
-   * from a clean one: the substitution leaves the output finite, in range and
-   * free of any error while carrying samples that are not a function of what
-   * you supplied. `0` means every output sample was computed from the input.
+   * A non-finite sample supplied by the caller is rejected before any stage
+   * runs, so a replacement is always of a value a stage itself produced.
+   *
+   * Only the true-peak limiters replace anything, so with the maximizer's
+   * limiter and the loudness stage both disabled a zero here means no stage
+   * was able to replace anything rather than that nothing needed replacing.
    *
    * @example
    * ```ts
@@ -1308,7 +1311,7 @@ export interface MasteringChainStereoResult {
   outputTruePeakDbtp: number;
   outputLra: number;
   loudnessTargetLimited: boolean;
-  /** Aggregated over every stage the chain ran and over both channels. */
+  /** See {@link MasteringChainResult} for field semantics. Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
   stageGainReductions: StageGainReduction[];
   report: MasteringReport;

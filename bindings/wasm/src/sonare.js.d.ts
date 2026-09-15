@@ -621,7 +621,16 @@ export interface WasmMasteringResult {
   appliedGainDb: number;
   loudnessTargetLimited?: boolean;
   latencySamples?: number;
-  /** Non-finite input samples a processor replaced with a finite in-domain one. */
+  /**
+   * Samples the named processor replaced with a finite in-domain one,
+   * keeping the output finite and in range. A non-finite sample supplied by
+   * the caller is rejected before the processor runs, so a replacement is
+   * always of a value the processor itself produced.
+   *
+   * Whether this can be non-zero depends on which processor was named: one
+   * that does not substitute reports zero because it has nothing to replace
+   * with, not because nothing needed replacing.
+   */
   nonFiniteSubstitutionCount: number;
 }
 
@@ -661,6 +670,19 @@ export interface WasmMasteringChainResult extends WasmMasteringResult {
   outputTruePeakDbtp: number;
   outputLra: number;
   loudnessTargetLimited: boolean;
+  /**
+   * Samples a stage replaced with a finite in-domain one, keeping the
+   * output finite and in range. A non-finite sample supplied by the caller
+   * is rejected before any stage runs, so a replacement is always of a
+   * value a stage itself produced.
+   *
+   * Only the true-peak limiters replace anything, so with the maximizer's
+   * limiter and the loudness stage both disabled a zero here means no
+   * stage was able to replace anything rather than that nothing needed
+   * replacing. Overrides the inherited {@link WasmMasteringResult} doc,
+   * which describes a single named processor rather than a chain.
+   */
+  nonFiniteSubstitutionCount: number;
   stageGainReductions: WasmStageGainReduction[];
   report: WasmMasteringReport;
 }
@@ -676,7 +698,7 @@ export interface WasmMasteringStereoChainResult {
   outputTruePeakDbtp: number;
   outputLra: number;
   loudnessTargetLimited: boolean;
-  /** Aggregated over every stage the chain ran and over both channels. */
+  /** See {@link WasmMasteringChainResult} for field semantics. Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
   stageGainReductions: WasmStageGainReduction[];
   report: WasmMasteringReport;

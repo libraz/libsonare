@@ -37,9 +37,14 @@ struct MonoAudioResult {
   /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
   int latency_samples = 0;
-  /// Non-finite samples this call's processors replaced with a finite in-domain
-  /// one, so the output is finite and in range while carrying samples unrelated
-  /// to the input. Per call: the processors are built per call.
+  /// Samples a stage replaced with a finite in-domain one, keeping the output
+  /// finite and in range. A non-finite sample supplied by the caller is
+  /// rejected before any stage runs, so a replacement is always of a value a
+  /// stage itself produced. Per call: the processors are built per call.
+  ///
+  /// Which stages can contribute depends on the call that filled this result
+  /// (@ref MonoResult vs. @ref MonoChainResult), so what a zero means is
+  /// stated on each of them rather than here.
   std::uint32_t non_finite_substitution_count = 0;
 };
 
