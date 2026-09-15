@@ -62,6 +62,23 @@ LufsResult lufs(const Audio& audio, const LufsConfig& config, std::vector<float>
 
 LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, int sample_rate,
                             const LufsConfig& config = {});
+
+/// @brief `lufs_interleaved` that also yields the two series the measurement built.
+/// @param momentary_out Receives the per-block momentary (400 ms) loudness in LUFS;
+///        may be null.
+/// @param short_term_out Receives the per-block short-term (3 s) loudness in LUFS;
+///        may be null.
+/// @details Both series fall out of the same K-weighting pass the scalars are
+///          reduced from, so a caller needing them pays for one pass instead of
+///          three. The blocks carry the BS.1770-4 channel sum, which the mono
+///          @ref momentary_lufs / @ref short_term_lufs cannot express: summing is
+///          over the K-weighted per-channel block energies, not over per-channel
+///          loudness in dB. For one channel the series are identical to those
+///          meters element for element.
+LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, int sample_rate,
+                            const LufsConfig& config, std::vector<float>* momentary_out,
+                            std::vector<float>* short_term_out);
+
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config = {});
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config = {});
 

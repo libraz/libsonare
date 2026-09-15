@@ -322,6 +322,36 @@ void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* r
 SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
                                     int sample_rate, SonareLufsResult* out);
 
+/// @brief Per-block momentary and short-term LUFS time series for interleaved
+///        multi-channel input, measured with BS.1770-4 channel summing.
+/// @details The mono @ref sonare_momentary_lufs / @ref sonare_short_term_lufs
+///          measure one channel each; a caller cannot recover this result from
+///          them, because the standard sums the K-weighted per-channel block
+///          energies rather than mixing per-channel loudness in dB. Both series
+///          come out of a single K-weighting pass, so asking for the pair costs
+///          one pass rather than two. For @p channels == 1 they are identical to
+///          the mono meters element for element.
+/// @param samples Interleaved input buffer holding @p frames * @p channels values.
+/// @param frames Number of sample frames (per-channel length); must be > 0.
+/// @param channels Channel count (must be > 0).
+/// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
+///        offline-input policy), not merely positive.
+/// @param out_momentary Receives the 400 ms series; free with
+///        @ref sonare_free_floats. May be null to skip the series, in which case
+///        @p out_momentary_length must be null too.
+/// @param out_momentary_length Receives the 400 ms series length.
+/// @param out_short_term Receives the 3 s series; free with
+///        @ref sonare_free_floats. May be null to skip the series, in which case
+///        @p out_short_term_length must be null too.
+/// @param out_short_term_length Receives the 3 s series length.
+/// @return SONARE_ERROR_INVALID_PARAMETER if either pointer/length pair has
+///         exactly one null member. A signal shorter than a window yields an
+///         empty series (null pointer, zero length), not an error.
+SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, int channels,
+                                           int sample_rate, float** out_momentary,
+                                           size_t* out_momentary_length, float** out_short_term,
+                                           size_t* out_short_term_length);
+
 /// @brief EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer.
 /// @details Multi-channel signals are not accepted here; use
 ///          @ref sonare_lufs_interleaved for a multi-channel measurement.

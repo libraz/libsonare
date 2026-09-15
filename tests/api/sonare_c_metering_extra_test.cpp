@@ -1,6 +1,7 @@
 /// @file sonare_c_metering_extra_test.cpp
 /// @brief C API tests for the multi-channel / standards-compliant LUFS
-///        extensions (sonare_lufs_interleaved, sonare_ebur128_loudness_range),
+///        extensions (sonare_lufs_interleaved, sonare_lufs_series_interleaved,
+///        sonare_ebur128_loudness_range),
 ///        the extended true-peak oversample-factor validation (factor 16
 ///        accepted, non-power-of-two rejected), and sonare_metering_spectrum_frame's
 ///        windowed copy, windowed non-finite scan and reused FFT plan against the
@@ -93,6 +94,125 @@ TEST_CASE("sonare_lufs_interleaved", "[c_api]") {
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_lufs_interleaved(samples.data(), samples.size(), 2, 0, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_lufs_series_interleaved", "[c_api][metering][lufs]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> mono = generate_sine(440.0f, kSampleRate, 5.0f);
+
+  SECTION("one channel reproduces the mono series entry points") {
+    float* momentary = nullptr;
+    size_t momentary_length = 0;
+    float* short_term = nullptr;
+    size_t short_term_length = 0;
+    REQUIRE(sonare_lufs_series_interleaved(mono.data(), mono.size(), 1, kSampleRate, &momentary,
+                                           &momentary_length, &short_term,
+                                           &short_term_length) == SONARE_OK);
+
+    float* expect_momentary = nullptr;
+    size_t expect_momentary_length = 0;
+    float* expect_short_term = nullptr;
+    size_t expect_short_term_length = 0;
+    REQUIRE(sonare_momentary_lufs(mono.data(), mono.size(), kSampleRate, &expect_momentary,
+                                  &expect_momentary_length) == SONARE_OK);
+    REQUIRE(sonare_short_term_lufs(mono.data(), mono.size(), kSampleRate, &expect_short_term,
+                                   &expect_short_term_length) == SONARE_OK);
+
+    // Element for element: one channel carries unit weight, so the summed path
+    // lands on the same block energies the mono meters compute.
+    REQUIRE(momentary_length == expect_momentary_length);
+    REQUIRE(short_term_length == expect_short_term_length);
+    REQUIRE(momentary_length > 0);
+    REQUIRE(short_term_length > 0);
+    for (size_t i = 0; i < momentary_length; ++i) {
+      CHECK(momentary[i] == expect_momentary[i]);
+    }
+    for (size_t i = 0; i < short_term_length; ++i) {
+      CHECK(short_term[i] == expect_short_term[i]);
+    }
+
+    sonare_free_floats(expect_short_term);
+    sonare_free_floats(expect_momentary);
+    sonare_free_floats(short_term);
+    sonare_free_floats(momentary);
+  }
+
+  SECTION("stereo sums channel energies rather than averaging loudness in dB") {
+    // Duplicating the channel doubles the summed energy, so the series moves by
+    // 10*log10(2). An implementation that averaged per-channel loudness, or that
+    // downmixed to (L+R)/2, would leave it where the mono reading is.
+    const std::vector<float> stereo = interleave_stereo(mono, mono);
+
+    float* mono_series = nullptr;
+    size_t mono_length = 0;
+    float* stereo_series = nullptr;
+    size_t stereo_length = 0;
+    REQUIRE(sonare_lufs_series_interleaved(mono.data(), mono.size(), 1, kSampleRate, nullptr,
+                                           nullptr, &mono_series, &mono_length) == SONARE_OK);
+    REQUIRE(sonare_lufs_series_interleaved(stereo.data(), mono.size(), 2, kSampleRate, nullptr,
+                                           nullptr, &stereo_series, &stereo_length) == SONARE_OK);
+
+    REQUIRE(stereo_length == mono_length);
+    REQUIRE(mono_length > 0);
+    for (size_t i = 0; i < mono_length; ++i) {
+      CAPTURE(i, mono_series[i], stereo_series[i]);
+      CHECK(stereo_series[i] - mono_series[i] == Catch::Approx(3.0103f).margin(1e-3f));
+    }
+
+    sonare_free_floats(stereo_series);
+    sonare_free_floats(mono_series);
+  }
+
+  SECTION("each pointer and its length are required together") {
+    float* series = nullptr;
+    size_t length = 0;
+
+    CHECK(sonare_lufs_series_interleaved(mono.data(), mono.size(), 1, kSampleRate, &series, nullptr,
+                                         nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_lufs_series_interleaved(mono.data(), mono.size(), 1, kSampleRate, nullptr, &length,
+                                         nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_lufs_series_interleaved(mono.data(), mono.size(), 1, kSampleRate, nullptr, nullptr,
+                                         &series, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_lufs_series_interleaved(mono.data(), mono.size(), 1, kSampleRate, nullptr, nullptr,
+                                         nullptr, &length) == SONARE_ERROR_INVALID_PARAMETER);
+
+    // Both pairs omitted is a legal request for nothing, not an error.
+    CHECK(sonare_lufs_series_interleaved(mono.data(), mono.size(), 1, kSampleRate, nullptr, nullptr,
+                                         nullptr, nullptr) == SONARE_OK);
+  }
+
+  SECTION("a clip shorter than the short-term window yields an empty series") {
+    const std::vector<float> clip = generate_sine(440.0f, kSampleRate, 1.0f);
+    // Pre-set so an entry point that returned early without writing its outputs
+    // would be caught rather than read as an empty series.
+    float sentinel = 0.0f;
+    float* momentary = &sentinel;
+    size_t momentary_length = 99;
+    float* short_term = &sentinel;
+    size_t short_term_length = 99;
+    REQUIRE(sonare_lufs_series_interleaved(clip.data(), clip.size(), 1, kSampleRate, &momentary,
+                                           &momentary_length, &short_term,
+                                           &short_term_length) == SONARE_OK);
+
+    REQUIRE(momentary_length > 0);
+    REQUIRE(short_term == nullptr);
+    REQUIRE(short_term_length == 0);
+    sonare_free_floats(momentary);
+  }
+
+  SECTION("rejects the same invalid input as sonare_lufs_interleaved") {
+    float* series = nullptr;
+    size_t length = 0;
+    const auto call = [&](const float* samples, size_t frames, int channels, int sample_rate) {
+      return sonare_lufs_series_interleaved(samples, frames, channels, sample_rate, &series,
+                                            &length, nullptr, nullptr);
+    };
+
+    CHECK(call(nullptr, mono.size(), 1, kSampleRate) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(call(mono.data(), mono.size(), 0, kSampleRate) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(call(mono.data(), mono.size(), 1, 0) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(call(mono.data(), 0, 1, kSampleRate) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 

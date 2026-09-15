@@ -2,8 +2,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "metering/basic.h"
@@ -491,6 +493,192 @@ TEST_CASE("LUFS yields the short-term series it reduced to scalars", "[meter][lu
   REQUIRE(result.short_term_lufs == plain.short_term_lufs);
   REQUIRE(result.max_short_term_lufs == plain.max_short_term_lufs);
   REQUIRE(result.loudness_range == plain.loudness_range);
+}
+
+namespace {
+
+// Amplitude steps half way through, so both series vary and a reading taken off
+// the wrong blocks cannot hide behind a flat curve.
+std::vector<float> stepped_sine(int sample_rate, float duration_sec) {
+  std::vector<float> samples(static_cast<size_t>(static_cast<float>(sample_rate) * duration_sec));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float amplitude = i < samples.size() / 2 ? 0.1f : 0.5f;
+    samples[i] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t);
+  }
+  return samples;
+}
+
+// Deterministic white noise; a different `seed` gives an uncorrelated realization
+// at the same level.
+std::vector<float> lcg_noise(size_t count, uint32_t seed, float amplitude) {
+  std::vector<float> samples(count);
+  uint32_t state = seed;
+  for (size_t i = 0; i < count; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float unit = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    samples[i] = amplitude * (2.0f * unit - 1.0f);
+  }
+  return samples;
+}
+
+std::vector<float> interleave_pair(const std::vector<float>& left,
+                                   const std::vector<float>& right) {
+  std::vector<float> out(left.size() * 2);
+  for (size_t i = 0; i < left.size(); ++i) {
+    out[2 * i] = left[i];
+    out[2 * i + 1] = right[i];
+  }
+  return out;
+}
+
+// BS.1770-4 sums the K-weighted per-channel block energies. The -0.691 LUFS
+// offset cancels across the conversion, so the summed loudness of two unit-weight
+// channels is this function of their individual loudnesses exactly.
+float sum_two_channel_lufs(float left, float right) {
+  return 10.0f * std::log10(std::pow(10.0f, left / 10.0f) + std::pow(10.0f, right / 10.0f));
+}
+
+float max_finite(const std::vector<float>& values) {
+  float best = -std::numeric_limits<float>::infinity();
+  for (float value : values) {
+    if (std::isfinite(value)) best = std::max(best, value);
+  }
+  return best;
+}
+
+}  // namespace
+
+TEST_CASE("interleaved LUFS yields the two series it reduced to scalars", "[meter][lufs]") {
+  // Six seconds at 22.05 kHz runs the block accumulator past its chunk boundary,
+  // which the whole-signal filter the mono series meters use does not have.
+  constexpr int sample_rate = 22050;
+  const std::vector<float> samples = stepped_sine(sample_rate, 6.0f);
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  std::vector<float> momentary;
+  std::vector<float> short_term;
+  const auto result = metering::lufs_interleaved(samples.data(), samples.size(), 1, sample_rate, {},
+                                                 &momentary, &short_term);
+
+  SECTION("one channel reproduces the mono meters element for element") {
+    // Not within a tolerance: one channel carries unit weight, so the summed
+    // path must land on the same energies the mono meters compute, bit for bit.
+    const std::vector<float> expect_momentary = metering::momentary_lufs(audio);
+    const std::vector<float> expect_short_term = metering::short_term_lufs(audio);
+
+    REQUIRE(!momentary.empty());
+    REQUIRE(!short_term.empty());
+    REQUIRE(momentary.size() == expect_momentary.size());
+    REQUIRE(short_term.size() == expect_short_term.size());
+    for (size_t index = 0; index < momentary.size(); ++index) {
+      REQUIRE(momentary[index] == expect_momentary[index]);
+    }
+    for (size_t index = 0; index < short_term.size(); ++index) {
+      REQUIRE(short_term[index] == expect_short_term[index]);
+    }
+    REQUIRE(momentary.front() != momentary.back());
+    REQUIRE(short_term.front() != short_term.back());
+  }
+
+  SECTION("the scalars are the reduction of the returned series") {
+    // A series computed separately from the scalars would drift here first.
+    REQUIRE(result.max_momentary_lufs == max_finite(momentary));
+    REQUIRE(result.max_short_term_lufs == max_finite(short_term));
+    REQUIRE(result.momentary_lufs == momentary.back());
+    REQUIRE(result.short_term_lufs == short_term.back());
+  }
+
+  SECTION("a null out-parameter leaves the scalars unchanged") {
+    const auto plain =
+        metering::lufs_interleaved(samples.data(), samples.size(), 1, sample_rate, {});
+    REQUIRE(result.integrated_lufs == plain.integrated_lufs);
+    REQUIRE(result.momentary_lufs == plain.momentary_lufs);
+    REQUIRE(result.short_term_lufs == plain.short_term_lufs);
+    REQUIRE(result.max_momentary_lufs == plain.max_momentary_lufs);
+    REQUIRE(result.max_short_term_lufs == plain.max_short_term_lufs);
+    REQUIRE(result.loudness_range == plain.loudness_range);
+
+    std::vector<float> only_short_term;
+    metering::lufs_interleaved(samples.data(), samples.size(), 1, sample_rate, {}, nullptr,
+                               &only_short_term);
+    REQUIRE(only_short_term == short_term);
+  }
+}
+
+TEST_CASE("interleaved LUFS sums channel energies rather than averaging loudness",
+          "[meter][lufs]") {
+  constexpr int sample_rate = 22050;
+  constexpr size_t frames = static_cast<size_t>(sample_rate) * 4;
+  const std::vector<float> left = lcg_noise(frames, 12345u, 0.25f);
+
+  const auto series_of = [](const std::vector<float>& buffer, int channels) {
+    std::vector<float> momentary;
+    metering::lufs_interleaved(buffer.data(), buffer.size() / static_cast<size_t>(channels),
+                               channels, sample_rate, {}, &momentary, nullptr);
+    return momentary;
+  };
+
+  const std::vector<float> mono = series_of(left, 1);
+  REQUIRE(!mono.empty());
+
+  SECTION("two uncorrelated channels at one level read 3 dB above one of them") {
+    const std::vector<float> right = lcg_noise(frames, 987654321u, 0.25f);
+    const std::vector<float> mono_right = series_of(right, 1);
+    const std::vector<float> stereo = series_of(interleave_pair(left, right), 2);
+
+    REQUIRE(stereo.size() == mono.size());
+    REQUIRE(mono_right.size() == mono.size());
+    for (size_t index = 0; index < stereo.size(); ++index) {
+      CAPTURE(index, mono[index], mono_right[index], stereo[index]);
+      REQUIRE(std::isfinite(stereo[index]));
+      REQUIRE_THAT(stereo[index],
+                   WithinAbs(sum_two_channel_lufs(mono[index], mono_right[index]), 1e-3f));
+      // An implementation that measured each channel and averaged the results in
+      // dB would put this difference at 0 rather than at 10*log10(2).
+      REQUIRE_THAT(stereo[index] - 0.5f * (mono[index] + mono_right[index]),
+                   WithinAbs(3.0103f, 0.2f));
+    }
+  }
+
+  SECTION("two identical channels read 3 dB above the single channel") {
+    // Separates the energy sum from a downmix: summing the channels into one
+    // buffer would read 6 dB above mono here, averaging them 0 dB above.
+    const std::vector<float> stereo = series_of(interleave_pair(left, left), 2);
+
+    REQUIRE(stereo.size() == mono.size());
+    for (size_t index = 0; index < stereo.size(); ++index) {
+      CAPTURE(index, mono[index], stereo[index]);
+      REQUIRE_THAT(stereo[index] - mono[index], WithinAbs(3.0103f, 1e-3f));
+    }
+  }
+}
+
+TEST_CASE("interleaved LUFS series lengths follow the BS.1770-4 windows", "[meter][lufs]") {
+  constexpr int sample_rate = 48000;
+
+  const auto lengths = [](size_t frames) {
+    const std::vector<float> stereo(frames * 2, 0.25f);
+    std::vector<float> momentary;
+    std::vector<float> short_term;
+    metering::lufs_interleaved(stereo.data(), frames, 2, sample_rate, {}, &momentary, &short_term);
+    return std::pair<size_t, size_t>{momentary.size(), short_term.size()};
+  };
+
+  SECTION("complete windows only, at a 100 ms hop") {
+    // 5 s: momentary (240000 - 19200) / 4800 + 1, short-term (240000 - 144000) / 4800 + 1.
+    const auto [momentary, short_term] = lengths(static_cast<size_t>(sample_rate) * 5);
+    REQUIRE(momentary == 47);
+    REQUIRE(short_term == 21);
+  }
+
+  SECTION("a clip shorter than a window yields that window no blocks") {
+    // 2 s clears the 400 ms momentary window and not the 3 s short-term one.
+    const auto [momentary, short_term] = lengths(static_cast<size_t>(sample_rate) * 2);
+    REQUIRE(momentary == 17);
+    REQUIRE(short_term == 0);
+  }
 }
 
 TEST_CASE("LUFS momentary measures -23 LUFS sine within tolerance", "[meter][lufs]") {

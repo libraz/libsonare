@@ -335,10 +335,11 @@ void validate_config(const LufsConfig& config) {
   SONARE_CHECK(config.short_term_duration_sec > 0.0f, ErrorCode::InvalidParameter);
 }
 
-/// Whole measurement; `short_term_out`, when given, takes the short-term series
-/// the scalars are reduced from.
+/// Whole measurement; each out-parameter, when given, takes the series the
+/// scalars are reduced from.
 LufsResult measure_lufs(const float* samples, size_t frames, int channels, int sample_rate,
-                        const LufsConfig& config, std::vector<float>* short_term_out) {
+                        const LufsConfig& config, std::vector<float>* momentary_out,
+                        std::vector<float>* short_term_out) {
   validate_config(config);
   SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
@@ -351,7 +352,7 @@ LufsResult measure_lufs(const float* samples, size_t frames, int channels, int s
   // Momentary/short-term below stay strict (no measurement until a full window).
   // ITU-R BS.1770-4 Annex 2: momentary uses a fixed 75% overlap (100 ms hop @ 400 ms),
   // independent of `config.block_overlap` (which controls integrated gating density).
-  const std::vector<float> momentary = energies_to_lufs(blocks.momentary);
+  std::vector<float> momentary = energies_to_lufs(blocks.momentary);
   std::vector<float> short_term = energies_to_lufs(blocks.short_term);
 
   LufsResult result;
@@ -361,6 +362,7 @@ LufsResult measure_lufs(const float* samples, size_t frames, int channels, int s
   result.max_momentary_lufs = max_or_silence(momentary);
   result.max_short_term_lufs = max_or_silence(short_term);
   result.loudness_range = lra_from_short_term_blocks(short_term);
+  if (momentary_out != nullptr) *momentary_out = std::move(momentary);
   if (short_term_out != nullptr) *short_term_out = std::move(short_term);
   return result;
 }
@@ -372,12 +374,20 @@ LufsResult lufs(const Audio& audio, const LufsConfig& config) {
 }
 
 LufsResult lufs(const Audio& audio, const LufsConfig& config, std::vector<float>* short_term_out) {
-  return measure_lufs(audio.data(), audio.size(), 1, audio.sample_rate(), config, short_term_out);
+  return measure_lufs(audio.data(), audio.size(), 1, audio.sample_rate(), config, nullptr,
+                      short_term_out);
 }
 
 LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, int sample_rate,
                             const LufsConfig& config) {
-  return measure_lufs(samples, frames, channels, sample_rate, config, nullptr);
+  return measure_lufs(samples, frames, channels, sample_rate, config, nullptr, nullptr);
+}
+
+LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, int sample_rate,
+                            const LufsConfig& config, std::vector<float>* momentary_out,
+                            std::vector<float>* short_term_out) {
+  return measure_lufs(samples, frames, channels, sample_rate, config, momentary_out,
+                      short_term_out);
 }
 
 float ebur128_loudness_range(const Audio& audio) {
