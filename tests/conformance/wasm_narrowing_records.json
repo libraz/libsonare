@@ -142,7 +142,7 @@
       {
         "name": "extent_or_size",
         "parameter_pattern": ".",
-        "count": 477,
+        "count": 479,
         "status": "open",
         "defect": "wraps",
         "selects": "a different analysis: another sample rate, FFT size, hop, frame count or matrix shape",

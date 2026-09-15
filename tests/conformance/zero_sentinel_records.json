@@ -190,18 +190,6 @@
       "reason": "Decomposition mask exponent; core response not driven."
     },
     {
-      "file": "src/c_api/sonare_c_engine_capture.cpp",
-      "value": "node.num_ports",
-      "measured": "no",
-      "reason": "Port count derived from the spec when absent; core response to a negative not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_engine_clips.cpp",
-      "value": "clip.length_samples",
-      "measured": "no",
-      "reason": "0 documents 'to the end of the source'; core response to a negative length not driven."
-    },
-    {
       "file": "src/c_api/sonare_c_engine_render.cpp",
       "value": "options->dither_bits",
       "measured": "no",
@@ -302,12 +290,6 @@
       "value": "f",
       "measured": "yes",
       "reason": "A negative octaveFraction is refused explicitly in front of the filter, and the value is read through the checked integer reader."
-    },
-    {
-      "file": "src/wasm/bindings/realtime/processing.cpp",
-      "value": "requested_ports",
-      "measured": "no",
-      "reason": "Port count derived from the channel count when absent; core response to a negative not driven."
     }
   ]
 }
