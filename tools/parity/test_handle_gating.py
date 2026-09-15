@@ -74,8 +74,8 @@ def test_genuine_handle_gap_is_active() -> None:
 
 
 def test_handle_op_covered_by_method_is_silent() -> None:
-    """The same op, exposed as a class method (prefix-stripped), is covered."""
-    rep = _report(_c("engine_set_tempo"), _py(methods={"set_tempo": "Engine"}))
+    """The same op, exposed on the handle's own class, is covered."""
+    rep = _report(_c("engine_set_tempo"), _py(methods={"set_tempo": "RealtimeEngine"}))
     assert ("engine_set_tempo", "python") not in _active(rep), _active(rep)
 
 
@@ -92,6 +92,40 @@ def test_project_op_requires_a_project_method() -> None:
         _py(methods={"clip_count": "Project"}),
     )
     assert ("project_clip_count", "python") not in _active(covered), _active(covered)
+
+
+def test_every_handle_prefix_requires_its_own_class() -> None:
+    """The class scoping holds for every mapped prefix, not just ``project_``.
+
+    Ranging over the map is the point: a prefix added later without a class, or
+    with the wrong one, is what this catches — the rule is only as good as the
+    set it covers.
+    """
+    for prefix, cls in compare._HANDLE_FULL_PREFIXES:
+        key = f"{prefix}probe_op"
+        foreign = _report(_c(key), _py(methods={"probe_op": "UnrelatedHandle"}))
+        assert (key, "python") in _active(foreign), (prefix, _active(foreign))
+
+        own = _report(_c(key), _py(methods={"probe_op": cls}))
+        assert (key, "python") not in _active(own), (prefix, _active(own))
+
+
+def test_handle_prefixes_name_a_class_each_facade_declares() -> None:
+    """Every mapped class name is one the real facades actually declare.
+
+    A misspelled class silently scopes to the empty set, which reads as a whole
+    handle's worth of coverage gaps rather than as a typo.
+    """
+    repo = _HERE.parent.parent
+    if not (repo / "include").exists():
+        return  # not in the libsonare tree; skip
+    import check_parity
+
+    for surface in ("python", "node", "wasm"):
+        ex = check_parity._EXTRACTORS[surface](repo)
+        declared = {f.raw_name.split(".", 1)[0] for f in ex.functions if "." in f.raw_name}
+        for prefix, cls in compare._HANDLE_FULL_PREFIXES:
+            assert cls in declared, (surface, prefix, cls)
 
 
 def test_handle_op_covered_by_alias_is_silent() -> None:
@@ -138,9 +172,11 @@ def test_alias_does_not_match_unrelated_member() -> None:
     ``eq_set_sidechain`` is credited by ``set_sidechain_mono``/``_stereo`` only;
     a facade that exposes some other ``set_*`` must still fail the gate.
     """
-    rep = _report(_c("eq_set_sidechain"), _py(methods={"set_gain": "Eq"}))
+    rep = _report(_c("eq_set_sidechain"), _py(methods={"set_gain": "StreamingEqualizer"}))
     assert ("eq_set_sidechain", "python") in _active(rep), _active(rep)
-    rep_ok = _report(_c("eq_set_sidechain"), _py(methods={"set_sidechain_mono": "Eq"}))
+    rep_ok = _report(
+        _c("eq_set_sidechain"), _py(methods={"set_sidechain_mono": "StreamingEqualizer"})
+    )
     assert ("eq_set_sidechain", "python") not in _active(rep_ok), _active(rep_ok)
 
 

@@ -115,33 +115,39 @@ HANDLE_PREFIX_FREEFN_EXCEPTIONS = (
     "voice_change",
 )
 
-# Full handle-instance prefixes. A C handle key (e.g. ``mixer_add_bus``) carries
-# the handle type as a leading token group; the facades expose the same op as a
-# bare class method (``Mixer.add_bus`` -> key ``add_bus``). To credit coverage we
-# strip the longest matching prefix and retry the tail against the facade's
-# method/free keys. Ordered LONGEST-FIRST so multi-token prefixes win over their
-# single-token shadows (``stream_analyzer_`` before ``stream_``-style tokens).
+# Full handle-instance prefixes, each paired with the facade class that owns the
+# op. A C handle key (e.g. ``mixer_add_bus``) carries the handle type as a leading
+# token group; the facades expose the same op as a bare class method
+# (``Mixer.add_bus`` -> key ``add_bus``). To credit coverage we strip the longest
+# matching prefix and retry the tail against THAT class's methods plus the
+# surface's free functions, so an identically named method on an unrelated class
+# cannot stand in for a missing one. Ordered LONGEST-FIRST so multi-token prefixes
+# win over their single-token shadows (``stream_analyzer_`` before ``stream_``).
+# One class name serves every facade: Node, WASM and Python spell these classes
+# alike, and ``python_pyi`` flattens each mixin method onto the concrete class.
 _HANDLE_FULL_PREFIXES = (
-    "streaming_mastering_chain_",
-    "streaming_retune_",
-    "stream_analyzer_",
-    "realtime_voice_changer_",
-    "clip_page_provider_",
-    "engine_",
-    "mixer_",
-    "strip_",
-    "eq_",
-    "audio_",
-    "sample_bank_",
+    ("streaming_mastering_chain_", "StreamingMasteringChain"),
+    ("streaming_retune_", "StreamingRetune"),
+    ("stream_analyzer_", "StreamAnalyzer"),
+    ("realtime_voice_changer_", "RealtimeVoiceChanger"),
+    ("clip_page_provider_", "ClipPageProvider"),
+    ("engine_", "RealtimeEngine"),
+    ("mixer_", "Mixer"),
+    # A strip is addressed through its owning mixer; no facade exposes it as a
+    # type of its own, so ``strip_set_gain`` is ``Mixer.setStripGain``'s job.
+    ("strip_", "Mixer"),
+    ("eq_", "StreamingEqualizer"),
+    ("audio_", "Audio"),
+    ("sample_bank_", "SampleBank"),
     # SonarePolyphonicAnalysis handle. ``polyphonic_analysis_`` is listed ahead of the
     # shorter token so the destroy entry strips to a bare lifecycle key.
-    "polyphonic_analysis_",
-    "polyphonic_",
+    ("polyphonic_analysis_", "PolyphonicAnalysis"),
+    ("polyphonic_", "PolyphonicAnalysis"),
     # SonareProject handle: e.g. ``project_split_clip`` -> facade ``Project``
     # method ``split_clip`` / ``splitClip``. Ops renamed on the facade
     # (serialize -> to_json, deserialize -> from_json, create -> ctor) are
     # credited via ``_ALIAS_COVERAGE`` / ``_is_lifecycle_key`` below.
-    "project_",
+    ("project_", "Project"),
 )
 
 
@@ -181,6 +187,7 @@ _ALIAS_COVERAGE = {
     "audio_data": ("data", "get_data"),
     "audio_length": ("length", "get_length"),
     "audio_duration": ("duration", "get_duration"),
+    "audio_sample_rate": ("sample_rate", "get_sample_rate"),
     "engine_get_transport_state": ("transport_state",),
     "mixer_get_strip_count": ("strip_count",),
     "realtime_voice_changer_get_config": ("config", "config_json", "config_pod"),
@@ -278,6 +285,9 @@ _ALIAS_COVERAGE = {
     "engine_render_offline_ex": ("render_offline",),
     # Sidechain EQ -> the mono/stereo-specific setters the facades expose.
     "eq_set_sidechain": ("set_sidechain_mono", "set_sidechain_stereo"),
+    # The N-channel planar block processor, exposed by channel count for the same
+    # reason the sidechain setter above is.
+    "eq_process": ("process_mono", "process_stereo"),
     # Plural builtin-instrument bounce -> singular facade method (one or many).
     "project_bounce_with_builtin_instruments": ("bounce_with_builtin_instrument",),
     # Plural SF2-instrument bounce -> singular facade method (one or many).
@@ -430,6 +440,14 @@ def _class_method_keys(ex: Extraction | None, class_name: str) -> set[str]:
     return {f.key for f in ex.functions if f.raw_name.startswith(prefix)}
 
 
+def _handle_prefix(key: str) -> str | None:
+    """The handle prefix ``key`` carries, or None. First match wins (longest-first)."""
+    for prefix, _cls in _HANDLE_FULL_PREFIXES:
+        if key.startswith(prefix) and len(key) > len(prefix):
+            return prefix
+    return None
+
+
 def _free_keys(ex: Extraction | None) -> set[str]:
     """Canonical keys exposed as free functions rather than class members."""
     if ex is None:
@@ -483,8 +501,10 @@ def build_report(
 
     # Class-method keys per facade (for handle/class matching).
     method_keys = {s: _method_keys(extractions.get(s)) for s in selected}
-    project_method_keys = {
-        s: _class_method_keys(extractions.get(s), "Project") for s in selected
+    handle_class_keys = {
+        (prefix, s): _class_method_keys(extractions.get(s), cls)
+        for prefix, cls in _HANDLE_FULL_PREFIXES
+        for s in selected
     }
     free_keys = {s: _free_keys(extractions.get(s)) for s in selected}
 
@@ -501,17 +521,16 @@ def build_report(
         for s in selected:
             if s == "c":
                 continue
-            # Project handle reachability is class-specific. Without this rule,
-            # an unrelated class method with the same tail (notably
-            # RealtimeEngine.clipCount) can hide a missing Project method.
+            # Handle reachability is class-specific. Without this rule a method
+            # on an unrelated class, or a free function, stands in for a missing
+            # one on the handle's own class whenever the tails happen to agree.
+            prefix = _handle_prefix(key)
             candidate_methods = (
-                project_method_keys.get(s, set())
-                if key.startswith("project_")
-                else method_keys.get(s, set())
+                handle_class_keys[(prefix, s)] if prefix else method_keys.get(s, set())
             )
             candidate_symbols = (
                 candidate_methods | free_keys.get(s, set())
-                if key.startswith("project_")
+                if prefix
                 else candidate_methods | set(indexed.get(s, {}))
             )
             present_free = key in indexed.get(s, {})
@@ -520,14 +539,11 @@ def build_report(
             if not covered:
                 # Handle-instance C key (``mixer_add_bus``): the facade exposes
                 # the same op as a bare class method (``Mixer.add_bus`` -> key
-                # ``add_bus``), so the handle prefix is stripped there. Strip the
-                # longest matching handle prefix and retry the tail against this
-                # surface's method-keys AND free-function keys; a match means the
-                # op IS exposed -- covered, no finding.
-                for prefix in _HANDLE_FULL_PREFIXES:
-                    if key.startswith(prefix) and len(key) > len(prefix):
-                        covered = key[len(prefix) :] in candidate_symbols
-                        break
+                # ``add_bus``), so the handle prefix is stripped there. Retry the
+                # tail against the handle class's methods AND this surface's
+                # free-function keys; a match means the op IS exposed.
+                if prefix:
+                    covered = key[len(prefix) :] in candidate_symbols
             if not covered:
                 # Idiomatic rename: the capability is exposed under a different
                 # canonical name (verified alias). Credit it when any listed alias
