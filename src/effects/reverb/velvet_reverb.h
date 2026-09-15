@@ -77,6 +77,10 @@ class VelvetReverb : public rt::ProcessorBase {
   void build_table(std::vector<Tap>& taps, std::uint32_t seed_offset, int grid_ls, int n_seg,
                    int num_pulses, float decay_rate, double sr) const;
 
+  /// Returns the post filters to rest once a non-finite value has reached them,
+  /// once per block (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   VelvetReverbConfig config_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

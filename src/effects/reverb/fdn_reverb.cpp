@@ -6,6 +6,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::reverb {
 
@@ -96,6 +97,17 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
       left[i] = dry * in_l + wet * 0.5f * (out_l + out_r);
     }
   }
+  discard_non_finite();
+}
+
+void FdnReverb::discard_non_finite() noexcept {
+  bool discarded = discard_run_if_non_finite(state_.begin(), state_.end(), 0.0f);
+  discarded |= discard_run_if_non_finite(filt_state_.begin(), filt_state_.end(), 0.0f);
+  discarded |= dc_blocker_.discard_non_finite();
+  if (!discarded) return;
+  // Every line is fed by the state cell that reads it, so the poison
+  // recirculates instead of flowing out. The walk is O(line), recovery only.
+  for (auto& delay : delays_) delay.reset();
 }
 
 int FdnReverb::tail_samples() const noexcept {

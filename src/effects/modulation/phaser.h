@@ -44,6 +44,10 @@ class Phaser : public rt::ProcessorBase {
   float sweep_coeff(float lfo_value) const noexcept;
   float process_channel(float input, int channel, float coeff);
 
+  /// Returns the allpass sections to rest once a non-finite value has reached
+  /// them, once per block (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   PhaserConfig config_{};
   double sample_rate_ = 48000.0;
   /// [L, R] sweep oscillators, offset by a quarter cycle in reset() so the two

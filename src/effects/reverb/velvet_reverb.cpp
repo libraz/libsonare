@@ -6,6 +6,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::reverb {
 
@@ -195,6 +196,15 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
       left[i] = dry * in_l + wet * 0.5f * (wet_l + wet_r);
     }
   }
+  discard_non_finite();
+}
+
+void VelvetReverb::discard_non_finite() noexcept {
+  // The tap rings and the late convolver are fed by the input alone, so a
+  // non-finite sample leaves them within one tap span; only the post filters
+  // hold it for good.
+  discard_group_if_non_finite(shelf_state_l_, shelf_state_r_);
+  dc_blocker_.discard_non_finite();
 }
 
 int VelvetReverb::tail_samples() const noexcept {

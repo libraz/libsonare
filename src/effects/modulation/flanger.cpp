@@ -1,8 +1,10 @@
 #include "effects/modulation/flanger.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 namespace {
@@ -62,6 +64,7 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
     const float wet_l = delays_[0].process(in_l + fb * feedback_[0], delay_l);
     const float wet_r = delays_[1].process(in_r + fb * feedback_[1], delay_r);
     feedback_ = {wet_l, wet_r};
+    feedback_non_finite_ |= !std::isfinite(wet_l) || !std::isfinite(wet_r);
     if (stereo) {
       left[i] = dry * in_l + wet * wet_l;
       right[i] = dry * in_r + wet * wet_r;
@@ -71,6 +74,16 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
       left[i] = dry * in_l + wet * 0.5f * (wet_l + wet_r);
     }
   }
+  discard_non_finite();
+}
+
+void Flanger::discard_non_finite() noexcept {
+  if (!feedback_non_finite_) return;
+  feedback_non_finite_ = false;
+  discard_run_if_non_finite(feedback_.begin(), feedback_.end(), 0.0f);
+  // Each line is fed by the feedback cell that reads it, so the poison
+  // recirculates instead of flowing out. O(line), recovery only.
+  for (auto& delay : delays_) delay.reset();
 }
 
 bool Flanger::set_parameter(unsigned int param_id, float value) {
@@ -120,6 +133,7 @@ void Flanger::reset() {
   lfos_[0].reset(0.0);
   lfos_[1].reset(0.5);
   feedback_ = {0.0f, 0.0f};
+  feedback_non_finite_ = false;
 }
 
 }  // namespace sonare::effects::modulation

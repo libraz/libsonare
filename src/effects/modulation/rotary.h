@@ -52,6 +52,10 @@ class Rotary : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
+  /// Returns the crossover filter to rest once a non-finite value has reached
+  /// it, once per block (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   static constexpr float kCrossoverHz = 800.0f;
   static constexpr float kDrumRateRatio = 0.74f;  ///< bass rotor spins slower.
 

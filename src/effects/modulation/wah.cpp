@@ -49,6 +49,7 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
       channels[ch][i] = dry * in + wet * filters_[ch].process(in, fc, q);
     }
   }
+  for (auto& filter : filters_) filter.discard_non_finite();
 }
 
 void Wah::reset() {

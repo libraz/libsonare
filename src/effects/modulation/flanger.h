@@ -39,11 +39,20 @@ class Flanger : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
+  /// Returns the feedback path to rest once a non-finite value has reached it,
+  /// once per block (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   FlangerConfig config_{};
   double sample_rate_ = 48000.0;
   std::array<ModDelayLine, 2> delays_;
   std::array<Lfo, 2> lfos_;
   std::array<float, 2> feedback_{{0.0f, 0.0f}};
+  /// Set by process() when a delay tap came back non-finite, cleared by
+  /// discard_non_finite(). The poison is resident in the line rather than in a
+  /// cell -- a tap reads it for a sample or two per lap and the cell is finite
+  /// again by the end of the block -- so the block latches it as it passes.
+  bool feedback_non_finite_ = false;
 };
 
 }  // namespace sonare::effects::modulation

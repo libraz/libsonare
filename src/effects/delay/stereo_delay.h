@@ -42,11 +42,21 @@ class StereoDelay : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
+  /// Returns the feedback path and the parameter smoothers to rest once a
+  /// non-finite value has reached them, once per block (see
+  /// util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   StereoDelayConfig config_{};
   double sample_rate_ = 48000.0;
   std::array<modulation::ModDelayLine, 2> delays_;
   std::array<float, 2> delay_samples_{{0.0f, 0.0f}};
   std::array<float, 2> feedback_state_{{0.0f, 0.0f}};
+  /// Set by process() when a delay tap came back non-finite, cleared by
+  /// discard_non_finite(). The poison is resident in the line rather than in a
+  /// cell -- a tap reads it for a sample or two per lap and the cell is finite
+  /// again by the end of the block -- so the block latches it as it passes.
+  bool feedback_non_finite_ = false;
   float smoothed_feedback_ = 0.0f;
   float smoothed_dry_wet_ = 0.5f;
   float smoothed_ping_pong_ = 0.0f;

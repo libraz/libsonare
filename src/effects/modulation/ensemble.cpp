@@ -5,6 +5,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 
@@ -98,6 +99,13 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
       left[i] = dry * in_l + wet * 0.5f * (tone_state_[0] + tone_state_[1]);
     }
   }
+  discard_non_finite();
+}
+
+void Ensemble::discard_non_finite() noexcept {
+  // The tap delays are fed by the input alone, so a non-finite sample leaves
+  // them within one line length; the tone filter is where it would stay.
+  discard_run_if_non_finite(tone_state_.begin(), tone_state_.end(), 0.0f);
 }
 
 bool Ensemble::set_parameter(unsigned int param_id, float value) {

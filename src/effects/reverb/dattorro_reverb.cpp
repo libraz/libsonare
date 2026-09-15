@@ -6,6 +6,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::reverb {
 
@@ -301,6 +302,27 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
       left[i] = dry * in_l + wet * 0.5f * (out_l + out_r);
     }
   }
+  discard_non_finite();
+}
+
+void DattorroReverb::discard_non_finite() noexcept {
+  // The four cells are one cross-coupled tank; a rested damping cell in the
+  // half whose tail is poisoned is not half a tank.
+  if (!discard_group_if_non_finite(damp_l_, damp_r_, tail_l_, tail_r_)) return;
+  // The lines and allpasses upstream are the loop that feeds these cells --
+  // including the input diffusers, which recirculate their own output -- so the
+  // poison cycles back instead of flowing out. O(line), recovery only.
+  std::fill(pre_delay_buf_.begin(), pre_delay_buf_.end(), 0.0f);
+  pre_delay_index_ = 0;
+  for (auto& ap : in_ap_) ap.reset();
+  mod_ap_l_.reset();
+  mod_ap_r_.reset();
+  delay_l1_.reset();
+  delay_l2_.reset();
+  delay_r1_.reset();
+  delay_r2_.reset();
+  decay_ap_l_.reset();
+  decay_ap_r_.reset();
 }
 
 int DattorroReverb::tail_samples() const noexcept {

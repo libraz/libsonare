@@ -18,6 +18,12 @@ class DcBlocker : public rt::ProcessorBase {
   void reset() override;
   float process_sample(int channel, float sample);
 
+  /// @brief Returns the per-channel history to rest once a non-finite value has
+  /// reached it (see util/non_finite_state.h). process() applies this to its own
+  /// cells; an owner driving process_sample() applies it for this filter.
+  /// @return true when any channel was discarded.
+  bool discard_non_finite() noexcept;
+
   void set_pole(float pole) noexcept;
   float pole() const noexcept { return pole_; }
 

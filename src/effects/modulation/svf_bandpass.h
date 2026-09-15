@@ -13,6 +13,7 @@
 #include <cmath>
 
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 
@@ -27,6 +28,11 @@ class SvfBandpass {
     ic1_ = 0.0f;
     ic2_ = 0.0f;
   }
+
+  /// Returns the integrator pair to rest once a non-finite value has reached it
+  /// (see util/non_finite_state.h). The owning insert calls this once per block.
+  /// @return true when the pair was discarded.
+  bool discard_non_finite() noexcept { return ::sonare::discard_group_if_non_finite(ic1_, ic2_); }
 
   /// Process one sample with the given centre frequency (Hz) and resonance Q.
   /// The bandpass output is scaled to unity peak gain at resonance.

@@ -5,6 +5,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 
@@ -69,6 +70,21 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
       const float coeff_r = sweep_coeff(lfos_[1].process());
       const float in_r = right[i];
       right[i] = dry * in_r + wet * process_channel(in_r, 1, coeff_r);
+    }
+  }
+  discard_non_finite();
+}
+
+void Phaser::discard_non_finite() noexcept {
+  for (size_t ch = 0; ch < y1_.size(); ++ch) {
+    auto& x = x1_[ch];
+    auto& z = y1_[ch];
+    // A stage's input tap and output tap are one section, so either one being
+    // poisoned returns both.
+    if (discard_run_if_non_finite(z.begin(), z.end(), 0.0f) ||
+        discard_run_if_non_finite(x.begin(), x.end(), 0.0f)) {
+      std::fill(x.begin(), x.end(), 0.0f);
+      std::fill(z.begin(), z.end(), 0.0f);
     }
   }
 }

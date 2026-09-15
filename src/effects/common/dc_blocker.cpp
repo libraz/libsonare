@@ -5,6 +5,7 @@
 
 #include "mastering/dynamics/channel_limits.h"
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::common {
 
@@ -59,6 +60,17 @@ void DcBlocker::process(float* const* channels, int num_channels, int num_sample
     x1_[static_cast<size_t>(ch)] = x1;
     y1_[static_cast<size_t>(ch)] = y1;
   }
+  discard_non_finite();
+}
+
+bool DcBlocker::discard_non_finite() noexcept {
+  bool discarded = false;
+  for (size_t ch = 0; ch < y1_.size(); ++ch) {
+    // x1 is the delayed input of the same section, so one usable tap over a
+    // poisoned one is not half a filter.
+    discarded |= discard_group_if_non_finite(x1_[ch], y1_[ch]);
+  }
+  return discarded;
 }
 
 float DcBlocker::process_sample(int channel, float sample) {

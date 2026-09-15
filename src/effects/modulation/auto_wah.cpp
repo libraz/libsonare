@@ -5,6 +5,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/dsp_primitives.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 
@@ -60,6 +61,14 @@ void AutoWah::process(float* const* channels, int num_channels, int num_samples)
       channels[ch][i] = dry * in + wet * filters_[ch].process(in, fc, q);
     }
   }
+  discard_non_finite();
+}
+
+void AutoWah::discard_non_finite() noexcept {
+  // The follower rests at silence: it is a rectified level, and a sweep opened
+  // from anything else would be a filter position no input asked for.
+  discard_if_non_finite(envelope_, 0.0f);
+  for (auto& filter : filters_) filter.discard_non_finite();
 }
 
 void AutoWah::reset() {

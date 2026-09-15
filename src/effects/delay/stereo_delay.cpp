@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::delay {
 namespace {
@@ -74,6 +75,7 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
     const float delayed_l = delays_[0].process(feed_l, delay_samples_[0]);
     const float delayed_r = delays_[1].process(feed_r, delay_samples_[1]);
     feedback_state_ = {delayed_l, delayed_r};
+    feedback_non_finite_ |= !std::isfinite(delayed_l) || !std::isfinite(delayed_r);
     if (stereo) {
       left[i] = dry * in_l + wet * delayed_l;
       right[i] = dry * in_r + wet * delayed_r;
@@ -83,6 +85,22 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
       left[i] = dry * in_l + wet * 0.5f * (delayed_l + delayed_r);
     }
   }
+  discard_non_finite();
+}
+
+void StereoDelay::discard_non_finite() noexcept {
+  if (feedback_non_finite_) {
+    feedback_non_finite_ = false;
+    discard_run_if_non_finite(feedback_state_.begin(), feedback_state_.end(), 0.0f);
+    // Both lines are fed by the feedback cells that read them, so the poison
+    // recirculates instead of flowing out. O(line), recovery only.
+    for (auto& delay : delays_) delay.reset();
+  }
+  // A smoother rests at its target, not at zero: zero would mute the mix and
+  // drop the feedback for a smoothing time nobody asked for.
+  discard_if_non_finite(smoothed_feedback_, std::clamp(config_.feedback, 0.0f, 0.95f));
+  discard_if_non_finite(smoothed_dry_wet_, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  discard_if_non_finite(smoothed_ping_pong_, std::clamp(config_.ping_pong, 0.0f, 1.0f));
 }
 
 int StereoDelay::tail_samples() const noexcept {
@@ -113,6 +131,7 @@ void StereoDelay::reset() {
   delay_samples_ = {config_delay_samples(config_.delay_time_l_ms, sample_rate_),
                     config_delay_samples(config_.delay_time_r_ms, sample_rate_)};
   feedback_state_ = {0.0f, 0.0f};
+  feedback_non_finite_ = false;
   smoothed_feedback_ = std::clamp(config_.feedback, 0.0f, 0.95f);
   smoothed_dry_wet_ = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   smoothed_ping_pong_ = std::clamp(config_.ping_pong, 0.0f, 1.0f);

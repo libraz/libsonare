@@ -56,6 +56,10 @@ class Ensemble : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
+  /// Returns the tone filter to rest once a non-finite value has reached it,
+  /// once per block (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   EnsembleConfig config_{};
   double sample_rate_ = 48000.0;
   /// 3 taps x 2 channels.

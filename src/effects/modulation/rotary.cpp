@@ -5,6 +5,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 
@@ -80,6 +81,13 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
       channels[ch][i] = dry * in + wet * (horn + drum);
     }
   }
+  discard_non_finite();
+}
+
+void Rotary::discard_non_finite() noexcept {
+  // The rotor delay lines are fed by the crossover output alone, so a
+  // non-finite sample leaves them within one line length.
+  discard_run_if_non_finite(lp_state_.begin(), lp_state_.end(), 0.0f);
 }
 
 void Rotary::reset() {

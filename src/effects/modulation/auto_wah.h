@@ -45,6 +45,11 @@ class AutoWah : public rt::ProcessorBase {
  private:
   void update_coeffs();
 
+  /// Returns the envelope follower and the sweep filters to rest once a
+  /// non-finite value has reached them, once per block (see
+  /// util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   AutoWahConfig config_{};
   double sample_rate_ = 48000.0;
   float attack_coeff_ = 0.0f;

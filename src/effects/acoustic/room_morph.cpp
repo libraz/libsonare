@@ -7,6 +7,7 @@
 #include "acoustic/rir_synthesizer.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::effects::acoustic {
@@ -134,6 +135,10 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
         st.gain = gain_smooth_ * st.gain + (1.0f - gain_smooth_) * target_gain;
         d[i] *= st.gain;
       }
+      // Three floats per channel, once per block. The envelopes rest at silence
+      // and the smoothed gain at unity, which is this expander's bypass.
+      discard_group_if_non_finite(st.env, st.peak);
+      discard_if_non_finite(st.gain, 1.0f);
     }
   }
 

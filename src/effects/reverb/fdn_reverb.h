@@ -39,6 +39,10 @@ class FdnReverb : public rt::ProcessorBase {
   // decay / hf_damping config, the prepared delay lengths, and the sample rate.
   void update_absorption();
 
+  // Returns the network to rest once a non-finite value has reached it, once
+  // per block (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   FdnReverbConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;

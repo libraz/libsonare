@@ -92,6 +92,10 @@ class DattorroReverb : public rt::ProcessorBase {
     float read_at(size_t offset) const;
   };
 
+  /// Returns the tank to rest once a non-finite value has reached it, once per
+  /// block (see util/non_finite_state.h).
+  void discard_non_finite() noexcept;
+
   DattorroReverbConfig config_{};
   double sample_rate_ = 48000.0;
 
