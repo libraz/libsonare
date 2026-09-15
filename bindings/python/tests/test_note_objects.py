@@ -761,6 +761,73 @@ def test_split_note_rejects_an_out_of_range_index_and_a_frame_outside_the_note()
         assert split[2].frame_start == frame
 
 
+# Note indices past the largest ``size_t``, each with the index the C conversion
+# folds it to. The fold is what makes these the interesting inputs rather than a
+# merely huge index: every one lands on a live note in the three-note set above,
+# so each has a plausible SUCCESSFUL outcome waiting for it and a
+# refusal-shaped assertion alone cannot see that.
+WRAPPING_NOTE_INDICES = [(2**64, 0), (2**64 + 1, 1), (2**64 + 2, 2), (2 * 2**64, 0)]
+
+
+def _spans(notes: Sequence[libsonare.NoteObject]) -> list[tuple[int, int]]:
+    return [(note.frame_start, note.frame_end) for note in notes]
+
+
+def test_split_note_refuses_an_index_past_size_t_rather_than_splitting_the_folded_one() -> None:
+    """Python integers are unbounded, so the range check has to be the binding's.
+
+    The negative half is refused by the facade's own guard; the ceiling is the
+    conversion's, and without it an index past ``size_t`` reaches the core as a
+    small one. The refusal is anchored on the argument it names, because the
+    facade's other refusals name ``frame`` and ``voiced`` and an unanchored
+    match would accept either in place of this one.
+    """
+    audio, f0_hz, voiced, notes = _gapped_notes()
+
+    # Positive control: two legitimate indices split different notes.
+    first = libsonare.split_note(audio, SR, f0_hz, FRAME_RATE, notes, 0, 4, voiced=voiced)
+    second = libsonare.split_note(audio, SR, f0_hz, FRAME_RATE, notes, 1, 13, voiced=voiced)
+    assert _spans(first) != _spans(second)
+
+    for value, _folds_to in WRAPPING_NOTE_INDICES:
+        with pytest.raises(SonareValueError, match=r"^index must be"):
+            libsonare.split_note(audio, SR, f0_hz, FRAME_RATE, notes, value, 13, voiced=voiced)
+
+    # What makes 2**64 + 1 the interesting value rather than a merely huge one:
+    # it folds to 1, and index 1 is a legal split with a result waiting. A
+    # dropped range check does not raise, it returns this -- byte for byte the
+    # right answer to a question the caller never asked.
+    assert _spans(second) == [(0, 8), (10, 13), (13, 17), (19, 24)]
+
+
+def test_merge_notes_refuses_a_run_past_size_t_rather_than_joining_the_folded_one() -> None:
+    """Both ends are converted, so each is asserted by the argument it names.
+
+    ``first`` and ``last`` are separate arguments of one call and only the first
+    bad one is reported, so a refusal matched loosely would let one stand in for
+    the other.
+    """
+    audio, f0_hz, voiced, notes = _gapped_notes()
+
+    # Positive control: two legitimate runs join different notes.
+    low = libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 0, 1, voiced=voiced)
+    high = libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 1, 2, voiced=voiced)
+    assert _spans(low) != _spans(high)
+
+    for value, _folds_to in WRAPPING_NOTE_INDICES:
+        with pytest.raises(SonareValueError, match=r"^first must be"):
+            libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, value, 1, voiced=voiced)
+        with pytest.raises(SonareValueError, match=r"^last must be"):
+            libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 0, value, voiced=voiced)
+
+    # The silent path a refusal-shaped assertion cannot reach: 2**64 and
+    # 2**64 + 1 fold to 0 and 1, the run the control merged, so an unchecked
+    # pair returns that result rather than failing.
+    assert _spans(low) == [(0, 17), (19, 24)]
+    with pytest.raises(SonareValueError, match=r"^first must be"):
+        libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 2**64, 2**64 + 1, voiced=voiced)
+
+
 # --- merge_notes ------------------------------------------------------------
 
 

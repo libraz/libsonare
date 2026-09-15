@@ -1171,7 +1171,11 @@ def decompose_note_pitch(
 
 
 def _note_set_index(fn_name: str, arg_name: str, value: int) -> int:
-    """Reject a negative note index before c_size_t wraps it into a huge one."""
+    """Reject a negative note index before ``size_t`` wraps it into a huge one.
+
+    The sign half only. Every call site hands the result to :func:`_to_c_size_t`,
+    which carries the ceiling -- an index past it folds onto a live note.
+    """
     if isinstance(value, bool) or not isinstance(value, Integral):
         raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
     if int(value) < 0:
@@ -1293,8 +1297,9 @@ def split_note(
 
     Raises:
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
-            either has a different length than ``f0_hz``, if ``index`` is
-            negative, or if a buffer is empty or non-finite.
+            either has a different length than ``f0_hz``, if ``index`` is not a
+            non-negative integer a ``size_t`` holds, or if a buffer is empty or
+            non-finite.
         SonareError: If the C call rejects the request (e.g. a frame on or
             outside the note's own boundaries).
 
@@ -1316,7 +1321,7 @@ def split_note(
             segmentation_threshold_cents, min_note_ms, reference_hz, voiced_threshold
         ),
         (
-            ctypes.c_size_t(_note_set_index("split_note", "index", index)),
+            _to_c_size_t(_note_set_index("split_note", "index", index), "index"),
             _to_c_int32(int(frame), "frame"),
         ),
     )
@@ -1381,7 +1386,8 @@ def merge_notes(
     Raises:
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
             either has a different length than ``f0_hz``, if ``first`` or
-            ``last`` is negative, or if a buffer is empty or non-finite.
+            ``last`` is not a non-negative integer a ``size_t`` holds, or if a
+            buffer is empty or non-finite.
         SonareError: If the C call rejects the request (e.g. a run that does not
             ascend, or one that runs past the end of the set).
 
@@ -1403,8 +1409,8 @@ def merge_notes(
             segmentation_threshold_cents, min_note_ms, reference_hz, voiced_threshold
         ),
         (
-            ctypes.c_size_t(_note_set_index("merge_notes", "first", first)),
-            ctypes.c_size_t(_note_set_index("merge_notes", "last", last)),
+            _to_c_size_t(_note_set_index("merge_notes", "first", first), "first"),
+            _to_c_size_t(_note_set_index("merge_notes", "last", last), "last"),
         ),
     )
 
