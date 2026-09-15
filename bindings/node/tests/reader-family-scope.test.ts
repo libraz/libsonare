@@ -33,7 +33,7 @@ import {
   READER_FAMILIES,
   readSites,
   unclassifiedReaders,
-} from './_reader_family_sources';
+} from './_reader_family_sources.js';
 
 /**
  * Every live cross-surface disagreement, grouped by the reader pair that causes
