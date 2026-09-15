@@ -13,9 +13,11 @@
 
 namespace {
 
-// Match the Node repair bindings: missing, null, undefined, and values of the
-// wrong primitive type retain the config default.  In particular, do not pass
-// embind's undefined-to-NaN coercion on to integer conversions in DSP configs.
+// Missing, null, undefined, and values of the wrong primitive type all retain
+// the config default, so embind's undefined-to-NaN coercion never reaches an
+// integer conversion in a DSP config. The Node addon refuses a wrong-typed
+// value by name for most repair fields, so the two surfaces answer that case
+// differently.
 bool repairOptionValue(const val& options, const char* key, val* value) {
   if (!hasProperty(options, key)) return false;
   *value = options[key];
