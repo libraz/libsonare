@@ -27,6 +27,7 @@ import {
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
+import { getSonareModule } from '../src/module_state';
 
 const SR = 22050;
 
@@ -58,6 +59,10 @@ function sine(n = 1024): Float32Array {
     buf[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
   }
   return buf;
+}
+
+function m() {
+  return getSonareModule();
 }
 
 describe('empty-sample guards (WASM)', () => {
@@ -231,6 +236,105 @@ describe('detailed-analysis config geometry matches the C ABI (WASM)', () => {
   it('analyzeTimbre rejects non-positive nMels/nMfcc', () => {
     expect(() => analyzeTimbre(audio, SR, { nMels: 0 })).toThrow();
     expect(() => analyzeTimbre(audio, SR, { nMfcc: 0 })).toThrow();
+  });
+});
+
+describe('plain embind float configs refuse a non-finite value (WASM)', () => {
+  // Driven off the module rather than the TS facades, which run their own
+  // assertFiniteScalar and would answer every case here before the WASM
+  // boundary under test. Each field below is a plain embind `float`: embind's
+  // own glue converts it, so it never passes through checkedFloatFromVal and
+  // the native guard is the only thing in front of the config. The `val`
+  // fields of these entry points are covered by quick-detailed-float-guards
+  // and features-float-guards, which assert checkedFloatFromVal's refusal.
+  const tone = sine(SR);
+  const nonFinite = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  // A finite number wider than FLT_MAX: embind's float glue saturates it onto
+  // an infinity, so it reaches the guard as one without ever looking non-finite
+  // to the caller.
+  const SATURATES_ONTO_AN_INFINITY = 3.5e38;
+  // Short enough for the CQT/VQT controls below to run a real transform cheaply.
+  const cqtTone = sine(4096);
+  const CQT_FMIN = 130.8128;
+
+  interface NonFiniteField {
+    entry: string;
+    key: string;
+    run: (value: number) => unknown;
+  }
+
+  const fields: NonFiniteField[] = [
+    {
+      entry: 'analyzeMelody',
+      key: 'fmin',
+      run: (v) => m().analyzeMelody(tone, SR, v, 2093, 2048, 256, 0.1, false, true),
+    },
+    {
+      entry: 'cqt',
+      key: 'fmin',
+      run: (v) => m().cqt(cqtTone, SR, 512, v, 12, 12),
+    },
+    {
+      entry: 'vqt',
+      key: 'fmin',
+      run: (v) => m().vqt(cqtTone, SR, 512, v, 12, 12, 0),
+    },
+  ];
+
+  const cases = fields.flatMap((field) => nonFinite.map((value) => ({ ...field, value })));
+
+  it.each(cases)('$entry refuses $key = $value', ({ run, value }) => {
+    expect(() => run(value)).toThrow();
+  });
+
+  it.each(fields)('$entry refuses a $key that saturates onto an infinity', ({ run }) => {
+    expect(() => run(SATURATES_ONTO_AN_INFINITY)).toThrow();
+  });
+
+  it('vqt refuses an infinite gamma', () => {
+    expect(() => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, Number.POSITIVE_INFINITY)).toThrow();
+    expect(() => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, Number.NEGATIVE_INFINITY)).toThrow();
+    expect(() => m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, SATURATES_ONTO_AN_INFINITY)).toThrow();
+  });
+
+  it('vqt reads a NaN gamma as the automatic-bandwidth sentinel', () => {
+    // resolve_vqt_gamma (src/feature/vqt.cpp) resolves NaN and any negative
+    // gamma to the same ERB-derived value, so the two must agree exactly while
+    // gamma = 0 (the CQT-equivalent bandwidth) must not.
+    const auto = Array.from(m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, Number.NaN).magnitude);
+    const negative = Array.from(m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, -1).magnitude);
+    const cqtEquivalent = Array.from(m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, 0).magnitude);
+    expect(auto).toEqual(negative);
+    expect(auto).not.toEqual(cqtEquivalent);
+  });
+
+  it('refuses an inverted but finite ordering pair', () => {
+    expect(() => m().analyzeBpm(tone, SR, 200, 100, 120, 2048, 512, 5)).toThrow();
+    expect(() => m().analyzeRhythm(tone, SR, 200, 100, 120, 2048, 512)).toThrow();
+    expect(() => m().analyzeMelody(tone, SR, 400, 200, 2048, 256, 0.1, false, true)).toThrow();
+  });
+
+  // Controls: the same entry points accept a finite configuration and return a
+  // value, so a refusal above cannot be an entry point rejecting everything.
+  it('analyzeBpm accepts a finite configuration', () => {
+    expect(Number.isFinite(m().analyzeBpm(tone, SR, 30, 300, 120, 2048, 512, 5).bpm)).toBe(true);
+  });
+  it('analyzeRhythm accepts a finite configuration', () => {
+    expect(Number.isFinite(m().analyzeRhythm(tone, SR, 60, 200, 120, 2048, 512).bpm)).toBe(true);
+  });
+  it('analyzeMelody accepts a finite configuration', () => {
+    const melody = m().analyzeMelody(tone, SR, 65, 2093, 2048, 256, 0.1, false, true);
+    expect(Number.isFinite(melody.pitchStability)).toBe(true);
+  });
+  it('cqt accepts a finite fmin', () => {
+    const result = m().cqt(cqtTone, SR, 512, CQT_FMIN, 12, 12);
+    expect(result.nBins).toBe(12);
+    expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
+  });
+  it('vqt accepts a finite fmin and gamma', () => {
+    const result = m().vqt(cqtTone, SR, 512, CQT_FMIN, 12, 12, 0);
+    expect(result.nBins).toBe(12);
+    expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
   });
 });
 

@@ -3,9 +3,11 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
 #include <limits>
 
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -148,7 +150,7 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
   // non-positive sizing instead of silently substituting struct defaults, so
   // WASM rejects identically to the C ABI / Node. The TS layer (which always
   // passes explicit values) carries the matching guards.
-  if (n_fft <= 0 || hop_length <= 0 || min_section_sec < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || !numeric::finite_non_negative(min_section_sec)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "analyzeSections: require nFft > 0, hopLength > 0, minSectionSec >= 0");
   }
@@ -191,7 +193,9 @@ val js_analyze_melody(val samples, const val& sample_rate, float fmin, const val
   // inverted/zero frequency range, non-positive sizing and a non-positive
   // threshold instead of silently substituting struct defaults. use_pyin/center
   // are plain bools selecting the pYIN tracker and frame centering.
-  if (fmin <= 0.0f || fmax <= fmin || frame_length <= 0 || hop_length <= 0 || threshold <= 0.0f) {
+  // fmin is a plain embind float, so nothing narrowed it on the way in.
+  if (!numeric::finite_positive(fmin) || !numeric::finite_ordered_range(fmin, fmax) ||
+      frame_length <= 0 || hop_length <= 0 || !numeric::finite_positive(threshold)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "analyzeMelody: require fmin > 0, fmax > fmin, frameLength > 0, "
                           "hopLength > 0, threshold > 0");
@@ -248,6 +252,10 @@ val cqtResultToVal(const CqtResult& result) {
 val js_cqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
            const val& n_bins, const val& bins_per_octave) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  // fmin is a plain embind float, so nothing narrowed it on the way in.
+  if (!numeric::finite_positive(fmin)) {
+    throw SonareException(ErrorCode::InvalidParameter, "cqt: require fmin > 0");
+  }
 
   CqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -289,6 +297,11 @@ val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, co
 val js_vqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
            const val& n_bins, const val& bins_per_octave, float gamma) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  // Mirror sonare_vqt: a NaN gamma selects automatic bandwidth, an infinity does not.
+  if (!numeric::finite_positive(fmin) || std::isinf(gamma)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "vqt: require fmin > 0 and a non-infinite gamma");
+  }
 
   VqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");

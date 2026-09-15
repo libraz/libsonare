@@ -1,6 +1,7 @@
 #include <cmath>
 
 #include "c_api/core_internal.h"
+#include "util/numeric_validation.h"
 
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
@@ -8,8 +9,8 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (bpm_min <= 0.0f || bpm_max <= bpm_min || n_fft <= 0 || hop_length <= 0 ||
-      max_candidates < 0) {
+  if (!numeric::finite_positive(bpm_min) || !numeric::finite_ordered_range(bpm_min, bpm_max) ||
+      !numeric::finite_positive(start_bpm) || n_fft <= 0 || hop_length <= 0 || max_candidates < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -125,7 +126,8 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
   // sonare_free_rhythm_result(&r) would delete[] an uninitialised pointer.
   out->beat_intervals = nullptr;
   out->beat_interval_count = 0;
-  if (bpm_min <= 0.0f || bpm_max <= bpm_min || n_fft <= 0 || hop_length <= 0) {
+  if (!numeric::finite_positive(bpm_min) || !numeric::finite_ordered_range(bpm_min, bpm_max) ||
+      !numeric::finite_positive(start_bpm) || n_fft <= 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -167,7 +169,8 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
   out->loudness_times = nullptr;
   out->loudness_rms_db = nullptr;
   out->loudness_count = 0;
-  if (window_sec <= 0.0f || hop_length <= 0 || compression_threshold < 0.0f) {
+  if (!numeric::finite_positive(window_sec) || hop_length <= 0 ||
+      !numeric::finite_non_negative(compression_threshold)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -218,7 +221,8 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
   out->spectral_rolloff_count = 0;
   out->timbre_over_time = nullptr;
   out->timbre_over_time_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 || window_sec <= 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 ||
+      !numeric::finite_positive(window_sec)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -453,7 +457,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   // sonare_free_section_result(&r) would delete[] an uninitialised pointer.
   out->sections = nullptr;
   out->section_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || !std::isfinite(min_section_sec) || min_section_sec < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || !numeric::finite_non_negative(min_section_sec)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -501,7 +505,8 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
   // input always leaves a NULL owned pointer; otherwise
   // sonare_free_melody_result(&r) would delete[] an uninitialised pointer.
   *out = {};
-  if (fmin <= 0.0f || fmax <= fmin || frame_length <= 0 || hop_length <= 0 || threshold <= 0.0f) {
+  if (!numeric::finite_positive(fmin) || !numeric::finite_ordered_range(fmin, fmax) ||
+      frame_length <= 0 || hop_length <= 0 || !numeric::finite_positive(threshold)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

@@ -1719,3 +1719,208 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
     REQUIRE(result.loudness_count == 0);
   }
 }
+
+TEST_CASE("C analysis ranges reject non-finite bounds", "[c_api][validation]") {
+  const auto clicks = generate_clicks(120.0f, 22050, 0.5f);
+  const auto tone = generate_sine(440.0f, 22050, 0.5f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SECTION("sonare_analyze_bpm") {
+    SonareBpmAnalysisResult result = {};
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, 120.0f, 1024,
+                               256, 5, &result) == SONARE_OK);
+    sonare_free_bpm_analysis_result(&result);
+
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, nan, 200.0f, 120.0f, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, nan, 120.0f, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, inf, 200.0f, 120.0f, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, inf, 120.0f, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, -inf, 200.0f, 120.0f, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 200.0f, 60.0f, 120.0f, 1024,
+                               256, 5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    // start_bpm is published as the reported BPM when no tempo peak survives, so
+    // a non-positive prior would leave a bpm of 0 rather than mean "no prior".
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, nan, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, inf, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, -inf, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, 0.0f, 1024, 256,
+                               5, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.candidates == nullptr);
+    REQUIRE(result.autocorrelation == nullptr);
+    REQUIRE(result.tempogram == nullptr);
+  }
+
+  SECTION("sonare_analyze_rhythm") {
+    SonareRhythmResult result = {};
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, 120.0f, 1024,
+                                  256, &result) == SONARE_OK);
+    sonare_free_rhythm_result(&result);
+
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, nan, 200.0f, 120.0f, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, nan, 120.0f, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, inf, 200.0f, 120.0f, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, inf, 120.0f, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, -inf, 200.0f, 120.0f, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 200.0f, 60.0f, 120.0f, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    // RhythmAnalyzer seeds its reported bpm from start_bpm, so the same
+    // non-positive prior would surface as a bpm of 0.
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, nan, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, inf, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, -inf, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), 22050, 60.0f, 200.0f, 0.0f, 1024,
+                                  256, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.beat_intervals == nullptr);
+  }
+
+  SECTION("sonare_analyze_melody_ex") {
+    SonareMelodyResult result = {};
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                     0.1f, 0, 1, &result) == SONARE_OK);
+    sonare_free_melody_result(&result);
+
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, nan, 2093.0f, 2048, 256, 0.1f,
+                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, nan, 2048, 256, 0.1f,
+                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, inf, 2093.0f, 2048, 256, 0.1f,
+                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, inf, 2048, 256, 0.1f,
+                                     0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, -inf, 2093.0f, 2048, 256,
+                                     0.1f, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 2093.0f, 65.0f, 2048, 256,
+                                     0.1f, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                     nan, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                     inf, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_melody_ex(tone.data(), tone.size(), 22050, 65.0f, 2093.0f, 2048, 256,
+                                     -inf, 0, 1, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.points == nullptr);
+  }
+}
+
+TEST_CASE("C analysis windows reject non-finite durations and thresholds", "[c_api][validation]") {
+  const auto clicks = generate_clicks(120.0f, 22050, 0.5f);
+  const auto tone = generate_sine(440.0f, 22050, 0.5f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SECTION("sonare_analyze_dynamics") {
+    SonareDynamicsResult result = {};
+    REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, 0.1f, 256, 6.0f,
+                                    &result) == SONARE_OK);
+    sonare_free_dynamics_result(&result);
+
+    REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, nan, 256, 6.0f, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, inf, 256, 6.0f, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, -inf, 256, 6.0f,
+                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, 0.1f, 256, nan, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, 0.1f, 256, inf, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, 0.1f, 256, -inf,
+                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.loudness_times == nullptr);
+    REQUIRE(result.loudness_rms_db == nullptr);
+  }
+
+  SECTION("sonare_analyze_timbre") {
+    SonareTimbreResult result = {};
+    REQUIRE(sonare_analyze_timbre(tone.data(), tone.size(), 22050, 2048, 512, 128, 13, 0.25f,
+                                  &result) == SONARE_OK);
+    sonare_free_timbre_result(&result);
+
+    REQUIRE(sonare_analyze_timbre(tone.data(), tone.size(), 22050, 2048, 512, 128, 13, nan,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(tone.data(), tone.size(), 22050, 2048, 512, 128, 13, inf,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_analyze_timbre(tone.data(), tone.size(), 22050, 2048, 512, 128, 13, -inf,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.spectral_centroid == nullptr);
+    REQUIRE(result.timbre_over_time == nullptr);
+  }
+}
+
+TEST_CASE("C CQT and key entry points reject a non-finite frequency", "[c_api][validation]") {
+  const auto tone = generate_sine(440.0f, 22050, 0.5f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SECTION("the CQT family rejects a non-finite fmin") {
+    SonareCqtResult result{};
+    REQUIRE(sonare_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, &result) == SONARE_OK);
+    sonare_free_cqt_result(&result);
+    REQUIRE(sonare_pseudo_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, &result) ==
+            SONARE_OK);
+    sonare_free_cqt_result(&result);
+    REQUIRE(sonare_hybrid_cqt(tone.data(), tone.size(), 22050, 256, 55.0f, 36, 12, &result) ==
+            SONARE_OK);
+    sonare_free_cqt_result(&result);
+
+    for (float fmin : {nan, inf, -inf}) {
+      REQUIRE(sonare_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, &result) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_pseudo_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, &result) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_hybrid_cqt(tone.data(), tone.size(), 22050, 256, fmin, 36, 12, &result) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(result.magnitude == nullptr);
+      REQUIRE(result.frequencies == nullptr);
+    }
+  }
+
+  SECTION("key detection rejects a non-finite high-pass corner") {
+    SonareKey key = {};
+    REQUIRE(sonare_detect_key_with_options(tone.data(), tone.size(), 22050, 2048, 512, 0, 0, 80.0f,
+                                           &key) == SONARE_OK);
+
+    for (float high_pass_hz : {nan, inf, -inf}) {
+      REQUIRE(sonare_detect_key_with_options(tone.data(), tone.size(), 22050, 2048, 512, 0, 0,
+                                             high_pass_hz, &key) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_detect_key_with_extended_options(
+                  tone.data(), tone.size(), 22050, 2048, 512, 0, 0, high_pass_hz, nullptr, 0,
+                  SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr,
+                  &key) == SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+
+  SECTION("key candidates reject a non-finite high-pass corner") {
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_detect_key_candidates(tone.data(), tone.size(), 22050, 2048, 512, 0, 0, 80.0f,
+                                         &candidates, &count) == SONARE_OK);
+    sonare_free_key_candidates(candidates);
+
+    for (float high_pass_hz : {nan, inf, -inf}) {
+      candidates = nullptr;
+      count = 0;
+      REQUIRE(sonare_detect_key_candidates(tone.data(), tone.size(), 22050, 2048, 512, 0, 0,
+                                           high_pass_hz, &candidates,
+                                           &count) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(candidates == nullptr);
+      REQUIRE(count == 0);
+    }
+  }
+}

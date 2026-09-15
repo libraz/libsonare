@@ -5,6 +5,7 @@
 #include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "c_api/core_internal.h"
+#include "util/numeric_validation.h"
 
 // Quick detection functions
 
@@ -61,7 +62,8 @@ SonareError sonare_detect_key_with_extended_options(
   SONARE_C_API_ENTRY;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_key = {};
-  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) || high_pass_hz < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) ||
+      !numeric::finite_non_negative(high_pass_hz)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -119,7 +121,8 @@ SonareError sonare_detect_key_candidates_with_extended_options(
   if (out_candidates == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_candidates = nullptr;
   *out_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) || high_pass_hz < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) ||
+      !numeric::finite_non_negative(high_pass_hz)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

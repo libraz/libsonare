@@ -1,11 +1,12 @@
 #include "c_api/core_internal.h"
+#include "util/numeric_validation.h"
 
 SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
+  if (hop_length <= 0 || !numeric::finite_positive(fmin) || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -25,7 +26,7 @@ SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_ra
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
+  if (hop_length <= 0 || !numeric::finite_positive(fmin) || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -45,7 +46,7 @@ SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_ra
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
+  if (hop_length <= 0 || !numeric::finite_positive(fmin) || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
