@@ -66,7 +66,7 @@ sonare::mastering::repair::DenoiseClassicalConfig to_cpp_denoise_config(
   cpp.n_fft = config->n_fft;
   cpp.hop_length = config->hop_length;
   cpp.dd_alpha = config->dd_alpha;
-  cpp.gain_floor = config->gain_floor;
+  cpp.reduction_db = config->reduction_db;
   cpp.over_subtraction = config->over_subtraction;
   cpp.spectral_floor = config->spectral_floor;
   cpp.noise_estimation_quantile = config->noise_estimation_quantile;

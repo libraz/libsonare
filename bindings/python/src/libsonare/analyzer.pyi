@@ -1699,7 +1699,7 @@ def mastering_repair_denoise_classical(
     n_fft: int = 1024,
     hop_length: int = 256,
     dd_alpha: float = 0.98,
-    gain_floor: float = 0.05,
+    reduction_db: float = 26.0,
     over_subtraction: float = 2.0,
     spectral_floor: float = 0.05,
     noise_estimation_quantile: float = 0.1,

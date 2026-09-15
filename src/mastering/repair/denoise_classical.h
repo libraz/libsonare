@@ -52,9 +52,10 @@ struct DenoiseClassicalConfig {
   /// 0.98 is the literature default; higher values produce smoother gains but
   /// slower adaptation to changing noise conditions.
   float dd_alpha = 0.98f;
-  /// Minimum gain (linear) applied to any bin. Acts as a residual-noise floor;
-  /// e.g. 0.05 leaves -26 dB of residual noise, preventing complete silence.
-  float gain_floor = 0.05f;
+  /// Deepest attenuation the gain mask may apply to any bin, in dB (>= 0). Acts
+  /// as a residual-noise floor: at 26 dB the noise is left 26 dB down rather
+  /// than removed, which is what keeps a denoised result from sounding gated.
+  float reduction_db = 26.0f;
   /// Spectral-subtraction over-subtraction factor (Berouti's alpha).
   /// Only used when `mode == SpectralSubtraction`.
   float over_subtraction = 2.0f;
@@ -90,10 +91,11 @@ struct DenoiseReport {
   NoiseDetection detected;
   float mean_reduction_db = 0.0f;  ///< Mean attenuation the gain mask applied.
   /// Deepest attenuation any cell of the mask applied. Saturating at
-  /// -20 log10(gain_floor) says the floor, not the estimator, set the depth.
+  /// `reduction_db` says the floor, not the estimator, set the depth.
   float max_reduction_db = 0.0f;
-  /// Fraction of mask cells sitting on gain_floor. Separates a floor that never
-  /// bound from one that bound everywhere, which mean_reduction_db cannot.
+  /// Fraction of mask cells sitting on the floor `reduction_db` sets. Separates
+  /// a floor that never bound from one that bound everywhere, which
+  /// mean_reduction_db cannot.
   /// Always 0 for SpectralSubtraction, whose floor is spectral_floor instead.
   float floor_limited_fraction = 0.0f;
 };

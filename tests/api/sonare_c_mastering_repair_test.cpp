@@ -99,7 +99,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
     config.n_fft = 1024;
     config.hop_length = 256;
     config.dd_alpha = 0.98f;
-    config.gain_floor = 0.05f;
+    config.reduction_db = 26.0f;
     config.over_subtraction = 2.0f;
     config.spectral_floor = 0.05f;
     config.noise_estimation_quantile = 0.1f;
@@ -146,7 +146,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
     config.n_fft = 1024;
     config.hop_length = 256;
     config.dd_alpha = 0.98f;
-    config.gain_floor = 0.05f;
+    config.reduction_db = 26.0f;
     config.over_subtraction = 2.0f;
     config.spectral_floor = 0.05f;
     config.noise_estimation_quantile = 0.1f;

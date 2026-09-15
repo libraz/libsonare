@@ -327,7 +327,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
     config.n_fft = IntProperty(options, "nFft", config.n_fft);
     config.hop_length = IntProperty(options, "hopLength", config.hop_length);
     config.dd_alpha = FloatProperty(options, "ddAlpha", config.dd_alpha);
-    config.gain_floor = FloatProperty(options, "gainFloor", config.gain_floor);
+    config.reduction_db = FloatProperty(options, "reductionDb", config.reduction_db);
     config.over_subtraction = FloatProperty(options, "overSubtraction", config.over_subtraction);
     config.spectral_floor = FloatProperty(options, "spectralFloor", config.spectral_floor);
     config.noise_estimation_quantile =

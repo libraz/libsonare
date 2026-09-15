@@ -95,7 +95,7 @@ class SonareDenoiseClassicalConfig(CStruct):
         ("n_fft", ctypes.c_int),
         ("hop_length", ctypes.c_int),
         ("dd_alpha", ctypes.c_float),
-        ("gain_floor", ctypes.c_float),
+        ("reduction_db", ctypes.c_float),
         ("over_subtraction", ctypes.c_float),
         ("spectral_floor", ctypes.c_float),
         ("noise_estimation_quantile", ctypes.c_float),

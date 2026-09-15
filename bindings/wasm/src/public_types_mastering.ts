@@ -216,6 +216,8 @@ export interface MasteringChainConfig {
           nFft?: number;
           hopLength?: number;
           ddAlpha?: number;
+          reductionDb?: number;
+          /** @deprecated Use `reductionDb`; converted to it (dB = -20*log10(gainFloor)). */
           gainFloor?: number;
           overSubtraction?: number;
           spectralFloor?: number;
@@ -226,6 +228,8 @@ export interface MasteringChainConfig {
     nFft?: number;
     hopLength?: number;
     ddAlpha?: number;
+    reductionDb?: number;
+    /** @deprecated Use `denoise.reductionDb`; converted to it (dB = -20*log10(gainFloor)). */
     gainFloor?: number;
     declip?: {
       enabled?: boolean;

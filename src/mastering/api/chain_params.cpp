@@ -5,6 +5,7 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/param_field_tables.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::api {
@@ -87,6 +88,7 @@ const std::string& canonical_chain_param_key(const std::string& key, std::string
   if (key == "repair.nFft") canonical = "repair.denoise.nFft";
   if (key == "repair.hopLength") canonical = "repair.denoise.hopLength";
   if (key == "repair.ddAlpha") canonical = "repair.denoise.ddAlpha";
+  if (key == "repair.reductionDb") canonical = "repair.denoise.reductionDb";
   if (key == "repair.gainFloor") canonical = "repair.denoise.gainFloor";
   if (key == "eq.tiltDb") canonical = "eq.tilt.tiltDb";
   if (key == "eq.pivotHz") canonical = "eq.tilt.pivotHz";
@@ -347,8 +349,16 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     mark_field(flags.denoise);
     return true;
   }
+  if (key == "repair.denoise.reductionDb") {
+    cfg.repair.denoise.config.reduction_db = vf;
+    mark_field(flags.denoise);
+    return true;
+  }
+  // Documents written while the knob was a linear floor carry that value, so
+  // convert it rather than drop it. The conversion carries the old validity
+  // range with it: a floor above 1 becomes a negative depth and is refused.
   if (key == "repair.denoise.gainFloor") {
-    cfg.repair.denoise.config.gain_floor = vf;
+    cfg.repair.denoise.config.reduction_db = -linear_to_db(vf);
     mark_field(flags.denoise);
     return true;
   }

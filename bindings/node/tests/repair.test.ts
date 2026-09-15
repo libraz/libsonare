@@ -76,7 +76,7 @@ describe('masteringRepairDenoiseClassical (Node)', () => {
       hopLength: 256,
       overSubtraction: 2.0,
       spectralFloor: 0.05,
-      gainFloor: 0.05,
+      reductionDb: 26.02, // -20*log10(0.05), the old gainFloor value this replaced
       speechPresenceGain: false,
       gainSmoothing: true,
     });

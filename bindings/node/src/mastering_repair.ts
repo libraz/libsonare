@@ -32,7 +32,7 @@ export interface DenoiseClassicalOptions {
   nFft?: number;
   hopLength?: number;
   ddAlpha?: number;
-  gainFloor?: number;
+  reductionDb?: number;
   overSubtraction?: number;
   spectralFloor?: number;
   noiseEstimationQuantile?: number;

@@ -495,6 +495,46 @@ TEST_CASE("parse_chain_config_params rejects unknown keys", "[mastering][chain]"
   REQUIRE_THROWS_AS(parse_chain_config_params(params, 1), sonare::SonareException);
 }
 
+TEST_CASE("A saved denoise floor loads as the depth it stood for", "[mastering][chain]") {
+  // The knob is a depth in dB; documents written while it was a linear floor
+  // carry that spelling, so loading one has to convert rather than ignore it.
+  Param legacy[] = {{"repair.denoise.gainFloor", 0.1}};
+  REQUIRE_THAT(parse_chain_config_params(legacy, 1).repair.denoise.config.reduction_db,
+               WithinAbs(20.0f, 1e-4f));
+
+  // The short spelling normalizes onto the same key, so it converts too.
+  Param short_legacy[] = {{"repair.gainFloor", 0.1}};
+  REQUIRE_THAT(parse_chain_config_params(short_legacy, 1).repair.denoise.config.reduction_db,
+               WithinAbs(20.0f, 1e-4f));
+
+  // A floor above unity was refused before. As a depth it is negative, so the
+  // conversion carries the old boundary rather than widening it, and the
+  // refusal names the stage because the repair stages are checked before any
+  // of them has touched the track.
+  Param out_of_range[] = {{"repair.denoise.gainFloor", 1.5}};
+  std::string refusal;
+  try {
+    parse_chain_config_params(out_of_range, 1);
+    FAIL("a linear floor above unity must not survive the conversion");
+  } catch (const SonareException& error) {
+    refusal = error.what();
+  }
+  REQUIRE(refusal.find("repair.denoise") != std::string::npos);
+  REQUIRE(refusal.find("reduction_db") != std::string::npos);
+
+  // The current spelling is taken as written, with no conversion in the way.
+  Param current[] = {{"repair.denoise.reductionDb", 12.0}};
+  REQUIRE_THAT(parse_chain_config_params(current, 1).repair.denoise.config.reduction_db,
+               WithinAbs(12.0f, 1e-6f));
+
+  // The short spelling exists for the current name too, alongside the three
+  // other repair shorthands, so the two spellings do not disagree on which
+  // names are accepted.
+  Param current_short[] = {{"repair.reductionDb", 12.0}};
+  REQUIRE_THAT(parse_chain_config_params(current_short, 1).repair.denoise.config.reduction_db,
+               WithinAbs(12.0f, 1e-6f));
+}
+
 TEST_CASE("parse_chain_config_params honors explicit enabled=false", "[mastering][chain]") {
   Param params[] = {
       {"dynamics.compressor.thresholdDb", -24.0},
@@ -767,7 +807,7 @@ TEST_CASE("MasteringChain stereo denoise keeps the output peak bounded",
 
   MasteringChainConfig config;
   config.repair.denoise.enabled = true;
-  config.repair.denoise.config.gain_floor = 0.1f;
+  config.repair.denoise.config.reduction_db = 20.0f;
   MasteringChain chain(config);
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
 
@@ -800,7 +840,7 @@ TEST_CASE("MasteringChain stereo denoise preserves a constant inter-channel rati
   config.repair.denoise.config.n_fft = 1024;
   config.repair.denoise.config.hop_length = 256;
   config.repair.denoise.config.over_subtraction = 4.0f;
-  config.repair.denoise.config.gain_floor = 0.05f;
+  config.repair.denoise.config.reduction_db = 26.0f;
   MasteringChain chain(config);
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
 

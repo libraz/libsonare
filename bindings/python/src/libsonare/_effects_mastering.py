@@ -266,7 +266,7 @@ def mastering_repair_denoise_classical(
     n_fft: int = 1024,
     hop_length: int = 256,
     dd_alpha: float = 0.98,
-    gain_floor: float = 0.05,
+    reduction_db: float = 26.0,
     over_subtraction: float = 2.0,
     spectral_floor: float = 0.05,
     noise_estimation_quantile: float = 0.1,
@@ -284,7 +284,8 @@ def mastering_repair_denoise_classical(
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
-        gain_floor: Minimum per-bin gain, linear (default 0.05).
+        reduction_db: Deepest attenuation the mask may apply, in dB, >= 0
+            (default 26.0).
         over_subtraction: Berouti alpha; SpectralSubtraction only (default 2.0).
         spectral_floor: Berouti beta; SpectralSubtraction only (default 0.05).
         noise_estimation_quantile: Fraction of frames assumed noise-only (default 0.1).
@@ -315,7 +316,7 @@ def mastering_repair_denoise_classical(
         n_fft=int(n_fft),
         hop_length=int(hop_length),
         dd_alpha=float(dd_alpha),
-        gain_floor=float(gain_floor),
+        reduction_db=float(reduction_db),
         over_subtraction=float(over_subtraction),
         spectral_floor=float(spectral_floor),
         noise_estimation_quantile=float(noise_estimation_quantile),

@@ -149,7 +149,7 @@ val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, v
     cfg.n_fft = repairIntOption(options, "nFft", cfg.n_fft);
     cfg.hop_length = repairIntOption(options, "hopLength", cfg.hop_length);
     cfg.dd_alpha = repairFloatOption(options, "ddAlpha", cfg.dd_alpha);
-    cfg.gain_floor = repairFloatOption(options, "gainFloor", cfg.gain_floor);
+    cfg.reduction_db = repairFloatOption(options, "reductionDb", cfg.reduction_db);
     cfg.over_subtraction = repairFloatOption(options, "overSubtraction", cfg.over_subtraction);
     cfg.spectral_floor = repairFloatOption(options, "spectralFloor", cfg.spectral_floor);
     cfg.noise_estimation_quantile =

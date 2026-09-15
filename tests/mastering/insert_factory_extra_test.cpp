@@ -742,7 +742,7 @@ TEST_CASE("chain JSON round-trips the full repair.denoise field set",
   cfg.repair.denoise.config.n_fft = 2048;
   cfg.repair.denoise.config.hop_length = 512;
   cfg.repair.denoise.config.dd_alpha = 0.95f;
-  cfg.repair.denoise.config.gain_floor = 0.08f;
+  cfg.repair.denoise.config.reduction_db = 21.5f;
   cfg.repair.denoise.config.over_subtraction = 3.5f;
   cfg.repair.denoise.config.spectral_floor = 0.12f;
   cfg.repair.denoise.config.noise_estimation_quantile = 0.2f;
@@ -757,7 +757,7 @@ TEST_CASE("chain JSON round-trips the full repair.denoise field set",
   REQUIRE(d.n_fft == 2048);
   REQUIRE(d.hop_length == 512);
   REQUIRE(d.dd_alpha == 0.95f);
-  REQUIRE(d.gain_floor == 0.08f);
+  REQUIRE(d.reduction_db == 21.5f);
   REQUIRE(d.over_subtraction == 3.5f);
   REQUIRE(d.spectral_floor == 0.12f);
   REQUIRE(d.noise_estimation_quantile == 0.2f);

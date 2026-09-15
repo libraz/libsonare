@@ -219,18 +219,18 @@ TEST_CASE("denoise rejects every out-of-domain field by name", "[repair][stereo]
 
   // NaN fails every comparison, so a `x < 0` guard would pass it through.
   CHECK(reject([](auto& c) { c.dd_alpha = kNaN; }) == ErrorCode::InvalidParameter);
-  CHECK(reject([](auto& c) { c.gain_floor = kNaN; }) == ErrorCode::InvalidParameter);
+  CHECK(reject([](auto& c) { c.reduction_db = kNaN; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.over_subtraction = kNaN; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.spectral_floor = kNaN; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.noise_estimation_quantile = kNaN; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.dd_alpha = kInf; }) == ErrorCode::InvalidParameter);
-  CHECK(reject([](auto& c) { c.gain_floor = kInf; }) == ErrorCode::InvalidParameter);
+  CHECK(reject([](auto& c) { c.reduction_db = kInf; }) == ErrorCode::InvalidParameter);
 
   CHECK(reject([](auto& c) { c.n_fft = 1000; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.hop_length = 0; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.hop_length = 2048; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.dd_alpha = 1.0f; }) == ErrorCode::InvalidParameter);
-  CHECK(reject([](auto& c) { c.gain_floor = 1.5f; }) == ErrorCode::InvalidParameter);
+  CHECK(reject([](auto& c) { c.reduction_db = -1.0f; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.over_subtraction = 17.0f; }) == ErrorCode::InvalidParameter);
   CHECK(reject([](auto& c) { c.noise_estimation_quantile = 0.0f; }) == ErrorCode::InvalidParameter);
 
@@ -245,7 +245,7 @@ TEST_CASE("denoise rejects every out-of-domain field by name", "[repair][stereo]
   // The detector and the linked entry share the same oracle.
   CHECK(rejection_code([&] {
           repair::DenoiseClassicalConfig config;
-          config.gain_floor = kNaN;
+          config.reduction_db = kNaN;
           repair::detect_noise_floor(bed.data(), bed.size(), kSampleRate, config);
         }) == ErrorCode::InvalidParameter);
   CHECK(rejection_code([&] { repair::detect_noise_floor(bed.data(), bed.size(), 0); }) ==
@@ -730,7 +730,7 @@ TEST_CASE("the denoise report describes the mask that ran", "[repair][stereo][de
   const repair::DenoiseReport report =
       repair::denoise_classical_stereo(as_audio(left), as_audio(right), config).report;
 
-  const float floor_limit_db = -20.0f * std::log10(config.gain_floor);
+  const float floor_limit_db = config.reduction_db;
   INFO("mean " << report.mean_reduction_db << " max " << report.max_reduction_db << " at-floor "
                << report.floor_limited_fraction);
   CHECK(report.mean_reduction_db > 1.0f);
@@ -743,11 +743,10 @@ TEST_CASE("the denoise report describes the mask that ran", "[repair][stereo][de
 
   // A deeper floor deepens the deepest cut by exactly the floor's own change.
   repair::DenoiseClassicalConfig deeper = config;
-  deeper.gain_floor = 0.01f;
+  deeper.reduction_db = 40.0f;
   const repair::DenoiseReport deeper_report =
       repair::denoise_classical_stereo(as_audio(left), as_audio(right), deeper).report;
-  CHECK(deeper_report.max_reduction_db ==
-        Approx(-20.0f * std::log10(deeper.gain_floor)).margin(1.0e-3));
+  CHECK(deeper_report.max_reduction_db == Approx(deeper.reduction_db).margin(1.0e-3));
   CHECK(deeper_report.mean_reduction_db > report.mean_reduction_db);
 
   // Berouti has no gain floor, so the fraction is defined to be zero there

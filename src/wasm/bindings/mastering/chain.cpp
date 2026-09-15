@@ -68,8 +68,8 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
         intProperty(repair, "hopLength", out.repair.denoise.config.hop_length);
     out.repair.denoise.config.dd_alpha =
         floatProperty(repair, "ddAlpha", out.repair.denoise.config.dd_alpha);
-    out.repair.denoise.config.gain_floor =
-        floatProperty(repair, "gainFloor", out.repair.denoise.config.gain_floor);
+    out.repair.denoise.config.reduction_db =
+        floatProperty(repair, "reductionDb", out.repair.denoise.config.reduction_db);
   }
   if (hasProperty(repair, "declick")) {
     val declick = objectProperty(repair, "declick");

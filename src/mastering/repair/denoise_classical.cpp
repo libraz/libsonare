@@ -10,6 +10,7 @@
 #include "mastering/common/noise_profile.h"
 #include "mastering/common/noise_tracker.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/validated.h"
 
@@ -21,6 +22,11 @@ using sonare::constants::kPiD;
 
 /// @brief Gain below which an attenuation is reported as the mask's floor.
 constexpr double kReportedGainEpsilon = 1e-12;
+
+// The knob is the suppression depth in dB; the mask needs it as a linear floor.
+double gain_floor_of(const DenoiseClassicalConfig& config) {
+  return db_to_linear(-static_cast<double>(config.reduction_db));
+}
 
 StftConfig analysis_config(const DenoiseClassicalConfig& config) {
   StftConfig stft_config;
@@ -255,7 +261,7 @@ std::vector<double> gains_ephraim_malah(const double* power_cells, const double*
   // Decision-directed a priori SNR uses the previous frame's clean estimate.
   std::vector<double> prev_clean_power(static_cast<size_t>(bins), 0.0);
   const double alpha = config.dd_alpha;
-  const double floor_gain = static_cast<double>(config.gain_floor);
+  const double floor_gain = gain_floor_of(config);
 
   for (int t = 0; t < frames; ++t) {
     for (int b = 0; b < bins; ++b) {
@@ -347,7 +353,7 @@ NoiseDetection to_detection(const common::NoiseFloorDbfs& levels) {
 void summarize_mask(const std::vector<double>& gains, const DenoiseClassicalConfig& config,
                     DenoiseReport* report) {
   if (gains.empty()) return;
-  const double floor_gain = static_cast<double>(config.gain_floor);
+  const double floor_gain = gain_floor_of(config);
   const bool has_gain_floor = config.mode != DenoiseMode::SpectralSubtraction;
   double sum_db = 0.0;
   double max_db = 0.0;
@@ -387,9 +393,11 @@ void validate_config(const DenoiseClassicalConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "denoise dd_alpha must be finite and in [0, 1)");
   }
-  if (!std::isfinite(config.gain_floor) || config.gain_floor < 0.0f || config.gain_floor > 1.0f) {
+  // No upper bound: the derived floor is 10^(-reduction_db/20), which already
+  // lands in (0, 1] for every finite non-negative depth.
+  if (!std::isfinite(config.reduction_db) || config.reduction_db < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise gain_floor must be finite and in [0, 1]");
+                          "denoise reduction_db must be finite and non-negative");
   }
   if (!std::isfinite(config.over_subtraction) || config.over_subtraction < 0.0f ||
       config.over_subtraction > 16.0f) {

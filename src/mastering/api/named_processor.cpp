@@ -504,7 +504,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     config.n_fft = i(params, "nFft", config.n_fft);
     config.hop_length = i(params, "hopLength", config.hop_length);
     config.dd_alpha = f(params, "ddAlpha", config.dd_alpha);
-    config.gain_floor = f(params, "gainFloor", config.gain_floor);
+    config.reduction_db = f(params, "reductionDb", config.reduction_db);
     config.over_subtraction = f(params, "overSubtraction", config.over_subtraction);
     config.spectral_floor = f(params, "spectralFloor", config.spectral_floor);
     config.noise_estimation_quantile =
@@ -805,7 +805,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     config.n_fft = i(map, "nFft", config.n_fft);
     config.hop_length = i(map, "hopLength", config.hop_length);
     config.dd_alpha = f(map, "ddAlpha", config.dd_alpha);
-    config.gain_floor = f(map, "gainFloor", config.gain_floor);
+    config.reduction_db = f(map, "reductionDb", config.reduction_db);
     config.over_subtraction = f(map, "overSubtraction", config.over_subtraction);
     config.spectral_floor = f(map, "spectralFloor", config.spectral_floor);
     config.noise_estimation_quantile =

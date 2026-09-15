@@ -172,7 +172,7 @@ THRESHOLDS: dict[str, Any] = {
             LEVEL_MATCH_IMPROVEMENT,
             "redraw floor 0.937 dB. Scaling an output by 0.5 with the processing untouched moved "
             "it 6.108 dB while every level-independent metric stayed at exactly 0, and the "
-            "gain_floor degradation's raw +2.623 dB is +0.0199 dB once the level is taken out -- "
+            "suppression-depth degradation's raw +2.623 dB is +0.0199 dB once the level is taken out -- "
             "a factor of 132. An improvement on the raw delta can therefore be a gain change",
             skip_when="saturation.seg_snr_db.ceiling_fraction >= 0.9",
             skip_why=(
@@ -250,7 +250,7 @@ THRESHOLDS: dict[str, Any] = {
 # denoiser mode: the ensemble's baseline and the step's baseline must be the
 # same configuration or the ratio compares two different things.
 STEP_FLOOR_SOURCE = {
-    "gain_floor": "D3s",
+    "reduction_db": "D3s",
     "noise_estimation_quantile": "D3s",
     "over_subtraction": "D2s",
     "spectral_floor": "D2s",
@@ -337,14 +337,14 @@ def one_step_resolution(gate: dict) -> dict[str, Any]:
 RESOLUTION_NOTES: dict[str, Any] = {
     "stoi": {
         "no_resolution_for": [
-            "repair.denoiseClassical.gain_floor",
+            "repair.denoiseClassical.reduction_db",
             "repair.denoiseClassical.over_subtraction",
             "repair.denoiseClassical.spectral_floor",
             "repair.denoiseClassical.noise_estimation_quantile",
         ],
         "measured": {
             "degradation_scale_response_over_floor": {
-                "gain_floor 0.05 -> 0.30": 0.5247,
+                "reduction_db 26 -> 10.46": 0.5247,
                 "over_subtraction 2.0 -> 6.0": 1.4943,
                 "gain_smoothing on -> off": 0.1564,
             },

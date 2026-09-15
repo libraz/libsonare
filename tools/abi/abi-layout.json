@@ -1018,7 +1018,7 @@
       },
       {
         "kind": "float",
-        "name": "gain_floor",
+        "name": "reduction_db",
         "offset": 20,
         "size": 4
       },

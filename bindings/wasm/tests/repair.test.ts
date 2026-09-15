@@ -83,7 +83,7 @@ describe('masteringRepairDenoiseClassical (WASM)', () => {
       hopLength: 256,
       overSubtraction: 2.0,
       spectralFloor: 0.05,
-      gainFloor: 0.05,
+      reductionDb: 26.02,
       speechPresenceGain: false,
       gainSmoothing: true,
     });

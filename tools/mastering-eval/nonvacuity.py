@@ -315,10 +315,10 @@ def build_cases(manifest: dict) -> list[Case]:
     cases: list[Case] = [
         denoise_case(
             "D1",
-            "denoise gain_floor 0.05 -> 0.30",
+            "denoise reduction_db 26 -> 10.46",
             "sine_white_noise",
             {},
-            {"gain_floor": 0.30},
+            {"reduction_db": 10.46},
             ("seg_snr_db",),
         ),
         denoise_case(
@@ -446,10 +446,10 @@ def build_cases(manifest: dict) -> list[Case]:
         # response to that degradation can be read.
         denoise_case(
             "D1s",
-            "denoise gain_floor 0.05 -> 0.30, speech bed",
+            "denoise reduction_db 26 -> 10.46, speech bed",
             "speech_white_noise",
             {},
-            {"gain_floor": 0.30},
+            {"reduction_db": 10.46},
             ("seg_snr_db",),
         ),
         denoise_case(
@@ -815,7 +815,7 @@ def build_steps(manifest: dict) -> list[Case]:
 
     cases: list[Case] = []
     for item in (STEP_NOISE_ITEM, SPEECH_ITEM):
-        cases += denoise_steps("gain_floor", 0.05, item, {})
+        cases += denoise_steps("reduction_db", 26.0, item, {})
         cases += denoise_steps("over_subtraction", 2.0, item, spectral)
         cases += denoise_steps("spectral_floor", 0.05, item, spectral)
         cases += denoise_steps("noise_estimation_quantile", 0.1, item, {})

@@ -814,7 +814,7 @@ typedef struct {
   int n_fft;                        // STFT size (default 1024, power of two)
   int hop_length;                   // hop in samples (default 256)
   float dd_alpha;                   // decision-directed SNR smoothing (default 0.98)
-  float gain_floor;                 // minimum bin gain, linear (default 0.05)
+  float reduction_db;               // deepest attenuation in dB, >= 0 (default 26)
   float over_subtraction;           // Berouti alpha (SpectralSubtraction only)
   float spectral_floor;             // Berouti beta (SpectralSubtraction only)
   float noise_estimation_quantile;  // noise-only frame fraction (default 0.1)

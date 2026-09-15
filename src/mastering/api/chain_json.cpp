@@ -145,7 +145,7 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   add_field(params, "repair.denoise.nFft", cfg.repair.denoise.config.n_fft);
   add_field(params, "repair.denoise.hopLength", cfg.repair.denoise.config.hop_length);
   add_field(params, "repair.denoise.ddAlpha", cfg.repair.denoise.config.dd_alpha);
-  add_field(params, "repair.denoise.gainFloor", cfg.repair.denoise.config.gain_floor);
+  add_field(params, "repair.denoise.reductionDb", cfg.repair.denoise.config.reduction_db);
   add_field(params, "repair.denoise.overSubtraction", cfg.repair.denoise.config.over_subtraction);
   add_field(params, "repair.denoise.spectralFloor", cfg.repair.denoise.config.spectral_floor);
   add_field(params, "repair.denoise.noiseEstimationQuantile",
