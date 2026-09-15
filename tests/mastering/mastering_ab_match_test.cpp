@@ -48,7 +48,7 @@ TEST_CASE("ABMatchLoudness matches a quiet b to a loud a", "[mastering][match][a
 }
 
 TEST_CASE("ABMatchLoudness applies ~0 dB when a and b already match",
-         "[mastering][match][ab-match]") {
+          "[mastering][match][ab-match]") {
   const auto a = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
   const auto b = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
 
@@ -59,7 +59,7 @@ TEST_CASE("ABMatchLoudness applies ~0 dB when a and b already match",
 }
 
 TEST_CASE("ABMatchLoudness leaves silent b unchanged instead of diverging",
-         "[mastering][match][ab-match]") {
+          "[mastering][match][ab-match]") {
   const auto a = generate_sine_audio(1000.0f, 48000, 1.0f, 0.5f);
   const std::vector<float> zeros(48000, 0.0f);
   const Audio silent_b = Audio::from_vector(zeros, 48000);
@@ -76,8 +76,7 @@ TEST_CASE("ABMatchLoudness leaves silent b unchanged instead of diverging",
   REQUIRE(matched.matched_true_peak_dbtp == sonare::constants::kFloorDb);
 }
 
-TEST_CASE("ABMatchLoudness leaves b unchanged when a is silent",
-         "[mastering][match][ab-match]") {
+TEST_CASE("ABMatchLoudness leaves b unchanged when a is silent", "[mastering][match][ab-match]") {
   const std::vector<float> zeros(48000, 0.0f);
   const Audio silent_a = Audio::from_vector(zeros, 48000);
   const auto b = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
@@ -92,7 +91,7 @@ TEST_CASE("ABMatchLoudness leaves b unchanged when a is silent",
 }
 
 TEST_CASE("ABMatchLoudness matches faithfully even when b is near full scale",
-         "[mastering][match][ab-match]") {
+          "[mastering][match][ab-match]") {
   // b sits close to full scale already. A clamp keyed on b's own headroom
   // would leave b at its own loudness here; the match must still be applied
   // in full, with the resulting overshoot only reported, not prevented.
@@ -111,7 +110,7 @@ TEST_CASE("ABMatchLoudness matches faithfully even when b is near full scale",
 }
 
 TEST_CASE("ABMatchLoudness validates like the existing A/B helpers",
-         "[mastering][match][ab-match]") {
+          "[mastering][match][ab-match]") {
   const Audio empty;
   const auto b = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
   REQUIRE_THROWS(ab_match_loudness(empty, b));
@@ -133,7 +132,7 @@ TEST_CASE("ABMatchLoudness returns a unchanged", "[mastering][match][ab-match]")
 }
 
 TEST_CASE("ABMatchLoudness composes with the existing switch and crossfade",
-         "[mastering][match][ab-match]") {
+          "[mastering][match][ab-match]") {
   const auto a = generate_sine_audio(1000.0f, 48000, 1.0f, 0.3f);
   const auto b = generate_sine_audio(1000.0f, 48000, 1.0f, 0.05f);
 
