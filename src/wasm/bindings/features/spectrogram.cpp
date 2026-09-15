@@ -122,12 +122,14 @@ val js_stft_db(val samples, const val& sample_rate_val, const val& n_fft_val,
 // ============================================================================
 
 val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft_val,
-                       const val& hop_length_val, const val& n_mels_val, float fmin, float fmax,
-                       bool htk) {
+                       const val& hop_length_val, const val& n_mels_val, const val& fmin_val,
+                       const val& fmax_val, bool htk) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
@@ -157,13 +159,16 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
 }
 
 val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
-            const val& hop_length_val, const val& n_mels_val, const val& n_mfcc_val, float fmin,
-            float fmax, bool htk, float lifter) {
+            const val& hop_length_val, const val& n_mels_val, const val& n_mfcc_val,
+            const val& fmin_val, const val& fmax_val, bool htk, const val& lifter_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
@@ -320,10 +325,11 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
 // Inverse: MFCC matrix [n_mfcc x n_frames] -> Mel power spectrogram.
 // Mirrors feature::mfcc_to_mel.
 val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, const val& n_mels_val,
-                   float lifter) {
+                   const val& lifter_val) {
   const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   std::vector<float> data =
       load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
   validate_positive("mfccToMel", n_mels, "n_mels");
@@ -341,7 +347,7 @@ val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, con
 val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
                      const val& n_mels_val, const val& sample_rate_val, const val& n_fft_val,
                      const val& hop_length_val, float fmin, float fmax, const val& n_iter_val,
-                     bool htk, float lifter) {
+                     bool htk, const val& lifter_val) {
   const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
@@ -349,6 +355,7 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   validate_sample_rate("mfccToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");

@@ -103,7 +103,9 @@ val js_bass_chroma(val samples, const val& sample_rate, const val& hop_length,
 }
 
 val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blend,
-                      float stft_blend_weight, const val& stft_blend_n_fft, const val& hop_length) {
+                      const val& stft_blend_weight_val, const val& stft_blend_n_fft,
+                      const val& hop_length) {
+  const float stft_blend_weight = checkedFloatFromVal(stft_blend_weight_val, "stftBlendWeight");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   NnlsChromaConfig config;
@@ -123,8 +125,8 @@ val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blen
 }
 
 val js_nnls_chroma(val samples, const val& sample_rate, bool enable_stft_blend,
-                   float stft_blend_weight, const val& stft_blend_n_fft) {
-  return js_nnls_chroma_ex(samples, sample_rate, enable_stft_blend, stft_blend_weight,
+                   const val& stft_blend_weight_val, const val& stft_blend_n_fft) {
+  return js_nnls_chroma_ex(samples, sample_rate, enable_stft_blend, stft_blend_weight_val,
                            stft_blend_n_fft, val(constants::kDefaultHopLength));
 }
 
@@ -137,9 +139,10 @@ val js_nnls_chroma(val samples, const val& sample_rate, bool enable_stft_blend,
 // { type, name, start, end, energyLevel, confidence }.
 // Embind passes every argument, so the narrowed sizes carry no C++ default.
 val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_val,
-                        const val& hop_length_val, float min_section_sec = 4.0f) {
+                        const val& hop_length_val, const val& min_section_sec_val) {
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float min_section_sec = checkedFloatFromVal(min_section_sec_val, "minSectionSec");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_sections): reject
   // non-positive sizing instead of silently substituting struct defaults, so
@@ -176,11 +179,13 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
 // pitchRangeOctaves, pitchStability, meanFrequency, vibratoRate }.
 // Embind passes every argument, so the narrowed sizes carry no C++ default, and
 // neither can the float parameters that precede them.
-val js_analyze_melody(val samples, const val& sample_rate, float fmin, float fmax,
+val js_analyze_melody(val samples, const val& sample_rate, float fmin, const val& fmax_val,
                       const val& frame_length_val, const val& hop_length_val,
-                      float threshold = 0.1f, bool use_pyin = false, bool center = true) {
+                      const val& threshold_val, bool use_pyin, bool center) {
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_melody_ex): reject an
   // inverted/zero frequency range, non-positive sizing and a non-positive
@@ -253,8 +258,9 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, float fmi
   return cqtResultToVal(cqt(audio, config));
 }
 
-val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
                   const val& n_bins, const val& bins_per_octave) {
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
@@ -266,8 +272,9 @@ val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, fl
   return cqtResultToVal(pseudo_cqt(audio, config));
 }
 
-val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
                   const val& n_bins, const val& bins_per_octave) {
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;

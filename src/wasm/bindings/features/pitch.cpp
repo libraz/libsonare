@@ -10,10 +10,12 @@
 // ============================================================================
 
 val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
-                 const val& hop_length_val, float fmin, float fmax, float threshold, bool fill_na) {
+                 const val& hop_length_val, float fmin, const val& fmax_val, float threshold,
+                 bool fill_na) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
@@ -49,11 +51,12 @@ val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_lengt
 }
 
 val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_length_val,
-                  const val& hop_length_val, float fmin, float fmax, float threshold,
+                  const val& hop_length_val, float fmin, const val& fmax_val, float threshold,
                   bool fill_na) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
@@ -137,10 +140,13 @@ float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_f
 }
 
 val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
-                const val& hop_length_val, float fmin, float fmax, float threshold) {
+                const val& hop_length_val, float fmin, const val& fmax_val,
+                const val& threshold_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   const Audio audio = loadValidatedAudio(samples, sample_rate);
   const PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin, fmax, threshold);
   val out = val::object();
