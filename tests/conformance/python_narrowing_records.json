@@ -34,6 +34,12 @@
       "argument": "lengths",
       "type": "c_size_t",
       "reason": "Each entry is the length returned by _to_c_float_array for a buffer this call already allocated, so it is bounded by that allocation."
+    },
+    {
+      "file": "_runtime.py",
+      "argument": "length",
+      "type": "c_size_t",
+      "reason": "The element count _to_c_float_array reports for the buffer being passed alongside it, so it is the size of an allocation that already succeeded rather than a number the caller chose."
     }
   ],
   "plain_structs": [],

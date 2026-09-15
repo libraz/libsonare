@@ -21,7 +21,7 @@ module can convert a caller's number however it likes and nothing notices:
   front of it, so the mask is the reportable shape rather than the assignment.
   A bare ``int(...)`` is not reported: truncating to an integer is deliberate.
 * **File-local readers.**  A helper that converts a caller's number to a ctypes
-  integer is a reader, and a reader outside the shared home means a change to
+  integer is a reader, and a reader outside the shared family means a change to
   the conversion contract reaches some call sites and not others.
 
 The records live in ``python_narrowing_records.json`` and are read as data.  A
@@ -80,12 +80,16 @@ ROOT = Path(__file__).resolve().parents[2]
 BINDING = ROOT / "bindings" / "python" / "src" / "libsonare"
 RECORDS = Path(__file__).resolve().parent / "python_narrowing_records.json"
 
-# The shared home. A narrowing here IS the implementation every other site
-# routes through, so it is the one place the raw ctypes constructor belongs.
-SHARED_READER_FILES = ("_runtime.py", "_cstruct.py")
+# The shared home is a SET OF SYMBOLS, not a file. A conversion inside the
+# shared implementation IS what every other site routes through, so the raw
+# ctypes constructor belongs there -- but a file grows, and a predicate written
+# beside the implementation inherits its trust without anyone deciding to. The
+# exemptions below therefore name what is trusted, so a new helper next to one
+# is reported rather than blessed by its address.
 
 # The struct base whose __setattr__ range-checks an integer field against the
-# field's own declared type.
+# field's own declared type. Its own definition is the one class allowed to sit
+# on ctypes.Structure directly, because it is what installs that check.
 STRUCT_BASE = "CStruct"
 
 # Spelled out rather than matched loosely: `c_float`, `c_char_p` and the pointer
@@ -130,6 +134,16 @@ SHARED_READERS = (
     "_to_c_uint8",
     "_to_c_size_t",
 )
+
+# The readers that ARE the shared family rather than a file-local copy of one:
+# the eight conversions above, plus the range check they all route through, its
+# field-level twin on the checked base, and the wording the two share.
+SHARED_LOCAL_READERS = SHARED_READERS + (
+    "_narrow_int",
+    "_narrow_field",
+    "_narrowing_error",
+)
+
 
 def _blank(match: re.Match[str]) -> str:
     """Replace a matched span with spaces, keeping its newlines and its length."""
@@ -211,12 +225,12 @@ class Scan:
         for path in self._files():
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source)
-            shared_home = path.name in SHARED_READER_FILES
+            exempt = _shared_reader_bodies(tree)
 
             # Scan A: over the parsed syntax.
             for node in ast.walk(tree):
                 conversion = _ctypes_integer_conversion(node)
-                if shared_home or conversion is None or not node.args:
+                if conversion is None or not node.args or _within(exempt, node.lineno):
                     continue
                 ctype, container = conversion
                 value = _converted_value(node.args[0]) if container else node.args[0]
@@ -227,19 +241,17 @@ class Scan:
                 )
 
             # Scan B: over the token stream.
-            self.token_counts[path.name] = 0 if shared_home else _token_scan(source)
+            self.token_counts[path.name] = _token_scan(source, exempt)
 
             self._collect_structure_bases(path, tree)
             self._collect_masked_fields(path, tree)
-            self._collect_local_readers(path, tree, shared_home)
+            self._collect_local_readers(path, tree)
             self._collect_aliased_imports(path, tree)
 
     def _collect_structure_bases(self, path: Path, tree: ast.Module) -> None:
         """A struct not on the checked base truncates every integer field it has."""
-        if path.name in SHARED_READER_FILES:
-            return
         for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef):
+            if not isinstance(node, ast.ClassDef) or node.name == STRUCT_BASE:
                 continue
             for base in node.bases:
                 if (
@@ -252,8 +264,6 @@ class Scan:
 
     def _collect_masked_fields(self, path: Path, tree: ast.Module) -> None:
         """A width mask hands the field's own range check a value that cannot fail."""
-        if path.name in SHARED_READER_FILES:
-            return
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 targets, masked = node.targets, _width_mask(node.value)
@@ -267,12 +277,10 @@ class Scan:
                 if isinstance(target, ast.Attribute):
                     self.masked_fields.append((path, node.lineno, ast.unparse(target), masked))
 
-    def _collect_local_readers(self, path: Path, tree: ast.Module, shared_home: bool) -> None:
+    def _collect_local_readers(self, path: Path, tree: ast.Module) -> None:
         """A module-level helper whose whole job is a ctypes integer conversion."""
-        if shared_home:
-            return
         for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
+            if not isinstance(node, ast.FunctionDef) or node.name in SHARED_LOCAL_READERS:
                 continue
             returns = ast.unparse(node.returns) if node.returns is not None else ""
             if not any(f"ctypes.{name}" == returns for name in INTEGER_TYPES):
@@ -301,13 +309,33 @@ class Scan:
         ]
 
 
-def _token_scan(source: str) -> int:
+def _shared_reader_bodies(tree: ast.Module) -> list[tuple[int, int]]:
+    """Line spans of the shared ``_to_c_*`` definitions -- the one exempt region.
+
+    This is what both scans share beyond the ctypes qualification, so a defect in
+    the spans is invisible to their disagreement. It is narrower than the
+    filename it replaces for exactly that reason: a span covers a definition
+    rather than everything written beside it.
+    """
+    return [
+        (node.lineno, node.end_lineno or node.lineno)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in SHARED_READERS
+    ]
+
+
+def _within(spans: list[tuple[int, int]], line: int) -> bool:
+    return any(low <= line <= high for low, high in spans)
+
+
+def _token_scan(source: str, exempt: list[tuple[int, int]]) -> int:
     """Scan B: both call spellings, read from the token stream."""
     stream = [
         token
         for token in tokenize.generate_tokens(io.StringIO(source).readline)
         if token.type not in (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT)
         and token.type != tokenize.DEDENT
+        and not _within(exempt, token.start[0])
     ]
     return _token_calls(stream) + _token_arrays(stream)
 
@@ -532,11 +560,10 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
             )
         )
 
-    aliased = [
-        (path, line, name)
-        for path, line, name in scan.aliased_imports
-        if path.name not in SHARED_READER_FILES
-    ]
+    # No exemption at all: an alias puts a conversion beyond the qualification
+    # both scans depend on wherever it is written, the shared implementation
+    # included, and there it would take the exempt spans with it.
+    aliased = scan.aliased_imports
     if aliased:
         failures.append(
             (
@@ -637,7 +664,7 @@ def main() -> int:
     records = Records(data)
     scan = Scan(args.tree, simple_arguments_only=args.simple_arguments_only)
 
-    print(f"inline narrowings outside the shared home: {len(scan.sites)}")
+    print(f"inline narrowings outside the shared family: {len(scan.sites)}")
     print(f"sites routed through the shared family: {_shared_reader_calls(args.tree)}")
     print(f"structs on ctypes.Structure directly: {len(scan.plain_structs)}")
 
