@@ -50,6 +50,8 @@ void EqSpectrumAnalyzer::prepare(double sample_rate) {
   if (fft_ == nullptr) {
     fft_ = std::make_unique<sonare::FFT>(kFftSize);
   }
+  // analyze() transforms on the audio thread, where a first-use allocation is not allowed.
+  fft_->prepare(/*real_forward=*/true, /*real_inverse=*/false, /*complex_forward=*/false);
   window_ = hann_window(kFftSize);
   double window_sum = 0.0;
   double window_sum_squares = 0.0;

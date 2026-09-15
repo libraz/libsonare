@@ -16,7 +16,15 @@ namespace sonare {
 /// factor, and the scalar KissFFT serves the rest, so an unusual @c n_fft still
 /// transforms rather than failing. Which backend runs is an implementation
 /// detail with no effect beyond floating-point rounding; it is chosen per
-/// transform kind at construction. Builds configured with
+/// transform kind on that transform's first call, and an instance allocates
+/// nothing for a kind it is never asked to perform. An @c ErrorCode::OutOfMemory
+/// therefore surfaces from the transform that first needs the state, not from
+/// the constructor. A realtime owner calls prepare() for the kinds it will use,
+/// from wherever it sizes its other buffers, so that no first transform
+/// allocates on the audio thread. In a @c noexcept caller that is a correctness
+/// requirement rather than a latency one: the first transform of a kind can
+/// throw, and an exception leaving a @c noexcept function terminates the
+/// process. Builds configured with
 /// `-DSONARE_USE_PFFFT=OFF`, which is the WebAssembly default, use KissFFT
 /// throughout.
 ///
@@ -30,7 +38,8 @@ class FFT {
  public:
   /// @brief Constructs FFT processor.
   /// @param n_fft FFT size (should be power of 2 for efficiency)
-  /// @throws SonareException with ErrorCode::OutOfMemory if allocation fails
+  /// @throws SonareException with ErrorCode::InvalidParameter if n_fft is not an
+  ///         even integer greater than or equal to 2
   explicit FFT(int n_fft);
 
   ~FFT();
@@ -40,6 +49,16 @@ class FFT {
   FFT& operator=(const FFT&) = delete;
   FFT(FFT&&) noexcept;
   FFT& operator=(FFT&&) noexcept;
+
+  /// @brief Builds the backend state for the given transform kinds up front.
+  /// @details Idempotent, and a kind already built is left untouched. All three
+  ///          kinds are named so that preparing one is a decision about the
+  ///          other two rather than a silent omission.
+  /// @param real_forward Prepare what forward() needs
+  /// @param real_inverse Prepare what inverse() needs
+  /// @param complex_forward Prepare what forward_complex() needs
+  /// @throws SonareException with ErrorCode::OutOfMemory if allocation fails
+  void prepare(bool real_forward, bool real_inverse, bool complex_forward);
 
   /// @brief Performs forward FFT (real to complex).
   /// @param input Input signal (size must equal n_fft)

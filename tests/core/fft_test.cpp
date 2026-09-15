@@ -7,7 +7,11 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <cstring>
 #include <vector>
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#endif
 
 #include "util/constants.h"
 #include "util/exception.h"
@@ -341,4 +345,164 @@ TEST_CASE("FFT forward_complex builds its backend on first use", "[fft]") {
       REQUIRE(repeated[static_cast<size_t>(k)] == after_real[static_cast<size_t>(k)]);
     }
   }
+}
+
+TEST_CASE("FFT real transforms build their backend on first use", "[fft]") {
+  // The real setup, its scratch buffers and the two KissFFT real configs are built on the
+  // first forward() / inverse() call rather than in the constructor, so what an instance
+  // holds -- and at which addresses -- depends on which transforms it has already run.
+  // The output must not depend on any of that, which is why these comparisons are exact:
+  // a rounding-tolerant assertion cannot see the few-ulp shift a changed traversal or a
+  // changed SIMD path would produce. The two sizes straddle the backend split as above.
+  for (int n : {64, 12}) {
+    CAPTURE(n);
+    const size_t bins = static_cast<size_t>(n / 2 + 1);
+    const size_t spectrum_bytes = bins * sizeof(std::complex<float>);
+    const size_t signal_bytes = static_cast<size_t>(n) * sizeof(float);
+
+    std::vector<float> signal(static_cast<size_t>(n));
+    std::vector<std::complex<float>> complex_signal(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(n);
+      const float value = std::sin(kTwoPi * 3.0f * t) + 0.25f * std::cos(kTwoPi * 5.0f * t);
+      signal[static_cast<size_t>(i)] = value;
+      complex_signal[static_cast<size_t>(i)] = {value, 0.5f * std::sin(kTwoPi * 7.0f * t)};
+    }
+    std::vector<std::complex<float>> spectrum(bins);
+    for (size_t k = 0; k < bins; ++k) {
+      const float t = static_cast<float>(k) / static_cast<float>(bins);
+      spectrum[k] = {std::cos(kTwoPi * 2.0f * t), std::sin(kTwoPi * 2.0f * t)};
+    }
+
+    // References, each taken from an instance that runs one transform and nothing else.
+    // The inverse-only instance is also the case that crashes outright if the real state
+    // is built from forward() alone.
+    FFT forward_only(n);
+    std::vector<std::complex<float>> forward_ref(bins);
+    forward_only.forward(signal.data(), forward_ref.data());
+
+    FFT inverse_only(n);
+    std::vector<float> inverse_ref(static_cast<size_t>(n));
+    inverse_only.inverse(spectrum.data(), inverse_ref.data());
+
+    // Every other first-use order has to reproduce those bytes.
+    FFT forward_after_inverse(n);
+    std::vector<float> time_scratch(static_cast<size_t>(n));
+    forward_after_inverse.inverse(spectrum.data(), time_scratch.data());
+    std::vector<std::complex<float>> forward_late(bins);
+    forward_after_inverse.forward(signal.data(), forward_late.data());
+    REQUIRE(std::memcmp(forward_late.data(), forward_ref.data(), spectrum_bytes) == 0);
+
+    FFT forward_after_complex(n);
+    std::vector<std::complex<float>> complex_scratch(static_cast<size_t>(n));
+    forward_after_complex.forward_complex(complex_signal.data(), complex_scratch.data());
+    std::vector<std::complex<float>> forward_after_cplx(bins);
+    forward_after_complex.forward(signal.data(), forward_after_cplx.data());
+    REQUIRE(std::memcmp(forward_after_cplx.data(), forward_ref.data(), spectrum_bytes) == 0);
+
+    FFT inverse_after_forward(n);
+    std::vector<std::complex<float>> spectrum_scratch(bins);
+    inverse_after_forward.forward(signal.data(), spectrum_scratch.data());
+    std::vector<float> inverse_late(static_cast<size_t>(n));
+    inverse_after_forward.inverse(spectrum.data(), inverse_late.data());
+    REQUIRE(std::memcmp(inverse_late.data(), inverse_ref.data(), signal_bytes) == 0);
+
+    FFT inverse_after_complex(n);
+    inverse_after_complex.forward_complex(complex_signal.data(), complex_scratch.data());
+    std::vector<float> inverse_after_cplx(static_cast<size_t>(n));
+    inverse_after_complex.inverse(spectrum.data(), inverse_after_cplx.data());
+    REQUIRE(std::memcmp(inverse_after_cplx.data(), inverse_ref.data(), signal_bytes) == 0);
+
+    // A repeat call reuses the state instead of rebuilding it.
+    std::vector<std::complex<float>> forward_repeat(bins);
+    forward_only.forward(signal.data(), forward_repeat.data());
+    REQUIRE(std::memcmp(forward_repeat.data(), forward_ref.data(), spectrum_bytes) == 0);
+    std::vector<float> inverse_repeat(static_cast<size_t>(n));
+    inverse_only.inverse(spectrum.data(), inverse_repeat.data());
+    REQUIRE(std::memcmp(inverse_repeat.data(), inverse_ref.data(), signal_bytes) == 0);
+
+    // Non-vacuity: the same comparison over a perturbed input fails, so the equalities
+    // above are a statement about the output rather than about the comparison.
+    std::vector<float> perturbed(signal);
+    perturbed[0] += 1.0f;
+    FFT perturbed_fft(n);
+    std::vector<std::complex<float>> forward_perturbed(bins);
+    perturbed_fft.forward(perturbed.data(), forward_perturbed.data());
+    REQUIRE(std::memcmp(forward_perturbed.data(), forward_ref.data(), spectrum_bytes) != 0);
+  }
+}
+
+TEST_CASE("FFT::prepare leaves the first transform allocation-free", "[fft][rt]") {
+  // A realtime owner calls prepare() so that its first transform neither allocates on the
+  // audio thread nor, in a noexcept caller, throws there. The shared AllocationGuard cannot
+  // measure this one: both backends take their memory through malloc (pffft_aligned_malloc,
+  // kiss_fftr_alloc) rather than operator new, so the malloc zone's in-use bytes are the
+  // instrument, and the case is macOS-only for that reason. CI runs the C++ suite on
+  // ubuntu-latest AND macos-latest, so the macOS row is what executes this case.
+#if !defined(__APPLE__)
+  SKIP("allocation is measured through the macOS malloc zone statistics");
+#else
+  const auto in_use = []() {
+    malloc_statistics_t stats;
+    malloc_zone_statistics(malloc_default_zone(), &stats);
+    return static_cast<long long>(stats.size_in_use);
+  };
+
+  // The sizes straddle the backend split as above, and are large enough that every
+  // allocation under test lands in the measured zone rather than the small-object one.
+  for (int n : {2048, 2040}) {
+    CAPTURE(n);
+    const size_t bins = static_cast<size_t>(n / 2 + 1);
+    std::vector<float> signal(static_cast<size_t>(n), 0.25f);
+    std::vector<std::complex<float>> spectrum(bins, std::complex<float>{0.5f, -0.25f});
+    std::vector<std::complex<float>> spectrum_out(bins);
+    std::vector<float> time_out(static_cast<size_t>(n));
+    std::vector<std::complex<float>> complex_in(static_cast<size_t>(n),
+                                                std::complex<float>{0.25f, 0.125f});
+    std::vector<std::complex<float>> complex_out(static_cast<size_t>(n));
+
+    {
+      // Bring the allocator to a steady state before anything is measured.
+      FFT warm(n);
+      warm.prepare(/*real_forward=*/true, /*real_inverse=*/true, /*complex_forward=*/true);
+      warm.forward(signal.data(), spectrum_out.data());
+      warm.inverse(spectrum.data(), time_out.data());
+      warm.forward_complex(complex_in.data(), complex_out.data());
+    }
+
+    // Controls: each first transform allocates when prepare() has not run. A control that
+    // fails means the instrument is blind, and the assertion below would then hold whatever
+    // prepare() did. Each delta is taken before any assertion machinery runs.
+    {
+      FFT unprepared(n);
+      const long long before = in_use();
+      unprepared.forward(signal.data(), spectrum_out.data());
+      const long long delta = in_use() - before;
+      REQUIRE(delta > 0);
+    }
+    {
+      FFT unprepared(n);
+      const long long before = in_use();
+      unprepared.inverse(spectrum.data(), time_out.data());
+      const long long delta = in_use() - before;
+      REQUIRE(delta > 0);
+    }
+    {
+      FFT unprepared(n);
+      const long long before = in_use();
+      unprepared.forward_complex(complex_in.data(), complex_out.data());
+      const long long delta = in_use() - before;
+      REQUIRE(delta > 0);
+    }
+
+    FFT prepared(n);
+    prepared.prepare(/*real_forward=*/true, /*real_inverse=*/true, /*complex_forward=*/true);
+    const long long before = in_use();
+    prepared.forward(signal.data(), spectrum_out.data());
+    prepared.inverse(spectrum.data(), time_out.data());
+    prepared.forward_complex(complex_in.data(), complex_out.data());
+    const long long delta = in_use() - before;
+    REQUIRE(delta == 0);
+  }
+#endif  // !defined(__APPLE__)
 }

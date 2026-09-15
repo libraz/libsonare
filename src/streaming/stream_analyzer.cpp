@@ -162,6 +162,8 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
 
   /// Initialize FFT
   fft_ = std::make_unique<FFT>(config_.n_fft);
+  /// compute_stft() transforms on the audio thread, which must not allocate
+  fft_->prepare(/*real_forward=*/true, /*real_inverse=*/false, /*complex_forward=*/false);
 
   /// Cache window function
   window_ = *get_window_cached(config_.window, config_.n_fft);

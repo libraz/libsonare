@@ -20,6 +20,8 @@ void ScopeTelemetryTap::prepare(double sample_rate, int max_block_size, size_t t
   n_fft_ = static_cast<int>(next_power_of_2(static_cast<size_t>(min_fft)));
 
   fft_ = std::make_unique<FFT>(n_fft_);
+  // process() transforms on the audio thread, where a first-use allocation is not allowed.
+  fft_->prepare(/*real_forward=*/true, /*real_inverse=*/false, /*complex_forward=*/false);
   fft_input_.assign(static_cast<size_t>(n_fft_), 0.0f);
   spectrum_.assign(static_cast<size_t>(fft_->n_bins()), std::complex<float>{});
   master_accumulator_.assign(static_cast<size_t>(n_fft_) * 2, 0.0f);

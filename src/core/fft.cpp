@@ -108,7 +108,14 @@ class PffftSetup {
 /// @details Both backends are wired per transform kind rather than per instance:
 /// a length PFFFT can factor for a complex transform is not necessarily one it
 /// can factor for a real transform, so each of the three entry points picks its
-/// own backend and only the configs that backend needs are allocated.
+/// own backend and only the configs that backend needs are allocated. Nothing is
+/// built until a transform is first run, so an instance that only ever calls
+/// forward_complex() -- which is what the constant-Q and VQT paths do -- pays
+/// for neither the real setup nor its scratch buffers. Safe because the class
+/// already forbids sharing one instance between threads without external
+/// synchronization (see the Thread Safety block in fft.h): the backend scratch
+/// buffers are written during every transform, so an instance was never usable
+/// concurrently to begin with.
 struct FFT::Impl {
 #if SONARE_HAVE_PFFFT
   PffftSetup real_setup;
@@ -126,12 +133,29 @@ struct FFT::Impl {
   kiss_fftr_cfg inverse_cfg = nullptr;
   kiss_fft_cfg forward_complex_cfg = nullptr;
 
-  // Set once ensure_complex() has settled on a backend for the complex transform.
+  // Set once the matching ensure_*() has settled on a backend. The two real
+  // directions latch apart because the KissFFT fallback needs a config per
+  // direction; one PFFFT setup serves both, so it latches them together.
+  bool real_forward_ready = false;
+  bool real_inverse_ready = false;
   bool complex_ready = false;
 
-  explicit Impl(int n) {
+  ~Impl() { release_kiss(); }
+
+  /// Builds the state one direction of the real transform needs, on first use.
+  /// Idempotent, and called only from forward() and inverse(), which the class's
+  /// thread-safety contract already requires a caller to serialize per instance.
+  /// The latch covers the whole decision, not just the PFFFT half: for a length
+  /// PFFFT declines, the KissFFT fallback must be chosen once rather than
+  /// re-attempting the failing setup on every transform. An allocation failure
+  /// leaves it clear so a retry is still possible.
+  void ensure_real(int n, bool inverse) {
+    bool& ready = inverse ? real_inverse_ready : real_forward_ready;
+    if (ready) return;
 #if SONARE_HAVE_PFFFT
-    real_setup.create(n, PFFFT_REAL);
+    if (!real_setup) {
+      real_setup.create(n, PFFFT_REAL);
+    }
     if (real_setup) {
       // `work` is passed explicitly rather than left null: PFFFT falls back to a
       // stack allocation of the same size, which is fine for an STFT frame but
@@ -140,37 +164,20 @@ struct FFT::Impl {
       real_in.allocate(count, "Failed to allocate PFFFT real input buffer");
       real_out.allocate(count, "Failed to allocate PFFFT real output buffer");
       real_work.allocate(count, "Failed to allocate PFFFT real work buffer");
+      real_forward_ready = true;
+      real_inverse_ready = true;
+      return;
     }
-    // The complex setup and its three buffers are built on the first
-    // forward_complex() call instead of here: most instances only ever run the
-    // real transform, and this is the larger half of the construction cost.
-    // Safe because the class already forbids sharing one instance between
-    // threads without external synchronization (see the Thread Safety block in
-    // fft.h) -- the backend scratch buffers are written during every transform,
-    // so an instance was never usable concurrently to begin with.
-    const bool need_kiss_real = !real_setup;
-#else
-    const bool need_kiss_real = true;
 #endif
-
-    // The KissFFT handles are raw, and a throwing constructor runs no destructor
-    // of its own, so a failure here releases whatever it already took before it
-    // leaves.
-    const char* failure = nullptr;
-    if (need_kiss_real) {
-      forward_cfg = kiss_fftr_alloc(n, 0, nullptr, nullptr);
-      inverse_cfg = kiss_fftr_alloc(n, 1, nullptr, nullptr);
-      if (!forward_cfg || !inverse_cfg) {
-        failure = "Failed to allocate KissFFT real config";
+    kiss_fftr_cfg& cfg = inverse ? inverse_cfg : forward_cfg;
+    if (cfg == nullptr) {
+      cfg = kiss_fftr_alloc(n, inverse ? 1 : 0, nullptr, nullptr);
+      if (cfg == nullptr) {
+        throw SonareException(ErrorCode::OutOfMemory, "Failed to allocate KissFFT real config");
       }
     }
-    if (failure != nullptr) {
-      release_kiss();
-      throw SonareException(ErrorCode::OutOfMemory, failure);
-    }
+    ready = true;
   }
-
-  ~Impl() { release_kiss(); }
 
   /// Builds the complex-transform state on first use. Idempotent, and called
   /// only from forward_complex(), which the class's thread-safety contract
@@ -216,7 +223,7 @@ struct FFT::Impl {
 FFT::FFT(int n_fft) : n_fft_(n_fft) {
   SONARE_CHECK_MSG(n_fft >= 2 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
                    "FFT size must be an even integer greater than or equal to 2");
-  impl_ = std::make_unique<Impl>(n_fft);
+  impl_ = std::make_unique<Impl>();
 }
 
 FFT::~FFT() = default;
@@ -224,9 +231,16 @@ FFT::~FFT() = default;
 FFT::FFT(FFT&&) noexcept = default;
 FFT& FFT::operator=(FFT&&) noexcept = default;
 
+void FFT::prepare(bool real_forward, bool real_inverse, bool complex_forward) {
+  if (real_forward) impl_->ensure_real(n_fft_, /*inverse=*/false);
+  if (real_inverse) impl_->ensure_real(n_fft_, /*inverse=*/true);
+  if (complex_forward) impl_->ensure_complex(n_fft_);
+}
+
 void FFT::forward(const float* input, std::complex<float>* output) {
   SONARE_CHECK_MSG(input != nullptr && output != nullptr, ErrorCode::InvalidParameter,
                    "Null pointer passed to FFT::forward");
+  impl_->ensure_real(n_fft_, /*inverse=*/false);
 #if SONARE_HAVE_PFFFT
   if (impl_->real_setup) {
     const int n = n_fft_;
@@ -273,6 +287,7 @@ void FFT::forward_complex(const std::complex<float>* input, std::complex<float>*
 void FFT::inverse(const std::complex<float>* input, float* output) {
   SONARE_CHECK_MSG(input != nullptr && output != nullptr, ErrorCode::InvalidParameter,
                    "Null pointer passed to FFT::inverse");
+  impl_->ensure_real(n_fft_, /*inverse=*/true);
 #if SONARE_HAVE_PFFFT
   if (impl_->real_setup) {
     const int n = n_fft_;

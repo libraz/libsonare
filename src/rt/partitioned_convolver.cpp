@@ -112,6 +112,8 @@ void PartitionedConvolver::validate_config() const {
 void PartitionedConvolver::rebuild_fft() {
   fft_size_ = config_.partition_size * 2;
   fft_ = std::make_unique<sonare::FFT>(fft_size_);
+  // process_block() is noexcept and transforms both directions on the audio thread.
+  fft_->prepare(/*real_forward=*/true, /*real_inverse=*/true, /*complex_forward=*/false);
   fft_input_.assign(static_cast<size_t>(fft_size_), 0.0f);
   fft_output_.assign(static_cast<size_t>(fft_size_), 0.0f);
   current_spectrum_.assign(static_cast<size_t>(fft_->n_bins()), {0.0f, 0.0f});

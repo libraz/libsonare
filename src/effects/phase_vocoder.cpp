@@ -150,6 +150,8 @@ void StreamingPhaseVocoder::ensure_stream_state() {
   if (fft_ != nullptr) return;
 
   fft_ = std::make_unique<FFT>(config_.n_fft);
+  // reserve() promises an allocation-free processing path, so both directions are built here.
+  fft_->prepare(/*real_forward=*/true, /*real_inverse=*/true, /*complex_forward=*/false);
   const auto analysis_window_handle = get_window_cached(WindowType::Hann, config_.win_length, true);
   const auto synthesis_window_handle =
       get_window_cached(WindowType::Hann, config_.win_length, false);
