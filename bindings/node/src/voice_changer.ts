@@ -48,12 +48,13 @@ export class RealtimeVoiceChanger {
    * non-finite value had reached it.
    *
    * Advisory telemetry, and the only thing that separates a degraded stream
-   * from a clean one. Every stage of this chain replaces a non-finite sample
-   * with an in-domain finite one — the inter-sample-peak limiter with silence
-   * or full scale, the sample-domain limiter by folding an infinity onto its
-   * ceiling — so the output stays finite, in range and free of any error while
-   * carrying samples unrelated to the input. A non-zero count is what says the
-   * samples in between were not computed from what you supplied.
+   * from a clean one. Every stage of this chain leaves an in-domain finite
+   * value where a non-finite one was — the input scrub and the
+   * inter-sample-peak limiter substitute silence, the sample-domain limiter
+   * folds an infinity onto its ceiling — so the output stays finite, in range
+   * and free of any error while carrying samples unrelated to the input. A
+   * non-zero count is what says the samples in between were not computed from
+   * what you supplied.
    *
    * Monotonic for the lifetime of the instance, and counted per channel and per
    * block: a stereo block that discards on both channels adds two.
@@ -112,9 +113,9 @@ export class RealtimeVoiceChanger {
 
 /** Options for {@link voiceChange}. All fields are optional. */
 export interface VoiceChangeOptions extends ValidateOptions {
-  /** Pitch shift in semitones (negative = down). Default 0. */
+  /** Pitch shift in semitones (negative = down), a finite number. Default 0. */
   pitchSemitones?: number;
-  /** Formant scale factor (>1 brightens, <1 darkens). Default 1. */
+  /** Formant scale factor (>1 brightens, <1 darkens), a finite number. Default 1. */
   formantFactor?: number;
 }
 

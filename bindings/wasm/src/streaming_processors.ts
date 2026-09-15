@@ -168,14 +168,15 @@ export class StreamingMasteringChain {
   }
 
   /**
-   * Non-finite input samples a stage replaced with a finite in-domain one.
+   * Samples a stage replaced with a finite in-domain one, keeping the output
+   * finite and in range.
    *
-   * Advisory telemetry, and the only thing that separates a degraded stream
-   * from a clean one. A stage that meets a non-finite sample substitutes an
-   * in-domain value for it — silence or full scale at the inter-sample-peak
-   * limiter, an infinity folded onto the ceiling at a sample-domain one — so
-   * the block comes back finite, in range and free of any error while carrying
-   * values that are not a function of the input. This count is what says so.
+   * A non-finite sample supplied by the caller is rejected before any stage
+   * runs, so a replacement is always of a value a stage itself produced.
+   *
+   * Only the true-peak limiters replace anything, so with the maximizer's
+   * limiter and the loudness stage both disabled a zero here means no stage was
+   * able to replace anything rather than that nothing needed replacing.
    *
    * Cumulative over every block since {@link prepare}, and aggregated over the
    * stages and channels, so it identifies neither which block nor which stage.
