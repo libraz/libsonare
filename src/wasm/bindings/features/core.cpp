@@ -97,7 +97,8 @@ val js_db_to_amplitude(val values, float ref) {
   return vectorToFloat32Array(db_to_amplitude(data, ref));
 }
 
-val js_preemphasis(val samples, float coef, val zi) {
+val js_preemphasis(val samples, const val& coef_val, val zi) {
+  const float coef = checkedFloatFromVal(coef_val, "coef");
   std::vector<float> data = float32ArrayToVector(samples);
   validateFiniteVector(data, "preemphasis");
   if (zi.isUndefined() || zi.isNull()) {
@@ -106,7 +107,8 @@ val js_preemphasis(val samples, float coef, val zi) {
   return vectorToFloat32Array(preemphasis(data, coef, checkedFloatFromVal(zi, "zi")));
 }
 
-val js_deemphasis(val samples, float coef, val zi) {
+val js_deemphasis(val samples, const val& coef_val, val zi) {
+  const float coef = checkedFloatFromVal(coef_val, "coef");
   std::vector<float> data = float32ArrayToVector(samples);
   validateFiniteVector(data, "deemphasis");
   if (zi.isUndefined() || zi.isNull()) {
@@ -115,8 +117,9 @@ val js_deemphasis(val samples, float coef, val zi) {
   return vectorToFloat32Array(deemphasis(data, coef, checkedFloatFromVal(zi, "zi")));
 }
 
-val js_trim_silence(val samples, float top_db, const val& frame_length_val,
+val js_trim_silence(val samples, const val& top_db_val, const val& frame_length_val,
                     const val& hop_length_val) {
+  const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
@@ -129,8 +132,9 @@ val js_trim_silence(val samples, float top_db, const val& frame_length_val,
   return out;
 }
 
-val js_split_silence(val samples, float top_db, const val& frame_length_val,
+val js_split_silence(val samples, const val& top_db_val, const val& frame_length_val,
                      const val& hop_length_val) {
+  const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
@@ -156,13 +160,20 @@ val js_frame_signal(val samples, const val& frame_length_val, const val& hop_len
   return out;
 }
 
-val js_tone(float frequency, const val& sample_rate, float duration, float phase, float amplitude) {
+val js_tone(const val& frequency_val, const val& sample_rate, float duration, const val& phase_val,
+            const val& amplitude_val) {
+  const float frequency = checkedFloatFromVal(frequency_val, "frequency");
+  const float phase = checkedFloatFromVal(phase_val, "phase");
+  const float amplitude = checkedFloatFromVal(amplitude_val, "amplitude");
   const Audio audio =
       tone(frequency, checkedIntFromVal(sample_rate, "sampleRate"), duration, phase, amplitude);
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
 }
 
-val js_chirp(float fmin, float fmax, const val& sample_rate, float duration, bool linear) {
+val js_chirp(const val& fmin_val, const val& fmax_val, const val& sample_rate, float duration,
+             bool linear) {
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const Audio audio =
       chirp(fmin, fmax, checkedIntFromVal(sample_rate, "sampleRate"), duration, linear);
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
@@ -221,11 +232,12 @@ val js_onset_backtrack(val events, val energy) {
 }
 
 val js_peak_pick(val values, const val& pre_max, const val& post_max, const val& pre_avg,
-                 const val& post_avg, float delta, const val& wait) {
+                 const val& post_avg, const val& delta_val, const val& wait) {
   const int pre_max_frames = checkedIntFromVal(pre_max, "preMax");
   const int post_max_frames = checkedIntFromVal(post_max, "postMax");
   const int pre_avg_frames = checkedIntFromVal(pre_avg, "preAvg");
   const int post_avg_frames = checkedIntFromVal(post_avg, "postAvg");
+  const float delta = checkedFloatFromVal(delta_val, "delta");
   const int wait_frames = checkedIntFromVal(wait, "wait");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "peakPick");
@@ -233,8 +245,9 @@ val js_peak_pick(val values, const val& pre_max, const val& post_max, const val&
                                       post_avg_frames, delta, wait_frames));
 }
 
-val js_vector_normalize(val values, const val& norm_type_val, float threshold) {
+val js_vector_normalize(val values, const val& norm_type_val, const val& threshold_val) {
   const int norm_type = checkedIntFromVal(norm_type_val, "normType");
+  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "vectorNormalize");
   NormType norm = NormType::Inf;
