@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import ctypes
-import operator
-from typing import Any, ClassVar, SupportsIndex
+from typing import Any, ClassVar
+
+from ._narrowing import _narrow_float, _narrow_int
 
 # ctypes type codes for the integer widths, taken from the field's own type so a
 # platform alias (``c_int32 is c_int``, ``c_size_t is c_ulong``) needs no table.
@@ -114,33 +115,7 @@ class CStruct(ctypes.Structure):
             cls = type(self)
             span = cls._integer_bounds().get(name)
             if span is not None:
-                value = _narrow_field(value, name, *span)
+                value = _narrow_int(value, name, *span)
             elif name in cls._float_fields():
-                value = _narrow_float_field(value, name)
+                value = _narrow_float(value, name)
         ctypes.Structure.__setattr__(self, name, value)
-
-
-def _narrow_field(value: object, name: str, low: int, high: int) -> int:
-    """Return ``value`` as a plain ``int``, or refuse what the field would change."""
-    if not isinstance(value, bool) and isinstance(value, SupportsIndex):
-        try:
-            integer = operator.index(value)
-        except TypeError:
-            pass
-        else:
-            if low <= integer <= high:
-                return integer
-    # Imported on the failure path only: _runtime reaches these structs through
-    # _ffi, so a module-level import here would close the cycle.
-    from ._runtime import SonareValueError, _narrowing_error
-
-    raise SonareValueError(_narrowing_error(name, low, high))
-
-
-def _narrow_float_field(value: object, name: str) -> float:
-    """Return ``value`` as a plain ``float``, or refuse what the field would fold."""
-    # Imported on call as _narrow_field is, but on every write: this half needs
-    # the shared reader to accept as well as to refuse.
-    from ._runtime import _narrow_float
-
-    return _narrow_float(value, name)

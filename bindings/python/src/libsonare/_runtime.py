@@ -6,12 +6,9 @@ import contextlib
 import ctypes
 import functools
 import inspect
-import math
-import operator
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from enum import IntEnum
 from numbers import Integral
-from typing import Any, SupportsFloat, SupportsIndex, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import numpy as np
 
@@ -19,7 +16,17 @@ import numpy as np
 # `from ._runtime import *`, so forward the full C-struct and public type
 # surfaces here instead of maintaining a partial hand-written list (an
 # incomplete list silently breaks submodules at runtime with NameError).
+# The leaf modules below are forwarded the same way; the redundant aliases are
+# what marks a re-export to mypy's strict mode.
+from ._errors import ErrorCode as ErrorCode
+from ._errors import SonareError as SonareError
+from ._errors import SonareValueError as SonareValueError
 from ._ffi import *  # noqa: F403
+from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
+from ._narrowing import _float_narrowing_error as _float_narrowing_error
+from ._narrowing import _narrow_float as _narrow_float
+from ._narrowing import _narrow_int as _narrow_int
+from ._narrowing import _narrowing_error as _narrowing_error
 from .types import *  # noqa: F403
 
 # Pan-law aliases are normalized case-insensitively and with underscores folded
@@ -34,73 +41,6 @@ PAN_MODE_STEREO_PAN = 1
 PAN_MODE_DUAL_PAN = 2
 
 _lib: ctypes.CDLL | None = None
-
-
-class ErrorCode(IntEnum):
-    """Public C-ABI error codes carried by :class:`SonareError`."""
-
-    OK = 0
-    FILE_NOT_FOUND = 1
-    INVALID_FORMAT = 2
-    DECODE_FAILED = 3
-    INVALID_PARAMETER = 4
-    OUT_OF_MEMORY = 5
-    NOT_SUPPORTED = 6
-    INVALID_STATE = 7
-    CANCELLED = 8
-    ENCODE_FAILED = 9
-    UNKNOWN = 99
-
-
-class SonareError(RuntimeError):
-    """Exception raised for non-OK Sonare C API return codes."""
-
-    def __init__(self, code: int, message: str) -> None:
-        self.code = int(code)
-        super().__init__(f"[{self.code}] {message}")
-
-    @property
-    def code_name(self) -> str:
-        """Canonical cross-binding name of :attr:`code`."""
-        names = {
-            ErrorCode.OK: "Ok",
-            ErrorCode.FILE_NOT_FOUND: "FileNotFound",
-            ErrorCode.INVALID_FORMAT: "InvalidFormat",
-            ErrorCode.DECODE_FAILED: "DecodeFailed",
-            ErrorCode.INVALID_PARAMETER: "InvalidParameter",
-            ErrorCode.OUT_OF_MEMORY: "OutOfMemory",
-            ErrorCode.NOT_SUPPORTED: "NotSupported",
-            ErrorCode.INVALID_STATE: "InvalidState",
-            ErrorCode.CANCELLED: "Cancelled",
-            ErrorCode.ENCODE_FAILED: "EncodeFailed",
-            ErrorCode.UNKNOWN: "Unknown",
-        }
-        try:
-            return names[ErrorCode(self.code)]
-        except ValueError:
-            return names[ErrorCode.UNKNOWN]
-
-
-class SonareValueError(SonareError, ValueError):
-    """Exception raised when the binding rejects a caller-supplied argument.
-
-    Deriving from both :class:`SonareError` and :class:`ValueError` is the
-    compatibility contract, not an implementation detail: every
-    argument-validation failure the binding raises must be caught by
-    ``except ValueError`` (the plain type argument validation has always used)
-    and by ``except SonareError`` (the binding's own error hierarchy), so
-    neither style of caller needs to know which one a given entry point picks.
-
-    Unlike :class:`SonareError`, the message is the plain validation text with
-    no ``[code]`` prefix, since the failure never reached the C ABI.
-    :attr:`code` defaults to :attr:`ErrorCode.INVALID_PARAMETER` so error-class
-    and exit-code mapping treat it exactly like the C-ABI rejection it stands
-    in for.
-    """
-
-    def __init__(self, message: str, code: int = int(ErrorCode.INVALID_PARAMETER)) -> None:
-        self.code = int(code)
-        ValueError.__init__(self, message)
 
 
 def _get_lib() -> ctypes.CDLL:
@@ -592,52 +532,6 @@ _UINT_MAX = (1 << (ctypes.sizeof(ctypes.c_uint) * 8)) - 1
 _UINT32_MAX = 2**32 - 1
 
 
-def _narrow_int(value: object, name: str, low: int, high: int) -> int:
-    """Return ``value`` as a plain ``int``, or refuse what a C type would change.
-
-    The one implementation behind every ``_to_c_*`` conversion below: the target
-    range is the only thing that differs between them, and all of them refuse the
-    same silent value change. A ctypes integer constructor applies the C
-    conversion, so ``c_int(2**32)`` is 0 — which every versioned config field
-    reads as "keep the default" — ``c_int(2**32 + 1)`` is 1, and
-    ``c_size_t(-1)`` is the largest representable size. A wrapped value is always
-    inside the target type, so no downstream range check can tell it from a
-    request the caller meant.
-
-    A ``bool`` is refused rather than read as 0/1: it is an ``int`` subclass, so
-    it can never fail the range check, and the entry points that genuinely take a
-    flag spell the conversion out at the call site.
-
-    Args:
-        value: Caller-supplied number.
-        name: Field or argument name, named in the error message.
-        low: Smallest value the target type represents.
-        high: Largest value the target type represents.
-
-    Returns:
-        The value as a plain ``int``.
-
-    Raises:
-        SonareValueError: If ``value`` is not an integer, or does not fit.
-    """
-    if not isinstance(value, bool) and isinstance(value, SupportsIndex):
-        try:
-            integer = operator.index(value)
-        except TypeError:
-            pass
-        else:
-            if low <= integer <= high:
-                return integer
-    raise SonareValueError(_narrowing_error(name, low, high))
-
-
-def _narrowing_error(name: str, low: int, high: int) -> str:
-    """Word one refusal for both halves of the family, unsigned reading as such."""
-    if low == 0:
-        return f"{name} must be a non-negative integer within [0, {high}]"
-    return f"{name} must be an integer within [{low}, {high}]"
-
-
 def _to_c_int(value: object, name: str) -> ctypes.c_int:
     """Narrow a caller-supplied integer onto a C ``int``; see :func:`_narrow_int`."""
     return ctypes.c_int(_narrow_int(value, name, _C_INT_MIN, _C_INT_MAX))
@@ -676,55 +570,6 @@ def _to_c_uint8(value: object, name: str) -> ctypes.c_uint8:
 def _to_c_size_t(value: object, name: str) -> ctypes.c_size_t:
     """Narrow a caller-supplied integer onto ``size_t``; see :func:`_narrow_int`."""
     return ctypes.c_size_t(_narrow_int(value, name, 0, _SIZE_T_MAX))
-
-
-# Largest finite value a 32-bit float represents. A double above it does not
-# overflow on conversion, it saturates to an infinity ctypes hands on as a
-# legal value.
-_FLOAT32_MAX = 3.4028234663852886e38
-
-
-def _narrow_float(value: object, name: str) -> float:
-    """Return ``value`` as a plain ``float``, or refuse what a C type would change.
-
-    The float half of the family, and the one implementation behind
-    :func:`_to_c_float`. A Python float is an IEEE double, so ``c_float`` halves
-    the exponent range without raising: ``c_float(1e40)`` is ``inf`` and
-    ``c_float(-1e40)`` is ``-inf``. That is saturation rather than the integer
-    family's wrap, and the consequence is the one :func:`_narrow_int` describes
-    — the caller's quantity arrives as another legal value, and on the fields
-    documented to read a non-finite input as "unspecified" it is
-    indistinguishable from a deliberate request. A NaN or an infinity passed in
-    directly folds onto the same reading, so it is refused here too.
-
-    An ``int`` is accepted: a caller writes ``1`` as readily as ``1.0``. A
-    ``bool`` is refused rather than read as 0/1, for the reason
-    :func:`_narrow_int` gives.
-
-    Args:
-        value: Caller-supplied number.
-        name: Field or argument name, named in the error message.
-
-    Returns:
-        The value as a plain ``float``.
-
-    Raises:
-        SonareValueError: If ``value`` is not a number, or does not fit.
-    """
-    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
-        try:
-            number = float(value)
-        except (TypeError, ValueError, OverflowError):
-            pass
-        else:
-            if math.isfinite(number) and abs(number) <= _FLOAT32_MAX:
-                return number
-    raise SonareValueError(_float_narrowing_error(name))
-
-
-def _float_narrowing_error(name: str) -> str:
-    """Word one refusal for the float half, as :func:`_narrowing_error` does for ints."""
-    return f"{name} must be a finite number within [-{_FLOAT32_MAX:g}, {_FLOAT32_MAX:g}]"
 
 
 def _to_c_float(value: object, name: str) -> ctypes.c_float:
