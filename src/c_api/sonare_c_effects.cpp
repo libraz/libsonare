@@ -20,6 +20,7 @@
 #include "effects/time_stretch.h"
 #include "sonare_c_internal.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -435,7 +436,7 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
-  if (rate <= 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!numeric::finite_positive(rate)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig stft_config;

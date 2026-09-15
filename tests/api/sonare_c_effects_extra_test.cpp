@@ -809,3 +809,125 @@ TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
     sonare_free_floats(spelled_out_audio);
   }
 }
+
+TEST_CASE("C scalar guards reject every non-finite argument", "[c_api][validation]") {
+  constexpr int sr = 22050;
+  const auto samples = generate_sine(440.0f, sr, 0.25f);
+
+  // Driven separately rather than as one representative value: a guard spelled
+  // !(x > 0) already refuses a NaN, so only an infinity distinguishes it.
+  const float bad_floats[] = {std::numeric_limits<float>::quiet_NaN(),
+                              std::numeric_limits<float>::infinity(),
+                              -std::numeric_limits<float>::infinity()};
+
+  SECTION("sonare_phase_vocoder rate") {
+    for (float bad_rate : bad_floats) {
+      float* out = non_null_sentinel_float_ptr();
+      size_t out_len = 99;
+      CAPTURE(bad_rate);
+      REQUIRE(sonare_phase_vocoder(samples.data(), samples.size(), sr, bad_rate, 2048, 512, &out,
+                                   &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(out == nullptr);
+      REQUIRE(out_len == 0);
+    }
+
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_phase_vocoder(samples.data(), samples.size(), sr, 1.25f, 2048, 512, &out,
+                                 &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_len > 0);
+    sonare_free_floats(out);
+  }
+
+  SECTION("sonare_zero_crossings threshold") {
+    for (float bad_threshold : bad_floats) {
+      int* out = nullptr;
+      size_t count = 99;
+      CAPTURE(bad_threshold);
+      REQUIRE(sonare_zero_crossings(samples.data(), samples.size(), bad_threshold, 0, 1, 1, &out,
+                                    &count) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(out == nullptr);
+      REQUIRE(count == 0);
+    }
+
+    int* out = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_zero_crossings(samples.data(), samples.size(), 0.0f, 0, 1, 1, &out, &count) ==
+            SONARE_OK);
+    REQUIRE(count > 0);
+    sonare_free_ints(out);
+  }
+
+  SECTION("sonare_pitch_tuning resolution") {
+    const std::vector<float> frequencies = {440.0f, 441.5f, 660.0f, 880.0f};
+    for (float bad_resolution : bad_floats) {
+      float tuning = 99.0f;
+      CAPTURE(bad_resolution);
+      REQUIRE(sonare_pitch_tuning(frequencies.data(), frequencies.size(), bad_resolution, 12,
+                                  &tuning) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(tuning == 0.0f);
+    }
+
+    float tuning = 99.0f;
+    REQUIRE(sonare_pitch_tuning(frequencies.data(), frequencies.size(), 0.01f, 12, &tuning) ==
+            SONARE_OK);
+    REQUIRE(std::isfinite(tuning));
+  }
+
+  SECTION("sonare_estimate_tuning resolution") {
+    for (float bad_resolution : bad_floats) {
+      float tuning = 99.0f;
+      CAPTURE(bad_resolution);
+      REQUIRE(sonare_estimate_tuning(samples.data(), samples.size(), sr, 2048, 512, bad_resolution,
+                                     12, &tuning) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(tuning == 0.0f);
+    }
+
+    float tuning = 99.0f;
+    REQUIRE(sonare_estimate_tuning(samples.data(), samples.size(), sr, 2048, 512, 0.01f, 12,
+                                   &tuning) == SONARE_OK);
+    REQUIRE(std::isfinite(tuning));
+  }
+}
+
+#ifdef SONARE_WITH_MASTERING
+TEST_CASE("sonare_eq_create rejects a non-finite sample rate", "[c_api][validation]") {
+  const double bad_rates[] = {std::numeric_limits<double>::quiet_NaN(),
+                              std::numeric_limits<double>::infinity(),
+                              -std::numeric_limits<double>::infinity()};
+  for (double bad_rate : bad_rates) {
+    CAPTURE(bad_rate);
+    REQUIRE(sonare_eq_create(bad_rate, 512) == nullptr);
+    // A handle constructor reports through the thread-local message rather than
+    // a SonareError, so the message is the only channel the code can be read on.
+    const char* message = sonare_last_error_message();
+    REQUIRE(message != nullptr);
+    REQUIRE(message[0] != '\0');
+  }
+
+  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  REQUIRE(eq != nullptr);
+  sonare_eq_destroy(eq);
+}
+#endif
+
+#ifdef SONARE_WITH_VOICE_CHANGER
+TEST_CASE("sonare_streaming_retune_prepare rejects a non-finite sample rate",
+          "[c_api][validation]") {
+  SonareStreamingRetune* retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+  REQUIRE(retune != nullptr);
+
+  const double bad_rates[] = {std::numeric_limits<double>::quiet_NaN(),
+                              std::numeric_limits<double>::infinity(),
+                              -std::numeric_limits<double>::infinity()};
+  for (double bad_rate : bad_rates) {
+    CAPTURE(bad_rate);
+    REQUIRE(sonare_streaming_retune_prepare(retune, bad_rate, 512) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 512) == SONARE_OK);
+  sonare_streaming_retune_destroy(retune);
+}
+#endif

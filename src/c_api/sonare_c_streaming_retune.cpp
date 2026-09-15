@@ -7,6 +7,7 @@
 
 #include "editing/voice_changer/streaming_retune.h"
 #include "sonare_c_internal.h"
+#include "util/numeric_validation.h"
 
 using sonare::editing::voice_changer::StreamingRetune;
 using sonare::editing::voice_changer::StreamingRetuneConfig;
@@ -90,7 +91,10 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
                                             int max_block_size) {
   SONARE_C_API_ENTRY;
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!(sample_rate > 0.0) || max_block_size < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // The core admits an infinite sample_rate and derives the grain size from it through a cast.
+  if (!sonare::numeric::finite_positive(sample_rate) || max_block_size < 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   retune->retune->prepare(sample_rate, max_block_size);
   // Size the block scratch here, where allocation is allowed, so process_mono

@@ -5,6 +5,7 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 // Argument validation in prepare() throws SonareException; process_block
 // is noexcept by contract and must not throw — see below.
 
@@ -44,8 +45,10 @@ void StreamingRetune::update_ratio() noexcept {
 }
 
 void StreamingRetune::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  // Finite, not merely positive: the default grain size rounds sample_rate to an int, and
+  // std::lround of an infinity is undefined before std::max ever narrows the result.
+  if (!numeric::finite_positive(sample_rate)) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be finite and positive");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");

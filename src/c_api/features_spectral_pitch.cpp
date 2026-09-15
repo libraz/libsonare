@@ -2,6 +2,7 @@
 
 #include "c_api/features_internal.h"
 #include "core/synthesis.h"
+#include "util/numeric_validation.h"
 
 // Core - Synthetic audio generation
 // ============================================================================
@@ -284,7 +285,7 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
   *out = nullptr;
   *out_count = 0;
   if (!samples && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!(threshold >= 0.0f)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!numeric::finite_non_negative(threshold)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   std::vector<int> result =
@@ -347,7 +348,9 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
   if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
   *out_tuning = 0.0f;
   if (!frequencies && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!(resolution > 0.0f) || bins_per_octave <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!numeric::finite_positive(resolution) || bins_per_octave <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   SONARE_C_TRY
   std::vector<float> freqs;
@@ -365,7 +368,9 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
   SONARE_C_API_ENTRY;
   if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
   *out_tuning = 0.0f;
-  if (!(resolution > 0.0f) || bins_per_octave <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!numeric::finite_positive(resolution) || bins_per_octave <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     *out_tuning = estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
@@ -517,8 +522,8 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
   out->count = 0;
   if (f0_hz == nullptr || voiced_prob == nullptr || f0_count == 0 ||
       f0_count != voiced_prob_count ||
-      f0_count > static_cast<size_t>(std::numeric_limits<int>::max()) || !(frame_rate > 0.0f) ||
-      !std::isfinite(frame_rate)) {
+      f0_count > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+      !numeric::finite_positive(frame_rate)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (config != nullptr && (config->struct_version < 0 || config->struct_version > 2)) {

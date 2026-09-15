@@ -66,6 +66,34 @@ TEST_CASE("StreamingRetune derives grain size from sample rate unless configured
   REQUIRE(configured.config().grain_size == 1024);
 }
 
+TEST_CASE("StreamingRetune::prepare rejects a non-finite sample rate", "[voice_changer]") {
+  // Driven on the class rather than through the C ABI: the WASM wrapper calls prepare()
+  // directly, so the C-ABI guard never runs on that path and would mask this one here.
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+
+  // An infinity is the discriminating value. It passes `sample_rate > 0.0`, so the derived
+  // grain size reaches std::lround(inf * seconds), which is undefined before std::max
+  // narrows it -- a NaN was already refused by that comparison.
+  StreamingRetune infinite_rate;
+  REQUIRE_THROWS_AS(infinite_rate.prepare(inf, 256), sonare::SonareException);
+
+  StreamingRetune nan_rate;
+  REQUIRE_THROWS_AS(nan_rate.prepare(nan, 256), sonare::SonareException);
+
+  StreamingRetune negative_infinite_rate;
+  REQUIRE_THROWS_AS(negative_infinite_rate.prepare(-inf, 256), sonare::SonareException);
+
+  // An explicit grain size takes the other branch of the same derivation, so it must be
+  // refused too rather than passing because nothing rounds the rate.
+  StreamingRetune configured_grain({0.0f, 1.0f, 1024});
+  REQUIRE_THROWS_AS(configured_grain.prepare(inf, 256), sonare::SonareException);
+
+  StreamingRetune ordinary;
+  REQUIRE_NOTHROW(ordinary.prepare(48000.0, 256));
+  REQUIRE(ordinary.grain_size() > 0);
+}
+
 TEST_CASE("StreamingRetune aligns dry and wet impulse peaks across mix values", "[voice_changer]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 128;

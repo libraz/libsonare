@@ -8,6 +8,7 @@
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
 #include "sonare_c_internal.h"
+#include "util/numeric_validation.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -41,7 +42,8 @@ sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
 
 SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
-  if (!(sample_rate > 0.0) || max_block_size < 0) {
+  // The processor admits an infinite sample_rate, which degenerates every band's biquad design.
+  if (!numeric::finite_positive(sample_rate) || max_block_size < 0) {
     set_last_error("EQ: sample_rate must be positive and max_block_size non-negative");
     return nullptr;
   }
