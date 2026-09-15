@@ -12,9 +12,12 @@
 // languages.
 // ============================================================================
 
-val js_analyze_bpm(val samples, const val& sample_rate, float bpm_min, float bpm_max,
-                   float start_bpm, const val& n_fft_val, const val& hop_length_val,
-                   const val& max_candidates_val) {
+val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
+                   const val& bpm_max_val, const val& start_bpm_val, const val& n_fft_val,
+                   const val& hop_length_val, const val& max_candidates_val) {
+  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
+  const float bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
+  const float start_bpm = checkedFloatFromVal(start_bpm_val, "startBpm");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int max_candidates = checkedIntFromVal(max_candidates_val, "maxCandidates");
@@ -59,8 +62,12 @@ val js_analyze_bpm(val samples, const val& sample_rate, float bpm_min, float bpm
   return out;
 }
 
-val js_analyze_rhythm(val samples, const val& sample_rate, float bpm_min, float bpm_max,
-                      float start_bpm, const val& n_fft_val, const val& hop_length_val) {
+val js_analyze_rhythm(val samples, const val& sample_rate, const val& bpm_min_val,
+                      const val& bpm_max_val, const val& start_bpm_val, const val& n_fft_val,
+                      const val& hop_length_val) {
+  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
+  const float bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
+  const float start_bpm = checkedFloatFromVal(start_bpm_val, "startBpm");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -97,9 +104,12 @@ val js_analyze_rhythm(val samples, const val& sample_rate, float bpm_min, float 
   return out;
 }
 
-val js_analyze_dynamics(val samples, const val& sample_rate, float window_sec,
-                        const val& hop_length_val, float compression_threshold) {
+val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_sec_val,
+                        const val& hop_length_val, const val& compression_threshold_val) {
+  const float window_sec = checkedFloatFromVal(window_sec_val, "windowSec");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float compression_threshold =
+      checkedFloatFromVal(compression_threshold_val, "compressionThreshold");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_dynamics): reject a
   // non-positive window or hop and a negative threshold instead of clamping.
@@ -131,11 +141,12 @@ val js_analyze_dynamics(val samples, const val& sample_rate, float window_sec,
 
 val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
                       const val& hop_length_val, const val& n_mels_val, const val& n_mfcc_val,
-                      float window_sec) {
+                      const val& window_sec_val) {
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
+  const float window_sec = checkedFloatFromVal(window_sec_val, "windowSec");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_timbre).
   if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 || window_sec <= 0.0f) {
