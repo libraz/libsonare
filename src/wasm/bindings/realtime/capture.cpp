@@ -16,6 +16,8 @@ sonare::engine::CaptureSource captureSourceFromVal(const val& source) {
     if (name == "input") return sonare::engine::CaptureSource::kInput;
   } else if (source.typeOf().as<std::string>() == "number") {
     const double ordinal = source.as<double>();
+    // Nothing narrows here: the equality comparisons below already exclude every
+    // non-finite and fractional value this guard names, so it cannot fire.
     if (std::isfinite(ordinal) && std::floor(ordinal) == ordinal) {
       if (ordinal == 0) return sonare::engine::CaptureSource::kOutput;
       if (ordinal == 1) return sonare::engine::CaptureSource::kInput;
