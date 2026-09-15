@@ -33,6 +33,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _to_c_float,
+    _to_c_int,
     _to_c_size_t,
     _to_c_uint8,
     _to_c_uint32,
@@ -67,7 +68,7 @@ class _ProjectMidiMixin:
         _check(
             _get_lib().sonare_project_set_midi_events(
                 self._require_handle(),
-                int(clip_id),
+                _to_c_uint32(clip_id, "clip_id"),
                 c_events if count else None,
                 _to_c_size_t(count, "count"),
             )
@@ -165,7 +166,10 @@ class _ProjectMidiMixin:
         """
         _check(
             _get_lib().sonare_project_set_program(
-                self._require_handle(), int(clip_id), int(program), int(bank)
+                self._require_handle(),
+                _to_c_uint32(clip_id, "clip_id"),
+                _to_c_int(program, "program"),
+                _to_c_int(bank, "bank"),
             )
         )
 
@@ -176,11 +180,11 @@ class _ProjectMidiMixin:
         _check(
             _get_lib().sonare_project_set_program_on_channel(
                 self._require_handle(),
-                int(clip_id),
-                int(group),
-                int(channel),
-                int(program),
-                int(bank),
+                _to_c_uint32(clip_id, "clip_id"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_int(program, "program"),
+                _to_c_int(bank, "bank"),
             )
         )
 
@@ -189,7 +193,7 @@ class _ProjectMidiMixin:
         _check(
             _get_lib().sonare_project_set_midi_fx(
                 self._require_handle(),
-                int(clip_id),
+                _to_c_uint32(clip_id, "clip_id"),
                 config_json.encode("utf-8"),
             )
         )
@@ -219,7 +223,11 @@ class _ProjectMidiMixin:
         handle = self._require_handle()
         config = config_json.encode("utf-8")
         if not with_source_index:
-            _check(_get_lib().sonare_project_bake_midi_fx(handle, int(clip_id), config))
+            _check(
+                _get_lib().sonare_project_bake_midi_fx(
+                    handle, _to_c_uint32(clip_id, "clip_id"), config
+                )
+            )
             return None
         expected = self.preview_midi_fx_count(clip_id, config_json)
         buffer = (ctypes.c_int32 * expected)() if expected else None
@@ -227,7 +235,7 @@ class _ProjectMidiMixin:
         _check(
             _get_lib().sonare_project_bake_midi_fx_ex(
                 handle,
-                int(clip_id),
+                _to_c_uint32(clip_id, "clip_id"),
                 config,
                 buffer,
                 _to_c_size_t(expected, "expected"),
@@ -242,7 +250,7 @@ class _ProjectMidiMixin:
         _check(
             _get_lib().sonare_project_preview_midi_fx_count(
                 self._require_handle(),
-                int(clip_id),
+                _to_c_uint32(clip_id, "clip_id"),
                 config_json.encode("utf-8"),
                 ctypes.byref(count),
             )
@@ -255,7 +263,7 @@ class _ProjectMidiMixin:
         _check(
             _get_lib().sonare_project_validate_midi_notes(
                 self._require_handle(),
-                int(clip_id),
+                _to_c_uint32(clip_id, "clip_id"),
                 ctypes.byref(result),
             )
         )
@@ -315,7 +323,7 @@ class _ProjectMidiMixin:
     @staticmethod
     def gm_instrument_name(program: int) -> str | None:
         """GM Level 1 instrument name for ``program`` [0,127], or ``None``."""
-        r = _get_lib().sonare_midi_gm_instrument_name(int(program))
+        r = _get_lib().sonare_midi_gm_instrument_name(_to_c_int(program, "program"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
@@ -328,24 +336,26 @@ class _ProjectMidiMixin:
     @staticmethod
     def gm_family_name(family: int) -> str | None:
         """GM family name for ``family`` [0,15], or ``None``."""
-        r = _get_lib().sonare_midi_gm_family_name(int(family))
+        r = _get_lib().sonare_midi_gm_family_name(_to_c_int(family, "family"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
     def gm_family_first_program(family: int) -> int:
         """First GM program in ``family`` [0,15], or ``-1``."""
-        return int(_get_lib().sonare_midi_gm_family_first_program(int(family)))
+        return int(_get_lib().sonare_midi_gm_family_first_program(_to_c_int(family, "family")))
 
     @staticmethod
     def gm2_instrument_name(bank_lsb: int, program: int) -> str | None:
         """GM2 melodic instrument name for ``bank_lsb`` + ``program``, or ``None``."""
-        r = _get_lib().sonare_midi_gm2_instrument_name(int(bank_lsb), int(program))
+        r = _get_lib().sonare_midi_gm2_instrument_name(
+            _to_c_int(bank_lsb, "bank_lsb"), _to_c_int(program, "program")
+        )
         return r.decode("utf-8") if r else None
 
     @staticmethod
     def gm_drum_name(note: int) -> str | None:
         """GM drum name for ``note`` [35,81], or ``None``."""
-        r = _get_lib().sonare_midi_gm_drum_name(int(note))
+        r = _get_lib().sonare_midi_gm_drum_name(_to_c_int(note, "note"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
@@ -358,19 +368,21 @@ class _ProjectMidiMixin:
     @staticmethod
     def gm2_drum_set_name(bank_lsb: int) -> str | None:
         """GM2 drum-set name for ``bank_lsb``, or ``None``."""
-        r = _get_lib().sonare_midi_gm2_drum_set_name(int(bank_lsb))
+        r = _get_lib().sonare_midi_gm2_drum_set_name(_to_c_int(bank_lsb, "bank_lsb"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
     def gm2_drum_name(bank_lsb: int, note: int) -> str | None:
         """GM2 drum name for ``bank_lsb`` + ``note``, or ``None``."""
-        r = _get_lib().sonare_midi_gm2_drum_name(int(bank_lsb), int(note))
+        r = _get_lib().sonare_midi_gm2_drum_name(
+            _to_c_int(bank_lsb, "bank_lsb"), _to_c_int(note, "note")
+        )
         return r.decode("utf-8") if r else None
 
     @staticmethod
     def midi_cc_name(controller: int) -> str | None:
         """Standard MIDI CC name for ``controller`` [0,127], or ``None``."""
-        r = _get_lib().sonare_midi_cc_name(int(controller))
+        r = _get_lib().sonare_midi_cc_name(_to_c_int(controller, "controller"))
         return r.decode("utf-8") if r else None
 
     @staticmethod
@@ -381,7 +393,7 @@ class _ProjectMidiMixin:
     @staticmethod
     def per_note_controller_name(index: int) -> str | None:
         """MIDI 2.0 registered per-note controller name for ``index``, or ``None``."""
-        r = _get_lib().sonare_midi_per_note_controller_name(int(index))
+        r = _get_lib().sonare_midi_per_note_controller_name(_to_c_int(index, "index"))
         return r.decode("utf-8") if r else None
 
     # -- MIDI pure conversion helpers ---------------------------------------
@@ -406,11 +418,11 @@ class _ProjectMidiMixin:
         _check(
             lib.sonare_midi_bank_program(
                 float(ppq),
-                int(group),
-                int(channel),
-                int(bank_msb),
-                int(bank_lsb),
-                int(program),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_int(bank_msb, "bank_msb"),
+                _to_c_int(bank_lsb, "bank_lsb"),
+                _to_c_int(program, "program"),
                 events,
                 ctypes.c_size_t(3),
                 ctypes.byref(out_count),

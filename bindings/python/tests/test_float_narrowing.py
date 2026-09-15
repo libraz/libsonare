@@ -174,6 +174,41 @@ def test_a_saturating_retune_control_is_refused_on_the_argument_that_carried_it(
         _refuses("mix", ("semitones",), ls.StreamingRetune, mix=value)
 
 
+def test_a_saturating_project_edit_control_is_refused_on_its_own_argument() -> None:
+    """The project edit ops, whose own finiteness check ran before the conversion.
+
+    A double past the float32 range is finite, so it passed that check and
+    saturated on the way to ``c_float``; the core then refused the infinity
+    without naming the argument that carried it.
+    """
+    project = ls.Project()
+    track = project.add_track("audio", "a")
+    clip = project.add_clip(track, 0.0, 480.0, audio=[0.1, 0.2], audio_sample_rate=48000)
+
+    def applied(edit, *args) -> str:
+        edit(*args)
+        result = project.to_json()
+        project.undo()
+        return result
+
+    largest = 3.4028234663852886e38
+    # Positive controls: the bound is the float32 range, not a guess at a
+    # plausible gain, so the largest representable value is still accepted.
+    assert applied(project.set_track_gain, track, 0.25) != applied(
+        project.set_track_gain, track, largest
+    )
+    assert applied(project.set_track_pan, track, -1.0) != applied(
+        project.set_track_pan, track, 0.75
+    )
+    assert applied(project.set_clip_gain, clip, 0.25) != applied(
+        project.set_clip_gain, clip, largest
+    )
+    for value in REFUSED:
+        _refuses("gain", ("track_id",), project.set_track_gain, track, value)
+        _refuses("pan", ("track_id",), project.set_track_pan, track, value)
+        _refuses("gain", ("clip_id",), project.set_clip_gain, clip, value)
+
+
 def test_a_representable_extreme_is_still_accepted() -> None:
     """The bound is the float32 range, not a guess at a plausible one."""
     largest = 3.4028234663852886e38

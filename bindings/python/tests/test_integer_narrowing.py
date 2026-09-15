@@ -13,6 +13,8 @@ out-of-range value cannot be told from a field the entry point never reads.
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pytest
 
@@ -157,3 +159,353 @@ def mixer_scene():
         yield mixer
     finally:
         mixer.close()
+
+
+@pytest.fixture
+def two_track_project():
+    """Two tracks and two clips, so an edit's id argument has something to select."""
+    project = ls.Project()
+    tracks = [project.add_track("audio", name) for name in ("a", "b")]
+    clips = [
+        project.add_clip(track, 0.0, 480.0, audio=[0.1, 0.2], audio_sample_rate=48000)
+        for track in tracks
+    ]
+    return project, tracks, clips
+
+
+# The core assigns ids from 1, so every value here lands on a live object once
+# converted: 2**32 + 1 and 1.5 both become 1, and 2**32 and 0.5 both become 0.
+WRAPPED_IDS = (2**32 + 1, 2**32 + 2, 2**32, 1.5, 0.5, -1)
+
+# The signed-int arguments, where -1 is legal and the wrap is what is not:
+# 2**32 lands on 0 and 2**31 on the most negative int.
+WRAPPED_INTS = (2**32, 2**32 + 1, 2**31, -(2**31) - 1, 1.5)
+
+# The 8-bit arguments, whose range a plausible-looking value already leaves.
+WRAPPED_BYTES = (2**8, 2**8 + 1, 2**32, -1, 1.5)
+
+
+def _refuses(name: str, call, *args) -> None:
+    """Assert the call is refused and that the refusal names ``name`` first.
+
+    Anchored rather than matched loosely: ``track_id`` appears inside
+    ``new_track_id``, so a substring test would let a refusal about one argument
+    stand in for a refusal about its neighbour.
+    """
+    with pytest.raises(SonareValueError, match=rf"^{re.escape(name)} must be"):
+        call(*args)
+
+
+def test_a_wrapped_edit_id_is_refused_rather_than_selecting_another_object(
+    two_track_project,
+) -> None:
+    """The project edit ops, where the wrap lands on an object the caller did not name.
+
+    Each case opens with the same edit applied to each of the two ids: the
+    results differ, so an entry point that ignored the id could not pass. The
+    refusal is asserted by the id it names, since every op here takes exactly one.
+    """
+    project, (track_a, track_b), (clip_a, clip_b) = two_track_project
+
+    def applied(edit, *args) -> str:
+        edit(*args)
+        result = project.to_json()
+        project.undo()
+        return result
+
+    edits = (
+        ("track_id", project.set_track_gain, track_a, track_b, (0.5,)),
+        ("track_id", project.set_track_mute, track_a, track_b, (True,)),
+        ("track_id", project.set_track_solo, track_a, track_b, (True,)),
+        ("track_id", project.set_track_pan, track_a, track_b, (0.5,)),
+        ("clip_id", project.remove_clip, clip_a, clip_b, ()),
+        ("clip_id", project.set_clip_gain, clip_a, clip_b, (0.5,)),
+        ("clip_id", project.set_clip_fade, clip_a, clip_b, (24.0, 48.0)),
+        ("clip_id", project.set_clip_loop, clip_a, clip_b, ("loop", 240.0)),
+    )
+    for name, edit, first, second, rest in edits:
+        assert applied(edit, first, *rest) != applied(edit, second, *rest)  # positive control
+        for value in WRAPPED_IDS:
+            _refuses(name, edit, value, *rest)
+
+
+@pytest.fixture
+def arrangement_project():
+    """Two of everything the arrangement edit ops address by id.
+
+    The spare pair is empty because the ops that retarget or retype a track
+    refuse one that already holds a clip, and a case whose control cannot run is
+    a case that proves nothing.
+    """
+    project = ls.Project()
+    tracks = [project.add_track("audio", name) for name in ("a", "b")]
+    clips = [
+        project.add_clip(track, 0.0, 480.0, audio=[0.1 * (i + 1)] * 8, audio_sample_rate=48000)
+        for i, track in enumerate(tracks)
+    ]
+    spare = [project.add_track("audio", name) for name in ("c", "d")]
+    for warp_ref, stretch in ((3, 120.0), (4, 140.0)):
+        project.set_warp_map(warp_ref, [(0.0, 0.0), (100.0, stretch)], f"w{warp_ref}")
+    for clip, source in zip(clips, (1, 2), strict=True):
+        project.set_clip_takes(clip, [{"id": 1, "source_id": source}])
+    for track in tracks:
+        project.add_automation_lane(track, 7, [(0.0, 0.25, 0)])
+    return project, tracks, clips, spare
+
+
+def test_a_wrapped_arrangement_id_is_refused_rather_than_selecting_another_object(
+    arrangement_project,
+) -> None:
+    """The rest of the arrangement surface, one row per id argument.
+
+    Each row is one lambda taking the value under test, so the positive control
+    and the refusal drive the identical call shape and a row cannot assert about
+    an argument its own edit never reads.
+    """
+    project, (track_a, track_b), (clip_a, clip_b), (spare_a, spare_b) = arrangement_project
+    points = [(0.0, 0.5, 0)]
+    segment = [{"start_ppq": 0.0, "end_ppq": 100.0, "take_id": 1}]
+
+    def applied(edit, value) -> str:
+        edit(value)
+        result = project.to_json()
+        project.undo()
+        return result
+
+    cases = (
+        ("clip_id", lambda v: project.split_clip(v, 240.0), clip_a, clip_b),
+        ("clip_id", lambda v: project.trim_clip(v, 0.0, 240.0), clip_a, clip_b),
+        ("clip_id", lambda v: project.move_clip(v, 240.0), clip_a, clip_b),
+        ("new_track_id", lambda v: project.move_clip(clip_a, 240.0, v), spare_a, spare_b),
+        ("track_id", lambda v: project.set_track_kind(v, "aux"), spare_a, spare_b),
+        ("clip_id", lambda v: project.set_clip_warp_ref(v, 3), clip_a, clip_b),
+        ("warp_ref_id", lambda v: project.set_clip_warp_ref(clip_a, v), 3, 4),
+        ("clip_id", lambda v: project.set_clip_warp_mode(v, "repitch"), clip_a, clip_b),
+        ("warp_ref_id", lambda v: project.remove_warp_map(v), 3, 4),
+        ("clip_id", lambda v: project.set_clip_takes(v, [{"id": 1}]), clip_a, clip_b),
+        ("clip_id", lambda v: project.set_clip_comp_segments(v, segment), clip_a, clip_b),
+        ("track_id", lambda v: project.set_track_midi_destination(v, 5), track_a, track_b),
+        ("destination_id", lambda v: project.set_track_midi_destination(track_a, v), 5, 6),
+        ("clip_id", lambda v: project.set_clip_source(v, 2), clip_a, clip_b),
+        ("source_id", lambda v: project.set_clip_source(clip_a, v), 1, 2),
+        ("clip_id", lambda v: project.duplicate_clip(v, 960.0), clip_a, clip_b),
+        ("track_id", lambda v: project.remove_track(v), track_a, track_b),
+        ("track_id", lambda v: project.rename_track(v, "zz"), track_a, track_b),
+        ("track_id", lambda v: project.set_track_route(v, "strip"), track_a, track_b),
+        ("source_id", lambda v: project.set_audio_source_metadata(v, "h", "r"), 1, 2),
+        ("track_id", lambda v: project.add_automation_lane(v, 9, points), track_a, track_b),
+        (
+            "track_id",
+            lambda v: project.add_automation_lane(v, 9, points, "track-pan"),
+            track_a,
+            track_b,
+        ),
+        ("track_id", lambda v: project.edit_automation_lane(v, 7, points), track_a, track_b),
+        (
+            "track_id",
+            lambda v: project.edit_automation_lane(v, 7, points, "track-pan"),
+            track_a,
+            track_b,
+        ),
+        ("track_id", lambda v: project.remove_automation_lane(v, 7), track_a, track_b),
+    )
+    for name, edit, first, second in cases:
+        assert applied(edit, first) != applied(edit, second), name  # positive control
+        for value in WRAPPED_IDS:
+            _refuses(name, edit, value)
+
+
+def test_a_wrapped_take_id_is_refused_rather_than_read_as_take_zero() -> None:
+    """The take list, whose own ``int()`` truncated in front of the checked field.
+
+    The mapping branch coerced the id before the struct's range check saw it, so
+    a fractional id became 0 and the list carried it as a real take.
+    """
+    project = ls.Project()
+    track = project.add_track("audio", "a")
+    clip = project.add_clip(track, 0.0, 480.0, audio=[0.1] * 8, audio_sample_rate=48000)
+
+    def applied(take_id) -> str:
+        project.set_clip_takes(clip, [{"id": take_id, "source_id": 1}])
+        result = project.to_json()
+        project.undo()
+        return result
+
+    assert applied(1) != applied(2)  # positive control
+    for value in WRAPPED_IDS:
+        _refuses("set_clip_takes: takes[0].id", applied, value)
+        _refuses(
+            "set_clip_takes: takes[0].source_id",
+            lambda v: project.set_clip_takes(clip, [{"id": 1, "source_id": v}]),
+            value,
+        )
+
+
+def test_a_wrapped_source_audio_argument_is_refused_rather_than_replacing_another_source() -> None:
+    """Registered PCM, whose arguments the serialized project does not carry.
+
+    ``to_json`` shows neither the samples nor the rate they were registered at,
+    so the control here is the rendered bounce: a control read off the JSON
+    would have compared two identical strings and passed on any argument.
+    """
+
+    def bounced(source_id, channels, sample_rate) -> bytes:
+        project = ls.Project()
+        for index, name in enumerate(("a", "b")):
+            track = project.add_track("audio", name)
+            project.add_clip(
+                track, 0.0, 480.0, audio=[0.1 * (index + 1)] * 8, audio_sample_rate=48000
+            )
+        project.set_source_audio(source_id, [0.9, 0.1] * 4, channels, sample_rate)
+        return np.asarray(project.bounce(), dtype=np.float64).tobytes()
+
+    assert bounced(1, 1, 48000) != bounced(2, 1, 48000)  # positive control
+    assert bounced(1, 1, 48000) != bounced(1, 2, 48000)  # positive control
+    assert bounced(1, 1, 44100) != bounced(1, 1, 48000)  # positive control
+    for value in WRAPPED_IDS:
+        _refuses("source_id", bounced, value, 1, 48000)
+    for value in WRAPPED_INTS:
+        _refuses("sample_rate", bounced, 1, 1, value)
+
+    # ``channels`` divides the sample count, so for any non-empty audio the
+    # local semantic half refuses a wrapped value before the narrowing is
+    # reached. Both halves are driven rather than assumed: the modulo check on
+    # its own message, the type check on the one path that reaches it.
+    def empty(channels) -> None:
+        ls.Project().set_source_audio(1, [], channels, 48000)
+
+    for value in (2**32, 2**32 + 1, 1.5):
+        _refuses("channels", empty, value)
+    for value in (2**32, -1, 0):
+        with pytest.raises(SonareValueError, match="^audio length must be a multiple of channels$"):
+            bounced(1, value, 48000)
+
+
+@pytest.fixture
+def two_midi_clip_project():
+    """Two MIDI clips carrying different note content."""
+    project = ls.Project()
+    clips = [project.add_midi_clip(0.0, 480.0)[1] for _ in range(2)]
+    for clip, note in zip(clips, (60, 67), strict=True):
+        project.set_midi_events(
+            clip,
+            [
+                ls.Project.midi_note_on(0.0, 0, 0, note, 100),
+                ls.Project.midi_note_off(240.0, 0, 0, note),
+            ],
+        )
+    return project, clips
+
+
+def test_a_wrapped_midi_argument_is_refused_rather_than_addressing_another_clip(
+    two_midi_clip_project,
+) -> None:
+    """The MIDI surface, whose clip id and channel-voice scalars narrow onto three widths."""
+    project, (clip_a, clip_b) = two_midi_clip_project
+    events = [ls.Project.midi_note_on(0.0, 0, 0, 72, 100)]
+    fx = '{"transpose_semitones":5}'
+
+    def applied(edit, value) -> str:
+        edit(value)
+        result = project.to_json()
+        project.undo()
+        return result
+
+    ids = (
+        ("clip_id", lambda v: project.set_midi_events(v, events)),
+        ("clip_id", lambda v: project.set_program(v, 5)),
+        ("clip_id", lambda v: project.set_program_on_channel(v, 0, 0, 5)),
+        ("clip_id", lambda v: project.set_midi_fx(v, fx)),
+        ("clip_id", lambda v: project.bake_midi_fx(v, fx)),
+    )
+    for name, edit in ids:
+        assert applied(edit, clip_a) != applied(edit, clip_b), name  # positive control
+        for value in WRAPPED_IDS:
+            _refuses(name, edit, value)
+
+    scalars = (
+        ("program", lambda v: project.set_program(clip_a, v), 5, 6, WRAPPED_INTS),
+        ("bank", lambda v: project.set_program(clip_a, 5, v), 0, 1, WRAPPED_INTS),
+        ("program", lambda v: project.set_program_on_channel(clip_a, 0, 0, v), 5, 6, WRAPPED_INTS),
+        ("bank", lambda v: project.set_program_on_channel(clip_a, 0, 0, 5, v), 0, 1, WRAPPED_INTS),
+        ("group", lambda v: project.set_program_on_channel(clip_a, v, 0, 5), 0, 1, WRAPPED_BYTES),
+        ("channel", lambda v: project.set_program_on_channel(clip_a, 0, v, 5), 0, 1, WRAPPED_BYTES),
+    )
+    for name, edit, first, second, refused in scalars:
+        assert applied(edit, first) != applied(edit, second), name  # positive control
+        for value in refused:
+            _refuses(name, edit, value)
+
+
+def test_a_wrapped_midi_query_argument_is_refused_rather_than_counting_another_clip(
+    two_midi_clip_project,
+) -> None:
+    """The read-only MIDI queries, whose result rather than the project is the control."""
+    project, (clip_a, clip_b) = two_midi_clip_project
+    project.set_midi_events(
+        clip_b,
+        [
+            ls.Project.midi_note_on(0.0, 0, 0, 67, 100),
+            ls.Project.midi_note_off(240.0, 0, 0, 67),
+            ls.Project.midi_note_on(240.0, 0, 0, 69, 100),
+        ],
+    )
+    fx = '{"transpose_semitones":5}'
+
+    queries = (
+        ("clip_id", lambda v: project.preview_midi_fx_count(v, fx)),
+        ("clip_id", lambda v: project.validate_midi_notes(v)),
+        ("clip_id", lambda v: project.bake_midi_fx(v, fx, with_source_index=True)),
+    )
+    for name, query in queries:
+        assert query(clip_a) != query(clip_b), name  # positive control
+        for value in WRAPPED_IDS:
+            _refuses(name, query, value)
+
+
+def test_a_wrapped_gm_lookup_argument_is_refused_rather_than_naming_another_entry() -> None:
+    """The static GM tables, where a wrap returns a name instead of ``None``.
+
+    These take no handle and mutate nothing, so an out-of-range program used to
+    come back as program 0's name -- an answer, and a wrong one, where the
+    contract promises ``None``.
+    """
+    lookups = (
+        ("program", ls.Project.gm_instrument_name, (0,), (1,), 0),
+        ("family", ls.Project.gm_family_name, (0,), (1,), 0),
+        ("family", ls.Project.gm_family_first_program, (0,), (1,), 0),
+        ("note", ls.Project.gm_drum_name, (36,), (38,), 0),
+        ("bank_lsb", ls.Project.gm2_drum_set_name, (0,), (8,), 0),
+        ("controller", ls.Project.midi_cc_name, (7,), (10,), 0),
+        ("index", ls.Project.per_note_controller_name, (1,), (2,), 0),
+        ("bank_lsb", ls.Project.gm2_instrument_name, (0, 0), (1, 0), 0),
+        ("program", ls.Project.gm2_instrument_name, (0, 0), (0, 1), 1),
+        ("bank_lsb", ls.Project.gm2_drum_name, (0, 27), (48, 27), 0),
+        ("note", ls.Project.gm2_drum_name, (0, 36), (0, 38), 1),
+    )
+    for name, lookup, first, second, position in lookups:
+        assert lookup(*first) != lookup(*second), name  # positive control
+        for value in WRAPPED_INTS:
+            args = list(first)
+            args[position] = value
+            _refuses(name, lookup, *args)
+
+
+def test_a_wrapped_bank_program_argument_is_refused_rather_than_emitting_another_event() -> None:
+    """The pure lowering helper, whose five scalars span two C widths."""
+    base = (0.0, 0, 0, 0, 0, 0)
+    scalars = (
+        ("group", 1, WRAPPED_BYTES),
+        ("channel", 2, WRAPPED_BYTES),
+        ("bank_msb", 3, WRAPPED_INTS),
+        ("bank_lsb", 4, WRAPPED_INTS),
+        ("program", 5, WRAPPED_INTS),
+    )
+    for name, position, refused in scalars:
+        moved = list(base)
+        moved[position] = 1
+        assert ls.Project.midi_bank_program(*moved) != ls.Project.midi_bank_program(*base), name
+        for value in refused:
+            args = list(base)
+            args[position] = value
+            _refuses(name, ls.Project.midi_bank_program, *args)
