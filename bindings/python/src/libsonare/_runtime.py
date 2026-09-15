@@ -740,9 +740,12 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
     power-of-two restriction here would reject sizes the C ABI and the native
     CLI accept, which makes the facade diverge rather than merely be stricter.
 
-    This is the single definition of that domain for the Python binding. Every
-    STFT-framed entry point routes through it, so the accepted range cannot
-    drift apart between them.
+    This is the single definition of the even-and-at-least-two domain, reached
+    through :func:`_validate_effect_fft_options`, so the entry points that hold
+    it cannot drift apart. It is not the binding's only STFT size domain: other
+    STFT-framed entry points deliberately require a power of two, and they are
+    not stricter versions of this one -- adopt this domain for a new entry point
+    only after checking which of the two the C ABI behind it accepts.
 
     Args:
         fn_name: Caller name, used to prefix the error message.
