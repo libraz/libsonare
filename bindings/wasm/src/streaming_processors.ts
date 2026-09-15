@@ -167,6 +167,35 @@ export class StreamingMasteringChain {
     return this.chain.stageNames();
   }
 
+  /**
+   * Non-finite input samples a stage replaced with a finite in-domain one.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded stream
+   * from a clean one. A stage that meets a non-finite sample substitutes an
+   * in-domain value for it — silence or full scale at the inter-sample-peak
+   * limiter, an infinity folded onto the ceiling at a sample-domain one — so
+   * the block comes back finite, in range and free of any error while carrying
+   * values that are not a function of the input. This count is what says so.
+   *
+   * Cumulative over every block since {@link prepare}, and aggregated over the
+   * stages and channels, so it identifies neither which block nor which stage.
+   * Read it per block and compare against the previous reading to localize one.
+   *
+   * {@link prepare} rebuilds the stages and so clears it; {@link reset} does
+   * not, because it drops processor state without rebuilding.
+   *
+   * @example
+   * ```typescript
+   * chain.processMono(block);
+   * if (chain.nonFiniteSubstitutionCount() > previous) {
+   *   // the block just produced is not derived from `block` everywhere
+   * }
+   * ```
+   */
+  nonFiniteSubstitutionCount(): number {
+    return this.chain.nonFiniteSubstitutionCount();
+  }
+
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.chain.delete();

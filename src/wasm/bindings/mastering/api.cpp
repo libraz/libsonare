@@ -299,6 +299,7 @@ val js_mastering_process(std::string processor_name, val samples, const val& sam
   out.set("appliedGainDb", result.applied_gain_db);
   out.set("latencySamples", result.latency_samples);
   out.set("loudnessTargetLimited", result.loudness_target_limited);
+  out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
   return out;
 }
 
@@ -323,6 +324,7 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
   out.set("appliedGainDb", result.applied_gain_db);
   out.set("latencySamples", result.latency_samples);
   out.set("loudnessTargetLimited", result.loudness_target_limited);
+  out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
   return out;
 }
 
@@ -346,6 +348,7 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
   out.set("outputLufs", result.output_lufs);
   out.set("appliedGainDb", result.applied_gain_db);
   out.set("latencySamples", result.latency_samples);
+  out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
   return out;
 }
 

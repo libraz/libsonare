@@ -182,6 +182,33 @@ export interface MasteringResult {
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited?: boolean;
   latencySamples?: number;
+  /**
+   * Non-finite input samples a processor replaced with a finite in-domain one.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded result
+   * from a clean one. A processor that meets a non-finite sample substitutes an
+   * in-domain value for it — silence or full scale at an inter-sample-peak
+   * limiter, an infinity folded onto the ceiling at a sample-domain one — so
+   * `samples` comes back finite, in range and free of any error while carrying
+   * values that are not a function of the input. This count is what says so.
+   *
+   * Zero means no substitution occurred and the output is a function of the
+   * input throughout. The counter saturates rather than wrapping, because a
+   * wrapped total could read as the one value zero is reserved for.
+   *
+   * @example
+   * ```ts
+   * const result = masteringProcess({
+   *   processorName: 'maximizer.truePeakLimiter',
+   *   samples,
+   *   sampleRate,
+   * });
+   * if (result.nonFiniteSubstitutionCount > 0) {
+   *   // `result.samples` is not derived from `samples` everywhere
+   * }
+   * ```
+   */
+  nonFiniteSubstitutionCount: number;
 }
 
 export type MasteringProcessorParams = Record<string, number | boolean>;
@@ -518,6 +545,16 @@ export interface MasteringChainResult {
   outputLra: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
+  /**
+   * Non-finite input samples a stage replaced with a finite in-domain one,
+   * aggregated over every stage the chain ran. See
+   * {@link MasteringResult.nonFiniteSubstitutionCount} for what a non-zero
+   * count says about the audio; zero means no stage substituted a sample.
+   *
+   * Aggregated, so it does not identify which stage substituted. Run the stages
+   * individually through {@link masteringProcess} to attribute a non-zero count.
+   */
+  nonFiniteSubstitutionCount: number;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
   report: MasteringReport;
@@ -535,6 +572,12 @@ export interface MasteringChainStereoResult {
   outputTruePeakDbtp: number;
   outputLra: number;
   loudnessTargetLimited: boolean;
+  /**
+   * See {@link MasteringChainResult.nonFiniteSubstitutionCount}. Aggregated over
+   * both channels as well as over every stage, so it does not identify which
+   * channel substituted.
+   */
+  nonFiniteSubstitutionCount: number;
   stageGainReductions: StageGainReduction[];
   report: MasteringReport;
 }
@@ -556,4 +599,9 @@ export interface MasteringStereoResult {
   latencySamples: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
+  /**
+   * See {@link MasteringResult.nonFiniteSubstitutionCount}. Aggregated over both
+   * channels, so it does not identify which channel substituted.
+   */
+  nonFiniteSubstitutionCount: number;
 }

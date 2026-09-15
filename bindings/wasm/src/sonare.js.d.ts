@@ -573,6 +573,8 @@ export interface WasmMasteringResult {
   appliedGainDb: number;
   loudnessTargetLimited?: boolean;
   latencySamples?: number;
+  /** Non-finite input samples a processor replaced with a finite in-domain one. */
+  nonFiniteSubstitutionCount: number;
 }
 
 export interface WasmStageGainReduction {
@@ -617,6 +619,8 @@ export interface WasmMasteringStereoChainResult {
   outputTruePeakDbtp: number;
   outputLra: number;
   loudnessTargetLimited: boolean;
+  /** Aggregated over every stage the chain ran and over both channels. */
+  nonFiniteSubstitutionCount: number;
   stageGainReductions: WasmStageGainReduction[];
   report: WasmMasteringReport;
 }
@@ -630,6 +634,8 @@ export interface WasmMasteringStereoResult {
   appliedGainDb: number;
   latencySamples: number;
   loudnessTargetLimited: boolean;
+  /** Aggregated over both channels. */
+  nonFiniteSubstitutionCount: number;
 }
 
 export interface WasmMixMeterSnapshot {
@@ -2914,6 +2920,8 @@ export interface WasmStreamingMasteringChain {
   reset: () => void;
   latencySamples: () => number;
   stageNames: () => string[];
+  /** Cumulative since prepare(), which rebuilds the stages and so clears it. */
+  nonFiniteSubstitutionCount: () => number;
   delete: () => void;
 }
 

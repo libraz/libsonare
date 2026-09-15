@@ -114,6 +114,13 @@ class StreamingMasteringChainWrapper {
     return out;
   }
 
+  // double rather than the uint32_t the chain reports: embind marshals an
+  // unsigned to a JS number anyway, and saying so here keeps the saturated
+  // maximum readable instead of arriving as a negative int.
+  double nonFiniteSubstitutionCount() const {
+    return static_cast<double>(chain_.non_finite_substitution_count());
+  }
+
  private:
   void ensurePreparedForFlush() const {
     if (max_block_size_ <= 0) {
@@ -146,7 +153,9 @@ void registerStreamingMasteringChainBindings() {
       .function("flushStereo", &StreamingMasteringChainWrapper::flushStereo)
       .function("reset", &StreamingMasteringChainWrapper::reset)
       .function("latencySamples", &StreamingMasteringChainWrapper::latencySamples)
-      .function("stageNames", &StreamingMasteringChainWrapper::stageNames);
+      .function("stageNames", &StreamingMasteringChainWrapper::stageNames)
+      .function("nonFiniteSubstitutionCount",
+                &StreamingMasteringChainWrapper::nonFiniteSubstitutionCount);
   function("createStreamingMasteringChain", &createStreamingMasteringChain, allow_raw_pointers());
 }
 

@@ -40,6 +40,7 @@ val js_mastering(val samples, const val& sample_rate_val, float target_lufs, flo
   out.set("outputLufs", result.output_lufs);
   out.set("appliedGainDb", result.applied_gain_db);
   out.set("loudnessTargetLimited", result.loudness_target_limited);
+  out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
   return out;
 }
 

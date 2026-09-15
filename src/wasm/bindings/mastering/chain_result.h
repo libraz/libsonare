@@ -37,14 +37,16 @@ inline void setMasteringReport(emscripten::val& out,
 }
 
 /// @brief Append the chain-metric fields (output true peak, LRA, per-stage gain
-/// reductions) shared by every mastering-chain result object. MonoChainResult
-/// and StereoChainResult both derive ChainMetrics, so the same builder serves
-/// both paths.
-inline void setChainMetrics(emscripten::val& out,
-                            const sonare::mastering::api::ChainMetrics& metrics) {
+/// reductions, substitution count) shared by every mastering-chain result
+/// object. Takes the whole result rather than its ChainMetrics base: the
+/// substitution count lives on the audio-result base instead, and a builder
+/// given only one of the two bases would silently drop whichever it cannot see.
+template <typename Result>
+inline void setChainMetrics(emscripten::val& out, const Result& metrics) {
   out.set("outputTruePeakDbtp", metrics.output_true_peak_dbtp);
   out.set("outputLra", metrics.output_lra);
   out.set("loudnessTargetLimited", metrics.loudness_target_limited);
+  out.set("nonFiniteSubstitutionCount", static_cast<double>(metrics.non_finite_substitution_count));
   emscripten::val reductions = emscripten::val::array();
   for (const auto& reduction : metrics.stage_gain_reductions) {
     emscripten::val entry = emscripten::val::object();
