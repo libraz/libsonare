@@ -11,14 +11,13 @@
  *
  * Acceptance is asserted by reading a value back, never by "it did not
  * throw" — a function that ignored its argument entirely would satisfy every
- * refusal case below in exactly the same way. The bpmMin/bpmMax controls lean
- * on a bound read from `BpmAnalyzer::analyze` (src/analysis/bpm_analyzer.cpp):
- * every detection and fallback path filters or bins candidates against
- * `[bpmMin, bpmMax]` before choosing one, so the returned `bpm` stays inside
- * that range regardless of which branch runs — measured against the built
- * module, not just traced. `startBpm` has no such control here: see the
- * comment above its refusal-only coverage below for what was actually
- * measured.
+ * refusal case below in exactly the same way. The BPM controls lean on an
+ * invariant read from `BpmAnalyzer::analyze` (src/analysis/bpm_analyzer.cpp)
+ * and confirmed against the built module: the returned `bpm` is either
+ * exactly `startBpm` (every early-return and empty-candidate path assigns it
+ * verbatim, reached when the buffer is too short for autocorrelation to run
+ * at all) or strictly within `[bpmMin, bpmMax]` (every detection path filters
+ * or bins candidates against that range before choosing one).
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -91,6 +90,12 @@ const BPM_PERIOD_SAMPLES = 3200;
 const bpmClickTrain = clickTrain(BPM_PERIOD_SAMPLES, 6);
 const BPM_NFFT = 256;
 const BPM_HOP = 64;
+
+// Too short (well under the default 2048-sample FFT) for autocorrelation to
+// ever run, so BpmAnalyzer::analyze returns config_.start_bpm verbatim
+// (src/analysis/bpm_analyzer.cpp:423/438) regardless of content.
+const UNDETECTABLE_AUDIO = new Float32Array(512);
+const UNDETECTABLE_SR = 22050;
 
 /** One float field of one entry point, and how to drive it with a value. */
 interface FloatField {
@@ -171,48 +176,57 @@ describe('every converted quick-detailed float parameter refuses a value the flo
   });
 });
 
-describe('analyzeBpm consumes bpmMin and bpmMax it accepts', () => {
-  // startBpm has no read-back control here: measured against the built module
-  // (bpmMin/bpmMax forced to 1e6/2e6, sweeping startBpm across 96/120/180 and
-  // values outside every range tried, on both a detectable 150 BPM click
-  // train and undetectable silence/noise), the returned bpm never tracked
-  // startBpm — it either reflects real detection or a fixed fallback that is
-  // neither startBpm nor bpmMin. That is a measured absence on the inputs
-  // tried, not a proof the field is dropped; the guard coverage in the
-  // refusal table above still applies regardless.
+describe('analyzeBpm consumes bpmMin, bpmMax and startBpm it accepts', () => {
+  it('reads startBpm back exactly when detection cannot run', () => {
+    // 512 samples is far too short for autocorrelation-based tempo tracking
+    // (well under the default 2048-sample FFT), so BpmAnalyzer falls straight
+    // through to config_.start_bpm before running any detection.
+    const low = analyzeBpm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 96 });
+    const high = analyzeBpm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 180 });
+    expect(low.bpm).toBe(96);
+    expect(high.bpm).toBe(180);
+  });
 
-  it('reads bpmMin as changing the result between an unreachable range and real detection', () => {
+  it('reads bpmMin as switching between the startBpm fallback and real detection', () => {
     // bpm_to_lag(1e6, sr, hopLength) rounds to 0 regardless of audio content,
     // so bpmMin: 1e6 puts every lag out of range and forces BpmAnalyzer's
-    // earliest return path. bpmMin: 30 instead gives the 150 BPM click
-    // train's autocorrelation peak a reachable window to detect within. The
-    // two configs differ only in bpmMin, so a differing result demonstrates
-    // bpmMin reaches the analyzer rather than being dropped or defaulted.
-    const unreachable = analyzeBpm(bpmClickTrain, BPM_SR, {
+    // earliest return path, returning startBpm verbatim. bpmMin: 30 instead
+    // gives the 150 BPM click train's autocorrelation peak a reachable window
+    // to detect within, so the result should reflect detection rather than
+    // the startBpm sentinel.
+    const forcedFallback = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 1e6,
       bpmMax: 2e6,
+      startBpm: 64,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
     const detected = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 30,
       bpmMax: 300,
+      startBpm: 64,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
-    expect(detected.bpm).not.toBe(unreachable.bpm);
+    expect(forcedFallback.bpm).toBe(64);
+    expect(detected.bpm).not.toBe(64);
   });
 
   it('reads bpmMax as bounding the result to the configured range', () => {
+    // startBpm sits inside each range under test, so the assertion holds
+    // whether the range excludes every real candidate (falls back to
+    // startBpm) or finds one (bounded to [bpmMin, bpmMax] by construction).
     const narrow = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 30,
       bpmMax: 40,
+      startBpm: 1,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
     const wide = analyzeBpm(bpmClickTrain, BPM_SR, {
       bpmMin: 60,
       bpmMax: 300,
+      startBpm: 100,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
@@ -222,38 +236,48 @@ describe('analyzeBpm consumes bpmMin and bpmMax it accepts', () => {
   });
 });
 
-describe('analyzeRhythm consumes bpmMin and bpmMax it accepts', () => {
+describe('analyzeRhythm consumes bpmMin, bpmMax and startBpm it accepts', () => {
   // analyzeRhythm's `bpm` is BeatAnalyzer::bpm(), which BeatAnalyzer::track_beats()
   // sets from the very same BpmAnalyzer with the same bpmMin/bpmMax/startBpm, so
-  // the same bound holds. No startBpm read-back control here either -- see the
-  // comment above the analyzeBpm describe block for what was measured.
+  // the same bound holds.
+  it('reads startBpm back exactly when detection cannot run', () => {
+    const low = analyzeRhythm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 96 });
+    const high = analyzeRhythm(UNDETECTABLE_AUDIO, UNDETECTABLE_SR, { startBpm: 180 });
+    expect(low.bpm).toBe(96);
+    expect(high.bpm).toBe(180);
+  });
 
-  it('reads bpmMin as changing the result between an unreachable range and real detection', () => {
-    const unreachable = analyzeRhythm(bpmClickTrain, BPM_SR, {
+  it('reads bpmMin as switching between the startBpm fallback and real detection', () => {
+    const forcedFallback = analyzeRhythm(bpmClickTrain, BPM_SR, {
       bpmMin: 1e6,
       bpmMax: 2e6,
+      startBpm: 64,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
     const detected = analyzeRhythm(bpmClickTrain, BPM_SR, {
       bpmMin: 60,
       bpmMax: 200,
+      startBpm: 64,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
-    expect(detected.bpm).not.toBe(unreachable.bpm);
+    expect(forcedFallback.bpm).toBe(64);
+    expect(detected.bpm).not.toBe(64);
   });
 
   it('reads bpmMax as bounding the result to the configured range', () => {
     const narrow = analyzeRhythm(bpmClickTrain, BPM_SR, {
       bpmMin: 30,
       bpmMax: 40,
+      startBpm: 1,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
     const wide = analyzeRhythm(bpmClickTrain, BPM_SR, {
       bpmMin: 60,
       bpmMax: 200,
+      startBpm: 100,
       nFft: BPM_NFFT,
       hopLength: BPM_HOP,
     });
