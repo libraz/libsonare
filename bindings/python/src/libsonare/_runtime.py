@@ -7,8 +7,7 @@ import ctypes
 import functools
 import inspect
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from numbers import Integral
-from typing import Any, TypeVar, cast
+from typing import Any, SupportsIndex, TypeVar, cast
 
 import numpy as np
 
@@ -655,6 +654,19 @@ _C_INT_MAX = 2**31 - 1
 _C_INT_MIN = -(2**31)
 
 
+def _int_refusal(fn_name: str, value: object, arg_name: str, domain: str) -> SonareValueError:
+    """Word a refusal :func:`_narrow_int` raised, keeping its two halves apart.
+
+    The shared predicate words a bad type and a value out of range identically.
+    The validators below name a non-integer as such and name everything else
+    against ``domain``, which states the field's whole accepted range rather
+    than only the C type's.
+    """
+    if isinstance(value, bool) or not isinstance(value, SupportsIndex):
+        return SonareValueError(f"{fn_name}: {arg_name} must be an integer")
+    return SonareValueError(f"{fn_name}: {arg_name} {domain}")
+
+
 def _validate_c_int_field(fn_name: str, value: int, arg_name: str) -> int:
     """Narrow a config field onto a C ``int``, refusing anything that would wrap.
 
@@ -663,6 +675,10 @@ def _validate_c_int_field(fn_name: str, value: int, arg_name: str) -> int:
     refused: ``2**32`` arrives as 0, which every field of the versioned configs
     reads as "keep the default", and ``2**32 + 1`` arrives as 1. Either way the
     call succeeds having used a setting the caller never asked for.
+
+    The check is :func:`_narrow_int`, the one the ``_to_c_*`` readers run, so
+    this cannot come to accept a different set of values than they do; only the
+    wording is this field's own.
 
     Args:
         fn_name: Caller name, used to prefix the error message.
@@ -675,12 +691,10 @@ def _validate_c_int_field(fn_name: str, value: int, arg_name: str) -> int:
     Raises:
         SonareValueError: If the value is not an integer or does not fit.
     """
-    if isinstance(value, bool) or not isinstance(value, Integral):
-        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
-    value = int(value)
-    if value < _C_INT_MIN or value > _C_INT_MAX:
-        raise SonareValueError(f"{fn_name}: {arg_name} must fit in a signed 32-bit integer")
-    return value
+    try:
+        return _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
+    except SonareValueError as exc:
+        raise _int_refusal(fn_name, value, arg_name, "must fit in a signed 32-bit integer") from exc
 
 
 def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
@@ -688,7 +702,8 @@ def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
 
     One definition for the whole binding: both HPSS entry points narrow the
     kernel into a C ``int``, where a value past the signed range wraps into a
-    different kernel the core then happily separates on.
+    different kernel the core then happily separates on. The range half is
+    :func:`_narrow_int`; odd-and-positive is this domain's own.
 
     Args:
         fn_name: Caller name, used to prefix the error message.
@@ -701,14 +716,14 @@ def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
     Raises:
         SonareValueError: If the value is not a positive odd signed 32-bit int.
     """
-    if isinstance(value, bool) or not isinstance(value, Integral):
-        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
-    value = int(value)
-    if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
-        raise SonareValueError(
-            f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer"
-        )
-    return value
+    domain = "must be a positive odd signed 32-bit integer"
+    try:
+        kernel = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
+    except SonareValueError as exc:
+        raise _int_refusal(fn_name, value, arg_name, domain) from exc
+    if kernel <= 0 or kernel % 2 == 0:
+        raise SonareValueError(f"{fn_name}: {arg_name} {domain}")
+    return kernel
 
 
 def _require_power_of_two(value: int, name: str) -> None:
@@ -740,12 +755,14 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
         SonareValueError: If ``n_fft`` is not an even integer in
             ``[2, 2**31 - 1]``.
     """
-    if isinstance(n_fft, bool) or not isinstance(n_fft, Integral):
-        raise SonareValueError(f"{fn_name}: n_fft must be an integer")
-    n_fft = int(n_fft)
-    if n_fft < 2 or n_fft > _C_INT_MAX or n_fft % 2 != 0:
-        raise SonareValueError(f"{fn_name}: n_fft must be an even signed 32-bit integer >= 2")
-    return n_fft
+    domain = "must be an even signed 32-bit integer >= 2"
+    try:
+        size = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
+    except SonareValueError as exc:
+        raise _int_refusal(fn_name, n_fft, "n_fft", domain) from exc
+    if size < 2 or size % 2 != 0:
+        raise SonareValueError(f"{fn_name}: n_fft {domain}")
+    return size
 
 
 def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
@@ -766,14 +783,14 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
         SonareValueError: If either value falls outside the accepted domain.
     """
     n_fft = _validate_stft_n_fft(fn_name, n_fft)
-    if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
-        raise SonareValueError(f"{fn_name}: hop_length must be an integer")
-    hop_length = int(hop_length)
-    if hop_length <= 0 or hop_length > _C_INT_MAX:
-        raise SonareValueError(
-            f"{fn_name}: hop_length must fit in a positive signed 32-bit integer"
-        )
-    return n_fft, hop_length
+    domain = "must fit in a positive signed 32-bit integer"
+    try:
+        hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
+    except SonareValueError as exc:
+        raise _int_refusal(fn_name, hop_length, "hop_length", domain) from exc
+    if hop <= 0:
+        raise SonareValueError(f"{fn_name}: hop_length {domain}")
+    return n_fft, hop
 
 
 def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
