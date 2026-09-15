@@ -56,6 +56,11 @@ typedef struct {
   int latency_samples;
   /// Non-zero when the true-peak ceiling prevented reaching target_lufs.
   int loudness_target_limited;
+  /// Non-finite input samples a processor replaced with a finite in-domain one.
+  /// The output is then finite, in range and error-free while carrying samples
+  /// unrelated to the input, so a nonzero count is the only thing separating a
+  /// degraded result from a clean one. Zero means no substitution occurred.
+  uint32_t non_finite_substitution_count;
 } SonareMasteringResult;
 
 typedef struct {
@@ -74,6 +79,9 @@ typedef struct {
   int latency_samples;
   /// Non-zero when the true-peak ceiling prevented reaching target_lufs.
   int loudness_target_limited;
+  /// See @c SonareMasteringResult::non_finite_substitution_count. Aggregated
+  /// over both channels.
+  uint32_t non_finite_substitution_count;
 } SonareMasteringStereoResult;
 
 /// @brief Progress callback type. Called per chain stage completion.
@@ -147,6 +155,10 @@ typedef struct {
   size_t stage_gain_reductions_count;
   /// Aggregated before/after measurements for UI and artifact reporting.
   SonareMasteringReport report;
+  /// See @c SonareMasteringResult::non_finite_substitution_count. Aggregated
+  /// over every stage the chain ran, so a caller learns a substitution happened
+  /// without having to ask which stage produced it.
+  uint32_t non_finite_substitution_count;
 } SonareMasteringChainResult;
 
 // Result of running the MasteringChain on stereo buffers. Offline chain/master_audio
@@ -172,6 +184,8 @@ typedef struct {
   float* stage_gain_reduction_values;
   size_t stage_gain_reductions_count;
   SonareMasteringReport report;
+  /// @copydoc SonareMasteringChainResult::non_finite_substitution_count
+  uint32_t non_finite_substitution_count;
 } SonareMasteringChainStereoResult;
 
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
@@ -776,6 +790,19 @@ int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMaster
 ///   the next API call on the same thread; the caller must NOT free it.
 const char* sonare_streaming_mastering_chain_stage_names(
     const SonareStreamingMasteringChain* handle);
+
+/// @brief Number of non-finite samples the chain's stages replaced with a
+///        finite in-domain one.
+/// @details Advisory telemetry, and the only thing that separates a degraded
+///   stream from a clean one: a substituting stage leaves the output finite, in
+///   range and free of any error while carrying samples unrelated to the input.
+///   Aggregated over every substituting stage, so a caller learns it happened
+///   without having to ask which stage produced it. Cumulative over every block
+///   since @ref sonare_streaming_mastering_chain_prepare, which rebuilds the
+///   stages and so clears it. Realtime-safe.
+/// @param out_count Receives the count; must not be NULL.
+SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
+    const SonareStreamingMasteringChain* handle, uint32_t* out_count);
 
 /// @brief Destroy and free the handle.
 void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle);

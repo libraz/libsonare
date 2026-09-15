@@ -2695,6 +2695,12 @@
         "name": "report",
         "offset": 88,
         "size": 180
+      },
+      {
+        "kind": "unsigned",
+        "name": "non_finite_substitution_count",
+        "offset": 268,
+        "size": 4
       }
     ],
     "size": 272
@@ -2797,6 +2803,12 @@
         "name": "report",
         "offset": 96,
         "size": 180
+      },
+      {
+        "kind": "unsigned",
+        "name": "non_finite_substitution_count",
+        "offset": 276,
+        "size": 4
       }
     ],
     "size": 280
@@ -2983,9 +2995,15 @@
         "name": "loudness_target_limited",
         "offset": 36,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "non_finite_substitution_count",
+        "offset": 40,
+        "size": 4
       }
     ],
-    "size": 40
+    "size": 48
   },
   "SonareMasteringStereoResult": {
     "align": 8,
@@ -3043,9 +3061,15 @@
         "name": "loudness_target_limited",
         "offset": 44,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "non_finite_substitution_count",
+        "offset": 48,
+        "size": 4
       }
     ],
-    "size": 48
+    "size": 56
   },
   "SonareMelResult": {
     "align": 8,

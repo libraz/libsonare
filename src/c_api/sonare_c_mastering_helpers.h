@@ -69,6 +69,7 @@ inline void set_mastering_result(const sonare::mastering::api::MonoResult& resul
   out->applied_gain_db = result.applied_gain_db;
   out->latency_samples = result.latency_samples;
   out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
+  out->non_finite_substitution_count = result.non_finite_substitution_count;
   std::unique_ptr<float[]> processed(new float[out->length]);
   std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
   out->samples = sonare_c_detail::release_array(processed);
@@ -104,6 +105,7 @@ inline void zero_chain_metrics(ChainResultT* out) {
   out->output_true_peak_dbtp = 0.0f;
   out->output_lra = 0.0f;
   out->loudness_target_limited = 0;
+  out->non_finite_substitution_count = 0;
   out->stage_gain_reduction_stages = nullptr;
   out->stage_gain_reduction_values = nullptr;
   out->stage_gain_reductions_count = 0;
@@ -197,6 +199,7 @@ inline void fill_mono_chain_result(const sonare::mastering::api::MonoChainResult
   }
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  out->non_finite_substitution_count = result.non_finite_substitution_count;
   set_chain_metrics(result, out);
 }
 
@@ -218,6 +221,7 @@ inline void fill_stereo_chain_result(const sonare::mastering::api::StereoChainRe
   }
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  out->non_finite_substitution_count = result.non_finite_substitution_count;
   set_chain_metrics(result, out);
 }
 

@@ -368,6 +368,14 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     SONARE_C_CATCH_RETURN(nullptr)
   }
 
+  SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
+      const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+    SONARE_C_API_ENTRY;
+    if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+    *out_count = handle->chain->non_finite_substitution_count();
+    return SONARE_OK;
+  }
+
   void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain * handle) {
     delete handle;
   }
