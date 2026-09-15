@@ -223,18 +223,18 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
 
 }  // namespace
 
-float js_scale_quantize_midi(const val& root, const val& mode_mask, float midi,
+float js_scale_quantize_midi(const val& root, const val& mode_mask, const val& midi,
                              float reference_midi) {
   editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
       checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
-  return q.quantize_midi(midi);
+  return q.quantize_midi(checkedFloatFromVal(midi, "midi"));
 }
 
-float js_scale_correction_semitones(const val& root, const val& mode_mask, float midi,
+float js_scale_correction_semitones(const val& root, const val& mode_mask, const val& midi,
                                     float reference_midi) {
   editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
       checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
-  return q.correction_semitones(midi);
+  return q.correction_semitones(checkedFloatFromVal(midi, "midi"));
 }
 
 bool js_scale_pitch_class_enabled(const val& root, const val& mode_mask,

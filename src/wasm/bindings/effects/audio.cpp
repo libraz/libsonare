@@ -1167,16 +1167,17 @@ val js_normalize(val samples, const val& sample_rate, float target_db) {
 }
 
 // Trim silence
-val js_trim_ex(val samples, const val& sample_rate, float threshold_db, const val& frame_length,
-               const val& hop_length) {
+val js_trim_ex(val samples, const val& sample_rate, const val& threshold_db,
+               const val& frame_length, const val& hop_length) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  Audio result = trim_absolute(audio, threshold_db, checkedIntFromVal(frame_length, "frameLength"),
+  Audio result = trim_absolute(audio, checkedFloatFromVal(threshold_db, "thresholdDb"),
+                               checkedIntFromVal(frame_length, "frameLength"),
                                checkedIntFromVal(hop_length, "hopLength"));
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
 
-val js_trim(val samples, const val& sample_rate, float threshold_db) {
+val js_trim(val samples, const val& sample_rate, const val& threshold_db) {
   return js_trim_ex(samples, sample_rate, threshold_db, val(constants::kDefaultNFft),
                     val(constants::kDefaultHopLength));
 }

@@ -20,13 +20,18 @@ import {
   chirp,
   deemphasis,
   ErrorCode,
+  fixLength,
   init,
   isSonareError,
+  padCenter,
   peakPick,
   preemphasis,
   type SonareError,
+  scaleCorrectionSemitones,
+  scaleQuantizeMidi,
   splitSilence,
   tone,
+  trim,
   trimSilence,
   vectorNormalize,
 } from '../dist/index.js';
@@ -46,8 +51,6 @@ const SATURATES_ONTO_A_FLOAT = [1e40, -1e40, 3.5e38, 1e300, -1e300];
 
 /** Non-finite values written directly, which must reach the same refusal. */
 const NON_FINITE = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-
-const REFUSED = [...SATURATES_ONTO_A_FLOAT, ...NON_FINITE];
 
 function capture(run: () => unknown): unknown {
   try {
@@ -102,11 +105,23 @@ const silenceSignal = new Float32Array(QUIET_SAMPLES + LOUD_SAMPLES).map((_, i) 
   return amplitude * Math.sin((2 * Math.PI * 440 * i) / SR);
 });
 
+// Natural C major, 12-bit pitch-class mask (root C = bit 0).
+const C_MAJOR_MASK = 0b101010110101;
+
 /** One float field of one entry point, and how to drive it with a value. */
 interface FloatField {
   entry: string;
   key: string;
   run: (value: number) => unknown;
+  /**
+   * True when the TS facade already runs `assertFiniteScalar` on this field
+   * ahead of the WASM call. That guard catches a literal Infinity/NaN with a
+   * plain RangeError but is blind to a value that only saturates onto an
+   * infinity inside embind's float glue -- `3.5e38` still has to reach the
+   * WASM-side range refusal. Fields without this TS-layer guard refuse both
+   * cases the same way.
+   */
+  nonFiniteRefusedInJs?: boolean;
 }
 
 const FLOAT_FIELDS: FloatField[] = [
@@ -165,6 +180,34 @@ const FLOAT_FIELDS: FloatField[] = [
     key: 'amplitude',
     run: (value) => tone(440, SR, 0.01, 0, value),
   },
+  {
+    entry: 'trim',
+    key: 'thresholdDb',
+    run: (value) => trim(silenceSignal, SR, value, 2048, 512),
+    nonFiniteRefusedInJs: true,
+  },
+  {
+    entry: 'padCenter',
+    key: 'padValue',
+    run: (value) => padCenter(new Float32Array([1, 2, 3]), 5, value),
+  },
+  {
+    entry: 'fixLength',
+    key: 'padValue',
+    run: (value) => fixLength(new Float32Array([1, 2, 3]), 5, value),
+  },
+  {
+    entry: 'scaleQuantizeMidi',
+    key: 'midi',
+    run: (value) => scaleQuantizeMidi(0, C_MAJOR_MASK, value, 69),
+    nonFiniteRefusedInJs: true,
+  },
+  {
+    entry: 'scaleCorrectionSemitones',
+    key: 'midi',
+    run: (value) => scaleCorrectionSemitones(0, C_MAJOR_MASK, value, 69),
+    nonFiniteRefusedInJs: true,
+  },
 ];
 
 beforeAll(async () => {
@@ -175,18 +218,38 @@ describe('every positional float parameter refuses a value the float type cannot
   it('covers one field per positional float read these facades make', () => {
     // A field dropped from the table stops being covered without anything going
     // red, which is the one way this file could quietly shrink.
-    expect(FLOAT_FIELDS).toHaveLength(11);
+    expect(FLOAT_FIELDS).toHaveLength(16);
     const ids = FLOAT_FIELDS.map((field) => `${field.entry}.${field.key}`);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it.each(FLOAT_FIELDS)('$entry names $key rather than accepting an infinity', ({ key, run }) => {
-    for (const value of REFUSED) {
+  it.each(FLOAT_FIELDS)('$entry names $key rather than accepting an infinity', ({
+    key,
+    run,
+    nonFiniteRefusedInJs,
+  }) => {
+    // This is the case that matters: a value that only saturates onto an
+    // infinity inside embind's glue, which a TS-side finiteness assertion
+    // cannot see because it inspects the number the caller sent.
+    for (const value of SATURATES_ONTO_A_FLOAT) {
       expectRangeRefusal(
         capture(() => run(value)),
         key,
         `${key} = ${value}`,
       );
+    }
+    for (const value of NON_FINITE) {
+      const caught = capture(() => run(value));
+      if (nonFiniteRefusedInJs) {
+        // Caught by the facade's own `assertFiniteScalar` before the WASM
+        // call, so it is a RangeError rather than the WASM range refusal.
+        expect(caught, `${key} = ${value}`).toBeInstanceOf(RangeError);
+        expect((caught as RangeError).message, `${key} = ${value}`).toContain(
+          `${key} must be a finite number`,
+        );
+      } else {
+        expectRangeRefusal(caught, key, `${key} = ${value}`);
+      }
     }
   });
 });
@@ -294,5 +357,42 @@ describe('the refusal is the same one the shared readers already raised', () => 
     expect((fromZi as SonareError).message.replace('zi', '<key>')).toBe(
       (fromCoef as SonareError).message.replace('coef', '<key>'),
     );
+  });
+});
+
+describe('trim consumes the thresholdDb it accepts', () => {
+  it('reads two legitimate thresholdDb values as two different trims', () => {
+    const strict = trim(silenceSignal, SR, -6, 2048, 512);
+    const lenient = trim(silenceSignal, SR, -80, 2048, 512);
+    expect(strict.length).toBeLessThan(lenient.length);
+  });
+});
+
+describe('padCenter and fixLength consume the padValue they accept', () => {
+  it('padCenter fills both padded sides with a legitimate padValue', () => {
+    // size=5 over a 3-sample input centers it with one pad sample on each side.
+    expect(Array.from(padCenter(new Float32Array([1, 2, 3]), 5, 7))).toEqual([7, 1, 2, 3, 7]);
+  });
+
+  it('fixLength fills the trailing padded region with a legitimate padValue', () => {
+    // size=5 over a 3-sample input appends two pad samples at the tail.
+    expect(Array.from(fixLength(new Float32Array([1, 2, 3]), 5, 9))).toEqual([1, 2, 3, 9, 9]);
+  });
+});
+
+describe('scaleQuantizeMidi and scaleCorrectionSemitones consume the midi they accept', () => {
+  it('scaleQuantizeMidi snaps an in-scale-adjacent midi to C major', () => {
+    // 61 (C#4) is one semitone off C major; the nearest enabled pitch class is
+    // 60 (C4).
+    expect(scaleQuantizeMidi(0, C_MAJOR_MASK, 61, 69)).toBe(60);
+  });
+
+  it('answers a midi past the quantizable range with the documented round-to-nearest fallback', () => {
+    // Past +-2048 the quantizer stops searching the scale and snaps
+    // chromatically (scale_quantizer.cpp), so a large-but-float-representable
+    // midi has a defined answer distinct from the refusal boundary at
+    // 3.5e38 -- this is the control that the fix has not narrowed the domain.
+    expect(scaleQuantizeMidi(0, C_MAJOR_MASK, 100000, 69)).toBe(100000);
+    expect(scaleCorrectionSemitones(0, C_MAJOR_MASK, 100000, 69)).toBe(0);
   });
 });

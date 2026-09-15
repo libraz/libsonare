@@ -189,8 +189,9 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val, floa
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
 }
 
-val js_pad_center(val values, const val& size_val, float pad_value) {
+val js_pad_center(val values, const val& size_val, const val& pad_value_val) {
   const int size = checkedIntFromVal(size_val, "size");
+  const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "padCenter");
   if (size < 0) {
@@ -199,8 +200,9 @@ val js_pad_center(val values, const val& size_val, float pad_value) {
   return vectorToFloat32Array(pad_center(data, static_cast<size_t>(size), pad_value));
 }
 
-val js_fix_length(val values, const val& size_val, float pad_value) {
+val js_fix_length(val values, const val& size_val, const val& pad_value_val) {
   const int size = checkedIntFromVal(size_val, "size");
+  const float pad_value = checkedFloatFromVal(pad_value_val, "padValue");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "fixLength");
   if (size < 0) {
