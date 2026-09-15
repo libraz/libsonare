@@ -165,6 +165,11 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              const int32_t* voiced, size_t n_frames, int hop_length,
                                              const SonarePitchCorrectionConfig* config, float** out,
                                              size_t* out_length);
+/// @param stretch_ratio Duration multiplier for the region; 1 leaves it as it
+///        is. Must be finite and > 0; there is no spelling of "unspecified".
+///        The refusal lives in the core rather than in this call, so an
+///        out-of-domain value comes back as SONARE_ERROR_INVALID_PARAMETER with
+///        the core's own text on sonare_last_error_message().
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
@@ -679,6 +684,12 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             const SonarePercussiveRenderConfig* config, float** out,
                                             size_t* out_length);
 
+/// @param pitch_semitones Transpose in semitones; 0 leaves the pitch alone.
+/// @param formant_factor Formant scale; 1 leaves the formants alone.
+/// @note Both must be finite; neither has a spelling of "unspecified". This call
+///       assigns them into the config unchecked and the core refuses a
+///       non-finite one, so either comes back as SONARE_ERROR_INVALID_PARAMETER
+///       with the core's own text on sonare_last_error_message().
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
