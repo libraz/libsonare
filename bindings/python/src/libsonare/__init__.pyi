@@ -256,6 +256,9 @@ from .analyzer import (
     mastering as mastering,
 )
 from .analyzer import (
+    mastering_ab_match_loudness as mastering_ab_match_loudness,
+)
+from .analyzer import (
     mastering_assistant_suggest as mastering_assistant_suggest,
 )
 from .analyzer import (
@@ -797,6 +800,9 @@ from .types import (
 )
 from .types import (
     KeyProfile as KeyProfile,
+)
+from .types import (
+    LoudnessMatch as LoudnessMatch,
 )
 from .types import LufsResult as LufsResult
 from .types import (

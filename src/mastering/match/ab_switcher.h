@@ -15,8 +15,12 @@ Audio ab_crossfade(const Audio& a, const Audio& b, float mix);
 
 /// @brief Result of matching `b`'s BS.1770 integrated loudness to `a`'s.
 struct LoudnessMatchedPair {
-  Audio a;                              ///< Returned unchanged; the loudness reference.
-  Audio b;                              ///< `b` with a gain applied to match `a`'s integrated LUFS.
+  Audio a;  ///< Returned unchanged; the loudness reference.
+  Audio b;  ///< `b` with a gain applied to match `a`'s integrated LUFS.
+  /// `a`'s integrated loudness. Non-finite when `a` is silent or below the
+  /// absolute gate, which is also when `applied_gain_db` falls back to 0.
+  float reference_lufs = 0.0f;
+  float source_lufs = 0.0f;             ///< `b`'s, before the match. Same non-finite case.
   float applied_gain_db = 0.0f;         ///< Gain applied to `b`, in dB.
   float matched_true_peak_dbtp = 0.0f;  ///< `b`'s true peak after the gain, in dBTP.
 };

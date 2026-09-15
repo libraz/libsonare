@@ -1111,6 +1111,19 @@ class MasteringStereoResult:
         non_finite_substitution_count: int = 0,
     ) -> None: ...
 
+class LoudnessMatch:
+    reference_lufs: float
+    source_lufs: float
+    applied_gain_db: float
+    matched_true_peak_dbtp: float
+    def __init__(
+        self,
+        reference_lufs: float,
+        source_lufs: float,
+        applied_gain_db: float,
+        matched_true_peak_dbtp: float,
+    ) -> None: ...
+
 class StageGainReduction:
     stage: str
     gain_reduction_db: float

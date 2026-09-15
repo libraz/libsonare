@@ -2561,6 +2561,36 @@
     ],
     "size": 16
   },
+  "SonareLoudnessMatch": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "reference_lufs",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "source_lufs",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "applied_gain_db",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "matched_true_peak_dbtp",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
   "SonareLufsResult": {
     "align": 4,
     "fields": [

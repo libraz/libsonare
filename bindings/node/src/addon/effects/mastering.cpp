@@ -1122,6 +1122,48 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringAbMatchLoudness(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (source, reference, sampleRate)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto source = info[0].As<Napi::Float32Array>();
+  auto reference = info[1].As<Napi::Float32Array>();
+  // Through the C ABI rather than the core call the pair processors use: the
+  // entry point owns the input validation and the match scalars, so this surface
+  // reports exactly what the other surfaces do.
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  float* matched = nullptr;
+  size_t matched_length = 0;
+  SonareLoudnessMatch match{};
+  const SonareError err = sonare_mastering_ab_match_loudness(
+      source.Data(), source.ElementLength(), reference.Data(), reference.ElementLength(), sr,
+      &matched, &matched_length, &match);
+  if (err != SONARE_OK) {
+    sonare_free_floats(matched);
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Float32Array samples = Napi::Float32Array::New(env, matched_length);
+  if (matched_length > 0 && matched != nullptr) {
+    std::memcpy(samples.Data(), matched, matched_length * sizeof(float));
+  }
+  sonare_free_floats(matched);
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("samples", samples);
+  out.Set("sampleRate", Napi::Number::New(env, sr));
+  out.Set("referenceLufs", Napi::Number::New(env, match.reference_lufs));
+  out.Set("sourceLufs", Napi::Number::New(env, match.source_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, match.applied_gain_db));
+  out.Set("matchedTruePeakDbtp", Napi::Number::New(env, match.matched_true_peak_dbtp));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringPairAnalyze(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||

@@ -821,6 +821,31 @@ export interface MasteringStereoResult {
   nonFiniteSubstitutionCount: number;
 }
 
+/** What gain-matching one take to another's loudness took, and produced. */
+export interface LoudnessMatchResult {
+  /** The source, gain-matched to the reference's integrated loudness. */
+  samples: Float32Array;
+  sampleRate: number;
+  /**
+   * The reference's BS.1770 integrated loudness. Non-finite for a silent or
+   * below-gate take, which is also when `appliedGainDb` is 0.
+   */
+  referenceLufs: number;
+  /** The source's, before the gain. Same non-finite case. */
+  sourceLufs: number;
+  /** Gain applied to the source, in dB. */
+  appliedGainDb: number;
+  /**
+   * The matched take's true peak after the gain, in dBTP. It can sit above
+   * 0 dBTP: the gain is applied with no upper bound, because clamping for
+   * headroom would return the source at its own loudness whenever it started
+   * near full scale, which is the one thing a loudness match must not do.
+   * Limiting is the caller's decision, so a value above 0 is a report rather
+   * than a defect.
+   */
+  matchedTruePeakDbtp: number;
+}
+
 /** Generic traversal view used by chain-config tooling; public configs are fully typed below. */
 export type MasteringChainSection = Record<string, unknown>;
 

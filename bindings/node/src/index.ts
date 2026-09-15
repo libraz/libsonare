@@ -100,6 +100,7 @@ export type {
   KeyDetectionOptions,
   KeyMode,
   KeyProfile,
+  LoudnessMatchResult,
   LufsResult,
   LufsSeriesResult,
   MasteringChainConfig,

@@ -1503,4 +1503,87 @@ TEST_CASE("planar stereo true peak matches the Audio-copy path exactly", "[maste
   }
 }
 
+TEST_CASE("sonare_mastering_ab_match_loudness", "[c_api][mastering]") {
+  constexpr int kSampleRate = 48000;
+  // The two takes are deliberately a different tone AND a different duration.
+  // Scaled copies of one tone would make the matched result numerically equal to
+  // the reference, and every assertion below would then also hold for a call
+  // that returned the reference instead of the matched take.
+  std::vector<float> reference = generate_sine(1000.0f, kSampleRate, 2.0f);
+  std::vector<float> source = generate_sine(220.0f, kSampleRate, 1.5f);
+  for (auto& sample : reference) sample *= 0.5f;
+  for (auto& sample : source) sample *= 0.05f;
+
+  SECTION("the matched take measures at the reference's loudness") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    SonareLoudnessMatch match{};
+    REQUIRE(sonare_mastering_ab_match_loudness(source.data(), source.size(), reference.data(),
+                                               reference.size(), kSampleRate, &out, &out_length,
+                                               &match) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_length == source.size());
+
+    // The reported gain is reference - source by construction, so asserting that
+    // relation would only restate the struct. What has to hold is that applying
+    // it landed the take where it was aimed: re-measure the output and compare
+    // it against the reference's own loudness.
+    const sonare::Audio matched = sonare::Audio::from_buffer(out, out_length, kSampleRate);
+    CHECK(sonare::mastering::common::measure_lufs(matched) ==
+          Catch::Approx(match.reference_lufs).margin(0.05));
+
+    // Landing at the right loudness does not say which take got there. The
+    // output has to be the source with the reported gain on it, sample for
+    // sample, or a call that returned the reference would satisfy the line above.
+    const float gain = sonare::db_to_linear(match.applied_gain_db);
+    for (size_t i = 0; i < source.size(); i += source.size() / 8) {
+      CHECK(out[i] == Catch::Approx(source[i] * gain).margin(1e-5));
+    }
+
+    // The fixture is only a witness if the two takes really differed; at equal
+    // loudness the assertions above pass for a function that does nothing.
+    CHECK(match.source_lufs < match.reference_lufs - 5.0f);
+    CHECK(match.applied_gain_db > 0.0f);
+
+    sonare_free_floats(out);
+  }
+
+  SECTION("the measurement struct is optional") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_mastering_ab_match_loudness(source.data(), source.size(), reference.data(),
+                                               reference.size(), kSampleRate, &out, &out_length,
+                                               nullptr) == SONARE_OK);
+    REQUIRE(out_length == source.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("a refused call leaves no measurement behind to be read as one") {
+    float* out = nullptr;
+    size_t out_length = 0;
+    SonareLoudnessMatch match{};
+    match.applied_gain_db = 99.0f;
+    CHECK(sonare_mastering_ab_match_loudness(source.data(), source.size(), reference.data(),
+                                             reference.size(), 0, &out, &out_length,
+                                             &match) != SONARE_OK);
+    CHECK(match.applied_gain_db == 0.0f);
+    CHECK(out == nullptr);
+    CHECK(out_length == 0);
+
+    match.applied_gain_db = 99.0f;
+    CHECK(sonare_mastering_ab_match_loudness(nullptr, source.size(), reference.data(),
+                                             reference.size(), kSampleRate, &out, &out_length,
+                                             &match) != SONARE_OK);
+    CHECK(match.applied_gain_db == 0.0f);
+
+    // The audio-output check comes after the struct is cleared, so refusing on a
+    // missing output buffer must still not leave a stale measurement readable.
+    match.applied_gain_db = 99.0f;
+    CHECK(sonare_mastering_ab_match_loudness(source.data(), source.size(), reference.data(),
+                                             reference.size(), kSampleRate, nullptr, &out_length,
+                                             &match) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(match.applied_gain_db == 0.0f);
+  }
+}
+
 #endif

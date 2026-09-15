@@ -577,6 +577,15 @@ export interface WasmMasteringResult {
   nonFiniteSubstitutionCount: number;
 }
 
+export interface WasmLoudnessMatchResult {
+  samples: Float32Array;
+  sampleRate: number;
+  referenceLufs: number;
+  sourceLufs: number;
+  appliedGainDb: number;
+  matchedTruePeakDbtp: number;
+}
+
 export interface WasmStageGainReduction {
   stage: string;
   gainReductionDb: number;
@@ -2027,6 +2036,11 @@ export interface SonareModule {
     sampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;
+  masteringAbMatchLoudness: (
+    source: Float32Array,
+    reference: Float32Array,
+    sampleRate: number,
+  ) => WasmLoudnessMatchResult;
   masteringStereoAnalyze: (
     analysisName: string,
     left: Float32Array,

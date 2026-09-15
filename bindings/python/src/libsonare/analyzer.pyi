@@ -26,6 +26,7 @@ from .types import (
     Key,
     KeyCandidate,
     KeyProfile,
+    LoudnessMatch,
     LufsResult,
     MasteringChainResult,
     MasteringChainStereoResult,
@@ -1203,6 +1204,13 @@ def mastering_pair_analyze(
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
 ) -> str: ...
+def mastering_ab_match_loudness(
+    source: FloatSamples,
+    reference: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    with_match: bool = True,
+) -> tuple[np.ndarray[Any, Any], LoudnessMatch | None]: ...
 def mastering_stereo_analyze(
     analysis_name: StereoAnalysis,
     left: FloatSamples,

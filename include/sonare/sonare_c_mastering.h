@@ -490,6 +490,30 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
                                             const SonareMasteringParam* params, size_t param_count,
                                             char** json_out);
 
+/// @brief What gain-matching one take to another's loudness took, and produced.
+typedef struct {
+  float reference_lufs;          // the reference take's BS.1770 integrated loudness
+  float source_lufs;             // the matched take's, before the gain
+  float applied_gain_db;         // reference_lufs - source_lufs
+  float matched_true_peak_dbtp;  // the matched take's true peak after the gain
+} SonareLoudnessMatch;
+
+/// @brief Gain-matches @p source to @p reference's integrated loudness, so an
+///        A/B between them is not decided by level.
+/// @details The gain is applied with no upper bound and @c matched_true_peak_dbtp
+///          reports where that left the peak, rather than the call capping it:
+///          a headroom clamp would return @p source at its own loudness whenever
+///          it started near full scale, which is the one thing a match must not
+///          do. Both loudness values are non-finite for a silent or below-gate
+///          take, and @c applied_gain_db is then 0.
+/// @param out Receives @p source at @p reference's loudness. Heap-allocated;
+///            release with @ref sonare_free_floats.
+/// @param out_match Pass NULL to take only the audio.
+SonareError sonare_mastering_ab_match_loudness(const float* source, size_t source_length,
+                                               const float* reference, size_t reference_length,
+                                               int sample_rate, float** out, size_t* out_length,
+                                               SonareLoudnessMatch* out_match);
+
 typedef struct {
   const char* name;
   float target_lufs;

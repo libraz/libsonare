@@ -8,6 +8,7 @@
 #include "core/audio.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/match/ab_switcher.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
@@ -396,6 +397,35 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
       analysis_name, left, right, length, sample_rate, to_params(params, param_count));
   *json_out = copy_string(json);
   return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_ab_match_loudness(const float* source, size_t source_length,
+                                               const float* reference, size_t reference_length,
+                                               int sample_rate, float** out, size_t* out_length,
+                                               SonareLoudnessMatch* out_match) {
+  SONARE_C_API_ENTRY;
+  // Cleared before the argument checks, not after: a caller that ignores the
+  // error code must not read the scalars left in the struct by whatever wrote
+  // it last as though this call had measured them.
+  if (out_match) *out_match = SonareLoudnessMatch{};
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+  SonareError err = validate_audio_params(source, source_length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(reference, reference_length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const Audio reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
+  const Audio source_audio = Audio::from_buffer(source, source_length, sample_rate);
+  const auto matched = sonare::mastering::match::ab_match_loudness(reference_audio, source_audio);
+  if (out_match) {
+    *out_match = SonareLoudnessMatch{matched.reference_lufs, matched.source_lufs,
+                                     matched.applied_gain_db, matched.matched_true_peak_dbtp};
+  }
+  return copy_audio_result(matched.b, out, out_length);
   SONARE_C_CATCH
 }
 

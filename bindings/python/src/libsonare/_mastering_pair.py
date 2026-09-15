@@ -6,7 +6,10 @@ import ctypes
 from collections.abc import Sequence
 from typing import Any
 
+import numpy as np
+
 from ._ffi import (
+    SonareLoudnessMatch,
     SonareMasteringResult,
     SonareStreamingPlatform,
 )
@@ -14,13 +17,16 @@ from ._mastering_offline import _assistant_params, _mastering_params
 from ._runtime import (
     SonareValueError,
     _check,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _out_float_array,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
 )
 from .types import (
+    LoudnessMatch,
     MasteringResult,
 )
 
@@ -104,6 +110,74 @@ def mastering_pair_analyze(
     finally:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
+
+
+@_guard_buffer("source", "reference")
+def mastering_ab_match_loudness(
+    source: Sequence[float] | list[float] | np.ndarray,
+    reference: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    with_match: bool = True,
+) -> tuple[np.ndarray, LoudnessMatch | None]:
+    """Gain-match ``source`` to ``reference``'s integrated loudness.
+
+    An A/B between two takes is otherwise decided by whichever is louder. The
+    gain is applied with no upper bound and :attr:`LoudnessMatch.
+    matched_true_peak_dbtp` reports where that left the peak, rather than the
+    call capping it: a headroom clamp would return ``source`` at its own
+    loudness whenever it started near full scale, which is the one thing a
+    match must not do. Clamp afterwards if the result has to stay under a
+    ceiling.
+
+    The two takes need not be the same length; each is measured over its own
+    buffer. Only ``source`` is returned -- ``reference`` is read as the loudness
+    target and is not itself modified.
+
+    Args:
+        source: Mono take to be matched (any sequence convertible to float32).
+        reference: Mono take whose loudness ``source`` is brought to.
+        sample_rate: Sample rate of both takes, in Hz (default 22050).
+        with_match: Whether to measure the match alongside the audio
+            (default True). Pass False to take only the matched samples.
+
+    Returns:
+        Tuple of ``(matched ndarray, match)``. The audio is a
+        ``numpy.ndarray`` of ``float32`` as long as ``source``; ``match`` is a
+        :class:`LoudnessMatch`, or ``None`` when ``with_match`` is False.
+
+    Example:
+        >>> matched, match = mastering_ab_match_loudness(take, ref, 48000)
+        >>> match.applied_gain_db  # doctest: +SKIP
+        -3.2
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_ab_match_loudness"):
+        raise RuntimeError("libsonare was built without mastering support")
+    source_array, source_length = _to_c_float_array(source, arg_name="source")
+    reference_array, reference_length = _to_c_float_array(reference, arg_name="reference")
+    match = SonareLoudnessMatch() if with_match else None
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_mastering_ab_match_loudness(
+            source_array,
+            _to_c_size_t(source_length, "source_length"),
+            reference_array,
+            _to_c_size_t(reference_length, "reference_length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(match) if match is not None else None,
+        )
+        _check(rc)
+        matched = _from_c_float_array(out, out_length.value)
+    if match is None:
+        return matched, None
+    return matched, LoudnessMatch(
+        reference_lufs=float(match.reference_lufs),
+        source_lufs=float(match.source_lufs),
+        applied_gain_db=float(match.applied_gain_db),
+        matched_true_peak_dbtp=float(match.matched_true_peak_dbtp),
+    )
 
 
 @_guard_buffer("left", "right")

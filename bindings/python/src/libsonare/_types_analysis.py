@@ -1374,6 +1374,23 @@ class MasteringStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class LoudnessMatch:
+    """What gain-matching one take to another's loudness took, and produced.
+
+    ``applied_gain_db`` is ``reference_lufs - source_lufs`` and carries no
+    upper bound, so ``matched_true_peak_dbtp`` reports where the gain left the
+    peak instead of the match being capped to keep it. A silent or below-gate
+    take reads non-finite on both loudness values, and ``applied_gain_db`` is
+    then 0.
+    """
+
+    reference_lufs: float
+    source_lufs: float
+    applied_gain_db: float
+    matched_true_peak_dbtp: float
+
+
+@dataclass(frozen=True, slots=True)
 class StageGainReduction:
     """Gain reduction reported by a single dynamics/maximizer chain stage.
 

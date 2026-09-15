@@ -170,6 +170,34 @@ export interface MasteringOptions {
   applyGainAtInputRate?: boolean;
 }
 
+/** What gain-matching one take to another's loudness took, and produced. */
+export interface LoudnessMatchResult {
+  /** The source take at the reference's loudness. */
+  samples: Float32Array;
+  sampleRate: number;
+  /**
+   * The reference take's BS.1770 integrated loudness. Non-finite for a silent
+   * or below-gate take — the documented outcome, not a failure.
+   */
+  referenceLufs: number;
+  /** The matched take's, before the gain. Non-finite in the same case. */
+  sourceLufs: number;
+  /**
+   * `referenceLufs - sourceLufs`. Applied with no upper bound, and 0 whenever
+   * either loudness is non-finite.
+   */
+  appliedGainDb: number;
+  /**
+   * The matched take's true peak after the gain, in dBTP.
+   *
+   * The match does not cap the gain, so this can sit above 0 dBTP: clamping to
+   * headroom would leave a near-full-scale source at its own loudness, which is
+   * the one thing a loudness match must not do. Limit downstream if the peak
+   * matters more than the match.
+   */
+  matchedTruePeakDbtp: number;
+}
+
 /**
  * Mastering loudness/true-peak processing result
  */

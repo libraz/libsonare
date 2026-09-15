@@ -39,6 +39,7 @@ export {
   masteringPresetNames,
 } from './mastering_chain';
 export type {
+  MasteringAbMatchLoudnessRequest,
   MasteringAssistantParamsRequest,
   MasteringAssistantStereoParamsRequest,
   MasteringChannelPolicy,
@@ -58,6 +59,7 @@ export type {
 } from './mastering_core';
 export {
   mastering,
+  masteringAbMatchLoudness,
   masteringAssistantSuggest,
   masteringAssistantSuggestStereo,
   masteringAudioProfile,

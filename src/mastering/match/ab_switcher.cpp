@@ -68,7 +68,7 @@ LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b) {
   Audio matched_audio = Audio::from_vector(std::move(matched), b.sample_rate());
   const float matched_true_peak_dbtp = common::measure_true_peak_dbtp(matched_audio);
 
-  return {a, std::move(matched_audio), gain_db, matched_true_peak_dbtp};
+  return {a, std::move(matched_audio), a_lufs, b_lufs, gain_db, matched_true_peak_dbtp};
 }
 
 }  // namespace sonare::mastering::match

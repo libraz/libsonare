@@ -134,6 +134,17 @@ class SonareMasteringChainStereoResult(CStruct):
     ]
 
 
+class SonareLoudnessMatch(CStruct):
+    """Maps to SonareLoudnessMatch in sonare_c.h."""
+
+    _fields_ = [
+        ("reference_lufs", ctypes.c_float),
+        ("source_lufs", ctypes.c_float),
+        ("applied_gain_db", ctypes.c_float),
+        ("matched_true_peak_dbtp", ctypes.c_float),
+    ]
+
+
 class SonareStreamingPlatform(CStruct):
     """Maps to SonareStreamingPlatform in sonare_c.h."""
 

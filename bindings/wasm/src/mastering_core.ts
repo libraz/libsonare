@@ -1,5 +1,6 @@
 import { getSonareModule } from './module_state';
 import type {
+  LoudnessMatchResult,
   MasteringAssistantParams,
   MasteringOptions,
   MasteringProcessorParams,
@@ -44,6 +45,15 @@ export interface MasteringPairProcessRequest {
   reference: Float32Array;
   sampleRate?: number;
   params?: MasteringProcessorParams;
+}
+
+/** Canonical request form for {@link masteringAbMatchLoudness}. */
+export interface MasteringAbMatchLoudnessRequest {
+  /** The take to gain-match. */
+  source: Float32Array;
+  /** The take whose loudness `source` is matched to; returned untouched. */
+  reference: Float32Array;
+  sampleRate?: number;
 }
 
 /** Canonical request form for a two-input match analysis. */
@@ -450,6 +460,36 @@ export function masteringPairAnalyze(
     request.reference,
     request.sampleRate ?? 22050,
     request.params ?? {},
+  );
+}
+
+/**
+ * Gain-match `source` to `reference`'s integrated loudness, so an A/B between
+ * the two is not decided by level. `source` and `reference` may have
+ * independent lengths.
+ *
+ * The gain is applied with no upper bound and `matchedTruePeakDbtp` reports
+ * where that left the peak, rather than the call capping it: a headroom clamp
+ * would return `source` at its own loudness whenever it started near full
+ * scale. Both loudness values are non-finite for a silent or below-gate take,
+ * and `appliedGainDb` is then 0.
+ *
+ * @example
+ * ```ts
+ * const { samples, appliedGainDb, matchedTruePeakDbtp } = masteringAbMatchLoudness({
+ *   source: take,
+ *   reference: master,
+ *   sampleRate: 48000,
+ * });
+ * ```
+ */
+export function masteringAbMatchLoudness(
+  request: MasteringAbMatchLoudnessRequest,
+): LoudnessMatchResult {
+  return requireModule().masteringAbMatchLoudness(
+    request.source,
+    request.reference,
+    request.sampleRate ?? 22050,
   );
 }
 

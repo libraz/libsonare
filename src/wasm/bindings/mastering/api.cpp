@@ -9,6 +9,7 @@
 #include "mastering/api/presets.h"
 #include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/platform_targets.h"
+#include "mastering/match/ab_switcher.h"
 #include "midi/synth/synth_presets.h"
 #include "mixing/api/presets.h"
 #include "sonare.h"
@@ -368,6 +369,30 @@ std::string js_mastering_pair_analyze(std::string analysis_name, val source_samp
                                             masteringParamsFromObject(params));
 }
 
+// Gain-matches `source` to `reference`'s integrated loudness. The core takes the
+// reference first; the C ABI and every facade take (source, reference), so the
+// two arguments are swapped here rather than at the call site.
+val js_mastering_ab_match_loudness(val source_samples, val reference_samples,
+                                   const val& sample_rate_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
+                               "reference samples", "masteringAbMatchLoudness input", false);
+  // source and reference may have independent lengths.
+  const Audio source = loadValidatedAudio(source_samples, sample_rate);
+  const Audio reference = loadValidatedAudio(reference_samples, sample_rate);
+  const auto matched = mastering::match::ab_match_loudness(reference, source);
+
+  val out = val::object();
+  out.set("samples", vectorToFloat32Array(std::vector<float>(matched.b.data(),
+                                                             matched.b.data() + matched.b.size())));
+  out.set("sampleRate", matched.b.sample_rate());
+  out.set("referenceLufs", matched.reference_lufs);
+  out.set("sourceLufs", matched.source_lufs);
+  out.set("appliedGainDb", matched.applied_gain_db);
+  out.set("matchedTruePeakDbtp", matched.matched_true_peak_dbtp);
+  return out;
+}
+
 std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samples,
                                         val right_samples, const val& sample_rate_val, val params) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
@@ -537,6 +562,7 @@ void registerMasteringApiBindings() {
   function("masteringProcessStereo", &js_mastering_process_stereo);
   function("masteringPairProcess", &js_mastering_pair_process);
   function("masteringPairAnalyze", &js_mastering_pair_analyze);
+  function("masteringAbMatchLoudness", &js_mastering_ab_match_loudness);
   function("masteringStereoAnalyze", &js_mastering_stereo_analyze);
   function("masteringAssistantSuggest", &js_mastering_assistant_suggest);
   function("masteringAudioProfile", &js_mastering_audio_profile);

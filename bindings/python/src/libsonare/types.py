@@ -109,6 +109,9 @@ from ._types_analysis import (
     KeyProfile as KeyProfile,
 )
 from ._types_analysis import (
+    LoudnessMatch as LoudnessMatch,
+)
+from ._types_analysis import (
     LufsResult as LufsResult,
 )
 from ._types_analysis import (
