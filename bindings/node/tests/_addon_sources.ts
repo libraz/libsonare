@@ -698,11 +698,13 @@ function enclosingDefinition(spans: DefinitionSpan[], at: number): string {
  * because neither is a modular conversion — not because neither can change a
  * caller's number. `FloatValue` saturates a double past FLT_MAX to an infinity,
  * which folds the caller's quantity onto another legal value by a non-modular
- * route. That route is closed at the reader rather than here, for the sites that
- * reach one: `node_narrow_float` refuses the overflow and
- * `node_narrow_finite_float` refuses a written non-finite as well. The sites
- * still reading `FloatValue()` inline — required arguments and object-key reads —
- * remain uncovered by this pattern and by those readers alike.
+ * route. Which of the three float readers a site takes is where that route is
+ * decided, not here: `node_narrow_float` refuses the overflow,
+ * `node_narrow_finite_float` refuses a written non-finite as well, and
+ * `node_float_as_c_abi` refuses neither, for the entry points whose core answers
+ * a non-finite input instead of failing on it. No site reads `FloatValue()`
+ * inline — the one remaining call is the permissive reader's own body.
+ * `addon-float-narrowing.test.ts` holds the population counts.
  */
 const WRAPPING_ACCESSOR =
   /\.\s*As<Napi::Number>\(\)\s*\.\s*(Int32Value|Uint32Value|Int64Value)\s*\(\s*\)/g;

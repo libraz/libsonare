@@ -162,7 +162,7 @@ export interface NoteStretchOptions {
   onsetSample?: number;
   /** Last sample of the note to stretch. Defaults to the input length. */
   offsetSample?: number;
-  /** Stretch ratio (1 = unchanged). Default 1. */
+  /** Stretch ratio (1 = unchanged), a finite number. Default 1. */
   stretchRatio?: number;
 }
 
@@ -665,9 +665,21 @@ export type MasteringPreset =
   | 'trance'
   | 'gameOst';
 
+/**
+ * One delivery target `masteringStreamingPreview` reports a normalization gain
+ * for.
+ *
+ * Both numbers are required and must be finite. Unlike
+ * {@link EngineBounceOptions.targetLufs}, which shares this name, unit and
+ * default, a non-finite value here selects nothing — this interface has no
+ * "use the library default" spelling — so it is refused by name.
+ */
 export interface StreamingPlatform {
+  /** Platform name, echoed into the reported result. */
   name: string;
+  /** Integrated-loudness target in LUFS, e.g. -14. */
   targetLufs: number;
+  /** True-peak ceiling in dBTP, e.g. -1. */
   ceilingDb: number;
 }
 

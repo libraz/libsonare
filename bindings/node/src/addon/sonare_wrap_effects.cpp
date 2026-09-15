@@ -146,7 +146,7 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float rate = info[2].As<Napi::Number>().FloatValue();
+  float rate = node_narrow_finite_float(env, info[2], "rate");
   int n_fft = node_arg_int(info, 3, 2048);
   int hop_length = node_arg_int(info, 4, 512);
 
@@ -177,7 +177,7 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float semitones = info[2].As<Napi::Number>().FloatValue();
+  float semitones = node_narrow_finite_float(env, info[2], "semitones");
   int n_fft = node_arg_int(info, 3, 2048);
   int hop_length = node_arg_int(info, 4, 512);
 
@@ -214,8 +214,8 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float current_midi = info[2].As<Napi::Number>().FloatValue();
-  float target_midi = info[3].As<Napi::Number>().FloatValue();
+  float current_midi = node_narrow_finite_float(env, info[2], "currentMidi");
+  float target_midi = node_narrow_finite_float(env, info[3], "targetMidi");
 
   sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
@@ -244,7 +244,7 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
-  float target_midi = info[3].As<Napi::Number>().FloatValue();
+  float target_midi = node_narrow_finite_float(env, info[3], "targetMidi");
   int hop_length = node_narrow_int(env, info[4], "hopLength");
   const size_t n_frames = f0.ElementLength();
 
@@ -397,7 +397,7 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sr");
   int onset_sample = node_narrow_int(env, info[2], "onsetSample");
   int offset_sample = node_narrow_int(env, info[3], "offsetSample");
-  float stretch_ratio = info[4].As<Napi::Number>().FloatValue();
+  float stretch_ratio = node_narrow_finite_float(env, info[4], "stretchRatio");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -730,7 +730,7 @@ Napi::Value SonareWrap::ExtractNotes(const Napi::CallbackInfo& info) {
   const int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
-  const float frame_rate = info[3].As<Napi::Number>().FloatValue();
+  const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
 
   NoteTrackOptions options;
   if (!ReadNoteTrackOptions(env, info[4], n_frames, &options)) {
@@ -820,9 +820,9 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
 
   SONARE_NODE_TRY
   auto f0 = info[0].As<Napi::Float32Array>();
-  const float frame_rate = info[1].As<Napi::Number>().FloatValue();
-  const float median_hz = info[2].As<Napi::Number>().FloatValue();
-  const float vibrato_cutoff_hz = info[3].As<Napi::Number>().FloatValue();
+  const float frame_rate = node_narrow_finite_float(env, info[1], "frameRate");
+  const float median_hz = node_narrow_finite_float(env, info[2], "medianHz");
+  const float vibrato_cutoff_hz = node_narrow_finite_float(env, info[3], "vibratoCutoffHz");
 
   OwnedPitchDecomposition decomposition;
   const SonareError err =
@@ -866,7 +866,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   const int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
-  const float frame_rate = info[3].As<Napi::Number>().FloatValue();
+  const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
   // A negative index arrives as a size_t past every note, which the C ABI
   // rejects as the out-of-range index it is.
   const size_t index = static_cast<size_t>(node_narrow_int64(env, info[5], "index"));
@@ -916,7 +916,7 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
   const int sr = node_narrow_int(env, info[1], "sr");
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
-  const float frame_rate = info[3].As<Napi::Number>().FloatValue();
+  const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
   const size_t first = static_cast<size_t>(node_narrow_int64(env, info[5], "first"));
   const size_t last = static_cast<size_t>(node_narrow_int64(env, info[6], "last"));
 
@@ -1027,8 +1027,8 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float pitch_semitones = info[2].As<Napi::Number>().FloatValue();
-  float formant_factor = info[3].As<Napi::Number>().FloatValue();
+  float pitch_semitones = node_narrow_finite_float(env, info[2], "pitchSemitones");
+  float formant_factor = node_narrow_finite_float(env, info[3], "formantFactor");
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);

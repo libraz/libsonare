@@ -104,7 +104,7 @@ Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
   const size_t send_index =
       static_cast<size_t>(sonare_node::node_narrow_int64(env, info[1], "sendIndex"));
   SonareError err =
-      sonare_strip_set_send_db(strip, send_index, info[2].As<Napi::Number>().FloatValue());
+      sonare_strip_set_send_db(strip, send_index, node_narrow_finite_float(env, info[2], "sendDb"));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip send level: ");
   }

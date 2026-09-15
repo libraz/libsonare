@@ -4,22 +4,55 @@ export interface ValuesRequest {
   values: Float32Array;
 }
 
+/**
+ * Frequency in Hz to the Slaney mel scale.
+ *
+ * A total function, matching the C ABI and librosa: a non-finite `hz`
+ * propagates rather than throwing, and a magnitude past the 32-bit float range
+ * saturates to an infinity the same way the C conversion does. Out-of-audio
+ * frequencies are not refused either — the mapping is defined over the whole
+ * real line.
+ */
 export function hzToMel(hz: number): number {
   return addon.hzToMel(hz);
 }
 
+/**
+ * Slaney mel scale to frequency in Hz. Total over the same domain as
+ * {@link hzToMel}.
+ */
 export function melToHz(mel: number): number {
   return addon.melToHz(mel);
 }
 
+/**
+ * Frequency in Hz to a fractional MIDI note number (A4 = 440 Hz = 69).
+ *
+ * Total, like {@link hzToMel}. A non-positive `hz` returns `-Infinity`, the log2
+ * limit, and {@link midiToHz} maps that back to 0. A NaN propagates, which is
+ * what makes a default {@link pitchPyin} track — whose unvoiced frames are NaN —
+ * safe to map through.
+ */
 export function hzToMidi(hz: number): number {
   return addon.hzToMidi(hz);
 }
 
+/**
+ * Fractional MIDI note number to frequency in Hz. Total, like {@link hzToMel};
+ * `-Infinity` bottoms out at 0 rather than propagating its sign.
+ */
 export function midiToHz(midi: number): number {
   return addon.midiToHz(midi);
 }
 
+/**
+ * Nearest note name for `hz` (`"A4"`, `"C#5"`).
+ *
+ * Every frequency with no note answers `"?"` rather than throwing: zero,
+ * negative, past the representable MIDI range, and non-finite alike. A default
+ * {@link pitchPyin} track fills unvoiced frames with NaN, so mapping one through
+ * this yields `"?"` at those frames.
+ */
 export function hzToNote(hz: number): string {
   return addon.hzToNote(hz);
 }
@@ -39,6 +72,13 @@ export function framesToTime(
   return addon.framesToTime(request.frames, request.sr ?? 22050, request.hopLength ?? 512);
 }
 
+/**
+ * Seconds to a frame index at `sr` / `hopLength`.
+ *
+ * `time` must be finite: the conversion saturates into the int frame index, so
+ * an infinity would return `INT_MAX` — a frame index nothing downstream can
+ * tell from a real one.
+ */
 export function timeToFrames(request: { time: number; sr?: number; hopLength?: number }): number;
 export function timeToFrames(time: number, sr?: number, hopLength?: number): number;
 export function timeToFrames(

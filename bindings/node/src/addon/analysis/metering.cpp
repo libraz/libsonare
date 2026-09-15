@@ -454,7 +454,7 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
     return false;
   }
   *mode_mask = static_cast<uint16_t>(mask_int);
-  *midi = info[2].As<Napi::Number>().FloatValue();
+  *midi = node_narrow_finite_float(info.Env(), info[2], "midi");
   *reference_midi = node_arg_finite_float(info, 3, 0.0f);
   return true;
 }

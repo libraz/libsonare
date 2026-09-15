@@ -258,7 +258,13 @@ export interface EngineParameterInfo {
 }
 
 export interface EngineAutomationPoint {
+  /** Position on the transport timeline, in pulses per quarter note. */
   ppq: number;
+  /**
+   * Parameter value at `ppq`. Required, and must be finite: the lane
+   * interpolates between breakpoints, so a non-finite one poisons every
+   * parameter the lane drives.
+   */
   value: number;
   curveToNext?: EngineAutomationPointCurve;
 }

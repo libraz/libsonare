@@ -907,9 +907,9 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   }
 
   SonareNoteSegmentsResult result{};
-  const SonareError error =
-      sonare_note_segments(f0.Data(), f0.ElementLength(), voiced.Data(), voiced.ElementLength(),
-                           rate_value.As<Napi::Number>().FloatValue(), &config, &result);
+  const SonareError error = sonare_note_segments(
+      f0.Data(), f0.ElementLength(), voiced.Data(), voiced.ElementLength(),
+      node_narrow_finite_float(env, rate_value, "frameRate"), &config, &result);
   if (error != SONARE_OK) {
     ThrowIfError(env, error);
     return env.Undefined();
@@ -943,7 +943,7 @@ Napi::Value SonareWrap::HzToMel(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  float hz = info[0].As<Napi::Number>().FloatValue();
+  float hz = node_float_as_c_abi(info[0]);
   return Napi::Number::New(env, static_cast<double>(sonare::hz_to_mel(hz)));
   SONARE_NODE_CATCH(env)
 }
@@ -957,7 +957,7 @@ Napi::Value SonareWrap::MelToHz(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  float mel = info[0].As<Napi::Number>().FloatValue();
+  float mel = node_float_as_c_abi(info[0]);
   return Napi::Number::New(env, static_cast<double>(sonare::mel_to_hz(mel)));
   SONARE_NODE_CATCH(env)
 }
@@ -971,7 +971,7 @@ Napi::Value SonareWrap::HzToMidi(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  float hz = info[0].As<Napi::Number>().FloatValue();
+  float hz = node_float_as_c_abi(info[0]);
   return Napi::Number::New(env, static_cast<double>(sonare::hz_to_midi(hz)));
   SONARE_NODE_CATCH(env)
 }
@@ -985,7 +985,7 @@ Napi::Value SonareWrap::MidiToHz(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  float midi = info[0].As<Napi::Number>().FloatValue();
+  float midi = node_float_as_c_abi(info[0]);
   return Napi::Number::New(env, static_cast<double>(sonare::midi_to_hz(midi)));
   SONARE_NODE_CATCH(env)
 }
@@ -999,7 +999,7 @@ Napi::Value SonareWrap::HzToNote(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  float hz = info[0].As<Napi::Number>().FloatValue();
+  float hz = node_float_as_c_abi(info[0]);
   return Napi::String::New(env, sonare::hz_to_note(hz));
   SONARE_NODE_CATCH(env)
 }
@@ -1045,7 +1045,7 @@ Napi::Value SonareWrap::TimeToFrames(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  float time = info[0].As<Napi::Number>().FloatValue();
+  float time = node_narrow_finite_float(env, info[0], "time");
   int sr = node_narrow_int(env, info[1], "sr");
   int hop_length = node_narrow_int(env, info[2], "hopLength");
 
@@ -1160,7 +1160,7 @@ Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   float coef = node_arg_float(info, 1, 0.97f);
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
-  float zi = use_zi ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  float zi = node_arg_finite_float(info, 2, 0.0f);
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -1179,7 +1179,7 @@ Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   float coef = node_arg_float(info, 1, 0.97f);
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
-  float zi = use_zi ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  float zi = node_arg_finite_float(info, 2, 0.0f);
   float* out = nullptr;
   size_t count = 0;
   SonareError err =

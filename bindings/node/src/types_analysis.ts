@@ -507,13 +507,19 @@ export interface RoomGeometryOptions {
   /**
    * Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When
    * provided it overrides `absorption` unless `materialPreset` is set.
+   *
+   * Every entry must be a finite number within [0, 1]. In a plain number array
+   * a non-numeric entry is refused by index rather than read as 0, which is a
+   * legal coefficient and would have been indistinguishable from a rigid wall
+   * the caller asked for.
    */
   bandAbsorption?: Float32Array | number[];
   /**
    * Optional per-band wall scattering; missing bands default to 0. Independent
    * of `bandAbsorption` and `materialPreset` — it applies to whichever material
    * the absorption precedence selected, so a preset or a scalar-absorption room
-   * can still be given rough walls.
+   * can still be given rough walls. Entries follow `bandAbsorption`'s domain
+   * and its per-index refusal.
    */
   bandScattering?: Float32Array | number[];
   /**

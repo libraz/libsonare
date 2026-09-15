@@ -80,7 +80,7 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const std::string id = info[0].As<Napi::String>().Utf8Value();
-  const float gain_db = info[1].As<Napi::Number>().FloatValue();
+  const float gain_db = node_narrow_finite_float(env, info[1], "gainDb");
 
   std::vector<std::string> member_storage;
   std::vector<const char*> member_ptrs;
@@ -143,7 +143,7 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const std::string id = info[0].As<Napi::String>().Utf8Value();
-  const float gain_db = info[1].As<Napi::Number>().FloatValue();
+  const float gain_db = node_narrow_finite_float(env, info[1], "gainDb");
   SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, id.c_str(), gain_db);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set VCA group gain: ");
@@ -218,7 +218,7 @@ Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
-  const float fader_db = info[2].As<Napi::Number>().FloatValue();
+  const float fader_db = node_narrow_finite_float(env, info[2], "faderDb");
   const int curve = node_arg_int(info, 3, 0);
   SonareError err = sonare_strip_schedule_fader_automation(strip, sample_pos, fader_db, curve);
   if (err != SONARE_OK) {
@@ -241,7 +241,7 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
-  const float pan = info[2].As<Napi::Number>().FloatValue();
+  const float pan = node_narrow_finite_float(env, info[2], "pan");
   const int curve = node_arg_int(info, 3, 0);
   SonareError err = sonare_strip_schedule_pan_automation(strip, sample_pos, pan, curve);
   if (err != SONARE_OK) {
@@ -264,7 +264,7 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[1], "samplePos");
-  const float width = info[2].As<Napi::Number>().FloatValue();
+  const float width = node_narrow_finite_float(env, info[2], "width");
   const int curve = node_arg_int(info, 3, 0);
   SonareError err = sonare_strip_schedule_width_automation(strip, sample_pos, width, curve);
   if (err != SONARE_OK) {
@@ -289,7 +289,7 @@ Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
   const size_t send_index =
       static_cast<size_t>(sonare_node::node_narrow_int64(env, info[1], "sendIndex"));
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[2], "samplePos");
-  const float db = info[3].As<Napi::Number>().FloatValue();
+  const float db = node_narrow_finite_float(env, info[3], "db");
   const int curve = node_arg_int(info, 4, 0);
   SonareError err = sonare_strip_schedule_send_automation(strip, send_index, sample_pos, db, curve);
   if (err != SONARE_OK) {

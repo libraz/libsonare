@@ -134,8 +134,7 @@ std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* ke
     std::vector<float> out;
     out.reserve(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
-      Napi::Value v = arr.Get(i);
-      out.push_back(v.IsNumber() ? v.As<Napi::Number>().FloatValue() : 0.0f);
+      out.push_back(node_narrow_finite_float_element(opts.Env(), arr.Get(i), key, i));
     }
     return out;
   }

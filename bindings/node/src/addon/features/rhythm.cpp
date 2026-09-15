@@ -216,7 +216,7 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   int hop = node_arg_int(info, 3, 512);
   std::vector<float> factors;
   if (info.Length() >= 5 && !info[4].IsUndefined() && !info[4].IsNull()) {
-    factors = FloatVectorFromValue(info[4]);
+    factors = FloatVectorFromValue(info[4], "factors");
   }
   const float* factors_ptr = factors.empty() ? nullptr : factors.data();
   size_t n_factors = factors.size();

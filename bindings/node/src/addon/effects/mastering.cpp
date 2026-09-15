@@ -221,7 +221,7 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   // release_ms: 0 selects the library default; any other value is applied as
   // asked and rejected by the shared loudness validator if it is not positive.
   if (info.Length() >= 6 && info[5].IsNumber()) {
-    config.release_ms = sonare::ZeroIsDefault(info[5].As<Napi::Number>().FloatValue())
+    config.release_ms = sonare::ZeroIsDefault(node_narrow_finite_float(env, info[5], "releaseMs"))
                             .or_default(config.release_ms);
   }
   config.apply_gain_at_input_rate =
@@ -1361,8 +1361,8 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
         return env.Undefined();
       }
       platforms.push_back({object.Get("name").As<Napi::String>().Utf8Value(),
-                           object.Get("targetLufs").As<Napi::Number>().FloatValue(),
-                           object.Get("ceilingDb").As<Napi::Number>().FloatValue()});
+                           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
+                           node_narrow_finite_float(env, object.Get("ceilingDb"), "ceilingDb")});
     }
   }
   const sonare::Audio audio =
@@ -1441,8 +1441,8 @@ Napi::Value SonareWrap::MasteringStreamingPreviewStereo(const Napi::CallbackInfo
         return env.Undefined();
       }
       platforms.push_back({object.Get("name").As<Napi::String>().Utf8Value(),
-                           object.Get("targetLufs").As<Napi::Number>().FloatValue(),
-                           object.Get("ceilingDb").As<Napi::Number>().FloatValue()});
+                           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
+                           node_narrow_finite_float(env, object.Get("ceilingDb"), "ceilingDb")});
     }
   }
   const auto results = platforms.empty()

@@ -39,6 +39,12 @@ export interface TempogramRatioRequest {
   winLength?: number;
   sampleRate?: number;
   hopLength?: number;
+  /**
+   * Tempo multiples the ratio is taken against; omit for the defaults. Every
+   * entry must be a finite number. A plain number array is checked entry by
+   * entry and the refusal names the index; a `Float32Array` is not, because JS
+   * folded an out-of-range entry to an infinity before the call.
+   */
   factors?: Float32Array | number[];
 }
 

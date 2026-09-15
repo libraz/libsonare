@@ -38,11 +38,14 @@ function maxAbsDiff(a: Float32Array, b: Float32Array): number {
   return worst;
 }
 
-const NON_SENTINEL_REFUSED: [string, number][] = [
-  ['a negative value', -5],
-  ['NaN', Number.NaN],
-  ['positive infinity', Number.POSITIVE_INFINITY],
-  ['negative infinity', Number.NEGATIVE_INFINITY],
+// Which layer answers is part of what these assert: a negative release is in
+// domain for a float and reaches the loudness validator, while a non-finite one
+// is refused by the addon's reader and never gets there.
+const NON_SENTINEL_REFUSED: [string, number, RegExp][] = [
+  ['a negative value', -5, /release_ms must be 0 .* or a finite positive value/],
+  ['NaN', Number.NaN, /releaseMs must be a finite number/],
+  ['positive infinity', Number.POSITIVE_INFINITY, /releaseMs must be a finite number/],
+  ['negative infinity', Number.NEGATIVE_INFINITY, /releaseMs must be a finite number/],
 ];
 
 describe('mastering releaseMs', () => {
@@ -54,8 +57,10 @@ describe('mastering releaseMs', () => {
         : { samples, sampleRate: SR, targetLufs: -6, releaseMs },
     ).samples;
 
-  it.each(NON_SENTINEL_REFUSED)('refuses %s instead of using the default', (_label, value) => {
-    expect(() => master(value)).toThrow(/release_ms must be 0 .* or a finite positive value/);
+  it.each(
+    NON_SENTINEL_REFUSED,
+  )('refuses %s instead of using the default', (_label, value, refusal) => {
+    expect(() => master(value)).toThrow(refusal);
   });
 
   it('treats 0 as the library default rather than a release of zero', () => {

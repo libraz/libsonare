@@ -107,6 +107,22 @@ inline int64_t node_narrow_int64(Napi::Env env, const Napi::Value& value, const 
   return static_cast<int64_t>(node_narrow_number(env, value, name, -kBound, kMax));
 }
 
+/// @brief The C ABI's own float conversion, saturation included, for the total
+///        functions whose core answers a non-finite input rather than failing on
+///        it.
+/// @details The permissive end of this family, and the only member that refuses
+///   nothing. Reserved for the entry points where the C ABI is the oracle and
+///   passes the value straight through: `hz_to_note` answers a non-finite with
+///   "?", the same answer it gives a non-positive frequency, and the librosa
+///   mirrors propagate a NaN the way the reference does. `pyin`'s default fills
+///   unvoiced frames with NaN, so its own output is a legitimate argument here.
+///   Refusing either would leave the C ABI and WASM permissive and put this
+///   surface alone out of step with the oracle. Expects a value already known to
+///   be a number.
+inline float node_float_as_c_abi(const Napi::Value& value) {
+  return value.As<Napi::Number>().FloatValue();
+}
+
 /// @brief Refuses a finite value no 32-bit float can hold, giving the float
 ///        readers the range discipline @ref node_narrow_number gives the integer
 ///        ones.
@@ -141,6 +157,24 @@ inline float node_narrow_finite_float(Napi::Env env, const Napi::Value& value, c
         env, std::string(name) + " must be a finite number within the 32-bit float range");
   }
   return node_narrow_float(env, value, name);
+}
+
+/// @brief Read one element of a plain JS number array as a finite float, named
+///        by index.
+/// @details The element shape of @ref node_narrow_finite_float, for the array
+///   readers whose caller-visible subject is `name[i]` rather than `name`. A
+///   non-number entry is refused rather than substituted: the two array readers
+///   this serves used to answer it as a silent 0.0f and as a dummy beside a
+///   pending exception, and 0 is in domain on both of their fields.
+/// @throws Napi::TypeError for a non-number entry, Napi::RangeError for a value
+///         outside the finite 32-bit float range.
+inline float node_narrow_finite_float_element(Napi::Env env, const Napi::Value& value,
+                                              const char* name, uint32_t index) {
+  const std::string element = std::string(name) + "[" + std::to_string(index) + "]";
+  if (!value.IsNumber()) {
+    throw Napi::TypeError::New(env, element + " must be a number");
+  }
+  return node_narrow_finite_float(env, value, element.c_str());
 }
 
 /// @brief Marks a key whose 0 the library reads as "keep the default" rather

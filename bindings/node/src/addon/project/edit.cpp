@@ -280,8 +280,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   desc.source_offset_ppq = obj.Get("sourceOffsetPpq").IsUndefined()
                                ? 0.0
                                : obj.Get("sourceOffsetPpq").As<Napi::Number>().DoubleValue();
-  desc.gain =
-      obj.Get("gain").IsUndefined() ? 1.0f : obj.Get("gain").As<Napi::Number>().FloatValue();
+  desc.gain = FiniteFloatProperty(obj, "gain", 1.0f);
   desc.audio_channels = IntProperty(obj, "audioChannels", kZeroIsSentinel);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 0);
 

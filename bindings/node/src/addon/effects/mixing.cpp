@@ -230,14 +230,15 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     strips.push_back(strip);
     Napi::Value inputTrim = OptionAt(env, options, "inputTrimDb", index);
     if (inputTrim.IsNumber()) {
-      SonareError err =
-          sonare_strip_set_input_trim_db(strip, inputTrim.As<Napi::Number>().FloatValue());
+      SonareError err = sonare_strip_set_input_trim_db(
+          strip, node_narrow_finite_float(env, inputTrim, "inputTrimDb"));
       if (err != SONARE_OK)
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }
     Napi::Value fader = OptionAt(env, options, "faderDb", index);
     if (fader.IsNumber()) {
-      SonareError err = sonare_strip_set_fader_db(strip, fader.As<Napi::Number>().FloatValue());
+      SonareError err =
+          sonare_strip_set_fader_db(strip, node_narrow_finite_float(env, fader, "faderDb"));
       if (err != SONARE_OK)
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }
@@ -251,7 +252,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     Napi::Value mode = OptionAt(env, options, "panMode", index);
     const bool has_mode = !mode.IsUndefined() && !mode.IsNull();
     if (pan.IsNumber() || has_mode) {
-      const float pan_value = pan.IsNumber() ? pan.As<Napi::Number>().FloatValue() : 0.0f;
+      const float pan_value = pan.IsNumber() ? node_narrow_finite_float(env, pan, "pan") : 0.0f;
       const int mode_value = has_mode ? PanModeValue(mode) : SONARE_PAN_MODE_KEEP;
       SonareError err = sonare_strip_set_pan(strip, pan_value, mode_value);
       if (err != SONARE_OK)
@@ -259,7 +260,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     }
     Napi::Value width = OptionAt(env, options, "width", index);
     if (width.IsNumber()) {
-      SonareError err = sonare_strip_set_width(strip, width.As<Napi::Number>().FloatValue());
+      SonareError err =
+          sonare_strip_set_width(strip, node_narrow_finite_float(env, width, "width"));
       if (err != SONARE_OK)
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }

@@ -385,7 +385,7 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_narrow_int(env, info[1], "sr");
-  float rate = info[2].As<Napi::Number>().FloatValue();
+  float rate = node_narrow_finite_float(env, info[2], "rate");
   int n_fft = node_arg_int(info, 3, sonare::constants::kDefaultNFft);
   int hop_length = node_arg_int(info, 4, sonare::constants::kDefaultHopLength);
   float* out = nullptr;

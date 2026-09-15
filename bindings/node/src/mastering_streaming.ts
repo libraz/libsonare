@@ -300,7 +300,11 @@ export class StreamAnalyzer {
     return this.native.sampleRate();
   }
 
-  /** Hint the expected total duration (seconds) to tune progressive estimates. */
+  /**
+   * Hint the expected total duration (seconds) to tune progressive estimates.
+   *
+   * `seconds` must be finite and non-negative; 0 means "unknown".
+   */
   setExpectedDuration(seconds: number): void {
     this.native.setExpectedDuration(seconds);
   }
@@ -309,9 +313,10 @@ export class StreamAnalyzer {
    * Set a normalization gain applied to incoming samples.
    *
    * `gain` is a linear factor within 0.01..100, assuming input in the
-   * conventional ±1 float domain. A value outside that range — or a
-   * non-finite or non-positive one — throws `InvalidParameter` instead of
-   * being clamped, and the previous gain is kept. The usual recipe
+   * conventional ±1 float domain. A value outside that range throws
+   * `InvalidParameter` instead of being clamped, and a non-finite one (or one
+   * past the 32-bit float range) a `RangeError` naming the argument; either way
+   * the previous gain is kept. The usual recipe
    * (`targetLevel / measuredLevel`) easily lands outside it for a buffer on
    * another scale: an integer-scaled one asks for about 3e-4. Since no getter
    * exposes the effective gain, a clamped request would analyse roughly 30 dB
@@ -325,10 +330,10 @@ export class StreamAnalyzer {
   /**
    * Set the tuning reference frequency (Hz) for key/chroma analysis.
    *
-   * `hz` must be within 220..880, the same range {@link StreamAnalyzerConfig}'s
-   * `tuningRefHz` accepts at construction. A value outside it throws rather
-   * than being clamped, so the chromagram cannot depend on which entry point
-   * supplied the reference.
+   * `hz` must be finite and within 220..880, the same range
+   * {@link StreamAnalyzerConfig}'s `tuningRefHz` accepts at construction. A
+   * value outside it throws rather than being clamped, so the chromagram cannot
+   * depend on which entry point supplied the reference.
    */
   setTuningRefHz(hz: number): void {
     this.native.setTuningRefHz(hz);

@@ -44,7 +44,8 @@ Napi::Value MixerWrap::SetInputTrimDb(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  SonareError err = sonare_strip_set_input_trim_db(strip, info[1].As<Napi::Number>().FloatValue());
+  SonareError err =
+      sonare_strip_set_input_trim_db(strip, node_narrow_finite_float(env, info[1], "db"));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip input trim: ");
   }
@@ -63,7 +64,7 @@ Napi::Value MixerWrap::SetFaderDb(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  SonareError err = sonare_strip_set_fader_db(strip, info[1].As<Napi::Number>().FloatValue());
+  SonareError err = sonare_strip_set_fader_db(strip, node_narrow_finite_float(env, info[1], "db"));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip fader: ");
   }
@@ -86,7 +87,8 @@ Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
   // Omitting panMode passes SONARE_PAN_MODE_KEEP (-1) so a plain pan nudge does
   // not reset a scene strip's current pan mode.
   const int pan_mode = node_arg_int(info, 2, -1);
-  SonareError err = sonare_strip_set_pan(strip, info[1].As<Napi::Number>().FloatValue(), pan_mode);
+  SonareError err =
+      sonare_strip_set_pan(strip, node_narrow_finite_float(env, info[1], "pan"), pan_mode);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip pan: ");
   }
@@ -105,7 +107,7 @@ Napi::Value MixerWrap::SetWidth(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  SonareError err = sonare_strip_set_width(strip, info[1].As<Napi::Number>().FloatValue());
+  SonareError err = sonare_strip_set_width(strip, node_narrow_finite_float(env, info[1], "width"));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip width: ");
   }
@@ -244,7 +246,8 @@ Napi::Value MixerWrap::SetVcaOffsetDb(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  SonareError err = sonare_strip_set_vca_offset_db(strip, info[1].As<Napi::Number>().FloatValue());
+  SonareError err =
+      sonare_strip_set_vca_offset_db(strip, node_narrow_finite_float(env, info[1], "offsetDb"));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip VCA offset: ");
   }
@@ -264,8 +267,9 @@ Napi::Value MixerWrap::SetDualPan(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  SonareError err = sonare_strip_set_dual_pan(strip, info[1].As<Napi::Number>().FloatValue(),
-                                              info[2].As<Napi::Number>().FloatValue());
+  SonareError err =
+      sonare_strip_set_dual_pan(strip, node_narrow_finite_float(env, info[1], "leftPan"),
+                                node_narrow_finite_float(env, info[2], "rightPan"));
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip dual pan: ");
   }

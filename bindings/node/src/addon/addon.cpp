@@ -343,8 +343,8 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   const SonareError err = sonare_midi_param_to_cc(
       bindings.empty() ? nullptr : bindings.data(), bindings.size(),
       sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
-      info[2].As<Napi::Number>().FloatValue(), group, sonare_node::node_arg_double(info, 4, 0.0),
-      &event);
+      sonare_node::node_narrow_finite_float(env, info[2], "unitValue"), group,
+      sonare_node::node_arg_double(info, 4, 0.0), &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI param-to-CC arguments").ThrowAsJavaScriptException();

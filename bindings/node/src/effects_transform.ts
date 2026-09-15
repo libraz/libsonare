@@ -569,9 +569,10 @@ export function pitchShift(
 /**
  * Apply one constant, immediate transpose from `currentMidi` to `targetMidi`.
  *
- * The result has exactly the input length. The whole interval is applied
- * however large it is: both endpoints are validated to [0, 127], so a two-octave
- * move such as C3 -> C5 transposes by the full 24 semitones. Use
+ * The result has exactly the input length. Both endpoints must be finite, and
+ * the whole interval is applied however large it is: they are validated to
+ * [0, 127], so a two-octave move such as C3 -> C5 transposes by the full 24
+ * semitones. Use
  * {@link pitchCorrectToMidiTimevarying} for a caller-supplied pitch contour and
  * retune glide.
  */

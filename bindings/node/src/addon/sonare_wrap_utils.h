@@ -176,7 +176,10 @@ inline std::vector<int> IntVectorFromValue(const Napi::Value& value) {
 
 /// @brief Coerce a JS value into a std::vector<float>, accepting a Float32Array
 ///        or a plain number[]. Throws a JS TypeError otherwise.
-inline std::vector<float> FloatVectorFromValue(const Napi::Value& value) {
+/// @details A plain-array entry is read as a finite float named `@p name [i]`.
+///   The Float32Array path cannot refuse anything: JS folded the entry before
+///   the call, so the finite value the caller wrote is already gone.
+inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const char* name) {
   if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
     auto arr = value.As<Napi::Float32Array>();
     return std::vector<float>(arr.Data(), arr.Data() + arr.ElementLength());
@@ -185,7 +188,7 @@ inline std::vector<float> FloatVectorFromValue(const Napi::Value& value) {
     auto arr = value.As<Napi::Array>();
     std::vector<float> out(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out[i] = arr.Get(i).As<Napi::Number>().FloatValue();
+      out[i] = node_narrow_finite_float_element(value.Env(), arr.Get(i), name, i);
     }
     return out;
   }

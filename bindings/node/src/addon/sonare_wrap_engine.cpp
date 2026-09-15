@@ -569,7 +569,9 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
     Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareAutomationPoint point{};
     point.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
-    point.value = obj.Get("value").As<Napi::Number>().FloatValue();
+    const Napi::Value point_value = obj.Get("value");
+    node_require_property_type(env, point_value.IsNumber(), "value", "a number");
+    point.value = node_narrow_finite_float(env, point_value, "value");
     point.curve_to_next = IntProperty(obj, "curveToNext", 0);
     if (env.IsExceptionPending()) return env.Undefined();
     points.push_back(point);
