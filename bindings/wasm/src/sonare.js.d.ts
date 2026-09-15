@@ -371,6 +371,30 @@ export interface WasmDereverbClassicalConfig {
   wpeStrength: number;
 }
 
+/** What a declick analysis found in one channel, as `masteringRepairDeclickStereo` returns it. Runs, not samples. */
+export interface WasmClickDetection {
+  count: number;
+  rejected: number;
+  longestRunSamples: number;
+  perSecond: number;
+}
+
+/** What a declick pass found in one channel of a stereo declick and what it did to it. */
+export interface WasmDeclickReport {
+  detected: WasmClickDetection;
+  repairedRuns: number;
+  repairedSamples: number;
+  linkedRuns: number;
+  lpcModelUsed: boolean;
+}
+
+export interface WasmDeclickStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: WasmDeclickReport;
+  rightReport: WasmDeclickReport;
+}
+
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
@@ -2086,6 +2110,12 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairDeclickStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmDeclickStereoResult;
   masteringRepairDenoiseClassical: (
     samples: Float32Array,
     sampleRate: number,

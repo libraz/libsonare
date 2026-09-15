@@ -98,6 +98,74 @@ val js_mastering_repair_declick(val samples, const val& sample_rate, val options
 
 namespace {
 
+val declickDetectionToVal(const mastering::repair::ClickDetection& detected) {
+  val out = val::object();
+  out.set("count", detected.count);
+  out.set("rejected", detected.rejected);
+  out.set("longestRunSamples", detected.longest_run_samples);
+  out.set("perSecond", detected.per_second);
+  return out;
+}
+
+val declickReportToVal(const mastering::repair::DeclickReport& report) {
+  val out = val::object();
+  out.set("detected", declickDetectionToVal(report.detected));
+  out.set("repairedRuns", report.repaired_runs);
+  out.set("repairedSamples", report.repaired_samples);
+  out.set("linkedRuns", report.linked_runs);
+  out.set("lpcModelUsed", report.lpc_model_used);
+  return out;
+}
+
+}  // namespace
+
+// Declicks a stereo pair, selecting the repaired runs from the union of both
+// channels' own detection: a common-mode click repaired on one side only would
+// move the stereo image. Each channel's fill still comes from its own samples
+// and its own AR model, which is why leftReport and rightReport genuinely
+// differ. Calls the core directly rather than the C ABI, matching every other
+// wrapper in this file -- sonare_c_mastering_repair.cpp is not part of the WASM
+// binding sources, so a C-ABI call here would be the odd one out among its
+// siblings.
+val js_mastering_repair_declick_stereo(val left_samples, val right_samples,
+                                       const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairDeclickStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  mastering::repair::DeclickConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    cfg.neighbor_ratio = repairFloatOption(options, "neighborRatio", cfg.neighbor_ratio);
+    if (hasProperty(options, "maxClickSamples")) {
+      const int v =
+          repairIntOption(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
+      if (v <= 0) {
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidParameter,
+            "masteringRepairDeclickStereo: maxClickSamples must be positive");
+      }
+      cfg.max_click_samples = static_cast<size_t>(v);
+    }
+    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+    cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
+  }
+  mastering::repair::DeclickStereoResult result =
+      mastering::repair::declick_stereo(left, right, cfg);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left_out));
+  out.set("right", vectorToFloat32Array(right_out));
+  out.set("leftReport", declickReportToVal(result.left_report));
+  out.set("rightReport", declickReportToVal(result.right_report));
+  return out;
+}
+
+namespace {
+
 // Throws on an unknown name rather than falling back, matching the C ABI's own
 // enum mapping, so there is no default to carry.
 mastering::repair::DenoiseMode parseDenoiseMode(const std::string& name) {
@@ -344,6 +412,7 @@ val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val op
 void registerRepairBindings() {
   // Mastering — offline repair processors
   function("masteringRepairDeclick", &js_mastering_repair_declick);
+  function("masteringRepairDeclickStereo", &js_mastering_repair_declick_stereo);
   function("masteringRepairDenoiseClassical", &js_mastering_repair_denoise_classical);
   function("masteringRepairDeclip", &js_mastering_repair_declip);
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);

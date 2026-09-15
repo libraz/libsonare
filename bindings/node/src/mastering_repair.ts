@@ -1,5 +1,5 @@
 import { addon } from './native.js';
-import type { RoomEstimateResult } from './types.js';
+import type { DeclickStereoResult, RoomEstimateResult } from './types.js';
 
 /** Common input fields for offline repair processors. */
 export interface MasteringRepairSamplesRequest {
@@ -57,6 +57,38 @@ export function masteringRepairDeclick(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return addon.masteringRepairDeclick(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDeclickStereo`. */
+export interface MasteringRepairDeclickStereoRequest extends DeclickOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Offline LPC-based declicker for a stereo pair, repairing the union of both
+ * channels' detected runs.
+ *
+ * A run either channel's detector selects is repaired in BOTH channels, so a
+ * common-mode click repaired on one side alone never moves the stereo image.
+ * Only the selection is shared: each channel's fill is computed from its own
+ * samples and its own LPC model, which is why `leftReport` and `rightReport`
+ * can genuinely differ. `linkedRuns` on either report counts the runs
+ * repaired because of the OTHER channel's own detection -- 0 whenever nothing
+ * was borrowed, and always 0 from {@link masteringRepairDeclick}. Merged runs
+ * can exceed `maxClickSamples`: that cap governs what may be selected, not
+ * how far a selection reaches once both channels agree.
+ */
+export function masteringRepairDeclickStereo(
+  request: MasteringRepairDeclickStereoRequest,
+): DeclickStereoResult {
+  return addon.masteringRepairDeclickStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /** Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). */

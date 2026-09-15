@@ -815,11 +815,15 @@ int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMaster
 const char* sonare_streaming_mastering_chain_stage_names(
     const SonareStreamingMasteringChain* handle);
 
-/// @brief Number of non-finite samples the chain's stages replaced with a
-///        finite in-domain one.
-/// @details Advisory telemetry, and the only thing that separates a degraded
-///   stream from a clean one: a substituting stage leaves the output finite, in
-///   range and free of any error while carrying samples unrelated to the input.
+/// @brief Number of samples the chain's stages replaced with a finite in-domain
+///        one, keeping the output finite and in range.
+/// @details A non-finite sample supplied by the caller is rejected before any
+///   stage runs, so a replacement is always of a value a stage itself produced.
+///
+///   Only the true-peak limiters replace anything, so with the maximizer's
+///   limiter and the loudness stage both disabled a zero here means no stage was
+///   able to replace anything rather than that nothing needed replacing.
+///
 ///   Aggregated over every substituting stage, so a caller learns it happened
 ///   without having to ask which stage produced it. Cumulative over every block
 ///   since @ref sonare_streaming_mastering_chain_prepare, which rebuilds the
@@ -879,6 +883,54 @@ typedef struct {
 SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
                                             const SonareDeclickConfig* config, float** out,
                                             size_t* out_length);
+
+/// @brief Flat POD mirror of @c mastering::repair::ClickDetection. Counts runs,
+///        not samples.
+typedef struct {
+  size_t count;                // runs meeting the repair criteria
+  size_t rejected;             // runs the criteria excluded as outliers
+  size_t longest_run_samples;  // over the counted runs
+  float per_second;            // count divided by the input duration
+} SonareClickDetection;
+
+/// @brief What one channel's declick pass found and what it did to it.
+/// @details A large @c detected.rejected says the configured run length or
+///   neighbour ratio is too tight for this material, not that the material is
+///   clean.
+typedef struct {
+  SonareClickDetection detected;  // this channel's own analysis of the input
+  size_t repaired_runs;           // runs interpolated
+  size_t repaired_samples;        // samples overwritten by interpolation
+  size_t linked_runs;             // of repaired_runs, those this channel's own
+                                  // detection did not produce; always 0 from
+                                  // the mono entry point
+  int lpc_model_used;             // 0 when the input was too short for lpc_order,
+                                  // which reduces every fill to linear
+} SonareDeclickReport;
+
+/// @brief A declicked stereo pair and what each channel's pass did.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  SonareDeclickReport left_report;
+  SonareDeclickReport right_report;
+} SonareDeclickStereoResult;
+
+/// @brief Declicks a stereo pair, repairing the union of both channels' runs.
+/// @details A common-mode click repaired on one side only moves the image, so a
+///   run either channel selects is repaired in both. Only the selection is
+///   shared: each channel's fill comes from its own samples and its own model,
+///   which is why the two reports can differ. Merged runs can leave a repaired
+///   region longer than @c max_click_samples -- that cap governs what may be
+///   selected, not how far a selection reaches once both channels agree.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_declick_stereo(const float* left, const float* right,
+                                                   size_t length, int sample_rate,
+                                                   const SonareDeclickConfig* config,
+                                                   SonareDeclickStereoResult* out);
 
 /// @brief Offline STFT-domain classical denoiser
 ///        (LogMMSE / MMSE-STSA / SpectralSubtraction).

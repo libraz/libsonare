@@ -239,6 +239,70 @@ export interface MasteringResult {
   nonFiniteSubstitutionCount: number;
 }
 
+/**
+ * What a declick analysis found in one channel of a
+ * {@link MasteringRepairDeclickStereoResult}. Runs, not samples.
+ */
+export interface ClickDetection {
+  /** Runs meeting the repair criteria. */
+  count: number;
+  /**
+   * Outlier runs the criteria excluded. A large value says `maxClickSamples`
+   * or `neighborRatio` is too tight for this material, not that the material
+   * is clean.
+   */
+  rejected: number;
+  /** Over the counted runs. */
+  longestRunSamples: number;
+  /** `count` divided by the input duration. */
+  perSecond: number;
+}
+
+/**
+ * What a declick pass found in one channel of a
+ * {@link MasteringRepairDeclickStereoResult} and what it did to it.
+ */
+export interface DeclickReport {
+  /** This channel's own analysis of the input. */
+  detected: ClickDetection;
+  /**
+   * Runs interpolated. Larger than `detected.count` only under linked stereo
+   * detection.
+   */
+  repairedRuns: number;
+  /** Samples overwritten by interpolation. */
+  repairedSamples: number;
+  /**
+   * Of `repairedRuns`, those whose extent this channel's own detection did
+   * not produce. Always 0 from the mono `masteringRepairDeclick`.
+   */
+  linkedRuns: number;
+  /**
+   * False when the input was too short for `lpcOrder`: every fill then
+   * reduces to linear interpolation.
+   */
+  lpcModelUsed: boolean;
+}
+
+/**
+ * A declicked stereo pair and what each channel's pass found and did.
+ *
+ * A run either channel's detector selects is repaired in BOTH channels — a
+ * common-mode click repaired on one side only would move the stereo image.
+ * Only the selection is shared: each channel's fill is computed from its own
+ * samples and its own AR model, which is why `leftReport` and `rightReport`
+ * genuinely differ. `linkedRuns` is the part of `repairedRuns` this channel's
+ * own detection did not produce, so it is normally non-zero here. Merged runs
+ * can exceed `maxClickSamples`: that cap governs what may be selected, not
+ * how far a selection reaches once both channels agree a click is there.
+ */
+export interface MasteringRepairDeclickStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: DeclickReport;
+  rightReport: DeclickReport;
+}
+
 export type MasteringProcessorParams = Record<string, number | boolean>;
 
 /**

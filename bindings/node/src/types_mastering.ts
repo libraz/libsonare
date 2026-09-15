@@ -841,6 +841,57 @@ export interface MasteringStereoResult {
   nonFiniteSubstitutionCount: number;
 }
 
+/** One channel's click detection, from {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
+export interface ClickDetection {
+  /** Runs meeting the repair criteria. */
+  count: number;
+  /** Runs the criteria excluded as outliers. */
+  rejected: number;
+  /** Longest counted run, in samples. */
+  longestRunSamples: number;
+  /** `count` divided by the input duration. */
+  perSecond: number;
+}
+
+/**
+ * What one channel's declick pass found and what it did to it, from
+ * {@link masteringRepairDeclickStereo}.
+ *
+ * A large `detected.rejected` says the configured run length or neighbour
+ * ratio is too tight for this material, not that the material is clean.
+ */
+export interface DeclickReport {
+  /** This channel's own analysis of the input. */
+  detected: ClickDetection;
+  /** Runs interpolated. */
+  repairedRuns: number;
+  /** Samples overwritten by interpolation. */
+  repairedSamples: number;
+  /**
+   * Of `repairedRuns`, those this channel's own detection did not produce --
+   * they were selected because the other channel's detector found them.
+   */
+  linkedRuns: number;
+  /** False when the input was too short for `lpcOrder`, which reduces every fill to linear interpolation. */
+  lpcModelUsed: boolean;
+}
+
+/**
+ * A declicked stereo pair and what each channel's pass did, from
+ * {@link masteringRepairDeclickStereo}.
+ *
+ * A run either channel's detector selects is repaired in both, so a
+ * common-mode click never moves the stereo image; only the selection is
+ * shared, and each channel's fill comes from its own samples and its own
+ * model, which is why `leftReport` and `rightReport` can differ.
+ */
+export interface DeclickStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: DeclickReport;
+  rightReport: DeclickReport;
+}
+
 /** What gain-matching one take to another's loudness took, and produced. */
 export interface LoudnessMatchResult {
   /** The source, gain-matched to the reference's integrated loudness. */

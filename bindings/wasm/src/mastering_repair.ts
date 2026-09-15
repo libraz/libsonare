@@ -1,5 +1,6 @@
 import { getSonareModule } from './module_state';
 import type { RoomEstimateResult } from './public_types_acoustic';
+import type { MasteringRepairDeclickStereoResult } from './public_types_mastering';
 
 function requireModule() {
   return getSonareModule();
@@ -21,6 +22,52 @@ export interface DeclickOptions {
 export interface MasteringRepairDeclickRequest extends DeclickOptions {
   samples: Float32Array;
   sampleRate: number;
+}
+
+/** Request form of `masteringRepairDeclickStereo`. */
+export interface MasteringRepairDeclickStereoRequest extends DeclickOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Offline LPC-based declicker for a stereo pair.
+ *
+ * A run either channel's own detection selects is repaired in BOTH channels —
+ * a common-mode click repaired on one side only would move the stereo image.
+ * Only the selection is shared: each channel's fill is computed from its own
+ * samples and its own AR model, which is why `leftReport` and `rightReport`
+ * genuinely differ. Prefer this over calling `masteringRepairDeclick` on each
+ * channel separately whenever a click may land in only one channel — a
+ * per-channel pass never repairs the other side's image-shifting click.
+ */
+export function masteringRepairDeclickStereo(
+  request: MasteringRepairDeclickStereoRequest,
+): MasteringRepairDeclickStereoResult;
+export function masteringRepairDeclickStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config?: DeclickOptions,
+): MasteringRepairDeclickStereoResult;
+export function masteringRepairDeclickStereo(
+  left: Float32Array | MasteringRepairDeclickStereoRequest,
+  right?: Float32Array,
+  sampleRate?: number,
+  config: DeclickOptions = {},
+): MasteringRepairDeclickStereoResult {
+  const request: MasteringRepairDeclickStereoRequest =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, ...config }
+      : left;
+  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDeclickStereo(
+    leftSamples,
+    rightSamples,
+    rate ?? 22050,
+    options,
+  );
 }
 
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */

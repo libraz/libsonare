@@ -73,10 +73,19 @@ from ._types_analysis import (
     ChromaResult as ChromaResult,
 )
 from ._types_analysis import (
+    ClickDetection as ClickDetection,
+)
+from ._types_analysis import (
     ClippingRegion as ClippingRegion,
 )
 from ._types_analysis import (
     ClippingReport as ClippingReport,
+)
+from ._types_analysis import (
+    DeclickReport as DeclickReport,
+)
+from ._types_analysis import (
+    DeclickStereoResult as DeclickStereoResult,
 )
 from ._types_analysis import (
     DereverbClassicalConfig as DereverbClassicalConfig,

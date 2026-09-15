@@ -69,6 +69,99 @@ TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering_repair_declick_stereo", "[c_api][mastering]") {
+  const int sr = 48000;
+  // The two channels carry different tones and their clicks sit at disjoint
+  // positions. Identical channels would let an implementation that declicks one
+  // and copies it satisfy every assertion below.
+  auto left = generate_sine(440.0f, sr, 0.5f);
+  auto right = generate_sine(660.0f, sr, 0.5f);
+  // 0.2, not 0.3: the detector wants a run to stand neighbor_ratio (4.0) above
+  // its neighbours, so a 1.0 spike landing near a tone's own peak clears the
+  // ratio at 0.2 and misses it at 0.3, making detection depend on the phase the
+  // click happens to land on.
+  for (auto& s : left) s *= 0.2f;
+  for (auto& s : right) s *= 0.2f;
+  const size_t kLeftClick = 4000;
+  const size_t kRightClick = 12000;
+  left[kLeftClick] = 1.0f;
+  right[kRightClick] = 1.0f;
+
+  SECTION("repairs the union of both channels' runs") {
+    SonareDeclickStereoResult out{};
+    REQUIRE(sonare_mastering_repair_declick_stereo(left.data(), right.data(), left.size(), sr,
+                                                   nullptr, &out) == SONARE_OK);
+    REQUIRE(out.left != nullptr);
+    REQUIRE(out.right != nullptr);
+    REQUIRE(out.length == left.size());
+
+    // The fixture only witnesses linking while each channel detects its own
+    // click and nothing else. A channel that detects neither still satisfies
+    // "repaired more runs than it detected" and reads as linked.
+    CHECK(out.left_report.detected.count == 1);
+    CHECK(out.right_report.detected.count == 1);
+
+    // Each channel's own click is gone.
+    CHECK(std::abs(out.left[kLeftClick]) < 0.5f);
+    CHECK(std::abs(out.right[kRightClick]) < 0.5f);
+
+    // The discriminating property: a run only one channel detected is repaired
+    // in both, so each report attributes runs to the other channel's detection.
+    // A per-channel implementation reports zero here and still passes the two
+    // checks above.
+    CHECK(out.left_report.linked_runs > 0);
+    CHECK(out.right_report.linked_runs > 0);
+    CHECK(out.left_report.repaired_runs > out.left_report.detected.count);
+    CHECK(out.right_report.repaired_runs > out.right_report.detected.count);
+
+    // The two outputs are not the same buffer restated.
+    CHECK(out.left[kRightClick] != out.right[kRightClick]);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("linking changes the output against the mono entry point") {
+    SonareDeclickStereoResult stereo{};
+    REQUIRE(sonare_mastering_repair_declick_stereo(left.data(), right.data(), left.size(), sr,
+                                                   nullptr, &stereo) == SONARE_OK);
+    float* mono = nullptr;
+    size_t mono_length = 0;
+    REQUIRE(sonare_mastering_repair_declick(left.data(), left.size(), sr, nullptr, &mono,
+                                            &mono_length) == SONARE_OK);
+    REQUIRE(mono_length == stereo.length);
+
+    // The mono pass never sees the right channel's click, so it leaves the left
+    // channel untouched there while the stereo pass repairs it. Without this the
+    // stereo entry could be the mono one run twice.
+    CHECK(stereo.left[kRightClick] != mono[kRightClick]);
+    CHECK(stereo.left[kLeftClick] == Catch::Approx(mono[kLeftClick]).margin(1e-6));
+
+    sonare_free_floats(mono);
+    sonare_free_floats(stereo.left);
+    sonare_free_floats(stereo.right);
+  }
+
+  SECTION("clears the result before refusing") {
+    SonareDeclickStereoResult out{};
+    out.left = non_null_sentinel_float_ptr();
+    out.length = 123;
+    out.left_report.repaired_runs = 99;
+    REQUIRE(sonare_mastering_repair_declick_stereo(nullptr, right.data(), left.size(), sr, nullptr,
+                                                   &out) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out.left == nullptr);
+    CHECK(out.right == nullptr);
+    CHECK(out.length == 0);
+    CHECK(out.left_report.repaired_runs == 0);
+  }
+
+  SECTION("refuses a null result") {
+    REQUIRE(sonare_mastering_repair_declick_stereo(left.data(), right.data(), left.size(), sr,
+                                                   nullptr,
+                                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   const int sr = 22050;
   auto signal = generate_sine(440.0f, sr, 1.0f);

@@ -306,6 +306,118 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+/// @brief Marshal one channel's click detection into the JS shape shared by
+///        the mono and stereo declick reports.
+Napi::Object EmitClickDetection(Napi::Env env, const SonareClickDetection& detection) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("count", Napi::Number::New(env, static_cast<double>(detection.count)));
+  out.Set("rejected", Napi::Number::New(env, static_cast<double>(detection.rejected)));
+  out.Set("longestRunSamples",
+          Napi::Number::New(env, static_cast<double>(detection.longest_run_samples)));
+  out.Set("perSecond", Napi::Number::New(env, detection.per_second));
+  return out;
+}
+
+Napi::Object EmitDeclickReport(Napi::Env env, const SonareDeclickReport& report) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("detected", EmitClickDetection(env, report.detected));
+  out.Set("repairedRuns", Napi::Number::New(env, static_cast<double>(report.repaired_runs)));
+  out.Set("repairedSamples", Napi::Number::New(env, static_cast<double>(report.repaired_samples)));
+  out.Set("linkedRuns", Napi::Number::New(env, static_cast<double>(report.linked_runs)));
+  out.Set("lpcModelUsed", Napi::Boolean::New(env, report.lpc_model_used != 0));
+  return out;
+}
+
+/// @brief Read a SonareDeclickConfig options bag, applying the same field
+///        names, defaults and maxClickSamples guard as the mono facade's C++
+///        DeclickConfig mapping above -- the two structs share their shape,
+///        this is the C-ABI mirror of that reading.
+SonareDeclickConfig read_declick_config_c(Napi::Env env, const Napi::Object& options,
+                                          SonareDeclickConfig config) {
+  config.threshold = FloatProperty(options, "threshold", config.threshold);
+  config.neighbor_ratio = FloatProperty(options, "neighborRatio", config.neighbor_ratio);
+  if (options.Has("maxClickSamples")) {
+    const int max_click_samples =
+        IntProperty(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
+    if (max_click_samples <= 0) {
+      throw Napi::RangeError::New(env, "maxClickSamples must be positive");
+    }
+    config.max_click_samples = static_cast<size_t>(max_click_samples);
+  }
+  config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
+  config.residual_ratio = FloatProperty(options, "residualRatio", config.residual_ratio);
+  return config;
+}
+
+/// @brief Frees both heap-owned channels of a SonareDeclickStereoResult on
+///        scope exit -- the struct carries no dedicated free function, unlike
+///        the CResultGuard-eligible C-ABI results elsewhere in the addon.
+class DeclickStereoResultGuard {
+ public:
+  explicit DeclickStereoResultGuard(SonareDeclickStereoResult* result) : result_(result) {}
+  DeclickStereoResultGuard(const DeclickStereoResultGuard&) = delete;
+  DeclickStereoResultGuard& operator=(const DeclickStereoResultGuard&) = delete;
+  ~DeclickStereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  SonareDeclickStereoResult* result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(env, "masteringRepairDeclickStereo: left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  // Library defaults (sonare_c_mastering.h SonareDeclickConfig), applied
+  // before any options key overrides a field.
+  SonareDeclickConfig config{0.8f, 4.0f, 8, 20, 8.0f};
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    config = read_declick_config_c(env, info[3].As<Napi::Object>(), config);
+  }
+  SonareDeclickStereoResult result{};
+  SonareError err = sonare_mastering_repair_declick_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  DeclickStereoResultGuard guard(&result);
+  auto left_out = Napi::Float32Array::New(env, result.length);
+  auto right_out = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("leftReport", EmitDeclickReport(env, result.left_report));
+  out.Set("rightReport", EmitDeclickReport(env, result.right_report));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {

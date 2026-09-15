@@ -1340,6 +1340,57 @@ class HpssResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ClickDetection:
+    """What one channel's click detector found, independent of repair.
+
+    ``count`` is runs meeting the repair criteria; ``rejected`` is runs the
+    criteria excluded as outliers. A large ``rejected`` says the configured
+    run length or neighbor ratio is too tight for this material, not that the
+    material is clean.
+    """
+
+    count: int
+    rejected: int
+    longest_run_samples: int
+    per_second: float
+
+
+@dataclass(frozen=True, slots=True)
+class DeclickReport:
+    """What one channel's declick pass found and did to it.
+
+    ``linked_runs`` is the part of ``repaired_runs`` this channel's own
+    detection did not produce -- always 0 from the mono declick entry point,
+    normally non-zero from the stereo one. ``lpc_model_used`` is False when
+    the input was too short for ``lpc_order``, which reduces every fill to
+    linear interpolation.
+    """
+
+    detected: ClickDetection
+    repaired_runs: int
+    repaired_samples: int
+    linked_runs: int
+    lpc_model_used: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DeclickStereoResult:
+    """A declicked stereo pair and what each channel's pass did.
+
+    A run either channel's detector selects is repaired in both, so a
+    common-mode click never moves the stereo image; only the selection is
+    shared, and each channel's fill comes from its own samples and its own
+    model, which is why the two reports can differ.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DeclickReport
+    right_report: DeclickReport
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 

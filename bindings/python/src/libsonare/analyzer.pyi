@@ -16,6 +16,7 @@ from .types import (
     ChromaResult,
     ClippingReport,
     CqtResult,
+    DeclickStereoResult,
     DereverbClassicalConfig,
     DynamicRangeReport,
     DynamicsResult,
@@ -1699,6 +1700,17 @@ def mastering_repair_declick(
     lpc_order: int = 20,
     residual_ratio: float = 8.0,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_declick_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.8,
+    neighbor_ratio: float = 4.0,
+    max_click_samples: int = 8,
+    lpc_order: int = 20,
+    residual_ratio: float = 8.0,
+) -> DeclickStereoResult: ...
 def mastering_repair_denoise_classical(
     samples: FloatSamples,
     sample_rate: int = 22050,

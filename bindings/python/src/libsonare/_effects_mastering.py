@@ -24,6 +24,7 @@ from ._ffi import (
     SONARE_TRIM_SILENCE_MODE_PEAK,
     SonareCompressorConfig,
     SonareDeclickConfig,
+    SonareDeclickStereoResult,
     SonareDeclipConfig,
     SonareDecrackleConfig,
     SonareDehumConfig,
@@ -58,7 +59,13 @@ from ._runtime import (
     _validate_samples,
     _validate_scalar,
 )
-from .types import DereverbClassicalConfig, RoomEstimate
+from .types import (
+    ClickDetection,
+    DeclickReport,
+    DeclickStereoResult,
+    DereverbClassicalConfig,
+    RoomEstimate,
+)
 
 _DEFAULT_EFFECT_FRAME_LENGTH = 2048
 _DEFAULT_EFFECT_HOP_LENGTH = 512
@@ -262,6 +269,102 @@ def mastering_repair_declick(
         )
         _check(rc)
         return _from_c_float_array(out, out_length.value)
+
+
+def _extract_declick_report(raw: Any) -> DeclickReport:
+    detected = raw.detected
+    return DeclickReport(
+        detected=ClickDetection(
+            count=int(detected.count),
+            rejected=int(detected.rejected),
+            longest_run_samples=int(detected.longest_run_samples),
+            per_second=float(detected.per_second),
+        ),
+        repaired_runs=int(raw.repaired_runs),
+        repaired_samples=int(raw.repaired_samples),
+        linked_runs=int(raw.linked_runs),
+        lpc_model_used=bool(raw.lpc_model_used),
+    )
+
+
+@_guard_buffer("left", "right")
+def mastering_repair_declick_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.8,
+    neighbor_ratio: float = 4.0,
+    max_click_samples: int = 8,
+    lpc_order: int = 20,
+    residual_ratio: float = 8.0,
+) -> DeclickStereoResult:
+    """Declicks a stereo pair, repairing the union of both channels' runs.
+
+    A common-mode click repaired on one side only would move the stereo
+    image, so a run either channel's detector selects is repaired in both.
+    Only the selection is shared: each channel's fill comes from its own
+    samples and its own LPC model, which is why the two reports can differ.
+    Merged runs can leave a repaired region longer than ``max_click_samples``
+    -- that cap governs what may be selected, not how far a selection reaches
+    once both channels agree.
+
+    Args:
+        left: Left channel input buffer (any sequence convertible to float32).
+        right: Right channel input buffer, same length as ``left``.
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Amplitude threshold vs LPC prediction (default 0.8).
+        neighbor_ratio: Ratio vs neighbour amplitude (default 4.0).
+        max_click_samples: Maximum click run length in samples (default 8).
+        lpc_order: LPC order used for prediction (default 20).
+        residual_ratio: Residual / signal threshold (default 8.0).
+
+    Returns:
+        :class:`DeclickStereoResult` with the declicked channels and each
+        channel's own detection/repair report.
+    """
+    if max_click_samples <= 0:
+        raise SonareValueError("max_click_samples must be positive")
+    lib = _get_lib()
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    config = SonareDeclickConfig(  # noqa: F405
+        threshold=float(threshold),
+        neighbor_ratio=float(neighbor_ratio),
+        max_click_samples=int(max_click_samples),
+        lpc_order=int(lpc_order),
+        residual_ratio=float(residual_ratio),
+    )
+    out = SonareDeclickStereoResult()  # noqa: F405
+    rc = lib.sonare_mastering_repair_declick_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        n = int(out.length)
+        return DeclickStereoResult(
+            left=[float(out.left[i]) for i in range(n)],
+            right=[float(out.right[i]) for i in range(n)],
+            length=n,
+            left_report=_extract_declick_report(out.left_report),
+            right_report=_extract_declick_report(out.right_report),
+        )
+    finally:
+        # No dedicated free function for this result: `left`/`right` are each
+        # released with sonare_free_floats (see SonareDeclickStereoResult in
+        # sonare_c_mastering.h). A refused call leaves `out` at its
+        # zero-initialized default, so both pointers are still NULL here.
+        if out.left:
+            lib.sonare_free_floats(out.left)
+        if out.right:
+            lib.sonare_free_floats(out.right)
 
 
 @_guard_buffer("samples")

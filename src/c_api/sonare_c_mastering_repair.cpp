@@ -160,6 +160,19 @@ sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(
   return cpp;
 }
 
+SonareDeclickReport to_c_declick_report(const sonare::mastering::repair::DeclickReport& cpp) {
+  SonareDeclickReport c{};
+  c.detected.count = cpp.detected.count;
+  c.detected.rejected = cpp.detected.rejected;
+  c.detected.longest_run_samples = cpp.detected.longest_run_samples;
+  c.detected.per_second = cpp.detected.per_second;
+  c.repaired_runs = cpp.repaired_runs;
+  c.repaired_samples = cpp.repaired_samples;
+  c.linked_runs = cpp.linked_runs;
+  c.lpc_model_used = cpp.lpc_model_used ? 1 : 0;
+  return c;
+}
+
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 void clear_float_output(float** out, size_t* out_length) {
@@ -180,6 +193,38 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
     Audio result = sonare::mastering::repair::declick(audio, to_cpp_declick_config(config));
     return copy_audio_result(result, out, out_length);
   });
+}
+
+SonareError sonare_mastering_repair_declick_stereo(const float* left, const float* right,
+                                                   size_t length, int sample_rate,
+                                                   const SonareDeclickConfig* config,
+                                                   SonareDeclickStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = SonareDeclickStereoResult{};
+
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const auto result = sonare::mastering::repair::declick_stereo(
+      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
+      to_cpp_declick_config(config));
+  out->length = result.left.size();
+  out->left_report = to_c_declick_report(result.left_report);
+  out->right_report = to_c_declick_report(result.right_report);
+  std::unique_ptr<float[]> left_out(new float[out->length]);
+  std::unique_ptr<float[]> right_out(new float[out->length]);
+  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+  out->left = release_array(left_out);
+  out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,

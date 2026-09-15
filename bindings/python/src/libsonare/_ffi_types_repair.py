@@ -19,6 +19,41 @@ class SonareDeclickConfig(CStruct):
     ]
 
 
+class SonareClickDetection(CStruct):
+    """Maps to SonareClickDetection in sonare_c.h. Counts runs, not samples."""
+
+    _fields_ = [
+        ("count", ctypes.c_size_t),
+        ("rejected", ctypes.c_size_t),
+        ("longest_run_samples", ctypes.c_size_t),
+        ("per_second", ctypes.c_float),
+    ]
+
+
+class SonareDeclickReport(CStruct):
+    """Maps to SonareDeclickReport in sonare_c.h."""
+
+    _fields_ = [
+        ("detected", SonareClickDetection),
+        ("repaired_runs", ctypes.c_size_t),
+        ("repaired_samples", ctypes.c_size_t),
+        ("linked_runs", ctypes.c_size_t),
+        ("lpc_model_used", ctypes.c_int),
+    ]
+
+
+class SonareDeclickStereoResult(CStruct):
+    """Maps to SonareDeclickStereoResult in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("left_report", SonareDeclickReport),
+        ("right_report", SonareDeclickReport),
+    ]
+
+
 # SonareCompressorConfig.detector values.
 SONARE_COMPRESSOR_DETECTOR_PEAK = 0
 SONARE_COMPRESSOR_DETECTOR_RMS = 1

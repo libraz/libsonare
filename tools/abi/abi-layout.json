@@ -575,6 +575,36 @@
     ],
     "size": 32
   },
+  "SonareClickDetection": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "count",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "rejected",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "longest_run_samples",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "per_second",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
   "SonareClipPageRequest": {
     "align": 8,
     "fields": [
@@ -820,6 +850,78 @@
       }
     ],
     "size": 24
+  },
+  "SonareDeclickReport": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "detected",
+        "offset": 0,
+        "size": 32
+      },
+      {
+        "kind": "unsigned",
+        "name": "repaired_runs",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "repaired_samples",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "linked_runs",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "lpc_model_used",
+        "offset": 56,
+        "size": 4
+      }
+    ],
+    "size": 64
+  },
+  "SonareDeclickStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "left_report",
+        "offset": 24,
+        "size": 64
+      },
+      {
+        "kind": "aggregate",
+        "name": "right_report",
+        "offset": 88,
+        "size": 64
+      }
+    ],
+    "size": 152
   },
   "SonareDeclipConfig": {
     "align": 4,

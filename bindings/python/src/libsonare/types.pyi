@@ -761,6 +761,15 @@ class DynamicsResult:
     @property
     def loudnessRmsDb(self) -> list[float]: ...
 
+class ClickDetection:
+    count: int
+    rejected: int
+    longest_run_samples: int
+    per_second: float
+    def __init__(
+        self, count: int, rejected: int, longest_run_samples: int, per_second: float
+    ) -> None: ...
+
 class ClippingRegion:
     start_sample: int
     end_sample: int
@@ -1065,6 +1074,36 @@ class HpssResult:
     sample_rate: int
     def __init__(
         self, harmonic: list[float], percussive: list[float], length: int, sample_rate: int
+    ) -> None: ...
+
+class DeclickReport:
+    detected: ClickDetection
+    repaired_runs: int
+    repaired_samples: int
+    linked_runs: int
+    lpc_model_used: bool
+    def __init__(
+        self,
+        detected: ClickDetection,
+        repaired_runs: int,
+        repaired_samples: int,
+        linked_runs: int,
+        lpc_model_used: bool,
+    ) -> None: ...
+
+class DeclickStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DeclickReport
+    right_report: DeclickReport
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        left_report: DeclickReport,
+        right_report: DeclickReport,
     ) -> None: ...
 
 class MasteringResult:

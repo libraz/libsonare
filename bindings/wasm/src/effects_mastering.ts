@@ -106,6 +106,7 @@ export type {
   DenoiseClassicalOptions,
   DereverbClassicalOptions,
   MasteringRepairDeclickRequest,
+  MasteringRepairDeclickStereoRequest,
   MasteringRepairDeclipRequest,
   MasteringRepairDecrackleRequest,
   MasteringRepairDehumRequest,
@@ -118,6 +119,7 @@ export type {
 } from './mastering_repair';
 export {
   masteringRepairDeclick,
+  masteringRepairDeclickStereo,
   masteringRepairDeclip,
   masteringRepairDecrackle,
   masteringRepairDehum,
