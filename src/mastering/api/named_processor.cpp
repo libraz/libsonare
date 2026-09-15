@@ -163,12 +163,12 @@ void run_processor_stereo(Processor& processor, std::vector<float>& left, std::v
 
 // Applies a whole-buffer offline transform to each channel independently.
 //
-// This is the fallback for the content-dependent stages that have no
-// multichannel form: the repair detectors reconstruct defect regions from a
-// channel's own content, and the final dither / output-chain stages
-// deliberately decorrelate their noise per channel (hence the channel index).
-// Everything backed by rt::ProcessorBase goes through run_processor() instead
-// and is handed all channels at once.
+// Two kinds of stage land here. The dither / output-chain stages want it: their
+// noise is deliberately decorrelated, hence the channel index. The repairs reach
+// it only as the one-channel fallback under apply_linked_or_per_channel(), since
+// a lone channel has no image to hold together. Everything backed by
+// rt::ProcessorBase goes through run_processor() instead and is handed all
+// channels at once.
 template <typename Fn>
 void apply_per_channel(ChannelSet& channels, int sample_rate, Fn&& transform) {
   for (int index = 0; index < channels.count(); ++index) {
@@ -181,6 +181,20 @@ void apply_per_channel(ChannelSet& channels, int sample_rate, Fn&& transform) {
     const Audio out = transform(audio, index);
     samples.assign(out.data(), out.data() + out.size());
   }
+}
+
+// Repairs a pair through the module's stereo entry and anything else per channel.
+// This dispatch is shared by the mono and stereo entry points, so the channel
+// count is what decides: a one-channel set has no image to hold together and has
+// to stay bit-identical to the mono path.
+template <typename StereoFn, typename MonoFn>
+void apply_linked_or_per_channel(ChannelSet& channels, int sample_rate, StereoFn&& stereo,
+                                 MonoFn&& mono) {
+  if (channels.count() == 2 && !channels.buffer(0).empty() && !channels.buffer(1).empty()) {
+    detail::apply_stereo_repair(channels.buffer(0), channels.buffer(1), sample_rate, stereo);
+    return;
+  }
+  apply_per_channel(channels, sample_rate, mono);
 }
 
 float lufs_for(const std::vector<float>& samples, int sample_rate) {
@@ -445,23 +459,29 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
         static_cast<size_t>(i(params, "maxClickSamples", config.max_click_samples));
     config.lpc_order = i(params, "lpcOrder", config.lpc_order);
     config.residual_ratio = f(params, "residualRatio", config.residual_ratio);
-    apply_per_channel(channels, sample_rate,
-                      [&](const Audio& audio, int) { return repair::declick(audio, config); });
+    apply_linked_or_per_channel(
+        channels, sample_rate,
+        [&](const Audio& l, const Audio& r) { return repair::declick_stereo(l, r, config); },
+        [&](const Audio& audio, int) { return repair::declick(audio, config); });
   } else if (name == "repair.declip") {
     repair::DeclipConfig config;
     config.clip_threshold = f(params, "clipThreshold", config.clip_threshold);
     config.lpc_order = i(params, "lpcOrder", config.lpc_order);
     config.iterations = i(params, "iterations", config.iterations);
     config.lpc_blend = f(params, "lpcBlend", config.lpc_blend);
-    apply_per_channel(channels, sample_rate,
-                      [&](const Audio& audio, int) { return repair::declip(audio, config); });
+    apply_linked_or_per_channel(
+        channels, sample_rate,
+        [&](const Audio& l, const Audio& r) { return repair::declip_stereo(l, r, config); },
+        [&](const Audio& audio, int) { return repair::declip(audio, config); });
   } else if (name == "repair.decrackle") {
     repair::DecrackleConfig config;
     config.threshold = f(params, "threshold", config.threshold);
     config.mode = checked_enum<repair::DecrackleMode>(i(params, "mode", 0), 2, "decrackle mode");
     config.levels = i(params, "levels", config.levels);
-    apply_per_channel(channels, sample_rate,
-                      [&](const Audio& audio, int) { return repair::decrackle(audio, config); });
+    apply_linked_or_per_channel(
+        channels, sample_rate,
+        [&](const Audio& l, const Audio& r) { return repair::decrackle_stereo(l, r, config); },
+        [&](const Audio& audio, int) { return repair::decrackle(audio, config); });
   } else if (name == "repair.dehum") {
     repair::DehumConfig config;
     config.fundamental_hz = f(params, "fundamentalHz", config.fundamental_hz);
@@ -472,8 +492,10 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     config.adaptation = f(params, "adaptation", config.adaptation);
     config.frame_size = i(params, "frameSize", config.frame_size);
     config.pll_bandwidth = f(params, "pllBandwidth", config.pll_bandwidth);
-    apply_per_channel(channels, sample_rate,
-                      [&](const Audio& audio, int) { return repair::dehum(audio, config); });
+    apply_linked_or_per_channel(
+        channels, sample_rate,
+        [&](const Audio& l, const Audio& r) { return repair::dehum_stereo(l, r, config); },
+        [&](const Audio& audio, int) { return repair::dehum(audio, config); });
   } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
     repair::DenoiseClassicalConfig config;
     config.mode = checked_enum<repair::DenoiseMode>(i(params, "mode", 0), 3, "denoise mode");
@@ -761,10 +783,8 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     // caller compensate an output that is already time-aligned.
     result.latency_samples = 0;
   } else if (name == "repair.trimSilence") {
-    // Stereo-native trim: detect the active range on the mono mix and slice both
-    // channels by that single (union) range so they stay equal length. Trimming
-    // each channel independently could pick different ranges and throw on the
-    // resulting length mismatch.
+    // One range cuts both channels, so they stay equal length. The rule that
+    // picks it lives in trim_silence_stereo rather than here.
     repair::TrimSilenceConfig config;
     config.threshold = f(map, "threshold", config.threshold);
     config.padding_samples = checked_nonnegative_size(
@@ -773,18 +793,10 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     config.gate_lufs = f(map, "gateLufs", config.gate_lufs);
     config.window_ms = f(map, "windowMs", config.window_ms);
     repair::validate_config(config);
-    const std::vector<float> mono = detail::mono_mix(result.left, result.right);
-    const repair::TrimRange range =
-        repair::detect_trim_range(mono.data(), mono.size(), sample_rate, config);
-    if (range.first >= range.last_exclusive) {
-      result.left.clear();
-      result.right.clear();
-    } else {
-      result.left = std::vector<float>(result.left.begin() + range.first,
-                                       result.left.begin() + range.last_exclusive);
-      result.right = std::vector<float>(result.right.begin() + range.first,
-                                        result.right.begin() + range.last_exclusive);
-    }
+    detail::apply_stereo_repair(result.left, result.right, sample_rate,
+                                [&config](const Audio& left, const Audio& right) {
+                                  return repair::trim_silence_stereo(left, right, config);
+                                });
   } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
     repair::DenoiseClassicalConfig config;
     config.mode = checked_enum<repair::DenoiseMode>(i(map, "mode", 0), 3, "denoise mode");
@@ -800,9 +812,10 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
         f(map, "noiseEstimationQuantile", config.noise_estimation_quantile);
     config.speech_presence_gain = b(map, "speechPresenceGain", config.speech_presence_gain);
     config.gain_smoothing = b(map, "gainSmoothing", config.gain_smoothing);
-    detail::apply_shared_mono_transfer_repair(
-        result.left, result.right, sample_rate,
-        [&config](const Audio& audio) { return repair::denoise_classical(audio, config); });
+    detail::apply_stereo_repair(result.left, result.right, sample_rate,
+                                [&config](const Audio& left, const Audio& right) {
+                                  return repair::denoise_classical_stereo(left, right, config);
+                                });
   } else if (name == "repair.dereverbClassical") {
     repair::DereverbClassicalConfig config;
     config.threshold = f(map, "threshold", config.threshold);
@@ -817,9 +830,10 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     config.wpe_iterations = i(map, "wpeIterations", config.wpe_iterations);
     config.wpe_taps = i(map, "wpeTaps", config.wpe_taps);
     config.wpe_strength = f(map, "wpeStrength", config.wpe_strength);
-    detail::apply_shared_mono_transfer_repair(
-        result.left, result.right, sample_rate,
-        [&config](const Audio& audio) { return repair::dereverb_classical(audio, config); });
+    detail::apply_stereo_repair(result.left, result.right, sample_rate,
+                                [&config](const Audio& left, const Audio& right) {
+                                  return repair::dereverb_classical_stereo(left, right, config);
+                                });
   } else {
     ProcessorOutcome outcome;
     // Shared dispatch, handed both channels at once. An rt::ProcessorBase stage
@@ -829,22 +843,15 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     // MasteringChain, instead of two independent envelopes that pull the stereo
     // image around every transient.
     //
-    // CAVEAT for the content-dependent repair stages (repair.declick,
-    // repair.declip, repair.decrackle, repair.dehum): those have no
-    // multichannel form, so try_configure_processor() still runs them once per
-    // channel. They detect and reconstruct localized defect regions from the
-    // channel's own content, so they can reconstruct *different* sample regions
-    // on L vs R, which can shift the stereo image slightly around a repaired
-    // transient. Unlike repair.trimSilence (handled above with a single
-    // mono-derived range), these algorithms expose no detect/apply split, so
-    // deriving a shared mono defect map is not possible without changing the
-    // core repair APIs; the per-channel behavior is therefore intentional and
-    // documented here. Callers needing bit-matched stereo repair should
-    // pre-detect on the mono mix and apply the correction themselves, or run
-    // repair before stereo processing. The dither / output-chain stages are
-    // per-channel for the opposite reason: their noise is deliberately
-    // decorrelated, and index 0 keeps the left channel bit-identical to the
-    // mono path.
+    // The repair stages reached through here (repair.declick, repair.declip,
+    // repair.decrackle, repair.dehum) are handed both channels at once: each
+    // module has a _stereo entry that decides what its channels share, and
+    // apply_linked_or_per_channel() picks it whenever the set is a pair.
+    // Repairing the channels independently reconstructed different sample
+    // regions on L and R and moved the image around every repaired transient.
+    // The dither / output-chain stages stay per-channel for the opposite
+    // reason: their noise is deliberately decorrelated, and index 0 keeps the
+    // left channel bit-identical to the mono path.
     // Every stereo-only id has a branch above, so reaching the shared dispatch
     // without one means the id does not exist.
     if (!try_configure_processor(name, map, ChannelSet(result.left, result.right), sample_rate,

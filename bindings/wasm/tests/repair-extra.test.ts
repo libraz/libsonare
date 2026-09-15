@@ -238,12 +238,17 @@ describe('masteringRepairDereverbConfigForRoom (WASM)', () => {
     ).toThrow();
   });
 
-  it('resolves an omitted field to the library default, never to zero', () => {
+  it('resolves every omitted field to the library default', () => {
     // The C ABI takes every config field literally -- it has no zero-is-default
     // rule -- so an estimate alone must still yield a config that is ready to run.
+    // What catches a config that was zero-filled and never seeded is the fields
+    // whose default is not zero: nFft, hopLength, overSubtraction, spectralFloor,
+    // wpeIterations, wpeTaps and wpeStrength. threshold cannot carry that witness,
+    // because its default IS zero -- "seeded correctly" and "left at zero" are the
+    // same observation on it, which is why the name no longer claims otherwise.
     const config = masteringRepairDereverbConfigForRoom(roomEstimate(2500));
-    expect(config.threshold).toBeCloseTo(0.05, 5);
-    expect(config.attenuation).toBeCloseTo(0.5, 5);
+    expect(config.threshold).toBeCloseTo(0, 5);
+    expect(config.attenuation).toBeCloseTo(1, 5);
     expect(config.nFft).toBe(1024);
     expect(config.hopLength).toBe(256);
     expect(config.overSubtraction).toBeCloseTo(1, 5);

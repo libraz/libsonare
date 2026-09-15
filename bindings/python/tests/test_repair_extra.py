@@ -194,13 +194,19 @@ class TestMasteringRepairDereverbConfigForRoom:
         with pytest.raises(ValueError, match="estimate"):
             libsonare.mastering_repair_dereverb_config_for_room(None)  # type: ignore[arg-type]
 
-    def test_omitted_fields_are_the_library_defaults_not_zeros(self) -> None:
+    def test_omitted_fields_are_the_library_defaults(self) -> None:
         # The C ABI takes every config field literally -- there is no
         # zero-is-default rule -- so the keyword defaults here are the library's
         # own, and an estimate alone yields a config that is ready to run.
+        # What catches a config that was zero-filled and never seeded is the
+        # fields whose default is not zero: n_fft, hop_length, over_subtraction,
+        # spectral_floor, wpe_iterations, wpe_taps and wpe_strength. threshold
+        # cannot carry that witness, because its default IS zero -- "seeded
+        # correctly" and "left at zero" are the same observation on it, which is
+        # why the name no longer claims otherwise.
         config = libsonare.mastering_repair_dereverb_config_for_room(self._estimate(2500.0))
-        assert config["threshold"] == pytest.approx(0.05)
-        assert config["attenuation"] == pytest.approx(0.5)
+        assert config["threshold"] == pytest.approx(0.0)
+        assert config["attenuation"] == pytest.approx(1.0)
         assert config["n_fft"] == 1024
         assert config["hop_length"] == 256
         assert config["over_subtraction"] == pytest.approx(1.0)

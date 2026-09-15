@@ -212,4 +212,25 @@ inline void apply_shared_mono_transfer_repair(std::vector<float>& left, std::vec
   }
 }
 
+// Hands both channels to a repair that is itself stereo-aware. What the channels
+// share -- a linked detection, one gain mask, one trim range -- is the repair's
+// decision, so nothing here reconstructs a shared one from two separate results.
+// A template because the seven repairs return seven result types; the bodies are
+// small and the alternative is repacking each into a pair at every call site.
+template <typename StereoRepairFn>
+inline void apply_stereo_repair(std::vector<float>& left, std::vector<float>& right,
+                                int sample_rate, StereoRepairFn&& repair) {
+  if (left.empty() || right.empty()) return;
+  auto result = repair(Audio::from_buffer(left.data(), left.size(), sample_rate),
+                       Audio::from_buffer(right.data(), right.size(), sample_rate));
+  // trim_silence shortens both channels, so the result length is not the input
+  // length; only the two channels agreeing with each other is invariant.
+  if (result.left.size() != result.right.size()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo repair produced mismatched channel lengths");
+  }
+  left.assign(result.left.data(), result.left.data() + result.left.size());
+  right.assign(result.right.data(), result.right.data() + result.right.size());
+}
+
 }  // namespace sonare::mastering::api::detail

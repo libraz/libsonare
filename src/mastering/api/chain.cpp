@@ -624,50 +624,57 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     return true;
   };
 
-  // 1. repair.declick (per-channel)
+  // Every repair stage below takes both channels at once. Each module decides
+  // what its channels share -- declick and declip share the selected regions and
+  // fill each channel from its own samples, dehum shares the tracked fundamental
+  // and keeps per-channel filter state, denoise and dereverb build one mask from
+  // the summed power. Repairing the channels independently moved the image on
+  // exactly the transients a repair touches.
+
+  // 1. repair.declick
   if (config_.repair.declick.enabled) {
-    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
-      return mastering::repair::declick(in, config_.repair.declick.config);
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::declick_stereo(l, r, config_.repair.declick.config);
     });
     if (!report("repair.declick")) return std::nullopt;
   }
 
-  // 2. repair.declip (per-channel)
+  // 2. repair.declip
   if (config_.repair.declip.enabled) {
-    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
-      return mastering::repair::declip(in, config_.repair.declip.config);
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::declip_stereo(l, r, config_.repair.declip.config);
     });
     if (!report("repair.declip")) return std::nullopt;
   }
 
-  // 3. repair.decrackle (per-channel)
+  // 3. repair.decrackle
   if (config_.repair.decrackle.enabled) {
-    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
-      return mastering::repair::decrackle(in, config_.repair.decrackle.config);
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::decrackle_stereo(l, r, config_.repair.decrackle.config);
     });
     if (!report("repair.decrackle")) return std::nullopt;
   }
 
-  // 4. repair.dehum (per-channel)
+  // 4. repair.dehum
   if (config_.repair.dehum.enabled) {
-    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
-      return mastering::repair::dehum(in, config_.repair.dehum.config);
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::dehum_stereo(l, r, config_.repair.dehum.config);
     });
     if (!report("repair.dehum")) return std::nullopt;
   }
 
   // 5. repair.dereverb
   if (config_.repair.dereverb.enabled) {
-    detail::apply_shared_mono_transfer_repair(left, right, sample_rate, [this](const Audio& audio) {
-      return mastering::repair::dereverb_classical(audio, config_.repair.dereverb.config);
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::dereverb_classical_stereo(l, r, config_.repair.dereverb.config);
     });
     if (!report("repair.dereverb")) return std::nullopt;
   }
 
   // 6. repair.denoise
   if (config_.repair.denoise.enabled) {
-    detail::apply_shared_mono_transfer_repair(left, right, sample_rate, [this](const Audio& audio) {
-      return mastering::repair::denoise_classical(audio, config_.repair.denoise.config);
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::denoise_classical_stereo(l, r, config_.repair.denoise.config);
     });
     if (!report("repair.denoise")) return std::nullopt;
   }

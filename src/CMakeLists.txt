@@ -394,6 +394,7 @@ if(BUILD_MASTERING)
     mastering/assistant/suggester.cpp
     mastering/common/hysteresis_ja.cpp
     mastering/common/loudness_measure.cpp
+    mastering/common/noise_profile.cpp
     mastering/common/noise_tracker.cpp
     mastering/dynamics/brickwall_limiter.cpp
     mastering/dynamics/compressor.cpp

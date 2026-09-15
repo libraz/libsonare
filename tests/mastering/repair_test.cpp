@@ -604,8 +604,11 @@ TEST_CASE("DereverbClassical spectral subtraction reduces late decay", "[masteri
                  std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
   }
   const Audio input = Audio::from_vector(samples, 48000);
+  // attenuation is the full subtraction this case measures. It reads 1 rather
+  // than 0.5 because the field reaches the DSP now: at 0.5 the module applies
+  // half the suppression and the tail ratio rises from 0.756 to 0.874.
   const auto output =
-      dereverb_classical(input, {0.05f, 0.5f, 1024, 256, 0.25f, 20.0f, 2.0f, 0.02f});
+      dereverb_classical(input, {0.05f, 1.0f, 1024, 256, 0.25f, 20.0f, 2.0f, 0.02f});
 
   REQUIRE(output.size() == input.size());
   double in_tail = 0.0;

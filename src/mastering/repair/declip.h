@@ -40,6 +40,63 @@ struct DeclipConfig {
   float lpc_blend = 0.65f;
 };
 
+/// Validates every public DeclipConfig field. The mono, stereo and detection
+/// entrypoints share this oracle so range handling cannot drift between them.
+void validate_config(const DeclipConfig& config);
+
+/// @brief What a declip analysis found.
+struct ClipDetection {
+  size_t sample_count = 0;       ///< Samples at or past clip_threshold.
+  float sample_fraction = 0.0f;  ///< sample_count / size.
+  size_t run_count = 0;
+  size_t longest_run_samples = 0;  ///< Compare against kDeclipMaxLpcGapSamples:
+                                   ///  a longer run takes the interpolation
+                                   ///  fallback rather than the LPC solver.
+};
+
+ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate,
+                              const DeclipConfig& config = {});
+
+/// @brief What a declip pass found in one channel and what it did to it.
+struct DeclipReport {
+  ClipDetection detected;             ///< This channel's own analysis of the input.
+  size_t lpc_reconstructed_runs = 0;  ///< Runs the Janssen solver filled.
+  size_t interpolated_runs = 0;       ///< Runs past the LPC gap cap, filled by
+                                      ///  interpolation instead: for these,
+                                      ///  lpc_order / iterations / lpc_blend had
+                                      ///  no effect.
+  size_t repaired_samples = 0;        ///< Samples overwritten by either fill.
+  size_t linked_runs = 0;             ///< Of the repaired runs, those reaching
+                                      ///  past this channel's own clipped
+                                      ///  samples because the other channel's
+                                      ///  run was wider. Always 0 from the mono
+                                      ///  entrypoint.
+};
+
 Audio declip(const Audio& audio, const DeclipConfig& config = {});
+
+/// @brief Declips @p audio and reports what the pass found and did.
+Audio declip(const Audio& audio, const DeclipConfig& config, DeclipReport* report);
+
+/// @brief A declipped stereo pair and what each channel's pass did.
+struct DeclipStereoResult {
+  Audio left;
+  Audio right;
+  DeclipReport left_report;
+  DeclipReport right_report;
+};
+
+/// @brief Declips a stereo pair, taking the reconstructed regions from both
+///        channels.
+/// @details One clipped plateau rarely ends on the same sample in both
+///   channels, and a run that a single sample splits in one channel but not the
+///   other reconstructs differently on the two sides, which moves the image.
+///   The union of the two channels' clipped runs is therefore the region set,
+///   and each channel reconstructs the whole of every union run it has at least
+///   one clipped sample in. A channel with none is left untouched there:
+///   reconstructing unclipped audio to match the other side would replace real
+///   samples with an estimate.
+DeclipStereoResult declip_stereo(const Audio& left, const Audio& right,
+                                 const DeclipConfig& config = {});
 
 }  // namespace sonare::mastering::repair

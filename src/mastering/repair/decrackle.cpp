@@ -9,6 +9,7 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/validated.h"
 
 namespace sonare::mastering::repair {
 namespace {
@@ -51,10 +52,20 @@ float bayes_shrink_threshold(const std::vector<float>& details, float noise_sigm
   return std::min(max_threshold, noise_variance / signal_sigma);
 }
 
-void haar_shrink(std::vector<float>& samples, int levels, float threshold) {
+/// The unnormalized Haar analysis. At each level [0, pairs) holds the
+/// approximation and [pairs, 2*pairs) the raw detail; an odd tail sample is
+/// carried through at 2*pairs. The approximation band is never shrunk and each
+/// level transforms only the previous level's approximation, so the transform
+/// and the shrinkage separate exactly -- which is what lets the shrinkage be
+/// measured instead of only performed.
+struct HaarAnalysis {
+  std::vector<size_t> active_sizes;  ///< Band length at each level, level 0 first.
+  float noise_sigma = 0.0f;          ///< MAD estimate from the level-0 detail band.
+};
+
+HaarAnalysis haar_forward(std::vector<float>& samples, int levels) {
+  HaarAnalysis analysis;
   size_t active = samples.size();
-  std::vector<size_t> active_sizes;
-  float noise_sigma = 0.0f;
   for (int level = 0; level < levels && active >= 2; ++level) {
     const size_t pairs = active / 2;
     std::vector<float> temp(active, 0.0f);
@@ -69,29 +80,44 @@ void haar_shrink(std::vector<float>& samples, int levels, float threshold) {
     if (level == 0) {
       // Phi^-1(0.75): scales MAD to Gaussian sigma
       static constexpr float kMadGaussianConstant = 0.67448975f;
-      noise_sigma = median_abs(details) / kMadGaussianConstant;
+      analysis.noise_sigma = median_abs(details) / kMadGaussianConstant;
     }
-    // The Haar transform here is UNNORMALIZED: each successive level averages
-    // the approximation band (0.5*(a+b)), so the white-noise standard deviation
-    // in the detail band shrinks by 1/sqrt(2) per level. Scale the level-0 noise
-    // sigma accordingly instead of reusing it verbatim, which would grossly
-    // over-threshold deeper (coarser) levels.
-    float level_noise_sigma = noise_sigma;
-    for (int l = 0; l < level; ++l) level_noise_sigma *= sonare::constants::kInvSqrt2;
-    const float level_threshold = bayes_shrink_threshold(details, level_noise_sigma, threshold);
-    for (size_t i = 0; i < pairs; ++i) {
-      temp[pairs + i] = soft_threshold(details[i], level_threshold);
-    }
+    for (size_t i = 0; i < pairs; ++i) temp[pairs + i] = details[i];
     if (active % 2 != 0) {
       temp[active - 1] = samples[active - 1];
     }
     std::copy(temp.begin(), temp.end(), samples.begin());
-    active_sizes.push_back(active);
+    analysis.active_sizes.push_back(active);
     active = pairs;
   }
+  return analysis;
+}
 
-  for (int level = static_cast<int>(active_sizes.size()) - 1; level >= 0; --level) {
-    const size_t reconstruct = active_sizes[static_cast<size_t>(level)];
+void haar_shrink_details(std::vector<float>& samples, const HaarAnalysis& analysis, float threshold,
+                         DecrackleReport* report) {
+  for (size_t level = 0; level < analysis.active_sizes.size(); ++level) {
+    const size_t pairs = analysis.active_sizes[level] / 2;
+    const auto band = samples.begin() + static_cast<std::ptrdiff_t>(pairs);
+    const std::vector<float> details(band, band + static_cast<std::ptrdiff_t>(pairs));
+    // Each level averages the approximation band, so the white-noise standard
+    // deviation in the detail band shrinks by 1/sqrt(2) per level. Reusing the
+    // level-0 sigma verbatim would grossly over-threshold the coarser levels.
+    float level_noise_sigma = analysis.noise_sigma;
+    for (size_t l = 0; l < level; ++l) level_noise_sigma *= sonare::constants::kInvSqrt2;
+    const float level_threshold = bayes_shrink_threshold(details, level_noise_sigma, threshold);
+    for (size_t i = 0; i < pairs; ++i) {
+      const float shrunk = soft_threshold(details[i], level_threshold);
+      samples[pairs + i] = shrunk;
+      if (report == nullptr) continue;
+      ++report->detail_coefficients;
+      if (shrunk == 0.0f) ++report->shrunk_coefficients;
+    }
+  }
+}
+
+void haar_inverse(std::vector<float>& samples, const HaarAnalysis& analysis) {
+  for (int level = static_cast<int>(analysis.active_sizes.size()) - 1; level >= 0; --level) {
+    const size_t reconstruct = analysis.active_sizes[static_cast<size_t>(level)];
     const size_t pairs = reconstruct / 2;
     if (pairs == 0) continue;
     std::vector<float> temp(reconstruct, 0.0f);
@@ -106,26 +132,130 @@ void haar_shrink(std::vector<float>& samples, int levels, float threshold) {
   }
 }
 
+/// This module's definition of the defect: a sample deviating from the median of
+/// itself and its two neighbours by more than threshold. The detector and the
+/// median repair both call it, so they cannot disagree about what crackle is.
+bool is_crackle(const std::vector<float>& samples, size_t index, float threshold, float* median) {
+  std::array<float, 3> window = {samples[index - 1], samples[index], samples[index + 1]};
+  std::sort(window.begin(), window.end());
+  *median = window[1];
+  return std::abs(samples[index] - *median) > threshold;
+}
+
+size_t count_crackle(const std::vector<float>& samples, float threshold) {
+  size_t count = 0;
+  for (size_t i = 1; i + 1 < samples.size(); ++i) {
+    float median = 0.0f;
+    if (is_crackle(samples, i, threshold, &median)) ++count;
+  }
+  return count;
+}
+
+CrackleDetection to_detection(size_t count, size_t size, int sample_rate) {
+  CrackleDetection detection;
+  detection.sample_count = count;
+  if (size == 0) return detection;
+  detection.sample_fraction = static_cast<float>(count) / static_cast<float>(size);
+  detection.per_second =
+      static_cast<float>(count) * static_cast<float>(sample_rate) / static_cast<float>(size);
+  return detection;
+}
+
+void require_stereo_pair(const Audio& left, const Audio& right) {
+  if (left.empty() || right.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  }
+  if (left.size() != right.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must have the same length");
+  }
+  if (left.sample_rate() != right.sample_rate()) {
+    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must share a sample rate");
+  }
+}
+
+std::vector<float> run_decrackle(const std::vector<float>& samples, int sample_rate,
+                                 const DecrackleConfig& config, DecrackleReport* report) {
+  if (report != nullptr) {
+    *report = DecrackleReport{};
+    report->detected =
+        to_detection(count_crackle(samples, config.threshold), samples.size(), sample_rate);
+  }
+  if (config.mode == DecrackleMode::WaveletShrinkage) {
+    std::vector<float> output = samples;
+    const HaarAnalysis analysis = haar_forward(output, config.levels);
+    haar_shrink_details(output, analysis, config.threshold, report);
+    haar_inverse(output, analysis);
+    if (report != nullptr) report->noise_sigma = analysis.noise_sigma;
+    return output;
+  }
+
+  std::vector<float> output = samples;
+  for (size_t i = 1; i + 1 < samples.size(); ++i) {
+    float median = 0.0f;
+    if (is_crackle(samples, i, config.threshold, &median)) {
+      output[i] = median;
+      if (report != nullptr) ++report->replaced_samples;
+    }
+  }
+  return output;
+}
+
 }  // namespace
 
+void validate_config(const DecrackleConfig& config) {
+  if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f)) {
+    throw SonareException(ErrorCode::InvalidParameter, "threshold must be finite and positive");
+  }
+  if (config.mode != DecrackleMode::Median && config.mode != DecrackleMode::WaveletShrinkage) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid decrackle mode");
+  }
+  if (config.levels < 1) {
+    throw SonareException(ErrorCode::InvalidParameter, "levels must be positive");
+  }
+}
+
+CrackleDetection detect_crackle(const float* samples, size_t size, int sample_rate,
+                                const DecrackleConfig& config) {
+  const auto validated = Validated<DecrackleConfig>::make(config);
+  if (sample_rate <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  }
+  if (samples == nullptr || size == 0) return {};
+
+  const std::vector<float> buffer(samples, samples + size);
+  return to_detection(count_crackle(buffer, validated->threshold), size, sample_rate);
+}
+
 Audio decrackle(const Audio& audio, const DecrackleConfig& config) {
+  return decrackle(audio, config, nullptr);
+}
+
+Audio decrackle(const Audio& audio, const DecrackleConfig& config, DecrackleReport* report) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  if (!(config.threshold > 0.0f) || config.levels < 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid decrackle configuration");
-  }
-  std::vector<float> samples(audio.data(), audio.data() + audio.size());
-  if (config.mode == DecrackleMode::WaveletShrinkage) {
-    haar_shrink(samples, config.levels, config.threshold);
-    return Audio::from_vector(std::move(samples), audio.sample_rate());
-  }
-  auto output = samples;
-  for (size_t i = 1; i + 1 < samples.size(); ++i) {
-    std::array<float, 3> window = {samples[i - 1], samples[i], samples[i + 1]};
-    std::sort(window.begin(), window.end());
-    const float median = window[1];
-    if (std::abs(samples[i] - median) > config.threshold) output[i] = median;
-  }
+  const auto validated = Validated<DecrackleConfig>::make(config);
+
+  const std::vector<float> samples(audio.data(), audio.data() + audio.size());
+  std::vector<float> output = run_decrackle(samples, audio.sample_rate(), validated.get(), report);
   return Audio::from_vector(std::move(output), audio.sample_rate());
+}
+
+DecrackleStereoResult decrackle_stereo(const Audio& left, const Audio& right,
+                                       const DecrackleConfig& config) {
+  require_stereo_pair(left, right);
+  const auto validated = Validated<DecrackleConfig>::make(config);
+  const int sample_rate = left.sample_rate();
+
+  const std::vector<float> left_samples(left.data(), left.data() + left.size());
+  const std::vector<float> right_samples(right.data(), right.data() + right.size());
+
+  DecrackleStereoResult result;
+  std::vector<float> left_output =
+      run_decrackle(left_samples, sample_rate, validated.get(), &result.left_report);
+  std::vector<float> right_output =
+      run_decrackle(right_samples, sample_rate, validated.get(), &result.right_report);
+  result.left = Audio::from_vector(std::move(left_output), sample_rate);
+  result.right = Audio::from_vector(std::move(right_output), sample_rate);
+  return result;
 }
 
 }  // namespace sonare::mastering::repair
