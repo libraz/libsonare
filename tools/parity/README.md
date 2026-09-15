@@ -93,8 +93,20 @@ different axis: it compares the WASM binding against **itself** (its own three
 files), catching a wiring break the C-anchored checks structurally cannot see.
 
 1. **coverage** — a canonical C free function missing from a surface, or a
-   surface symbol with no C counterpart. Handle/class APIs, `free_*` memory
-   helpers and the curated CLI are reported as *informational* (see below).
+   surface symbol with no C counterpart. `free_*` memory helpers, constructors /
+   destructors and the curated CLI are reported as *informational* (see below);
+   a handle op absent from a facade is **active**.
+
+   A handle op is credited only by a method on its own handle class. The C key
+   carries the handle type as a leading token group (`mixer_add_bus`), which is
+   stripped before the tail is looked up, and `_HANDLE_FULL_PREFIXES` in
+   `compare.py` says which class each prefix belongs to. Neither a same-named
+   method on an unrelated class nor a free function sharing the tail counts: the
+   free function takes the audio instead of holding it, so it is a different
+   capability, and crediting it would let a whole handle tier ship green on the
+   one claim it makes — that each facade grew the methods. An op a facade
+   deliberately exposes as a free function is named in `_ALIAS_COVERAGE`, one
+   reviewed entry at a time.
 2. **default** — Node / WASM / Python disagree on a parameter's default
    (facade-vs-facade; C carries no defaults).
 3. **core_default** — a facade default diverges from the C++ **core** design
@@ -160,8 +172,9 @@ files), catching a wiring break the C-anchored checks structurally cannot see.
 ### Finding states
 
 - **active** — counts toward the non-zero exit code (real, un-triaged drift).
-- **informational** — reported but non-gating: handle/class methods, `free_*`
-  helpers, CLI-only gaps, ergonomic facade-only methods.
+- **informational** — reported but non-gating: lifecycle helpers (constructors,
+  destructors, `free_*`), CLI-only gaps, and a facade class method with no C
+  counterpart. A handle op a facade does not expose is active, not this.
 - **allowlisted** — suppressed (and counted) via `allowlist.toml`; an
   intentional, reviewed divergence.
 

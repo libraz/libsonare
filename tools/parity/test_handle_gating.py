@@ -110,6 +110,69 @@ def test_every_handle_prefix_requires_its_own_class() -> None:
         assert (key, "python") not in _active(own), (prefix, _active(own))
 
 
+def test_a_free_function_does_not_credit_a_handle_op() -> None:
+    """A free function sharing the stripped tail is a different capability.
+
+    It takes the audio rather than holding it, so it is no evidence that the
+    handle carries the op. Without this, a whole handle tier ships green on the
+    one claim it makes — that each facade grew the methods.
+    """
+    for prefix, cls in compare._HANDLE_FULL_PREFIXES:
+        key = f"{prefix}probe_op"
+        free_only = _report(_c(key), _py(frees=["probe_op"]))
+        assert (key, "python") in _active(free_only), (prefix, _active(free_only))
+
+        method = _report(_c(key), _py(methods={"probe_op": cls}))
+        assert (key, "python") not in _active(method), (prefix, _active(method))
+
+
+def test_an_alias_may_still_name_a_free_function() -> None:
+    """Aliases keep free-function reach; the blanket free credit is what went.
+
+    Six live entries resolve only to a free function (the voice-changer preset
+    helpers), and folding an op onto one deliberately is what an entry is for.
+    """
+    rep = _report(
+        _c("realtime_voice_changer_config_default"),
+        _py(frees=["realtime_voice_changer_preset_config"]),
+    )
+    assert ("realtime_voice_changer_config_default", "python") not in _active(rep), (
+        _active(rep)
+    )
+
+
+def test_a_free_export_does_not_credit_a_handle_op_of_the_same_name() -> None:
+    """Against the real facades, not a fixture: a free export is not a method.
+
+    All three export ``ebur128LoudnessRange`` as a free function. With the
+    matching ``Audio`` member taken out of the extraction, a C
+    ``sonare_audio_ebur128_loudness_range`` must still read as a gap — the free
+    export cannot carry the claim a handle op makes. Removing the member rather
+    than assuming its absence keeps this true once the facades grow one.
+    """
+    repo = _HERE.parent.parent
+    if not (repo / "include").exists():
+        return  # not in the libsonare tree; skip
+    import check_parity
+
+    key, tail = "audio_ebur128_loudness_range", "ebur128_loudness_range"
+    for surface in ("python", "node", "wasm"):
+        ex = check_parity._EXTRACTORS[surface](repo)
+        assert tail in compare._free_keys(ex), surface
+        ex.functions = [
+            f
+            for f in ex.functions
+            if not (f.raw_name.startswith("Audio.") and f.key == tail)
+        ]
+        rep = compare.build_report(
+            {"c": _c(key), surface: ex},
+            allowlist_mod.Allowlist(),
+            ["c", surface],
+        )
+        gaps = {(f.key, f.surface) for f in rep.active() if f.category == "coverage"}
+        assert (key, surface) in gaps, surface
+
+
 def test_handle_prefixes_name_a_class_each_facade_declares() -> None:
     """Every mapped class name is one the real facades actually declare.
 

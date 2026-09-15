@@ -195,12 +195,10 @@ _ALIAS_COVERAGE = {
     "project_serialize": ("to_json",),
     # The C name groups with its handle's other ops so the prefix machinery above
     # can strip it; the facades name the operation rather than the handle, as a
-    # free function (analyzePolyphonic) or a class-level one (analyze). This entry
-    # earns its place on the surface-only side, not the coverage side: the C key is
-    # already informational through the handle prefix, and what the entry suppresses
-    # is the facade name reading as a node-only and wasm-only symbol. Measured both
-    # ways -- replacing the key changes nothing, replacing the value raises two
-    # active findings.
+    # free function (analyzePolyphonic) or a class-level one (analyze). Since the
+    # prefix path stopped crediting free functions this entry carries the op's
+    # coverage on Node and WASM outright, as well as keeping the facade name out
+    # of surface-only. Measured: deleting it raises four active findings.
     "polyphonic_analyze": ("analyze_polyphonic", "analyze"),
     "project_deserialize": ("from_json",),
     # JSON-config setter -> the typed set_config the facades expose.
@@ -288,6 +286,13 @@ _ALIAS_COVERAGE = {
     # The N-channel planar block processor, exposed by channel count for the same
     # reason the sidechain setter above is.
     "eq_process": ("process_mono", "process_stereo"),
+    # The CLI namespaces these as `project <verb>` subcommands rather than methods
+    # on a handle; the three facades reach them through Project and never consult
+    # these entries. No facade declares a free function under any of these names,
+    # so the credit cannot drift onto one.
+    "project_bounce": ("bounce",),
+    "project_export_smf": ("export_smf",),
+    "project_import_smf": ("import_smf",),
     # Plural builtin-instrument bounce -> singular facade method (one or many).
     "project_bounce_with_builtin_instruments": ("bounce_with_builtin_instrument",),
     # Plural SF2-instrument bounce -> singular facade method (one or many).
@@ -522,16 +527,14 @@ def build_report(
             if s == "c":
                 continue
             # Handle reachability is class-specific. Without this rule a method
-            # on an unrelated class, or a free function, stands in for a missing
-            # one on the handle's own class whenever the tails happen to agree.
+            # on an unrelated class stands in for a missing one on the handle's
+            # own class whenever the tails happen to agree.
             prefix = _handle_prefix(key)
             candidate_methods = (
                 handle_class_keys[(prefix, s)] if prefix else method_keys.get(s, set())
             )
-            candidate_symbols = (
-                candidate_methods | free_keys.get(s, set())
-                if prefix
-                else candidate_methods | set(indexed.get(s, {}))
+            candidate_symbols = candidate_methods | (
+                free_keys.get(s, set()) if prefix else set(indexed.get(s, {}))
             )
             present_free = key in indexed.get(s, {})
             present_method = key in candidate_methods
@@ -539,15 +542,21 @@ def build_report(
             if not covered:
                 # Handle-instance C key (``mixer_add_bus``): the facade exposes
                 # the same op as a bare class method (``Mixer.add_bus`` -> key
-                # ``add_bus``), so the handle prefix is stripped there. Retry the
-                # tail against the handle class's methods AND this surface's
-                # free-function keys; a match means the op IS exposed.
+                # ``add_bus``), so the handle prefix is stripped there. The tail
+                # is retried against the handle CLASS's methods only. A free
+                # function sharing the tail is a different capability -- it takes
+                # the audio instead of holding it -- and crediting it would let a
+                # handle tier ship with no facade method on any surface, which is
+                # the one claim the tier makes. An op the facades deliberately
+                # expose as a free function is named in ``_ALIAS_COVERAGE`` below.
                 if prefix:
-                    covered = key[len(prefix) :] in candidate_symbols
+                    covered = key[len(prefix) :] in candidate_methods
             if not covered:
                 # Idiomatic rename: the capability is exposed under a different
                 # canonical name (verified alias). Credit it when any listed alias
-                # is present as a method / free function on this surface.
+                # is present as a method / free function on this surface. Aliases
+                # reach free functions because each entry is a reviewed statement
+                # about one name, not a blanket rule.
                 aliases = _ALIAS_COVERAGE.get(key)
                 covered = bool(aliases) and any(a in candidate_symbols for a in aliases)
             # Every surface reaches a verdict here: the key is either exposed on
