@@ -503,3 +503,14 @@ SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, i
     return SONARE_OK;
   });
 }
+
+/// Handle form; it follows its buffer twin here rather than joining the other ten
+/// in sonare_c_editing.cpp, which is where the twin lives.
+SonareError sonare_audio_ebur128_loudness_range(const SonareAudio* audio, float* out_lra) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out_lra) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  *out_lra = metering::ebur128_loudness_range(audio->audio);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}

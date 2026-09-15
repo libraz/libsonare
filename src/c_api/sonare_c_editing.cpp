@@ -35,6 +35,34 @@ namespace {
 
 bool is_power_of_two(int v) { return v > 0 && (v & (v - 1)) == 0; }
 
+SonareError fill_clipping_result(const metering::ClippingResult& result,
+                                 SonareClippingResult* out) {
+  out->clipped_samples = result.clipped_samples;
+  out->clipping_ratio = result.clipping_ratio;
+  out->max_clipped_peak = result.max_clipped_peak;
+  out->region_count = result.regions.size();
+  if (result.regions.empty()) return SONARE_OK;
+  std::unique_ptr<SonareClippingRegion[]> tmp(new SonareClippingRegion[result.regions.size()]);
+  for (size_t i = 0; i < result.regions.size(); ++i) {
+    tmp[i].start_sample = result.regions[i].start_sample;
+    tmp[i].end_sample = result.regions[i].end_sample;
+    tmp[i].length = result.regions[i].length;
+    tmp[i].peak = result.regions[i].peak;
+  }
+  out->regions = release_array(tmp);
+  return SONARE_OK;
+}
+
+SonareError fill_dynamic_range_result(const metering::DynamicRangeResult& result,
+                                      SonareDynamicRangeResult* out) {
+  out->dynamic_range_db = result.dynamic_range_db;
+  out->low_percentile_db = result.low_percentile_db;
+  out->high_percentile_db = result.high_percentile_db;
+  out->window_count = result.window_rms_db.size();
+  out->window_rms_db = copy_vector(result.window_rms_db);
+  return SONARE_OK;
+}
+
 }  // namespace
 
 SonareError sonare_metering_peak_db(const float* samples, size_t length, int sample_rate,
@@ -138,23 +166,8 @@ SonareError sonare_metering_detect_clipping(const float* samples, size_t length,
     // like the equally out-of-domain 1.5 always was.
     const metering::ClippingParams params =
         metering::clipping_params_from_public(threshold, min_region_samples);
-    metering::ClippingResult result =
-        metering::detect_clipping(audio, params.threshold, params.min_region_samples);
-    out->clipped_samples = result.clipped_samples;
-    out->clipping_ratio = result.clipping_ratio;
-    out->max_clipped_peak = result.max_clipped_peak;
-    out->region_count = result.regions.size();
-    if (!result.regions.empty()) {
-      std::unique_ptr<SonareClippingRegion[]> tmp(new SonareClippingRegion[result.regions.size()]);
-      for (size_t i = 0; i < result.regions.size(); ++i) {
-        tmp[i].start_sample = result.regions[i].start_sample;
-        tmp[i].end_sample = result.regions[i].end_sample;
-        tmp[i].length = result.regions[i].length;
-        tmp[i].peak = result.regions[i].peak;
-      }
-      out->regions = release_array(tmp);
-    }
-    return SONARE_OK;
+    return fill_clipping_result(
+        metering::detect_clipping(audio, params.threshold, params.min_region_samples), out);
   });
 }
 
@@ -180,13 +193,7 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
   const metering::DynamicRangeConfig cfg = metering::dynamic_range_config_from_public(
       window_sec, hop_sec, low_percentile, high_percentile);
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
-    out->dynamic_range_db = result.dynamic_range_db;
-    out->low_percentile_db = result.low_percentile_db;
-    out->high_percentile_db = result.high_percentile_db;
-    out->window_count = result.window_rms_db.size();
-    out->window_rms_db = copy_vector(result.window_rms_db);
-    return SONARE_OK;
+    return fill_dynamic_range_result(metering::dynamic_range(audio, cfg), out);
   });
   SONARE_C_CATCH
 }
@@ -450,6 +457,139 @@ void sonare_free_spectrum_result(SonareSpectrumResult* result) {
   result->power = nullptr;
   result->db = nullptr;
   result->bin_count = 0;
+}
+
+// ============================================================================
+// Handle-form metering
+// ============================================================================
+// A SonareAudio already owns samples that passed validate_audio_params at
+// construction, so these skip the scan and the copy run_offline performs and
+// measure audio->audio in place. Parameter decoding is shared with the buffer
+// forms rather than restated, so a sentinel can only change in one place.
+
+SonareError sonare_audio_peak_db(const SonareAudio* audio, float* out_db) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  *out_db = metering::peak_db(audio->audio);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_rms_db(const SonareAudio* audio, float* out_db) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  *out_db = metering::rms_db(audio->audio);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_dc_offset(const SonareAudio* audio, float* out_value) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out_value) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  *out_value = metering::dc_offset(audio->audio);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_crest_factor_db(const SonareAudio* audio, float* out_db) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  *out_db = metering::crest_factor_db(audio->audio);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold_db,
+                                       int frame_length, int hop_length, float* out_ratio) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out_ratio || !std::isfinite(threshold_db) || frame_length <= 0 || hop_length <= 0)
+    return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  *out_ratio = metering::silence_ratio(audio->audio, threshold_db, frame_length, hop_length);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_true_peak_db(const SonareAudio* audio, int oversample_factor,
+                                      float* out_db) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_db = 0.0f;
+  const int factor = oversample_factor == 0 ? 4 : oversample_factor;
+  if (factor < 1 || factor > 16 || !is_power_of_two(factor)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  *out_db = metering::true_peak_db(audio->audio, factor);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_detect_clipping(const SonareAudio* audio, float threshold,
+                                         size_t min_region_samples, SonareClippingResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
+  SONARE_C_TRY
+  const metering::ClippingParams params =
+      metering::clipping_params_from_public(threshold, min_region_samples);
+  return fill_clipping_result(
+      metering::detect_clipping(audio->audio, params.threshold, params.min_region_samples), out);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_dynamic_range(const SonareAudio* audio, float window_sec, float hop_sec,
+                                       float low_percentile, float high_percentile,
+                                       SonareDynamicRangeResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
+  SONARE_C_TRY
+  const metering::DynamicRangeConfig cfg = metering::dynamic_range_config_from_public(
+      window_sec, hop_sec, low_percentile, high_percentile);
+  return fill_dynamic_range_result(metering::dynamic_range(audio->audio, cfg), out);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_spectrum(const SonareAudio* audio, int n_fft, int apply_octave_smoothing,
+                                  int octave_fraction, float db_ref, float db_amin,
+                                  SonareSpectrumResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
+  metering::SpectrumConfig cfg;
+  SonareError err = SONARE_OK;
+  if (!decode_spectrum_config(n_fft, apply_octave_smoothing, octave_fraction, db_ref, db_amin, &cfg,
+                              &err)) {
+    return err;
+  }
+  SONARE_C_TRY
+  return fill_spectrum_result(metering::spectrum(audio->audio, cfg), out);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_spectrum_frame(const SonareAudio* audio, size_t frame_offset, int n_fft,
+                                        int apply_octave_smoothing, int octave_fraction,
+                                        float db_ref, float db_amin, SonareSpectrumResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!audio || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
+  metering::SpectrumConfig cfg;
+  SonareError err = SONARE_OK;
+  if (!decode_spectrum_config(n_fft, apply_octave_smoothing, octave_fraction, db_ref, db_amin, &cfg,
+                              &err)) {
+    return err;
+  }
+  // The core reads the frame at the offset and zero-pads past the end, so unlike
+  // the buffer form there is no window to copy and no out-of-range offset to
+  // special-case.
+  SONARE_C_TRY
+  return fill_spectrum_result(metering::spectrum_frame(audio->audio, frame_offset, cfg), out);
+  SONARE_C_CATCH
 }
 
 namespace {

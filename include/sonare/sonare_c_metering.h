@@ -363,6 +363,80 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
 SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, int sample_rate,
                                           float* out_lra);
 
+// ============================================================================
+// Metering - handle form
+// ============================================================================
+
+/// @name Handle-form metering
+/// Each entry measures what its @c sonare_metering_* twin measures, reading a
+/// @ref SonareAudio instead of a caller buffer. The handle already holds owned
+/// samples that passed validation at construction, so these skip the per-call
+/// finiteness scan and the defensive copy the buffer forms perform. Parameters
+/// and their defaults are documented on the twin and are not restated here.
+///
+/// This trades for repeated measurement rather than making a call faster:
+/// constructing the handle costs one full copy of the samples, so measuring a
+/// buffer once is better served by the buffer form. A handle also fixes what is
+/// measured at creation time, so mutating the source buffer afterwards changes
+/// nothing here.
+///
+/// @ref sonare_audio_spectrum_frame is the one entry whose accepted domain
+/// differs from its twin: @ref sonare_metering_spectrum_frame accepts a
+/// non-finite sample outside the analysis frame, while no @ref SonareAudio can
+/// hold one at all.
+/// @{
+
+/// @brief Handle form of @ref sonare_metering_peak_db.
+SonareError sonare_audio_peak_db(const SonareAudio* audio, float* out_db);
+
+/// @brief Handle form of @ref sonare_metering_rms_db.
+SonareError sonare_audio_rms_db(const SonareAudio* audio, float* out_db);
+
+/// @brief Handle form of @ref sonare_metering_dc_offset.
+SonareError sonare_audio_dc_offset(const SonareAudio* audio, float* out_value);
+
+/// @brief Handle form of @ref sonare_metering_crest_factor_db.
+SonareError sonare_audio_crest_factor_db(const SonareAudio* audio, float* out_db);
+
+/// @brief Handle form of @ref sonare_metering_silence_ratio.
+SonareError sonare_audio_silence_ratio(const SonareAudio* audio, float threshold_db,
+                                       int frame_length, int hop_length, float* out_ratio);
+
+/// @brief Handle form of @ref sonare_metering_true_peak_db.
+SonareError sonare_audio_true_peak_db(const SonareAudio* audio, int oversample_factor,
+                                      float* out_db);
+
+/// @brief Handle form of @ref sonare_metering_detect_clipping.
+/// @param out Receives heap-owned regions; free with @ref sonare_free_clipping_result.
+SonareError sonare_audio_detect_clipping(const SonareAudio* audio, float threshold,
+                                         size_t min_region_samples, SonareClippingResult* out);
+
+/// @brief Handle form of @ref sonare_metering_dynamic_range.
+/// @param out Receives heap-owned window levels; free with
+///        @ref sonare_free_dynamic_range_result.
+SonareError sonare_audio_dynamic_range(const SonareAudio* audio, float window_sec, float hop_sec,
+                                       float low_percentile, float high_percentile,
+                                       SonareDynamicRangeResult* out);
+
+/// @brief Handle form of @ref sonare_metering_spectrum.
+/// @param out Receives heap-owned bin arrays; free with @ref sonare_free_spectrum_result.
+SonareError sonare_audio_spectrum(const SonareAudio* audio, int n_fft, int apply_octave_smoothing,
+                                  int octave_fraction, float db_ref, float db_amin,
+                                  SonareSpectrumResult* out);
+
+/// @brief Handle form of @ref sonare_metering_spectrum_frame. Cost per call is
+///        set by @p n_fft rather than by the handle's length, so an analyzer may
+///        poll it over a long buffer.
+/// @param out Receives heap-owned bin arrays; free with @ref sonare_free_spectrum_result.
+SonareError sonare_audio_spectrum_frame(const SonareAudio* audio, size_t frame_offset, int n_fft,
+                                        int apply_octave_smoothing, int octave_fraction,
+                                        float db_ref, float db_amin, SonareSpectrumResult* out);
+
+/// @brief Handle form of @ref sonare_ebur128_loudness_range.
+SonareError sonare_audio_ebur128_loudness_range(const SonareAudio* audio, float* out_lra);
+
+/// @}
+
 #ifdef __cplusplus
 }
 #endif
