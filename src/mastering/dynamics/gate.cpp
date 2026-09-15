@@ -10,8 +10,12 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::dynamics {
+
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
@@ -119,6 +123,24 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
     const float gain = gain_;
     for (int ch = 0; ch < num_channels; ++ch) channels[ch][i] *= gain;
     last_gain_reduction_db_ = std::min(last_gain_reduction_db_, linear_to_db(gain_));
+  }
+
+  // Every cell carried between blocks, once per block. The gain rests open, at
+  // unity.
+  //
+  // Never seen to fire: no sample drove this cell non-finite. The detector folds
+  // with std::max, which drops a NaN, and an infinity reads as a level at or over
+  // the threshold, which opens the gate onto a finite target -- so the smoother
+  // only ever sees finite input. A configuration route is open (range_db is not
+  // checked for finiteness) but that is a validation question and nothing here
+  // covers it. A measured absence on the signals tried, not a proof of one.
+  discard_if_non_finite(gain_, 1.0f);
+  // The two taps of a one-pole section are meaningful only together. This pair
+  // does strand: a non-finite tap makes the detector read silence from then on,
+  // so the gate stays shut for the rest of the handle with every output sample
+  // finite -- which is why the test reads a value rather than finiteness.
+  for (size_t ch = 0; ch < hpf_x1_.size(); ++ch) {
+    discard_group_if_non_finite(hpf_x1_[ch], hpf_y1_[ch]);
   }
 }
 

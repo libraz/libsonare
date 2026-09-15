@@ -7,8 +7,12 @@
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::spectral {
+
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
 
 LowEndFocus::LowEndFocus(LowEndFocusConfig config) : config_(config) { validate_config(config_); }
 
@@ -75,6 +79,18 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
       channels[ch][i] = high + low + config_.subharmonic_amount * sub_state_[index] +
                         config_.transient_tightness * transient;
     }
+  }
+
+  // Every cell carried between blocks, once per block. The low-pass feeds both
+  // the subharmonic divider and the transient detector, so one non-finite cell
+  // strands the channel; all three rest at silence.
+  for (int ch = 0; ch < num_channels; ++ch) {
+    const auto index = static_cast<size_t>(ch);
+    // The polarity detector reads the previous low-pass value against the
+    // current one, so the pair is meaningful only together.
+    discard_group_if_non_finite(low_state_[index], previous_low_[index]);
+    discard_if_non_finite(sub_state_[index], 0.0f);
+    discard_if_non_finite(transient_state_[index], 0.0f);
   }
 }
 

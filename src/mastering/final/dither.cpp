@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <random>
 #include <utility>
@@ -21,10 +22,22 @@ namespace {
 constexpr std::array<float, 9> kLvNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f,  -4.174f, 3.353f,
                                                         -2.205f, 1.281f,  -0.569f, 0.0847f};
 
-float sanitize_sample(float sample) noexcept {
-  if (std::isnan(sample)) return 0.0f;
-  if (sample == std::numeric_limits<float>::infinity()) return 1.0f;
-  if (sample == -std::numeric_limits<float>::infinity()) return -1.0f;
+/// Replaces a non-finite sample with a finite in-domain one and counts it in
+/// @p non_finite, which is the only thing that separates the replacement from a
+/// sample the caller delivered.
+float sanitize_sample(float sample, size_t& non_finite) noexcept {
+  if (std::isnan(sample)) {
+    ++non_finite;
+    return 0.0f;
+  }
+  if (sample == std::numeric_limits<float>::infinity()) {
+    ++non_finite;
+    return 1.0f;
+  }
+  if (sample == -std::numeric_limits<float>::infinity()) {
+    ++non_finite;
+    return -1.0f;
+  }
   return sample;
 }
 
@@ -39,14 +52,16 @@ float quantize_to_grid(float value, float lsb, float min_code, float max_code) n
 
 }  // namespace
 
-Audio dither(const Audio& audio, const DitherConfig& config) {
+Audio dither(const Audio& audio, const DitherConfig& config, size_t* non_finite_samples) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   if (config.target_bits < 2 || config.target_bits > 32) {
     throw SonareException(ErrorCode::InvalidParameter, "target_bits must be in [2, 32]");
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
+  size_t non_finite = 0;
   if (config.type == DitherType::None) {
-    for (auto& sample : samples) sample = sanitize_sample(sample);
+    for (auto& sample : samples) sample = sanitize_sample(sample, non_finite);
+    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
 
@@ -59,17 +74,19 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
 
   if (config.type == DitherType::Rpdf) {
     for (auto& sample : samples) {
-      const float dithered = sanitize_sample(sample) + dist(rng) * lsb;
+      const float dithered = sanitize_sample(sample, non_finite) + dist(rng) * lsb;
       sample = quantize_to_grid(dithered, lsb, min_code, max_code);
     }
+    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
 
   if (config.type == DitherType::Tpdf) {
     for (auto& sample : samples) {
-      const float dithered = sanitize_sample(sample) + (dist(rng) + dist(rng)) * lsb;
+      const float dithered = sanitize_sample(sample, non_finite) + (dist(rng) + dist(rng)) * lsb;
       sample = quantize_to_grid(dithered, lsb, min_code, max_code);
     }
+    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
 
@@ -81,7 +98,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
       feedback += kLvNoiseShapingCoeffs[k] * error_history[k];
     }
 
-    sample = sanitize_sample(sample);
+    sample = sanitize_sample(sample, non_finite);
     const float dithered = sample + (dist(rng) + dist(rng)) * lsb + feedback * lsb;
     // Noise-shaping feedback can push the dithered value beyond full scale;
     // clamp before quantizing so the output never leaves [-1, 1] regardless of
@@ -100,6 +117,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
 
     sample = quantized;
   }
+  if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
   return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 

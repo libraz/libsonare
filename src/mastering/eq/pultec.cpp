@@ -8,9 +8,11 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
 
+using sonare::discard_if_non_finite;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 using sonare::constants::kTwoPiD;
@@ -61,6 +63,11 @@ void PultecEq::process(float* const* channels, int num_channels, int num_samples
     for (int i = 0; i < num_samples; ++i) {
       channels[ch][i] = process_component_sample(channels[ch][i], ch);
     }
+    // Two charges per channel, once per block. The enclosed ParametricEq returns
+    // its own sections; these sit after it and rest discharged.
+    auto& state = component_state_[static_cast<size_t>(ch)];
+    discard_if_non_finite(state.low_charge, 0.0f);
+    discard_if_non_finite(state.high_charge, 0.0f);
   }
 }
 

@@ -1,6 +1,8 @@
 #include "mastering/saturation/hard_clipper.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <limits>
 
 #include "mastering/dynamics/channel_limits.h"
@@ -8,6 +10,21 @@
 #include "util/exception.h"
 
 namespace sonare::mastering::saturation {
+namespace {
+
+/// Replaces an infinity with the ceiling -- which @c std::clamp already does, with
+/// no branch to find -- and reports it in @p substituted. A NaN is deliberately
+/// left alone: both of the clamp's comparisons are false for it, so it passes
+/// through and the caller can still see that its stream was degraded.
+inline float clamp_to_ceiling(float value, float ceiling, std::uint32_t& substituted) noexcept {
+  if (std::isinf(value)) {
+    ++substituted;
+    return value > 0.0f ? ceiling : -ceiling;
+  }
+  return std::clamp(value, -ceiling, ceiling);
+}
+
+}  // namespace
 
 HardClipper::HardClipper(HardClipperConfig config) : config_(config) { validate_config(config_); }
 
@@ -17,6 +34,7 @@ void HardClipper::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   max_block_size_ = max_block_size;
+  non_finite_substitution_count_.reset();
   prepared_ = true;
   // Preallocate per-channel ADAA state so process() never resizes on the audio
   // thread (matches Tube/AmpSim).
@@ -54,12 +72,14 @@ void HardClipper::process(float* const* channels, int num_channels, int num_samp
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
+  std::uint32_t substituted = 0;
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
     for (int ch = 0; ch < num_channels; ++ch) {
       for (int i = 0; i < num_samples; ++i) {
-        channels[ch][i] = process_sample(channels[ch][i], ch);
+        channels[ch][i] = process_sample(channels[ch][i], ch, substituted);
       }
     }
+    non_finite_substitution_count_.add(substituted);
     return;
   }
 
@@ -79,12 +99,13 @@ void HardClipper::process(float* const* channels, int num_channels, int num_samp
     oversampler_.upsample_to_streaming(channels[ch], static_cast<size_t>(num_samples),
                                        up_scratch_.data(), up_scratch_.size(), &state);
     for (size_t i = 0; i < os_samples; ++i) {
-      up_scratch_[i] = std::clamp(up_scratch_[i], -config_.ceiling, config_.ceiling);
+      up_scratch_[i] = clamp_to_ceiling(up_scratch_[i], config_.ceiling, substituted);
     }
     oversampler_.downsample_to_streaming(up_scratch_.data(), os_samples, down_scratch_.data(),
                                          down_scratch_.size(), &state);
     std::copy_n(down_scratch_.data(), static_cast<size_t>(num_samples), channels[ch]);
   }
+  non_finite_substitution_count_.add(substituted);
 }
 
 void HardClipper::reset() {
@@ -164,14 +185,16 @@ int HardClipper::latency_samples() const noexcept {
   return config_.aliasing == sonare::rt::AliasingControl::Adaa2 ? 1 : 0;
 }
 
-float HardClipper::process_sample(float sample, int channel) {
+float HardClipper::process_sample(float sample, int channel, std::uint32_t& substituted) {
+  // The ADAA modes substitute nothing: a non-finite input makes their divided
+  // difference indeterminate, so it leaves as a NaN rather than as a plausible value.
   if (config_.aliasing == sonare::rt::AliasingControl::Adaa1) {
     return hard_clip_adaa_[static_cast<size_t>(channel)].process(sample);
   }
   if (config_.aliasing == sonare::rt::AliasingControl::Adaa2) {
     return hard_clip_adaa2_[static_cast<size_t>(channel)].process(sample);
   }
-  return std::clamp(sample, -config_.ceiling, config_.ceiling);
+  return clamp_to_ceiling(sample, config_.ceiling, substituted);
 }
 
 }  // namespace sonare::mastering::saturation

@@ -10,8 +10,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::multiband {
+
+using sonare::discard_group_if_non_finite;
 
 constexpr float MultibandImager::kDecorrelationFrequenciesHz[];
 
@@ -144,6 +147,15 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
       for (int i = 0; i < num_samples; ++i) {
         channels[ch][i] += band_samples[static_cast<size_t>(i)];
       }
+    }
+  }
+
+  // Two taps per allpass stage, once per block. The enclosed Crossover returns
+  // its own sections; these stages sit after the split, and the bands are summed
+  // above, so one stranded stage is enough to ruin the whole output.
+  for (auto& band_stages : allpass_) {
+    for (auto& stage : band_stages) {
+      discard_group_if_non_finite(stage.x1, stage.y1);
     }
   }
 }

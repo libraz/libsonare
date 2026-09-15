@@ -10,9 +10,11 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
 
+using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 
 namespace {
@@ -179,6 +181,22 @@ void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
     } else {
       profile_db_[band] = level_db + (profile_db_[band] - level_db) * release;
     }
+  }
+
+  // The fall ballistics carry each band between transforms, and the rise branch
+  // cannot take a band back: a later finite level compares below a stranded one
+  // and is smoothed toward it instead. Each band rests at the floor, alone, so a
+  // stranded band does not take the rest of the profile with it.
+  //
+  // Never seen to fire. Driving NaN, +inf and -inf through the analyser left the
+  // profile finite every time: the transform leaves a NaN somewhere in each
+  // band's bin range, and the level fold above answers std::max(kFloorDb, NaN)
+  // with kFloorDb. That is a consequence of how bands map onto bins rather than a
+  // barrier anyone built, so what this guards is the mapping changing. It is a
+  // measured absence on the signals tried, not a proof no input reaches here,
+  // which is why no test covers it -- a positive control could not be satisfied.
+  for (float& band_db : profile_db_) {
+    discard_if_non_finite(band_db, kFloorDb);
   }
 }
 

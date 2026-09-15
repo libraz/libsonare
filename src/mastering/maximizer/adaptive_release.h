@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "mastering/maximizer/true_peak_limiter.h"
@@ -43,6 +44,14 @@ class AdaptiveRelease : public rt::ProcessorBase {
   /// @brief Most negative gain reduction over the whole of the last process()
   ///        call, aggregated across its internal control chunks.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+  /// @brief Non-finite samples this stage replaced with a finite in-domain one.
+  /// @details The crest/RMS envelopes only read the buffer, so every substitution
+  ///          is the inner true-peak limiter's and this reports its count
+  ///          directly. Monotonic since @ref prepare, which clears it; @ref reset
+  ///          does not.
+  std::uint32_t non_finite_substitution_count() const noexcept {
+    return limiter_.non_finite_substitution_count();
+  }
   int latency_samples() const noexcept override { return limiter_.latency_samples(); }
 
   // Automatable parameters (RT-safe, no allocation). Most are read directly by

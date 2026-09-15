@@ -3,10 +3,12 @@
 /// @file brickwall_limiter.h
 /// @brief Hard-ceiling limiter that guarantees sample peaks do not exceed the ceiling.
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "mastering/dynamics/limiter.h"
+#include "rt/overflow_counter.h"
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
@@ -63,6 +65,17 @@ class BrickwallLimiter : public rt::ProcessorBase,
   // going through the lock-free publisher.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
   int hard_clip_count() const noexcept { return hard_clip_count_; }
+  /// @brief Non-finite samples this stage replaced with a finite in-domain one.
+  /// @details Monotonic since @ref prepare, which clears it; @ref reset does not.
+  ///          A NaN becomes silence and an infinity the ceiling, so the output
+  ///          stays finite, in range and free of any error while carrying samples
+  ///          unrelated to the input. This count is the only thing that separates
+  ///          such a stream from a clean one -- @ref hard_clip_count cannot,
+  ///          because it also counts the ordinary over-ceiling samples the stage
+  ///          exists to pull down.
+  std::uint32_t non_finite_substitution_count() const noexcept {
+    return non_finite_substitution_count_.load();
+  }
   int latency_samples() const noexcept override { return limiter_.latency_samples(); }
 
   // RT-safe: set_parameter updates the audio thread's live working config
@@ -98,6 +111,7 @@ class BrickwallLimiter : public rt::ProcessorBase,
   int max_block_size_ = 0;
   float last_gain_reduction_db_ = 0.0f;
   int hard_clip_count_ = 0;
+  rt::OverflowCounter non_finite_substitution_count_{};
 };
 
 }  // namespace sonare::mastering::dynamics

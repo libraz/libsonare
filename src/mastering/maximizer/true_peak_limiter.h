@@ -3,10 +3,12 @@
 /// @file true_peak_limiter.h
 /// @brief Ceiling limiter with true-peak style post guard.
 
+#include <cstdint>
 #include <vector>
 
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "rt/lookahead_buffer.h"
+#include "rt/overflow_counter.h"
 #include "rt/oversampler.h"
 #include "rt/sliding_max.h"
 #include "rt/true_peak_filter.h"
@@ -121,6 +123,16 @@ class TruePeakLimiter : public rt::ProcessorBase {
   /// Most-negative gain reduction since the last prepare/reset. Offline hosts
   /// process a zero tail to drain latency, so this retains the program value.
   float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
+  /// @brief Non-finite samples this stage replaced with a finite in-domain one.
+  /// @details Monotonic since @ref prepare, which clears it; @ref reset does not.
+  ///          A NaN becomes silence and an infinity the ceiling, at both the input
+  ///          and the post-gain stage, so the output stays finite, in range and
+  ///          free of any error while carrying samples unrelated to the input. The
+  ///          count is per replacement, so a sample sanitized at both stages adds
+  ///          two; only zero versus non-zero is a contract.
+  std::uint32_t non_finite_substitution_count() const noexcept {
+    return non_finite_substitution_count_.load();
+  }
   int latency_samples() const noexcept override;
 
   // Parameters:
@@ -148,6 +160,9 @@ class TruePeakLimiter : public rt::ProcessorBase {
   float adaptive_release_coeff(float linked_peak);
   void process_polyphase(float* const* channels, int num_channels, int num_samples);
   void process_polyphase_detect_only(float* const* channels, int num_channels, int num_samples);
+  /// @brief Returns the gain smoothers and the crest detector to rest when a
+  ///        non-finite value has reached them. Runs once per block.
+  void discard_non_finite_state() noexcept;
 
   TruePeakLimiterConfig config_{};
   dynamics::BrickwallLimiter limiter_;
@@ -184,6 +199,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   static constexpr unsigned int kReleaseControlInterval = 8;
   float last_gain_reduction_db_ = 0.0f;
   float minimum_gain_reduction_db_ = 0.0f;
+  rt::OverflowCounter non_finite_substitution_count_{};
 };
 
 }  // namespace sonare::mastering::maximizer

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -20,6 +21,7 @@ void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   maximizer_.set_config({0.0f, config_.ceiling_db, 1.0f, config_.release_ms});
   maximizer_.prepare(sample_rate_, max_block_size_);
+  non_finite_substitution_count_.reset();
   prepared_ = true;
 }
 
@@ -39,6 +41,7 @@ void SoftKneeMax::process(float* const* channels, int num_channels, int num_samp
   // delay and its detector both observe the same knee-shaped signal, so the
   // gain envelope and the audio it scales stay aligned (no lookahead_ms skew
   // between the knee shape and the limiting).
+  std::uint32_t substituted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
@@ -46,12 +49,17 @@ void SoftKneeMax::process(float* const* channels, int num_channels, int num_samp
       float x = channels[ch][i] * drive;
       const float ax = std::abs(x);
       if (ax > knee && knee > 0.0f) {
+        // tanh saturates an infinity onto twice the knee, so it never reaches
+        // the maximizer to be counted there. A NaN fails the comparison above
+        // and does, which is why only the infinity is counted here.
+        if (std::isinf(x)) ++substituted;
         const float sign = x < 0.0f ? -1.0f : 1.0f;
         x = sign * (knee + std::tanh((ax - knee) / knee) * knee);
       }
       channels[ch][i] = x;
     }
   }
+  non_finite_substitution_count_.add(substituted);
   maximizer_.process(channels, num_channels, num_samples);
 }
 

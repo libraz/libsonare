@@ -3,6 +3,7 @@
 /// @file maximizer.h
 /// @brief Input-gain maximizer with a hard output ceiling.
 
+#include <cstdint>
 #include <vector>
 
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -26,6 +27,14 @@ class Maximizer : public rt::ProcessorBase {
   void set_config(const MaximizerConfig& config);
   const MaximizerConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
+  /// @brief Non-finite samples this stage replaced with a finite in-domain one.
+  /// @details The input-gain stage is a memoryless multiply, which leaves a NaN a
+  ///          NaN and an infinity an infinity, so every substitution is the inner
+  ///          brickwall limiter's and this reports its count directly. Monotonic
+  ///          since @ref prepare, which clears it; @ref reset does not.
+  std::uint32_t non_finite_substitution_count() const noexcept {
+    return limiter_.non_finite_substitution_count();
+  }
   // The input-gain stage is memoryless, so the whole signal path is delayed by
   // exactly the inner brickwall limiter's lookahead. Hosts compensate with this
   // value and the offline runner trims this many leading samples, so leaving it

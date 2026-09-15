@@ -6,8 +6,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::stereo {
+
+using sonare::discard_group_if_non_finite;
 
 MonoMaker::MonoMaker(MonoMakerConfig config) : config_(config) { validate_config(config_); }
 
@@ -48,6 +51,12 @@ void MonoMaker::process(float* const* channels, int num_channels, int num_sample
     const float retained_side = side + config_.amount * (high_side - side);
     channels[0][i] = mid + retained_side;
     channels[1][i] = mid - retained_side;
+  }
+
+  // Two taps per one-pole section, once per block. The sections are cascaded, so
+  // a stranded one strands every section below it as well.
+  for (size_t stage = 0; stage < highpass_input_.size(); ++stage) {
+    discard_group_if_non_finite(highpass_input_[stage], highpass_output_[stage]);
   }
 }
 

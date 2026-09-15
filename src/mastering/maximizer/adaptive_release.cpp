@@ -7,8 +7,13 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::maximizer {
+
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
+
 namespace {
 
 // Smallest strictly-positive crest window / crest factor accepted by
@@ -197,12 +202,21 @@ void AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels
     rms_square_envelope_ += crest_coeff_ * (mean_square - rms_square_envelope_);
 
     const float running_rms = std::sqrt(std::max(rms_square_envelope_, 0.0f));
+    // Recomputed from the two envelopes, never from itself: not a cell to return.
     current_crest_factor_ = running_rms < kRmsFloor ? 0.0f : peak_envelope_ / running_rms;
     const float norm =
         std::clamp((current_crest_factor_ - config_.crest_low) / crest_span, 0.0f, 1.0f);
     const float target_release_ms = config_.min_release_ms + release_span * (1.0f - norm);
     current_release_ms_ += release_smoothing_coeff_ * (target_release_ms - current_release_ms_);
   }
+
+  // Every cell carried between blocks, before the next control publish so a
+  // stranded release never reaches the inner limiter. The peak envelope's
+  // std::max fold drops a NaN but keeps an infinity, which is the value an
+  // envelope over |x| actually acquires; the two halves of the crest detector
+  // rest together at silence, the release where prepare() seeds it.
+  discard_group_if_non_finite(peak_envelope_, rms_square_envelope_);
+  discard_if_non_finite(current_release_ms_, config_.min_release_ms);
 }
 
 }  // namespace sonare::mastering::maximizer

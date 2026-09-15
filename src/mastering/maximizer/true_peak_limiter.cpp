@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -11,8 +12,13 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::maximizer {
+
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
+
 namespace {
 
 // Fast/slow gain-smoother attack times (ms). The fast smoother clamps inter-
@@ -21,10 +27,22 @@ namespace {
 constexpr float kFastAttackMs = 0.1f;
 constexpr float kSlowAttackMs = 1.0f;
 
-float sanitize_sample(float sample, float ceiling) {
-  if (std::isnan(sample)) return 0.0f;
-  if (sample == std::numeric_limits<float>::infinity()) return ceiling;
-  if (sample == -std::numeric_limits<float>::infinity()) return -ceiling;
+/// Replaces a non-finite sample with a finite in-domain one and reports it in
+/// @p substituted, since nothing downstream can tell the replacement from a value
+/// the limiter computed.
+float sanitize_sample(float sample, float ceiling, std::uint32_t& substituted) {
+  if (std::isnan(sample)) {
+    ++substituted;
+    return 0.0f;
+  }
+  if (sample == std::numeric_limits<float>::infinity()) {
+    ++substituted;
+    return ceiling;
+  }
+  if (sample == -std::numeric_limits<float>::infinity()) {
+    ++substituted;
+    return -ceiling;
+  }
   return sample;
 }
 
@@ -103,6 +121,7 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_ch
                                        std::max(true_peak_filter_.factor(), 1)));
   }
   prepared_ = true;
+  non_finite_substitution_count_.reset();
   reset();
 }
 
@@ -170,6 +189,7 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
 
   const float ceiling = db_to_linear(config_.ceiling_db);
   float min_gain = 1.0f;
+  std::uint32_t substituted = 0;
   for (size_t os = 0; os < oversampled_samples; ++os) {
     oversampled_peak_window_.push(linked_abs_[os]);
 
@@ -191,9 +211,9 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
 
     for (int ch = 0; ch < num_channels; ++ch) {
       const float delayed = oversampled_lookahead_[static_cast<size_t>(ch)].process(
-          sanitize_sample(oversampled_buffers_[static_cast<size_t>(ch)][os], ceiling));
+          sanitize_sample(oversampled_buffers_[static_cast<size_t>(ch)][os], ceiling, substituted));
       limited_oversampled_buffers_[static_cast<size_t>(ch)][os] =
-          sanitize_sample(delayed * gain, ceiling);
+          sanitize_sample(delayed * gain, ceiling, substituted);
     }
 
     // The gain above lags the ideal one on a fast transient, so a post-lookahead
@@ -249,8 +269,11 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     }
   }
 
+  // Once per block, not per sample: nothing downstream reads the count mid-block.
+  non_finite_substitution_count_.add(substituted);
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));
   minimum_gain_reduction_db_ = std::min(minimum_gain_reduction_db_, last_gain_reduction_db_);
+  discard_non_finite_state();
 }
 
 void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int num_channels,
@@ -289,6 +312,7 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
 
   const float ceiling = db_to_linear(config_.ceiling_db);
   float min_gain = 1.0f;
+  std::uint32_t substituted = 0;
   std::fill_n(input_rate_gain_.begin(), num_samples, 1.0f);
   for (size_t os = 0; os < oversampled_samples; ++os) {
     oversampled_peak_window_.push(linked_abs_[os]);
@@ -321,9 +345,9 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
   for (int i = 0; i < num_samples; ++i) {
     const float gain = input_rate_gain_[static_cast<size_t>(i)];
     for (int ch = 0; ch < num_channels; ++ch) {
-      const float delayed =
-          lookahead_[static_cast<size_t>(ch)].process(sanitize_sample(channels[ch][i], ceiling));
-      channels[ch][i] = sanitize_sample(delayed * gain, ceiling);
+      const float delayed = lookahead_[static_cast<size_t>(ch)].process(
+          sanitize_sample(channels[ch][i], ceiling, substituted));
+      channels[ch][i] = sanitize_sample(delayed * gain, ceiling, substituted);
     }
     // Channel-linked residual guard, matching the polyphase path.
     float linked_output = 0.0f;
@@ -340,8 +364,25 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
     }
   }
 
+  // Once per block, not per sample: nothing downstream reads the count mid-block.
+  non_finite_substitution_count_.add(substituted);
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));
   minimum_gain_reduction_db_ = std::min(minimum_gain_reduction_db_, last_gain_reduction_db_);
+  discard_non_finite_state();
+}
+
+void TruePeakLimiter::discard_non_finite_state() noexcept {
+  // Four floats, once per block. The input sanitizer keeps the samples finite but
+  // the detector reads the buffer before it, so a stranded cell does not surface
+  // as a non-finite output: every sample is substituted instead and the stage
+  // falls silent for the rest of the handle. The crest peak's std::max fold drops
+  // a NaN but keeps an infinity, which is the value an envelope over |x| actually
+  // acquires, and an infinite crest holds the release at its shortest for good.
+  // The gain smoothers rest at unity, the crest detector's two halves together at
+  // silence.
+  discard_if_non_finite(fast_gain_, 1.0f);
+  discard_if_non_finite(slow_gain_, 1.0f);
+  discard_group_if_non_finite(crest_peak_, crest_rms_);
 }
 
 void TruePeakLimiter::reset() {

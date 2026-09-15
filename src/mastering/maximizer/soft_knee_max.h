@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "mastering/maximizer/maximizer.h"
+#include "rt/overflow_counter.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -22,6 +24,15 @@ class SoftKneeMax : public rt::ProcessorBase {
   void set_config(const SoftKneeMaxConfig& config);
   const SoftKneeMaxConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return maximizer_.last_gain_reduction_db(); }
+  /// @brief Non-finite samples this stage replaced with a finite in-domain one.
+  /// @details Sums the knee's own substitutions and the inner maximizer's. The
+  ///          knee runs before the maximizer and folds an infinity onto twice the
+  ///          knee, so the maximizer never sees it; a NaN passes the knee and is
+  ///          counted there instead. Monotonic since @ref prepare, which clears
+  ///          both; @ref reset does not.
+  std::uint32_t non_finite_substitution_count() const noexcept {
+    return non_finite_substitution_count_.load() + maximizer_.non_finite_substitution_count();
+  }
   // The soft-knee shaping is a memoryless pre-stage, so the delay is entirely
   // the inner maximizer's (in turn its limiter's lookahead).
   int latency_samples() const noexcept override { return maximizer_.latency_samples(); }
@@ -44,6 +55,7 @@ class SoftKneeMax : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   bool prepared_ = false;
+  rt::OverflowCounter non_finite_substitution_count_{};
 };
 
 }  // namespace sonare::mastering::maximizer

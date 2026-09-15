@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -46,6 +47,7 @@ void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
   // hard-clip stage reads active_.ceiling_db, not config_.
   active_ = config_;
   prepared_ = true;
+  non_finite_substitution_count_.reset();
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -71,6 +73,7 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
   const float ceiling = db_to_linear(cfg.ceiling_db);
   float min_sample_gain = 1.0f;
   hard_clip_count_ = 0;
+  std::uint32_t substituted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     for (int i = 0; i < num_samples; ++i) {
       const float before = channels[ch][i];
@@ -84,9 +87,12 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
       } else if (!std::isfinite(before)) {
         min_sample_gain = 0.0f;
         ++hard_clip_count_;
+        ++substituted;
       }
     }
   }
+  // Once per block, not per sample: nothing downstream reads the count mid-block.
+  non_finite_substitution_count_.add(substituted);
 
   last_gain_reduction_db_ =
       std::min(limiter_.last_gain_reduction_db(), linear_to_db(min_sample_gain));

@@ -9,9 +9,11 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::stereo {
 
+using sonare::discard_group_if_non_finite;
 using sonare::constants::kPi;
 
 float Imager::Allpass::process(float input) noexcept {
@@ -85,6 +87,13 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
     const auto lr = decode_sample(ms.mid, ms.side);
     channels[0][i] = lr.mid * output;
     channels[1][i] = lr.side * output;
+  }
+
+  // Two taps per allpass stage, once per block. The decorrelator runs whether or
+  // not its output is mixed in, so a stranded stage waits silently until the
+  // width and amount that reveal it are set.
+  for (auto& stage : allpass_) {
+    discard_group_if_non_finite(stage.x1, stage.y1);
   }
 }
 

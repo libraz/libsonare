@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "rt/adaa.h"
 #include "rt/aliasing_control.h"
 #include "rt/nonlinearities.h"
+#include "rt/overflow_counter.h"
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
 
@@ -43,11 +45,24 @@ class HardClipper : public rt::ProcessorBase {
   ///   Oversample4x adds the oversampler's streaming round-trip latency.
   int latency_samples() const noexcept override;
 
+  /// @brief Infinities this stage replaced with the ceiling.
+  /// @details Monotonic since @ref prepare, which clears it; @ref reset does not.
+  ///          An infinity leaves as the ceiling, indistinguishable from a sample
+  ///          the clipper meant to produce, so this count is the only thing that
+  ///          separates such a stream from a clean one. A NaN is NOT counted: the
+  ///          clamp's two comparisons are both false for it whatever the ceiling
+  ///          and the aliasing mode, so it passes through and is already visible
+  ///          to the caller. The Adaa1/Adaa2 modes substitute nothing at all and
+  ///          never move this count.
+  std::uint32_t non_finite_substitution_count() const noexcept {
+    return non_finite_substitution_count_.load();
+  }
+
  private:
   static void validate_config(const HardClipperConfig& config);
   void ensure_state(int num_channels);
   void rebuild_adaa();
-  float process_sample(float sample, int channel);
+  float process_sample(float sample, int channel, std::uint32_t& substituted);
 
   HardClipperConfig config_{};
   bool prepared_ = false;
@@ -63,6 +78,7 @@ class HardClipper : public rt::ProcessorBase {
   std::vector<float> down_scratch_;
   std::vector<sonare::rt::Adaa1<sonare::rt::HardClipNonlinearity>> hard_clip_adaa_;
   std::vector<sonare::rt::Adaa2<sonare::rt::HardClipNonlinearity>> hard_clip_adaa2_;
+  sonare::rt::OverflowCounter non_finite_substitution_count_{};
 };
 
 }  // namespace sonare::mastering::saturation

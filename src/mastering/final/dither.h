@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include "core/audio.h"
@@ -38,6 +39,12 @@ struct DitherConfig {
 /// @details A separate @ref bit_depth pass over the result is a no-op: the
 ///          samples are already on that grid. @ref output_chain runs both so a
 ///          @c None dither still reaches the target word length.
-Audio dither(const Audio& audio, const DitherConfig& config = {});
+/// @param[out] non_finite_samples Optional count of input samples that were not
+///        finite. A NaN leaves as silence and an infinity as full scale, both of
+///        them in range and free of any error, so this count is the only thing
+///        that distinguishes such a sample from one the caller meant to deliver.
+///        Set on every mode; left untouched when the call throws.
+Audio dither(const Audio& audio, const DitherConfig& config = {},
+             size_t* non_finite_samples = nullptr);
 
 }  // namespace sonare::mastering::final
