@@ -20,11 +20,12 @@
  * control of two legitimate values producing two different results, so a surface
  * that stopped reading the field entirely cannot pass.
  *
- * What is settled here: neither surface answers a wrong-typed value with the
- * default any more. What is NOT settled, and is pinned below so a change to it
- * is visible: the WASM presence-checked readers COERCE (`val::as<double>` turns
- * `'30'` into 30) where the addon refuses, so the two still part company on a
- * numeric string — as an error on one side rather than as different audio.
+ * What is settled here: for these two fields both surfaces now refuse a
+ * wrong-typed value by name, and neither answers one with the default. What is
+ * NOT settled is the CLASS — most fields read on both surfaces still disagree,
+ * the embind reader coercing where the addon refuses. This file drives the one
+ * bag it can measure end to end; `reader-family-scope.test.ts` holds the
+ * population and is where a field leaves the divergent list.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -107,16 +108,21 @@ describe('detectOnsets reads delta on both surfaces', () => {
   });
 
   it('is not separated by a boolean, which is why one must not be used here', () => {
-    // On WASM `true` coerces to 1, and 1 gives the default's onset set on this
-    // fixture — so a boolean cannot tell a reader that APPLIES the value from
-    // one that ignores it. That is what bars it as the discriminating input,
-    // and it is a property of the value rather than of either reader. The addon
-    // now refuses it by name instead of answering with the default, which is a
-    // second reason and not the first one.
-    expect(wasmOnsets({ delta: true })).toBe(wasmOnsets());
-    const caught = capture(() => nodeOnsets({ delta: true }));
-    expect(caught).toBeInstanceOf(TypeError);
-    expect((caught as TypeError).message).toBe('delta must be a number');
+    // A boolean coerces to 1, and 1 answers with the default's onset set on
+    // this fixture — so even a reader that APPLIED it would reply exactly as
+    // one that ignored it. That is what bars a boolean as the discriminating
+    // input, and it is a property of the VALUE. It is asserted with the number
+    // rather than through either reader precisely because both now refuse the
+    // boolean: a reader can no longer be asked to demonstrate it, and a claim
+    // resting on a reader would have died with the refusal it was written
+    // against.
+    expect(nodeOnsets({ delta: 1 })).toBe(nodeOnsets());
+    expect(wasmOnsets({ delta: 1 })).toBe(wasmOnsets());
+    for (const onsets of [nodeOnsets, wasmOnsets]) {
+      const caught = capture(() => onsets({ delta: true }));
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toContain('delta must be a number');
+    }
   });
 
   it('refuses a numeric string and a single-element array on the addon', () => {
@@ -138,18 +144,23 @@ describe('detectOnsets reads delta on both surfaces', () => {
     }
   });
 
-  it('applies the coerced number on WASM, which is where the surfaces still part', () => {
-    // Recorded, not endorsed. The WASM presence-checked readers have no type
-    // test, so a numeric string reaches the core as the number. The addon
-    // refuses it. Neither substitutes the default any more, which was the
-    // silent half; this is the visible remainder, and a change to the WASM
-    // reader shows up here rather than passing unnoticed.
+  it('refuses them on WASM too, so this field no longer parts the surfaces', () => {
+    // This assertion used to record the remainder the other way round: the
+    // embind reader had no type test, so a numeric string reached the core as
+    // the number while the addon refused it. It is asserted here rather than
+    // left to the scanner because only a driven call can say the refusal
+    // reaches a caller rather than merely being written.
     for (const value of DISCRIMINATING) {
-      expect(wasmOnsets({ delta: value }), JSON.stringify(value)).toBe(
-        wasmOnsets({ delta: HIGH_DELTA }),
-      );
-      expect(wasmOnsets({ delta: value })).not.toBe(wasmOnsets());
+      const label = JSON.stringify(value);
+      const caught = capture(() => wasmOnsets({ delta: value }));
+      expect(caught, `delta ${label}`).toBeInstanceOf(Error);
+      expect((caught as Error).message, `delta ${label}`).toContain('delta must be a number');
     }
+    // Not a blanket rejection of the key: the same reader still applies a
+    // legitimate value, to the same answer the addon gives. Without this a
+    // reader that threw for everything would pass the loop above.
+    expect(wasmOnsets({ delta: HIGH_DELTA })).toBe(nodeOnsets({ delta: HIGH_DELTA }));
+    expect(wasmOnsets({ delta: HIGH_DELTA })).not.toBe(wasmOnsets());
   });
 
   it('reads threshold the same way, so the rule is the bag and not one key', () => {
@@ -165,10 +176,11 @@ describe('detectOnsets reads delta on both surfaces', () => {
     expect(high).not.toBe(byDefault);
     expect(wasmOnsets({ threshold: LOW_THRESHOLD })).toBe(low);
     expect(wasmOnsets({ threshold: HIGH_THRESHOLD })).toBe(high);
-    const caught = capture(() => nodeOnsets({ threshold: `${HIGH_THRESHOLD}` }));
-    expect(caught).toBeInstanceOf(TypeError);
-    expect((caught as TypeError).message).toBe('threshold must be a number');
-    expect(wasmOnsets({ threshold: `${HIGH_THRESHOLD}` })).toBe(high);
+    for (const onsets of [nodeOnsets, wasmOnsets]) {
+      const caught = capture(() => onsets({ threshold: `${HIGH_THRESHOLD}` }));
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toContain('threshold must be a number');
+    }
   });
 });
 

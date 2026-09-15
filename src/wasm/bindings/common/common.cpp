@@ -313,6 +313,15 @@ float floatProperty(val object, const char* key, float default_value) {
   return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
 }
 
+float typedFloatProperty(val object, const char* key, float default_value) {
+  val value = objectProperty(object, key);
+  if (value.isUndefined()) return default_value;
+  if (value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+  }
+  return checkedFloatFromVal(value, key);
+}
+
 float floatOption(val object, const char* key, float default_value) {
   val value = objectProperty(object, key);
   if (value.isUndefined()) return default_value;

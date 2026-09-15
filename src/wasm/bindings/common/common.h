@@ -241,6 +241,20 @@ val objectProperty(val object, const char* key);
 ///          documented "non-finite means unspecified" convention.
 /// @throws SonareException(InvalidParameter) naming @p key.
 float floatProperty(val object, const char* key, float default_value);
+/// @brief Presence- AND type-checked float reader: an absent field takes @p
+///        default_value, a present one must be a JS number.
+/// @details The addon's FloatProperty spelled for this surface, for a field that
+///          is a QUANTITY -- it has no value meaning "unspecified", so omitting
+///          the key is the only way to ask for the default. @ref floatProperty
+///          reaches the same field through val::as<double>(), which COERCES: a
+///          numeric string and a one-element array arrive as the number they
+///          spell and a boolean as 0 or 1, so a caller error becomes a result
+///          indistinguishable from a value the caller chose, and the addon
+///          refuses the very same input. Which of the two a field takes is a
+///          contract decision; that the surfaces answer it differently is not.
+/// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
+///         value and for one @ref checkedFloatFromVal refuses.
+float typedFloatProperty(val object, const char* key, float default_value);
 /// @brief Fallback float reader: a field that is absent, or present but not a
 ///        finite number, takes @p default_value. A wrong-typed value, and a
 ///        finite value outside the 32-bit float range, are refused rather than

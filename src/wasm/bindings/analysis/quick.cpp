@@ -402,12 +402,15 @@ val js_detect_onsets(val samples, int sample_rate, val options) {
   OnsetDetectConfig config;
   config.n_fft = intProperty(options, "nFft", config.n_fft);
   config.hop_length = intProperty(options, "hopLength", config.hop_length);
-  config.threshold = floatProperty(options, "threshold", config.threshold);
+  // Type-checked to match the addon's FloatProperty on the same two keys. Both
+  // are peak-picking quantities with no "unspecified" spelling, so a wrong-typed
+  // value is a caller error rather than a request for the default.
+  config.threshold = typedFloatProperty(options, "threshold", config.threshold);
   config.pre_max = onsetWindowFrames(options, "preMax", config.pre_max);
   config.post_max = onsetWindowFrames(options, "postMax", config.post_max);
   config.pre_avg = onsetWindowFrames(options, "preAvg", config.pre_avg);
   config.post_avg = onsetWindowFrames(options, "postAvg", config.post_avg);
-  config.delta = floatProperty(options, "delta", config.delta);
+  config.delta = typedFloatProperty(options, "delta", config.delta);
   config.wait = onsetWindowFrames(options, "wait", config.wait);
   config.backtrack = !options["backtrack"].isUndefined() && options["backtrack"].as<bool>();
   config.backtrack_range = onsetWindowFrames(options, "backtrackRange", config.backtrack_range);
