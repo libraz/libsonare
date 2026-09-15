@@ -79,6 +79,11 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
     min_reduction = std::min(min_reduction, reduction_db);
   }
 
+  // One float, once per block: the follower is recursive, so a non-finite level
+  // that reached it would otherwise outlive every later block. Only followers_[0]
+  // advances under linked detection, so it is the only cell to scrub.
+  follower.discard_if_non_finite();
+
   last_gain_reduction_db_ = min_reduction;
 }
 

@@ -83,6 +83,11 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
       }
       max_reduction = std::min(max_reduction, reduction_db);
     }
+    // One float, once per block: the follower is recursive, so a non-finite
+    // level that reached it would otherwise outlive every later block. The
+    // limiter gain is recursive too but cannot be stranded -- a non-finite
+    // magnitude fails the ordered comparison that is the only path into it.
+    followers_[0].discard_if_non_finite();
   } else {
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& follower = followers_[static_cast<size_t>(ch)];
@@ -98,6 +103,8 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
         channels[ch][i] = out;
         max_reduction = std::min(max_reduction, reduction_db);
       }
+      // One float per channel, once per block; see the linked branch.
+      follower.discard_if_non_finite();
     }
   }
 

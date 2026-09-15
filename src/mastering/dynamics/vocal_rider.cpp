@@ -9,8 +9,15 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::dynamics {
+
+namespace {
+
+using sonare::discard_if_non_finite;
+
+}  // namespace
 
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
@@ -90,6 +97,13 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
         largest_abs_gain = linked_gain_state_db_;
       }
     }
+    // One float per detector plus the shared gain state, once per block. Both
+    // are recursive, and the gain state is fed by the detectors, so a non-finite
+    // sample that reached either would otherwise outlive every later block.
+    for (int ch = 0; ch < num_channels; ++ch) {
+      followers_[static_cast<size_t>(ch)].discard_if_non_finite();
+    }
+    discard_if_non_finite(linked_gain_state_db_, 0.0f);
   } else {
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& follower = followers_[static_cast<size_t>(ch)];
@@ -110,6 +124,9 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
         // both detection modes.
         if (std::abs(gain_state) > std::abs(largest_abs_gain)) largest_abs_gain = gain_state;
       }
+      // Two floats per channel, once per block; see the linked branch.
+      follower.discard_if_non_finite();
+      discard_if_non_finite(gain_state, 0.0f);
     }
   }
 

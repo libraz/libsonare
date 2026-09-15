@@ -10,8 +10,16 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::spectral {
+
+namespace {
+
+using sonare::discard_group_if_non_finite;
+using sonare::discard_if_non_finite;
+
+}  // namespace
 
 SpectralShaper::SpectralShaper(SpectralShaperConfig config) : config_(config) {
   validate_config(config_);
@@ -80,6 +88,12 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
       min_gain = std::min(min_gain, gain_state);
       channels[ch][i] = remainder + target_band * gain_state;
     }
+    // Four cells per channel, once per block. The two low-pass states feed the
+    // envelope and the envelope feeds the gain, so one non-finite cell strands
+    // the channel for every later block. The gain rests at unity, not at zero.
+    discard_group_if_non_finite(low, band_low);
+    envelope.discard_if_non_finite();
+    discard_if_non_finite(gain_state, 1.0f);
     low_state_[static_cast<size_t>(ch)] = low;
     band_low_state_[static_cast<size_t>(ch)] = band_low;
     gain_state_[static_cast<size_t>(ch)] = gain_state;

@@ -216,6 +216,7 @@ if(BUILD_MASTERING)
     mastering/dynamics_expander_gate_test.cpp
     mastering/dynamics_processors_test.cpp
     mastering/dynamics_rt_safe_test.cpp
+    mastering/dynamics_state_non_finite_recovery_test.cpp
     mastering/eq_golden_test.cpp
     mastering/eq_parametric_test.cpp
     mastering/eq_processor_test.cpp

@@ -9,9 +9,12 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::dynamics {
 namespace {
+
+using sonare::discard_if_non_finite;
 
 constexpr float kEnvelopeFloor = 1.0e-6f;
 
@@ -88,6 +91,13 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
         largest_abs_gain = gain_state_db_[idx];
       }
     }
+    // Three floats per channel, once per block. The gain state is derived from
+    // both followers and is recursive itself, so a non-finite sample that
+    // reached any of them would otherwise outlive every later block. The
+    // lookahead line is a FIFO: its copy of the sample ages out on its own.
+    fast.discard_if_non_finite();
+    slow.discard_if_non_finite();
+    discard_if_non_finite(gain_state_db_[static_cast<size_t>(ch)], 0.0f);
   }
 
   last_gain_db_ = largest_abs_gain;
