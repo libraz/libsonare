@@ -72,13 +72,14 @@ test-install:
 	$(CMAKE) --build build-install-consumer -j
 	ctest --test-dir build-install-consumer --output-on-failure --no-tests=error
 
-# This path builds the full bundle only, so it attests that module alone;
-# build:js attests the tsup output it writes.
+# Delegates instead of configuring a tree of its own, because the feature
+# flags, the output name and the analysis-only switch that decide WHICH module
+# gets built live in bindings/wasm/package.json, while the post-build step
+# copies whatever was built over the dist/ every surface's tests import. It
+# also covers both bundles: the freshness guard checks each, so building one
+# leaves the other stale and the suite refuses to start.
 wasm:
-	emcmake $(CMAKE) -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release
-	$(CMAKE) --build build-wasm -j
-	cd bindings/wasm && node scripts/dist-source-manifest.mjs --write sonare
-	cd bindings/wasm && yarn build:js
+	cd bindings/wasm && yarn build
 
 # The K-weighting cases compare against a reference this script computes, and
 # the file it writes is gitignored, so a fresh checkout has no copy of it. The
