@@ -2,7 +2,7 @@
   "meta": {
     "schema": 1,
     "contract": "tools/mastering-eval/docs/objective.md",
-    "head": "19f607387a105bb496d824fd850562614a243f92",
+    "head": "faa51c5ef46b0f234c82267bc856b61dc933b48f",
     "library": "build-python-shared/lib/libsonare.dylib (Release, BUILD_SHARED=ON)",
     "corpus_seed": 20250915,
     "corpus_digest": "52efff6dc7e3c3792f8d309aa79d963446c589de451f9b2ee2d5d63b5840d4f0",
@@ -29,6 +29,8 @@
       "why": "the ledger this was read from carries no provenance block, so the tree and the binary these numbers were measured on were not recorded. Unknown, not clean, and not fillable later: that tree state is not in the repository's history"
     },
     "non_vacuity_run": "../../tools/mastering-eval/runs/nonvacuity.json",
+    "non_vacuity_corpus_digest": "52efff6dc7e3c3792f8d309aa79d963446c589de451f9b2ee2d5d63b5840d4f0",
+    "non_vacuity_corpus_digest_paths": 59,
     "non_vacuity_corpus_tree_digest": "5bb75f6ba6b3616f0c9df05887028a7a074dbe482e0d11b090fa869a5557f707",
     "gate_provenance": {
       "head": "19f607387a105bb496d824fd850562614a243f92",

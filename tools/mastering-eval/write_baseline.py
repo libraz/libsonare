@@ -482,6 +482,14 @@ def main() -> int:
             # now, and now is not when either run measured anything.
             "numbers_provenance": recorded_provenance(ledger),
             "non_vacuity_run": str(args.non_vacuity),
+            # Both digests from the gate, because the two answer different questions
+            # and a file can move one without the other: the tree digest covers the
+            # directory, the file digest covers only what the manifest names. Carrying
+            # the tree digest alone would let a file the manifest stopped naming --
+            # added, dropped, or renamed out of the list -- change the corpus on one
+            # side of the comparison and agree on the other.
+            "non_vacuity_corpus_digest": gate.get("corpus_digest"),
+            "non_vacuity_corpus_digest_paths": gate.get("corpus_digest_paths"),
             "non_vacuity_corpus_tree_digest": gate.get("corpus_tree_digest"),
             "gate_provenance": recorded_provenance(gate),
             "thresholds": dict(
