@@ -346,6 +346,33 @@ float floatOption(val object, const char* key, float default_value) {
   return std::isfinite(number) ? static_cast<float>(number) : default_value;
 }
 
+namespace {
+
+// Shared by every integer narrowing below: only the range differs between them.
+// Truncation is the same silent value change as saturation from the other end --
+// 31.5 separates on 31, and anything in (-1, 0) lands on the 0 that most of
+// these fields read as "keep the default".
+void requireIntegral(double number, const char* key) {
+  if (number != std::trunc(number)) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
+  }
+}
+
+// The unsigned narrowings share a [0, max] range on top of that, so they share
+// the whole body and pass their own bound.
+double checkedUnsignedNumber(const val& value, const char* key, double max) {
+  const double number = value.as<double>();
+  if (!std::isfinite(number) || number < 0.0 || number > max) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " must be a finite number within [0, " +
+                              std::to_string(static_cast<long long>(max)) + "]");
+  }
+  requireIntegral(number, key);
+  return number;
+}
+
+}  // namespace
+
 int checkedIntFromVal(const val& value, const char* key) {
   // val::as<int>() SATURATES out of range, so 2^31, 2^40, 3e9 and 4294967295 all
   // arrive as INT_MAX and pass every downstream guard that only asks for a
@@ -362,14 +389,7 @@ int checkedIntFromVal(const val& value, const char* key) {
         ErrorCode::InvalidParameter,
         std::string(key) + " must be a finite number within the 32-bit integer range");
   }
-  // The cast truncates, and truncation is the same class of silent value change
-  // as the saturation above: 31.5 separates on 31, and anything in (-1, 0) lands
-  // on the 0 that most of these fields read as "keep the default". Refusing here
-  // rather than per facade is what reaches a caller driving the embind classes
-  // directly, which no JS-side check can see.
-  if (number != std::trunc(number)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
-  }
+  requireIntegral(number, key);
   return static_cast<int>(number);
 }
 
@@ -377,26 +397,6 @@ int intProperty(val object, const char* key, int default_value) {
   val value = objectProperty(object, key);
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
-
-namespace {
-
-// Shared by the unsigned narrowings below: the range is the only thing that
-// differs between them, and every one of them refuses the same two silent value
-// changes -- a value outside the target type, and a fractional one.
-double checkedUnsignedNumber(const val& value, const char* key, double max) {
-  const double number = value.as<double>();
-  if (!std::isfinite(number) || number < 0.0 || number > max) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " must be a finite number within [0, " +
-                              std::to_string(static_cast<long long>(max)) + "]");
-  }
-  if (number != std::trunc(number)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
-  }
-  return number;
-}
-
-}  // namespace
 
 uint32_t checkedUintFromVal(const val& value, const char* key) {
   return static_cast<uint32_t>(
@@ -416,9 +416,7 @@ uint32_t checkedWordFromVal(const val& value, const char* key) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(key) + " must be a finite 32-bit word value");
   }
-  if (number != std::trunc(number)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
-  }
+  requireIntegral(number, key);
   return number < 0.0 ? static_cast<uint32_t>(static_cast<int64_t>(number))
                       : static_cast<uint32_t>(number);
 }
@@ -449,9 +447,7 @@ int64_t checkedInt64FromVal(const val& value, const char* key) {
         ErrorCode::InvalidParameter,
         std::string(key) + " must be a finite number within the 64-bit integer range");
   }
-  if (number != std::trunc(number)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
-  }
+  requireIntegral(number, key);
   return static_cast<int64_t>(number);
 }
 
