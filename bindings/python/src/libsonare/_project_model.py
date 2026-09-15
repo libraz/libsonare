@@ -89,6 +89,7 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _UINT32_MAX,
     SonareAutomationLaneDesc,
     SonareAutomationPoint,
     SonareBuiltinSynthConfig,
@@ -224,7 +225,7 @@ def _automation_target_param_id_value(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise SonareValueError("target_param_id must be a finite integer in [1, 4294967295]")
     target = float(cast(SupportsFloat, value))
-    if not math.isfinite(target) or not target.is_integer() or target < 1.0 or target > 0xFFFFFFFF:
+    if not math.isfinite(target) or not target.is_integer() or target < 1.0 or target > _UINT32_MAX:
         if math.isfinite(target) and target == 0.0:
             raise SonareValueError("target_param_id must be non-zero")
         raise SonareValueError("target_param_id must be a finite integer in [1, 4294967295]")
@@ -1085,7 +1086,7 @@ def _validate_midi_event_word(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise SonareValueError(f"{label} must be an integer in [0, 4294967295]")
     word = float(cast(SupportsFloat, value))
-    if not math.isfinite(word) or not word.is_integer() or word < 0.0 or word > 0xFFFFFFFF:
+    if not math.isfinite(word) or not word.is_integer() or word < 0.0 or word > _UINT32_MAX:
         raise SonareValueError(f"{label} must be an integer in [0, 4294967295]")
     return int(word)
 

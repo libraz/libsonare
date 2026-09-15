@@ -8,6 +8,7 @@ import operator
 from collections.abc import Mapping, Sequence
 
 from ._runtime import (
+    _UINT32_MAX,
     AutomationCurve,
     EngineClip,
     EngineGraphConnection,
@@ -131,7 +132,7 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
         marker_id = operator.index(marker.id)
     except TypeError as exc:
         raise SonareValueError("marker id must be a positive uint32 integer") from exc
-    if marker_id <= 0 or marker_id > 0xFFFFFFFF:
+    if marker_id <= 0 or marker_id > _UINT32_MAX:
         raise SonareValueError("marker id must be a positive uint32 integer")
     raw = SonareEngineMarker()
     raw.id = marker_id

@@ -627,7 +627,7 @@ def analyze_impulse_response(
         raise SonareValueError(
             "analyze_impulse_response: n_octave_bands must be a non-negative integer"
         ) from exc
-    if n_octave_bands_value < 0 or n_octave_bands_value > 2**31 - 1:
+    if n_octave_bands_value < 0 or n_octave_bands_value > _C_INT_MAX:
         raise SonareValueError(
             "analyze_impulse_response: n_octave_bands must be a non-negative integer"
         )

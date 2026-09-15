@@ -18,6 +18,7 @@ import numpy as np
 
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._runtime import (
+    _UINT32_MAX,
     ErrorCode,
     SonareValueError,
     _check,
@@ -340,8 +341,8 @@ class SampleBank:
             root_key=_unsigned(root_key, "root_key", 127),
             fine_tune_cents=_finite(fine_tune_cents, "fine_tune_cents"),
             source_rate=_finite(source_rate, "source_rate"),
-            loop_start=_unsigned(loop_start, "loop_start", 0xFFFFFFFF),
-            loop_end=_unsigned(loop_end, "loop_end", 0xFFFFFFFF),
+            loop_start=_unsigned(loop_start, "loop_start", _UINT32_MAX),
+            loop_end=_unsigned(loop_end, "loop_end", _UINT32_MAX),
             loop_mode=_sample_desc_loop_value(loop_mode),
         )
         c_array, length = _to_c_float_array(buf)
@@ -404,7 +405,7 @@ class SampleBank:
             key_hi=_unsigned(key_hi, "key_hi", 0xFF),
             vel_lo=_unsigned(vel_lo, "vel_lo", 0xFF),
             vel_hi=_unsigned(vel_hi, "vel_hi", 0xFF),
-            sample_index=_unsigned(sample_index, "sample_index", 0xFFFFFFFF),
+            sample_index=_unsigned(sample_index, "sample_index", _UINT32_MAX),
             tune_cents=_finite(tune_cents, "tune_cents"),
             gain=_finite(gain, "gain"),
             pan_units=_finite(pan_units, "pan_units"),
@@ -412,7 +413,7 @@ class SampleBank:
         _check(
             _get_lib().sonare_sample_bank_add_zone(
                 self._require_handle(),
-                ctypes.c_uint32(_unsigned(set_index, "set_index", 0xFFFFFFFF)),
+                ctypes.c_uint32(_unsigned(set_index, "set_index", _UINT32_MAX)),
                 ctypes.byref(zone),
             )
         )

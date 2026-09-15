@@ -8,6 +8,7 @@ import operator
 from collections.abc import Sequence
 
 from ._runtime import (
+    _C_INT_MAX,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -665,7 +666,7 @@ def nnls_chroma(
         hop_length_value = operator.index(hop_length)
     except TypeError as exc:
         raise SonareValueError("nnls_chroma: hop_length must be a positive integer") from exc
-    if hop_length_value <= 0 or hop_length_value > 2**31 - 1:
+    if hop_length_value <= 0 or hop_length_value > _C_INT_MAX:
         raise SonareValueError("nnls_chroma: hop_length must be a positive integer")
     if isinstance(stft_blend_n_fft, bool):
         raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
@@ -677,7 +678,7 @@ def nnls_chroma(
         ) from exc
     if (
         stft_blend_n_fft_value < 2
-        or stft_blend_n_fft_value > 2**31 - 1
+        or stft_blend_n_fft_value > _C_INT_MAX
         or (stft_blend_n_fft_value & 1) != 0
     ):
         raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
