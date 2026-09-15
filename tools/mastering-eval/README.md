@@ -13,9 +13,9 @@ rye run python ../../tools/mastering-eval/run.py --family restoration  # narrow 
 
 Both run from `bindings/python` so `rye` resolves numpy and `libsonare`. `run.py` imports the built Python binding, so a C-ABI change needs its dylib rebuilt first — point `SONARE_LIB_PATH` at the build you mean to measure, because the loader otherwise prefers `build/lib/libsonare.dylib` and will happily measure a stale one.
 
-**What runs by default.** `run.py` with no arguments measures **both families** — 95 rows, 51 restoration and 44 chain. `corpus.py` with no arguments writes the **whole** corpus; there is no default subset of it. `--family` narrows a run; it is not there to keep the default cheap, because a default that leaves the chain unmeasured costs more than the seconds it saves.
+**What runs by default.** `run.py` with no arguments measures **both families** — 110 rows, 60 restoration and 50 chain. `corpus.py` with no arguments writes the **whole** corpus; there is no default subset of it. `--family` narrows a run; it is not there to keep the default cheap, because a default that leaves the chain unmeasured costs more than the seconds it saves.
 
-Measured on this tree: `corpus.py` takes about 1.5 s and writes 125.5 s of audio across 22 items (53 WAV files — the noise items carry five draws each, plus one clean reference per item). `run.py` takes 11.5 s for both families, 6.5 s for restoration alone.
+Measured on this tree: `corpus.py` takes about 3 s and writes 137.5 s of audio across 25 items (59 WAV files — the noise items carry five draws each, plus one clean reference per item; every other item is one draw and its reference). The reverberant items' convolution is 1.45 s of that. `run.py` takes 13.1 s for both families, 7.6 s for restoration alone.
 
 `corpus.py` also measures each item's short-term loudness spread through `metrics_chain`, which reaches the C library. That is the one thing in corpus generation that needs a built dylib, and it is not required: without one the manifest records the spread as null and says so, rather than claiming a value.
 
@@ -32,9 +32,9 @@ Measured on this tree: `corpus.py` takes about 1.5 s and writes 125.5 s of audio
 
 ## What is in the corpus
 
-Five kinds of item, and they differ in what may be concluded from them.
+Six kinds of item, and they differ in what may be concluded from them.
 
-**`synthetic`** — sine and chord beds crossed with clicks, hum, clipping and noise. Every item ships a clean reference beside it and every planted defect's quantity in the manifest. These are the only items a restoration metric can be read on, because all four restoration metrics compare a clean signal against a processed one.
+**`synthetic`** — sine and chord beds crossed with clicks, hum, clipping and noise. Every item ships a clean reference beside it and every planted defect's quantity in the manifest. All four restoration metrics compare a clean signal against a processed one, so a restoration metric is read only where both exist — these items, the `speech` items and the `reverb` items, and nowhere else.
 
 | id | bed | planted |
 |---|---|---|
@@ -50,7 +50,7 @@ Five kinds of item, and they differ in what may be concluded from them.
 
 They are short on purpose — the restoration metrics are frame-averaged and read fine off half a second. They are also tonal, which is why STOI is not read on them (below).
 
-**`speech`** — the same five defects again, on speech-bearing material: pitch pulses through three formant resonators under a 2.3 Hz syllable gate. **These are the only items STOI is read on.** They run 2.5 s rather than the tonal items' half second because STOI's silent-frame removal drops roughly a quarter of the signal and the measure returns NaN under about a second; a shorter speech item would be speech-bearing and still unreadable.
+**`speech`** — the same five defects again, on speech-bearing material: pitch pulses through three formant resonators under a 2.3 Hz syllable gate. **These and the two reverberant speech items below are the only items STOI is read on.** They run 2.5 s rather than the tonal items' half second because STOI's silent-frame removal drops roughly a quarter of the signal and the measure returns NaN under about a second; a shorter speech item would be speech-bearing and still unreadable.
 
 | id | planted |
 |---|---|
@@ -72,6 +72,22 @@ The generator is the one the STOI implementation was checked against the referen
 **This bed is not a substitute for recorded speech, and STOI reads optimistically on it.** It holds one vowel and one 2.3 Hz modulation line, so every band's envelope has the same shape and their correlations sit more stable than real speech would. Band-selective damage is still detected; it simply reads smaller than it would on a real voice. The fix, if STOI turns out to be too blunt here, is to vary the generator's envelope across bands — several vowels, a different modulation rate per resonator — not to change the metric. This is why the contract keeps recorded material as a separate half of the corpus.
 
 One more property worth knowing before reading a number off these rows: the channels carry the same signal at a −0.5 dB offset, and `plant_noise` draws each channel's noise independently, so the downmix feed sits about 3 dB better in SNR than either channel feed. **The three feeds of one noise item are not three measurements of the same condition** and must not be pooled as repeats. The repeats are the draws, below.
+
+**`reverb`** — beds convolved with a synthetic room, for the defect no other builder plants. A dereverberator's knobs are only reachable on a signal that has a tail; swept over dry material every one of them reads as inert, which makes a wired knob indistinguishable from an unwired one.
+
+| id | bed | planted | measured T60 |
+|---|---|---|---|
+| `speech_reverb_short` | speech | direct impulse + exponential noise tail, 20 ms predelay, DRR 0 dB | 0.351 s |
+| `speech_reverb_long` | speech | the same conditions at a longer reverberation time | 1.204 s |
+| `chord_reverb_long` | chord | the same conditions as `speech_reverb_long`, tonal bed | 1.209 s |
+
+Two speech items differing in nothing but reverberation time, so a response can be read against the planted quantity rather than against a single condition, and one tonal bed so that response is not read off one talker. The two speech items are the only reverberant rows STOI is read on. All three run 4 s, past the 3 s short-term window, so every chain metric is live on them rather than null.
+
+Each item draws its own tail from its own seed, so two items sharing a reverberation time are two rooms under one decay law rather than one room measured twice.
+
+The reverberation time in the manifest is **measured off the impulse response**, not the number that was requested: a Schroeder T30 fitted between −5 and −35 dB and doubled. Two direct-to-reverberant ratios are recorded and they are different quantities — `rir_drr_db` belongs to the response and is exact, `pair_drr_db` is what the written pair carries and sits lower on sustained material, because a held note keeps feeding the tail while the direct sound stays where it is.
+
+The reverberant planter is the only one that rescales the clean side too. The wet sum peaks above the bed and has to come back inside full scale, and the factor belongs to the pair: applied to the dirty side alone it would be a level change, which segmental SNR reads as damage by construction.
 
 **`dynamics`** — long beds with slow level variation, carrying no defect and no clean reference. They exist for one reason: short-term loudness is a 3 s window that emits no partial, so a feed under 3.1 s produces **no** spread rather than a small one, and a steady feed produces blocks that are all the same. Neither leaves the dynamics metric anywhere to move, and a check for over-compression needs somewhere for it to move to.
 
@@ -155,7 +171,9 @@ The mastering chain has both entries, so it is measured on both: `master_audio_s
 
 ## Parameters handed to the processors
 
-Dehum needs the fundamental, declip needs the plateau, and declick's default level gate sits above every click in this corpus. Handing them the planted quantity makes a row a measurement of **restoration quality given correct detection**, which is not a measurement of detection. `planted_params_supplied` names, per row, which quantities were supplied, and `params` records the values.
+Dehum needs the fundamental, declip needs the plateau, dereverb needs the reverberation time, and declick's default level gate sits above every click in this corpus. Handing them the planted quantity makes a row a measurement of **restoration quality given correct detection**, which is not a measurement of detection. `planted_params_supplied` names, per row, which quantities were supplied, and `params` records the values.
+
+Dereverb is handed `t60_sec` and nothing else. The planter's envelope decays 60 dB in T60, which is the decay law the dereverberator assumes when it turns that knob into a late-power estimate, so the measured T30 and the knob are one quantity. `late_delay_ms` is not: the planted predelay is where the tail starts, not the mixing time past which the response is diffuse, so the library's own default stands and no row claims a planted value for it.
 
 ## The metric seam
 
@@ -231,13 +249,13 @@ The same spread was measured independently from the metric's side, with no proce
 
 STOI correlates short-time band envelopes against a model fitted to and validated on speech. A pure tone carries no such envelope, so the number it returns there is outside the domain the metric was established in — and reading it anyway is not the conservative choice. It has already scored a *correct* restoration as a regression on tonal items (`sine_click` −0.030, `sine_white_noise` −0.013), which under "no metric may get worse" rejects a good change.
 
-Every item therefore carries `speech_bearing`, and every row repeats it. On a row where it is false, STOI is not computed and `inapplicable_metrics` says why; the other three metrics are read as usual. Of the 95 rows in a full run, 18 carry a STOI value and 33 record it as inapplicable (the rest are chain rows, which never read it).
+Every item therefore carries `speech_bearing`, and every row repeats it. On a row where it is false, STOI is not computed and `inapplicable_metrics` says why; the other three metrics are read as usual. Of the 110 rows in a full run, 24 carry a STOI value and 36 record it as inapplicable (the rest are chain rows, which never read it).
 
 ### Saturation
 
 Segmental SNR clips each frame to `[-10, +35]` dB before averaging. A row whose frames were mostly taken at the ceiling has lost most of its room to move downward, so reading it as "did not get worse" lets the clip hide a regression.
 
-**The column to read is `ceiling_fraction`, not `saturated`.** The boolean says only that the *aggregate* landed on a bound, which happens only when every averaged frame did. A row can lose nine frames in ten to the ceiling and still report an aggregate nowhere near it: `sine_click` on the downmix reads 33.56 dB with 86 of its 92 frames taken at the ceiling, and `saturated` is false. Nine of the thirty-three restoration rows sit above 0.9 and only four of those are flagged by the boolean. Folding this column back down to a boolean is the likeliest regression here; it is a boolean that reads healthy on a crushed row.
+**The column to read is `ceiling_fraction`, not `saturated`.** The boolean says only that the *aggregate* landed on a bound, which happens only when every averaged frame did. A row can lose nine frames in ten to the ceiling and still report an aggregate nowhere near it: `sine_click` on the downmix reads 33.56 dB with 86 of its 92 frames taken at the ceiling, and `saturated` is false. Twelve of the sixty restoration rows sit above 0.9 and only seven of those are flagged by the boolean. Folding this column back down to a boolean is the likeliest regression here; it is a boolean that reads healthy on a crushed row.
 
 A metric supplies these by exposing a companion `<name>_report` taking the same arguments and returning the same value alongside the counts — `segmental_snr_report` for `segmental_snr`. The harness prefers the companion where it exists, so the value and the counts always come from one call, and each row then carries a `saturation` block per metric: `active_frames`, `ceiling_frames`, `floor_frames`, `ceiling_fraction`, `floor_fraction`, `saturated`. A chain metric reported as an input/output pair carries a block per side.
 

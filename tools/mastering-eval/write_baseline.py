@@ -23,6 +23,12 @@ rather than filled with a number".
 A pair with only one undefined side would be a different statement, so that case
 keeps the pair and nulls the one side; nothing in the corpus produces it today.
 
+The same rule governs provenance. ``meta.head`` is this file's own emission, not
+the run's; each run's tree and binary are copied from its ledger under
+``numbers_provenance`` and ``gate_provenance``. A ledger that recorded none reads
+``recorded: false`` with the reason, because a dirty tree is invisible afterwards
+and an absent record must not be read as a clean one.
+
 Run from ``bindings/python`` so rye resolves numpy and libsonare::
 
     SONARE_LIB_PATH=.../libsonare.dylib \\
@@ -32,7 +38,7 @@ Run from ``bindings/python`` so rye resolves numpy and libsonare::
     rye run python ../../tools/mastering-eval/write_baseline.py \\
         --shape /tmp/shape.json \\
         --ledger ../../tools/mastering-eval/runs/w2-baseline-run.json \\
-        --non-vacuity ../../tools/mastering-eval/runs/w2-nonvacuity.json
+        --non-vacuity ../../tools/mastering-eval/runs/nonvacuity.json
 """
 
 from __future__ import annotations
@@ -62,6 +68,35 @@ NOT_DEFINED = {
     ),
 }
 NOT_DEFINED_FALLBACK = "the metric returned an undefined value on this row"
+
+# What a ledger did not record cannot be supplied afterwards. The working tree a
+# run measured on is not in the repository's history, so a run that did not write
+# its own provenance leaves it unknown permanently -- and unknown is the one thing
+# a reader must not take for clean. `recorded: false` is the field that says so;
+# the nulls beside it are there to stop a key lookup failing, not to answer.
+NOT_RECORDED = {
+    "recorded": False,
+    "head": None,
+    "head_committed": None,
+    "status_src": None,
+    "status_all": None,
+    "package": None,
+    "sonare_lib_path": None,
+    "sonare_lib_mtime": None,
+    "why": (
+        "the ledger this was read from carries no provenance block, so the tree and the "
+        "binary these numbers were measured on were not recorded. Unknown, not clean, and "
+        "not fillable later: that tree state is not in the repository's history"
+    ),
+}
+
+
+def recorded_provenance(ledger: dict) -> dict:
+    """A ledger's own provenance, or the block that says it did not write one."""
+    block = ledger.get("provenance")
+    if not block:
+        return dict(NOT_RECORDED)
+    return dict(block, recorded=True)
 
 
 # The improvement thresholds, and the rule where there is no threshold to have.
@@ -127,7 +162,9 @@ THRESHOLDS: dict[str, Any] = {
     "restoration": {
         "basis": "redraw_floor",
         "basis_source": (
-            "runs/w2-nonvacuity.json#ensembles (5 draws per item, processing held fixed)"
+            "runs/nonvacuity.json#ensembles (5 draws per item, processing held fixed). The same "
+            "run supplies the steps table, so a floor and the response read against it come from "
+            "one corpus; a gate ledger carrying only one of the two leaves resolution unreadable"
         ),
         "seg_snr_db": _threshold(
             1.0,
@@ -427,6 +464,8 @@ def main() -> int:
         "meta": {
             "schema": SCHEMA,
             "contract": "tools/mastering-eval/docs/objective.md",
+            # HEAD when this file was written, which is not when the numbers were
+            # measured: see `numbers_provenance` for that run's own record.
             "head": git("rev-parse", "HEAD"),
             "library": args.library,
             "corpus_seed": manifest.get("seed"),
@@ -437,8 +476,14 @@ def main() -> int:
             "downmix": ledger["downmix"],
             "unavailable_metrics": ledger["unavailable_metrics"],
             "saturation_probe": ledger["saturation_probe"],
+            # Three provenances, and they are three because the work happened three
+            # times. `head` is this emission's; the other two are the runs' own, copied
+            # from their ledgers rather than taken from git here -- git would answer for
+            # now, and now is not when either run measured anything.
+            "numbers_provenance": recorded_provenance(ledger),
             "non_vacuity_run": str(args.non_vacuity),
             "non_vacuity_corpus_tree_digest": gate.get("corpus_tree_digest"),
+            "gate_provenance": recorded_provenance(gate),
             "thresholds": dict(
                 THRESHOLDS,
                 resolution=dict(RESOLUTION_NOTES, one_step_knob_response=one_step_resolution(gate)),

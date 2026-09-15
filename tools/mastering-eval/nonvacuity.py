@@ -20,6 +20,14 @@ different material cannot settle. The speech table is the one that settles it:
 its material is the only corpus item both speech-bearing and longer than the 3.1
 s short-term window, so no column on it is out of domain.
 
+**Feeds.** Most cases take a mono feed, which is what every restoration entry
+point accepts, and the shared materials are restaged on one. A metric whose
+reading combines channels cannot be exercised there at all, so a case may instead
+name the ``stereo`` feed and be handed the item's own channels; the restoration
+metrics are defined on one channel and read null with their reason on such a row.
+A case on a multi-channel feed is not restaged, because the shared tables are
+mono and moving it there would drop the dimension it exists to exercise.
+
 Every restoration metric needs a reference signal. A corpus item with a clean
 reference supplies one; an item without (the long dynamics beds carry no defect
 and no clean twin) uses the processor's own input, recorded per row as
@@ -40,8 +48,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
-import os
 import subprocess
 import sys
 import time
@@ -58,7 +66,7 @@ if str(HERE) not in sys.path:
 
 import metrics_chain  # noqa: E402
 import metrics_repair  # noqa: E402
-from run import DOWNMIX, load_item, mono_feeds  # noqa: E402
+from run import DOWNMIX, _as_stereo, load_item, mono_feeds, provenance  # noqa: E402
 
 import libsonare  # noqa: E402
 
@@ -92,6 +100,20 @@ COMMON_FEED = "downmix"
 SPEECH_ITEM = "speech_dynamic_hum50"
 SPEECH_FEED = "downmix"
 
+# Where the gain-only case is repeated on a multi-channel feed. Short-term spread
+# is a channel-summed reading, and a one-channel feed has nothing to sum, so the
+# level-independence check cannot reach that arithmetic on a mono row.
+#
+# The programme bed rather than the corpus's stereo mix: what the sum needs is
+# per-channel loudness envelopes that are not proportional, which decorrelated
+# waveforms do not imply. Over the chain's output the summed series departs from a
+# constant offset of the left channel's by 0.029 LU here against 0.0007 LU on
+# stereo_mix_dry, whose channels carry one programme at a fixed width. It is also
+# the material the mono gain-only case runs on, so the two differ in the feed's
+# channel count alone.
+STEREO_ITEM = COMMON_ITEM
+STEREO_FEED = "stereo"
+
 # The one-step table's extra materials. The noise bed is the only speech item
 # that carries an ensemble, so it is the only place a one-step response can be
 # read against a redraw floor of the same material; the click bed is where a
@@ -99,7 +121,21 @@ SPEECH_FEED = "downmix"
 STEP_NOISE_ITEM = "speech_pink_noise"
 STEP_CLICK_ITEM = "speech_click"
 
+# The two reverberant materials the dereverb knobs are swept on. Both, because a
+# knob is being asked whether it reaches the output at all, and one material
+# cannot separate a knob that does nothing from a knob whose one material gave it
+# nothing to do. The speech bed is where STOI is readable; the tonal bed is
+# sustained, so its tail accumulates where the speech bed's decays into syllable
+# gaps.
+STEP_REVERB_ITEM = "speech_reverb_long"
+STEP_REVERB_TONAL_ITEM = "chord_reverb_long"
+
 NOT_SPEECH_BEARING = "STOI is defined on speech; this material carries none"
+NOT_ONE_CHANNEL = "defined here on one channel; this feed carries {channels}"
+
+# The metrics that take a mono signal, named so a multi-channel row can record
+# their absence rather than leave a caller to infer it from four nulls.
+ONE_CHANNEL_METRICS = ("seg_snr_db", "log_kurtosis_ratio", "stoi", "log_spectral_distance")
 
 # The cases that repeat an earlier degradation on speech-bearing material. They
 # belong to the home table only: restaging them on a shared material would run
@@ -120,6 +156,25 @@ VECTOR_METRICS = ("band_energy_delta",)
 
 def _f32(x: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(x, dtype=np.float32)
+
+
+def feeds(audio: np.ndarray) -> dict[str, np.ndarray]:
+    """The runner's own mono feeds, plus the item's channels as one feed.
+
+    The mono feeds and their downmix are the runner's, not a second copy: this
+    module checks whether the harness's metrics can fail, so it has to be handed
+    the samples the harness hands them. ``stereo`` is the same audio uncollapsed,
+    which is what the runner's own stereo mastering row is measured on.
+    """
+    named = dict(mono_feeds(audio))
+    stereo = _as_stereo(audio)
+    if stereo.shape[1] > 1:
+        named["stereo"] = stereo
+    return named
+
+
+def _channels(feed: np.ndarray) -> int:
+    return 1 if feed.ndim == 1 else int(feed.shape[1])
 
 
 def _rms_matched(reference: np.ndarray, other: np.ndarray) -> np.ndarray:
@@ -147,9 +202,26 @@ def _declick(feed: np.ndarray, sample_rate: int, params: dict) -> np.ndarray:
     )
 
 
+def _dereverb(feed: np.ndarray, sample_rate: int, params: dict) -> np.ndarray:
+    return np.asarray(
+        libsonare.mastering_repair_dereverb_classical(_f32(feed), sample_rate, **params),
+        dtype=np.float64,
+    )
+
+
 def _chain(feed: np.ndarray, sample_rate: int, overrides: dict | None) -> np.ndarray:
     result = libsonare.master_audio(_f32(feed), sample_rate, PRESET, overrides or None)
     return np.asarray(result.samples, dtype=np.float64)
+
+
+def _chain_stereo(feed: np.ndarray, sample_rate: int) -> np.ndarray:
+    result = libsonare.master_audio_stereo(
+        _f32(feed[:, 0]), _f32(feed[:, 1]), sample_rate, PRESET
+    )
+    return np.stack(
+        [np.asarray(result.left, dtype=np.float64), np.asarray(result.right, dtype=np.float64)],
+        axis=1,
+    )
 
 
 def _band_cut_params(sample_rate: int) -> dict[str, float | bool]:
@@ -315,6 +387,21 @@ def build_cases(manifest: dict) -> list[Case]:
             settings={"entry_point": "master_audio", "preset": PRESET, "gain": GAIN_ONLY},
         ),
         Case(
+            key="D7st",
+            title=f"stereo chain output scaled by {GAIN_ONLY:g}, processing identical",
+            family="mastering",
+            item=STEREO_ITEM,
+            expected=("integrated_lufs", "true_peak_dbtp"),
+            baseline=lambda x, sr: _chain_stereo(x, sr),
+            degraded=lambda x, sr: _chain_stereo(x, sr) * GAIN_ONLY,
+            settings={
+                "entry_point": "master_audio_stereo",
+                "preset": PRESET,
+                "gain": GAIN_ONLY,
+            },
+            feed=STEREO_FEED,
+        ),
+        Case(
             key="D7r",
             title=f"denoise output scaled by {GAIN_ONLY:g}, processing identical",
             family="restoration",
@@ -420,7 +507,10 @@ def restaged(manifest: dict, item: str, feed: str) -> list[Case]:
 
     A speech twin is the same degradation as its non-speech original, so only
     the original is restaged; keeping both would report one measurement twice
-    under two names and inflate any agreement read off the table.
+    under two names and inflate any agreement read off the table. A case on a
+    multi-channel feed is left where it is for a different reason: the shared
+    materials are taken as mono feeds here, so restaging it would drop the
+    channel dimension it exists to exercise.
     """
     return [
         Case(
@@ -435,7 +525,7 @@ def restaged(manifest: dict, item: str, feed: str) -> list[Case]:
             feed=feed,
         )
         for case in build_cases(manifest)
-        if case.key not in SPEECH_TWINS
+        if case.key not in SPEECH_TWINS and case.feed == "downmix"
     ]
 
 
@@ -463,10 +553,59 @@ def restaged(manifest: dict, item: str, feed: str) -> list[Case]:
 #   change of anything; 0.5 dB is the smallest increment a mastering decision is
 #   normally made in.
 #
+# * **Ladder-like** (an FFT size, a hop, an iteration or a tap count): the
+#   admissible values are rungs rather than a line, so one step is one rung --
+#   the next power of two for a size, plus or minus one for a count. The relative
+#   rule cannot be used on these: 20% of 1024 is not a power of two, and 20% of 2
+#   iterations rounds back to 2 and would measure nothing while reporting a step.
+#
 # A boolean knob has no step. Its only change is a flip, which is what D3 already
-# measured, so the booleans are left out rather than given an invented step.
+# measured, so the booleans are flipped rather than given an invented step.
 STEP_RELATIVE = 0.20
 STEP_DECIBELS = 0.5
+
+# Which rule each dereverb knob takes. Every knob the config carries is here,
+# including the two the audit found unread, because a sweep that leaves a knob
+# out cannot report on it either way -- and `output_identical` on these rows is
+# what says whether a knob reaches the output at all, which no metric delta can
+# say on its own.
+DEREVERB_STEP_KIND = {
+    "threshold": "relative",
+    "attenuation": "relative",
+    "n_fft": "ladder",
+    "hop_length": "ladder",
+    "t60_sec": "relative",
+    "late_delay_ms": "relative",
+    "over_subtraction": "relative",
+    "spectral_floor": "relative",
+    "wpe_enabled": "flip",
+    "wpe_iterations": "count",
+    "wpe_taps": "count",
+    "wpe_strength": "relative",
+}
+
+# The four knobs the WPE stage owns are read only when it runs, exactly as the
+# Berouti knobs are read only under spectral subtraction. Swept under a config
+# that turns it on, or they would be measured where the code never reaches them.
+WPE_ON = {"wpe_enabled": True}
+
+# Two configurations the validator accepts and the subtraction stage is an
+# identity map under: the stage takes `max(power - over_subtraction * late,
+# spectral_floor * power)`, so a floor of 1 clamps the subtraction away and an
+# over-subtraction of 0 subtracts nothing. Either way every bin's gain is 1.
+#
+# They matter to a sweep because `t60_sec` and `late_delay_ms` reach the output
+# only through the late power that stage subtracts. Based on one of these, a
+# sweep would report four inert knobs and could not tell the two that are never
+# read from the two it had disabled itself. The base is checked against them
+# rather than assumed clear of them.
+DEREVERB_INERT_CONFIGS = ({"spectral_floor": 1.0}, {"over_subtraction": 0.0})
+
+# The knobs an inert configuration disables, swept under one as a positive
+# control. A column that reports inertness has to be shown reporting it where the
+# cause is known, or an inert reading elsewhere cannot be told from a column that
+# is stuck.
+DEREVERB_DISABLED_BY_INERT = ("t60_sec", "late_delay_ms")
 
 # The chain values the explicit baseline asserts are the preset's own. Asserted
 # rather than assumed: PRESET-CHECK below runs the chain with these set and with
@@ -479,8 +618,44 @@ def _ratio_steps(value: float) -> tuple[float, float]:
     return value * (1.0 - STEP_RELATIVE), value * (1.0 + STEP_RELATIVE)
 
 
+def dereverb_defaults() -> dict[str, Any]:
+    """The dereverberator's own defaults, read off the binding's signature.
+
+    Read rather than copied: a sweep that steps from a hand-written default is a
+    step from a value the processor may never have held, which is the question
+    PRESET-CHECK asks on the chain side and which introspection answers outright
+    here. The resolved values go into every row's settings.
+    """
+    parameters = inspect.signature(libsonare.mastering_repair_dereverb_classical).parameters
+    return {
+        name: parameter.default
+        for name, parameter in parameters.items()
+        if parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    }
+
+
+def _dereverb_step(knob: str, default: Any) -> tuple[Any, Any, str]:
+    """One step either side of a dereverb knob's default, by the knob's kind."""
+    kind = DEREVERB_STEP_KIND[knob]
+    if kind == "relative":
+        low, high = _ratio_steps(float(default))
+        return low, high, f"+/-{STEP_RELATIVE:.0%}"
+    if kind == "ladder":
+        return int(default) // 2, int(default) * 2, "one power of two"
+    if kind == "count":
+        return int(default) - 1, int(default) + 1, "one step"
+    raise ValueError(f"{knob} takes no step: it is {kind}")
+
+
 def build_steps(manifest: dict) -> list[Case]:
-    """One knob moved one step, in each direction, with everything else held."""
+    """One knob moved one step, in each direction, with everything else held.
+
+    Holding everything else is also this table's blind spot: one knob's setting can
+    disable another, and a single-knob sweep sees the disabled knob as inert
+    without saying which of the two caused it. The dereverb rows carry controls
+    for the two cases known here; finding such a pair in general is not something
+    this shape of sweep can do.
+    """
     by_id = {item["id"]: item for item in manifest["items"]}
     spectral = {"mode": "spectralSubtraction"}
 
@@ -526,12 +701,128 @@ def build_steps(manifest: dict) -> list[Case]:
             )
         return out
 
+    defaults = dereverb_defaults()
+
+    def dereverb_case(knob: str, item: str, sign: str, base: dict, stepped: dict, how: str) -> Case:
+        return Case(
+            key=f"dereverb.{knob}{sign}",
+            title=(
+                f"dereverb {knob} {base[knob]!r} -> {stepped[knob]!r} ({how})"
+                + (", WPE on" if base.get("wpe_enabled") else "")
+            ),
+            family="restoration",
+            item=item,
+            expected=(),
+            baseline=lambda x, sr, p=base: _dereverb(x, sr, p),
+            degraded=lambda x, sr, p=stepped: _dereverb(x, sr, p),
+            settings={
+                "entry_point": "dereverb_classical",
+                "knob": knob,
+                "step": DEREVERB_STEP_KIND[knob],
+                "baseline": base,
+                "degraded": stepped,
+            },
+        )
+
+    def dereverb_steps(knob: str, item: str) -> list[Case]:
+        extra = dict(WPE_ON) if knob.startswith("wpe_") and knob != "wpe_enabled" else {}
+        default = defaults[knob]
+        if DEREVERB_STEP_KIND[knob] == "flip":
+            base = dict(extra, **{knob: default})
+            flipped = dict(extra, **{knob: not default})
+            return [dereverb_case(knob, item, "~", base, flipped, "flip")]
+        low, high, how = _dereverb_step(knob, default)
+        return [
+            dereverb_case(
+                knob, item, sign, dict(extra, **{knob: default}), dict(extra, **{knob: value}), how
+            )
+            for sign, value in (("-", low), ("+", high))
+        ]
+
+    def dereverb_control(key: str, title: str, item: str, base: dict, other: dict) -> Case:
+        """One dereverb row whose answer is `output_identical`, not a metric delta."""
+        return Case(
+            key=f"dereverb.{key}",
+            title=title,
+            family="restoration",
+            item=item,
+            expected=(),
+            baseline=lambda x, sr, p=base: _dereverb(x, sr, p),
+            degraded=lambda x, sr, p=other: _dereverb(x, sr, p),
+            settings={
+                "entry_point": "dereverb_classical",
+                "knob": None,
+                "step": "control",
+                "baseline": base,
+                "degraded": other,
+            },
+        )
+
+    def dereverb_controls(item: str) -> list[Case]:
+        """Whether the sweep's base subtracts anything, and whether inert is reachable.
+
+        Three questions, all answered by `output_identical` rather than by a delta:
+
+        * ``BASE-VS-INERT`` -- the defaults against a configuration whose
+          subtraction stage is an identity map. Identical outputs would mean the
+          base is inert too, and every dereverb row above it vacuous.
+        * ``INERT-AGREE`` -- the two inert configurations against each other. They
+          are different knobs reaching the same identity map, so identical is the
+          expected answer, and this is where the column is seen saying True for a
+          fully understood reason.
+        * ``inert[...]`` -- the two knobs an inert configuration disables, stepped
+          under it. Inert here and live in the rows above is what says the column
+          reports inertness rather than being stuck on one answer.
+        """
+        out = [
+            dereverb_control(
+                f"BASE-VS-INERT[{knob}={value:g}]",
+                f"dereverb defaults against {knob}={value:g}, which makes the subtraction "
+                f"stage an identity map",
+                item,
+                {},
+                dict(inert),
+            )
+            for inert in DEREVERB_INERT_CONFIGS
+            for knob, value in inert.items()
+        ]
+        first, second = DEREVERB_INERT_CONFIGS
+        out.append(
+            dereverb_control(
+                "INERT-AGREE",
+                "dereverb's two identity-map configurations against each other",
+                item,
+                dict(first),
+                dict(second),
+            )
+        )
+        for inert in DEREVERB_INERT_CONFIGS:
+            held = next(iter(inert))
+            for knob in DEREVERB_DISABLED_BY_INERT:
+                low, high, how = _dereverb_step(knob, defaults[knob])
+                for sign, value in (("-", low), ("+", high)):
+                    out.append(
+                        dereverb_control(
+                            f"inert[{held}].{knob}{sign}",
+                            f"dereverb {knob} {defaults[knob]:g} -> {value:g} ({how}) under "
+                            f"{held}={inert[held]:g}",
+                            item,
+                            dict(inert, **{knob: defaults[knob]}),
+                            dict(inert, **{knob: value}),
+                        )
+                    )
+        return out
+
     cases: list[Case] = []
     for item in (STEP_NOISE_ITEM, SPEECH_ITEM):
         cases += denoise_steps("gain_floor", 0.05, item, {})
         cases += denoise_steps("over_subtraction", 2.0, item, spectral)
         cases += denoise_steps("spectral_floor", 0.05, item, spectral)
         cases += denoise_steps("noise_estimation_quantile", 0.1, item, {})
+    for item in (STEP_REVERB_ITEM, STEP_REVERB_TONAL_ITEM):
+        for knob in DEREVERB_STEP_KIND:
+            cases += dereverb_steps(knob, item)
+        cases += dereverb_controls(item)
     for item in (SPEECH_ITEM, COMMON_ITEM):
         cases += chain_steps("ceilingDb", PRESET_CEILING_DB, item)
         cases += chain_steps("targetLufs", PRESET_TARGET_LUFS, item)
@@ -596,24 +887,38 @@ def evaluate(
     already called a correct restoration a regression on a tonal item -- so a
     non-speech row carries null and the reason rather than a number that would
     then have to be argued away.
+
+    The four restoration metrics are defined here on one channel and abstain the
+    same way on a multi-channel feed. Averaging them over channels would be a
+    definition this harness invented, and the C++ twin they are pinned against
+    takes one channel too. The four chain metrics take the feed whole.
     """
     n = min(reference.shape[0], source.shape[0], output.shape[0])
     ref, src, out = reference[:n], source[:n], output[:n]
 
-    report = metrics_repair.segmental_snr_report(ref, out, sample_rate)
+    one_channel = _channels(out) == 1
+    report = metrics_repair.segmental_snr_report(ref, out, sample_rate) if one_channel else None
     values: dict[str, Any] = {
-        "seg_snr_db": float(report.value),
-        "log_kurtosis_ratio": float(metrics_repair.log_kurtosis_ratio(src, out, sample_rate)),
+        "seg_snr_db": float(report.value) if report is not None else None,
+        "log_kurtosis_ratio": (
+            float(metrics_repair.log_kurtosis_ratio(src, out, sample_rate))
+            if one_channel
+            else None
+        ),
         "stoi": (
             _maybe(
                 lambda: float(
                     metrics_repair.short_time_objective_intelligibility(ref, out, sample_rate)
                 )
             )
-            if speech_bearing
+            if speech_bearing and one_channel
             else None
         ),
-        "log_spectral_distance": float(metrics_repair.log_spectral_distance(ref, out, sample_rate)),
+        "log_spectral_distance": (
+            float(metrics_repair.log_spectral_distance(ref, out, sample_rate))
+            if one_channel
+            else None
+        ),
         "integrated_lufs": float(metrics_chain.integrated_loudness(out, sample_rate)),
         "true_peak_dbtp": float(metrics_chain.true_peak_dbtp(out, sample_rate)),
         "short_term_spread": float(metrics_chain.short_term_spread(out, sample_rate)),
@@ -621,6 +926,9 @@ def evaluate(
             float(v) for v in metrics_chain.band_energy_delta(src, out, sample_rate)
         ],
     }
+    if report is None:
+        values["seg_snr_saturation"] = None
+        return values
     values["seg_snr_saturation"] = {
         "active_frames": int(report.active_frames),
         "ceiling_frames": int(report.ceiling_frames),
@@ -638,6 +946,17 @@ def _maybe(call: Callable[[], float]) -> float | None:
         return call()
     except NotImplementedError:
         return None
+
+
+def _inapplicable(speech_bearing: bool, channels: int) -> dict[str, str]:
+    """Which metrics this row could not read, each with the reason it could not."""
+    absent: dict[str, str] = {}
+    if not speech_bearing:
+        absent["stoi"] = NOT_SPEECH_BEARING
+    if channels > 1:
+        for metric in ONE_CHANNEL_METRICS:
+            absent[metric] = NOT_ONE_CHANNEL.format(channels=channels)
+    return absent
 
 
 def _delta(before: Any, after: Any) -> Any:
@@ -658,8 +977,8 @@ def measure(case: Case, manifest: dict, root: Path, draw: int = 0) -> dict:
     item = next(i for i in manifest["items"] if i["id"] == case.item)
     draws, clean, sample_rate = load_item(root, item)
     audio = draws[draw]
-    feed = mono_feeds(audio)[case.feed]
-    reference = mono_feeds(clean)[case.feed] if clean is not None else feed
+    feed = feeds(audio)[case.feed]
+    reference = feeds(clean)[case.feed] if clean is not None else feed
     reference_kind = "clean_reference" if clean is not None else "processor_input"
     speech = bool(item.get("speech_bearing", False))
 
@@ -686,13 +1005,14 @@ def measure(case: Case, manifest: dict, root: Path, draw: int = 0) -> dict:
         "family": case.family,
         "item": case.item,
         "feed": case.feed,
+        "channels": _channels(feed),
         "sample_rate": sample_rate,
         "reference": reference_kind,
         "draw": draw,
         "draw_count": len(draws),
         "downmix": DOWNMIX if case.feed == "downmix" else None,
         "speech_bearing": speech,
-        "inapplicable_metrics": ({} if speech else {"stoi": NOT_SPEECH_BEARING}),
+        "inapplicable_metrics": _inapplicable(speech, _channels(feed)),
         "expected": list(case.expected),
         "settings": case.settings,
         "seconds": round(processed_seconds, 3),
@@ -730,8 +1050,8 @@ def ensemble(case: Case, manifest: dict, root: Path) -> dict | None:
 
     per_draw = []
     for audio in draws:
-        feed = mono_feeds(audio)[case.feed]
-        reference = mono_feeds(clean)[case.feed] if clean is not None else feed
+        feed = feeds(audio)[case.feed]
+        reference = feeds(clean)[case.feed] if clean is not None else feed
         out = case.baseline(feed, sample_rate)
         per_draw.append(evaluate(reference, feed, out, sample_rate, speech_bearing=speech))
 
@@ -756,6 +1076,7 @@ def ensemble(case: Case, manifest: dict, root: Path) -> dict | None:
         "case": case.key,
         "item": case.item,
         "feed": case.feed,
+        "channels": _channels(feed),
         "draws": len(draws),
         "speech_bearing": speech,
         "settings": case.settings,
@@ -783,39 +1104,6 @@ def print_table(rows: list[dict], title: str, delta_key: str = "delta") -> None:
     for row in rows:
         cells = [_cell(m, row[delta_key][m]) for m in SCALAR_METRICS + VECTOR_METRICS]
         print(" | ".join([row["case"], *cells]))
-
-
-def provenance() -> dict:
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args],
-            cwd=HERE.parents[1],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout.strip()
-
-    status = git("status", "--porcelain")
-    # Which binary produced the numbers, not only which package was imported:
-    # the loader prefers build/lib/libsonare.dylib unless SONARE_LIB_PATH says
-    # otherwise, and a run that measured a stale dylib is indistinguishable from
-    # one that did not unless the path and its mtime are on the record.
-    dylib = os.environ.get("SONARE_LIB_PATH")
-    return {
-        "head": git("rev-parse", "HEAD"),
-        "head_committed": git("log", "-1", "--format=%cI"),
-        "status_src": [
-            line for line in status.splitlines() if " src/" in line or line[3:].startswith("src/")
-        ],
-        "status_all": status.splitlines(),
-        "package": getattr(libsonare, "__file__", None),
-        "sonare_lib_path": dylib,
-        "sonare_lib_mtime": (
-            time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(Path(dylib).stat().st_mtime))
-            if dylib and Path(dylib).exists()
-            else None
-        ),
-    }
 
 
 CORPUS_TREE_RECIPE = "find . -type f | sort | xargs shasum -a 256 | shasum -a 256"
@@ -892,7 +1180,7 @@ def main() -> int:
         default=HERE / "audio" / "manifest.json",
         help="the corpus manifest corpus.py wrote",
     )
-    parser.add_argument("--out", type=Path, default=HERE / "runs" / "w2-nonvacuity.json")
+    parser.add_argument("--out", type=Path, default=HERE / "runs" / "nonvacuity.json")
     parser.add_argument(
         "--table",
         choices=["home", "common", "speech", "steps", "all"],

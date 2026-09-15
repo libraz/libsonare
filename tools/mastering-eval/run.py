@@ -25,6 +25,9 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import math
+import os
+import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -195,6 +198,21 @@ def _denoise_params(_defect: dict) -> dict:
     return {}
 
 
+def _dereverb_params(defect: dict) -> dict:
+    """Hand over the reverberation time the file carries, not the one requested.
+
+    The planter's envelope decays 60 dB in T60, which is the decay law the
+    dereverberator assumes when it turns ``t60_sec`` into a late-power estimate,
+    so the measured T30 and the knob are one quantity. ``late_delay_ms`` is not:
+    the planted predelay is where the tail starts, not the mixing time past which
+    it is diffuse, so the library's own default stands and the row does not claim
+    a planted value for it.
+    """
+    measured = defect.get("t60_measured_sec")
+    usable = measured is not None and math.isfinite(measured)
+    return {"t60_sec": float(measured if usable else defect["t60_requested_sec"])}
+
+
 # Which planted quantities each processor is handed, so a row can say whether it
 # was given the answer. An empty tuple means the processor ran on its defaults.
 REPAIR_JOBS: dict[str, tuple[str, Callable[[dict], dict], tuple[str, ...]]] = {
@@ -202,6 +220,7 @@ REPAIR_JOBS: dict[str, tuple[str, Callable[[dict], dict], tuple[str, ...]]] = {
     "hum": ("mastering_repair_dehum", _dehum_params, ("fundamental_hz", "harmonic_count")),
     "clip": ("mastering_repair_declip", _declip_params, ("threshold_in_file",)),
     "noise": ("mastering_repair_denoise_classical", _denoise_params, ()),
+    "reverb": ("mastering_repair_dereverb_classical", _dereverb_params, ("t60_measured_sec",)),
 }
 
 
@@ -560,6 +579,53 @@ def as_baseline(rows: list[dict]) -> dict:
     return baseline
 
 
+def provenance() -> dict:
+    """Which tree and which binary produced a set of numbers.
+
+    Lives here rather than beside either caller because a ledger and a gate run
+    have to record it the same way: two spellings of the same fact read as two
+    different facts a month later. ``nonvacuity`` and ``write_baseline`` both
+    take it from here.
+
+    ``status_src`` and ``status_all`` are the point. A run measured on a dirty
+    tree is not the commit it names, and nothing in the repository's history can
+    say afterwards what was uncommitted at the time -- so it is recorded now or
+    it is unknown forever.
+    """
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+
+    status = git("status", "--porcelain")
+    # Which binary produced the numbers, not only which package was imported:
+    # the loader prefers build/lib/libsonare.dylib unless SONARE_LIB_PATH says
+    # otherwise, and a run that measured a stale dylib is indistinguishable from
+    # one that did not unless the path and its mtime are on the record.
+    dylib = os.environ.get("SONARE_LIB_PATH")
+    return {
+        "recorded": True,
+        "head": git("rev-parse", "HEAD"),
+        "head_committed": git("log", "-1", "--format=%cI"),
+        "status_src": [
+            line for line in status.splitlines() if " src/" in line or line[3:].startswith("src/")
+        ],
+        "status_all": status.splitlines(),
+        "package": getattr(libsonare, "__file__", None),
+        "sonare_lib_path": dylib,
+        "sonare_lib_mtime": (
+            time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(Path(dylib).stat().st_mtime))
+            if dylib and Path(dylib).exists()
+            else None
+        ),
+    }
+
+
 def _metric_module(name: str) -> ModuleType:
     """Import one metric module, naming what a caller must supply if it is absent."""
     try:
@@ -664,6 +730,7 @@ def run(
         "families": list(families),
         "unavailable_metrics": unavailable,
         "saturation_probe": probes,
+        "provenance": provenance(),
         "rows": rows,
         "skipped": skipped,
     }

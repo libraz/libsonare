@@ -3,10 +3,9 @@
 energy delta.
 
 Every level these four report is measured by the library's own meters, reached through the Python
-binding. What this module adds is the three things the binding does not publish: the
-channel-summed short-term loudness *series* (``sonare_short_term_lufs`` takes a mono buffer and has
-no interleaved counterpart), the spread reduction over that series, and the resample of a long-term
-spectrum onto the 32 logarithmic band centres. None of it is a second implementation of a meter.
+binding. What this module adds is the two things the binding does not publish: the spread reduction
+over the short-term series, and the resample of a long-term spectrum onto the 32 logarithmic band
+centres. None of it is a second implementation of a meter.
 
 Unlike ``metrics_repair`` this module has no C++ twin pinned to it, because the arithmetic that
 could drift already lives inside the library and both languages call it.
@@ -36,12 +35,11 @@ movement other than the applied gain is what it catches.
 
 **Short-term loudness spread.** The population standard deviation, in LU, of the BS.1770-4
 short-term loudness series -- 3 s windows on a 100 ms hop -- over the blocks that survive the
-absolute gate at :data:`ABSOLUTE_GATE_LUFS`. A block's channel-summed energy is reconstructed from
-the per-channel series the binding does publish: every block index covers the same window in every
-channel, and mono and stereo layouts carry unit BS.1770 channel weights, so summing the per-channel
-energies reproduces the sum the multi-channel meter would have formed. Fewer than two surviving
-blocks gives NaN, which is what a signal shorter than 3.1 s yields: short-term emits no partial
-window.
+absolute gate at :data:`ABSOLUTE_GATE_LUFS`. The series comes from
+``libsonare.lufs_series_interleaved``, which sums the K-weighted per-channel block energies the way
+the standard specifies, so the channel weighting and the LFE exclusion of a surround layout are the
+library's rather than this module's. Fewer than two surviving blocks gives NaN, which is what a
+signal shorter than 3.1 s yields: short-term emits no partial window.
 
 *Why this is not the loudness range.* LRA is an inter-percentile range (P95 - P10) over a
 distribution a second, relative gate has already trimmed 20 LU below its own mean, so it reads two
@@ -99,10 +97,6 @@ TRUE_PEAK_OVERSAMPLE = 4
 
 ABSOLUTE_GATE_LUFS = -70.0
 """Blocks below this are not measurements. Mirrors ``metering::kLufsAbsoluteGate``."""
-
-LOUDNESS_OFFSET_DB = -0.691
-"""BS.1770-4 loudness offset, mirroring ``rt::kLoudnessOffset``. Only used to take a published
-short-term value back to the block energy it was formed from."""
 
 # Sentinel the Python binding reads as "use the library's own default" for the spectrum's dB
 # reference and floor.
@@ -184,19 +178,11 @@ def _short_term_series(
     feed: npt.NDArray[np.float64], sample_rate: float
 ) -> npt.NDArray[np.float64]:
     """The channel-summed BS.1770-4 short-term loudness series in LUFS."""
-    channels = feed.shape[1]
-    per_channel = [
-        np.asarray(libsonare.short_term_lufs(_channel(feed, index), int(sample_rate)), dtype=float)
-        for index in range(channels)
-    ]
-    if channels == 1:
-        return per_channel[0]
-    energies = np.zeros_like(per_channel[0])
-    for series in per_channel:
-        block_energy = 10.0 ** ((series - LOUDNESS_OFFSET_DB) / 10.0)
-        energies += np.where(np.isfinite(series), block_energy, 0.0)
-    with np.errstate(divide="ignore"):
-        return LOUDNESS_OFFSET_DB + 10.0 * np.log10(energies)
+    interleaved = np.ascontiguousarray(feed.reshape(-1), dtype=np.float32)
+    _, short_term = libsonare.lufs_series_interleaved(
+        interleaved, feed.shape[1], int(sample_rate)
+    )
+    return np.asarray(short_term, dtype=float)
 
 
 def integrated_loudness(x: npt.ArrayLike, sample_rate: float) -> float:

@@ -2,12 +2,12 @@
   "meta": {
     "schema": 1,
     "contract": "tools/mastering-eval/docs/objective.md",
-    "head": "e61167d4166b3152b4b374d78ffcd98b88b0c3f7",
-    "library": "build-mr-w2-shared/lib/libsonare.dylib (Release, BUILD_SHARED=ON)",
+    "head": "19f607387a105bb496d824fd850562614a243f92",
+    "library": "build-python-shared/lib/libsonare.dylib (Release, BUILD_SHARED=ON)",
     "corpus_seed": 20250915,
-    "corpus_digest": "e6cde34d093b2d79bef654925bf8679ff56f7a440cc5bd2c42f08c6abd4e7c9c",
-    "corpus_digest_paths": 53,
-    "corpus_tree_digest": "447ef8e181094f469e9022ae37684d8f8b73dd5351dcc64f40b2785f6f3fcf47",
+    "corpus_digest": "52efff6dc7e3c3792f8d309aa79d963446c589de451f9b2ee2d5d63b5840d4f0",
+    "corpus_digest_paths": 59,
+    "corpus_tree_digest": "5bb75f6ba6b3616f0c9df05887028a7a074dbe482e0d11b090fa869a5557f707",
     "preset": "pop",
     "downmix": "mid_mean",
     "unavailable_metrics": {},
@@ -17,8 +17,45 @@
       },
       "mastering": {}
     },
-    "non_vacuity_run": "../../tools/mastering-eval/runs/w2-nonvacuity.json",
-    "non_vacuity_corpus_tree_digest": "447ef8e181094f469e9022ae37684d8f8b73dd5351dcc64f40b2785f6f3fcf47",
+    "numbers_provenance": {
+      "recorded": false,
+      "head": null,
+      "head_committed": null,
+      "status_src": null,
+      "status_all": null,
+      "package": null,
+      "sonare_lib_path": null,
+      "sonare_lib_mtime": null,
+      "why": "the ledger this was read from carries no provenance block, so the tree and the binary these numbers were measured on were not recorded. Unknown, not clean, and not fillable later: that tree state is not in the repository's history"
+    },
+    "non_vacuity_run": "../../tools/mastering-eval/runs/nonvacuity.json",
+    "non_vacuity_corpus_tree_digest": "5bb75f6ba6b3616f0c9df05887028a7a074dbe482e0d11b090fa869a5557f707",
+    "gate_provenance": {
+      "head": "19f607387a105bb496d824fd850562614a243f92",
+      "head_committed": "2026-09-15T10:42:05+09:00",
+      "status_src": [],
+      "status_all": [
+        "M tools/mastering-eval/README.md",
+        " M tools/mastering-eval/baseline.json",
+        " M tools/mastering-eval/corpus.py",
+        " M tools/mastering-eval/docs/objective.md",
+        " M tools/mastering-eval/metrics_chain.py",
+        " M tools/mastering-eval/nonvacuity.py",
+        " M tools/mastering-eval/run.py",
+        " M tools/mastering-eval/write_baseline.py",
+        " M tools/parity/README.md",
+        " M tools/parity/allowlist.py",
+        " M tools/parity/allowlist.toml",
+        " M tools/parity/check_parity.py",
+        " M tools/parity/compare.py",
+        " M tools/parity/report.py",
+        " M tools/parity/test_allowlist_audit.py"
+      ],
+      "package": "/Users/libraz/Projects/libsonare/bindings/python/src/libsonare/__init__.py",
+      "sonare_lib_path": "/Users/libraz/Projects/libsonare/build-python-shared/lib/libsonare.dylib",
+      "sonare_lib_mtime": "2026-09-15T09:47:07",
+      "recorded": true
+    },
     "thresholds": {
       "regression": {
         "rule": "any_worsening_fails",
@@ -27,7 +64,7 @@
       },
       "restoration": {
         "basis": "redraw_floor",
-        "basis_source": "runs/w2-nonvacuity.json#ensembles (5 draws per item, processing held fixed)",
+        "basis_source": "runs/nonvacuity.json#ensembles (5 draws per item, processing held fixed). The same run supplies the steps table, so a floor and the response read against it come from one corpus; a gate ledger carrying only one of the two leaves resolution unreadable",
         "seg_snr_db": {
           "improvement": 1.0,
           "unit": "dB",
@@ -2076,6 +2113,312 @@
         "fundamental_hz": 50.0,
         "harmonics": 4
       }
+    },
+    "restoration/speech_reverb_short/reverb/mastering_repair_dereverb_classical/downmix": {
+      "metrics": {
+        "seg_snr_db": 2.126183441788195,
+        "log_kurtosis_ratio": 0.9884132445552657,
+        "stoi": 0.8125319819205773,
+        "log_spectral_distance": 12.504194088566575
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 0.07882552840616253,
+        "log_kurtosis_ratio": -0.011586755444734309,
+        "stoi": 0.004471503974328939,
+        "log_spectral_distance": -0.23797045602461608
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 251,
+          "ceiling_frames": 1,
+          "floor_frames": 34,
+          "ceiling_fraction": 0.003984,
+          "floor_fraction": 0.135458,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "downmix",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 0.351038
+      }
+    },
+    "restoration/speech_reverb_short/reverb/mastering_repair_dereverb_classical/left": {
+      "metrics": {
+        "seg_snr_db": 2.126183551347814,
+        "log_kurtosis_ratio": 0.9884531080135641,
+        "stoi": 0.8125319841784867,
+        "log_spectral_distance": 12.550458287382629
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 0.07882553684461868,
+        "log_kurtosis_ratio": -0.011546891986435881,
+        "stoi": 0.004471506633011768,
+        "log_spectral_distance": -0.2384100375605005
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 251,
+          "ceiling_frames": 1,
+          "floor_frames": 34,
+          "ceiling_fraction": 0.003984,
+          "floor_fraction": 0.135458,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "left",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 0.351038
+      }
+    },
+    "restoration/speech_reverb_short/reverb/mastering_repair_dereverb_classical/right": {
+      "metrics": {
+        "seg_snr_db": 2.1261833261749086,
+        "log_kurtosis_ratio": 0.9883731417269176,
+        "stoi": 0.81253198295021,
+        "log_spectral_distance": 12.456441703673095
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 0.07882552009006183,
+        "log_kurtosis_ratio": -0.011626858273082408,
+        "stoi": 0.004471504582396868,
+        "log_spectral_distance": -0.2375109747664581
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 251,
+          "ceiling_frames": 1,
+          "floor_frames": 34,
+          "ceiling_fraction": 0.003984,
+          "floor_fraction": 0.135458,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "right",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 0.351038
+      }
+    },
+    "restoration/speech_reverb_long/reverb/mastering_repair_dereverb_classical/downmix": {
+      "metrics": {
+        "seg_snr_db": -0.04100995102216876,
+        "log_kurtosis_ratio": 0.9647217179123599,
+        "stoi": 0.8206935517233753,
+        "log_spectral_distance": 17.024392756657125
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 0.7750352077401625,
+        "log_kurtosis_ratio": -0.035278282087640056,
+        "stoi": 0.02078452851081969,
+        "log_spectral_distance": -0.649505506090204
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 250,
+          "ceiling_frames": 1,
+          "floor_frames": 52,
+          "ceiling_fraction": 0.004,
+          "floor_fraction": 0.208,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "downmix",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 1.203837
+      }
+    },
+    "restoration/speech_reverb_long/reverb/mastering_repair_dereverb_classical/left": {
+      "metrics": {
+        "seg_snr_db": -0.08068721744989561,
+        "log_kurtosis_ratio": 0.9647276649380566,
+        "stoi": 0.820693559906441,
+        "log_spectral_distance": 17.075002784461105
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 0.7719473949659795,
+        "log_kurtosis_ratio": -0.03527233506194338,
+        "stoi": 0.020784524678871708,
+        "log_spectral_distance": -0.6499083885366055
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 251,
+          "ceiling_frames": 1,
+          "floor_frames": 53,
+          "ceiling_fraction": 0.003984,
+          "floor_fraction": 0.211155,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "left",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 1.203837
+      }
+    },
+    "restoration/speech_reverb_long/reverb/mastering_repair_dereverb_classical/right": {
+      "metrics": {
+        "seg_snr_db": -0.04100998183852215,
+        "log_kurtosis_ratio": 0.964715123138521,
+        "stoi": 0.82069354154683,
+        "log_spectral_distance": 16.972044117060605
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 0.775035185291481,
+        "log_kurtosis_ratio": -0.035284876861478964,
+        "stoi": 0.020784531064830025,
+        "log_spectral_distance": -0.6490850892980156
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 250,
+          "ceiling_frames": 1,
+          "floor_frames": 52,
+          "ceiling_fraction": 0.004,
+          "floor_fraction": 0.208,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "right",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 1.203837
+      }
+    },
+    "restoration/chord_reverb_long/reverb/mastering_repair_dereverb_classical/downmix": {
+      "metrics": {
+        "seg_snr_db": -1.3816745008298297,
+        "log_kurtosis_ratio": 1.0353176290354442,
+        "log_spectral_distance": 4.754625598885726
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 1.2921433036010332,
+        "log_kurtosis_ratio": 0.03531762903544422,
+        "log_spectral_distance": -0.12599813953954708
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 374,
+          "ceiling_frames": 1,
+          "floor_frames": 0,
+          "ceiling_fraction": 0.002674,
+          "floor_fraction": 0.0,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {
+        "stoi": "material is not speech-bearing"
+      },
+      "speech_bearing": false,
+      "feed": "downmix",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 1.208997
+      }
+    },
+    "restoration/chord_reverb_long/reverb/mastering_repair_dereverb_classical/left": {
+      "metrics": {
+        "seg_snr_db": -1.3881675171555814,
+        "log_kurtosis_ratio": 1.040005211741028,
+        "log_spectral_distance": 5.337561605239671
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 1.2566676304963822,
+        "log_kurtosis_ratio": 0.04000521174102789,
+        "log_spectral_distance": -0.15237154767334005
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 374,
+          "ceiling_frames": 1,
+          "floor_frames": 0,
+          "ceiling_fraction": 0.002674,
+          "floor_fraction": 0.0,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {
+        "stoi": "material is not speech-bearing"
+      },
+      "speech_bearing": false,
+      "feed": "left",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 1.208997
+      }
+    },
+    "restoration/chord_reverb_long/reverb/mastering_repair_dereverb_classical/right": {
+      "metrics": {
+        "seg_snr_db": -1.3892025304114226,
+        "log_kurtosis_ratio": 1.0466021908370609,
+        "log_spectral_distance": 6.454993209828903
+      },
+      "metrics_sd": null,
+      "delta": {
+        "seg_snr_db": 1.2632924088600819,
+        "log_kurtosis_ratio": 0.04660219083706085,
+        "log_spectral_distance": -0.1863929946819498
+      },
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {
+        "seg_snr_db": {
+          "active_frames": 374,
+          "ceiling_frames": 1,
+          "floor_frames": 0,
+          "ceiling_fraction": 0.002674,
+          "floor_fraction": 0.0,
+          "saturated": false
+        }
+      },
+      "inapplicable_metrics": {
+        "stoi": "material is not speech-bearing"
+      },
+      "speech_bearing": false,
+      "feed": "right",
+      "entry_point": "mastering_repair_dereverb_classical",
+      "params": {
+        "t60_sec": 1.208997
+      }
     }
   },
   "mastering": {
@@ -3770,8 +4113,8 @@
           "output": -0.9999834895133972
         },
         "short_term_spread": {
-          "input": 4.373281079906937,
-          "output": 3.58598698337266
+          "input": 4.373281093910283,
+          "output": 3.5859869372787534
         },
         "band_energy_delta": [
           0.9317838062232653,
@@ -3883,6 +4226,378 @@
         "preset": "pop"
       }
     },
+    "mastering/speech_reverb_short/-/master_audio_stereo/stereo": {
+      "metrics": {
+        "integrated_lufs": {
+          "input": -16.297027587890625,
+          "output": -14.39863109588623
+        },
+        "true_peak_dbtp": {
+          "input": -0.9056464433670044,
+          "output": -0.9983524680137634
+        },
+        "short_term_spread": {
+          "input": 0.25310706475879313,
+          "output": 0.10591987997686565
+        },
+        "band_energy_delta": [
+          -0.1130284484116757,
+          0.1875755845855167,
+          0.654023510744068,
+          1.2361641281633453,
+          1.0251303042848363,
+          0.21223514911916652,
+          0.041720427670760785,
+          -0.04082324407893623,
+          0.051635439558204155,
+          0.897667074722591,
+          0.04295820125228289,
+          0.21624143648416094,
+          0.20903749098754787,
+          0.2428120729262062,
+          0.14366145556887489,
+          0.28402233748726147,
+          -0.12904491480740532,
+          0.5804855865665957,
+          0.6949547195648549,
+          0.8840835954178061,
+          1.3926062521970195,
+          1.547444126820956,
+          1.6864065151878904,
+          1.709599480019243,
+          1.1364927037736265,
+          0.782853235855896,
+          0.6047415400961569,
+          0.6642578587011343,
+          0.6329526932494645,
+          0.5126487353653317,
+          -0.18737840322987154,
+          -3.436285589593595
+        ]
+      },
+      "metrics_sd": null,
+      "delta": null,
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {},
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "stereo",
+      "entry_point": "master_audio_stereo",
+      "params": {
+        "preset": "pop"
+      }
+    },
+    "mastering/speech_reverb_short/-/master_audio/downmix": {
+      "metrics": {
+        "integrated_lufs": {
+          "input": -19.31092071533203,
+          "output": -15.666356086730957
+        },
+        "true_peak_dbtp": {
+          "input": -1.1520488262176514,
+          "output": -0.9983298182487488
+        },
+        "short_term_spread": {
+          "input": 0.25310723557246256,
+          "output": 0.09210640630149698
+        },
+        "band_energy_delta": [
+          0.03059009568870863,
+          0.42316863807123184,
+          1.0326320436299667,
+          1.793259587464334,
+          1.4245119549998435,
+          0.1917859811532665,
+          -0.08750165799925469,
+          -0.14677366168783834,
+          0.09145011536960368,
+          0.7765400319910825,
+          -0.1017091666735439,
+          0.2950732101121716,
+          0.10485324415255093,
+          0.22860957624219935,
+          0.02018762517656114,
+          0.3164713173225664,
+          -0.1495369296931166,
+          0.5457360594176635,
+          0.6405987709377854,
+          0.9201410315126282,
+          1.3525108879182781,
+          1.615701131762016,
+          1.7350881278275594,
+          1.7408575905466392,
+          1.196467337916701,
+          0.8357465249099221,
+          0.6770403855435916,
+          0.7138505203495811,
+          0.6712791991490406,
+          0.584051917005354,
+          -0.1322821614005818,
+          -3.3987960815429688
+        ]
+      },
+      "metrics_sd": null,
+      "delta": null,
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {},
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "downmix",
+      "entry_point": "master_audio",
+      "params": {
+        "preset": "pop"
+      }
+    },
+    "mastering/speech_reverb_long/-/master_audio_stereo/stereo": {
+      "metrics": {
+        "integrated_lufs": {
+          "input": -16.27366828918457,
+          "output": -14.154213905334473
+        },
+        "true_peak_dbtp": {
+          "input": -0.9005321264266968,
+          "output": -0.9998823404312134
+        },
+        "short_term_spread": {
+          "input": 0.07798839266615183,
+          "output": 0.07328604551839774
+        },
+        "band_energy_delta": [
+          -0.3609248961111504,
+          0.032550465301724785,
+          0.6411385423947991,
+          1.400673828343173,
+          1.2451228477934393,
+          0.40422917119602886,
+          0.10754412143920433,
+          0.03310515525850377,
+          0.08571231990399752,
+          0.021294813152749725,
+          -0.1788917671104997,
+          -0.10277360331747332,
+          0.13476257920110157,
+          0.12254183873313451,
+          -0.03783712969775621,
+          0.04712004368774103,
+          -0.09325029556639919,
+          0.33002151236905775,
+          0.5392203641931133,
+          0.766852344330502,
+          1.0946487554128268,
+          1.40470357196795,
+          1.5082181025298382,
+          1.3522699936015172,
+          0.9320317784004573,
+          0.6214628618572817,
+          0.455088514985988,
+          0.4381217590982516,
+          0.37306651316357886,
+          0.27414797316785666,
+          -0.4110542524339422,
+          -3.6079958558205476
+        ]
+      },
+      "metrics_sd": null,
+      "delta": null,
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {},
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "stereo",
+      "entry_point": "master_audio_stereo",
+      "params": {
+        "preset": "pop"
+      }
+    },
+    "mastering/speech_reverb_long/-/master_audio/downmix": {
+      "metrics": {
+        "integrated_lufs": {
+          "input": -19.287561416625977,
+          "output": -14.896822929382324
+        },
+        "true_peak_dbtp": {
+          "input": -1.1469345092773438,
+          "output": -0.9997400641441345
+        },
+        "short_term_spread": {
+          "input": 0.07798808360952042,
+          "output": 0.08448602571972363
+        },
+        "band_energy_delta": [
+          -0.020725979403714234,
+          0.44508065645330674,
+          1.1646517307017845,
+          2.062696754944213,
+          1.7499621469651672,
+          0.5194528338886855,
+          0.11761835528533737,
+          0.0025671222508449887,
+          0.08529823849185192,
+          -0.010014852064415436,
+          -0.2794905400224721,
+          -0.07206262951048359,
+          0.2089319107914278,
+          0.10009254121953148,
+          -0.0753161802751876,
+          0.08276265572679975,
+          -0.12316150977255447,
+          0.32291028299245284,
+          0.5410723936934403,
+          0.764624619071995,
+          1.0951615376132793,
+          1.4335782778161175,
+          1.55178813471327,
+          1.3696601999625386,
+          0.997683555042201,
+          0.6776739943885559,
+          0.5030934451203564,
+          0.49245290781250617,
+          0.4148925818448106,
+          0.3152194434339606,
+          -0.3712115181195941,
+          -3.5549850463867188
+        ]
+      },
+      "metrics_sd": null,
+      "delta": null,
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {},
+      "inapplicable_metrics": {},
+      "speech_bearing": true,
+      "feed": "downmix",
+      "entry_point": "master_audio",
+      "params": {
+        "preset": "pop"
+      }
+    },
+    "mastering/chord_reverb_long/-/master_audio_stereo/stereo": {
+      "metrics": {
+        "integrated_lufs": {
+          "input": -7.573015213012695,
+          "output": -14.00001049041748
+        },
+        "true_peak_dbtp": {
+          "input": -0.9142596125602722,
+          "output": -4.441649436950684
+        },
+        "short_term_spread": {
+          "input": 0.4929070990166774,
+          "output": 0.23360037187113192
+        },
+        "band_energy_delta": [
+          1.8509519855780994,
+          1.8835398391107105,
+          1.9458826118857715,
+          2.0237014902259745,
+          1.974611099792682,
+          1.8278246329185137,
+          2.1650699851918063,
+          2.2892412232289203,
+          2.2016758737083677,
+          1.158433488447237,
+          -0.08186063143908306,
+          0.021748986997641495,
+          0.41434926540287975,
+          2.985942274435999,
+          2.178188358829516,
+          4.687122159210354,
+          6.907710580051713,
+          4.447126185830484,
+          6.896225379974496,
+          5.091282838617275,
+          5.19396772102067,
+          4.5559484816399305,
+          3.5972167403332094,
+          3.27076112738753,
+          2.7567354207994015,
+          2.385889367043333,
+          2.002837268780482,
+          1.8854839212185368,
+          1.780349414995328,
+          1.6963525102662658,
+          1.2268188430969644,
+          -0.8219198143903697
+        ]
+      },
+      "metrics_sd": null,
+      "delta": null,
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {},
+      "inapplicable_metrics": {},
+      "speech_bearing": false,
+      "feed": "stereo",
+      "entry_point": "master_audio_stereo",
+      "params": {
+        "preset": "pop"
+      }
+    },
+    "mastering/chord_reverb_long/-/master_audio/downmix": {
+      "metrics": {
+        "integrated_lufs": {
+          "input": -10.611296653747559,
+          "output": -14.00001049041748
+        },
+        "true_peak_dbtp": {
+          "input": -1.053814172744751,
+          "output": -1.751474142074585
+        },
+        "short_term_spread": {
+          "input": 0.4935371562747981,
+          "output": 0.2338770200275623
+        },
+        "band_energy_delta": [
+          1.8834382716580222,
+          1.913880775086973,
+          1.9736883735645492,
+          2.048329945671618,
+          1.9999073728337322,
+          1.8564940162585373,
+          2.186740243362202,
+          2.2978431950040843,
+          2.210774051398488,
+          1.1566693820569043,
+          -0.07467751666183631,
+          0.02094036511630648,
+          0.38396694834128553,
+          2.9504486097343516,
+          2.135413401379644,
+          4.818139088807783,
+          7.073282408671275,
+          4.439732580131036,
+          7.23418093550076,
+          5.290930048082785,
+          5.2962419306144,
+          4.534589809230553,
+          3.2991840519025573,
+          2.8535548247692333,
+          2.2208338110314116,
+          1.7749791408498083,
+          1.4556400384832244,
+          1.2911942895016608,
+          1.1808060691385833,
+          1.0995184387023471,
+          0.7507978555603785,
+          -0.8056640625
+        ]
+      },
+      "metrics_sd": null,
+      "delta": null,
+      "delta_sd": null,
+      "realizations": 1,
+      "saturation": {},
+      "inapplicable_metrics": {},
+      "speech_bearing": false,
+      "feed": "downmix",
+      "entry_point": "master_audio",
+      "params": {
+        "preset": "pop"
+      }
+    },
     "mastering/dynamic_sections/-/master_audio_stereo/stereo": {
       "metrics": {
         "integrated_lufs": {
@@ -3894,8 +4609,8 @@
           "output": -2.1216702461242676
         },
         "short_term_spread": {
-          "input": 4.620501128471054,
-          "output": 3.2412520599697943
+          "input": 4.620501130859327,
+          "output": 3.241252040626494
         },
         "band_energy_delta": [
           9.139352768515892,
@@ -4018,8 +4733,8 @@
           "output": -3.9525136947631836
         },
         "short_term_spread": {
-          "input": 5.266162094774568,
-          "output": 3.5416185114563725
+          "input": 5.266162084415049,
+          "output": 3.5416184648680433
         },
         "band_energy_delta": [
           9.251717368923067,
@@ -4142,8 +4857,8 @@
           "output": -0.9976968169212341
         },
         "short_term_spread": {
-          "input": 5.098612619273585,
-          "output": 3.8526812472033214
+          "input": 5.098612639926181,
+          "output": 3.852681264757303
         },
         "band_energy_delta": [
           0.1096139443776778,
@@ -4266,8 +4981,8 @@
           "output": -0.9972560405731201
         },
         "short_term_spread": {
-          "input": 0.35161889013034,
-          "output": 0.33360803837111097
+          "input": 0.35161907888223115,
+          "output": 0.3336080582548221
         },
         "band_energy_delta": [
           -0.02660424871287148,
@@ -4390,8 +5105,8 @@
           "output": -3.4918758869171143
         },
         "short_term_spread": {
-          "input": 2.5172205955396176e-05,
-          "output": 0.023313455311964534
+          "input": 2.5188641984069986e-05,
+          "output": 0.023313918522093705
         },
         "band_energy_delta": [
           0.977758122870469,
@@ -4514,8 +5229,8 @@
           "output": -6.744711399078369
         },
         "short_term_spread": {
-          "input": 0.06565379400418266,
-          "output": 0.01922875955595959
+          "input": 0.06565367300619894,
+          "output": 0.019228656186927318
         },
         "band_energy_delta": [
           0.7076272815551476,
@@ -4638,8 +5353,8 @@
           "output": -1.9482134580612183
         },
         "short_term_spread": {
-          "input": 0.0014628647249650775,
-          "output": 0.009426384561953109
+          "input": 0.001462777409329898,
+          "output": 0.009426283717909262
         },
         "band_energy_delta": [
           -0.02095740369465915,

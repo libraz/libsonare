@@ -5,10 +5,10 @@ One corpus serves both families (see ``docs/objective.md``). It has three
 halves, and they differ in what a measurement may conclude from them:
 
 ``synthetic``
-    Sine and chord beds crossed with clicks, hum, clipping and noise. Each item
-    ships a clean reference beside it and every planted defect's quantity in the
-    manifest, so a restoration metric has something to be measured against and a
-    detector has a known answer to be scored on.
+    Sine, chord and speech beds crossed with clicks, hum, clipping, noise and
+    reverberation. Each item ships a clean reference beside it and every planted
+    defect's quantity in the manifest, so a restoration metric has something to be
+    measured against and a detector has a known answer to be scored on.
 
 ``listening``
     The four long fixtures ``tools/mastering_generate_listening_corpus.py``
@@ -77,6 +77,23 @@ SHORT_TERM_WINDOW_SECONDS = 3.0
 # which count produces the sign one wants is the same defect as choosing the
 # seed that way.
 NOISE_REALIZATIONS = 5
+
+# How long the synthetic impulse response runs, in multiples of its own T60. At
+# one T60 the tail is already 60 dB down, so the half beyond it is what keeps the
+# truncation from landing inside the decay the fit reads.
+RIR_SPAN_IN_T60 = 1.5
+
+# The band the reverberation time is fitted over: ISO 3382's T30, which starts
+# below the direct sound and stops above the truncation.
+T60_FIT_UPPER_DB = -5.0
+T60_FIT_LOWER_DB = -35.0
+
+# How wet the reverberant items are, and where the tail starts. Equal direct and
+# reverberant energy is a distant source in a live room; the predelay sits under
+# the dereverberator's own 50 ms late-delay default so that the knob has both an
+# early and a late region to move between.
+REVERB_DRR_DB = 0.0
+REVERB_PREDELAY_MS = 20.0
 
 
 # ---------------------------------------------------------------- quantization
@@ -445,6 +462,103 @@ def plant_noise(
     return bed + noise, record
 
 
+def _schroeder_t60(rir: np.ndarray, sample_rate: int) -> float:
+    """Reverberation time from the impulse response's backward-integrated energy.
+
+    A T30 fit -- the slope between -5 and -35 dB on the decay curve, extrapolated
+    to 60 dB -- which is what ISO 3382 quotes when the curve does not stay
+    straight for the full 60. It is measured rather than assumed because the
+    planted number has to be the file's: the response is truncated, its first
+    milliseconds carry the direct sound rather than the tail, and neither is
+    visible in the requested value.
+    """
+    decay = np.cumsum((rir**2)[::-1])[::-1]
+    decay_db = 10.0 * np.log10(np.maximum(decay / decay[0], 1e-20))
+    seconds = np.arange(decay.size, dtype=np.float64) / sample_rate
+    inside = (decay_db <= T60_FIT_UPPER_DB) & (decay_db >= T60_FIT_LOWER_DB)
+    if int(inside.sum()) < 2:
+        return float("nan")
+    slope = float(np.polyfit(seconds[inside], decay_db[inside], 1)[0])
+    return -60.0 / slope
+
+
+def _synthetic_rir(
+    rng: np.random.Generator, *, t60_sec: float, drr_db: float, predelay_ms: float
+) -> np.ndarray:
+    """A direct impulse plus an exponentially decaying noise tail.
+
+    The envelope is ``exp(-3 ln10 t / T60)``, so the tail's *energy* is 60 dB
+    down at T60. That is the same decay law ``dereverb_classical`` assumes when
+    it turns its ``t60_sec`` knob into a late-power estimate, which is what makes
+    the planted quantity and the knob the same quantity rather than two numbers
+    that share a name.
+    """
+    frames = int(round(SAMPLE_RATE * t60_sec * RIR_SPAN_IN_T60))
+    seconds = np.arange(frames, dtype=np.float64) / SAMPLE_RATE
+    tail = rng.standard_normal(frames) * np.exp(-3.0 * np.log(10.0) * seconds / t60_sec)
+    tail[: int(round(SAMPLE_RATE * predelay_ms * 1.0e-3))] = 0.0
+    # The direct impulse carries unit energy, so the tail's total energy is the
+    # direct-to-reverberant ratio outright and the ratio is set rather than read.
+    tail *= np.sqrt(10.0 ** (-drr_db / 10.0) / float(np.sum(tail**2)))
+    tail[0] += 1.0
+    return tail
+
+
+def plant_reverb(
+    bed: np.ndarray,
+    rng: np.random.Generator,
+    *,
+    t60_sec: float,
+    drr_db: float,
+    predelay_ms: float,
+    peak: float = 0.9,
+) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Convolve the bed with a synthetic room, and return the pair on one scale.
+
+    Both channels get the same response, as the click and hum planters do. A
+    per-channel tail would be decorrelated, and the downmix's
+    direct-to-reverberant ratio would then sit below the recorded one by the
+    decorrelation gain -- a difference no row records.
+
+    This is the only planter that returns the clean side too. The reverberant sum
+    peaks above the bed, so it has to be brought back inside full scale, and the
+    factor belongs to the pair: applied to the dirty side alone it would be a
+    level change, which segmental SNR reads as damage by construction.
+
+    The tail is truncated at the bed's end rather than extending it, so both
+    sides keep the same frame count and the item ends mid-decay.
+
+    Two direct-to-reverberant ratios are recorded and they are different
+    quantities, not a request and its error. ``rir_drr_db`` belongs to the
+    impulse response and is exact; ``pair_drr_db`` is what the written pair
+    carries, and it sits lower on sustained material because a held note keeps
+    feeding the tail while the direct sound stays where it is.
+    """
+    rir = _synthetic_rir(rng, t60_sec=t60_sec, drr_db=drr_db, predelay_ms=predelay_ms)
+    frames = bed.shape[0]
+    wet = np.stack([np.convolve(bed[:, ch], rir)[:frames] for ch in range(bed.shape[1])], axis=1)
+    scale = peak / max(float(np.max(np.abs(wet))), float(np.max(np.abs(bed))))
+    clean, dirty = bed * scale, wet * scale
+
+    before, after = quantize(clean), quantize(dirty)
+    reverberant = after - before
+    record = {
+        "t60_requested_sec": t60_sec,
+        "t60_measured_sec": round(_schroeder_t60(rir, SAMPLE_RATE), 6),
+        "t60_measure": f"schroeder T30 ({T60_FIT_UPPER_DB:g} to {T60_FIT_LOWER_DB:g} dB) x2",
+        "rir_drr_db": drr_db,
+        "pair_drr_db": round(
+            10.0 * np.log10(float(np.mean(before**2)) / float(np.mean(reverberant**2))), 4
+        ),
+        "predelay_ms": predelay_ms,
+        "rir_seconds": round(rir.size / SAMPLE_RATE, 6),
+        "tail_dropped_samples": int(rir.size - 1),
+        "pair_scale": round(float(scale), 9),
+        "channels": "both",
+    }
+    return clean, dirty, record
+
+
 # -------------------------------------------------------------- item builders
 
 
@@ -772,6 +886,55 @@ def build_speech(out_dir: Path, seed: int) -> list[dict]:
     return entries
 
 
+def build_reverb(out_dir: Path, seed: int) -> list[dict]:
+    """Reverberant material, for the defect the other builders do not plant.
+
+    A dereverberator's knobs are only reachable on a signal that has a tail. Swept
+    over dry material every one of them reads as inert, which makes a knob that is
+    wired indistinguishable from one that is not -- the reading is empty rather
+    than red, and it is the failure this half of the corpus exists to prevent.
+
+    Three items. Two speech beds differing in nothing but reverberation time, so a
+    response can be read against the planted quantity rather than against a single
+    condition; and one tonal bed, so that response is not read off one talker. The
+    two speech items are the only reverberant rows STOI may be read on.
+
+    All three run past the 3 s short-term window, which is what leaves every
+    metric column live on the speech pair instead of null.
+    """
+    seconds = 4.0
+    entries: list[dict] = []
+
+    conditions = (
+        ("speech_reverb_short", "speech", True, 0.35),
+        ("speech_reverb_long", "speech", True, 1.20),
+        ("chord_reverb_long", "chord", False, 1.20),
+    )
+    for index, (item_id, bed_name, speech, t60_sec) in enumerate(conditions):
+        bed = speech_bed(seconds, peak=0.5) if speech else _peak_normalize(chord_bed(seconds), 0.5)
+        clean, dirty, reverb = plant_reverb(
+            bed,
+            np.random.default_rng([seed, 200 + index]),
+            t60_sec=t60_sec,
+            drr_db=REVERB_DRR_DB,
+            predelay_ms=REVERB_PREDELAY_MS,
+        )
+        entries.append(
+            _synthetic_entry(
+                out_dir,
+                item_id,
+                bed_name,
+                seconds,
+                clean,
+                dirty,
+                {"reverb": reverb},
+                [seed, 200 + index],
+                speech,
+            )
+        )
+    return entries
+
+
 def _dynamics_entry(
     out_dir: Path, item_id: str, bed_name: str, seconds: float, audio: np.ndarray
 ) -> dict:
@@ -991,6 +1154,12 @@ def generate(out_dir: Path, *, seed: int, listening: bool) -> dict:
     speech = build_speech(out_dir, seed)
     items += speech
     print(f"  {len(speech)} items in {time.perf_counter() - started:.2f}s")
+
+    started = time.perf_counter()
+    print("reverb:")
+    reverb = build_reverb(out_dir, seed)
+    items += reverb
+    print(f"  {len(reverb)} items in {time.perf_counter() - started:.2f}s")
 
     started = time.perf_counter()
     print("dynamics:")
