@@ -206,11 +206,11 @@ inline int64_t node_arg_int64(const Napi::CallbackInfo& info, size_t index, int6
   return node_narrow_int64(info.Env(), info[index], node_arg_label(index).c_str());
 }
 
-/// @brief Read a float positional argument, falling back if absent or non-number.
+/// @brief Read a float positional argument, falling back if absent or non-number,
+///        and refusing a number no 32-bit float can hold (@ref node_narrow_float).
 inline float node_arg_float(const Napi::CallbackInfo& info, size_t index, float fallback) {
-  return index < info.Length() && info[index].IsNumber()
-             ? info[index].As<Napi::Number>().FloatValue()
-             : fallback;
+  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
+  return node_narrow_float(info.Env(), info[index], node_arg_label(index).c_str());
 }
 
 /// @brief Read a double positional argument, falling back if absent or non-number.
@@ -434,6 +434,13 @@ inline std::string StringProperty(const Napi::Object& obj, const char* key, cons
 /// @details undefined/null is an empty vector rather than an error, so an
 ///   optional per-band array reads the same whether it was omitted or reported
 ///   absent. Any other non-array value throws.
+/// @note One rule runs down both paths and they answer differently because the
+///   values differ, not because the rule does. A Float32Array element arrives
+///   already folded to an infinity, which @ref node_narrow_float passes; a plain
+///   array still holds the finite double the caller wrote, which it refuses. The
+///   typed path CANNOT refuse -- the only copy of what was asked for was lost in
+///   JS -- and declining to refuse the plain one would destroy the surviving copy
+///   to match a case that never had it.
 inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char* key) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return {};
@@ -453,8 +460,13 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
   values.reserve(array.Length());
   for (uint32_t i = 0; i < array.Length(); ++i) {
     Napi::Value item = array.Get(i);
-    values.push_back(item.IsNumber() ? item.As<Napi::Number>().FloatValue()
-                                     : std::numeric_limits<float>::quiet_NaN());
+    if (!item.IsNumber()) {
+      values.push_back(std::numeric_limits<float>::quiet_NaN());
+      continue;
+    }
+    // Indexed, because the key alone cannot say which element was refused.
+    const std::string element = std::string(key) + "[" + std::to_string(i) + "]";
+    values.push_back(node_narrow_float(obj.Env(), item, element.c_str()));
   }
   return values;
 }
@@ -506,12 +518,12 @@ inline bool RequiredWordValue(Napi::Env env, const Napi::Value& value, const std
   return true;
 }
 
-/// @brief Read a required float value.
+/// @brief Read a required float value (@ref node_narrow_float).
 inline bool RequiredFloatValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                                float* out) {
   if (!RequireNumberValue(env, value, label)) return false;
-  *out = value.As<Napi::Number>().FloatValue();
-  return !env.IsExceptionPending();
+  *out = node_narrow_float(env, value, label.c_str());
+  return true;
 }
 
 /// @brief Read a required double value.
