@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -35,7 +37,19 @@ struct MonoAudioResult {
   /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
   int latency_samples = 0;
+  /// Non-finite samples this call's processors replaced with a finite in-domain
+  /// one, so the output is finite and in range while carrying samples unrelated
+  /// to the input. Per call: the processors are built per call.
+  std::uint32_t non_finite_substitution_count = 0;
 };
+
+/// @brief Adds @p count to @p total, saturating instead of wrapping.
+/// @details A wrapped total could read as zero, which is the one value
+///          @ref MonoAudioResult::non_finite_substitution_count promises.
+inline void accumulate_substitutions(std::uint32_t& total, std::uint32_t count) noexcept {
+  constexpr std::uint32_t kMax = std::numeric_limits<std::uint32_t>::max();
+  total = count > kMax - total ? kMax : total + count;
+}
 
 /// @brief Every scalar one named-processor dispatch computes for one channel.
 ///
@@ -80,6 +94,8 @@ struct StereoAudioResult {
   /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
   int latency_samples = 0;
+  /// @copydoc MonoAudioResult::non_finite_substitution_count
+  std::uint32_t non_finite_substitution_count = 0;
 };
 
 /// @brief Result of one stereo named-processor call: the shared audio fields

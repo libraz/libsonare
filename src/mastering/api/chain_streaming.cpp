@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -70,6 +71,10 @@ struct StreamingMasteringChain::Impl {
   // The static gain is applied in process_block() immediately before this
   // limiter, mirroring the offline chain's loudness stage (gain -> limiter).
   std::unique_ptr<rt::ProcessorBase> loudness_limiter;
+  // Non-owning views of the stages above that substitute a non-finite sample.
+  // ProcessorBase does not carry the count, so the stages that keep one are
+  // recorded as prepare() builds them.
+  std::vector<const mastering::maximizer::TruePeakLimiter*> substitution_sources;
 };
 
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
@@ -145,10 +150,12 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   max_block_size_ = 0;
   impl_->processors.clear();
   impl_->loudness_limiter.reset();
+  impl_->substitution_sources.clear();
   stage_names_.clear();
 
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
   std::vector<std::string> stage_names;
+  std::vector<const mastering::maximizer::TruePeakLimiter*> substitution_sources;
   auto add_stage = [&](std::unique_ptr<rt::ProcessorBase> proc, const char* name) {
     // The streaming contract has already limited this chain to mono or stereo.
     // Preserve that bound so channel-aware stages do not allocate scratch for
@@ -224,9 +231,10 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
 
   // 11. maximizer.truePeakLimiter
   if (config_.maximizer.true_peak_limiter.enabled) {
-    add_stage(std::make_unique<mastering::maximizer::TruePeakLimiter>(
-                  config_.maximizer.true_peak_limiter.config),
-              "maximizer.truePeakLimiter");
+    auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(
+        config_.maximizer.true_peak_limiter.config);
+    substitution_sources.push_back(limiter.get());
+    add_stage(std::move(limiter), "maximizer.truePeakLimiter");
   }
 
   // 12. loudness (precomputed static gain + dedicated true-peak limiter).
@@ -243,6 +251,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
             config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
     limiter->prepare(sample_rate, max_block_size, num_channels);
+    substitution_sources.push_back(limiter.get());
     loudness_limiter = std::move(limiter);
     stage_names.emplace_back("loudness.optimize");
   }
@@ -251,6 +260,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   // to "prepared for these arguments" in one step.
   impl_->processors = std::move(processors);
   impl_->loudness_limiter = std::move(loudness_limiter);
+  impl_->substitution_sources = std::move(substitution_sources);
   stage_names_ = std::move(stage_names);
   prepared_channels_ = num_channels;
   max_block_size_ = max_block_size;
@@ -365,6 +375,14 @@ int StreamingMasteringChain::latency_samples() const noexcept {
   }
   if (impl_->loudness_limiter) {
     total += impl_->loudness_limiter->latency_samples();
+  }
+  return total;
+}
+
+std::uint32_t StreamingMasteringChain::non_finite_substitution_count() const noexcept {
+  std::uint32_t total = 0;
+  for (const auto* source : impl_->substitution_sources) {
+    accumulate_substitutions(total, source->non_finite_substitution_count());
   }
   return total;
 }

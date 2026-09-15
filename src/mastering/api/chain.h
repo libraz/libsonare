@@ -4,6 +4,7 @@
 /// @brief High-level mastering chain composition (multi-module ordered processing).
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -387,6 +388,13 @@ class StreamingMasteringChain {
   /// @brief Returns the ordered stage names that will run (e.g. "eq.tilt").
   /// Populated after prepare().
   const std::vector<std::string>& stage_names() const noexcept { return stage_names_; }
+
+  /// @brief Non-finite samples a stage replaced with a finite in-domain one, so
+  ///        the output is finite and in range while carrying samples unrelated
+  ///        to the input.
+  /// @details Cumulative over every block since prepare(), which rebuilds the
+  ///          stages and so clears it; the stages persist across blocks.
+  std::uint32_t non_finite_substitution_count() const noexcept;
 
  private:
   void process_prevalidated(float* const* channels, int num_channels, int num_samples);

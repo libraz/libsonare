@@ -19,13 +19,16 @@
 /// (both of std::clamp's comparisons are false for it) and substitutes only an
 /// infinity, so its NaN case asserts the count does NOT move.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
+#include "mastering/api/chain.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/final/bit_depth.h"
 #include "mastering/final/dither.h"
@@ -119,6 +122,85 @@ constexpr float kInf = std::numeric_limits<float>::infinity();
 /// The ceiling every limiter below is configured with, plus the margin a
 /// polyphase reconstruction may ring by.
 const float kLimiterBound = sonare::db_to_linear(-1.0f) * 1.05f;
+
+// ---------------------------------------------------------------------------
+// Chain-level aggregate
+// ---------------------------------------------------------------------------
+// A chain caller never holds the owners above, so the aggregate on the result is
+// the only thing that separates a degraded stream from a clean one. The chain
+// refuses a non-finite input outright, so these cases drive a stage into making
+// one: a makeup gain whose linear form overflows a float hands the limiter an
+// infinity that never came from the caller.
+
+constexpr int kChainSampleRate = 48000;
+constexpr std::size_t kChainLength = 24000;  // 0.5 s
+constexpr float kChainPeak = 0.5f;
+/// Ceiling the chain's limiter runs at. Well under the level the compressor
+/// leaves, so the limiter is not dormant on a clean run either.
+constexpr float kChainCeilingDb = -20.0f;
+/// db_to_linear of this is an infinity, so the compressor's output multiply
+/// overflows for every sample.
+constexpr float kOverflowingMakeupDb = 1.0e6f;
+
+std::vector<float> chain_program() {
+  std::vector<float> out(kChainLength);
+  for (std::size_t i = 0; i < kChainLength; ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(kChainSampleRate);
+    out[i] = static_cast<float>(kChainPeak * std::sin(2.0 * kPiD * 220.0 * t));
+  }
+  return out;
+}
+
+/// Compressor into true-peak limiter. @p makeup_db of kOverflowingMakeupDb is
+/// what makes the compressor emit the non-finite samples the limiter replaces.
+sonare::mastering::api::MasteringChainConfig chain_config(float makeup_db, int oversample) {
+  sonare::mastering::api::MasteringChainConfig config;
+  config.dynamics.compressor.enabled = true;
+  config.dynamics.compressor.config.makeup_gain_db = makeup_db;
+  config.maximizer.true_peak_limiter.enabled = true;
+  config.maximizer.true_peak_limiter.config.ceiling_db = kChainCeilingDb;
+  config.maximizer.true_peak_limiter.config.oversample_factor = oversample;
+  return config;
+}
+
+/// Stages the chain cases below run, in order. Asserted rather than assumed:
+/// the count has exactly one writer under this config, and a fixture that later
+/// enabled loudness would add a second without any case failing.
+const std::vector<std::string> kExpectedStages{"dynamics.compressor", "maximizer.truePeakLimiter"};
+
+std::size_t non_finite_count(const std::vector<float>& samples) {
+  std::size_t count = 0;
+  for (float sample : samples) {
+    if (!std::isfinite(sample)) ++count;
+  }
+  return count;
+}
+
+float stage_gain_reduction_db(const sonare::mastering::api::MonoChainResult& result,
+                              const std::string& stage) {
+  for (const auto& reduction : result.stage_gain_reductions) {
+    if (reduction.stage == stage) return reduction.gain_reduction_db;
+  }
+  return 0.0f;
+}
+
+/// Runs @p chain over the fixture in kBlockSize blocks and returns the output.
+std::vector<float> drive_streaming(sonare::mastering::api::StreamingMasteringChain& chain,
+                                   const std::vector<float>& program) {
+  std::vector<float> out;
+  out.reserve(program.size());
+  for (std::size_t offset = 0; offset < program.size();
+       offset += static_cast<std::size_t>(kBlockSize)) {
+    const std::size_t count =
+        std::min(static_cast<std::size_t>(kBlockSize), program.size() - offset);
+    std::vector<float> buffer(program.begin() + static_cast<std::ptrdiff_t>(offset),
+                              program.begin() + static_cast<std::ptrdiff_t>(offset + count));
+    float* channels[1] = {buffer.data()};
+    chain.process_block(channels, 1, static_cast<int>(count));
+    out.insert(out.end(), buffer.begin(), buffer.end());
+  }
+  return out;
+}
 
 }  // namespace
 
@@ -312,5 +394,101 @@ TEST_CASE("Final-stage quantizers report the non-finite samples they replaced",
     REQUIRE(count == 2u);
     REQUIRE(std::isfinite(poisoned[0]));
     REQUIRE(std::isfinite(poisoned[2]));
+  }
+}
+
+TEST_CASE("MasteringChain reports no substitution over ordinary audio",
+          "[mastering][chain][non-finite]") {
+  using sonare::mastering::api::MasteringChain;
+  using sonare::mastering::api::MonoChainResult;
+
+  const std::vector<float> program = chain_program();
+  MasteringChain chain(chain_config(0.0f, 4));
+  const MonoChainResult result =
+      chain.process_mono(program.data(), program.size(), kChainSampleRate);
+
+  REQUIRE(result.stages == kExpectedStages);
+  // Non-vacuity: a limiter passing the signal through would report zero on its
+  // own. Its ceiling sits under the level the compressor leaves, so it limits.
+  REQUIRE(stage_gain_reduction_db(result, "maximizer.truePeakLimiter") < 0.0f);
+  REQUIRE(finite_peak(result.samples) <= sonare::db_to_linear(kChainCeilingDb) * 1.05f);
+  REQUIRE(result.non_finite_substitution_count == 0u);
+}
+
+TEST_CASE("MasteringChain counts the non-finite samples a stage of its own produced",
+          "[mastering][chain][non-finite]") {
+  using sonare::mastering::api::MasteringChain;
+  using sonare::mastering::api::MonoChainResult;
+
+  // dynamics.compressor is the producer: its makeup multiply overflows, and
+  // maximizer.truePeakLimiter is the stage that replaces the result.
+  const std::vector<float> program = chain_program();
+  MasteringChain chain(chain_config(kOverflowingMakeupDb, 4));
+  const MonoChainResult result =
+      chain.process_mono(program.data(), program.size(), kChainSampleRate);
+
+  REQUIRE(result.stages == kExpectedStages);
+  REQUIRE(result.non_finite_substitution_count > 0u);
+  // The buffer the caller gets back is finite and in range either way, which is
+  // why the count is the only signal there is.
+  REQUIRE(non_finite_count(result.samples) == 0u);
+  REQUIRE(finite_peak(result.samples) <= sonare::db_to_linear(kChainCeilingDb) * 1.05f);
+}
+
+TEST_CASE("MasteringChain's substitution count follows the stage that made the replacements",
+          "[mastering][chain][non-finite]") {
+  using sonare::mastering::api::MasteringChain;
+  using sonare::mastering::api::MonoChainResult;
+
+  // The limiter sanitizes at its oversampled rate, so the same provoked run
+  // through a 1x limiter counts a different number of replacements than a 4x
+  // one. A field fixed to one value cannot satisfy both.
+  const std::vector<float> program = chain_program();
+  MasteringChain oversampled(chain_config(kOverflowingMakeupDb, 4));
+  MasteringChain base_rate(chain_config(kOverflowingMakeupDb, 1));
+  const MonoChainResult oversampled_result =
+      oversampled.process_mono(program.data(), program.size(), kChainSampleRate);
+  const MonoChainResult base_rate_result =
+      base_rate.process_mono(program.data(), program.size(), kChainSampleRate);
+
+  REQUIRE(oversampled_result.stages == kExpectedStages);
+  REQUIRE(base_rate_result.stages == kExpectedStages);
+  REQUIRE(oversampled_result.non_finite_substitution_count > 0u);
+  REQUIRE(base_rate_result.non_finite_substitution_count > 0u);
+  REQUIRE(oversampled_result.non_finite_substitution_count !=
+          base_rate_result.non_finite_substitution_count);
+}
+
+TEST_CASE("StreamingMasteringChain accumulates its substitutions across blocks",
+          "[mastering][chain][non-finite]") {
+  using sonare::mastering::api::StreamingMasteringChain;
+
+  const std::vector<float> program = chain_program();
+
+  SECTION("ordinary audio leaves the count at zero") {
+    StreamingMasteringChain chain(chain_config(0.0f, 4));
+    chain.prepare(kChainSampleRate, kBlockSize, 1);
+    REQUIRE(chain.stage_names() == kExpectedStages);
+    const std::vector<float> out = drive_streaming(chain, program);
+    // Non-vacuity, as above: the limiter is holding the output under a ceiling
+    // the input is over.
+    REQUIRE(finite_peak(program) > sonare::db_to_linear(kChainCeilingDb));
+    REQUIRE(finite_peak(out) <= sonare::db_to_linear(kChainCeilingDb) * 1.05f);
+    REQUIRE(chain.non_finite_substitution_count() == 0u);
+  }
+
+  SECTION("the count keeps rising while the stages keep replacing") {
+    StreamingMasteringChain chain(chain_config(kOverflowingMakeupDb, 4));
+    chain.prepare(kChainSampleRate, kBlockSize, 1);
+    REQUIRE(chain.stage_names() == kExpectedStages);
+
+    std::vector<float> first(program.begin(), program.begin() + kBlockSize);
+    float* channels[1] = {first.data()};
+    chain.process_block(channels, 1, kBlockSize);
+    const std::uint32_t after_one_block = chain.non_finite_substitution_count();
+    REQUIRE(after_one_block > 0u);
+
+    drive_streaming(chain, program);
+    REQUIRE(chain.non_finite_substitution_count() > after_one_block);
   }
 }

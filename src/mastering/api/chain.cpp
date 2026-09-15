@@ -522,6 +522,8 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
         {"maximizer.truePeakLimiter", processor.minimum_gain_reduction_db()});
+    accumulate_substitutions(result.non_finite_substitution_count,
+                             processor.non_finite_substitution_count());
     if (!report("maximizer.truePeakLimiter")) return std::nullopt;
   }
 
@@ -557,6 +559,8 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
         {"loudness.optimize", processor.minimum_gain_reduction_db()});
+    accumulate_substitutions(result.non_finite_substitution_count,
+                             processor.non_finite_substitution_count());
     if (!report("loudness.optimize")) return std::nullopt;
   }
 
@@ -784,6 +788,8 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
         {"maximizer.truePeakLimiter", processor.minimum_gain_reduction_db()});
+    accumulate_substitutions(result.non_finite_substitution_count,
+                             processor.non_finite_substitution_count());
     if (!report("maximizer.truePeakLimiter")) return std::nullopt;
   }
 
@@ -814,6 +820,8 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
         {"loudness.optimize", processor.minimum_gain_reduction_db()});
+    accumulate_substitutions(result.non_finite_substitution_count,
+                             processor.non_finite_substitution_count());
     if (!report("loudness.optimize")) return std::nullopt;
   }
 
