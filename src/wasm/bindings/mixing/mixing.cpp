@@ -219,9 +219,13 @@ std::optional<float> optionalNumberAt(val options, const char* key, int index) {
     return mixing::PanMode::Balance;
   }
   if (value.typeOf().as<std::string>() == "number") {
+    // The narrowing is shared; the domain answer keeps the C ABI's own wording,
+    // which to_pan_mode (mixing_internal.h) states for the same rejection.
     const int mode = checkedIntFromVal(value, "mixing pan mode");
-    requireOrdinalInRange(mode, static_cast<int>(mixing::PanMode::Balance),
-                          static_cast<int>(mixing::PanMode::DualPan), "mixing pan mode");
+    if (mode < static_cast<int>(mixing::PanMode::Balance) ||
+        mode > static_cast<int>(mixing::PanMode::DualPan)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    }
     if (mode == 1) return mixing::PanMode::StereoPan;
     if (mode == 2) return mixing::PanMode::DualPan;
     return mixing::PanMode::Balance;
@@ -285,9 +289,12 @@ int panModeOrdinalFromVal(val value) {
     return SONARE_PAN_MODE_BALANCE;
   }
   if (value.typeOf().as<std::string>() == "number") {
+    // Split as setTrackStripPanMode (realtime/mixer.cpp) already splits it: the
+    // narrowing is shared, the domain answer keeps the C ABI's own wording.
     const int ordinal = checkedIntFromVal(value, "mixing pan mode");
-    requireOrdinalInRange(ordinal, SONARE_PAN_MODE_BALANCE, SONARE_PAN_MODE_DUAL_PAN,
-                          "mixing pan mode");
+    if (ordinal < SONARE_PAN_MODE_BALANCE || ordinal > SONARE_PAN_MODE_DUAL_PAN) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    }
     return ordinal;
   }
   if (value.typeOf().as<std::string>() != "string") {
