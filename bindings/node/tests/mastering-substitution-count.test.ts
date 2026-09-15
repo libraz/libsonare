@@ -8,7 +8,6 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  StreamingMasteringChain,
   masterAudio,
   masterAudioAsync,
   masterAudioStereo,
@@ -19,6 +18,7 @@ import {
   masteringPairProcess,
   masteringProcess,
   masteringProcessStereo,
+  StreamingMasteringChain,
 } from '../src/index.js';
 
 const SR = 44100;
