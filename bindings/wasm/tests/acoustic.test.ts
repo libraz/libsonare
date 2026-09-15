@@ -197,6 +197,22 @@ describe('geometric room acoustics', () => {
     expect(() => synthesizeRir({ ...base, seed: 2 ** 40 })).toThrow();
   });
 
+  it('refuses a fractional seed rather than truncating it onto a neighbour', () => {
+    // The range check reaches 1.5 and passes it, so the cast decided the seed:
+    // 1.5 and 1.9 both landed on seed 1 and reported success, which is the same
+    // silent fold as the wrap above from the other end.
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
+    const asArray = (seed: number): number[] => Array.from(synthesizeRir({ ...base, seed }).rir);
+    // Non-vacuity: 1 and 2 must actually differ, or "1.5 is refused" would pass
+    // for an entry point that ignores its seed entirely.
+    expect(asArray(1)).not.toEqual(asArray(2));
+    expect(() => synthesizeRir({ ...base, seed: 1.5 })).toThrow(/seed must be an integer/);
+    expect(() => synthesizeRir({ ...base, seed: 1.9 })).toThrow(/seed must be an integer/);
+    // The neighbours it used to truncate onto stay accepted.
+    expect(asArray(1).length).toBeGreaterThan(0);
+    expect(asArray(2).length).toBeGreaterThan(0);
+  });
+
   it('honors per-band wall scattering', () => {
     const base = {
       lengthM: 7,

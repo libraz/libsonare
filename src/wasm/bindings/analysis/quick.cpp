@@ -867,6 +867,9 @@ unsigned seedFromVal(val opts, unsigned fallback) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "seed must be within [0, 4294967295]");
   }
+  // The range check above says nothing about a fraction, and 1.5 truncating onto
+  // seed 1 is the same silent fold as a wrap: two seeds, one RIR.
+  requireIntegral(seed_in, "seed");
   if (seed_in == 0.0) return fallback;
   return static_cast<unsigned>(seed_in);
 }

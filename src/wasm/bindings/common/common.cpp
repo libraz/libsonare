@@ -346,8 +346,6 @@ float floatOption(val object, const char* key, float default_value) {
   return std::isfinite(number) ? static_cast<float>(number) : default_value;
 }
 
-namespace {
-
 // Shared by every integer narrowing below: only the range differs between them.
 // Truncation is the same silent value change as saturation from the other end --
 // 31.5 separates on 31, and anything in (-1, 0) lands on the 0 that most of
@@ -357,6 +355,8 @@ void requireIntegral(double number, const char* key) {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
   }
 }
+
+namespace {
 
 // The unsigned narrowings share a [0, max] range on top of that, so they share
 // the whole body and pass their own bound.

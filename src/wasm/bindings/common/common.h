@@ -272,6 +272,15 @@ float typedFloatProperty(val object, const char* key, float default_value);
 /// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
 ///         value and for a finite value wider than a 32-bit float.
 float floatOption(val object, const char* key, float default_value);
+/// @brief Refuses a fractional number, the integrality half of the narrowings
+///        below.
+/// @details Declared rather than left file-local because a site whose range
+///          check is already someone else's -- a C-ABI bound, a core validator --
+///          otherwise has nothing to reach for and hand-writes the trunc
+///          comparison. Truncation is the same silent value change as a wrap
+///          from the other end.
+/// @throws SonareException(InvalidParameter) naming @p key.
+void requireIntegral(double number, const char* key);
 /// @brief Narrows a JS number to int, rejecting anything out of range or
 ///        fractional.
 /// @details The one place that knows how to do this safely. A reader that needs
