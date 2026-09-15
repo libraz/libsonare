@@ -28,13 +28,9 @@ uint32_t ProjectWasm::addTrack(val desc) {
                                         "unknown project track kind");
         }
       } else if (kind.typeOf().as<std::string>() == "number") {
-        const double numeric_kind = kind.as<double>();
-        if (!std::isfinite(numeric_kind) || std::floor(numeric_kind) != numeric_kind ||
-            numeric_kind < SONARE_TRACK_AUDIO || numeric_kind > SONARE_TRACK_AUX) {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "unknown project track kind");
-        }
-        d.kind = static_cast<uint32_t>(numeric_kind);
+        const int ordinal = checkedIntFromVal(kind, "project track kind");
+        requireOrdinalInRange(ordinal, SONARE_TRACK_AUDIO, SONARE_TRACK_AUX, "project track kind");
+        d.kind = static_cast<uint32_t>(ordinal);
       } else {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "project track kind must be a string or number");

@@ -292,13 +292,11 @@ int MixerWasm::latencySamples() {
 // Drains delayed/tail audio by processing a zero-input block of num_samples
 // frames. Returns { left, right, sampleRate } mirroring processStereo.
 val MixerWasm::drainTailStereo(double num_samples) {
-  if (!std::isfinite(num_samples) || std::floor(num_samples) != num_samples || num_samples <= 0.0 ||
-      num_samples > static_cast<double>(block_size_)) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "mixer drain numSamples must be an integer in [1, prepared block size]");
+  const size_t count = wasmCountArg(num_samples, "mixer drain numSamples");
+  if (count == 0 || count > static_cast<size_t>(block_size_)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "mixer drain numSamples must be in [1, prepared block size]");
   }
-  const auto count = static_cast<size_t>(num_samples);
   std::vector<float> out_left(count, 0.0f);
   std::vector<float> out_right(count, 0.0f);
   SonareError err =

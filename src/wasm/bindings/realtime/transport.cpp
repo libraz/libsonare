@@ -169,17 +169,17 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   for (int i = 0; i < count; ++i) {
     val marker = markers[i];
     const double ppq = objectProperty(marker, "ppq").as<double>();
-    const double id_value = doubleProperty(marker, "id", static_cast<double>(i + 1));
     if (!std::isfinite(ppq) || ppq < 0.0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "setMarkers: marker ppq must be finite and non-negative");
     }
-    if (!std::isfinite(id_value) || id_value <= 0.0 || std::trunc(id_value) != id_value ||
-        id_value > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+    // The narrowing is uintProperty's; zero stays this field's own rule, which
+    // sonare_engine_set_markers enforces on the C side.
+    const uint32_t id = uintProperty(marker, "id", static_cast<uint32_t>(i + 1));
+    if (id == 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMarkers: marker id must be a positive uint32 integer");
+                                    "setMarkers: marker id must be positive");
     }
-    const uint32_t id = static_cast<uint32_t>(id_value);
     if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "setMarkers: marker ids must be unique");

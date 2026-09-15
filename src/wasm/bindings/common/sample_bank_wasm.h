@@ -65,12 +65,10 @@ class SampleBankWasm {
   // than silence.
   static SonareSampleBank* fromDescriptor(val desc) {
     if (!hasProperty(desc, "sampleBankId")) return nullptr;
-    const double raw = requireNumberProperty(desc, "sampleBankId", "synth instrument");
-    if (raw < 0.0 || raw > 4294967295.0 || std::floor(raw) != raw) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "synth instrument sampleBankId must be a uint32");
-    }
-    const auto id = static_cast<uint32_t>(raw);
+    // Asked for its TYPE check: checkedUintFromVal reads through as<double>(),
+    // which coerces a numeric string into an id rather than refusing it.
+    requireNumberProperty(desc, "sampleBankId", "synth instrument");
+    const uint32_t id = checkedUintFromVal(desc["sampleBankId"], "synth instrument sampleBankId");
     if (id == 0) return nullptr;
     SonareSampleBank* bank = lookup(id);
     if (bank == nullptr) {

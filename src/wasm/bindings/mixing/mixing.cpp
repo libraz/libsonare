@@ -219,11 +219,9 @@ std::optional<float> optionalNumberAt(val options, const char* key, int index) {
     return mixing::PanMode::Balance;
   }
   if (value.typeOf().as<std::string>() == "number") {
-    const double raw = value.as<double>();
-    if (!std::isfinite(raw) || std::floor(raw) != raw || raw < 0.0 || raw > 2.0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
-    }
-    const int mode = static_cast<int>(raw);
+    const int mode = checkedIntFromVal(value, "mixing pan mode");
+    requireOrdinalInRange(mode, static_cast<int>(mixing::PanMode::Balance),
+                          static_cast<int>(mixing::PanMode::DualPan), "mixing pan mode");
     if (mode == 1) return mixing::PanMode::StereoPan;
     if (mode == 2) return mixing::PanMode::DualPan;
     return mixing::PanMode::Balance;
@@ -287,12 +285,10 @@ int panModeOrdinalFromVal(val value) {
     return SONARE_PAN_MODE_BALANCE;
   }
   if (value.typeOf().as<std::string>() == "number") {
-    const double raw = value.as<double>();
-    if (!std::isfinite(raw) || std::floor(raw) != raw || raw < SONARE_PAN_MODE_BALANCE ||
-        raw > SONARE_PAN_MODE_DUAL_PAN) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
-    }
-    return static_cast<int>(raw);
+    const int ordinal = checkedIntFromVal(value, "mixing pan mode");
+    requireOrdinalInRange(ordinal, SONARE_PAN_MODE_BALANCE, SONARE_PAN_MODE_DUAL_PAN,
+                          "mixing pan mode");
+    return ordinal;
   }
   if (value.typeOf().as<std::string>() != "string") {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");

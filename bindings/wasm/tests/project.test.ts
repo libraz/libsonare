@@ -228,9 +228,11 @@ describe('Sonare WASM Project', () => {
 
       const native = (project as unknown as { native: { addTrack: (desc: object) => number } })
         .native;
+      // One rejection each, named by what is wrong with it: the numeric path
+      // narrows through the shared reader before the ordinal range is asked.
       expect(() => native.addTrack({ kind: 'bus' })).toThrow(/unknown project track kind/);
-      expect(() => native.addTrack({ kind: 3 })).toThrow(/unknown project track kind/);
-      expect(() => native.addTrack({ kind: 1.5 })).toThrow(/unknown project track kind/);
+      expect(() => native.addTrack({ kind: 3 })).toThrow(/project track kind is out of range/);
+      expect(() => native.addTrack({ kind: 1.5 })).toThrow(/project track kind must be an integer/);
     } finally {
       project.delete();
     }

@@ -317,12 +317,9 @@ uint32_t automationTargetKindFromVal(val desc) {
   const val target_kind = desc["targetKind"];
   const std::string type = target_kind.typeOf().as<std::string>();
   if (type == "number") {
-    const double ordinal = target_kind.as<double>();
-    if (!std::isfinite(ordinal) || std::floor(ordinal) != ordinal || ordinal < 0.0 ||
-        ordinal > static_cast<double>(SONARE_AUTOMATION_TARGET_TRACK_PAN)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "invalid automation target kind");
-    }
+    const int ordinal = checkedIntFromVal(target_kind, "automation target kind");
+    requireOrdinalInRange(ordinal, SONARE_AUTOMATION_TARGET_OPAQUE,
+                          SONARE_AUTOMATION_TARGET_TRACK_PAN, "automation target kind");
     return static_cast<uint32_t>(ordinal);
   }
   if (type == "string") {
