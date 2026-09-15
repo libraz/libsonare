@@ -662,10 +662,18 @@ class CliContractSelfTest(unittest.TestCase):
     def test_semantically_pending_shared_paths_still_require_option_parity(self) -> None:
         """Semantic promotion remains independent from the shared option gate."""
         manifest = copy.deepcopy(self.manifest)
+        # No shipping command is semantically pending any more, so the state
+        # this gate covers is constructed rather than borrowed from the tree.
+        manifest["commands"]["chords"]["status"] = "pending"
+        manifest["active_paths"] = [
+            contract
+            for contract in manifest["active_paths"]
+            if contract["path"] != "chords"
+        ]
         native = self._fake_inventory(manifest, "native")
         python = self._fake_inventory(manifest, "python")
-        self.assertEqual(manifest["commands"]["chords"]["status"], "pending")
         self.assertEqual(manifest["commands"]["chords"]["option_status"], "active")
+        self.assertEqual(CHECKER.validate_manifest(manifest), [])
         native_chords = next(
             command for command in native["commands"] if command["path"] == "chords"
         )
@@ -768,23 +776,20 @@ class CliContractSelfTest(unittest.TestCase):
             ),
         )
 
-    def test_chords_is_the_only_shared_command_left_unpinned(self) -> None:
-        """The remaining gap is one named command, not an open set.
+    def test_no_shared_command_is_left_unpinned(self) -> None:
+        """Every shared command's success keys are pinned, and the set is closed.
 
-        ``chords`` publishes a quality name on the Python CLI that the native
-        CLI has no name for: the value is on the struct it already reads, but
-        the camelCase quality names live in a hand-written table replicated
-        across the bindings and the C ABI exposes no quality-name function.
-        Emitting it from the native tool means one more copy of that table, so
-        the name has to be given a single home first. Anything else arriving in
-        this set is an omission and fails here.
+        A command classified as shared but left pending publishes whatever the
+        two surfaces happen to agree on that day. The set is asserted empty
+        rather than enumerated, so a command arriving unpinned fails here
+        instead of being read as a known gap.
         """
         pending = {
             path
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared" and record["status"] == "pending"
         }
-        self.assertEqual(pending, {"chords"})
+        self.assertEqual(pending, set())
 
     def test_all_shared_paths_have_active_canonical_option_contracts(self) -> None:
         shared = {

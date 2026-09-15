@@ -176,6 +176,15 @@ std::pair<ChordTemplate, float> find_best_chord(const std::array<float, 12>& chr
 /// @brief Converts chord quality to string.
 std::string chord_quality_to_string(ChordQuality quality);
 
+/// @brief Returns the published name of @p quality, as every binding spells it.
+/// @param quality Chord quality
+/// @return Enumerator name in camelCase; @c "unknown" outside the enum
+/// @details A different vocabulary from @ref chord_quality_to_string, which
+///          returns the chord-symbol suffix a chord name is spelled with
+///          (@c maj7, @c m7b5). This is the identifier a caller switches on,
+///          and the one home the in-tree tools read it from.
+const char* chord_quality_name(ChordQuality quality);
+
 /// @brief Converts pitch class to string.
 std::string pitch_class_to_string(PitchClass pc);
 

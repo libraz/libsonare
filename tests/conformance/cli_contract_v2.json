@@ -3038,7 +3038,7 @@
     },
     "chords": {
       "classification": "shared",
-      "status": "pending",
+      "status": "active",
       "option_status": "active"
     },
     "timbre": {
@@ -7423,6 +7423,261 @@
           "exit": 0,
           "legacy_exit": 0,
           "payload": "candidates",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "chords",
+      "options": [
+        {
+          "name": "detect-inversions",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "hmm-beam-width",
+          "type": "integer",
+          "default": 24,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "key-context",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "key-mode",
+          "type": "string",
+          "default": "major",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "key-root",
+          "type": "string",
+          "default": "C",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-duration",
+          "type": "number",
+          "default": 0.3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "nnls",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "no-beat-sync",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "smoothing-window",
+          "type": "number",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "triads-only",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "use-hmm",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "progression": "string",
+            "count": "integer",
+            "chords": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "name": "string",
+                  "root": "integer",
+                  "quality": "string",
+                  "bass": "integer",
+                  "start": "number",
+                  "end": "number",
+                  "confidence": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "default",
+          "argv": [
+            "chords",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "triads_only",
+          "argv": [
+            "chords",
+            "{audio}",
+            "--triads-only",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "nnls_chroma",
+          "argv": [
+            "chords",
+            "{audio}",
+            "--nnls",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "detect_inversions",
+          "argv": [
+            "chords",
+            "{audio}",
+            "--detect-inversions",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "hmm_smoothing",
+          "argv": [
+            "chords",
+            "{audio}",
+            "--use-hmm",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "key_context",
+          "argv": [
+            "chords",
+            "{audio}",
+            "--key-context",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
           "artifact": "none",
           "stdout": "json"
         }

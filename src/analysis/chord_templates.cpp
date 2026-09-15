@@ -135,6 +135,64 @@ std::string chord_quality_to_string(ChordQuality quality) {
   }
 }
 
+const char* chord_quality_name(ChordQuality quality) {
+  switch (quality) {
+    case ChordQuality::Major:
+      return "major";
+    case ChordQuality::Minor:
+      return "minor";
+    case ChordQuality::Diminished:
+      return "diminished";
+    case ChordQuality::Augmented:
+      return "augmented";
+    case ChordQuality::Dominant7:
+      return "dominant7";
+    case ChordQuality::Major7:
+      return "major7";
+    case ChordQuality::Minor7:
+      return "minor7";
+    case ChordQuality::Sus2:
+      return "sus2";
+    case ChordQuality::Sus4:
+      return "sus4";
+    case ChordQuality::Unknown:
+      return "unknown";
+    case ChordQuality::Add9:
+      return "add9";
+    case ChordQuality::MinorAdd9:
+      return "minorAdd9";
+    case ChordQuality::Dim7:
+      return "dim7";
+    case ChordQuality::HalfDim7:
+      return "halfDim7";
+    case ChordQuality::Major9:
+      return "major9";
+    case ChordQuality::Dominant9:
+      return "dominant9";
+    case ChordQuality::Sus2Add4:
+      return "sus2Add4";
+    case ChordQuality::Major6:
+      return "major6";
+    case ChordQuality::Minor6:
+      return "minor6";
+    case ChordQuality::MinorMajor7:
+      return "minorMajor7";
+    case ChordQuality::Dominant7Sus4:
+      return "dominant7Sus4";
+    case ChordQuality::Dominant11:
+      return "dominant11";
+    case ChordQuality::Dominant13:
+      return "dominant13";
+    case ChordQuality::Dominant7b9:
+      return "dominant7Flat9";
+    case ChordQuality::Dominant7s9:
+      return "dominant7Sharp9";
+  }
+  // No default label above, so appending a quality warns here rather than
+  // reaching this line; a value from outside the enum still lands on it.
+  return "unknown";
+}
+
 std::string ChordTemplate::to_string() const {
   return pitch_class_to_string(root) + chord_quality_to_string(quality);
 }
@@ -155,7 +213,7 @@ float ChordTemplate::correlate(const float* chroma) const {
   }
 
   float denom = std::sqrt(chroma_norm_sq * pattern_norm_sq);
-  if (denom < constants::kEpsilon) {
+  if (denom < kEpsilon) {
     return 0.0f;
   }
 
@@ -171,7 +229,7 @@ float ChordTemplate::correlate(const float* chroma) const {
     }
   }
 
-  if (max_chroma < constants::kEpsilon) {
+  if (max_chroma < kEpsilon) {
     return cosine_sim;
   }
 

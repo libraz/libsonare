@@ -36,6 +36,7 @@ WASM_DTS = check.ORDINAL_TABLES[3].path
 PY_DETECTION = check.ORDINAL_TABLES[4].path
 PY_MUSIC = check.ORDINAL_TABLES[5].path
 NODE_ADDON = check.ORDINAL_TABLES[6].path
+CORE_NAMES = check.ORDINAL_TABLES[7].path
 NODE_TYPES = check.NAME_TABLES[0].path
 PY_SUFFIXES = check.NAME_TABLES[2].path
 
@@ -48,6 +49,7 @@ FILES = (
     PY_DETECTION,
     PY_MUSIC,
     NODE_ADDON,
+    CORE_NAMES,
     NODE_TYPES,
     PY_SUFFIXES,
 )
@@ -208,6 +210,23 @@ class SwappedEntriesTest(_CopiedTree):
         self.assertEqual(len(lines), 1, lines)
         self.assertIn("ordinal 5 is `minor7`", lines[0])
 
+    def test_a_swap_in_the_core_switch_is_reported(self) -> None:
+        lines = self.lines(
+            check.evaluate(
+                self.tree(
+                    {
+                        CORE_NAMES: (
+                            '    case ChordQuality::Major7:\n      return "major7";',
+                            '    case ChordQuality::Major7:\n      return "minor7";',
+                        )
+                    }
+                )
+            ),
+            "disagree with the core enum at an ordinal",
+        )
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("ordinal 5 is `minor7`", lines[0])
+
 
 class RenamedEntryTest(_CopiedTree):
     def test_a_renamed_python_entry_is_reported(self) -> None:
@@ -257,7 +276,7 @@ class MissingTableTest(_CopiedTree):
         self.assertEqual(len(missing), 1, missing)
         self.assertIn(PY_MUSIC, missing[0])
         floor = self.lines(failures, "no longer locates the population")
-        self.assertTrue(any("ordinal_tables: found 6, floor is 7" in line for line in floor), floor)
+        self.assertTrue(any("ordinal_tables: found 7, floor is 8" in line for line in floor), floor)
 
     def test_a_renamed_table_symbol_is_reported(self) -> None:
         missing = self.lines(
@@ -277,7 +296,16 @@ class MissingTableTest(_CopiedTree):
         self.assertEqual(len(missing), 1, missing)
 
     def test_every_table_reports_on_its_own(self) -> None:
-        for path in (WASM_CONST, WASM_DTS, NODE_TYPES, PY_SUFFIXES, EMBIND, NODE_ADDON, C_HEADER):
+        for path in (
+            WASM_CONST,
+            WASM_DTS,
+            NODE_TYPES,
+            PY_SUFFIXES,
+            EMBIND,
+            NODE_ADDON,
+            CORE_NAMES,
+            C_HEADER,
+        ):
             with self.subTest(path=path):
                 missing = self.lines(check.evaluate(self.tree(omit=(path,))), "could not be located")
                 self.assertTrue(any(path in line for line in missing), missing)

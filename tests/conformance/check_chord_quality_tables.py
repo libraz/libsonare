@@ -2,7 +2,9 @@
 """Hold every chord-quality name table to the core enum, ordinal by ordinal.
 
 ``sonare::ChordQuality`` has no name accessor on the C ABI, so each surface
-carries its own hand-written ordinal-to-name table. Appending a quality is
+carries its own hand-written ordinal-to-name table. The core carries one too,
+for the in-tree tools that link it directly; it is a copy like the rest and is
+held to the enum here alongside them. Appending a quality is
 survivable -- a table short of an ordinal fails on the value it cannot map.
 Renumbering is not: reorder two enumerators and every table relabels at once,
 each still complete, each now naming the wrong chord. Nothing else sees it.
@@ -145,6 +147,14 @@ ORDINAL_TABLES = (
         "node",
         "the quality string the addon writes into every chord",
     ),
+    Table(
+        "src/analysis/chord_templates.cpp",
+        "chord_quality_name",
+        "cpp_core_switch",
+        "camel",
+        "core",
+        "the quality string the native CLI writes into every chord",
+    ),
 )
 
 # Tables keyed on a name. Ordering carries nothing, but the set is a public
@@ -194,7 +204,7 @@ SPELLING_EXEMPTIONS: dict[str, Exemption] = {
 # Independent of the tuples above: deleting a table entry must not lower the bar.
 FLOOR = {
     "qualities": 25,
-    "ordinal_tables": 7,
+    "ordinal_tables": 8,
     "name_tables": 3,
 }
 
@@ -348,6 +358,23 @@ def cpp_switch(text: str, table: Table) -> tuple[int, dict[str, str]] | None:
     return line, dict(pairs)
 
 
+def cpp_core_switch(text: str, table: Table) -> tuple[int, dict[str, str]] | None:
+    """``case ChordQuality::Enumerator: return "name";`` inside the named function.
+
+    Returns name keyed by enumerator; the caller resolves the ordinal from the
+    core enum, which is what the switch dispatches on.
+    """
+    anchor = re.compile(rf"\b{re.escape(table.symbol)}\s*\([^)]*\)\s*\{{")
+    found = block(text, anchor)
+    if found is None:
+        return None
+    line, body = found
+    pairs = re.findall(
+        rf"case\s+{re.escape(CORE_ENUM.symbol)}::(\w+)\s*:\s*return\s+\"([^\"]*)\"\s*;", body
+    )
+    return line, dict(pairs)
+
+
 def python_dict(text: str, table: Table) -> tuple[int, dict] | None:
     """The one assignment of a dict literal to @p symbol, at any nesting depth."""
     found = []
@@ -468,6 +495,15 @@ def locate(root: Path, table: Table, core: dict[int, str] | None, c_abi: dict[in
         if any(name not in ordinals for name in by_constant):
             return None
         result = (line, {ordinals[name]: exported for name, exported in by_constant.items()})
+    elif table.parser == "cpp_core_switch":
+        found = cpp_core_switch(text, table)
+        if found is None or core is None:
+            return None
+        line, by_enumerator = found
+        ordinals = {name: ordinal for ordinal, name in core.items()}
+        if any(name not in ordinals for name in by_enumerator):
+            return None
+        result = (line, {ordinals[name]: exported for name, exported in by_enumerator.items()})
     elif table.parser == "ts_union":
         found = ts_union(text, table)
         if found is None:

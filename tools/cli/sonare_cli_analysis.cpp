@@ -225,6 +225,7 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
       json.begin_object()
           .kv("name", c.to_string())
           .kv("root", static_cast<int>(c.root))
+          .kv("quality", chord_quality_name(c.quality))
           .kv("bass", static_cast<int>(c.bass))
           .kv("start", c.start)
           .kv("end", c.end)
