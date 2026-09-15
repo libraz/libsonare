@@ -36,6 +36,10 @@ import report as report_mod  # noqa: E402
 from extractors import c_api, cli, node_ts, python_pyi, wasm_internal, wasm_ts  # noqa: E402
 from model import SURFACES  # noqa: E402
 
+#: Allowlist section names that differ from the finding category they gate, for
+#: matching an expired entry against the declined comparison behind it.
+_AUDIT_CATEGORY = {"input_naming": "input"}
+
 _EXTRACTORS = {
     "c": c_api.extract,
     "python": python_pyi.extract,
@@ -77,17 +81,23 @@ def run(
 
 
 def _audit_allowlist(rep, selected: list[str], path: Path) -> int:
-    """Name every allowlist entry that suppressed nothing on this run.
+    """Name every allowlist entry whose divergence a comparison no longer finds.
 
-    A stale entry is not inert. It keeps asserting that a divergence under that
+    Such an entry is not inert. It keeps asserting that a divergence under that
     name was reviewed and accepted, so the next symbol to take the name inherits
     the blessing without anyone looking at it -- which is how an allowlist stops
     being a record of decisions and becomes a hole. Removing an entry the moment
     its divergence is fixed is what keeps the file readable as decisions.
 
+    An entry standing in front of a comparison that never runs fails the same
+    way, because the tool derives that case itself -- a facade that folded its
+    argument order into a request object is recorded as not compared, and is
+    compared again the moment it goes back to positional parameters. A
+    hand-written entry for it would excuse the restored divergence instead.
+
     Only a full-surface run can answer this: a comparison limited to two surfaces
     never consults the other two's entries, and every one of them would look
-    stale.
+    expired.
     """
     if list(selected) != list(SURFACES):
         print(
@@ -113,16 +123,35 @@ def _audit_allowlist(rep, selected: list[str], path: Path) -> int:
             file=sys.stderr,
         )
         return 1
-    unused = rep.allowlist.unused_entries() if rep.allowlist else []
-    if not unused:
-        print(f"allowlist has no stale entries and nothing in a held-empty section: {path}")
+    expired = rep.allowlist.expired_entries() if rep.allowlist else []
+    if not expired:
+        print(
+            "every allowlist entry still excuses a divergence a comparison found, "
+            f"and nothing sits in a held-empty section: {path}"
+        )
         return 0
-    print(f"{len(unused)} allowlist entr(ies) suppressed nothing: {path}", file=sys.stderr)
-    for scope, pattern in unused:
-        print(f"  [{scope}] {pattern}", file=sys.stderr)
+    # Why the comparison behind an entry produced nothing, where the run derived
+    # one: the reason is what tells a reader whether to delete or to look closer.
+    declined = {
+        (n["category"], n["key"], n["surface"]): n["reason"] for n in rep.not_compared
+    }
+    print(
+        f"{len(expired)} allowlist entr(ies) no longer suppress a divergence: {path}",
+        file=sys.stderr,
+    )
+    for scope, pattern, state in expired:
+        parts = scope.split(".")
+        category = _AUDIT_CATEGORY.get(parts[0], parts[0])
+        reason = declined.get((category, pattern, parts[-1])) or next(
+            (r for (c, k, _), r in declined.items() if c == category and k == pattern),
+            None,
+        )
+        note = f" — {reason}" if reason else ""
+        print(f"  [{scope}] {pattern} ({state}){note}", file=sys.stderr)
     print(
         "Remove each one, or say in its reason why it must outlive the "
-        "divergence it excuses.",
+        "divergence it excuses. `stale` means the comparison ran and the "
+        "surfaces agreed; `unconsulted` means no comparison looked the name up.",
         file=sys.stderr,
     )
     return 1
@@ -134,7 +163,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--audit-allowlist",
         action="store_true",
-        help="Report allowlist entries that suppressed nothing, and exit 1 if any",
+        help=(
+            "Report allowlist entries whose divergence a comparison no longer "
+            "finds, and exit 1 if any"
+        ),
     )
     ap.add_argument(
         "--surface",

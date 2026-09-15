@@ -20,7 +20,7 @@ make parity                                  # the normal entry point
 python3 tools/parity/check_parity.py         # markdown report (same thing)
 python3 tools/parity/check_parity.py --json  # machine-readable findings
 python3 tools/parity/check_parity.py --surface c,python   # limit surfaces (c always included)
-python3 tools/parity/check_parity.py --audit-allowlist    # fail on a stale allowlist entry
+python3 tools/parity/check_parity.py --audit-allowlist    # fail on an allowlist entry whose divergence is gone
 make surface-coverage                        # regenerate the runtime capability matrix
 make surface-coverage-check                  # fail on a stale matrix
 ```
@@ -46,10 +46,24 @@ are committed instead, so they can be reviewed in a diff and gated in CI:
   constructor, GC or RAII); an **allowlisted gap still counts as a gap**,
   because an entry records that an absence was reviewed, not that it was filled.
 - The **allowlist audit** (`--audit-allowlist`), which names every
-  `allowlist.toml` entry that suppressed nothing on a full-surface run. A stale
-  entry is not inert: it keeps asserting a reviewed decision about a name, so
-  the next symbol to take that name inherits the blessing unexamined. Fixing a
-  divergence therefore means deleting its entry in the same change.
+  `allowlist.toml` entry a full-surface run found nothing left to suppress.
+  Such an entry is not inert: it keeps asserting a reviewed decision about a
+  name, so the next symbol to take that name inherits the blessing unexamined.
+  Fixing a divergence therefore means deleting its entry in the same change.
+  Every consult site passes the verdict its comparison reached, and a check that
+  cannot compare at all asks nothing, so two states fail: `stale` (the
+  comparison ran and the surfaces agreed) and `unconsulted` (no comparison
+  looked the name up). The second covers an entry standing in front of a fold
+  the tool already detects — a facade taking a request object declares no
+  argument order — which is a fact the run derives and reports itself, so the
+  entry duplicates it and expires. Deriving it is also what makes it expire the
+  right way round: a facade that goes back to positional parameters is compared
+  again with no edit anywhere, where a hand-written entry would instead excuse
+  the restored divergence.
+- Neither gate can tell whether a live entry excuses the divergence its *reason*
+  claims. The report prints what each entry actually suppressed beside it so the
+  two can be read against each other; nothing is matched against the prose
+  automatically.
 
 ## Two extraction units
 
@@ -234,9 +248,10 @@ Every suppressed field divergence is emitted as an `allowlisted` finding rather
 than filtered before a finding is built, so the suppressed total stays auditable
 in the report instead of being a silent number.
 
-Entries expire. `--audit-allowlist` fails on any entry that suppressed nothing,
-so an entry outlives its divergence only for as long as it takes to notice —
-see [Two tracked outputs](#two-tracked-outputs).
+Entries expire. `--audit-allowlist` fails on any entry a comparison reached and
+then agreed with, and on any entry no comparison looked up at all, so an entry
+outlives its divergence only for as long as it takes to notice — see
+[Two tracked outputs](#two-tracked-outputs).
 
 A record that merely *shares a name* with an unrelated C struct does **not**
 belong in `allowlist.toml` — that is a matching fact and it lives in

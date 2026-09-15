@@ -39,7 +39,16 @@ def to_json(rep: Report) -> str:
         "handle_keys": rep.handle_keys,
         "record_counts": rep.record_counts,
         "matrix": rep.matrix,
+        "not_compared": rep.not_compared,
         "findings": [asdict(f) for f in rep.findings],
+        "allowlist_suppressed": {
+            f"{scope}|{pattern}": divergences
+            for (scope, pattern), divergences in sorted(
+                rep.allowlist.suppressed_divergences().items()
+            )
+        }
+        if rep.allowlist is not None
+        else {},
         "summary": _summary(rep),
     }
     return json.dumps(payload, indent=2, sort_keys=False)
@@ -105,26 +114,62 @@ def to_markdown(rep: Report) -> str:
                 out.append(f"| {s} | {rep.record_counts[s]} |")
         out.append("")
 
-    # Allowlist hygiene. An entry that suppressed nothing is not inert: it keeps
-    # asserting a reviewed decision about a name, so whatever takes that name next
-    # inherits the blessing unexamined. Reported here for a full-surface run only,
-    # because a partial run never consults the surfaces it left out.
+    # Comparisons no check could make. A fold on either side leaves no sequence
+    # to diff, and saying so here is what keeps it out of the allowlist: the fact
+    # is derived, so a facade that goes back to positional parameters is compared
+    # again with no edit anywhere. Counted by cause; the rows are in --json.
+    if rep.not_compared:
+        causes: dict[tuple[str, str], int] = {}
+        for n in rep.not_compared:
+            causes[(n["category"], n["reason"])] = (
+                causes.get((n["category"], n["reason"]), 0) + 1
+            )
+        out.append("## Comparisons not performed\n")
+        out.append(
+            f"**{len(rep.not_compared)}** (key, surface) pairs carried nothing to "
+            "compare. Per-pair rows are in `--json`.\n"
+        )
+        out.append("| category | pairs | why the comparison could not be made |")
+        out.append("|---|---|---|")
+        for (category, reason), count in sorted(causes.items()):
+            out.append(f"| {category} | {count} | {reason} |")
+        out.append("")
+
+    # Allowlist hygiene. An entry whose comparison ran and agreed is not inert: it
+    # keeps asserting a reviewed decision about a name, so whatever takes that name
+    # next inherits the blessing unexamined. Reported here for a full-surface run
+    # only, because a partial run never consults the surfaces it left out.
     if rep.allowlist is not None and list(rep.surfaces) == list(SURFACES):
-        stale = rep.allowlist.unused_entries()
-        out.append("## Allowlist entries that suppressed nothing\n")
-        if stale:
+        expired = rep.allowlist.expired_entries()
+        out.append("## Allowlist entries that no longer suppress a divergence\n")
+        if expired:
             out.append(
-                f"**{len(stale)}** — remove each one, or say in its reason why it "
+                f"**{len(expired)}** — remove each one, or say in its reason why it "
                 "must outlive the divergence it excuses "
                 "(`check_parity.py --audit-allowlist` gates this).\n"
             )
-            out.append("| section | entry |")
-            out.append("|---|---|")
-            for scope, pattern in stale:
-                out.append(f"| `{scope}` | `{pattern}` |")
+            out.append("| section | entry | state |")
+            out.append("|---|---|---|")
+            for scope, pattern, state in expired:
+                out.append(f"| `{scope}` | `{pattern}` | {state} |")
         else:
-            out.append("None — every entry still excuses a live divergence.")
+            out.append(
+                "None — every entry excused a divergence a comparison found."
+            )
         out.append("")
+
+        # What each live entry actually suppressed. An entry can be live and
+        # still not excuse the divergence its reason describes, which no checker
+        # can decide; this is the material for reading the two side by side.
+        suppressed = rep.allowlist.suppressed_divergences()
+        if suppressed:
+            out.append("## What each allowlist entry suppressed\n")
+            out.append("| section | entry | divergence |")
+            out.append("|---|---|---|")
+            for (scope, pattern), divergences in sorted(suppressed.items()):
+                for divergence in divergences:
+                    out.append(f"| `{scope}` | `{pattern}` | {divergence} |")
+            out.append("")
 
     # Self-confidence: unparsed counts.
     out.append("## Parser confidence (unparsed declarations)\n")

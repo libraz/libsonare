@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 
 import re
 
-from allowlist import Allowlist
+from allowlist import AGREED, DIVERGED, Allowlist
 from core_defaults import CoreConfig
 from extractors.wasm_internal import WasmInternal
 from model import Extraction, FunctionSig, RecordShape
@@ -371,6 +371,17 @@ class Report:
     # of its entries actually suppressed something. Kept on the report so a
     # caller can audit the allowlist without rebuilding the comparison.
     allowlist: Allowlist | None = None
+    # Comparisons a check declined to make, as {category, key, surface, reason}.
+    # A fold on either side leaves no sequence to diff, and deriving that here is
+    # what lets the exclusion expire on its own: the facade going back to
+    # positional parameters restores the comparison with no edit anywhere.
+    not_compared: list[dict[str, str]] = field(default_factory=list)
+
+    def decline(self, category: str, key: str, surface: str, reason: str) -> None:
+        """Record a comparison that could not be made, and why."""
+        self.not_compared.append(
+            {"category": category, "key": key, "surface": surface, "reason": reason}
+        )
 
     def active(self) -> list[Finding]:
         """Findings that count toward failure (non-allowlisted, non-informational)."""
@@ -505,29 +516,35 @@ def build_report(
             )
             present_free = key in indexed.get(s, {})
             present_method = key in candidate_methods
-            if present_free or present_method:
-                continue
-            # Handle-instance C key (``mixer_add_bus``): the facade exposes the
-            # same op as a bare class method (``Mixer.add_bus`` -> key
-            # ``add_bus``), so the handle prefix is stripped there. Strip the
-            # longest matching handle prefix and retry the tail against this
-            # surface's method-keys AND free-function keys; a match means the op
-            # IS exposed -- covered, no finding.
-            stripped = None
-            for prefix in _HANDLE_FULL_PREFIXES:
-                if key.startswith(prefix) and len(key) > len(prefix):
-                    stripped = key[len(prefix) :]
-                    break
-            if stripped is not None and stripped in candidate_symbols:
-                continue
-            # Idiomatic rename: the capability is exposed under a different
-            # canonical name (verified alias). Credit it when any listed alias is
-            # present as a method / free function on this surface.
-            aliases = _ALIAS_COVERAGE.get(key)
-            if aliases and any(a in candidate_symbols for a in aliases):
-                continue
-            if allow.coverage_ok(key, s):
+            covered = present_free or present_method
+            if not covered:
+                # Handle-instance C key (``mixer_add_bus``): the facade exposes
+                # the same op as a bare class method (``Mixer.add_bus`` -> key
+                # ``add_bus``), so the handle prefix is stripped there. Strip the
+                # longest matching handle prefix and retry the tail against this
+                # surface's method-keys AND free-function keys; a match means the
+                # op IS exposed -- covered, no finding.
+                for prefix in _HANDLE_FULL_PREFIXES:
+                    if key.startswith(prefix) and len(key) > len(prefix):
+                        covered = key[len(prefix) :] in candidate_symbols
+                        break
+            if not covered:
+                # Idiomatic rename: the capability is exposed under a different
+                # canonical name (verified alias). Credit it when any listed alias
+                # is present as a method / free function on this surface.
+                aliases = _ALIAS_COVERAGE.get(key)
+                covered = bool(aliases) and any(a in candidate_symbols for a in aliases)
+            # Every surface reaches a verdict here: the key is either exposed on
+            # this surface or it is not, so coverage never declines a comparison.
+            if allow.coverage_ok(
+                key,
+                s,
+                AGREED if covered else DIVERGED,
+                f"C '{key}' is not exposed in {s}",
+            ):
                 rep.findings.append(Finding("coverage", key, s, "", allowlisted=True))
+                continue
+            if covered:
                 continue
             # Constructors / destructors / heap-release helpers are handled by the
             # facade object model (ctor / GC / RAII), not a free function. Report
@@ -574,9 +591,12 @@ def build_report(
             # findings. Keep it explicit rather than stripping every `_json`.
             is_c_alias = any(key in aliases for aliases in _ALIAS_COVERAGE.values())
             if key in c_index or is_c_alias:
+                allow.surface_only_ok(key, s, AGREED)
                 continue
             rep.surface_only[s].append(key)
-            allowlisted = allow.surface_only_ok(key, s)
+            allowlisted = allow.surface_only_ok(
+                key, s, DIVERGED, f"{s}-only '{sig.raw_name}' has no C counterpart"
+            )
             # A surface-only symbol whose raw_name carries a '.' is a facade
             # CLASS METHOD (e.g. "Mixer.add_bus", "Audio.fromBuffer"): an
             # ergonomic handle/instance method with no C free-function
@@ -663,8 +683,6 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
         keys.update(indexed[s].keys())
     for key in sorted(keys):
         sigs = {s: indexed[s][key] for s in facades if key in indexed[s]}
-        if len(sigs) < 2:
-            continue
         param_names: list[str] = []
         for sig in sigs.values():
             for p in sig.core_params():
@@ -672,9 +690,15 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
                     continue
                 if p.name not in param_names:
                     param_names.append(p.name)
+        if len(sigs) < 2:
+            rep.decline(
+                "default",
+                key,
+                next(iter(sigs), ""),
+                "only one facade exposes the key, so there is no second default",
+            )
+            continue
         for pname in param_names:
-            if allow.default_ok(key, pname):
-                continue
             declared: dict[str, str] = {}
             for s, sig in sigs.items():
                 match = next((p for p in sig.core_params() if p.name == pname), None)
@@ -693,24 +717,33 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
                 for s, v in declared.items():
                     if canon[s] == "none" or is_empty_collection_default(v):
                         canon[s] = "\0empty-collection\0"
-            distinct = set(canon.values())
-            if len(distinct) > 1:
-                rep.findings.append(
-                    Finding(
-                        category="default",
-                        key=key,
-                        surface="cross",
-                        message=(
-                            f"default drift for '{key}.{pname}': "
-                            + ", ".join(f"{s}={declared[s]}" for s in sorted(declared))
-                        ),
-                        detail={"param": pname, "defaults": declared},
-                        location="; ".join(
-                            f"{s}={sigs[s].file}:{sigs[s].line}"
-                            for s in sorted(declared)
-                        ),
-                    )
+            if len(declared) < 2:
+                rep.decline(
+                    "default",
+                    f"{key}.{pname}",
+                    "cross",
+                    "fewer than two facades spell a default for this parameter",
                 )
+                continue
+            distinct = set(canon.values())
+            message = f"default drift for '{key}.{pname}': " + ", ".join(
+                f"{s}={declared[s]}" for s in sorted(declared)
+            )
+            verdict = DIVERGED if len(distinct) > 1 else AGREED
+            if allow.default_ok(key, pname, verdict, message) or verdict == AGREED:
+                continue
+            rep.findings.append(
+                Finding(
+                    category="default",
+                    key=key,
+                    surface="cross",
+                    message=message,
+                    detail={"param": pname, "defaults": declared},
+                    location="; ".join(
+                        f"{s}={sigs[s].file}:{sigs[s].line}" for s in sorted(declared)
+                    ),
+                )
+            )
 
 
 # C config param names that are opaque struct/options pointers the facades
@@ -777,57 +810,77 @@ _EXTENDED_FIELD_TAILS = {
 }
 
 
+def _order_not_comparable(c_cfg: list[str], s_cfg: list[str]) -> str | None:
+    """Why this pair carries no order to diff, or None when it does.
+
+    Either side can fold its order away entirely, and a fold leaves no sequence
+    to compare rather than a sequence that matches.
+    """
+    # When C itemizes no config params, or its only config param is an opaque
+    # struct/options pointer, the facade flattening it is the bag convention, not
+    # order drift. (The itemized C order lives in a `_with_options` variant,
+    # compared on its own key.)
+    if not c_cfg or all(n in _STRUCT_BAG_NAMES for n in c_cfg):
+        return "C itemizes no config parameter order to compare against"
+    # Facade may also flatten/fold into a bag: a facade whose config is a subset
+    # bag (all names are struct/bag names) carries no order signal.
+    if all(n in _STRUCT_BAG_NAMES for n in s_cfg):
+        return "the facade takes a request object / options bag, which has no order"
+    return None
+
+
+def _order_verdict(key: str, c_cfg: list[str], s_cfg: list[str]) -> str:
+    """Whether one facade's config order matches C's, once both itemize one."""
+    # A trailing versioned C config struct is commonly flattened into facade
+    # keyword/request fields.  The positional prefix still has to match exactly;
+    # the struct's interior has no C-level parameter order to compare here.  This
+    # is distinct from an arbitrary tail because the canonical final parameter is
+    # explicitly an opaque bag.
+    if c_cfg[-1] in _STRUCT_BAG_NAMES and s_cfg[: len(c_cfg) - 1] == c_cfg[:-1]:
+        return AGREED
+    # Facades fold variadic C scalar tails into an options bag, so a facade
+    # exposing a STRICT PREFIX of the C config order is fine.
+    if s_cfg == c_cfg[: len(s_cfg)]:
+        return AGREED
+    # Facades exposed in their EXTENDED (``_ex``) form: C base order followed by
+    # the known extra-field tail of the _ex variant.
+    tail = _EXTENDED_FIELD_TAILS.get(key)
+    if (
+        tail is not None
+        and s_cfg[: len(c_cfg)] == c_cfg
+        and tuple(s_cfg[len(c_cfg) :]) == tail
+    ):
+        return AGREED
+    return DIVERGED
+
+
 def _order_drift(
     c_index, indexed, allow, rep: Report, selected, roles: set[str]
 ) -> None:
     for key, csig in c_index.items():
         c_cfg = _config_names(csig, roles)
-        # When C itemizes no config params, or its only config param is an opaque
-        # struct/options pointer, the facade flattening it is the bag convention,
-        # not order drift. (The itemized C order lives in a `_with_options`
-        # variant, compared on its own key.)
-        if not c_cfg or all(n in _STRUCT_BAG_NAMES for n in c_cfg):
-            continue
         for s in _FACADE_SURFACES:
             if s not in selected or key not in indexed.get(s, {}):
                 continue
-            if allow.order_ok(key, s):
-                continue
             ssig = indexed[s][key]
             s_cfg = _config_names(ssig, roles)
-            # Facade may also flatten/fold into a bag: a facade whose config is a
-            # subset bag (all names are struct/bag names) carries no order signal.
-            if all(n in _STRUCT_BAG_NAMES for n in s_cfg):
+            declined = _order_not_comparable(c_cfg, s_cfg)
+            if declined is not None:
+                rep.decline("order", key, s, declined)
                 continue
-            # A trailing versioned C config struct is commonly flattened into
-            # facade keyword/request fields.  The positional prefix still has
-            # to match exactly; the struct's interior has no C-level parameter
-            # order to compare here.  This is distinct from an arbitrary tail
-            # because the canonical final parameter is explicitly an opaque bag.
-            if c_cfg[-1] in _STRUCT_BAG_NAMES and s_cfg[: len(c_cfg) - 1] == c_cfg[:-1]:
-                continue
-            # Facades fold variadic C scalar tails into an options bag, so a
-            # facade exposing a STRICT PREFIX of the C config order is fine.
-            if s_cfg == c_cfg[: len(s_cfg)]:
-                continue
-            # Facades exposed in their EXTENDED (``_ex``) form: C base order
-            # followed by the known extra-field tail of the _ex variant.
-            tail = _EXTENDED_FIELD_TAILS.get(key)
-            if (
-                tail is not None
-                and s_cfg[: len(c_cfg)] == c_cfg
-                and tuple(s_cfg[len(c_cfg) :]) == tail
-            ):
+            verdict = _order_verdict(key, c_cfg, s_cfg)
+            message = (
+                f"config param order/name mismatch vs C for '{key}': "
+                f"C={c_cfg} {s}={s_cfg}"
+            )
+            if allow.order_ok(key, s, verdict, f"[{s}] {message}") or verdict == AGREED:
                 continue
             rep.findings.append(
                 Finding(
                     category="order",
                     key=key,
                     surface=s,
-                    message=(
-                        f"config param order/name mismatch vs C for '{key}': "
-                        f"C={c_cfg} {s}={s_cfg}"
-                    ),
+                    message=message,
                     detail={"c": c_cfg, s: s_cfg},
                     location=f"{ssig.file}:{ssig.line} (C {csig.file}:{csig.line})",
                 )
@@ -861,8 +914,6 @@ def _input_naming(
     for s in facades:
         keys.update(indexed[s].keys())
     for key in sorted(keys):
-        if allow.input_naming_ok(key):
-            continue
         groups: dict[str, list[str]] = {}
         for s in facades:
             if key in indexed[s]:
@@ -880,27 +931,39 @@ def _input_naming(
             ]
             if cg:
                 groups["c"] = cg
+        # A surface that names no input buffer drops out of the population, and
+        # one group left is a spelling, not a comparison.
         if len(groups) < 2:
+            # The lone surface that did name one goes in the surface field, so
+            # the reason stays one row in the report's per-cause tally.
+            rep.decline(
+                "input",
+                key,
+                next(iter(groups), "none"),
+                "fewer than two surfaces name an audio-input buffer here",
+            )
             continue
         distinct = {tuple(v) for v in groups.values()}
-        if len(distinct) > 1:
-            rep.findings.append(
-                Finding(
-                    category="input",
-                    key=key,
-                    surface="cross",
-                    message=(
-                        f"audio-input naming differs for '{key}': "
-                        + "; ".join(f"{s}={groups[s]}" for s in sorted(groups))
-                    ),
-                    detail={"groups": groups},
-                    location="; ".join(
-                        f"{s}={indexed[s][key].file}:{indexed[s][key].line}"
-                        for s in sorted(groups)
-                        if s in indexed and key in indexed[s]
-                    ),
-                )
+        message = f"audio-input naming differs for '{key}': " + "; ".join(
+            f"{s}={groups[s]}" for s in sorted(groups)
+        )
+        verdict = DIVERGED if len(distinct) > 1 else AGREED
+        if allow.input_naming_ok(key, verdict, message) or verdict == AGREED:
+            continue
+        rep.findings.append(
+            Finding(
+                category="input",
+                key=key,
+                surface="cross",
+                message=message,
+                detail={"groups": groups},
+                location="; ".join(
+                    f"{s}={indexed[s][key].file}:{indexed[s][key].line}"
+                    for s in sorted(groups)
+                    if s in indexed and key in indexed[s]
+                ),
             )
+        )
 
 
 def _enum_drift(indexed, allow, rep: Report) -> None:
@@ -910,16 +973,20 @@ def _enum_drift(indexed, allow, rep: Report) -> None:
         keys.update(indexed[s].keys())
     for key in sorted(keys):
         sigs = {s: indexed[s][key] for s in facades if key in indexed[s]}
-        if len(sigs) < 2:
-            continue
         param_names: list[str] = []
         for sig in sigs.values():
             for p in sig.params:
                 if p.enum_values and p.name not in param_names:
                     param_names.append(p.name)
+        if len(sigs) < 2:
+            rep.decline(
+                "enum",
+                key,
+                next(iter(sigs), ""),
+                "only one facade exposes the key, so there is no second value-set",
+            )
+            continue
         for pname in param_names:
-            if allow.enum_ok(key, pname):
-                continue
             sets: dict[str, tuple[str, ...]] = {}
             for s, sig in sigs.items():
                 match = next(
@@ -927,23 +994,33 @@ def _enum_drift(indexed, allow, rep: Report) -> None:
                 )
                 if match is not None:
                     sets[s] = match.enum_values
-            distinct = {frozenset(v) for v in sets.values()}
-            if len(distinct) > 1:
-                rep.findings.append(
-                    Finding(
-                        category="enum",
-                        key=key,
-                        surface="cross",
-                        message=(
-                            f"enum value-set drift for '{key}.{pname}': "
-                            + "; ".join(f"{s}={sorted(sets[s])}" for s in sorted(sets))
-                        ),
-                        detail={
-                            "param": pname,
-                            "sets": {s: list(v) for s, v in sets.items()},
-                        },
-                    )
+            if len(sets) < 2:
+                rep.decline(
+                    "enum",
+                    f"{key}.{pname}",
+                    "cross",
+                    "fewer than two facades declare an enum value-set here",
                 )
+                continue
+            distinct = {frozenset(v) for v in sets.values()}
+            message = f"enum value-set drift for '{key}.{pname}': " + "; ".join(
+                f"{s}={sorted(sets[s])}" for s in sorted(sets)
+            )
+            verdict = DIVERGED if len(distinct) > 1 else AGREED
+            if allow.enum_ok(key, pname, verdict, message) or verdict == AGREED:
+                continue
+            rep.findings.append(
+                Finding(
+                    category="enum",
+                    key=key,
+                    surface="cross",
+                    message=message,
+                    detail={
+                        "param": pname,
+                        "sets": {s: list(v) for s, v in sets.items()},
+                    },
+                )
+            )
 
 
 def _core_default_drift(
@@ -973,13 +1050,21 @@ def _core_default_drift(
             if sig is None:
                 continue
             for p in sig.core_params():
-                if p.name in roles or p.default is None:
+                if p.name in roles:
                     continue
                 core_def = cfg.core_default_for(p.name)
-                if core_def is None:
+                # One of the two values does not exist to be compared.
+                if p.default is None or core_def is None:
+                    rep.decline(
+                        "core_default",
+                        f"{key}.{p.name}",
+                        s,
+                        "the facade declares no default"
+                        if p.default is None
+                        else "the core struct field has no literal initializer",
+                    )
                     continue
-                if allow.core_default_ok(key, p.name):
-                    continue
+                verdict = AGREED
                 if "::" in core_def:
                     # Enum-member core default. The facade may spell it as a
                     # member string ('stft') or a bare integer (0). We can fold
@@ -991,21 +1076,34 @@ def _core_default_drift(
                     if facade_canon is not None and re.fullmatch(
                         r"-?\d+", facade_canon
                     ):
+                        rep.decline(
+                            "core_default",
+                            f"{key}.{p.name}",
+                            s,
+                            "the facade spells an enum-member core default as an "
+                            "integer, which needs an enum value table to compare",
+                        )
                         continue
-                    if facade_canon == canonical_core_default(core_def):
-                        continue
-                elif canonical_default(p.default) == canonical_default(core_def):
-                    continue
+                    if facade_canon != canonical_core_default(core_def):
+                        verdict = DIVERGED
+                elif canonical_default(p.default) != canonical_default(core_def):
+                    verdict = DIVERGED
                 field_name = cfg.rename.get(p.name, p.name)
+                message = (
+                    f"core-default drift for '{key}.{p.name}': "
+                    f"{s}={p.default} vs C++ {cfg.name}.{field_name}={core_def}"
+                )
+                if (
+                    allow.core_default_ok(key, p.name, verdict, f"[{s}] {message}")
+                    or verdict == AGREED
+                ):
+                    continue
                 rep.findings.append(
                     Finding(
                         category="core_default",
                         key=key,
                         surface=s,
-                        message=(
-                            f"core-default drift for '{key}.{p.name}': "
-                            f"{s}={p.default} vs C++ {cfg.name}.{field_name}={core_def}"
-                        ),
+                        message=message,
                         detail={
                             "param": p.name,
                             "facade": p.default,
@@ -1042,7 +1140,7 @@ def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
     """
 
     def _emit(name: str, message: str, location: str, informational: bool) -> None:
-        if allow.wasm_internal_ok(name):
+        if allow.wasm_internal_ok(name, DIVERGED, message):
             rep.findings.append(
                 Finding("wasm_internal", name, "wasm", "", allowlisted=True)
             )
@@ -1061,6 +1159,7 @@ def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
     # 1. embind free registration not declared in the SonareModule type.
     for name, site in sorted(wi.embind.items()):
         if name in wi.iface:
+            allow.wasm_internal_ok(name, AGREED)
             continue
         _emit(
             name,
@@ -1073,6 +1172,7 @@ def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
     # 2. A facade calls module.X for a name the SonareModule type does not declare.
     for name, site in sorted(wi.refs.items()):
         if name in wi.iface:
+            allow.wasm_internal_ok(name, AGREED)
             continue
         _emit(
             name,
@@ -1157,6 +1257,23 @@ def _index_records(ex: Extraction | None) -> dict[str, RecordShape]:
     return out
 
 
+def _record_verdict(c_rec: RecordShape, shape: RecordShape | None) -> str:
+    """Whole-record verdict for one facade against its C struct oracle."""
+    if shape is None:
+        # A peer facade declares it and this one does not.
+        return DIVERGED
+    c_names = {x.name for x in c_rec.fields}
+    declared = {f.name for f in shape.fields}
+    if any(n not in declared for n in c_rec.core_field_names()):
+        return DIVERGED
+    if any(
+        f.name not in c_names and f.name not in _FACADE_ONLY_FIELDS
+        for f in shape.core_fields()
+    ):
+        return DIVERGED
+    return AGREED
+
+
 def _record_drift(extractions, allow, rep: Report, selected) -> None:
     """Compare each facade's declared record shape against its C struct oracle.
 
@@ -1197,13 +1314,25 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
             continue
         present = [s for s in facades if key in indexed[s]]
         for s in facades:
-            if allow.record_ok(key, s):
+            shape = indexed[s].get(key)
+            if shape is None and not present:
+                rep.decline(
+                    "record",
+                    key,
+                    s,
+                    "no facade declares the record, so there is no shape to hold "
+                    "against C",
+                )
+                continue
+            # Whole-record verdict, read before the field-level entries narrow
+            # it: this entry suppresses everything they would have caught.
+            verdict = _record_verdict(c_rec, shape)
+            if allow.record_ok(
+                key, s, verdict, f"[{s}] record '{c_rec.raw_name}' shape differs"
+            ):
                 rep.findings.append(Finding("record", key, s, "", allowlisted=True))
                 continue
-            shape = indexed[s].get(key)
             if shape is None:
-                if not present:
-                    continue  # uniform absence reads as agreement, not drift
                 rep.findings.append(
                     Finding(
                         category="record",
@@ -1229,13 +1358,34 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
             suppressed: list[str] = []
             for n in c_fields:
                 if n in declared:
+                    allow.record_field_ok(key, n, AGREED)
                     continue
-                (suppressed if allow.record_field_ok(key, n) else missing).append(n)
-            extra_allowed = allow.record_extra_ok(key, s)
+                div = f"[{s}] {shape.raw_name} declares no '{n}' of {c_rec.raw_name}"
+                (
+                    suppressed
+                    if allow.record_field_ok(key, n, DIVERGED, div)
+                    else missing
+                ).append(n)
+            raw_extra = [
+                f.name
+                for f in shape.core_fields()
+                if f.name not in c_names and f.name not in _FACADE_ONLY_FIELDS
+            ]
+            extra_allowed = allow.record_extra_ok(
+                key,
+                s,
+                DIVERGED if raw_extra else AGREED,
+                f"{shape.raw_name} declares beyond {c_rec.raw_name}: {raw_extra}",
+            )
             for f in shape.core_fields():
                 if f.name in c_names or f.name in _FACADE_ONLY_FIELDS:
+                    allow.record_field_ok(key, f.name, AGREED)
                     continue
-                if extra_allowed or allow.record_field_ok(key, f.name):
+                div = (
+                    f"[{s}] {shape.raw_name} declares '{f.name}', absent from "
+                    f"{c_rec.raw_name}"
+                )
+                if extra_allowed or allow.record_field_ok(key, f.name, DIVERGED, div):
                     suppressed.append(f.name)
                 else:
                     extra.append(f.name)

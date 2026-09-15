@@ -394,70 +394,68 @@ python = [
 # beyond the options-bag-prefix convention. Seed empty.
 # ---------------------------------------------------------------------------
 [order]
+# A JS facade that takes a request object declares no parameter order at all, so
+# the comparison is not made and the report says so per (key, surface). Those
+# need no entry here, which is why most of the keys below are listed for python
+# alone: the same fold that removes the divergence removes the comparison, and it
+# comes back on its own if a facade returns to positional parameters.
+#
 # scale_quantize_midi / scale_correction_semitones: C orders the optional
 # reference pitch BEFORE the value being quantized (root, mode_mask,
 # reference_midi, midi). All facades use the ergonomic order (root, mode_mask,
 # midi, reference_midi=default) and remap to C order internally (verified in the
 # addon / embind / ctypes wrappers).
 #
-# preemphasis / deemphasis: C is (coef, zi, use_zi); Node/WASM expose
-# (coef, zi?) and derive use_zi from whether zi was supplied.
-# tempogram: the facades expose a single `mode` selector (cyclic / fourier /
-# autocorr) that folds the C `center` / `norm` flags; Node/WASM replace
-# center+norm with `mode`, Python keeps center+norm and adds `mode`. Documented
-# ergonomic convenience, not order drift.
+# tempogram (python): the facade exposes a single `mode` selector (cyclic /
+# fourier / autocorr) that folds the C `center` / `norm` flags, keeping
+# center+norm alongside it. Documented ergonomic convenience, not order drift.
 # strip_meter (wasm/node): the C handle method `sonare_strip_meter` takes a
 # `strip` handle; the facades follow the documented handle->index convention
 # (the handle becomes a numeric `strip_index`) and add a `tap` metering-tap
 # selector, the same extended-facade shape already accepted for strip_meter
 # (python) below. Same op, handle->index + tap-selector — not order drift.
-# lufs_interleaved: C is (samples, frames, channels, sample_rate). All facades
-# expose (samples, channels, sample_rate) and DERIVE frames = len(samples) /
-# channels internally — passing both an interleaved buffer and a redundant frame
-# count would let them disagree. The frames-derived shape is the documented
-# cross-binding convention; not order drift.
-# lufs_series_interleaved (python): same C shape and the same frames derivation,
-# listed for python alone because the TS extractor reads the request-object
-# overload first and sees one `request` parameter, so node and wasm never reach
-# the order comparison. An entry for them would suppress nothing.
-# chord_functional_analysis: C is (options-bag, key_root, key_mode); the facades
-# put (key_root, key_mode) first and INLINE the SonareChordDetectionOptions
-# fields after them — the same ergonomic options-inlining + key-first shape
-# already used for detect_chords. Remapped internally; not order drift.
-# analyze_melody (node/python): the facade appends the extended use_pyin/center
-# params that map to C sonare_analyze_melody_ex; the base C analyze_melody lacks
-# them. Folded extended-facade params, not order drift. (WASM passes them via an
-# options object, so it is not flagged here.)
-# pitch_correct_to_midi_timevarying (all): C is (f0_hz, voiced_prob, voiced,
-# n_frames, hop_length, target_midi). Every facade uses the ergonomic order
+# lufs_interleaved / lufs_series_interleaved (python): C is (samples, frames,
+# channels, sample_rate). The facade exposes (samples, channels, sample_rate) and
+# DERIVES frames = len(samples) / channels internally — passing both an
+# interleaved buffer and a redundant frame count would let them disagree. The
+# frames-derived shape is the documented cross-binding convention; not order drift.
+# chord_functional_analysis (python): C is (options-bag, key_root, key_mode); the
+# facade puts (key_root, key_mode) first and INLINES the
+# SonareChordDetectionOptions fields after them — the same ergonomic
+# options-inlining + key-first shape already used for detect_chords. Remapped
+# internally; not order drift.
+# analyze_melody (python): the facade appends the extended use_pyin/center params
+# that map to C sonare_analyze_melody_ex; the base C analyze_melody lacks them.
+# Folded extended-facade params, not order drift.
+# pitch_correct_to_midi_timevarying (python): C is (f0_hz, voiced_prob, voiced,
+# n_frames, hop_length, target_midi). The facade uses the ergonomic order
 # (f0_hz, target_midi, hop_length, voiced?, voiced_prob?) and DERIVES n_frames
 # from the f0_hz array length — passing both the contour array and a redundant
-# frame count would let them disagree. Remapped to C order internally (ctypes /
-# addon / embind wrappers). Documented ergonomic convenience, not order drift.
-# pitch_correct_timevarying (all): C is (f0_hz, voiced_prob, voiced, n_frames,
-# hop_length, config). Every facade exposes (f0_hz, sampleRate, hopLength, ...)
-# and DERIVES n_frames from the f0_hz array length, then folds the
-# SonarePitchCorrectionConfig fields + the voiced/voicedProb companion arrays —
-# Node/WASM into a trailing PitchCorrectOptions bag, Python into keyword args.
-# Same ergonomic options-fold + array-length derivation as spectral_edit /
-# pitch_correct_to_midi_timevarying. Remapped to C order internally. Not order drift.
+# frame count would let them disagree. Remapped to C order in the ctypes wrapper.
+# pitch_correct_timevarying (python): C is (f0_hz, voiced_prob, voiced, n_frames,
+# hop_length, config). The facade exposes (f0_hz, sample_rate, hop_length, ...),
+# DERIVES n_frames from the f0_hz array length, then folds the
+# SonarePitchCorrectionConfig fields and the voiced / voiced_prob companion
+# arrays into keyword args. Same ergonomic options-fold + array-length derivation
+# as spectral_edit. Remapped to C order internally. Not order drift.
 # midi_cc_learn (node/wasm/python): C is (events, count, param_id, min_value,
 # max_value, min_movement). The facades DERIVE `count` from the events array
 # length; Node/WASM additionally fold the optional (min_value, max_value,
 # min_movement) range params into a MidiCcLearnOptions bag (Python keeps them as
 # keyword args). Passing both the array and a redundant count would let them
 # disagree. Remapped to C order internally; ergonomic convenience, not order drift.
-# midi_route_events (all): C is (events, count, config). Every facade exposes
+# midi_route_events (python): C is (events, count, config). The facade exposes
 # (events, config) and DERIVES `count` from the events array length — same
-# array-length derivation as lufs_interleaved. (The facade method is
+# array-length derivation as lufs_interleaved. Node and WASM carry no entry: their
+# trailing options bag is structural, so what reaches the comparison is a strict
+# prefix of the C order and there is nothing left to excuse. (The facade method is
 # `midiRouteEvents` / `route_midi_events`, mapped to this C key.)
-# spectral_edit (all): C is (config, ops, n_ops). Every facade exposes (ops, ...)
+# spectral_edit (python): C is (config, ops, n_ops). The facade exposes (ops, ...)
 # and DERIVES `n_ops` from the ops array length, then folds the
-# SonareSpectralEditConfig fields — Node/WASM into a trailing options bag
-# (nFft/hopLength/window/healRadiusFrames), Python into keyword args. Passing both
-# the ops array and a redundant count would let them disagree; same ergonomic
-# options-fold + array-length derivation already accepted for midi_route_events.
-# Remapped to C order internally (addon / embind / ctypes). Not order drift.
+# SonareSpectralEditConfig fields into keyword args. Passing both the ops array
+# and a redundant count would let them disagree; same ergonomic options-fold +
+# array-length derivation already accepted for midi_route_events. Remapped to C
+# order in the ctypes wrapper. Not order drift.
 # extract_notes (python): C is (f0_hz, voiced_prob, voiced, n_frames, frame_rate,
 # config). The facade exposes (f0_hz, frame_rate, ...) and DERIVES n_frames from
 # the f0_hz array length, then folds the SonareNoteExtractorConfig fields and the
@@ -483,39 +481,14 @@ python = [
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
-  "preemphasis",
-  "deemphasis",
-  "tempogram",
   "strip_meter",
-  "lufs_interleaved",
-  "chord_functional_analysis",
-  "analyze_melody",
-  "pitch_correct_to_midi_timevarying",
-  "pitch_correct_timevarying",
   "midi_cc_learn",
-  "midi_route_events",
-  "spectral_edit",
-  "mel_to_stft",  # Node facade derives matrix extents from typed arrays; C requires explicit dims
-  "mel_to_audio", # Node facade derives matrix extents from typed arrays; C requires explicit dims
-  "mfcc_to_audio", # Node facade derives matrix extents from typed arrays; C requires explicit dims
 ]
 wasm = [
   "scale_quantize_midi",
   "scale_correction_semitones",
-  "preemphasis",
-  "deemphasis",
-  "tempogram",
   "strip_meter",
-  "lufs_interleaved",
-  "chord_functional_analysis",
-  "pitch_correct_to_midi_timevarying",
-  "pitch_correct_timevarying",
   "midi_cc_learn",
-  "midi_route_events",
-  "spectral_edit",
-  "mel_to_stft",  # WASM facade derives matrix extents from typed arrays; C requires explicit dims
-  "mel_to_audio", # WASM facade derives matrix extents from typed arrays; C requires explicit dims
-  "mfcc_to_audio", # WASM facade derives matrix extents from typed arrays; C requires explicit dims
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -614,10 +587,11 @@ params = []
 # real signal worth triaging.
 # ---------------------------------------------------------------------------
 [input_naming]
-# WASM renames the primary feature-buffer input for clarity: `mel` -> `melPower`
-# and `mfcc` -> `mfccCoefficients`. Same buffer, descriptive spelling — not a
-# drift. (Node and C keep `mel` / `mfcc`.)
-keys = ["mel_to_stft", "mel_to_audio", "mfcc_to_mel", "mfcc_to_audio"]
+# The Python facade names the coefficient input `mfcc_coeffs` where C names it
+# `mfcc`. Same buffer, descriptive spelling — not drift. The WASM facade renames
+# it `mfccCoefficients` for the same reason, but takes a request object, so it
+# declares no positional input name and never enters the comparison.
+keys = ["mfcc_to_mel", "mfcc_to_audio"]
 
 # ---------------------------------------------------------------------------
 # [wasm_internal] — WASM embind / SonareModule / index.ts names whose
