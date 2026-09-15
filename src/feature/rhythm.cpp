@@ -12,6 +12,7 @@
 #include "feature/onset.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -195,9 +196,11 @@ std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, in
     throw SonareException(ErrorCode::InvalidParameter,
                           "cyclic_tempogram: sr and hop_length must be > 0");
   }
-  if (bpm_min <= 0.0f || n_bins <= 0) {
+  // Finite, not merely positive: a non-finite bpm_min makes the phase below NaN, and
+  // the cast to a bin index is undefined before std::clamp ever sees the value.
+  if (!numeric::finite_positive(bpm_min) || n_bins <= 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "cyclic_tempogram: bpm_min and n_bins must be > 0");
+                          "cyclic_tempogram: bpm_min must be finite and > 0, n_bins must be > 0");
   }
   if (onset_envelope.empty()) return {};
 
@@ -248,6 +251,14 @@ std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig
   }
   if (config.hop_length <= 0 || config.sr <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "plp: sr and hop_length must be > 0");
+  }
+  // The band test below is the only reader of these, and it is a pair of relational
+  // comparisons: a NaN bound fails both, so the band silently stops restricting.
+  if (!numeric::finite_positive(config.tempo_min) ||
+      !numeric::finite_ordered_range(config.tempo_min, config.tempo_max)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "plp: tempo_min and tempo_max must be finite with "
+                          "0 < tempo_min < tempo_max");
   }
   const int n = static_cast<int>(onset_envelope.size());
   if (n == 0) return {};

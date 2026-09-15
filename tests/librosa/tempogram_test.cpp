@@ -387,3 +387,19 @@ TEST_CASE("tempogram_ratio rejects unanswerable input instead of zero-filling",
     require_invalid_parameter([&] { return tempogram_ratio(tg, win_length, 22050, 512, factors); });
   }
 }
+
+TEST_CASE("cyclic_tempogram rejects a non-finite bpm_min", "[tempogram]") {
+  // NaN and +Infinity both survive a bare bpm_min <= 0. The folded phase then goes
+  // NaN and the cast to a bin index is undefined -- the std::clamp around it runs
+  // after the cast, so it narrows a value that is already undefined.
+  const std::vector<float> env(256, 1.0f);
+  TempogramConfig cfg;
+  const float inf = std::numeric_limits<float>::infinity();
+
+  REQUIRE_THROWS_AS(cyclic_tempogram(env, 22050, cfg, inf, 16), SonareException);
+  REQUIRE_THROWS_AS(cyclic_tempogram(env, 22050, cfg, std::numeric_limits<float>::quiet_NaN(), 16),
+                    SonareException);
+  REQUIRE_THROWS_AS(cyclic_tempogram(env, 22050, cfg, -inf, 16), SonareException);
+
+  REQUIRE_NOTHROW(cyclic_tempogram(env, 22050, cfg, 60.0f, 16));
+}

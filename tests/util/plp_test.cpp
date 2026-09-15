@@ -4,11 +4,13 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
 #include "feature/onset.h"
 #include "feature/rhythm.h"
+#include "util/exception.h"
 
 using namespace sonare;
 
@@ -238,4 +240,31 @@ TEST_CASE("plp from onset envelope is consistent with audio overload", "[plp][un
 
   auto pulse_env = plp(env, cfg);
   REQUIRE(pulse_env.size() == env.size());
+}
+
+TEST_CASE("plp rejects a non-finite tempo band", "[plp][unit]") {
+  // The band test is a pair of relational comparisons, so a NaN bound fails both
+  // and the band stops restricting anything instead of rejecting the input.
+  const std::vector<float> env(1024, 1.0f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  PlpConfig nan_min;
+  nan_min.tempo_min = nan;
+  REQUIRE_THROWS_AS(plp(env, nan_min), SonareException);
+
+  PlpConfig nan_max;
+  nan_max.tempo_max = nan;
+  REQUIRE_THROWS_AS(plp(env, nan_max), SonareException);
+
+  PlpConfig inf_max;
+  inf_max.tempo_max = inf;
+  REQUIRE_THROWS_AS(plp(env, inf_max), SonareException);
+
+  PlpConfig inverted;
+  inverted.tempo_min = 300.0f;
+  inverted.tempo_max = 30.0f;
+  REQUIRE_THROWS_AS(plp(env, inverted), SonareException);
+
+  REQUIRE_NOTHROW(plp(env, PlpConfig{}));
 }
