@@ -13,13 +13,14 @@ out-of-range value cannot be told from a field the entry point never reads.
 
 from __future__ import annotations
 
+import ctypes
 import re
 
 import numpy as np
 import pytest
 
 import libsonare as ls
-from libsonare import SonareValueError
+from libsonare import SonareError, SonareValueError
 
 SAMPLE_RATE = 22050
 
@@ -509,3 +510,123 @@ def test_a_wrapped_bank_program_argument_is_refused_rather_than_emitting_another
             args = list(base)
             args[position] = value
             _refuses(name, ls.Project.midi_bank_program, *args)
+
+
+# Two legal values per packer argument, both inside the MIDI range the core
+# enforces. Each pair was measured to pack to different words: these return a
+# packed integer, where two different inputs land on one word easily.
+_PACKER_PAIRS = {
+    "ppq": (0.0, 1.5),
+    "group": (0, 1),
+    "channel": (0, 1),
+    "note": (60, 62),
+    "velocity": (100, 101),
+    "controller": (7, 10),
+    "value": (40, 41),
+    "pressure": (50, 51),
+    "program": (5, 6),
+    "bend": (8192, 9000),
+}
+
+# The C width each argument narrows onto, where it is not the family's uint8.
+# ``ppq`` reaches a c_double, which a Python float already is, so it has no
+# fold to refuse and takes no entry in the wrap loop.
+_PACKER_WIDTHS: dict[str, int | None] = {"bend": 16, "ppq": None}
+
+_PACKERS = (
+    (ls.Project.midi_note_on, ("ppq", "group", "channel", "note", "velocity")),
+    (ls.Project.midi_note_off, ("ppq", "group", "channel", "note", "velocity")),
+    (ls.Project.midi_cc, ("ppq", "group", "channel", "controller", "value")),
+    (ls.Project.midi_poly_pressure, ("ppq", "group", "channel", "note", "pressure")),
+    (ls.Project.midi_program, ("ppq", "group", "channel", "program")),
+    (ls.Project.midi_channel_pressure, ("ppq", "group", "channel", "pressure")),
+    (ls.Project.midi_pitch_bend, ("ppq", "group", "channel", "bend")),
+)
+
+
+def _wraps_onto(value: int, bits: int) -> tuple[float | int, ...]:
+    """Values a ``bits``-wide conversion folds onto ``value`` exactly, plus a fraction.
+
+    Each one used to return the event the positive control had just asked for,
+    which is what makes the refusal discriminating: a caller could not tell the
+    wrapped request from the legitimate one beside it.
+    """
+    return (2**32 + value, 2**bits + value, 2 ** (bits * 2) + value, value + 0.5, -1)
+
+
+def test_a_wrapped_packer_argument_is_refused_rather_than_packing_another_event() -> None:
+    """The MIDI 1.0 event packers, whose arguments reached their argtypes unconverted.
+
+    These stay positional; only the narrowing changed. The per-field MIDI bounds
+    (a note is 0-127, a channel 0-15) are the core's and are asserted separately,
+    so what is driven here is the type bound alone.
+    """
+    for packer, names in _PACKERS:
+        base = [_PACKER_PAIRS[name][0] for name in names]
+        for index, name in enumerate(names):
+            moved = list(base)
+            moved[index] = _PACKER_PAIRS[name][1]
+            label = f"{packer.__name__}/{name}"
+            assert packer(*moved) != packer(*base), label  # positive control
+            width = _PACKER_WIDTHS.get(name, 8)
+            if width is None:
+                continue
+            for value in _wraps_onto(base[index], width):
+                args = list(base)
+                args[index] = value
+                _refuses(name, packer, *args)
+
+
+def test_a_packer_still_refuses_at_the_midi_bound_the_core_owns() -> None:
+    """The semantic half stayed in the core, so it still refuses and still says so.
+
+    Driven because the repair narrows onto the C width, which is wider than
+    every MIDI field: without this, moving a bound out of the core would read as
+    a passing change.
+    """
+    for call in (
+        lambda: ls.Project.midi_note_on(0.0, 0, 0, 128, 100),
+        lambda: ls.Project.midi_note_on(0.0, 0, 16, 60, 100),
+        lambda: ls.Project.midi_note_on(0.0, 16, 0, 60, 100),
+        lambda: ls.Project.midi_note_on(0.0, 0, 0, 60, 128),
+        lambda: ls.Project.midi_pitch_bend(0.0, 0, 0, 16384),
+    ):
+        with pytest.raises(SonareError) as raised:
+            call()
+        assert not isinstance(raised.value, SonareValueError)
+
+
+def test_a_pitch_bend_keeps_the_range_its_own_width_carries() -> None:
+    """The one uint16 in the family, pinned so a uniform uint8 cannot pass.
+
+    ``_midi_event_tuple`` sees only ``*args`` and cannot tell the widths apart,
+    so a narrowing folded into it would have to pick one -- and uint8 would
+    refuse most of a 14-bit quantity while every other packer stayed green.
+    """
+    for value in (256, 8192, 16383):
+        assert ls.Project.midi_pitch_bend(0.0, 0, 0, value) != ls.Project.midi_pitch_bend(
+            0.0, 0, 0, 0
+        )
+
+
+def test_a_wrong_typed_packer_argument_is_refused_by_name_not_by_ctypes() -> None:
+    """A value ctypes cannot convert used to escape as a raw ``ctypes.ArgumentError``.
+
+    That is neither a ``SonareValueError`` nor anything the binding's contract
+    names, so a caller catching the library's own error types did not catch it.
+    """
+    for packer, names in _PACKERS:
+        base = [_PACKER_PAIRS[name][0] for name in names]
+        for index, name in enumerate(names):
+            for value in ("60", None, True):
+                args = list(base)
+                args[index] = value
+                with pytest.raises(SonareValueError):
+                    packer(*args)
+                # And specifically not the ctypes exception it used to be.
+                try:
+                    packer(*args)
+                except ctypes.ArgumentError:  # pragma: no cover - the repaired path
+                    pytest.fail(f"{packer.__name__}/{name} leaked ctypes.ArgumentError")
+                except SonareValueError:
+                    pass

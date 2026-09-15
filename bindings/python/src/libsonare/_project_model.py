@@ -1065,7 +1065,15 @@ def _track_kind_value(kind: str | int) -> int:
     return _resolve_enum(kind, _TRACK_KIND_NAMES, "track kind")
 
 
-def _midi_event_tuple(name: str, *args: float | int) -> tuple[float, int, int]:
+def _midi_event_tuple(
+    name: str, *args: float | ctypes.c_uint8 | ctypes.c_uint16
+) -> tuple[float, int, int]:
+    """Call one packer and read its event back as a tuple.
+
+    Each argument arrives already narrowed, because the widths are not uniform
+    across the family: pitch bend takes a ``uint16`` where every other packer's
+    scalars are ``uint8``, and this sees only ``*args``.
+    """
     lib = _get_lib()
     event = SonareMidiEventPod()
     fn = getattr(lib, name)

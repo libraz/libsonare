@@ -36,6 +36,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
     _to_c_uint8,
+    _to_c_uint16,
     _to_c_uint32,
 )
 
@@ -278,45 +279,92 @@ class _ProjectMidiMixin:
         ppq: float, group: int, channel: int, note: int, velocity: int
     ) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 note-on event tuple accepted by :meth:`set_midi_events`."""
-        return _midi_event_tuple("sonare_midi_note_on", ppq, group, channel, note, velocity)
+        return _midi_event_tuple(
+            "sonare_midi_note_on",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(velocity, "velocity"),
+        )
 
     @staticmethod
     def midi_note_off(
         ppq: float, group: int, channel: int, note: int, velocity: int = 0
     ) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 note-off event tuple accepted by :meth:`set_midi_events`."""
-        return _midi_event_tuple("sonare_midi_note_off", ppq, group, channel, note, velocity)
+        return _midi_event_tuple(
+            "sonare_midi_note_off",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(velocity, "velocity"),
+        )
 
     @staticmethod
     def midi_cc(
         ppq: float, group: int, channel: int, controller: int, value: int
     ) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 control-change event tuple."""
-        return _midi_event_tuple("sonare_midi_cc", ppq, group, channel, controller, value)
+        return _midi_event_tuple(
+            "sonare_midi_cc",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(controller, "controller"),
+            _to_c_uint8(value, "value"),
+        )
 
     @staticmethod
     def midi_poly_pressure(
         ppq: float, group: int, channel: int, note: int, pressure: int
     ) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 poly-pressure event tuple."""
-        return _midi_event_tuple("sonare_midi_poly_pressure", ppq, group, channel, note, pressure)
+        return _midi_event_tuple(
+            "sonare_midi_poly_pressure",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(pressure, "pressure"),
+        )
 
     @staticmethod
     def midi_program(ppq: float, group: int, channel: int, program: int) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 program-change event tuple."""
-        return _midi_event_tuple("sonare_midi_program", ppq, group, channel, program)
+        return _midi_event_tuple(
+            "sonare_midi_program",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(program, "program"),
+        )
 
     @staticmethod
     def midi_channel_pressure(
         ppq: float, group: int, channel: int, pressure: int
     ) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 channel-pressure event tuple."""
-        return _midi_event_tuple("sonare_midi_channel_pressure", ppq, group, channel, pressure)
+        return _midi_event_tuple(
+            "sonare_midi_channel_pressure",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(pressure, "pressure"),
+        )
 
     @staticmethod
     def midi_pitch_bend(ppq: float, group: int, channel: int, bend: int) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 pitch-bend event tuple (`bend` is unsigned 14-bit)."""
-        return _midi_event_tuple("sonare_midi_pitch_bend", ppq, group, channel, bend)
+        # The one uint16 in the family; a uint8 here would refuse most of the range.
+        return _midi_event_tuple(
+            "sonare_midi_pitch_bend",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint16(bend, "bend"),
+        )
 
     # -- MIDI naming / GM tables (static-lifetime lookups) ------------------
 
