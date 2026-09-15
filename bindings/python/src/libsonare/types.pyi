@@ -1075,6 +1075,7 @@ class MasteringResult:
     applied_gain_db: float
     latency_samples: int
     loudness_target_limited: bool
+    non_finite_substitution_count: int
     def __init__(
         self,
         samples: list[float],
@@ -1084,6 +1085,7 @@ class MasteringResult:
         applied_gain_db: float,
         latency_samples: int = 0,
         loudness_target_limited: bool = False,
+        non_finite_substitution_count: int = 0,
     ) -> None: ...
 
 class MasteringStereoResult:
@@ -1095,6 +1097,7 @@ class MasteringStereoResult:
     applied_gain_db: float
     latency_samples: int
     loudness_target_limited: bool
+    non_finite_substitution_count: int
     def __init__(
         self,
         left: list[float],
@@ -1105,6 +1108,7 @@ class MasteringStereoResult:
         applied_gain_db: float,
         latency_samples: int = 0,
         loudness_target_limited: bool = False,
+        non_finite_substitution_count: int = 0,
     ) -> None: ...
 
 class StageGainReduction:
@@ -1156,6 +1160,7 @@ class MasteringChainResult:
     loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
     report: MasteringReport | None
+    non_finite_substitution_count: int
     def __init__(
         self,
         samples: list[float],
@@ -1169,6 +1174,7 @@ class MasteringChainResult:
         loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
         report: MasteringReport | None = ...,
+        non_finite_substitution_count: int = ...,
     ) -> None: ...
 
 class MasteringChainStereoResult:
@@ -1184,6 +1190,7 @@ class MasteringChainStereoResult:
     loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
     report: MasteringReport | None
+    non_finite_substitution_count: int
     def __init__(
         self,
         left: list[float],
@@ -1198,6 +1205,7 @@ class MasteringChainStereoResult:
         loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
         report: MasteringReport | None = ...,
+        non_finite_substitution_count: int = ...,
     ) -> None: ...
 
 class MixMeterSnapshot:

@@ -91,6 +91,7 @@ def mastering(
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
             loudness_target_limited=bool(out.loudness_target_limited),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
@@ -319,6 +320,7 @@ def mastering_process(
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
             loudness_target_limited=bool(out.loudness_target_limited),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
@@ -363,6 +365,7 @@ def mastering_process_stereo(
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
             loudness_target_limited=bool(out.loudness_target_limited),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
@@ -586,6 +589,7 @@ def mastering_chain(
                 int(out.stage_gain_reductions_count),
             ),
             report=_extract_mastering_report(out.report),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
@@ -685,6 +689,7 @@ def mastering_chain_stereo(
                 int(out.stage_gain_reductions_count),
             ),
             report=_extract_mastering_report(out.report),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
@@ -820,6 +825,7 @@ def master_audio(
                 int(out.stage_gain_reductions_count),
             ),
             report=_extract_mastering_report(out.report),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
@@ -922,6 +928,7 @@ def master_audio_stereo(
                 int(out.stage_gain_reductions_count),
             ),
             report=_extract_mastering_report(out.report),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))

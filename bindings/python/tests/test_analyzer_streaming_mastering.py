@@ -346,6 +346,28 @@ def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
     chain.reset()
 
 
+def test_streaming_mastering_chain_reports_no_substitution_on_a_clean_stream() -> None:
+    """The cumulative substitution count is reachable and stays zero for finite input.
+
+    A substituting stage leaves the output finite, in range and free of any
+    error while carrying samples unrelated to the input, so zero is what says
+    the blocks were computed from what was supplied.
+    """
+    from libsonare import StreamingMasteringChain
+
+    with StreamingMasteringChain({"maximizer.truePeakLimiter.enabled": 1}) as chain:
+        chain.prepare(sample_rate=44100, max_block_size=256, num_channels=1)
+        assert chain.non_finite_substitution_count() == 0
+        for _ in range(4):
+            out = chain.process_mono(
+                [0.4 * math.sin(2 * math.pi * 220 * i / 44100) for i in range(256)]
+            )
+            assert all(math.isfinite(x) for x in out)
+        count = chain.non_finite_substitution_count()
+        assert isinstance(count, int)
+        assert count == 0
+
+
 def test_stft_result_types() -> None:
     """StftResult fields have correct types and shapes."""
     from libsonare import stft

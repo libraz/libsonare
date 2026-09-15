@@ -64,6 +64,7 @@ def mastering_pair_process(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))

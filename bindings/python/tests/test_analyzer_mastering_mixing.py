@@ -626,3 +626,44 @@ def test_mastering_assistant_suggest_follows_target_platform() -> None:
     # The numeric index is a transport detail, not part of the Python vocabulary.
     with pytest.raises(ValueError):
         libsonare.mastering_assistant_suggest(samples, sample_rate=sr, params={"targetPlatform": 2})
+
+
+def test_clean_input_reports_no_non_finite_substitution() -> None:
+    """Every mastering result reports zero substitutions for a finite input.
+
+    A substituting stage replaces a non-finite input sample with a finite
+    in-domain one, leaving the output finite, in range and error-free while
+    carrying samples unrelated to the input. Zero is therefore what says the
+    output was computed from what was supplied, and every entry point must be
+    able to say it.
+    """
+    import libsonare
+
+    sr = 44100
+    samples = [0.3 * math.sin(2 * math.pi * 220 * i / sr) for i in range(4096)]
+    other = [0.2 * math.sin(2 * math.pi * 330 * i / sr) for i in range(4096)]
+    config = {
+        "dynamics": {"compressor": {"thresholdDb": -30.0, "ratio": 4.0}},
+        "loudness": {"targetLufs": -14.0, "ceilingDb": -1.0},
+    }
+
+    results = [
+        libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0),
+        libsonare.mastering_process(
+            "dynamics.compressor", samples, sample_rate=sr, params={"thresholdDb": -24.0}
+        ),
+        libsonare.mastering_process_stereo(
+            "stereo.imager", samples, other, sample_rate=sr, params={"width": 1.1}
+        ),
+        libsonare.mastering_pair_process(
+            "match.abCrossfade", samples, other, sample_rate=sr, params={"mix": 0.5}
+        ),
+        libsonare.mastering_chain(samples, sample_rate=sr, config=config),
+        libsonare.mastering_chain_stereo(samples, other, sample_rate=sr, config=config),
+        libsonare.master_audio(samples, sample_rate=sr, preset_name="pop"),
+        libsonare.master_audio_stereo(samples, other, sample_rate=sr, preset_name="pop"),
+    ]
+
+    for result in results:
+        assert result.non_finite_substitution_count == 0
+        assert isinstance(result.non_finite_substitution_count, int)

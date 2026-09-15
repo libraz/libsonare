@@ -1350,6 +1350,11 @@ class MasteringResult:
     applied_gain_db: float
     latency_samples: int = 0
     loudness_target_limited: bool = False
+    #: Non-finite input samples a processor replaced with a finite in-domain
+    #: one. The output is then finite, in range and error-free while carrying
+    #: samples unrelated to the input, so a non-zero count is the only thing
+    #: separating a degraded result from a clean one.
+    non_finite_substitution_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1364,6 +1369,8 @@ class MasteringStereoResult:
     applied_gain_db: float
     latency_samples: int = 0
     loudness_target_limited: bool = False
+    #: See :class:`MasteringResult`. Aggregated over both channels.
+    non_finite_substitution_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1427,6 +1434,12 @@ class MasteringChainResult:
     #: :attr:`stages`).
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
     report: MasteringReport | None = None
+    #: Non-finite input samples a stage replaced with a finite in-domain one,
+    #: aggregated over every stage the chain ran. The output is then finite, in
+    #: range and error-free while carrying samples unrelated to the input, so a
+    #: non-zero count is the only thing separating a degraded result from a
+    #: clean one.
+    non_finite_substitution_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1446,3 +1459,5 @@ class MasteringChainStereoResult:
     loudness_target_limited: bool = False
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
     report: MasteringReport | None = None
+    #: Aggregated over every stage the chain ran and over both channels.
+    non_finite_substitution_count: int = 0

@@ -16,6 +16,7 @@ from ._mastering_offline import _chain_params
 from ._runtime import (
     SonareValueError,
     _check,
+    _check_realtime,
     _get_lib,
     _guard_buffer,
     _narrow_float,
@@ -237,6 +238,33 @@ class StreamingMasteringChain:
         if self._handle is None or not self._handle:
             return 0
         return int(self._lib.sonare_streaming_mastering_chain_latency_samples(self._handle))
+
+    def non_finite_substitution_count(self) -> int:
+        """Return the non-finite samples this chain's stages replaced.
+
+        Advisory telemetry, and the only thing that separates a degraded stream
+        from a clean one. A substituting stage replaces a non-finite input
+        sample with a finite in-domain one, so the output stays finite, in range
+        and free of any error while carrying samples unrelated to the input. A
+        non-zero count is what says the samples in between were not computed
+        from what was supplied.
+
+        Aggregated over every substituting stage, so it reports that a
+        substitution happened without naming the stage. Cumulative over every
+        block since the last :meth:`prepare`, which rebuilds the stages and so
+        clears it; :meth:`reset` leaves it alone.
+        """
+        self._ensure_open()
+        if not hasattr(self._lib, "sonare_streaming_mastering_chain_non_finite_substitution_count"):
+            raise RuntimeError(
+                "libsonare was built without streaming mastering substitution telemetry"
+            )
+        out = ctypes.c_uint32()
+        rc = self._lib.sonare_streaming_mastering_chain_non_finite_substitution_count(
+            self._handle, ctypes.byref(out)
+        )
+        _check_realtime(rc)
+        return int(out.value)
 
     def stage_names(self) -> list[str]:
         """Return the realized stage names in processing order.
