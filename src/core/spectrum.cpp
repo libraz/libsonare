@@ -147,6 +147,112 @@ std::vector<std::complex<float>> stft_with_window(
   return spectrum;
 }
 
+/// @brief Builds a window of @p win_length, zero-padded to @p n_fft.
+/// @details Shared math behind the padded-window construction Spectrogram::compute
+///          and Spectrogram::to_audio each inline; also used by griffin_lim to build
+///          the (fixed, for its whole call) analysis/synthesis windows once.
+std::vector<float> build_padded_window(WindowType window, int win_length, int n_fft,
+                                       bool periodic) {
+  const auto window_handle = get_window_cached(window, win_length, periodic);
+  const std::vector<float>& short_window = *window_handle;
+  std::vector<float> padded(n_fft, 0.0f);
+  const int offset = (n_fft - win_length) / 2;
+  std::copy(short_window.begin(), short_window.end(), padded.begin() + offset);
+  return padded;
+}
+
+/// @brief iSTFT overlap-add for griffin_lim's iteration loop (n_frames > 1).
+/// @details Same per-frame extraction, inverse FFT and overlap-add as
+///          Spectrogram::to_audio's length > 0 path -- mirror it exactly if
+///          either changes -- but against caller-owned scratch and an
+///          externally owned FFT plan. griffin_lim's geometry (n_fft,
+///          hop_length, window, center=true) is fixed across n_iter passes, so
+///          the caller hoists the allocation and the FFT plan out of its loop
+///          instead of paying Spectrogram::from_complex + to_audio's cost each
+///          pass. @p output and @p window_sum must be sized to full_length.
+Audio griffin_lim_synthesize(const std::complex<float>* data, int n_bins, int n_frames, int n_fft,
+                             int hop_length, int sample_rate, int target_length,
+                             const std::vector<float>& synthesis_window,
+                             const Eigen::VectorXf& window_product_vec, FFT& fft,
+                             std::vector<std::complex<float>>& frame_spectrum,
+                             std::vector<float>& frame, std::vector<float>& output,
+                             std::vector<float>& window_sum) {
+  const int full_length = (n_frames - 1) * hop_length + n_fft;
+  std::fill(output.begin(), output.end(), 0.0f);
+  std::fill(window_sum.begin(), window_sum.end(), 0.0f);
+
+  Eigen::Map<const Eigen::VectorXf> synthesis_window_vec(synthesis_window.data(), n_fft);
+  Eigen::Map<const Eigen::VectorXf> frame_vec(frame.data(), n_fft);
+  Eigen::Map<Eigen::VectorXf> output_vec(output.data(), full_length);
+  Eigen::Map<Eigen::VectorXf> window_sum_vec(window_sum.data(), full_length);
+
+  for (int t = 0; t < n_frames; ++t) {
+    for (int f = 0; f < n_bins; ++f) {
+      frame_spectrum[f] = data[f * n_frames + t];
+    }
+    fft.inverse(frame_spectrum.data(), frame.data());
+    const int start = t * hop_length;
+    output_vec.segment(start, n_fft).noalias() += frame_vec.cwiseProduct(synthesis_window_vec);
+    window_sum_vec.segment(start, n_fft).noalias() += window_product_vec;
+  }
+
+  const float eps = sonare::constants::kSpectrumEpsilon;
+  output_vec =
+      (window_sum_vec.array() > eps)
+          .select(output_vec.array() / window_sum_vec.array().max(eps), output_vec.array());
+
+  // center is always true for griffin_lim's StftConfig, and n_frames > 1 here
+  // makes target_length > 0 always, so to_audio's length > 0 branch is the
+  // only one this geometry can reach.
+  const int trim_start = n_fft / 2;
+  std::vector<float> trimmed(static_cast<size_t>(target_length), 0.0f);
+  std::copy(output.begin() + trim_start, output.begin() + trim_start + target_length,
+            trimmed.begin());
+  return Audio::from_vector(std::move(trimmed), sample_rate);
+}
+
+/// @brief Forward STFT for griffin_lim's iteration loop (n_frames > 1).
+/// @details Same framing, windowing and per-frame FFT as stft_with_window --
+///          mirror it exactly if either changes -- against caller-owned
+///          scratch and an externally owned FFT plan, for the reason given on
+///          griffin_lim_synthesize. @p signal is exactly target_length samples
+///          (never empty for n_frames > 1), so the padded/framed length here
+///          always agrees with the @p n_frames the caller already knows.
+void griffin_lim_analyze(const Audio& signal, PadMode pad_mode,
+                         const std::vector<float>& padded_window, int n_fft, int hop_length,
+                         int n_bins, int n_frames, FFT& fft, std::vector<float>& frame,
+                         std::vector<std::complex<float>>& frame_spectrum,
+                         std::vector<std::complex<float>>& spectrum) {
+  const int pad_length = n_fft / 2;
+  std::vector<float> padded_signal = pad_center(signal.data(), signal.size(), pad_length, pad_mode);
+
+  for (int t = 0; t < n_frames; ++t) {
+    const size_t start = static_cast<size_t>(t) * static_cast<size_t>(hop_length);
+    const size_t remaining = start < padded_signal.size() ? padded_signal.size() - start : 0;
+    const int valid_samples = static_cast<int>(std::min(static_cast<size_t>(n_fft), remaining));
+
+    if (valid_samples >= n_fft) {
+      for (int i = 0; i < n_fft; ++i) {
+        frame[i] = padded_signal[start + static_cast<size_t>(i)] * padded_window[i];
+      }
+    } else if (valid_samples > 0) {
+      for (int i = 0; i < valid_samples; ++i) {
+        frame[i] = padded_signal[start + static_cast<size_t>(i)] * padded_window[i];
+      }
+      std::fill(frame.begin() + valid_samples, frame.end(), 0.0f);
+    } else {
+      std::fill(frame.begin(), frame.end(), 0.0f);
+    }
+
+    fft.forward(frame.data(), frame_spectrum.data());
+
+    for (int f = 0; f < n_bins; ++f) {
+      spectrum[static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t)] =
+          frame_spectrum[f];
+    }
+  }
+}
+
 }  // namespace
 
 Spectrogram::Spectrogram()
@@ -495,40 +601,93 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   stft_config.hop_length = hop_length;
   stft_config.center = true;
 
-  // Iterate
-  for (int iter = 0; iter < config.n_iter; ++iter) {
-    // Create spectrogram and do iSTFT
-    Spectrogram spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
-                                                 hop_length, sample_rate, stft_config.window,
-                                                 /*center=*/true);
-    Audio reconstructed = spec.to_audio(target_length);
+  if (n_frames <= 1) {
+    // to_audio(0) takes the auto-trim path and can return an empty
+    // reconstruction, which Spectrogram::compute then turns into a 0x0
+    // spectrogram -- a shape the fast path below (sized for n_frames > 1)
+    // cannot reuse. Rare enough to keep the original per-iteration path
+    // for it rather than special-case it into the hoisted buffers.
+    for (int iter = 0; iter < config.n_iter; ++iter) {
+      Spectrogram spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
+                                                   hop_length, sample_rate, stft_config.window,
+                                                   /*center=*/true);
+      Audio reconstructed = spec.to_audio(target_length);
+      Spectrogram new_spec = Spectrogram::compute(reconstructed, stft_config);
 
-    // Forward STFT of reconstructed signal
-    Spectrogram new_spec = Spectrogram::compute(reconstructed, stft_config);
+      for (int f = 0; f < n_bins; ++f) {
+        for (int t = 0; t < n_frames; ++t) {
+          const size_t idx =
+              static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
+          float target_mag = magnitude[idx];
+          std::complex<float> rebuilt = new_spec.at(f, t);
 
-    // Update phase while preserving magnitude
-    for (int f = 0; f < n_bins; ++f) {
-      for (int t = 0; t < n_frames; ++t) {
-        const size_t idx =
-            static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
-        float target_mag = magnitude[idx];
+          std::complex<float> angles = rebuilt;
+          if (config.momentum > 0.0f) {
+            angles -= (config.momentum / (1.0f + config.momentum)) * tprev[idx];
+          }
+          const float norm = std::abs(angles) + 1e-16f;
 
-        std::complex<float> rebuilt = new_spec.at(f, t);
-
-        // librosa's fast Griffin-Lim momentum, operating in the complex plane:
-        //   angles  = rebuilt - (momentum / (1 + momentum)) * tprev
-        //   angles /= |angles| + eps
-        //   estimate = target_mag * angles
-        // This preserves magnitude weighting and avoids the 2*pi phase-wrap
-        // discontinuities of scalar-angle extrapolation.
-        std::complex<float> angles = rebuilt;
-        if (config.momentum > 0.0f) {
-          angles -= (config.momentum / (1.0f + config.momentum)) * tprev[idx];
+          tprev[idx] = rebuilt;
+          spectrum[idx] = (target_mag / norm) * angles;
         }
-        const float norm = std::abs(angles) + 1e-16f;
+      }
+    }
+  } else {
+    // n_fft, hop_length, window and geometry are fixed for the whole call, so
+    // hoist the FFT plan and the per-iteration buffers out of the loop instead
+    // of paying Spectrogram::from_complex's copy and Spectrogram::compute's
+    // fresh allocation (and a fresh FFT plan for each) on every pass.
+    const StftConfig checked = Validated<StftConfig>::make(stft_config).get();
+    const int win_length = checked.actual_win_length();
+    std::vector<float> analysis_window =
+        build_padded_window(checked.window, win_length, n_fft, true);
+    std::vector<float> synthesis_window =
+        build_padded_window(checked.window, win_length, n_fft, false);
+    Eigen::Map<const Eigen::VectorXf> analysis_window_vec(analysis_window.data(), n_fft);
+    Eigen::Map<const Eigen::VectorXf> synthesis_window_vec(synthesis_window.data(), n_fft);
+    const Eigen::VectorXf window_product_vec =
+        analysis_window_vec.cwiseProduct(synthesis_window_vec);
 
-        tprev[idx] = rebuilt;  // Store the full complex estimate for next iter.
-        spectrum[idx] = (target_mag / norm) * angles;
+    const int full_length = (n_frames - 1) * hop_length + n_fft;
+
+    FFT fft(n_fft);
+    std::vector<float> frame(n_fft);
+    std::vector<std::complex<float>> frame_spectrum(n_bins);
+    std::vector<float> output(static_cast<size_t>(full_length));
+    std::vector<float> window_sum(static_cast<size_t>(full_length));
+    std::vector<std::complex<float>> new_spectrum(total);
+
+    for (int iter = 0; iter < config.n_iter; ++iter) {
+      Audio reconstructed = griffin_lim_synthesize(
+          spectrum.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, target_length,
+          synthesis_window, window_product_vec, fft, frame_spectrum, frame, output, window_sum);
+      griffin_lim_analyze(reconstructed, checked.pad_mode, analysis_window, n_fft, hop_length,
+                          n_bins, n_frames, fft, frame, frame_spectrum, new_spectrum);
+
+      // Update phase while preserving magnitude
+      for (int f = 0; f < n_bins; ++f) {
+        for (int t = 0; t < n_frames; ++t) {
+          const size_t idx =
+              static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
+          float target_mag = magnitude[idx];
+
+          std::complex<float> rebuilt = new_spectrum[idx];
+
+          // librosa's fast Griffin-Lim momentum, operating in the complex plane:
+          //   angles  = rebuilt - (momentum / (1 + momentum)) * tprev
+          //   angles /= |angles| + eps
+          //   estimate = target_mag * angles
+          // This preserves magnitude weighting and avoids the 2*pi phase-wrap
+          // discontinuities of scalar-angle extrapolation.
+          std::complex<float> angles = rebuilt;
+          if (config.momentum > 0.0f) {
+            angles -= (config.momentum / (1.0f + config.momentum)) * tprev[idx];
+          }
+          const float norm = std::abs(angles) + 1e-16f;
+
+          tprev[idx] = rebuilt;  // Store the full complex estimate for next iter.
+          spectrum[idx] = (target_mag / norm) * angles;
+        }
       }
     }
   }

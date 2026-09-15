@@ -10,9 +10,11 @@
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <numeric>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -47,6 +49,67 @@ float compute_snr(const float* original, const float* reconstructed, size_t size
     return 100.0f;  // Very high SNR
   }
   return 10.0f * std::log10(signal_power / noise_power);
+}
+
+/// @brief Reassembles Griffin-Lim from only the public Spectrogram API.
+/// @details Same algorithm griffin_lim's n_frames > 1 fast path runs -- random-phase
+///          init, then per iteration Spectrogram::from_complex -> to_audio ->
+///          Spectrogram::compute -- but through the public entry points instead of
+///          the fast path's caller-owned FFT plan and scratch. Exists so the test
+///          below can catch the fast path's internal helpers (griffin_lim_synthesize,
+///          griffin_lim_analyze) drifting from Spectrogram::to_audio /
+///          stft_with_window if either changes without the other following.
+Audio griffin_lim_via_public_api(const std::vector<float>& magnitude, int n_bins, int n_frames,
+                                 int n_fft, int hop_length, int sample_rate, int n_iter,
+                                 float momentum) {
+  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
+  std::vector<std::complex<float>> spectrum(total);
+  std::mt19937 rng(42);
+  std::uniform_real_distribution<float> dist(0.0f, kTwoPi);
+  for (int f = 0; f < n_bins; ++f) {
+    for (int t = 0; t < n_frames; ++t) {
+      const size_t idx = static_cast<size_t>(f) * static_cast<size_t>(n_frames) + t;
+      spectrum[idx] = std::polar(magnitude[idx], dist(rng));
+    }
+  }
+
+  std::vector<std::complex<float>> tprev(total, std::complex<float>(0.0f, 0.0f));
+  const int target_length = std::max(0, (n_frames - 1) * hop_length);
+
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+  stft_config.center = true;
+
+  for (int iter = 0; iter < n_iter; ++iter) {
+    Spectrogram spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
+                                                 hop_length, sample_rate, stft_config.window,
+                                                 /*center=*/true);
+    Audio reconstructed = spec.to_audio(target_length);
+    Spectrogram new_spec = Spectrogram::compute(reconstructed, stft_config);
+
+    for (int f = 0; f < n_bins; ++f) {
+      for (int t = 0; t < n_frames; ++t) {
+        const size_t idx = static_cast<size_t>(f) * static_cast<size_t>(n_frames) + t;
+        float target_mag = magnitude[idx];
+        std::complex<float> rebuilt = new_spec.at(f, t);
+
+        std::complex<float> angles = rebuilt;
+        if (momentum > 0.0f) {
+          angles -= (momentum / (1.0f + momentum)) * tprev[idx];
+        }
+        const float norm = std::abs(angles) + 1e-16f;
+
+        tprev[idx] = rebuilt;
+        spectrum[idx] = (target_mag / norm) * angles;
+      }
+    }
+  }
+
+  Spectrogram final_spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
+                                                     hop_length, sample_rate, stft_config.window,
+                                                     /*center=*/true);
+  return final_spec.to_audio(target_length);
 }
 }  // namespace
 
@@ -911,6 +974,81 @@ TEST_CASE("Griffin-Lim momentum=0.5 converges", "[spectrum]") {
 
   float snr = compute_snr(original.data() + skip, reconstructed.data() + skip, len - 2 * skip);
   REQUIRE(snr > 0.0f);  // Positive SNR indicates convergence (signal > error)
+}
+
+TEST_CASE("Griffin-Lim's fast path matches the public-API reference bit for bit",
+          "[spectrum][griffin_lim]") {
+  // n_fft/hop/duration deliberately small (well under [.][slow]) but n_frames > 1,
+  // so the fast path's hoisted FFT plan and scratch get exercised across repeated
+  // iterations -- the drift griffin_lim_via_public_api exists to catch.
+  constexpr int sr = 22050;
+  constexpr int samples = 6615;  // 0.3s
+  constexpr int n_fft = 512;
+  constexpr int hop_length = 128;
+
+  Audio audio = Audio::from_vector(generate_sine(samples, 220.0f, sr), sr);
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  const std::vector<float>& mag = spec.magnitude();
+  REQUIRE(spec.n_frames() > 1);
+
+  // n_iter=2 exercises the momentum recursion's tprev carry-over between
+  // iterations, which n_iter=1 cannot: a single pass never reads tprev.
+  GriffinLimConfig gl_config;
+  gl_config.n_iter = 2;
+
+  Audio fast = griffin_lim(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr, gl_config);
+  Audio reference =
+      griffin_lim_via_public_api(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr,
+                                 gl_config.n_iter, gl_config.momentum);
+
+  REQUIRE(fast.size() == reference.size());
+  REQUIRE(std::memcmp(fast.data(), reference.data(), fast.size() * sizeof(float)) == 0);
+
+  // Non-vacuity: griffin_lim_via_public_api itself must be sensitive to n_iter,
+  // or the REQUIRE above would pass even if the fast path ignored n_iter
+  // entirely. A 1-iteration and a 2-iteration run of the same reference must
+  // disagree somewhere.
+  Audio reference_one_iter = griffin_lim_via_public_api(mag, spec.n_bins(), spec.n_frames(), n_fft,
+                                                        hop_length, sr, 1, gl_config.momentum);
+  REQUIRE(reference_one_iter.size() == reference.size());
+  REQUIRE(std::memcmp(reference_one_iter.data(), reference.data(),
+                      reference.size() * sizeof(float)) != 0);
+}
+
+TEST_CASE("Griffin-Lim's fast path matches the public-API reference at a KissFFT-only length",
+          "[spectrum][griffin_lim]") {
+  // PFFFT's real-transform setup (fft.cpp: ensure_real -> pffft_length_allowed)
+  // requires n_fft % (2 * SIMD_SZ^2) == 0; SIMD_SZ is 4 on this build's PFFFT
+  // (pffft_simd_size()), so the gate is n_fft % 32 == 0. 100 % 32 == 4, so
+  // FFT::forward/inverse -- the only calls griffin_lim makes -- fall through to
+  // the KissFFT real config for this whole run, exercising the fast path's
+  // buffer/plan reuse against the other backend.
+  constexpr int sr = 22050;
+  constexpr int samples = 4410;  // 0.2s
+  constexpr int n_fft = 100;
+  constexpr int hop_length = 25;
+
+  Audio audio = Audio::from_vector(generate_sine(samples, 220.0f, sr), sr);
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  const std::vector<float>& mag = spec.magnitude();
+  REQUIRE(spec.n_frames() > 1);
+
+  GriffinLimConfig gl_config;
+  gl_config.n_iter = 2;
+
+  Audio fast = griffin_lim(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr, gl_config);
+  Audio reference =
+      griffin_lim_via_public_api(mag, spec.n_bins(), spec.n_frames(), n_fft, hop_length, sr,
+                                 gl_config.n_iter, gl_config.momentum);
+
+  REQUIRE(fast.size() == reference.size());
+  REQUIRE(std::memcmp(fast.data(), reference.data(), fast.size() * sizeof(float)) == 0);
 }
 
 TEST_CASE("iSTFT with win_length < n_fft", "[spectrum]") {
