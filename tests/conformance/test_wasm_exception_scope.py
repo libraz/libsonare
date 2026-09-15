@@ -35,8 +35,8 @@ SPEC.loader.exec_module(CHECKER)
 REAL_BUILD = ROOT / "bindings" / "wasm" / "build-wasm"
 REAL_ANALYSIS_BUILD = ROOT / "bindings" / "wasm" / "build-wasm-analysis"
 
-# The units SONARE_WASM_EXCEPTION_SOURCES flags whose only catching header the
-# analysis-only gate removes from the closure.  Dead weight in that build, and
+# The flagged units whose only catching header the analysis-only gate removes
+# from the closure.  Dead weight in that build, and
 # load-bearing in the full one -- which is the whole reason the rule is a union.
 GATED_IN_ANALYSIS_BUILD = frozenset(
     {
@@ -337,7 +337,7 @@ class SyntheticBuildTest(unittest.TestCase):
             status, out, err = self._main(root, build_a, build_b)
             self.assertEqual(status, 1)
             self.assertIn("mod: module_unit.cpp", err)
-            self.assertIn("SONARE_WASM_EXCEPTION_SOURCES", err)
+            self.assertIn("-fexceptions source list", err)
             self.assertNotIn("catch nowhere in some", out)
 
     def test_single_configuration_never_fails_on_an_idle_flag(self) -> None:

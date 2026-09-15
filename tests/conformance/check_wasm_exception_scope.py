@@ -13,7 +13,8 @@ error-code translation and reaches JS raw.  A ``noexcept`` function whose
 The failure is invisible.  It is not a compile error, not a link error, and not
 a test failure unless a test happens to assert the exact error code of a path
 that throws deep inside the C ABI.  The flag is applied per source file
-(``SONARE_WASM_EXCEPTION_SOURCES`` in ``src/CMakeLists.txt``) because a
+(the per-target ``-fexceptions`` source lists in ``src/CMakeLists.txt``, one
+``set_source_files_properties`` block per library the module links) because a
 whole-target ``-fexceptions`` costs several times as much binary for no
 additional behaviour -- and a hand-maintained file list drifts, which is what
 this check exists to catch.
@@ -46,8 +47,8 @@ Both directions of the mismatch are checked, and they are not symmetric:
 * **A unit that catches without the flag** is a defect in whichever single
   configuration shows it -- its catch arms are gone from that shipped module.
 * **A unit that carries the flag and catches nowhere** is only a defect if it
-  catches nowhere in *every* configuration.  ``SONARE_WASM_EXCEPTION_SOURCES``
-  is one unconditional list, while catch reachability is feature-gated: a gate
+  catches nowhere in *every* configuration.  Each source list is
+  unconditional, while catch reachability is feature-gated: a gate
   can remove the only catching header from a unit's closure, so the same entry
   is load-bearing in the full build and dead weight in the analysis-only one.
   Judging one configuration alone would demand deleting an entry the other
@@ -440,9 +441,10 @@ def main() -> int:
             "\nThese units catch but were compiled without -fexceptions, so every",
             "catch arm in them was deleted:",
             *(f"  {name}" for name in uncovered),
-            "\nUnits of the `sonare` target belong in SONARE_WASM_EXCEPTION_SOURCES",
-            "in src/CMakeLists.txt; a unit of a sibling static library needs the flag",
-            "on that library's own sources.",
+            "\nAdd each unit to the -fexceptions source list of the target that",
+            "compiles it, in src/CMakeLists.txt. The lists are per target: a unit of",
+            "a sibling static library needs the flag on that library's own block, not",
+            "on the module's.",
             sep="\n",
             file=sys.stderr,
         )
@@ -480,7 +482,8 @@ def main() -> int:
                 "\nThese units carry -fexceptions but reach no catch in any",
                 "configuration, so the flag is dead in every shipped build:",
                 *(f"  {name}" for name in dead),
-                "\nDrop them from SONARE_WASM_EXCEPTION_SOURCES in src/CMakeLists.txt.",
+                "\nDrop them from the -fexceptions source list of the target that",
+            "compiles them, in src/CMakeLists.txt.",
                 sep="\n",
                 file=sys.stderr,
             )
