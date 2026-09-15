@@ -235,9 +235,9 @@ describe('the WASM exception decoder covers every core ErrorCode', () => {
     }
 
     const pyBody = captureOne(
-      repoFile('bindings/python/src/libsonare/_runtime.py'),
+      repoFile('bindings/python/src/libsonare/_errors.py'),
       /class ErrorCode\(IntEnum\):([\s\S]*?)\n\n\nclass /,
-      'class ErrorCode in the Python runtime',
+      'class ErrorCode in the Python error types',
     );
     const pyTable = new Map<string, number>();
     for (const match of pyBody.matchAll(/^ {4}([A-Z][A-Z0-9_]*)\s*=\s*(\d+)$/gm)) {
