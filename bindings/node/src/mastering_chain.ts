@@ -1,6 +1,7 @@
 import { flattenChainConfig } from './_chain_config.js';
 import { addon } from './native.js';
 import type {
+  LoudnessMatchResult,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringChainStereoResult,
@@ -108,6 +109,15 @@ export interface MasteringPairProcessRequest {
   reference: Float32Array;
   sampleRate?: number;
   params?: Record<string, number | boolean>;
+}
+
+/** Canonical request form for {@link masteringAbMatchLoudness}. */
+export interface MasteringAbMatchLoudnessRequest {
+  /** The take to gain-match. Returned in `samples` with the gain applied. */
+  source: Float32Array;
+  /** The take whose integrated loudness `source` is matched to. */
+  reference: Float32Array;
+  sampleRate?: number;
 }
 
 export interface MasteringPairAnalyzeRequest {
@@ -782,6 +792,32 @@ export function masteringPairProcess(
     request.reference,
     request.sampleRate ?? 22050,
     request.params ?? {},
+  );
+}
+
+/**
+ * Gain-match `source` to `reference`'s BS.1770 integrated loudness, so an A/B
+ * between the two is not decided by level. The buffers may have independent
+ * lengths — each is measured at its own.
+ *
+ * The gain is not clamped; {@link LoudnessMatchResult} documents what each
+ * returned field then reports.
+ *
+ * @example
+ * ```ts
+ * const matched = masteringAbMatchLoudness({ source: take, reference: mix, sampleRate: 44100 });
+ * if (matched.matchedTruePeakDbtp > -1) {
+ *   // the match pushed the take above the delivery ceiling
+ * }
+ * ```
+ */
+export function masteringAbMatchLoudness(
+  request: MasteringAbMatchLoudnessRequest,
+): LoudnessMatchResult {
+  return addon.masteringAbMatchLoudness(
+    request.source,
+    request.reference,
+    request.sampleRate ?? 22050,
   );
 }
 
