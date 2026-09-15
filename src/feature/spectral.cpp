@@ -9,6 +9,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -100,7 +101,9 @@ std::vector<float> spectral_bandwidth(const float* magnitude, int n_bins, int n_
                                       int n_fft, float p) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0 && sr > 0 && n_fft > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(p > 0.0f, ErrorCode::InvalidParameter);
+  // An infinite p survives a bare p > 0 and is laundered into a finite lie:
+  // pow(sum, 1/p) collapses to pow(x, 0) == 1, so every frame reads 1.0 Hz.
+  SONARE_CHECK(numeric::finite_positive(p), ErrorCode::InvalidParameter);
 
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> centroids = spectral_centroid(magnitude, n_bins, n_frames, sr, n_fft);
@@ -567,9 +570,11 @@ std::vector<int> zero_crossings(const float* y, size_t n, float threshold, bool 
     throw SonareException(ErrorCode::InvalidParameter,
                           "zero_crossings: null input with non-zero length");
   }
-  if (!(threshold >= 0.0f)) {
+  // Finite, not merely non-negative: an infinite threshold zeroes every sample under
+  // the sign test, and ref_magnitude scales it to NaN on silence, inverting that.
+  if (!numeric::finite_non_negative(threshold)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "zero_crossings: threshold must be non-negative");
+                          "zero_crossings: threshold must be finite and non-negative");
   }
 
   std::vector<int> indices;

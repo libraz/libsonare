@@ -2,6 +2,7 @@
 /// @brief Unit tests for feature/spectral zero_crossings (raw indices).
 
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <vector>
 
 #include "feature/spectral.h"
@@ -49,4 +50,16 @@ TEST_CASE("zero_crossings on empty input", "[util][zero_crossings][edge]") {
 TEST_CASE("zero_crossings rejects negative threshold", "[util][zero_crossings][edge]") {
   std::vector<float> y{1.0f, -1.0f};
   REQUIRE_THROWS_AS(zero_crossings(y, -1.0f), SonareException);
+}
+
+TEST_CASE("zero_crossings rejects a non-finite threshold", "[util][zero_crossings][edge]") {
+  // +Infinity is the case a bare threshold >= 0 admits, and it fails silently rather
+  // than loudly: every finite sample falls inside the band, so the scan reports no
+  // crossings at all and returns an ordinary empty result.
+  std::vector<float> y{1.0f, -1.0f};
+  const float inf = std::numeric_limits<float>::infinity();
+
+  REQUIRE_THROWS_AS(zero_crossings(y, inf), SonareException);
+  REQUIRE_THROWS_AS(zero_crossings(y, -inf), SonareException);
+  REQUIRE_THROWS_AS(zero_crossings(y, std::numeric_limits<float>::quiet_NaN()), SonareException);
 }

@@ -212,6 +212,23 @@ TEST_CASE("spectral_rolloff validates librosa-compatible inputs", "[spectral]") 
   REQUIRE_THAT(clamped[0], WithinAbs(100.0f, 1e-7f));
 }
 
+TEST_CASE("spectral_bandwidth rejects a non-finite exponent", "[spectral]") {
+  // +Infinity is the case a bare p > 0 admits: pow(sum, 1/p) collapses to pow(x, 0),
+  // so every frame reads exactly 1.0 -- finite, so nothing downstream can catch it.
+  std::vector<float> magnitude = {9.0f, 1.0f, 1.0f};
+  const float inf = std::numeric_limits<float>::infinity();
+
+  REQUIRE_THROWS_AS(spectral_bandwidth(magnitude.data(), 3, 1, 300, 6, inf), SonareException);
+  REQUIRE_THROWS_AS(spectral_bandwidth(magnitude.data(), 3, 1, 300, 6, -inf), SonareException);
+  REQUIRE_THROWS_AS(
+      spectral_bandwidth(magnitude.data(), 3, 1, 300, 6, std::numeric_limits<float>::quiet_NaN()),
+      SonareException);
+
+  std::vector<float> accepted = spectral_bandwidth(magnitude.data(), 3, 1, 300, 6, 2.0f);
+  REQUIRE(accepted.size() == 1);
+  REQUIRE(std::isfinite(accepted[0]));
+}
+
 TEST_CASE("spectral_contrast rejects empty spectrograms like sibling features", "[spectral]") {
   Spectrogram empty;
 
