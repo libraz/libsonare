@@ -529,7 +529,11 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
 _SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
 _UINT_MAX = (1 << (ctypes.sizeof(ctypes.c_uint) * 8)) - 1
 # Fixed-width, unlike the two above: a uint32_t field is 32 bits on every host.
+_UINT8_MAX = 2**8 - 1
+_UINT16_MAX = 2**16 - 1
 _UINT32_MAX = 2**32 - 1
+_INT64_MIN = -(2**63)
+_INT64_MAX = 2**63 - 1
 
 
 def _to_c_int(value: object, name: str) -> ctypes.c_int:
@@ -544,7 +548,7 @@ def _to_c_int32(value: object, name: str) -> ctypes.c_int32:
 
 def _to_c_int64(value: object, name: str) -> ctypes.c_int64:
     """Narrow a caller-supplied integer onto ``int64_t``; see :func:`_narrow_int`."""
-    return ctypes.c_int64(_narrow_int(value, name, -(2**63), 2**63 - 1))
+    return ctypes.c_int64(_narrow_int(value, name, _INT64_MIN, _INT64_MAX))
 
 
 def _to_c_uint(value: object, name: str) -> ctypes.c_uint:
@@ -559,12 +563,12 @@ def _to_c_uint32(value: object, name: str) -> ctypes.c_uint32:
 
 def _to_c_uint16(value: object, name: str) -> ctypes.c_uint16:
     """Narrow a caller-supplied integer onto ``uint16_t``; see :func:`_narrow_int`."""
-    return ctypes.c_uint16(_narrow_int(value, name, 0, 2**16 - 1))
+    return ctypes.c_uint16(_narrow_int(value, name, 0, _UINT16_MAX))
 
 
 def _to_c_uint8(value: object, name: str) -> ctypes.c_uint8:
     """Narrow a caller-supplied integer onto ``uint8_t``; see :func:`_narrow_int`."""
-    return ctypes.c_uint8(_narrow_int(value, name, 0, 2**8 - 1))
+    return ctypes.c_uint8(_narrow_int(value, name, 0, _UINT8_MAX))
 
 
 def _to_c_size_t(value: object, name: str) -> ctypes.c_size_t:

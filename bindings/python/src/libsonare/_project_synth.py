@@ -18,6 +18,7 @@ import numpy as np
 
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._runtime import (
+    _UINT8_MAX,
     _UINT32_MAX,
     ErrorCode,
     SonareValueError,
@@ -401,10 +402,10 @@ class SampleBank:
                 at or above 4096.
         """
         zone = SonareSampleZoneDesc(
-            key_lo=_unsigned(key_lo, "key_lo", 0xFF),
-            key_hi=_unsigned(key_hi, "key_hi", 0xFF),
-            vel_lo=_unsigned(vel_lo, "vel_lo", 0xFF),
-            vel_hi=_unsigned(vel_hi, "vel_hi", 0xFF),
+            key_lo=_unsigned(key_lo, "key_lo", _UINT8_MAX),
+            key_hi=_unsigned(key_hi, "key_hi", _UINT8_MAX),
+            vel_lo=_unsigned(vel_lo, "vel_lo", _UINT8_MAX),
+            vel_hi=_unsigned(vel_hi, "vel_hi", _UINT8_MAX),
             sample_index=_unsigned(sample_index, "sample_index", _UINT32_MAX),
             tune_cents=_finite(tune_cents, "tune_cents"),
             gain=_finite(gain, "gain"),
