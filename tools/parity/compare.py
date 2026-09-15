@@ -1375,7 +1375,8 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
                 key,
                 s,
                 DIVERGED if raw_extra else AGREED,
-                f"{shape.raw_name} declares beyond {c_rec.raw_name}: {raw_extra}",
+                f"[{s}] {shape.raw_name} declares beyond {c_rec.raw_name}: "
+                f"{sorted(raw_extra)}",
             )
             for f in shape.core_fields():
                 if f.name in c_names or f.name in _FACADE_ONLY_FIELDS:

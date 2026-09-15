@@ -33,7 +33,14 @@ if str(_HERE) not in sys.path:
 import allowlist as allowlist_mod  # noqa: E402
 import check_parity  # noqa: E402
 import compare  # noqa: E402
-from model import Extraction, FunctionSig, Param, SURFACES  # noqa: E402
+from model import (  # noqa: E402
+    Extraction,
+    FunctionSig,
+    Param,
+    RecordField,
+    RecordShape,
+    SURFACES,
+)
 
 
 def _c(*keys: str) -> Extraction:
@@ -263,6 +270,60 @@ def test_the_audit_records_which_divergence_each_entry_suppressed() -> None:
     suppressed = allow.suppressed_divergences()[("input_naming.keys", "mfcc_to_mel")]
     assert len(suppressed) == 1, suppressed
     assert "mfcc_coeffs" in suppressed[0] and "mfcc" in suppressed[0]
+
+
+def test_the_suppression_record_does_not_depend_on_declaration_order() -> None:
+    """Reordering declarations produces the same record, not a second one.
+
+    The record is built to be held against a later run's, so anything that moves
+    while the surfaces stand still would read as drift that is not there. Two
+    orders can vary: the arrival order of the divergences one pattern collects,
+    and the field order inside one of them.
+    """
+
+    def by_symbol_order(*keys: str):
+        allow = allowlist_mod.Allowlist()
+        allow.surface_only = {"node": ["helper_*"]}
+        compare.build_report(
+            {"c": _c("resample"), "node": _facade("node", *keys)}, allow, ["c", "node"]
+        )
+        return allow.suppressed_divergences()
+
+    assert by_symbol_order("helper_a", "helper_b") == by_symbol_order(
+        "helper_b", "helper_a"
+    )
+
+    def by_field_order(*field_names: str):
+        allow = allowlist_mod.Allowlist()
+        allow.record_extra = {"node": ["chord"]}
+        c = Extraction(surface="c")
+        c.records = [
+            RecordShape(
+                key="chord",
+                surface="c",
+                raw_name="SonareChord",
+                fields=[RecordField(name="start", raw_name="start")],
+                file="c.h",
+                line=1,
+            )
+        ]
+        node = Extraction(surface="node")
+        node.records = [
+            RecordShape(
+                key="chord",
+                surface="node",
+                raw_name="Chord",
+                fields=[RecordField(name=n, raw_name=n) for n in field_names],
+                file="node.ts",
+                line=1,
+            )
+        ]
+        compare.build_report({"c": c, "node": node}, allow, ["c", "node"])
+        return allow.suppressed_divergences()
+
+    assert by_field_order("start", "name", "duration") == by_field_order(
+        "duration", "start", "name"
+    )
 
 
 def test_the_repository_allowlist_holds_its_ratcheted_sections_empty() -> None:

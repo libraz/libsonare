@@ -164,6 +164,10 @@ def to_markdown(rep: Report) -> str:
         suppressed = rep.allowlist.suppressed_divergences()
         if suppressed:
             out.append("## What each allowlist entry suppressed\n")
+            out.append(
+                "The section column is the scope the comparison asked under, so a "
+                "`[surface_only] any` pattern appears once per querying surface.\n"
+            )
             out.append("| section | entry | divergence |")
             out.append("|---|---|---|")
             for (scope, pattern), divergences in sorted(suppressed.items()):

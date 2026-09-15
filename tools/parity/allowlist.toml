@@ -400,6 +400,21 @@ python = [
 # alone: the same fold that removes the divergence removes the comparison, and it
 # comes back on its own if a facade returns to positional parameters.
 #
+# What the JS facades do with those folded arguments does not follow from any
+# signature, so it is recorded here rather than left to an entry that suppresses
+# nothing:
+#   preemphasis / deemphasis  C is (coef, zi, use_zi); Node and WASM expose
+#     (coef, zi?) and DERIVE use_zi from whether zi was supplied.
+#   tempogram                 Node and WASM REPLACE the C center / norm flags
+#     with the `mode` selector; Python keeps center + norm and adds `mode`.
+#   pitch_correct_timevarying / spectral_edit  the JS request fields are a
+#     PitchCorrectOptions bag and nFft / hopLength / window / healRadiusFrames.
+#   analyze_melody            WASM passes the extended use_pyin / center params
+#     through an options object rather than appending them positionally.
+#   Across this whole group, every facade — not only the one listed below —
+#   derives the C count / extent arguments from array length and remaps to the C
+#   order inside its own wrapper (addon / embind / ctypes).
+#
 # scale_quantize_midi / scale_correction_semitones: C orders the optional
 # reference pitch BEFORE the value being quantized (root, mode_mask,
 # reference_midi, midi). All facades use the ergonomic order (root, mode_mask,

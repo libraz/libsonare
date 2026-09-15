@@ -107,11 +107,9 @@ class Allowlist:
     # it reached them with: verdict -> "<section>[.<surface>]" -> patterns. The
     # scope key lets a report name the TOML table an expired entry sits in.
     seen: dict[str, dict[str, set[str]]] = field(default_factory=dict)
-    # What each pattern actually suppressed: (scope, pattern) -> one line per
-    # divergence. An entry can be live and still not excuse the divergence its
-    # reason describes, which no audit can decide -- this is the material for
-    # reading the two against each other.
-    _suppressed: dict[tuple[str, str], list[str]] = field(default_factory=dict)
+    # What each pattern actually suppressed: (scope, pattern) -> the set of
+    # divergences it excused. See :meth:`suppressed_divergences`.
+    _suppressed: dict[tuple[str, str], set[str]] = field(default_factory=dict)
 
     def _mark(
         self,
@@ -130,12 +128,28 @@ class Allowlist:
         pattern = _match(name, patterns, bucket)
         if pattern is None or verdict != DIVERGED:
             return False
-        self._suppressed.setdefault((scope, pattern), []).append(divergence or name)
+        self._suppressed.setdefault((scope, pattern), set()).add(divergence or name)
         return True
 
     def suppressed_divergences(self) -> dict[tuple[str, str], list[str]]:
-        """(scope, pattern) -> the divergences that pattern excused, in order."""
-        return self._suppressed
+        """(scope, pattern) -> the divergences that pattern excused, sorted.
+
+        A pattern selects on the NAME; the reason beside it in ``allowlist.toml``
+        argues about one divergence inside that name. The two are different
+        properties, so an entry stays live while excusing something its reason
+        never described -- and no checker can read the prose to tell. This is the
+        material for reading the two against each other by hand; nothing here is
+        matched against a reason automatically.
+
+        The set is built to be comparable against a later run's, which is the
+        form that would catch that drift mechanically: a pattern alone absorbs
+        whatever takes the name next, and a count alone misses an identity that
+        swaps at constant population. **No comparison is implemented here** --
+        nothing reads a previous run's record, and no expected set is written to
+        ``allowlist.toml``. So each divergence is spelled from names and declared
+        values only: no file, no line number, no iteration order.
+        """
+        return {key: sorted(values) for key, values in self._suppressed.items()}
 
     def _declared_entries(self) -> list[tuple[str, str]]:
         """Every (scope, pattern) pair the file declares, in report order."""
