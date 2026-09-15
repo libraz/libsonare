@@ -157,8 +157,7 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int n_iter = node_arg_int(info, 4, 50);
-  float beta =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 2.0f;
+  float beta = node_arg_finite_float(info, 5, 2.0f);
   // Optional 7th arg selects the initialiser ("random" | "nndsvd"). When given,
   // route through the with-init variant for the NNDSVD warm-start.
   std::string init =

@@ -1087,8 +1087,7 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float target_db =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  float target_db = node_arg_finite_float(info, 2, 0.0f);
   std::string mode =
       info.Length() >= 4 && info[3].IsString() ? info[3].As<Napi::String>().Utf8Value() : "peak";
   if (mode != "peak" && mode != "rms") {

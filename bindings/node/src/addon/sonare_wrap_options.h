@@ -241,6 +241,18 @@ inline float node_arg_float(const Napi::CallbackInfo& info, size_t index, float 
   return node_narrow_float(info.Env(), info[index], node_arg_label(index).c_str());
 }
 
+/// @brief Read a float positional argument whose field documents no
+///        "unspecified" spelling, refusing a non-finite value as well as one no
+///        32-bit float can hold (@ref node_narrow_finite_float).
+/// @details Same fallback as @ref node_arg_float -- a missing OR
+///   present-but-non-number argument takes @p fallback -- so the two differ only
+///   in what a written number may be. Use this one unless the field documents an
+///   infinity or a NaN as selecting something, as the VQT gamma does.
+inline float node_arg_finite_float(const Napi::CallbackInfo& info, size_t index, float fallback) {
+  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
+  return node_narrow_finite_float(info.Env(), info[index], node_arg_label(index).c_str());
+}
+
 /// @brief Read a double positional argument, falling back if absent or non-number.
 inline double node_arg_double(const Napi::CallbackInfo& info, size_t index, double fallback) {
   return index < info.Length() && info[index].IsNumber()

@@ -75,8 +75,7 @@ Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
   }
   const std::string send_id = info[1].As<Napi::String>().Utf8Value();
   const std::string destination_bus_id = info[2].As<Napi::String>().Utf8Value();
-  const float send_db =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
+  const float send_db = node_arg_finite_float(info, 3, 0.0f);
   const int timing = node_arg_int(info, 4, 0);
 
   size_t index = 0;

@@ -87,8 +87,7 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
   int sr = node_arg_int(info, 1, 22050);
   int hop = node_arg_int(info, 2, 512);
   int win = node_arg_int(info, 3, 384);
-  float bpm_min =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 60.0f;
+  float bpm_min = node_arg_finite_float(info, 4, 60.0f);
   int n_bins = node_arg_int(info, 5, 60);
   float* out = nullptr;
   size_t count = 0;
@@ -114,10 +113,8 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_arg_int(info, 1, 22050);
   int hop = node_arg_int(info, 2, 512);
-  float tempo_min =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 30.0f;
-  float tempo_max =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 300.0f;
+  float tempo_min = node_arg_finite_float(info, 3, 30.0f);
+  float tempo_max = node_arg_finite_float(info, 4, 300.0f);
   int win = node_arg_int(info, 5, 384);
   float* out = nullptr;
   size_t count = 0;
@@ -246,8 +243,7 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   int n_frames = 0;
   const bool enable_blend =
       info.Length() >= 3 && info[2].IsBoolean() ? info[2].As<Napi::Boolean>().Value() : true;
-  const float blend_weight =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 0.55f;
+  const float blend_weight = node_arg_finite_float(info, 3, 0.55f);
   const int blend_n_fft = node_arg_int(info, 4, 4096);
   const int hop_length = node_arg_int(info, 5, 512);
   SonareError err =

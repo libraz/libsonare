@@ -303,8 +303,7 @@ Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
   }
   auto samples = info[0].As<Napi::Float32Array>();
   const int sample_rate = node_arg_int(info, 1, 22050);
-  const float threshold_db =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -45.0f;
+  const float threshold_db = node_arg_finite_float(info, 2, -45.0f);
   const int frame_length = node_arg_int(info, 3, 1024);
   const int hop_length = node_arg_int(info, 4, 256);
   float ratio = 0.0f;
@@ -365,8 +364,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr = node_arg_int(info, 1, 22050);
-  float threshold =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.999f;
+  float threshold = node_arg_finite_float(info, 2, 0.999f);
   const int64_t min_region_value = node_arg_int64(info, 3, 1);
   if (min_region_value < 0) {
     Napi::RangeError::New(env, "minRegionSamples must be non-negative")
@@ -412,16 +410,12 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   }
   auto typed = info[0].As<Napi::Float32Array>();
   int sr = node_arg_int(info, 1, 22050);
-  float window_sec =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
-  float hop_sec =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
+  float window_sec = node_arg_finite_float(info, 2, 0.0f);
+  float hop_sec = node_arg_finite_float(info, 3, 0.0f);
   // The C ABI treats 0.0 as a literal 0th percentile and a NEGATIVE value as
   // "use the library default", so omitted percentiles pass -1.0f (default).
-  float low_p =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : -1.0f;
-  float high_p =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : -1.0f;
+  float low_p = node_arg_finite_float(info, 4, -1.0f);
+  float high_p = node_arg_finite_float(info, 5, -1.0f);
   SonareDynamicRangeResult result{};
   SonareError err = sonare_metering_dynamic_range(typed.Data(), typed.ElementLength(), sr,
                                                   window_sec, hop_sec, low_p, high_p, &result);
@@ -461,8 +455,7 @@ bool ParseScaleArgs(const Napi::CallbackInfo& info, int* root, uint16_t* mode_ma
   }
   *mode_mask = static_cast<uint16_t>(mask_int);
   *midi = info[2].As<Napi::Number>().FloatValue();
-  *reference_midi =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
+  *reference_midi = node_arg_finite_float(info, 3, 0.0f);
   return true;
 }
 

@@ -202,6 +202,9 @@ SonareError sonare_cqt_to_audio_checked(const float* magnitude, size_t input_len
 
 /// @brief Reconstructs mono audio from row-major VQT magnitude with Griffin-Lim.
 /// @details Shape, ownership, and iteration rules match @ref sonare_cqt_to_audio.
+/// @param gamma Bandwidth offset in Hz, resolved exactly as @ref sonare_vqt
+/// resolves it: negative or NaN selects the librosa-compatible ERB-derived
+/// automatic value; zero selects standard CQT.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_vqt_to_audio(const float* magnitude, int n_bins, int n_frames, int sample_rate,
                                 int hop_length, float fmin, int bins_per_octave, float gamma,
@@ -209,6 +212,7 @@ SonareError sonare_vqt_to_audio(const float* magnitude, int n_bins, int n_frames
 
 /// @brief Length-checked sonare_vqt_to_audio.
 /// @details @p input_length must equal @p n_bins * @p n_frames.
+/// @param gamma Resolved as in @ref sonare_vqt_to_audio.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_length, int n_bins,
                                         int n_frames, int sample_rate, int hop_length, float fmin,
@@ -868,9 +872,16 @@ SonareError sonare_split_silence(const float* samples, size_t length, float top_
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_frame_signal(const float* samples, size_t length, int frame_length,
                                 int hop_length, float** out, size_t* out_length, int* out_n_frames);
+/// @brief Centres @p values inside @p target_size, filling both sides with
+///        @p pad_value.
+/// @param pad_value The literal value written into every added element; must be
+/// finite. It carries no sentinel, so a non-finite one is out of domain rather
+/// than a request for a default.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pad_center(const float* values, size_t length, size_t target_size,
                               float pad_value, float** out, size_t* out_length);
+/// @brief Pads with @p pad_value on the right, or truncates, to @p target_size.
+/// @param pad_value As in @ref sonare_pad_center; must be finite.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_fix_length(const float* values, size_t length, size_t target_size,
                               float pad_value, float** out, size_t* out_length);

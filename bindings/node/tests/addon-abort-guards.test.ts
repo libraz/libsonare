@@ -2480,10 +2480,13 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     // reader (outside this population by design, since that family is the
     // lenience decision) or as a bare info[i] read routed through
     // node_narrow_int, which is a call rather than an inline accessor.
-    expect(inlineTypedArgumentReads().length).toBeGreaterThan(150);
+    // 144 reads match. The floor sits well under that on purpose: routing an
+    // argument onto a reader shrinks this population without touching the
+    // violation subset it guards, so such a move must not redden it.
+    expect(inlineTypedArgumentReads().length).toBeGreaterThan(120);
     // The floor alone would not notice the implicit-conversion form being
-    // dropped again: without it the population is 474 rather than 489, and both
-    // clear 400. So pin that form where it is concentrated. Measured on
+    // dropped again: without it the population is 130 rather than 144, and both
+    // clear 120. So pin that form where it is concentrated. Measured on
     // addon.cpp's MIDI lookups: 18 reads with both forms matched, 3 with only
     // the explicit one, because 15 of them are accessor-less. A floor between
     // the two separates a scanner that still sees the implicit form from one

@@ -210,10 +210,8 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input(data, length, sr);
 
   sonare::mastering::maximizer::LoudnessOptimizeConfig config;
-  config.target_lufs =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -14.0f;
-  config.ceiling_db =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : -1.0f;
+  config.target_lufs = node_arg_finite_float(info, 2, -14.0f);
+  config.ceiling_db = node_arg_finite_float(info, 3, -1.0f);
   // 0 is the C-ABI sentinel for the library default; any other value reaches
   // the loudness validator instead of being replaced by the default.
   if (info.Length() >= 5 && info[4].IsNumber()) {

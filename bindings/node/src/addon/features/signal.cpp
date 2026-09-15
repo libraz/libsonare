@@ -83,8 +83,7 @@ Napi::Value SonareWrap::TrimSilence(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float top_db =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 60.0f;
+  float top_db = node_arg_finite_float(info, 1, 60.0f);
   int frame_length = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
   float* out = nullptr;
@@ -110,8 +109,7 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float top_db =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 60.0f;
+  float top_db = node_arg_finite_float(info, 1, 60.0f);
   int frame_length = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
   int* out = nullptr;
@@ -154,8 +152,7 @@ Napi::Value SonareWrap::PadCenter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float pad_value =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  float pad_value = node_arg_finite_float(info, 2, 0.0f);
   const int64_t target_size = node_narrow_int64(env, info[1], "targetSize");
   if (target_size < 0) {
     Napi::RangeError::New(env, "size must be non-negative").ThrowAsJavaScriptException();
@@ -178,8 +175,7 @@ Napi::Value SonareWrap::FixLength(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float pad_value =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  float pad_value = node_arg_finite_float(info, 2, 0.0f);
   const int64_t target_size = node_narrow_int64(env, info[1], "targetSize");
   if (target_size < 0) {
     Napi::RangeError::New(env, "size must be non-negative").ThrowAsJavaScriptException();
@@ -275,8 +271,7 @@ Napi::Value SonareWrap::VectorNormalize(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   int norm_type = node_arg_int(info, 1, 0);
-  float threshold =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  float threshold = node_arg_finite_float(info, 2, 0.0f);
   float* out = nullptr;
   size_t count = 0;
   SonareError err =

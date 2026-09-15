@@ -165,6 +165,22 @@ export function frameSignal(
   return addon.frameSignal(request.samples, request.frameLength, request.hopLength);
 }
 
+/**
+ * Centres `values` inside `targetSize`, filling both sides with `padValue`.
+ *
+ * @param request - The values, the length to reach, and the fill value.
+ * @param request.padValue - The literal value written into every added element,
+ *   default `0`. It is a quantity with no sentinel — there is no spelling of
+ *   "unspecified" — so a non-finite value is out of domain rather than a request
+ *   for a default.
+ * @throws {RangeError} `padValue` is not a finite number the 32-bit float range
+ *   can hold.
+ * @example
+ * ```ts
+ * padCenter({ values: Float32Array.from([1, 2]), targetSize: 4, padValue: 7 });
+ * // Float32Array [7, 1, 2, 7]
+ * ```
+ */
 export function padCenter(
   request: ValuesRequest & { targetSize: number; padValue?: number },
 ): Float32Array;
@@ -182,6 +198,21 @@ export function padCenter(
   return addon.padCenter(request.values, request.targetSize, request.padValue ?? 0);
 }
 
+/**
+ * Pads `values` on the right with `padValue`, or truncates it, to `targetSize`.
+ *
+ * @param request - The values, the length to reach, and the fill value.
+ * @param request.padValue - As in {@link padCenter}: the literal value written
+ *   into every added element, default `0`, with no non-finite spelling. Unused
+ *   when `values` is already at least `targetSize` long.
+ * @throws {RangeError} `padValue` is not a finite number the 32-bit float range
+ *   can hold.
+ * @example
+ * ```ts
+ * fixLength({ values: Float32Array.from([1, 2]), targetSize: 4, padValue: 7 });
+ * // Float32Array [1, 2, 7, 7]
+ * ```
+ */
 export function fixLength(
   request: ValuesRequest & { targetSize: number; padValue?: number },
 ): Float32Array;

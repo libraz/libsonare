@@ -594,8 +594,7 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float threshold_db =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -60.0f;
+  float threshold_db = node_arg_finite_float(info, 2, -60.0f);
   auto parse_frame_option = [&](size_t index, const char* name, int fallback, int* output) {
     if (info.Length() <= index || info[index].IsUndefined()) {
       *output = fallback;

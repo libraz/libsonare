@@ -93,9 +93,17 @@ export interface RealtimeVoiceChangerConfig {
 
 /** Options for the high-level {@link mastering} one-shot. All fields are optional. */
 export interface MasteringOptions {
-  /** Integrated-loudness target in LUFS. Default -14. */
+  /**
+   * Integrated-loudness target in LUFS. Default -14. Must be finite; a
+   * non-finite value is rejected.
+   *
+   * Deliberately NOT the contract of {@link EngineBounceOptions.targetLufs},
+   * which shares this name, unit and default but resolves a non-finite value to
+   * the default. There the loudness stage derives a per-sample gain and checks
+   * nothing itself; here the target reaches a validator that owns the domain.
+   */
   targetLufs?: number;
-  /** True-peak ceiling in dBTP. Default -1. */
+  /** True-peak ceiling in dBTP. Default -1. Must be finite. */
   ceilingDb?: number;
   /** True-peak oversampling factor. Default 4. */
   truePeakOversample?: number;
