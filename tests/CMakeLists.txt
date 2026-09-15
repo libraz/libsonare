@@ -208,6 +208,7 @@ if(BUILD_MASTERING)
     mastering/chain_test.cpp
     mastering/chain_latency_test.cpp
     mastering/common_test.cpp
+    mastering/mastering_ab_match_test.cpp
     mastering/mastering_metrics_test.cpp
     mastering/mastering_state_non_finite_recovery_test.cpp
     mastering/repair_metrics_test.cpp
@@ -245,6 +246,7 @@ if(BUILD_MASTERING)
     mastering/config_zero_init_test.cpp
     mastering/repair_test.cpp
     mastering/repair_stereo_denoise_test.cpp
+    mastering/named_processor_stereo_repair_test.cpp
     mastering/repair_stereo_impulse_test.cpp
     mastering/repair_stereo_hum_test.cpp
     mastering/dereverb_room_test.cpp
