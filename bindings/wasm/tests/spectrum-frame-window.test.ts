@@ -113,13 +113,16 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     // it makes that observable without a clock, which is what keeps this from
     // being the kind of assertion that goes quiet on a slow machine.
     const asked: Array<[number, number]> = [];
-    class Probe extends Float32Array {
-      subarray(begin?: number, end?: number): Float32Array {
+    // The buffer parameter is spelled out on both the base and the override:
+    // left off, the override widens to ArrayBufferLike and stops matching what
+    // it overrides.
+    class Probe extends Float32Array<ArrayBuffer> {
+      subarray(begin?: number, end?: number): Float32Array<ArrayBuffer> {
         asked.push([begin ?? 0, end ?? this.length]);
         return super.subarray(begin, end);
       }
     }
-    const samples = new Probe(LENGTH);
+    const samples = new Probe(new ArrayBuffer(LENGTH * Float32Array.BYTES_PER_ELEMENT));
     for (let i = 0; i < LENGTH; i++) {
       samples[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
     }
