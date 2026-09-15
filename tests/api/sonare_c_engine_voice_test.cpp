@@ -659,6 +659,80 @@ TEST_CASE("sonare_engine rejects the reserved invalid parameter id 0", "[c_api][
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_add_parameter rejects a non-finite declared range", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SonareParameterInfo ordinary{};
+  ordinary.id = 21;
+  std::strncpy(ordinary.name, "gain", sizeof(ordinary.name) - 1);
+  std::strncpy(ordinary.unit, "dB", sizeof(ordinary.unit) - 1);
+  ordinary.min_value = -60.0f;
+  ordinary.max_value = 6.0f;
+  ordinary.default_value = 0.0f;
+  ordinary.rt_safe = 1;
+  ordinary.default_curve = 0;
+
+  SECTION("each of min_value, max_value and default_value is refused on its own") {
+    // Driven one field at a time: a descriptor carrying all three cannot say
+    // which one the guard caught, and a NaN makes the ordering test false.
+    const std::array<const char*, 3> names{"min_value", "max_value", "default_value"};
+    const std::array<float SonareParameterInfo::*, 3> fields{&SonareParameterInfo::min_value,
+                                                             &SonareParameterInfo::max_value,
+                                                             &SonareParameterInfo::default_value};
+    for (float bad : {nan, inf, -inf}) {
+      CAPTURE(bad);
+      for (size_t i = 0; i < fields.size(); ++i) {
+        CAPTURE(names[i]);
+        SonareParameterInfo parameter = ordinary;
+        parameter.*(fields[i]) = bad;
+        CHECK(sonare_engine_add_parameter(engine, &parameter) == SONARE_ERROR_INVALID_PARAMETER);
+      }
+    }
+    size_t count = 1;
+    REQUIRE(sonare_engine_parameter_count(engine, &count) == SONARE_OK);
+    CHECK(count == 0u);
+  }
+
+  SECTION("an inverted finite range stays refused") {
+    SonareParameterInfo inverted = ordinary;
+    inverted.min_value = 1.0f;
+    inverted.max_value = 0.0f;
+    CHECK(sonare_engine_add_parameter(engine, &inverted) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("a degenerate but equal finite range still registers") {
+    SonareParameterInfo degenerate = ordinary;
+    degenerate.min_value = 0.5f;
+    degenerate.max_value = 0.5f;
+    degenerate.default_value = 0.5f;
+    CHECK(sonare_engine_add_parameter(engine, &degenerate) == SONARE_OK);
+  }
+
+  SECTION("a finite default outside the declared range still registers") {
+    // min_value/max_value are descriptive metadata the engine never clamps to,
+    // so a default outside them is a caller's choice rather than an error.
+    SonareParameterInfo outside = ordinary;
+    outside.default_value = 12.0f;
+    CHECK(sonare_engine_add_parameter(engine, &outside) == SONARE_OK);
+  }
+
+  SECTION("an ordinary parameter registers") {
+    // Without this the refusals above are satisfied by an entry point that
+    // rejects every descriptor.
+    REQUIRE(sonare_engine_add_parameter(engine, &ordinary) == SONARE_OK);
+    size_t count = 0;
+    REQUIRE(sonare_engine_parameter_count(engine, &count) == SONARE_OK);
+    CHECK(count == 1u);
+  }
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine_bounce_offline validates the channel count against a layout",
           "[c_api][engine][surround]") {
   SonareRealtimeEngine* engine = nullptr;

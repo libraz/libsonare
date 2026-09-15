@@ -502,9 +502,11 @@ uint32_t RealtimeEngineWasm::warpStretchOverflowCount() const {
 // rendered silence). Frames travel as a double so a long window survives the JS
 // boundary without an int32 truncation.
 void RealtimeEngineWasm::setClipPagePrefetchFrames(double frames) {
-  if (!(frames >= 0.0)) {
+  // 2^63 rather than numeric_limits: INT64_MAX is not a representable double and rounds up.
+  static constexpr double kInt64UpperBound = 9223372036854775808.0;
+  if (!sonare::numeric::finite_non_negative(frames) || frames >= kInt64UpperBound) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "clip page prefetch frames must be >= 0");
+                                  "clip page prefetch frames must be finite and within [0, 2^63)");
   }
   engine_.set_clip_page_prefetch_frames(static_cast<int64_t>(frames));
 }

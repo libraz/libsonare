@@ -12,6 +12,7 @@ import {
   masteringChainStereo,
   meteringTruePeakDb,
   phaseVocoder,
+  RealtimeEngine,
   remix,
   voiceChangeRealtime,
 } from '../src/index';
@@ -106,5 +107,97 @@ describe('meteringTruePeakDb oversample-factor guard', () => {
 describe('voiceChangeRealtime empty-input guard', () => {
   it('rejects an empty buffer', () => {
     expect(() => voiceChangeRealtime(new Float32Array(0), 48000, 'neutral-monitor')).toThrow();
+  });
+});
+
+describe('addParameter range guard matches the C ABI', () => {
+  const ordinary = () => ({
+    id: 21,
+    name: 'gain',
+    unit: 'dB',
+    minValue: -60,
+    maxValue: 6,
+    defaultValue: 0,
+    rtSafe: true,
+    defaultCurve: 1,
+  });
+
+  // Driven one field at a time: a descriptor carrying all three cannot say which
+  // one the guard caught, and a NaN makes the inverted-range comparison false.
+  for (const field of ['minValue', 'maxValue', 'defaultValue'] as const) {
+    for (const [label, bad] of [
+      ['NaN', Number.NaN],
+      ['+Infinity', Number.POSITIVE_INFINITY],
+      ['-Infinity', Number.NEGATIVE_INFINITY],
+    ] as const) {
+      it(`rejects ${label} on ${field}`, () => {
+        const engine = new RealtimeEngine(48000, 128);
+        const info = ordinary();
+        info[field] = bad;
+        expect(() => engine.addParameter(info)).toThrow(/finite/);
+        expect(engine.parameterCount()).toBe(0);
+      });
+    }
+  }
+
+  it('still rejects an inverted finite range', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.addParameter({ ...ordinary(), minValue: 1, maxValue: 0 })).toThrow(
+      /maxValue must be >= minValue/,
+    );
+    expect(engine.parameterCount()).toBe(0);
+  });
+
+  it('accepts a degenerate but equal finite range', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.addParameter({ ...ordinary(), minValue: 0.5, maxValue: 0.5, defaultValue: 0.5 });
+    expect(engine.parameterCount()).toBe(1);
+  });
+
+  it('accepts a finite default outside the declared range', () => {
+    // minValue/maxValue are descriptive metadata the engine never clamps to.
+    const engine = new RealtimeEngine(48000, 128);
+    engine.addParameter({ ...ordinary(), defaultValue: 12 });
+    expect(engine.parameterCount()).toBe(1);
+  });
+
+  it('registers an ordinary parameter', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.addParameter(ordinary());
+    expect(engine.parameterCount()).toBe(1);
+  });
+});
+
+describe('setClipPagePrefetchFrames rejects a value the int64 cast cannot take', () => {
+  // The guard's boundary. Written as powers of two because the decimal spellings
+  // of these doubles do not round-trip through a source literal.
+  const TWO_POW_63 = 2 ** 63;
+  const LARGEST_BELOW_TWO_POW_63 = TWO_POW_63 - 1024;
+
+  it('rejects +Infinity and NaN', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setClipPagePrefetchFrames(Number.POSITIVE_INFINITY)).toThrow();
+    expect(() => engine.setClipPagePrefetchFrames(Number.NaN)).toThrow();
+  });
+  it('rejects a finite value the int64 cast cannot take', () => {
+    // INT64_MAX is not representable as a double, so a bound spelled from it
+    // would admit exactly 2^63 — the first value whose cast is undefined.
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setClipPagePrefetchFrames(TWO_POW_63)).toThrow();
+    expect(() => engine.setClipPagePrefetchFrames(1e30)).toThrow();
+  });
+
+  it('accepts the largest double below 2^63', () => {
+    // The double immediately below the bound: without this the rejection above
+    // is satisfied by a guard set a power of two too low.
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setClipPagePrefetchFrames(LARGEST_BELOW_TWO_POW_63);
+    expect(engine.clipPagePrefetchFrames()).toBe(LARGEST_BELOW_TWO_POW_63);
+  });
+
+  it('accepts a finite non-negative window', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setClipPagePrefetchFrames(4096);
+    expect(engine.clipPagePrefetchFrames()).toBe(4096);
   });
 });

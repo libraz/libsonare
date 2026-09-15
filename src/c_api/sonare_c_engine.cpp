@@ -11,6 +11,7 @@
 #include "rt/command.h"
 #include "sonare_c_engine_internal.h"
 #include "sonare_c_internal.h"
+#include "util/numeric_validation.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -306,7 +307,11 @@ SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_pp
 SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info) {
   SONARE_C_API_ENTRY;
-  if (!engine || !info || info->max_value < info->min_value) return SONARE_ERROR_INVALID_PARAMETER;
+  // default_value needs finiteness only: nothing clamps it to [min_value, max_value].
+  if (!engine || !info || !numeric::finite(info->min_value) || !numeric::finite(info->max_value) ||
+      !numeric::finite(info->default_value) || info->max_value < info->min_value) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   // Reject an out-of-range default curve ordinal instead of silently clamping,
   // matching the automation-lane path and the other surfaces.
   if (info->default_curve < 0 || info->default_curve > 3) return SONARE_ERROR_INVALID_PARAMETER;

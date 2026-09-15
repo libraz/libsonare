@@ -35,8 +35,8 @@ void RealtimeEngineWasm::addParameter(val info) {
   parameter.id = id;
   parameter.min_value = floatProperty(info, "minValue", 0.0f);
   parameter.max_value = floatProperty(info, "maxValue", 1.0f);
-  // Match the C ABI: reject an inverted range instead of registering it (WASM
-  // bypasses the C-ABI guard), so normalization/automation scaling stays defined.
+  // Match the C ABI: reject an inverted range instead of registering it (WASM bypasses
+  // the C-ABI guard). Non-finite minValue/maxValue/defaultValue are refused by floatProperty.
   if (parameter.max_value < parameter.min_value) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter maxValue must be >= minValue");
