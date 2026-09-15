@@ -17,6 +17,7 @@ import {
 } from './effects_mastering';
 import {
   chroma,
+  ebur128LoudnessRange,
   lufs,
   melSpectrogram,
   mfcc,
@@ -37,6 +38,26 @@ import {
   trim,
   zeroCrossingRate,
 } from './features';
+import type {
+  ClippingReport,
+  DynamicRangeReport,
+  MeteringDetectClippingOptions,
+  MeteringDynamicRangeOptions,
+  SpectrumOptions,
+  SpectrumReport,
+} from './metering';
+import {
+  meteringCrestFactorDb,
+  meteringDcOffset,
+  meteringDetectClipping,
+  meteringDynamicRange,
+  meteringPeakDb,
+  meteringRmsDb,
+  meteringSilenceRatio,
+  meteringSpectrum,
+  meteringSpectrumFrame,
+  meteringTruePeakDb,
+} from './metering';
 import { getSonareModule } from './module_state';
 import type {
   AnalysisResult,
@@ -77,6 +98,7 @@ import {
   detectOnsets,
 } from './quick_analysis';
 import type { ProgressCallback, WasmNnlsChromaResult } from './sonare.js';
+import type { ValidateOptions } from './validation';
 import { validateAudioBuffer } from './validation';
 
 // ============================================================================
@@ -531,5 +553,71 @@ export class Audio {
 
   resample(targetSr: number): Float32Array {
     return resample(this._samples, this._sampleRate, targetSr);
+  }
+
+  // -- Metering --
+  //
+  // These delegate to the module-level buffer-form functions rather than a
+  // native handle: WASM's Audio is a plain JS wrapper around a Float32Array,
+  // not an embind class, so there is no cheaper path to reach the same
+  // measurement. The methods exist for call-shape parity with Node/Python,
+  // which do hold a native handle here.
+
+  peakDb(): number {
+    return meteringPeakDb(this._samples, this._sampleRate);
+  }
+
+  rmsDb(): number {
+    return meteringRmsDb(this._samples, this._sampleRate);
+  }
+
+  dcOffset(): number {
+    return meteringDcOffset(this._samples, this._sampleRate);
+  }
+
+  crestFactorDb(): number {
+    return meteringCrestFactorDb(this._samples, this._sampleRate);
+  }
+
+  silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
+    return meteringSilenceRatio(
+      this._samples,
+      this._sampleRate,
+      thresholdDb,
+      frameLength,
+      hopLength,
+    );
+  }
+
+  /**
+   * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
+   * in [1, 16]; pass 0 to use the library default (4).
+   */
+  truePeakDb(oversampleFactor = 4): number {
+    return meteringTruePeakDb(this._samples, this._sampleRate, oversampleFactor);
+  }
+
+  detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
+    return meteringDetectClipping(this._samples, this._sampleRate, options);
+  }
+
+  dynamicRange(options: MeteringDynamicRangeOptions = {}): DynamicRangeReport {
+    return meteringDynamicRange(this._samples, this._sampleRate, options);
+  }
+
+  spectrum(options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
+    return meteringSpectrum(this._samples, this._sampleRate, options);
+  }
+
+  /**
+   * True single-frame magnitude / power / dB spectrum starting at `frameOffset`.
+   * See {@link meteringSpectrumFrame} for the frame-validation contract.
+   */
+  spectrumFrame(frameOffset = 0, options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
+    return meteringSpectrumFrame(this._samples, this._sampleRate, frameOffset, options);
+  }
+
+  ebur128LoudnessRange(): number {
+    return ebur128LoudnessRange(this._samples, this._sampleRate);
   }
 }
