@@ -10,6 +10,14 @@ The case that matters is the swap. Two entries exchanged inside one table leave
 its name set identical and its mapping wrong, which is what a check comparing
 sorted names would pass; that set is asserted to be unchanged in the same
 fixture, so the swap case cannot be satisfied by a set comparison.
+
+The vocabulary-II cases carry the same burden one layer up. Each perturbs one
+suffix table and asserts which comparison fires, so the three groups are shown
+to be three rather than asserted to be; a check that folded them would satisfy
+the divergence cases and fail the two that require the template label to be
+allowed to differ where it does. The key-set cases carry a control: the same
+perturbed tree is put through a comparison of the values that still resolve,
+which passes, so the key-set rule is shown to be the thing doing the work.
 """
 
 from __future__ import annotations
@@ -39,6 +47,9 @@ NODE_ADDON = check.ORDINAL_TABLES[6].path
 CORE_NAMES = check.ORDINAL_TABLES[7].path
 NODE_TYPES = check.NAME_TABLES[0].path
 PY_SUFFIXES = check.NAME_TABLES[2].path
+# Both chord-symbol suffix tables the core carries live in this one file, and
+# `chord_quality_to_string` shares CORE_NAMES with the quality-name switch.
+ANALYZER = check.SUFFIX_TABLES[1].path
 
 FILES = (
     TYPES,
@@ -52,6 +63,7 @@ FILES = (
     CORE_NAMES,
     NODE_TYPES,
     PY_SUFFIXES,
+    ANALYZER,
 )
 
 # A quality appended to the core, in the three spellings the surfaces use.
@@ -364,6 +376,293 @@ class StaleExemptionTest(_CopiedTree):
         self.assertEqual(check.evaluate(), [])
 
 
+class SuffixVocabularyTest(unittest.TestCase):
+    """The four suffix tables, and the three groups they fall into."""
+
+    def test_every_suffix_table_is_located(self) -> None:
+        scan = check.Scan()
+        for table, found in scan.suffix.items():
+            with self.subTest(table=table.display):
+                self.assertIsNotNone(found, f"{table.display} was not located")
+                self.assertTrue(found.by_ordinal)
+                self.assertEqual(found.unresolved, ())
+
+    def test_the_groups_are_three_and_not_one(self) -> None:
+        groups = [table.group for table in check.SUFFIX_TABLES]
+        self.assertEqual(sorted(groups), ["label", "numeral", "symbol", "symbol"])
+
+    def test_the_chord_symbol_tables_leave_major_bare_and_the_label_does_not(self) -> None:
+        scan = check.Scan()
+        by_group = {t.group: f for t, f in scan.suffix.items() if t.group != "symbol"}
+        symbol = [f for t, f in scan.suffix.items() if t.group == "symbol"]
+        self.assertEqual({f.by_ordinal[0] for f in symbol}, {""})
+        self.assertEqual(by_group["label"].by_ordinal[0], "maj")
+
+    def test_the_numeral_table_is_a_vocabulary_of_its_own(self) -> None:
+        """Its spelling is not compared, and this measures why.
+
+        Folding it into the chord-symbol comparison would need more exceptions
+        than the whole exception list holds, which is the table copied out
+        again rather than a rule held against it.
+        """
+        scan = check.Scan()
+        numeral = next(f for t, f in scan.suffix.items() if t.group == "numeral")
+        symbol = next(f for t, f in scan.suffix.items() if t.group == "symbol")
+        differing = [
+            ordinal
+            for ordinal, suffix in symbol.by_ordinal.items()
+            if suffix and numeral.by_ordinal.get(ordinal) != suffix
+        ]
+        self.assertGreater(len(differing), len(check.SUFFIX_EXCEPTIONS), differing)
+        # The minor third is carried by the numeral's own case, not by a suffix.
+        self.assertEqual(symbol.by_ordinal[6], "m7")
+        self.assertEqual(numeral.by_ordinal[6], "7")
+        self.assertIn(6, differing)
+        self.assertIn(19, differing)
+
+    def test_each_comparison_reaches_most_of_the_enum(self) -> None:
+        """A comparison reaching nothing agrees with every table."""
+        scan = check.Scan()
+        check._suffix_failures(scan)
+        self.assertEqual(scan.compared["symbol-group"], len(scan.core))
+        for comparison, reached in scan.compared.items():
+            with self.subTest(comparison=comparison):
+                self.assertGreater(reached, len(scan.core) - 4, scan.compared)
+
+
+class SuffixDivergenceTest(_CopiedTree):
+    """A planted disagreement is named by its site and its ordinal."""
+
+    def test_a_chord_symbol_disagreement_names_both_sites(self) -> None:
+        lines = self.lines(
+            check.evaluate(
+                self.tree(
+                    {
+                        ANALYZER: (
+                            '    case ChordQuality::Minor7:\n      name += "m7";',
+                            '    case ChordQuality::Minor7:\n      name += "min7";',
+                        )
+                    }
+                )
+            ),
+            "spelled differently by two chord-symbol tables",
+        )
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("ordinal 6 (`Minor7`)", lines[0])
+        self.assertIn(ANALYZER, lines[0])
+        self.assertIn(PY_SUFFIXES, lines[0])
+        self.assertIn("`min7`", lines[0])
+        self.assertIn("`m7`", lines[0])
+
+    def test_a_disagreement_in_the_python_copy_is_reported_the_same_way(self) -> None:
+        lines = self.lines(
+            check.evaluate(self.tree({PY_SUFFIXES: ('"minorMajor7": "mM7"', '"minorMajor7": "mmaj7"')})),
+            "spelled differently by two chord-symbol tables",
+        )
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("ordinal 19 (`MinorMajor7`)", lines[0])
+
+    def test_the_template_label_may_not_drift_away_from_major(self) -> None:
+        lines = self.lines(
+            check.evaluate(
+                self.tree(
+                    {
+                        CORE_NAMES: (
+                            '    case ChordQuality::Minor7:\n      return "m7";',
+                            '    case ChordQuality::Minor7:\n      return "-7";',
+                        )
+                    }
+                )
+            ),
+            "diverges from the chord symbols somewhere it is not allowed to",
+        )
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("ordinal 6 (`Minor7`)", lines[0])
+        self.assertIn("`-7`", lines[0])
+
+    def test_a_quality_dropped_from_the_numeral_table_is_reported(self) -> None:
+        lines = self.lines(
+            check.evaluate(
+                self.tree(
+                    {
+                        ANALYZER: (
+                            '    case ChordQuality::MinorMajor7:\n      numeral += "M7";\n      break;\n',
+                            "",
+                        )
+                    }
+                )
+            ),
+            "Roman-numeral table has no arm",
+        )
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("ordinal 19 (`MinorMajor7`)", lines[0])
+
+
+class SuffixGroupSplitTest(_CopiedTree):
+    """The template label is allowed to differ at Major. It is not required to."""
+
+    AGREES = {CORE_NAMES: ('    case ChordQuality::Major:\n      return "maj";',
+                           '    case ChordQuality::Major:\n      return "";')}
+
+    def test_agreeing_at_major_is_not_reported_as_a_divergence(self) -> None:
+        failures = check.evaluate(self.tree(self.AGREES))
+        self.assertNotIn(
+            "diverges from the chord symbols somewhere it is not allowed to",
+            " ".join(heading for heading, _ in failures),
+        )
+
+    def test_agreeing_at_major_retires_the_exception_that_excused_it(self) -> None:
+        """The only complaint is that the exception now excuses nothing."""
+        root = self.tree(self.AGREES)
+        lines = self.lines(check.evaluate(root), "suffix exceptions excused nothing")
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("label-vs-symbol at ordinal 0", lines[0])
+
+        saved = dict(check.SUFFIX_EXCEPTIONS)
+        del check.SUFFIX_EXCEPTIONS[("label-vs-symbol", 0)]
+        try:
+            self.assertEqual(check.evaluate(root), [])
+        finally:
+            check.SUFFIX_EXCEPTIONS.clear()
+            check.SUFFIX_EXCEPTIONS.update(saved)
+        self.assertEqual(check.evaluate(), [])
+
+
+class SuffixKeySetTest(_CopiedTree):
+    """The suffix map is keyed on a name, and a key nothing resolves is invisible."""
+
+    ONE_KEY = {PY_SUFFIXES: ('"halfDim7": "m7b5"', '"halfDiminished7": "m7b5"')}
+
+    def value_only_passes(self, root: Path) -> bool:
+        """What a check comparing only the values that still resolve would say.
+
+        The declared exceptions are skipped so this measures the key set alone
+        and not the divergence that is already accounted for.
+        """
+        scan = check.Scan(root)
+        tables = [f for t, f in scan.suffix.items() if f is not None and t.group == "symbol"]
+        for ordinal in sorted(scan.core):
+            if ("symbol-group", ordinal) in check.SUFFIX_EXCEPTIONS:
+                continue
+            seen = [t.by_ordinal[ordinal] for t in tables if ordinal in t.by_ordinal]
+            if len(seen) > 1 and len(set(seen)) != 1:
+                return False
+        return True
+
+    def test_a_renamed_key_is_reported_as_a_key_and_not_only_as_a_value(self) -> None:
+        failures = check.evaluate(self.tree(self.ONE_KEY))
+        stray = self.lines(failures, "a key that is not one can never be hit")
+        self.assertEqual(len(stray), 1, stray)
+        self.assertIn("`halfDiminished7`", stray[0])
+        self.lines(failures, "key set no longer matches the core enum")
+
+    def test_a_renamed_key_leaves_the_values_that_resolve_agreeing(self) -> None:
+        """The control: value comparison alone is satisfied by the same tree."""
+        self.assertTrue(self.value_only_passes(self.tree(self.ONE_KEY)))
+
+    def test_a_key_set_gone_entirely_stale_is_reported(self) -> None:
+        root = self.tree()
+        path = root / PY_SUFFIXES
+        text = path.read_text(encoding="utf-8")
+        start = text.index("        suffixes = {")
+        end = text.index("\n        }\n", start)
+        body = text[start:end]
+        self.assertEqual(body.count('\n            "'), len(check.Scan().core))
+        path.write_text(
+            text[:start] + body.replace('\n            "', '\n            "x') + text[end:],
+            encoding="utf-8",
+        )
+        stray = self.lines(check.evaluate(root), "a key that is not one can never be hit")
+        self.assertEqual(len(stray), len(check.Scan().core), stray)
+
+    def test_a_key_set_gone_entirely_stale_leaves_nothing_to_compare(self) -> None:
+        """The control, at its worst: no value disagrees because none resolves.
+
+        Every chord would render as a bare root, which is a plausible-looking
+        result. Only the key set says so.
+        """
+        root = self.tree()
+        path = root / PY_SUFFIXES
+        text = path.read_text(encoding="utf-8")
+        start = text.index("        suffixes = {")
+        end = text.index("\n        }\n", start)
+        path.write_text(
+            text[:start] + text[start:end].replace('\n            "', '\n            "x') + text[end:],
+            encoding="utf-8",
+        )
+        self.assertTrue(self.value_only_passes(root))
+        scan = check.Scan(root)
+        suffixes = next(f for t, f in scan.suffix.items() if t.path == PY_SUFFIXES)
+        self.assertEqual(suffixes.by_ordinal, {})
+        self.assertEqual(len(suffixes.unresolved), len(scan.core))
+
+
+class SuffixUnreadableTest(_CopiedTree):
+    """A suffix table this check cannot parse fails loudly rather than emptily."""
+
+    def test_a_second_switch_makes_the_table_unreadable_and_drops_the_floor(self) -> None:
+        failures = check.evaluate(
+            self.tree(
+                {ANALYZER: ("  if (bass != root) {", "  switch (bass) { default: break; }\n  if (bass != root) {")}
+            )
+        )
+        missing = self.lines(failures, "suffix tables could not be read")
+        self.assertEqual(len(missing), 1, missing)
+        self.assertIn("Chord::to_string", missing[0])
+        floor = self.lines(failures, "no longer locates the population")
+        self.assertTrue(any("suffix_symbol_tables: found 1, floor is 2" in line for line in floor), floor)
+
+    def test_an_append_that_is_not_a_literal_is_refused_rather_than_read_as_empty(self) -> None:
+        """Otherwise the arm would read as the empty suffix, which is a spelling."""
+        missing = self.lines(
+            check.evaluate(
+                self.tree({ANALYZER: ('      name += "sus2";', "      name += kSus2Suffix;")})
+            ),
+            "suffix tables could not be read",
+        )
+        self.assertTrue(any("Chord::to_string" in line for line in missing), missing)
+
+    def test_each_suffix_table_reports_on_its_own(self) -> None:
+        for path in (CORE_NAMES, ANALYZER, PY_SUFFIXES):
+            with self.subTest(path=path):
+                missing = self.lines(
+                    check.evaluate(self.tree(omit=(path,))), "suffix tables could not be read"
+                )
+                self.assertTrue(any(path in line for line in missing), missing)
+
+
+class SuffixExceptionTest(_CopiedTree):
+    """Every suffix exception suppresses something, and expires with it."""
+
+    def test_the_exceptions_are_load_bearing(self) -> None:
+        saved = dict(check.SUFFIX_EXCEPTIONS)
+        check.SUFFIX_EXCEPTIONS.clear()
+        try:
+            failures = check.evaluate()
+            raised = " ".join(heading for heading, _ in failures)
+            self.assertIn("spelled differently by two chord-symbol tables", raised)
+            self.assertIn("diverges from the chord symbols", raised)
+            self.assertIn("Roman-numeral table has no arm", raised)
+        finally:
+            check.SUFFIX_EXCEPTIONS.update(saved)
+        self.assertEqual(check.evaluate(), [])
+
+    def test_each_exception_carries_a_reason(self) -> None:
+        for key, exception in check.SUFFIX_EXCEPTIONS.items():
+            with self.subTest(key=key):
+                self.assertTrue(exception.reason.strip())
+
+    def test_an_exception_at_an_ordinal_the_enum_lost_is_reported(self) -> None:
+        check.SUFFIX_EXCEPTIONS[("symbol-group", 99)] = check.SuffixException("no such ordinal")
+        try:
+            stale = self.lines(check.evaluate(), "suffix exceptions excused nothing")
+            self.assertEqual(len(stale), 1, stale)
+            self.assertIn("ordinal 99", stale[0])
+        finally:
+            del check.SUFFIX_EXCEPTIONS[("symbol-group", 99)]
+        self.assertEqual(check.evaluate(), [])
+
+
 class FloorTest(_CopiedTree):
     def test_an_unparsable_core_enum_fails_rather_than_matching_everything(self) -> None:
         failures = check.evaluate(self.tree({TYPES: ("enum class ChordQuality {", "enum class ChordQualityV2 {")}))
@@ -374,7 +673,14 @@ class FloorTest(_CopiedTree):
     def test_the_floor_is_independent_of_the_declared_tables(self) -> None:
         self.assertGreaterEqual(len(check.ORDINAL_TABLES), check.FLOOR["ordinal_tables"])
         self.assertGreaterEqual(len(check.NAME_TABLES), check.FLOOR["name_tables"])
+        self.assertGreaterEqual(len(check.SUFFIX_TABLES), check.FLOOR["suffix_tables"])
         self.assertEqual(check.FLOOR["qualities"], 25)
+
+    def test_the_suffix_floors_count_tables_rather_than_spellings(self) -> None:
+        """Correcting a suffix must not be able to lower the bar it is held to."""
+        symbol = [t for t in check.SUFFIX_TABLES if t.group == "symbol"]
+        self.assertEqual(check.FLOOR["suffix_symbol_tables"], len(symbol))
+        self.assertEqual(check.FLOOR["suffix_tables"], len(check.SUFFIX_TABLES))
 
 
 if __name__ == "__main__":
