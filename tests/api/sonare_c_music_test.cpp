@@ -94,6 +94,23 @@ TEST_CASE("sonare_detect_acoustic", "[.][slow][c_api][acoustic]") {
   sonare_free_acoustic_result(&result);
 }
 
+TEST_CASE("sonare_detect_acoustic rejects non-finite decay parameters", "[c_api][acoustic]") {
+  // The guarded sibling above spells this with isfinite; this entry point did not,
+  // so NaN and +Infinity failed every relational clause and reached the analysis.
+  // Rejection happens before any DSP, so this case does not belong in the slow tier.
+  std::vector<float> samples(1024, 0.1f);
+  const float inf = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  SonareAcousticResult result = {};
+  for (float bad : {nan, inf}) {
+    REQUIRE(sonare_detect_acoustic(samples.data(), samples.size(), 48000, 6, 24, bad, 10.0f,
+                                   &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_acoustic(samples.data(), samples.size(), 48000, 6, 24, 30.0f, bad,
+                                   &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_detect_acoustic blind mode exposes null clarity bands",
           "[.][slow][c_api][acoustic]") {
   const int sample_rate = 48000;

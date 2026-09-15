@@ -768,7 +768,8 @@ val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_oct
   // Mirror the C ABI's sonare_detect_acoustic guard so a negative band/subband
   // count or non-positive decay window is rejected here too, instead of silently
   // producing an empty-subband result (the C++ core treats them as benign).
-  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || min_decay_db <= 0.0f ||
+  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || !std::isfinite(min_decay_db) ||
+      min_decay_db <= 0.0f || !std::isfinite(noise_floor_margin_db) ||
       noise_floor_margin_db < 0.0f) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "detectAcoustic parameters out of range");

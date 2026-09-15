@@ -96,7 +96,8 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
   *out = {};
-  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || min_decay_db <= 0.0f ||
+  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || !std::isfinite(min_decay_db) ||
+      min_decay_db <= 0.0f || !std::isfinite(noise_floor_margin_db) ||
       noise_floor_margin_db < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
