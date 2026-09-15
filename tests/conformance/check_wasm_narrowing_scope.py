@@ -111,8 +111,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WASM_TREE = ROOT / "src" / "wasm"
-SHARED_READER_DIR = WASM_TREE / "bindings" / "common"
 RECORDS = Path(__file__).resolve().parent / "wasm_narrowing_records.json"
+
+# Everything keyed on a path is keyed relative to the tree actually scanned, so
+# that --tree reaches a copy. Anchoring on WASM_TREE instead made the flag a
+# crash rather than a seam, and a scan whose sources sit elsewhere cannot tell a
+# shared reader from a binding.
+SHARED_READER_SUBDIR = Path("bindings") / "common"
 
 _SOURCE_SUFFIXES = (".cpp", ".cc", ".h", ".hpp")
 
@@ -237,6 +242,14 @@ def prepare(text: str) -> tuple[str, str]:
     """
     readable = _LEXICAL.sub(_blank, text)
     return readable, _LITERAL.sub(_blank, readable)
+
+
+def _relative(path: Path, tree: Path) -> str:
+    """A record key: the path under the scanned tree, falling back to the repo."""
+    try:
+        return str(path.relative_to(tree))
+    except ValueError:
+        return _display(path)
 
 
 def _display(path: Path) -> str:
@@ -374,8 +387,11 @@ def containers_of(path: Path, readable: str, code: str) -> list[Container]:
 class Site:
     """One narrowing, with everything a record is keyed on."""
 
-    def __init__(self, path: Path, offset: int, line: int, cast_type: str, receiver: str) -> None:
+    def __init__(
+        self, path: Path, offset: int, line: int, cast_type: str, receiver: str, tree: Path
+    ) -> None:
         self.path = path
+        self.tree = tree
         self.offset = offset
         self.line = line
         self.type = cast_type
@@ -388,7 +404,7 @@ class Site:
 
     @property
     def key(self) -> tuple[str, str, str]:
-        return (str(self.path.relative_to(WASM_TREE)), self.receiver, self.type)
+        return (_relative(self.path, self.tree), self.receiver, self.type)
 
 
 class Scan:
@@ -467,6 +483,7 @@ class Scan:
                     line,
                     match.group(1),
                     receiver_of(readable, code, match.start()),
+                    self.tree,
                 )
                 enclosing = [c for c in containers if c.contains(site.offset)]
                 if enclosing:
@@ -835,7 +852,8 @@ def load_records(path: Path = RECORDS) -> dict:
 class Records:
     """The recorded-benign data, and which of its entries matched anything."""
 
-    def __init__(self, data: dict) -> None:
+    def __init__(self, data: dict, tree: Path | None = None) -> None:
+        self.tree = tree if tree is not None else WASM_TREE
         self.shapes = data.get("shapes", [])
         self.pending_types = {e["type"]: e for e in data.get("pending_types", [])}
         self.narrowings = data.get("narrowings", [])
@@ -860,7 +878,7 @@ class Records:
         return False
 
     def covers_reader(self, container: Container) -> bool:
-        relative = str(container.path.relative_to(WASM_TREE))
+        relative = _relative(container.path, self.tree)
         for entry in self.readers:
             if entry["file"] == relative and entry["symbol"] == container.name:
                 self.used.add(f"reader:{relative}:{container.name}")
@@ -1393,7 +1411,7 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     local_readers = [
         container
         for container in scan.readers
-        if SHARED_READER_DIR not in container.path.parents
+        if scan.tree / SHARED_READER_SUBDIR not in container.path.parents
         and not records.covers_reader(container)
     ]
     if local_readers:
@@ -1465,7 +1483,7 @@ def main() -> int:
         _VAL_PARAM = re.compile(r"\bval\b(?<!::val)")
 
     data = load_records(args.records)
-    records = Records(data)
+    records = Records(data, args.tree)
     scan = Scan(args.tree, body_window=args.body_window)
 
     positional_records = PositionalRecords(data)

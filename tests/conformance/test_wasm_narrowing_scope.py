@@ -132,7 +132,6 @@ val entryPoint(val options) {
             CHECKER,
             ROOT=root,
             WASM_TREE=root / "src" / "wasm",
-            SHARED_READER_DIR=root / "src" / "wasm" / "bindings" / "common",
         )
 
     def test_every_shape_is_found_and_contained(self) -> None:
@@ -266,7 +265,6 @@ val entryPoint(val options) {
             CHECKER,
             ROOT=root,
             WASM_TREE=root / "src" / "wasm",
-            SHARED_READER_DIR=root / "src" / "wasm" / "bindings" / "common",
         ):
             scan = CHECKER.Scan(root / "src" / "wasm")
             return CHECKER.evaluate(scan, CHECKER.Records(records), self.FLOOR)
