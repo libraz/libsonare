@@ -6,7 +6,9 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <clocale>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <locale>
 #include <stdexcept>
@@ -746,11 +748,12 @@ TEST_CASE("Shared stereo repair transfer preserves signed gain changes",
   REQUIRE_THAT(right[1], WithinAbs(0.5f, 1.0e-6f));
 }
 
-TEST_CASE("Shared stereo repair transfer stays bounded at mono zero crossings",
+TEST_CASE("MasteringChain stereo denoise keeps the output peak bounded",
           "[mastering][chain][repair]") {
-  // Decorrelated stereo content makes the mono mix cross zero where the
-  // channels do not; the spectral repair output is not proportional to the
-  // mono mix there, so an unbounded out/in ratio would explode the channels.
+  // The chain no longer repairs a mono mix and scales the pair by the per-sample
+  // out/in ratio, so the unbounded ratio at a mix zero crossing this once
+  // guarded is gone. The bound stays because a masked resynthesis is an
+  // overlap-add of modified frames and is not bounded by the input peak a priori.
   constexpr int sample_rate = 22050;
   std::vector<float> left(static_cast<size_t>(sample_rate / 2));
   std::vector<float> right(left.size());
@@ -775,8 +778,13 @@ TEST_CASE("Shared stereo repair transfer stays bounded at mono zero crossings",
   REQUIRE(output_peak <= 4.0f * input_peak);
 }
 
-TEST_CASE("MasteringChain stereo denoise applies a shared stereo transfer",
+TEST_CASE("MasteringChain stereo denoise preserves a constant inter-channel ratio",
           "[mastering][chain][repair]") {
+  // Named for what it checks. It does NOT witness that the mask was shared:
+  // every gain this denoiser computes is a power ratio, so a scaled pair gets
+  // the same mask from a per-channel pass too -- measured at 4.282e-09 against
+  // this case's own 1.0e-05 tolerance. The linked mask is witnessed by
+  // "builds one mask from both channels" below, which uses an unscaled pair.
   constexpr int sample_rate = 22050;
   std::vector<float> left(static_cast<size_t>(sample_rate / 4));
   std::vector<float> right(left.size());
@@ -803,6 +811,92 @@ TEST_CASE("MasteringChain stereo denoise applies a shared stereo transfer",
       REQUIRE_THAT(result.right[i], WithinAbs(0.35f * result.left[i], 1.0e-5f));
     }
   }
+}
+
+namespace {
+
+/// @brief Reproducible uniform noise in [-1, 1), so each channel carries its own floor.
+class ChainLcg {
+ public:
+  explicit ChainLcg(uint32_t seed) : state_(seed) {}
+  float next() {
+    state_ = state_ * 1664525u + 1013904223u;
+    return static_cast<float>(state_ >> 8) / 8388608.0f - 1.0f;
+  }
+
+ private:
+  uint32_t state_;
+};
+
+float worst_gap(const std::vector<float>& a, const std::vector<float>& b) {
+  const size_t count = std::min(a.size(), b.size());
+  float worst = 0.0f;
+  for (size_t i = 0; i < count; ++i) worst = std::max(worst, std::abs(a[i] - b[i]));
+  return worst;
+}
+
+}  // namespace
+
+TEST_CASE("MasteringChain stereo denoise builds one mask from both channels",
+          "[mastering][chain][repair]") {
+  constexpr int sample_rate = 22050;
+  const size_t length = static_cast<size_t>(sample_rate / 4);
+  // Two different programmes with their own noise floors, deliberately not a
+  // scaled pair. Every gain this denoiser computes is a power ratio, so scaling
+  // a channel leaves its whole mask unchanged and a scaled pair cannot separate
+  // one shared mask from two private ones.
+  std::vector<float> left(length);
+  std::vector<float> right(length);
+  ChainLcg rng(2468u);
+  for (size_t i = 0; i < length; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    left[i] = 0.30f * std::sin(sonare::constants::kTwoPi * 440.0f * t) + 0.02f * rng.next();
+    right[i] = 0.10f * std::sin(sonare::constants::kTwoPi * 3100.0f * t) + 0.06f * rng.next();
+  }
+  float peak = 0.0f;
+  for (size_t i = 0; i < length; ++i) {
+    peak = std::max({peak, std::abs(left[i]), std::abs(right[i])});
+  }
+
+  MasteringChainConfig config;
+  config.repair.denoise.enabled = true;
+  config.repair.denoise.config.n_fft = 1024;
+  config.repair.denoise.config.hop_length = 256;
+  MasteringChain chain(config);
+
+  const auto stereo = chain.process_stereo(left.data(), right.data(), length, sample_rate);
+  // Per channel: the same chain, one channel at a time. This IS the
+  // implementation a linked mask has to be distinguishable from.
+  const auto mono_left = chain.process_mono(left.data(), length, sample_rate);
+  const auto mono_right = chain.process_mono(right.data(), length, sample_rate);
+
+  // An STFT frame sums n_fft products in float, twice over for analysis and
+  // synthesis, so a difference this size is rounding rather than a decision.
+  const float rounding = 2.0f * std::sqrt(1024.0f) * std::numeric_limits<float>::epsilon() * peak;
+  const float left_gap = worst_gap(stereo.left, mono_left.samples);
+  const float right_gap = worst_gap(stereo.right, mono_right.samples);
+  INFO("left gap " << left_gap << " right gap " << right_gap << " rounding " << rounding);
+  // The mask is built from the channel-summed power, so each channel's output
+  // depends on the other channel. Per-channel processing makes both gaps zero.
+  CHECK(left_gap > 100.0f * rounding);
+  CHECK(right_gap > 100.0f * rounding);
+
+  // Non-vacuity: the stage has to have done something at all. Without this the
+  // gaps above could be produced by a stage that only runs in one of the modes.
+  CHECK(worst_gap(stereo.left, left) > 100.0f * rounding);
+
+  // The control that attributes the gaps to denoise. With the stage off, every
+  // remaining stage in this config is disabled, so the stereo and mono paths
+  // have to agree bit for bit -- if they do not, something else links the
+  // channels and the gaps above are not evidence about denoise.
+  MasteringChainConfig off = config;
+  off.repair.denoise.enabled = false;
+  MasteringChain bypass(off);
+  const auto bypass_stereo = bypass.process_stereo(left.data(), right.data(), length, sample_rate);
+  const auto bypass_mono = bypass.process_mono(left.data(), length, sample_rate);
+  REQUIRE(bypass_stereo.left.size() == bypass_mono.samples.size());
+  CHECK(std::memcmp(bypass_stereo.left.data(), bypass_mono.samples.data(),
+                    bypass_stereo.left.size() * sizeof(float)) == 0);
 }
 
 // ---------------------------------------------------------------------------

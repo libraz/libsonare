@@ -166,6 +166,10 @@ inline void apply_repair_in_place(std::vector<float>& data, int sample_rate,
   data.assign(repaired.data(), repaired.data() + repaired.size());
 }
 
+// The two rules a linked stereo repair is measured against. Neither is on a
+// production path any more -- every repair carries its own stereo form -- and
+// they stay because deleting them would delete the comparison, not dead weight.
+
 // Runs @p repair independently on each channel in place (left, then right). The
 // channels are separate buffers and the repair transforms are pure, so this is
 // equivalent to repairing both in either interleaving.
@@ -176,6 +180,9 @@ inline void apply_independent_repair(std::vector<float>& left, std::vector<float
   apply_repair_in_place(right, sample_rate, repair);
 }
 
+// Derives one gain curve from the mono mix and applies it to both channels. A
+// downmix decides for material it cannot see: one-sided content is halved and an
+// antiphase pair cancels, which is the reason the stereo forms do not use one.
 template <typename RepairFn>
 inline void apply_shared_mono_transfer_repair(std::vector<float>& left, std::vector<float>& right,
                                               int sample_rate, RepairFn&& repair) {
