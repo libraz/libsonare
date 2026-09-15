@@ -47,6 +47,14 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
+import type {
+  ClippingReport,
+  DynamicRangeReport,
+  MeteringDetectClippingOptions,
+  MeteringDynamicRangeOptions,
+  SpectrumOptions,
+  SpectrumReport,
+} from './metering.js';
 import { resample as resampleFn } from './mixer.js';
 import { addon } from './native.js';
 import type {
@@ -179,11 +187,13 @@ export class Audio {
 
   // -- Analysis --
 
-  // The seven methods below stay on the native handle rather than delegating to
-  // their standalone facade counterparts: the handle reads its own buffer in
-  // native memory, so routing through data() would copy it out first. Nothing is
-  // given up by not delegating — those facades are plain forwarders with no
-  // guard of their own, and none of these methods takes an integer positionally.
+  // The methods below stay on the native handle rather than delegating to their
+  // standalone facade counterparts: the handle reads its own buffer in native
+  // memory, so routing through data() would copy it out first. Nothing is given
+  // up by not delegating — those facades are plain forwarders with no guard of
+  // their own. The metering group below analyze() additionally skips the
+  // per-call finiteness scan and defensive copy the standalone metering
+  // facades pay, because audio_ passed both once at construction.
 
   detectBpm(): number {
     this.requireAlive();
@@ -218,6 +228,71 @@ export class Audio {
   analyze(options: MusicAnalyzeOptions = {}): AnalysisResult {
     this.requireAlive();
     return this.native.analyze(options);
+  }
+
+  // -- Metering --
+
+  peakDb(): number {
+    this.requireAlive();
+    return this.native.peakDb();
+  }
+
+  rmsDb(): number {
+    this.requireAlive();
+    return this.native.rmsDb();
+  }
+
+  dcOffset(): number {
+    this.requireAlive();
+    return this.native.dcOffset();
+  }
+
+  crestFactorDb(): number {
+    this.requireAlive();
+    return this.native.crestFactorDb();
+  }
+
+  silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
+    this.requireAlive();
+    return this.native.silenceRatio(thresholdDb, frameLength, hopLength);
+  }
+
+  /**
+   * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
+   * in [1, 16]; pass 0 to use the library default (4).
+   */
+  truePeakDb(oversampleFactor = 4): number {
+    this.requireAlive();
+    return this.native.truePeakDb(oversampleFactor);
+  }
+
+  detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
+    this.requireAlive();
+    return this.native.detectClipping(options);
+  }
+
+  dynamicRange(options: MeteringDynamicRangeOptions = {}): DynamicRangeReport {
+    this.requireAlive();
+    return this.native.dynamicRange(options);
+  }
+
+  spectrum(options: SpectrumOptions = {}): SpectrumReport {
+    this.requireAlive();
+    return this.native.spectrum(options);
+  }
+
+  /**
+   * True single-frame magnitude / power / dB spectrum starting at `frameOffset`.
+   * See {@link meteringSpectrumFrame} for the frame-validation contract.
+   */
+  spectrumFrame(frameOffset = 0, options: SpectrumOptions = {}): SpectrumReport {
+    this.requireAlive();
+    return this.native.spectrumFrame(frameOffset, options);
+  }
+
+  ebur128LoudnessRange(): number {
+    this.requireAlive();
+    return this.native.ebur128LoudnessRange();
   }
 
   analyzeBpm(options: AnalyzeBpmOptions = {}): BpmAnalysisResult {

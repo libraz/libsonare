@@ -29,6 +29,22 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   Napi::Value DetectDownbeatsInstance(const Napi::CallbackInfo& info);
   Napi::Value DetectOnsetsInstance(const Napi::CallbackInfo& info);
   Napi::Value AnalyzeInstance(const Napi::CallbackInfo& info);
+
+  // Handle-form metering: reads audio_ directly, skipping the finiteness
+  // scan and defensive copy their sonare_metering_* / sonare_ebur128_*
+  // buffer-form counterparts pay per call.
+  Napi::Value PeakDbInstance(const Napi::CallbackInfo& info);
+  Napi::Value RmsDbInstance(const Napi::CallbackInfo& info);
+  Napi::Value DcOffsetInstance(const Napi::CallbackInfo& info);
+  Napi::Value CrestFactorDbInstance(const Napi::CallbackInfo& info);
+  Napi::Value SilenceRatioInstance(const Napi::CallbackInfo& info);
+  Napi::Value TruePeakDbInstance(const Napi::CallbackInfo& info);
+  Napi::Value DetectClippingInstance(const Napi::CallbackInfo& info);
+  Napi::Value DynamicRangeInstance(const Napi::CallbackInfo& info);
+  Napi::Value SpectrumInstance(const Napi::CallbackInfo& info);
+  Napi::Value SpectrumFrameInstance(const Napi::CallbackInfo& info);
+  Napi::Value Ebur128LoudnessRangeInstance(const Napi::CallbackInfo& info);
+
   void Destroy(const Napi::CallbackInfo& info);
 
   // Static factory/query methods

@@ -756,6 +756,295 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+// --- Handle-form metering instance methods ---
+//
+// Each reads audio_ directly instead of a caller Float32Array, skipping the
+// finiteness scan and defensive copy the buffer-form functions above pay per
+// call. Parameters and defaults mirror the buffer form; see it for the
+// contract. audio_ already passed validation at construction, so mutating the
+// source buffer afterwards changes nothing these methods report.
+
+Napi::Value SonareWrap::PeakDbInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  float out_db = 0.0f;
+  SonareError err = sonare_audio_peak_db(audio_, &out_db);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, out_db);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::RmsDbInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  float out_db = 0.0f;
+  SonareError err = sonare_audio_rms_db(audio_, &out_db);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, out_db);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::DcOffsetInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  float out_value = 0.0f;
+  SonareError err = sonare_audio_dc_offset(audio_, &out_value);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, out_value);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::CrestFactorDbInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  float out_db = 0.0f;
+  SonareError err = sonare_audio_crest_factor_db(audio_, &out_db);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, out_db);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::SilenceRatioInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const float threshold_db = node_arg_finite_float(info, 0, -45.0f);
+  const int frame_length = node_arg_int(info, 1, 1024);
+  const int hop_length = node_arg_int(info, 2, 256);
+  float ratio = 0.0f;
+  const SonareError err =
+      sonare_audio_silence_ratio(audio_, threshold_db, frame_length, hop_length, &ratio);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, ratio);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::TruePeakDbInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int oversample = node_arg_int(info, 0, 4);
+  float out_value = 0.0f;
+  SonareError err = sonare_audio_true_peak_db(audio_, oversample, &out_value);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, out_value);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  float threshold = 0.999f;
+  int64_t min_region_value = 1;
+  if (info.Length() >= 1 && info[0].IsObject()) {
+    Napi::Object opts = info[0].As<Napi::Object>();
+    // threshold's 0.0f is a real value (the library default IS 0.999, not a
+    // sentinel), so read it as a plain fallback rather than ZeroIsSentinel.
+    threshold = FiniteFloatProperty(opts, "threshold", 0.999f);
+    min_region_value = Int64Property(opts, "minRegionSamples", 1);
+  }
+  if (min_region_value < 0) {
+    Napi::RangeError::New(env, "minRegionSamples must be non-negative")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const size_t min_region = static_cast<size_t>(min_region_value);
+  SonareClippingResult result{};
+  SonareError err = sonare_audio_detect_clipping(audio_, threshold, min_region, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  CResultGuard<SonareClippingResult, sonare_free_clipping_result> guard(&result);
+  Napi::Array regions = Napi::Array::New(env, result.region_count);
+  for (size_t i = 0; i < result.region_count; ++i) {
+    Napi::Object region = Napi::Object::New(env);
+    region.Set("startSample",
+               Napi::Number::New(env, static_cast<double>(result.regions[i].start_sample)));
+    region.Set("endSample",
+               Napi::Number::New(env, static_cast<double>(result.regions[i].end_sample)));
+    region.Set("length", Napi::Number::New(env, static_cast<double>(result.regions[i].length)));
+    region.Set("peak", Napi::Number::New(env, result.regions[i].peak));
+    regions.Set(static_cast<uint32_t>(i), region);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("clippedSamples", Napi::Number::New(env, static_cast<double>(result.clipped_samples)));
+  out.Set("clippingRatio", Napi::Number::New(env, result.clipping_ratio));
+  out.Set("maxClippedPeak", Napi::Number::New(env, result.max_clipped_peak));
+  out.Set("regions", regions);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::DynamicRangeInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  float window_sec = 0.0f;
+  float hop_sec = 0.0f;
+  // A NEGATIVE percentile selects the library default; 0.0f is a literal 0th
+  // percentile request, so these read as plain fallbacks rather than
+  // ZeroIsSentinel.
+  float low_p = -1.0f;
+  float high_p = -1.0f;
+  if (info.Length() >= 1 && info[0].IsObject()) {
+    Napi::Object opts = info[0].As<Napi::Object>();
+    window_sec = FiniteFloatProperty(opts, "windowSec", 0.0f);
+    hop_sec = FiniteFloatProperty(opts, "hopSec", 0.0f);
+    low_p = FiniteFloatProperty(opts, "lowPercentile", -1.0f);
+    high_p = FiniteFloatProperty(opts, "highPercentile", -1.0f);
+  }
+  SonareDynamicRangeResult result{};
+  SonareError err = sonare_audio_dynamic_range(audio_, window_sec, hop_sec, low_p, high_p, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  CResultGuard<SonareDynamicRangeResult, sonare_free_dynamic_range_result> guard(&result);
+  auto windows = Napi::Float32Array::New(env, result.window_count);
+  if (result.window_count > 0 && result.window_rms_db != nullptr) {
+    std::memcpy(windows.Data(), result.window_rms_db, result.window_count * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("dynamicRangeDb", Napi::Number::New(env, result.dynamic_range_db));
+  out.Set("lowPercentileDb", Napi::Number::New(env, result.low_percentile_db));
+  out.Set("highPercentileDb", Napi::Number::New(env, result.high_percentile_db));
+  out.Set("windowRmsDb", windows);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::SpectrumInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  int n_fft = 0;
+  int smooth = 0;
+  int octave = 0;
+  float db_ref = 0.0f;
+  float db_amin = 0.0f;
+  if (info.Length() >= 1 && info[0].IsObject()) {
+    Napi::Object opts = info[0].As<Napi::Object>();
+    n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
+    smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
+    octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
+    db_ref = FiniteFloatProperty(opts, "dbRef", 0.0f);
+    db_amin = FiniteFloatProperty(opts, "dbAmin", 0.0f);
+  }
+  SonareSpectrumResult result{};
+  SonareError err = sonare_audio_spectrum(audio_, n_fft, smooth, octave, db_ref, db_amin, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
+  return EmitSpectrumResult(env, result);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  size_t frame_offset = info.Length() >= 1 && info[0].IsNumber()
+                            ? static_cast<size_t>(std::max<int64_t>(
+                                  0, node_narrow_int64(env, info[0], node_arg_label(0).c_str())))
+                            : 0;
+  int n_fft = 0;
+  int smooth = 0;
+  int octave = 0;
+  float db_ref = 0.0f;
+  float db_amin = 0.0f;
+  if (info.Length() >= 2 && info[1].IsObject()) {
+    Napi::Object opts = info[1].As<Napi::Object>();
+    n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
+    smooth = BoolProperty(opts, "applyOctaveSmoothing", false) ? 1 : 0;
+    octave = IntProperty(opts, "octaveFraction", kZeroIsSentinel);
+    db_ref = FiniteFloatProperty(opts, "dbRef", 0.0f);
+    db_amin = FiniteFloatProperty(opts, "dbAmin", 0.0f);
+  }
+  SonareSpectrumResult result{};
+  SonareError err = sonare_audio_spectrum_frame(audio_, frame_offset, n_fft, smooth, octave, db_ref,
+                                                db_amin, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
+  return EmitSpectrumResult(env, result);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::Ebur128LoudnessRangeInstance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!audio_) {
+    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  float out_lra = 0.0f;
+  SonareError err = sonare_audio_ebur128_loudness_range(audio_, &out_lra);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, out_lra);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
