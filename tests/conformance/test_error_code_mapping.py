@@ -55,7 +55,7 @@ NODE_ADDON = "bindings/node/src/addon/sonare_wrap_utils.cpp"
 WASM_BINDINGS = "src/wasm/bindings.cpp"
 NODE_TYPES = "bindings/node/src/errors.ts"
 WASM_TYPES = "bindings/wasm/src/errors.ts"
-PYTHON_RUNTIME = "bindings/python/src/libsonare/_runtime.py"
+PYTHON_ERRORS = "bindings/python/src/libsonare/_errors.py"
 
 SOURCES = (
     CORE_ENUM,
@@ -66,7 +66,7 @@ SOURCES = (
     WASM_BINDINGS,
     NODE_TYPES,
     WASM_TYPES,
-    PYTHON_RUNTIME,
+    PYTHON_ERRORS,
 )
 
 # `Ok` is not an error, so it is compared on its own terms; see the docstring.
@@ -193,7 +193,7 @@ def python_mapping(root: Path) -> dict[str, int]:
     them here is deliberate -- a member with no entry in the table is a surface
     that cannot name its own code.
     """
-    text = _read(root, PYTHON_RUNTIME)
+    text = _read(root, PYTHON_ERRORS)
     enum_body = text[text.index("class ErrorCode(IntEnum):") :]
     enum_body = enum_body[: enum_body.index("\n\n\n")]
     members = {

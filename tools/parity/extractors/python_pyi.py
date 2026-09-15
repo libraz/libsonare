@@ -302,7 +302,7 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         "internal helpers: process-local plumbing with no C counterpart",
-        ("_runtime.py", "_cancellation.py", "_facade.py"),
+        ("_runtime.py", "_cancellation.py", "_facade.py", "_errors.py", "_narrowing.py"),
     ),
 )
 
