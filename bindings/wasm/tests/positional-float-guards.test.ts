@@ -70,7 +70,9 @@ function expectRangeRefusal(caught: unknown, key: string, context: string): void
 function countZeroCrossings(values: Float32Array): number {
   let crossings = 0;
   for (let i = 1; i < values.length; i++) {
-    if ((values[i - 1] as number) < 0 !== (values[i] as number) < 0) crossings++;
+    if ((values[i - 1] as number) < 0 !== (values[i] as number) < 0) {
+      crossings++;
+    }
   }
   return crossings;
 }
