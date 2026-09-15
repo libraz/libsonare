@@ -217,7 +217,10 @@ std::vector<int> intArrayToVector(val arr) {
   const size_t length = wasmArrayLikeLength(arr, "Int32Array");
   std::vector<int> out(length);
   for (size_t index = 0; index < length; ++index) {
-    out[index] = arr[index].as<int>();
+    // Each element goes through the same 32-bit-integer guard as any other
+    // scalar read, so an out-of-range or fractional element is refused rather
+    // than silently narrowed.
+    out[index] = checkedIntFromVal(arr[index], "Int32Array element");
   }
   return out;
 }

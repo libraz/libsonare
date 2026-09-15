@@ -1,8 +1,8 @@
 {
   "floor": {
-    "files": 21,
+    "files": 10,
     "containers": 411,
-    "narrowings": 51,
+    "narrowings": 15,
     "readers": 29
   },
   "shapes": [

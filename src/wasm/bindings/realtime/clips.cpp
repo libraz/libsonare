@@ -160,7 +160,8 @@ void RealtimeEngineWasm::setClips(val clips) {
                                    !objectProperty(clip_val, "pageProvider").isNull() &&
                                    !objectProperty(clip_val, "pageProvider").isUndefined();
     val channels_val = has_page_provider ? val::array() : clip_val["channels"];
-    const int channel_count = has_page_provider ? 0 : channels_val["length"].as<int>();
+    const int channel_count =
+        has_page_provider ? 0 : static_cast<int>(wasmArrayLikeLength(channels_val, "channels"));
     if (!has_page_provider && channel_count <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "clip channels must not be empty");
@@ -278,7 +279,7 @@ void RealtimeEngineWasm::setClips(val clips) {
     }
     if (hasProperty(clip_val, "warpAnchors")) {
       val anchors_val = objectProperty(clip_val, "warpAnchors");
-      const int anchor_count = anchors_val["length"].as<int>();
+      const int anchor_count = static_cast<int>(wasmArrayLikeLength(anchors_val, "warpAnchors"));
       if (anchor_count > 0) {
         auto anchors = std::make_shared<std::vector<sonare::engine::WarpAnchor>>();
         anchors->reserve(static_cast<size_t>(anchor_count));

@@ -20,6 +20,7 @@ import {
   init,
   isSonareError,
   RealtimeEngine,
+  RealtimeVoiceChanger,
   type SonareError,
   type SpectralRegionOp,
   spectralEdit,
@@ -268,5 +269,167 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     expectInvalidParameter(() =>
       waveformPeakPyramid(samples, 1, { samplesPerBucketLevels: levels }),
     );
+  });
+
+  it('sizes RealtimeVoiceChanger.processMono from the real sample count', () => {
+    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    vc.prepare(48000, 256, 1);
+    // The control: two legal block sizes select an output of that size.
+    expect(vc.processMono(new Float32Array(4)).length).toBe(4);
+    expect(vc.processMono(new Float32Array(8)).length).toBe(8);
+    for (const length of [-1, 1.5, 2e9]) {
+      expectInvalidParameter(() => vc.processMono({ length } as unknown as Float32Array));
+    }
+  });
+
+  it("sizes RealtimeVoiceChanger.processMonoInto's output check from the real buffer", () => {
+    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    vc.prepare(48000, 256, 1);
+    const input = new Float32Array(4);
+    // The control: an output exactly the input's size accepts; one short refuses.
+    expect(() => vc.processMonoInto(input, new Float32Array(4))).not.toThrow();
+    expect(() => vc.processMonoInto(input, new Float32Array(3))).toThrow();
+    for (const length of [-1, 1.5, 2e9]) {
+      expectInvalidParameter(() =>
+        vc.processMonoInto(input, { length } as unknown as Float32Array),
+      );
+    }
+  });
+
+  it('reads setTrackBuses from the real array length, not a fabricated one', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      // The control: a lone valid bus accepts; a second bus with an invalid
+      // layout trips the layout check, which only fires if it was actually read.
+      expect(() => engine.setTrackBuses([{ busId: 1 }])).not.toThrow();
+      expect(() => engine.setTrackBuses([{ busId: 1 }, { busId: 2, channelLayout: 99 }])).toThrow();
+      for (const length of [-1, 1.5, 2e9]) {
+        expectInvalidParameter(() =>
+          engine.setTrackBuses({ length } as unknown as Parameters<typeof engine.setTrackBuses>[0]),
+        );
+      }
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('counts setGraph nodes, connections and parameter bindings from the real arrays', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      // The control: two legal node lists report that many nodes.
+      engine.setGraph({
+        nodes: [{ id: 'a', numPorts: 1 }],
+        connections: [],
+        inputNode: 'a',
+        outputNode: 'a',
+        numChannels: 1,
+      });
+      expect(engine.graphNodeCount()).toBe(1);
+      engine.setGraph({
+        nodes: [
+          { id: 'a', numPorts: 1 },
+          { id: 'b', numPorts: 1 },
+        ],
+        connections: [{ sourceNode: 'a', sourcePort: 0, destNode: 'b', destPort: 0 }],
+        inputNode: 'a',
+        outputNode: 'b',
+        numChannels: 1,
+      });
+      expect(engine.graphNodeCount()).toBe(2);
+      expect(engine.graphConnectionCount()).toBe(1);
+      type GraphSpec = Parameters<typeof engine.setGraph>[0];
+      for (const length of [-1, 1.5, 2e9]) {
+        expectInvalidParameter(() =>
+          engine.setGraph({
+            nodes: { length } as unknown as GraphSpec['nodes'],
+            connections: [],
+            inputNode: 'a',
+            outputNode: 'a',
+            numChannels: 1,
+          }),
+        );
+        expectInvalidParameter(() =>
+          engine.setGraph({
+            nodes: [{ id: 'a', numPorts: 1 }],
+            connections: { length } as unknown as GraphSpec['connections'],
+            inputNode: 'a',
+            outputNode: 'a',
+            numChannels: 1,
+          }),
+        );
+        expectInvalidParameter(() =>
+          engine.setGraph({
+            nodes: [{ id: 'a', numPorts: 1 }],
+            connections: [],
+            inputNode: 'a',
+            outputNode: 'a',
+            numChannels: 1,
+            parameterBindings: { length } as unknown as GraphSpec['parameterBindings'],
+          }),
+        );
+      }
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('reads setClips channels and warpAnchors from the real arrays, not a fabricated length', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      const chA = new Float32Array(128).fill(0.5);
+      const chB = new Float32Array(64).fill(0.5);
+      // The control: a single channel accepts; a second, mismatched-length
+      // channel trips the length check, which only fires if it was actually read.
+      expect(() => engine.setClips([{ id: 1, channels: [chA], startPpq: 0 }])).not.toThrow();
+      expect(() => engine.setClips([{ id: 1, channels: [chA, chB], startPpq: 0 }])).toThrow();
+      type Clip = Parameters<typeof engine.setClips>[0][number];
+      for (const length of [-1, 1.5, 2e9]) {
+        expectInvalidParameter(() =>
+          engine.setClips([
+            { id: 1, channels: { length } as unknown as Clip['channels'], startPpq: 0 } as Clip,
+          ]),
+        );
+      }
+
+      // The control: one warp anchor accepts; a second, non-increasing anchor
+      // trips the monotonicity check, which only fires if it was actually read.
+      expect(() =>
+        engine.setClips([
+          {
+            id: 2,
+            channels: [chA],
+            startPpq: 0,
+            warpAnchors: [{ warpSample: 10, sourceSample: 10 }],
+          },
+        ]),
+      ).not.toThrow();
+      expect(() =>
+        engine.setClips([
+          {
+            id: 2,
+            channels: [chA],
+            startPpq: 0,
+            warpAnchors: [
+              { warpSample: 10, sourceSample: 10 },
+              { warpSample: 5, sourceSample: 5 },
+            ],
+          },
+        ]),
+      ).toThrow();
+      for (const length of [-1, 1.5, 2e9]) {
+        expectInvalidParameter(() =>
+          engine.setClips([
+            {
+              id: 2,
+              channels: [chA],
+              startPpq: 0,
+              warpAnchors: { length } as unknown as Clip['warpAnchors'],
+            } as Clip,
+          ]),
+        );
+      }
+    } finally {
+      engine.destroy();
+    }
   });
 });

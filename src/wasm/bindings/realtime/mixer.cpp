@@ -10,7 +10,7 @@
 
 void RealtimeEngineWasm::setTrackLanes(val lanes) {
 #if defined(SONARE_WITH_MIXING)
-  const int count = lanes["length"].as<int>();
+  const int count = static_cast<int>(wasmArrayLikeLength(lanes, "lanes"));
   std::vector<sonare::engine::TrackLaneConfig> configs;
   configs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {
@@ -37,7 +37,7 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     if (lane_val.typeOf().as<std::string>() == "object" && !lane_val["sends"].isUndefined() &&
         !lane_val["sends"].isNull()) {
       val sends = lane_val["sends"];
-      const int send_count = sends["length"].as<int>();
+      const int send_count = static_cast<int>(wasmArrayLikeLength(sends, "sends"));
       config.sends.reserve(static_cast<size_t>(send_count));
       for (int send_index = 0; send_index < send_count; ++send_index) {
         val send = sends[send_index];
@@ -95,7 +95,7 @@ void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& in
 
 void RealtimeEngineWasm::setTrackBuses(val buses) {
 #if defined(SONARE_WITH_MIXING)
-  const int count = buses["length"].as<int>();
+  const int count = static_cast<int>(wasmArrayLikeLength(buses, "buses"));
   std::vector<sonare::engine::TrackBusConfig> configs;
   configs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {

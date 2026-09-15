@@ -17,6 +17,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   ErrorCode,
+  fixFrames,
   init,
   isSonareError,
   masteringRepairDereverbClassical,
@@ -547,5 +548,88 @@ describe('the double reader refuses a non-finite number at the read', () => {
     );
     expect(error.code).toBe(ErrorCode.InvalidParameter);
     expect(error.message).toContain('id must be a finite number');
+  });
+});
+
+describe('fixFrames reads each frame element through the scalar guard, not a raw cast', () => {
+  // A real Int32Array cannot itself carry an out-of-range element -- writing
+  // to one wraps at the JS boundary before the C++ side ever sees it. A Proxy
+  // over a real Int32Array passes `instanceof Int32Array` (so the facade
+  // forwards it unmodified) while lying about one element's value, which is
+  // the only way to drive the native per-element read with a value the
+  // TypedArray itself refuses to hold.
+  function lyingElement(real: number[], index: number, lie: number): Int32Array {
+    const backing = new Int32Array(real);
+    return new Proxy(backing, {
+      // Forwarded through `target` rather than `receiver`: a TypedArray's
+      // `.length` is an accessor on the prototype that brand-checks `this`,
+      // so calling it with the Proxy itself as `receiver` throws before the
+      // lied-about index is ever read.
+      get(target, property) {
+        if (property === String(index)) {
+          return lie;
+        }
+        return Reflect.get(target, property);
+      },
+    });
+  }
+
+  it('keeps two legal single-frame arrays as themselves', () => {
+    expect(Array.from(fixFrames(new Int32Array([5]), -1, -1, false))).toEqual([5]);
+    expect(Array.from(fixFrames(new Int32Array([6]), -1, -1, false))).toEqual([6]);
+  });
+
+  it('refuses an element that used to wrap or truncate onto a legal frame', () => {
+    // 2**32 + 5 used to wrap onto 5 -- identical to the legal [5] above -- and
+    // 1.5 used to truncate onto 1.
+    for (const value of [2 ** 32 + 5, 1.5, ...SATURATING, ...NON_FINITE]) {
+      expectInvalidParameter(() => fixFrames(lyingElement([0], 0, value), -1, -1, false));
+    }
+  });
+});
+
+describe('array-like `.length` reads refuse a wrapped, negative or fractional count', () => {
+  // Before this guard, an array-like's raw `.length` narrowed straight into a
+  // C++ integer or size_t: 2**32 + 5 wrapped onto 5 (a plausible small count
+  // indistinguishable from a caller who really asked for 5), and a negative
+  // length sailed past a `> 0` check into a size_t-sized allocation. Each case
+  // below pairs the refusal with two legal counts that select a genuinely
+  // different outcome, so a reader that refused everything could not pass it
+  // by accident.
+  const WRAPPING_LENGTHS = [2 ** 32 + 5, -1, 1.5, 2 ** 40, ...NON_FINITE];
+
+  it('routes midiRouteEvents from the real event count, not a lying `.length`', () => {
+    const oneEvent = [Project.midiNoteOn(0, 0, 0, 60, 100)];
+    const twoEvents = [Project.midiNoteOn(0, 0, 0, 60, 100), Project.midiNoteOn(1, 0, 0, 61, 100)];
+    // The control: two legal event arrays route that many events.
+    expect(Project.midiRouteEvents(oneEvent, {}).events.length).toBe(1);
+    expect(Project.midiRouteEvents(twoEvents, {}).events.length).toBe(2);
+    for (const value of WRAPPING_LENGTHS) {
+      expectInvalidParameter(() =>
+        Project.midiRouteEvents({ length: value } as unknown as typeof oneEvent, {}),
+      );
+    }
+  });
+
+  it('reads midiCcLearn and midiParamToCc bindings from the real array length', () => {
+    type CcBinding = Parameters<typeof Project.midiParamToCc>[0][number];
+    const binding = (ccNumber: number): CcBinding =>
+      ({ ccNumber, channel: 0, kind: 0, paramId: 1, minValue: 0, maxValue: 1 }) as CcBinding;
+    // The control: an empty binding list matches nothing; one real, matching
+    // binding does -- so the guard is reading how many bindings are really
+    // there, not a value baked in ahead of time.
+    expect(Project.midiParamToCc([], 1, 0.5, 0, 0)).toBeNull();
+    expect(Project.midiParamToCc([binding(7)], 1, 0.5, 0, 0)).not.toBeNull();
+    for (const value of WRAPPING_LENGTHS) {
+      expectInvalidParameter(() =>
+        Project.midiParamToCc({ length: value } as unknown as CcBinding[], 1, 0.5, 0, 0),
+      );
+      expectInvalidParameter(() =>
+        Project.midiCcLearn(
+          { length: value } as unknown as ReturnType<typeof Project.midiNoteOn>[],
+          1,
+        ),
+      );
+    }
   });
 });

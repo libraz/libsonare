@@ -11,7 +11,8 @@
 
 void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const size_t count = events.isUndefined() || events.isNull() ? 0 : events["length"].as<size_t>();
+  const size_t count =
+      events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
@@ -375,7 +376,7 @@ val js_cc_binding_to_val(const SonareMidiCcBinding& binding) {
 
 std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
   const size_t count =
-      bindings.isUndefined() || bindings.isNull() ? 0 : bindings["length"].as<size_t>();
+      bindings.isUndefined() || bindings.isNull() ? 0 : wasmArrayLikeLength(bindings, "bindings");
   std::vector<SonareMidiCcBinding> out(count);
   for (size_t i = 0; i < count; ++i) {
     out[i] = js_cc_binding_from_val(bindings[i]);
@@ -387,7 +388,8 @@ val js_midi_cc_learn(val events, const val& param_id_val, float min_value, float
                      const val& min_movement_val) {
   const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
   const int min_movement = checkedIntFromVal(min_movement_val, "minMovement");
-  const size_t count = events.isUndefined() || events.isNull() ? 0 : events["length"].as<size_t>();
+  const size_t count =
+      events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
     pods[i] = js_midi_event_from_val(events[i]);
@@ -442,7 +444,8 @@ val js_midi_param_to_cc(val bindings, val param_id, float unit_value, const val&
 }
 
 val js_midi_route_events(val events, val config) {
-  const size_t count = events.isUndefined() || events.isNull() ? 0 : events["length"].as<size_t>();
+  const size_t count =
+      events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> input(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];

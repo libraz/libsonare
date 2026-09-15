@@ -124,7 +124,7 @@ class RealtimeVoiceChangerWrapper {
   // crossings and per-call allocations entirely.
   val processMono(val samples) {
     require_prepared();
-    const int length = samples["length"].as<int>();
+    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
     require_block_within_max(length);
     ensure_mono_capacity(static_cast<size_t>(length));
     copyFloat32Array(samples, mono_input_.data(), static_cast<size_t>(length));
@@ -137,9 +137,9 @@ class RealtimeVoiceChangerWrapper {
 
   void processMonoInto(val samples, val output) {
     require_prepared();
-    const int length = samples["length"].as<int>();
+    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
     require_block_within_max(length);
-    if (output["length"].as<int>() < length) {
+    if (static_cast<int>(wasmArrayLikeLength(output, "output")) < length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "output buffer is too small");
     }
@@ -152,7 +152,7 @@ class RealtimeVoiceChangerWrapper {
 
   val processInterleaved(val samples, const val& channels_val) {
     require_prepared();
-    const int length = samples["length"].as<int>();
+    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
     val output = val::global("Float32Array").new_(length);
     // Forwarded unnarrowed: processInterleavedInto narrows it under the same key.
     processInterleavedInto(samples, channels_val, output);
@@ -162,13 +162,13 @@ class RealtimeVoiceChangerWrapper {
   void processInterleavedInto(val samples, const val& channels_val, val output) {
     const int channels = checkedIntFromVal(channels_val, "channels");
     require_prepared();
-    const int length = samples["length"].as<int>();
+    const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
     if (channels <= 0 || length % channels != 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "invalid interleaved channel count");
     }
     require_prepared_channels(channels);
-    if (output["length"].as<int>() < length) {
+    if (static_cast<int>(wasmArrayLikeLength(output, "output")) < length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "output buffer is too small");
     }

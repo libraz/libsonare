@@ -103,7 +103,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
 #if defined(SONARE_WITH_GRAPH)
   auto graph = std::make_unique<sonare::graph::Graph>();
   val nodes = spec["nodes"];
-  const int node_count = nodes["length"].as<int>();
+  const int node_count = static_cast<int>(wasmArrayLikeLength(nodes, "nodes"));
   if (node_count <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "graph nodes must not be empty");
@@ -132,7 +132,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
     }
   }
   val connections = spec["connections"];
-  const int connection_count = connections["length"].as<int>();
+  const int connection_count = static_cast<int>(wasmArrayLikeLength(connections, "connections"));
   for (int i = 0; i < connection_count; ++i) {
     val connection = connections[i];
     sonare::graph::Connection graph_connection{};
@@ -157,7 +157,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
   std::vector<sonare::engine::GraphRuntime::ParameterBinding> parameter_bindings;
   if (hasProperty(spec, "parameterBindings")) {
     val bindings = spec["parameterBindings"];
-    const int binding_count = bindings["length"].as<int>();
+    const int binding_count = static_cast<int>(wasmArrayLikeLength(bindings, "parameterBindings"));
     parameter_bindings.reserve(static_cast<size_t>(std::max(binding_count, 0)));
     for (int i = 0; i < binding_count; ++i) {
       val binding = bindings[i];

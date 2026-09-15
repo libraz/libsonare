@@ -59,7 +59,10 @@ describe('WASM binding sources stay on the shared common.h field readers', () =>
     // it carries the source expression, and it stays unique when the same
     // expression appears twice in one file.
     const sites = [...bareFieldReadSites(), ...bareArrayLengthReadSites()];
-    expect(sites.length).toBeGreaterThan(100);
+    // A floor sized to the population this scan is meant to shrink would stop
+    // checking the scanner and start checking that remediation did not
+    // happen; this one only needs to stay comfortably above zero.
+    expect(sites.length).toBeGreaterThan(50);
     for (const site of sites) {
       expect(site.id).toContain(site.expression);
       expect(site.id).not.toContain(`:${site.line}`);
