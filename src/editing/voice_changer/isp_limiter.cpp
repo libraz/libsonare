@@ -7,6 +7,7 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/non_finite_sample.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::editing::voice_changer {
@@ -22,21 +23,6 @@ constexpr float kIspAttackMs = 0.1f;
 /// error. Without it the detect-only gain envelope can leave residual peaks
 /// 0.02-0.05 dB above the ceiling at heavily oversampled material.
 constexpr float kCeilingHeadroomDb = 0.05f;
-
-/// Keeps a non-finite sample out of the host graph, and sets @p substituted so
-/// the caller can report it. Both replacements are in-domain, so nothing
-/// downstream can tell them from a value the limiter computed.
-inline float clamp_finite(float value, bool& substituted) noexcept {
-  if (std::isnan(value)) {
-    substituted = true;
-    return 0.0f;
-  }
-  if (std::isinf(value)) {
-    substituted = true;
-    return value > 0.0f ? 1.0f : -1.0f;
-  }
-  return value;
-}
 
 }  // namespace
 
@@ -224,7 +210,10 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
       gain_ += release_alpha_ * (target_gain - gain_);
     }
 
-    const float delayed = clamp_finite(lookahead_.process(buffer[i]), substituted);
+    // The buffer is the host's, so a non-finite sample leaving here is out of
+    // reach; silence is the one replacement this stage could not have produced.
+    float delayed = lookahead_.process(buffer[i]);
+    if (resolve_non_finite(SampleDestination::kIrreversibleOutput, delayed)) substituted = true;
     // Never clip the base-rate waveform here. A sample hard-clamp introduces a
     // discontinuity that the same interpolation FIR can reconstruct above the
     // dBTP ceiling. The gain safety bound above is the final protection.

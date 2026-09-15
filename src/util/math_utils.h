@@ -14,6 +14,13 @@
 namespace sonare {
 
 /// @brief Clamps a value between min and max.
+/// @details Forwards to std::clamp. The nested `std::max(min_val, std::min(...))`
+///          this replaces returned @p min_val for a NaN, because a comparison
+///          against a non-finite value is false -- so a NaN left here as a
+///          plausible in-range value with nothing downstream able to tell it
+///          from a computed one. This is a pure function returning to its
+///          caller (SampleDestination::kCallerReturn), so a non-finite value
+///          propagates and is itself the report.
 /// @tparam T Numeric type
 /// @param value Value to clamp
 /// @param min_val Minimum bound
@@ -21,7 +28,7 @@ namespace sonare {
 /// @return Clamped value
 template <typename T>
 T clamp(T value, T min_val, T max_val) {
-  return std::max(min_val, std::min(value, max_val));
+  return std::clamp(value, min_val, max_val);
 }
 
 /// @brief Returns the index of the maximum element.

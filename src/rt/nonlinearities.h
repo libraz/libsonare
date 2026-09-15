@@ -107,6 +107,10 @@ struct ArctanNonlinearity {
   }
 };
 
+/// The clamps in this file are transfer functions, not substitutions: an
+/// infinity lands on the bound because that is the limit of the function being
+/// evaluated, and a NaN propagates. Neither is a SampleDestination case, so
+/// util/non_finite_sample.h does not apply here.
 struct HardClipNonlinearity {
   float limit = 1.0f;
 

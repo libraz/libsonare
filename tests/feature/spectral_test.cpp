@@ -968,3 +968,56 @@ TEST_CASE("poly_features does not depend on where a frame lands in a tile", "[sp
     }
   }
 }
+
+// ===================================================================
+// Reachability, established rather than asserted: a raw magnitude
+// array is what these overloads take, so a non-finite magnitude
+// reaches the substitution with nothing in between to refuse it.
+// The assertions are equalities against a reference run, because a
+// range check on the result would pass either way.
+// ===================================================================
+TEST_CASE("A non-finite magnitude is answered as if it were zero", "[spectral]") {
+  constexpr int n_bins = 8;
+  constexpr int n_frames = 4;
+  constexpr int sr = 22050;
+  constexpr int n_fft = 2 * (n_bins - 1);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  std::vector<float> reference(static_cast<size_t>(n_bins * n_frames));
+  for (size_t i = 0; i < reference.size(); ++i) {
+    reference[i] = 0.1f + 0.05f * static_cast<float>(i % 7);
+  }
+
+  // The bins the non-finite values take, zeroed in the reference so the two
+  // runs differ only in HOW that zero was arrived at.
+  const std::array<size_t, 3> tainted_bins = {3, 11, 20};
+  std::vector<float> tainted = reference;
+  tainted[tainted_bins[0]] = nan;
+  tainted[tainted_bins[1]] = inf;
+  tainted[tainted_bins[2]] = -inf;
+  for (size_t bin : tainted_bins) reference[bin] = 0.0f;
+
+  SECTION("spectral_centroid") {
+    const auto expected = spectral_centroid(reference.data(), n_bins, n_frames, sr, n_fft);
+    const auto actual = spectral_centroid(tainted.data(), n_bins, n_frames, sr, n_fft);
+    REQUIRE(actual == expected);
+  }
+
+  SECTION("spectral_flatness") {
+    const auto expected = spectral_flatness(reference.data(), n_bins, n_frames);
+    const auto actual = spectral_flatness(tainted.data(), n_bins, n_frames);
+    REQUIRE(actual == expected);
+  }
+
+  SECTION("a large finite magnitude in the same bins is NOT answered as zero") {
+    // The control. Without it the equalities above would also hold if the
+    // descriptors simply ignored those bins.
+    std::vector<float> loud = reference;
+    for (size_t bin : tainted_bins) loud[bin] = 9.0f;
+    REQUIRE(spectral_centroid(loud.data(), n_bins, n_frames, sr, n_fft) !=
+            spectral_centroid(reference.data(), n_bins, n_frames, sr, n_fft));
+    REQUIRE(spectral_flatness(loud.data(), n_bins, n_frames) !=
+            spectral_flatness(reference.data(), n_bins, n_frames));
+  }
+}

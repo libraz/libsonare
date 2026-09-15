@@ -495,9 +495,9 @@ TEST_CASE("the realtime voice changer bounds a non-finite sample to its own bloc
   }
 
   SECTION("with the inter-sample-peak limiter") {
-    // The ISP stage replaces a non-finite sample with silence or full scale, so
-    // the output is finite whether the state behind it is usable or not and no
-    // assertion on the samples can separate the two runs. The chain reports the
+    // The ISP stage substitutes silence for a non-finite sample, so the output
+    // is finite whether the state behind it is usable or not and no assertion
+    // on the samples can separate the two runs. The chain reports the
     // block it discarded its own state in, and that report is the positive
     // control: the clean run must produce none of them.
     RealtimeVoiceChangerConfig config = linear_config();
@@ -567,6 +567,22 @@ TEST_CASE("the inter-sample-peak limiter reports the sample it substituted",
     // identical would be reporting something other than this substitution.
     REQUIRE(residual_from(clean.first, poisoned.first, kPoisonBlock) > 0.0);
   }
+
+  // The report is consumed by the read rather than latched. Everything above
+  // only requires the poisoned run to report at some point, which an
+  // implementation that raised the flag once and never lowered it would also
+  // satisfy -- and that implementation would mark every later clean block as
+  // degraded.
+  IspLimiter limiter;
+  limiter.prepare(kSampleRate, kBlockSize);
+  limiter.set_config({-1.0f, 50.0f});
+  std::vector<float> poisoned_block = stream_block(0);
+  poisoned_block[static_cast<size_t>(kPoisonIndex)] = std::numeric_limits<float>::quiet_NaN();
+  limiter.process_block(poisoned_block.data(), kBlockSize);
+  REQUIRE(limiter.discard_non_finite());
+  std::vector<float> clean_block = stream_block(1);
+  limiter.process_block(clean_block.data(), kBlockSize);
+  REQUIRE_FALSE(limiter.discard_non_finite());
 }
 
 TEST_CASE("the mixer meter bounds a non-finite sample to its own block", "[mixing][meter]") {

@@ -20,6 +20,7 @@
 #include "midi/ump.h"
 #include "transport/transport_state.h"
 #include "util/exception.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare::host::backends {
 namespace {
@@ -140,9 +141,9 @@ void finalize_au_output(float* const* channels, int num_channels, int chans, int
   } else {
     for (int c = 0; c < render_chans && c < chans; ++c) {
       if (channels[c] == nullptr) continue;
-      for (int s = 0; s < render_samples; ++s) {
-        if (!std::isfinite(channels[c][s])) channels[c][s] = 0.0f;
-      }
+      // The count is discarded because the provider exposes no counter for it.
+      (void)resolve_non_finite_run(SampleDestination::kIrreversibleOutput, channels[c],
+                                   static_cast<size_t>(render_samples));
     }
   }
   // Silence host channels the AU did not fill (host supplied more than the AU renders).

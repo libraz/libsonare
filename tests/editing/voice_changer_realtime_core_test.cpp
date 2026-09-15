@@ -913,6 +913,63 @@ TEST_CASE("RealtimeVoiceChanger sanitizes non-finite inputs", "[voice_changer]")
 }
 
 // ===================================================================
+// The input scrub substitutes silence successfully, so the non-finite
+// value never reaches a state cell and discard_non_finite_state() has
+// nothing to find. The count must still move, because it is the only
+// thing separating these samples from ones computed from the input.
+// ===================================================================
+TEST_CASE("RealtimeVoiceChanger counts the input samples it substituted", "[voice_changer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 64;
+  RealtimeVoiceChanger changer(realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor));
+  changer.prepare(sample_rate, block, 1);
+  REQUIRE(changer.non_finite_discard_count() == 0);
+
+  // A clean block first, so the zero above is known to survive processing and
+  // the step below is attributable to the non-finite sample alone.
+  std::vector<float> clean(block, 0.01f);
+  std::vector<float> out(block, 0.0f);
+  changer.process_block(clean.data(), out.data(), block);
+  REQUIRE(changer.non_finite_discard_count() == 0);
+
+  std::vector<float> tainted(block, 0.01f);
+  tainted[16] = std::numeric_limits<float>::quiet_NaN();
+  changer.process_block(tainted.data(), out.data(), block);
+  REQUIRE(changer.non_finite_discard_count() == 1);
+
+  // Mono, so one block adds one however many samples in it were substituted.
+  std::vector<float> many(block, 0.01f);
+  many[8] = std::numeric_limits<float>::quiet_NaN();
+  many[24] = std::numeric_limits<float>::infinity();
+  many[40] = -std::numeric_limits<float>::infinity();
+  changer.process_block(many.data(), out.data(), block);
+  REQUIRE(changer.non_finite_discard_count() == 2);
+}
+
+TEST_CASE("RealtimeVoiceChanger counts a substituted input per channel", "[voice_changer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 64;
+  RealtimeVoiceChanger changer(realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor));
+  changer.prepare(sample_rate, block, 2);
+
+  std::vector<float> left(block, 0.01f);
+  std::vector<float> right(block, 0.01f);
+  left[16] = std::numeric_limits<float>::quiet_NaN();
+  float* channels[2] = {left.data(), right.data()};
+  changer.process_block(channels, 2, block);
+  // One channel carried it, so one bump — not two, and not zero.
+  REQUIRE(changer.non_finite_discard_count() == 1);
+
+  std::vector<float> l2(block, 0.01f);
+  std::vector<float> r2(block, 0.01f);
+  l2[4] = std::numeric_limits<float>::infinity();
+  r2[52] = std::numeric_limits<float>::infinity();
+  float* both[2] = {l2.data(), r2.data()};
+  changer.process_block(both, 2, block);
+  REQUIRE(changer.non_finite_discard_count() == 3);
+}
+
+// ===================================================================
 // Regression: reverb buffers must follow sample_rate. Confirm that
 // prepare() at 44.1 kHz and 96 kHz both produce finite, bounded output
 // for the same preset.

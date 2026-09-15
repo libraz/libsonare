@@ -8,6 +8,7 @@
 #include "midi/synth/voice_random.h"
 #include "midi/ump.h"
 #include "util/constants.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare::midi::synth {
 
@@ -858,9 +859,10 @@ void NativeSynth::process_impl(float* const* channels,
     // input, which is not the same as safe for it -- the blocker is a feedback
     // cell whose worst-case gain is well over unity, so a large enough finite
     // sample still leaves float range. Mirrors the host-side scrub in
-    // au_instrument_provider.
-    if (!std::isfinite(mix_l)) mix_l = 0.0f;
-    if (!std::isfinite(mix_r)) mix_r = 0.0f;
+    // au_instrument_provider. The count is discarded because the synth exposes
+    // no counter to add it to.
+    (void)resolve_non_finite(SampleDestination::kRecursiveState, mix_l);
+    (void)resolve_non_finite(SampleDestination::kRecursiveState, mix_r);
     if (config_.dc_block) {
       const float l = mix_l - dc_x1_[0] + dc_r_ * dc_y1_[0];
       dc_x1_[0] = mix_l;

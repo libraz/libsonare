@@ -1298,3 +1298,82 @@ TEST_CASE("a filter the scratch bound slowed down still covers every row", "[hps
     }
   }
 }
+
+// ===================================================================
+// The median filters substitute a non-finite magnitude so the sorted
+// array stays a strict weak ordering. What that substitution IS gets
+// asserted here: a run over a poisoned spectrogram must agree bin for
+// bin with a run over the same spectrogram holding zero in its place.
+// A finiteness check on the output would pass without it.
+// ===================================================================
+TEST_CASE("hpss answers a non-finite magnitude as if it were zero", "[hpss][nan]") {
+  Audio audio = create_harmonic_audio(440.0f, 22050, 0.25f);
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+
+  Spectrogram clean = Spectrogram::compute(audio, stft_config);
+  const int n_bins = clean.n_bins();
+  const int n_frames = clean.n_frames();
+  REQUIRE(n_bins > 0);
+  REQUIRE(n_frames > 0);
+
+  const float kNaN = std::numeric_limits<float>::quiet_NaN();
+  const float kInf = std::numeric_limits<float>::infinity();
+  const std::vector<size_t> tainted_bins = {
+      static_cast<size_t>(1 * n_frames + 3),
+      static_cast<size_t>((n_bins / 2) * n_frames + n_frames / 2),
+      static_cast<size_t>((n_bins - 2) * n_frames + (n_frames - 3)),
+  };
+
+  const std::vector<std::complex<float>> base(clean.complex_data(),
+                                              clean.complex_data() + n_bins * n_frames);
+
+  auto run = [&](const std::vector<std::complex<float>>& bins) {
+    Spectrogram spec = Spectrogram::from_complex(
+        bins.data(), n_bins, n_frames, clean.n_fft(), clean.hop_length(), clean.sample_rate(),
+        clean.window(), clean.center(), clean.win_length());
+    HpssConfig config;
+    config.kernel_size_harmonic = 11;
+    config.kernel_size_percussive = 11;
+    return hpss(spec, config);
+  };
+
+  std::vector<std::complex<float>> poisoned = base;
+  poisoned[tainted_bins[0]] = std::complex<float>(kNaN, 0.0f);
+  poisoned[tainted_bins[1]] = std::complex<float>(kInf, kNaN);
+  poisoned[tainted_bins[2]] = std::complex<float>(0.0f, kNaN);
+
+  std::vector<std::complex<float>> zeroed = base;
+  for (size_t bin : tainted_bins) zeroed[bin] = std::complex<float>(0.0f, 0.0f);
+
+  const HpssSpectrogramResult poisoned_result = run(poisoned);
+  const HpssSpectrogramResult zeroed_result = run(zeroed);
+
+  // Every bin but the poisoned ones themselves, whose magnitude legitimately
+  // differs between the two inputs.
+  auto agrees_away_from_taint = [&](const std::vector<float>& a, const std::vector<float>& b) {
+    REQUIRE(a.size() == b.size());
+    size_t compared = 0;
+    for (size_t i = 0; i < a.size(); ++i) {
+      if (std::find(tainted_bins.begin(), tainted_bins.end(), i) != tainted_bins.end()) continue;
+      REQUIRE(a[i] == b[i]);
+      ++compared;
+    }
+    // The comparison ran over the whole spectrogram rather than over nothing.
+    REQUIRE(compared == a.size() - tainted_bins.size());
+  };
+
+  agrees_away_from_taint(poisoned_result.harmonic.magnitude(), zeroed_result.harmonic.magnitude());
+  agrees_away_from_taint(poisoned_result.percussive.magnitude(),
+                         zeroed_result.percussive.magnitude());
+
+  // Control: a large finite magnitude in the same bins moves the medians its
+  // neighbours are built from, so the agreement above is not something every
+  // input satisfies.
+  std::vector<std::complex<float>> loud = base;
+  for (size_t bin : tainted_bins) loud[bin] = std::complex<float>(40.0f, 0.0f);
+  const HpssSpectrogramResult loud_result = run(loud);
+  REQUIRE(loud_result.harmonic.magnitude() != zeroed_result.harmonic.magnitude());
+}

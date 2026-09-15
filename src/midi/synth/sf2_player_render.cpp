@@ -12,6 +12,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "util/constants.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare::midi::synth {
 
@@ -175,8 +176,9 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       const Sf2ChannelMod& mod = mods[part];
       // Same non-finite scrub as the fallback loop below: this leg feeds the
       // insert bus and the system effect sends, which are persistent IIR state.
-      const float rendered = v.render(mod);
-      const float s = std::isfinite(rendered) ? rendered : 0.0f;
+      // The count is discarded because the player exposes no counter for it.
+      float s = v.render(mod);
+      (void)resolve_non_finite(SampleDestination::kRecursiveState, s);
       const float l = s * v.gain_left;
       const float r = s * v.gain_right;
       if (part_bussed[part]) {
@@ -237,9 +239,10 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       // for the whole render. Bit-identical for finite input, which is not the
       // same as safe for it -- those states are feedback cells, so a large
       // enough finite sample still leaves float range. The same guard the
-      // NativeSynth host applies to its own physical-model mix bus.
-      const float rendered = v.render(mod, wind.pitch_ratio, wind.gain);
-      const float s = std::isfinite(rendered) ? rendered : 0.0f;
+      // NativeSynth host applies to its own physical-model mix bus. The count is
+      // discarded because the player exposes no counter for it.
+      float s = v.render(mod, wind.pitch_ratio, wind.gain);
+      (void)resolve_non_finite(SampleDestination::kRecursiveState, s);
       float l = s * v.gain_left;
       float r = s * v.gain_right;
       if (body_active[part]) body_dry[part] += 0.5f * (l + r);

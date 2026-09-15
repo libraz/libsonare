@@ -17,6 +17,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/non_finite_sample.h"
 #include "util/numeric_validation.h"
 
 namespace sonare {
@@ -43,12 +44,13 @@ class SlidingMedian {
   explicit SlidingMedian(int max_size) : sorted_(max_size), size_(0) {}
 
   /// @brief Adds a value to the window.
-  /// @details Non-finite values (NaN / +/-Inf) are sanitized to 0.0f so that the
-  ///          sorted array remains a strict weak ordering. NaN-tainted inputs
-  ///          would otherwise corrupt `std::lower_bound` and trigger undefined
-  ///          behavior in subsequent erase operations.
+  /// @details Non-finite values are substituted so the sorted array remains a
+  ///          strict weak ordering; a NaN-tainted input would otherwise corrupt
+  ///          `std::lower_bound` and trigger undefined behavior in subsequent
+  ///          erase operations. The count is discarded because the median filter
+  ///          is a free-standing helper with no channel to report it on.
   void insert(float val) {
-    if (!std::isfinite(val)) val = 0.0f;
+    (void)resolve_non_finite(SampleDestination::kOrderedContainer, val);
     auto pos = std::lower_bound(sorted_.begin(), sorted_.begin() + size_, val);
     int idx = static_cast<int>(pos - sorted_.begin());
     if (idx < size_) {
@@ -63,7 +65,7 @@ class SlidingMedian {
   /// @details Must apply the same sanitization as `insert` so that the value
   ///          actually present in the sorted array is the one we search for.
   void erase(float val) {
-    if (!std::isfinite(val)) val = 0.0f;
+    (void)resolve_non_finite(SampleDestination::kOrderedContainer, val);
     auto pos = std::lower_bound(sorted_.begin(), sorted_.begin() + size_, val);
     int idx = static_cast<int>(pos - sorted_.begin());
     --size_;
@@ -97,14 +99,13 @@ class SlidingMedian {
 /// @warning This function modifies the input array via std::nth_element.
 ///          The array will be partially sorted after the call.
 /// @details Used only for boundary regions where sliding window doesn't apply.
-///          Non-finite entries (NaN / Inf) are sanitized to 0.0f before sorting
-///          because `std::nth_element` requires a strict weak ordering.
+///          Non-finite entries are substituted before sorting because
+///          `std::nth_element` requires a strict weak ordering. The count is
+///          discarded for the same reason as in SlidingMedian.
 float compute_median(float* values, size_t n) {
   if (n == 0) return 0.0f;
 
-  for (size_t i = 0; i < n; ++i) {
-    if (!std::isfinite(values[i])) values[i] = 0.0f;
-  }
+  (void)resolve_non_finite_run(SampleDestination::kOrderedContainer, values, n);
 
   size_t mid = n / 2;
   std::nth_element(values, values + mid, values + n);

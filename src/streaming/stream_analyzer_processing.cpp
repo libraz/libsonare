@@ -9,6 +9,7 @@
 #include "streaming/stream_analyzer.h"
 #include "streaming/stream_analyzer_utils.h"
 #include "util/exception.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare {
 
@@ -289,12 +290,11 @@ std::array<float, 12> StreamAnalyzer::median_full_chroma(size_t start, size_t co
 
 const float* StreamAnalyzer::sanitize_into(const float* src, size_t n_samples,
                                            std::vector<float>& dst) {
-  dst.resize(n_samples);
-  for (size_t i = 0; i < n_samples; ++i) {
-    const float v = src[i];
-    /// std::isfinite is false for NaN and +/-Inf; replace those with silence.
-    dst[i] = std::isfinite(v) ? v : 0.0f;
-  }
+  dst.assign(src, src + n_samples);
+  /// The copy feeds the STFT and, through it, the onset and chroma histories the
+  /// analyzer carries between frames. The count is discarded because the
+  /// analyzer exposes no counter to add it to.
+  (void)resolve_non_finite_run(SampleDestination::kRecursiveState, dst.data(), n_samples);
   return dst.data();
 }
 

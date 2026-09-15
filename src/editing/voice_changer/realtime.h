@@ -203,13 +203,13 @@ class RealtimeVoiceChanger {
   ///          discards on both channels adds two.
   ///
   ///          This is the only observable that separates a degraded stream from
-  ///          a clean one. Every stage below substitutes an in-domain finite
-  ///          value for a non-finite one -- the ISP limiter replaces it with
-  ///          silence or full scale, the sample-domain limiter folds an infinity
-  ///          onto the ceiling -- so the output stays finite, in range and free
-  ///          of any error while carrying samples unrelated to the input. A
-  ///          non-zero count is what says the samples in between were not
-  ///          computed from what the caller supplied.
+  ///          a clean one. Every stage of this chain leaves an in-domain finite
+  ///          value where a non-finite one was -- the input scrub and the
+  ///          inter-sample-peak limiter substitute silence, the sample-domain
+  ///          limiter folds an infinity onto its ceiling -- so the output stays
+  ///          finite, in range and free of any error while carrying samples
+  ///          unrelated to the input. A non-zero count is what says the samples
+  ///          in between were not computed from what the caller supplied.
   std::uint32_t non_finite_discard_count() const noexcept {
     return non_finite_discard_count_.load();
   }

@@ -61,8 +61,14 @@ Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
   for (size_t i = 0; i < audio.size(); ++i) {
     samples[i] = data[i] * gain_linear;
     if (clip) {
-      /// Hard-clip to [-1, 1] (opt-out via the clip flag).
-      samples[i] = std::max(-1.0f, std::min(1.0f, samples[i]));
+      /// Hard-clip to [-1, 1] (opt-out via the clip flag). std::clamp rather
+      /// than a nested min/max: a comparison against a non-finite value is
+      /// false, so std::min(1.0f, NaN) returns its other argument and the sample
+      /// would leave here as positive full scale, indistinguishable from a peak
+      /// this function meant to produce. The result is returned to the caller,
+      /// which is the downstream, so the NaN propagates and is itself the report
+      /// (SampleDestination::kCallerReturn).
+      samples[i] = std::clamp(samples[i], -1.0f, 1.0f);
     }
   }
 

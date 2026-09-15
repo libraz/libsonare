@@ -317,3 +317,23 @@ TEST_CASE("unnormalized_autocorrelation is the shared raw autocorrelation primit
     REQUIRE_THAT(result[0], WithinRel(static_cast<float>(energy), 1e-4f));
   }
 }
+
+TEST_CASE("clamp does not launder a non-finite value", "[math_utils]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  // A pure function returning to its caller propagates. The nested
+  // std::max(min_val, std::min(value, max_val)) this replaced returned min_val
+  // for a NaN, because a comparison against a non-finite value is false.
+  REQUIRE(std::isnan(clamp(nan, 0.0f, 1.0f)));
+  REQUIRE(std::isnan(clamp(nan, -5.0f, 5.0f)));
+
+  // Bound-folding for the infinities and for ordinary values is unchanged, so
+  // the assertion above is about the NaN alone.
+  REQUIRE(clamp(inf, 0.0f, 1.0f) == 1.0f);
+  REQUIRE(clamp(-inf, 0.0f, 1.0f) == 0.0f);
+  REQUIRE(clamp(2.0f, 0.0f, 1.0f) == 1.0f);
+  REQUIRE(clamp(-2.0f, 0.0f, 1.0f) == 0.0f);
+  REQUIRE(clamp(0.25f, 0.0f, 1.0f) == 0.25f);
+  REQUIRE(clamp(3, 0, 10) == 3);
+}

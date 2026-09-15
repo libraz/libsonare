@@ -6,6 +6,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/non_finite_sample.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::editing::voice_changer {
@@ -254,6 +255,10 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     if (channels[ch] == nullptr) continue;
     auto& channel = channels_[static_cast<std::size_t>(ch)];
     const std::uint64_t block_start = channel.control_cadence.sample_position();
+    // The substitution below succeeds, so the non-finite value never reaches a
+    // state cell and discard_non_finite_state() cannot see it. The flag is what
+    // carries it to the block's report instead.
+    bool input_substituted = false;
     for (int i = 0; i < num_samples; ++i) {
       // Non-finite input is flushed to silence rather than refused: every stage
       // below recirculates its own output, so one NaN would hold the HPF/EQ
@@ -264,8 +269,8 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
       // can become -- a finite sample large enough leaves float range inside the
       // highpass recurrence on the next line. discard_non_finite_state is what
       // catches that, one block later.
-      const float raw = channels[ch][i];
-      const float clean = std::isfinite(raw) ? raw : 0.0f;
+      float clean = channels[ch][i];
+      if (resolve_non_finite(SampleDestination::kRecursiveState, clean)) input_substituted = true;
       channels[ch][i] = clean;
       const bool control_update = channel.control_cadence.advance();
       scratch_[i] = process_input_stage(channel, clean, control_update);
@@ -292,7 +297,10 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     if (config.limiter.enable_isp_limiter) {
       channel.isp_limiter.process_block(channels[ch], num_samples);
     }
-    if (discard_non_finite_state(channel)) non_finite_discard_count_.bump();
+    // One bump per channel per block whichever of the two found something, so the
+    // counter keeps the cadence its accessor documents.
+    const bool state_discarded = discard_non_finite_state(channel);
+    if (state_discarded || input_substituted) non_finite_discard_count_.bump();
   }
 }
 

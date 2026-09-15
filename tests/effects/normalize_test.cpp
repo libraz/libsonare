@@ -289,3 +289,37 @@ TEST_CASE("detect_silence_boundaries with sound only at end", "[normalize]") {
   auto [start, end] = detect_silence_boundaries(audio);
   REQUIRE(end > start);
 }
+
+// ===================================================================
+// The clip path must not turn a non-finite sample into a peak. Every
+// assertion below is on the value the sample takes, because a check
+// that the output is finite passes whether or not that happened.
+// ===================================================================
+TEST_CASE("apply_gain clipping does not launder a non-finite sample", "[normalize]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  std::vector<float> samples = {0.5f, nan, 2.0f, inf, -2.0f, -inf};
+  Audio audio = Audio::from_vector(std::move(samples), 22050);
+
+  const Audio clipped = apply_gain(audio, 0.0f, /*clip=*/true);
+  // apply_gain returns to its caller, which is the downstream, so the NaN
+  // propagates and is itself the report. A nested std::max(-1, std::min(1, x))
+  // sent it to +1.0f instead, indistinguishable from a peak this function meant
+  // to produce.
+  REQUIRE(std::isnan(clipped.data()[1]));
+  // The clip's own bounds still apply to everything else, infinities included:
+  // folding one onto the bound is the limit of the transfer function rather
+  // than a substituted value.
+  REQUIRE(clipped.data()[0] == 0.5f);
+  REQUIRE(clipped.data()[2] == 1.0f);
+  REQUIRE(clipped.data()[3] == 1.0f);
+  REQUIRE(clipped.data()[4] == -1.0f);
+  REQUIRE(clipped.data()[5] == -1.0f);
+
+  // Control: with clipping off nothing is bounded, so the assertions above are
+  // about the clip path rather than about apply_gain's arithmetic.
+  const Audio unclipped = apply_gain(audio, 0.0f, /*clip=*/false);
+  REQUIRE(unclipped.data()[2] == 2.0f);
+  REQUIRE(unclipped.data()[3] == inf);
+  REQUIRE(std::isnan(unclipped.data()[1]));
+}

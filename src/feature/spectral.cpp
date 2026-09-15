@@ -9,6 +9,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/non_finite_sample.h"
 #include "util/numeric_validation.h"
 
 namespace sonare {
@@ -49,8 +50,12 @@ std::vector<float> pad_for_centered_zcr(const float* samples, size_t n_samples, 
   return padded;
 }
 
+/// The descriptors built from this carry a declared closed range; the count is
+/// discarded because none of them has a channel to report it on.
 float sanitized_magnitude(float magnitude) noexcept {
-  return std::isfinite(magnitude) ? std::max(magnitude, 0.0f) : 0.0f;
+  float value = magnitude;
+  (void)resolve_non_finite(SampleDestination::kBoundedResult, value);
+  return std::max(value, 0.0f);
 }
 
 }  // namespace
@@ -240,8 +245,9 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
   for (int bin = 0; bin < n_bins; ++bin) {
     const float* row = magnitude + static_cast<size_t>(bin) * static_cast<size_t>(n_frames);
     for (int frame = 0; frame < n_frames; ++frame) {
-      const double value = static_cast<double>(row[frame]);
-      const double sanitized = std::isfinite(value) ? std::max(value, 0.0) : 0.0;
+      double value = static_cast<double>(row[frame]);
+      (void)resolve_non_finite(SampleDestination::kBoundedResult, value);
+      const double sanitized = std::max(value, 0.0);
       const double power = std::max(sanitized * sanitized, kAmin);
       sum_log[static_cast<size_t>(frame)] += std::log(power);
       sum_linear[static_cast<size_t>(frame)] += power;
