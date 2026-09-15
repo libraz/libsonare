@@ -659,35 +659,50 @@ class CliContractSelfTest(unittest.TestCase):
             report,
         )
 
-    def test_semantically_pending_shared_paths_still_require_option_parity(self) -> None:
-        """Semantic promotion remains independent from the shared option gate."""
-        manifest = copy.deepcopy(self.manifest)
-        # No shipping command is semantically pending any more, so the state
-        # this gate covers is constructed rather than borrowed from the tree.
-        manifest["commands"]["chords"]["status"] = "pending"
-        manifest["active_paths"] = [
-            contract
-            for contract in manifest["active_paths"]
-            if contract["path"] != "chords"
-        ]
-        native = self._fake_inventory(manifest, "native")
-        python = self._fake_inventory(manifest, "python")
-        self.assertEqual(manifest["commands"]["chords"]["option_status"], "active")
-        self.assertEqual(CHECKER.validate_manifest(manifest), [])
-        native_chords = next(
-            command for command in native["commands"] if command["path"] == "chords"
-        )
-        native_chords["options"][0]["default"] = True
+    def test_the_shared_option_gate_is_independent_of_semantic_status(self) -> None:
+        """One injected option divergence, run at both semantic statuses.
 
-        report: list[tuple[str, str]] = []
-        CHECKER._compare_active_inventory_options(
-            {command["path"]: command for command in native["commands"]},
-            {command["path"]: command for command in python["commands"]},
-            manifest,
-            report,
-        )
-        self.assertTrue(
-            any("inventory.shared.chords" in message for _, message in report), report
+        The gate is meant to read ``option_status`` and never ``status``, so a
+        shared path's option contract is compared whether or not its payload is
+        semantically promoted. A single status cannot demonstrate that: the
+        assertion would hold just as well on a gate that had started reading
+        ``status``, as long as it read it the one way that state was run at.
+        Both are run against the same divergence, so a gate that fires for only
+        one of them fails naming the status it stopped covering.
+        """
+
+        def fires_at(status: str) -> bool:
+            manifest = copy.deepcopy(self.manifest)
+            manifest["commands"]["chords"]["status"] = status
+            if status != "active":
+                # An active_paths entry belongs to an active command only, so
+                # the demoted state has to drop its contract to stay valid.
+                manifest["active_paths"] = [
+                    contract
+                    for contract in manifest["active_paths"]
+                    if contract["path"] != "chords"
+                ]
+            self.assertEqual(manifest["commands"]["chords"]["option_status"], "active")
+            self.assertEqual(CHECKER.validate_manifest(manifest), [], status)
+            native = self._fake_inventory(manifest, "native")
+            python = self._fake_inventory(manifest, "python")
+            native_chords = next(
+                command for command in native["commands"] if command["path"] == "chords"
+            )
+            native_chords["options"][0]["default"] = True
+
+            report: list[tuple[str, str]] = []
+            CHECKER._compare_active_inventory_options(
+                {command["path"]: command for command in native["commands"]},
+                {command["path"]: command for command in python["commands"]},
+                manifest,
+                report,
+            )
+            return any("inventory.shared.chords" in message for _, message in report)
+
+        self.assertEqual(
+            {status: fires_at(status) for status in ("pending", "active")},
+            {"pending": True, "active": True},
         )
 
     def _fake_inventory(self, manifest, surface):
