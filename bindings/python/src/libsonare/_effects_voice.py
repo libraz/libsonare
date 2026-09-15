@@ -554,6 +554,11 @@ class RealtimeVoiceChangerConfig:
 
 
 def _resolve_preset_ordinal(preset: str | int) -> int:
+    """Map a preset name to its ordinal, passing an integer ordinal through.
+
+    The name half only. An integer is not checked against anything here -- the
+    caller narrows it, and the C entry point owns the ordinal's own range.
+    """
     if isinstance(preset, int):
         return preset
     try:
@@ -572,6 +577,10 @@ def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChan
 
     This is the canonical name shared with the C / Node / WASM ``preset_config``
     surfaces; :func:`realtime_voice_changer_preset_pod` is a deprecated alias.
+
+    Raises:
+        SonareValueError: If ``preset`` is neither a known name nor an integer
+            ordinal a C ``int`` holds.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_realtime_voice_changer_preset_config"):
@@ -581,7 +590,7 @@ def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChan
         )
     pod = SonareRealtimeVoiceChangerConfig()
     rc = lib.sonare_realtime_voice_changer_preset_config(
-        ctypes.c_int(_resolve_preset_ordinal(preset)), ctypes.byref(pod)
+        _to_c_int(_resolve_preset_ordinal(preset), "preset"), ctypes.byref(pod)
     )
     _check(rc)
     return RealtimeVoiceChangerConfig.from_pod(pod)

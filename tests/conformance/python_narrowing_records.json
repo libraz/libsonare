@@ -31,7 +31,7 @@
     },
     {
       "name": "domain-validated-helper",
-      "argument_pattern": "_(?:profile|pan_law|pan_mode|send_timing|meter_tap|curve)_value\\(.+\\)|_resolve_preset_ordinal\\(.+\\)|_unsigned\\(.+\\)|_narrow_int\\(.+\\)",
+      "argument_pattern": "_(?:profile|pan_law|pan_mode|send_timing|meter_tap|curve)_value\\(.+\\)|_unsigned\\(.+\\)|_narrow_int\\(.+\\)",
       "reason": "The argument is a resolver that refuses anything outside the field's own domain before the conversion sees it."
     }
   ],

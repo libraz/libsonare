@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 import libsonare
+from libsonare import SonareValueError
 from libsonare._ffi import SonareRealtimeVoiceChangerConfig
 
 from ._helpers import LIB_AVAILABLE
@@ -86,6 +87,55 @@ def test_preset_pod_distinguishes_presets() -> None:
 def test_preset_pod_rejects_unknown_name() -> None:
     with pytest.raises(ValueError, match="unknown voice character preset"):
         libsonare.realtime_voice_changer_preset_pod("does-not-exist")
+
+
+# Preset ordinals past the signed range, each with the ordinal a C ``int`` folds
+# it to. The fold is what makes these the interesting inputs rather than merely
+# huge ones: every one lands on a live preset, so each has a plausible
+# SUCCESSFUL outcome waiting for it and a refusal-shaped assertion alone cannot
+# see that.
+WRAPPING_PRESET_ORDINALS = [(2**32, 0), (2**32 + 1, 1), (2**32 + 2, 2), (3 * 2**32, 0)]
+
+PRESET_ENTRIES = [
+    libsonare.realtime_voice_changer_preset_config,
+    libsonare.realtime_voice_changer_preset_pod,
+]
+
+
+@pytest.mark.parametrize("entry", PRESET_ENTRIES)
+def test_preset_config_refuses_an_ordinal_past_the_c_range_rather_than_folding_it(entry) -> None:
+    """An ordinal past the signed range reached the core as a different preset.
+
+    The refusal is anchored on the argument it names, because this entry point's
+    other refusal is "unknown voice character preset: ..." -- which contains the
+    word "preset" too, so an unanchored match would be satisfied by the wrong
+    guard entirely.
+
+    The positive control carries the claim a refusal cannot: the three ordinals
+    these values fold onto are live presets with three distinct configs, so an
+    unchecked call returns one of them -- indistinguishable from having asked
+    for it, and nothing downstream can tell the two apart.
+    """
+    folded = [dataclasses.astuple(entry(ordinal)) for ordinal in (0, 1, 2)]
+    assert len(set(folded)) == 3
+
+    for value, folds_to in WRAPPING_PRESET_ORDINALS:
+        with pytest.raises(SonareValueError, match=r"^preset must be"):
+            entry(value)
+        assert dataclasses.astuple(entry(folds_to)) == folded[folds_to]
+
+
+@pytest.mark.parametrize("entry", PRESET_ENTRIES)
+@pytest.mark.parametrize("value", [True, False])
+def test_preset_config_refuses_a_bool_rather_than_reading_it_as_an_ordinal(entry, value) -> None:
+    """``bool`` is an ``int`` subclass, so it reached the ordinal path unchallenged.
+
+    It cannot fail a range check either, which is why keeping it out takes an
+    explicit test rather than a bound: ``True`` selected preset 1 and ``False``
+    preset 0, both legal answers to a question nobody asked.
+    """
+    with pytest.raises(SonareValueError, match=r"^preset must be"):
+        entry(value)
 
 
 def _build_changer() -> libsonare.RealtimeVoiceChanger:
