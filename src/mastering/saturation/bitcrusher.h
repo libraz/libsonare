@@ -38,6 +38,9 @@ class BitCrusher : public rt::ProcessorBase {
 
  private:
   static void validate_config(const BitCrusherConfig& config);
+  /// @brief Returns this channel's cells to rest when a non-finite value has
+  ///        reached them (see util/non_finite_state.h). Called once per block.
+  void discard_non_finite_state(size_t channel) noexcept;
   float quantize(float sample, int bit_depth, int channel);
   float dither_noise(int channel);
   void ensure_state(int num_channels);

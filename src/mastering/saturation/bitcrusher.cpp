@@ -6,8 +6,13 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::saturation {
+
+using sonare::discard_if_non_finite;
+using sonare::discard_run_if_non_finite;
+
 namespace {
 
 constexpr std::array<float, 9> kNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f,  -4.174f, 3.353f,
@@ -54,7 +59,19 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
       channels[ch][i] =
           channels[ch][i] * (1.0f - config_.mix) + held_[static_cast<size_t>(ch)] * config_.mix;
     }
+    discard_non_finite_state(static_cast<size_t>(ch));
   }
+}
+
+void BitCrusher::discard_non_finite_state(size_t channel) noexcept {
+  // Ten floats per channel, once per block. The nine shaping taps are the error
+  // the quantizer feeds back into its own input, so one non-finite tap re-poisons
+  // every later block; they are one history and any of them returns all of them
+  // to rest. The held sample only survives to the end of its downsample period,
+  // and is scrubbed so that period does not start from it.
+  auto& history = error_history_[channel];
+  discard_run_if_non_finite(history.begin(), history.end(), 0.0f);
+  discard_if_non_finite(held_[channel], 0.0f);
 }
 
 void BitCrusher::reset() {

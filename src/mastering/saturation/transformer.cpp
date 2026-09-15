@@ -7,8 +7,11 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::saturation {
+
+using sonare::discard_group_if_non_finite;
 
 Transformer::Transformer(TransformerConfig config)
     : transformer_config_(config), hysteresis_(make_ja_config(config)) {
@@ -45,6 +48,11 @@ void Transformer::process(float* const* channels, int num_channels, int num_samp
     for (int i = 0; i < num_samples; ++i) {
       channels[ch][i] = process_sample(state, channels[ch][i]);
     }
+    // Two floats per channel, once per block. The integrator takes its field
+    // step from previous_field and advances magnetization from its own value, so
+    // one non-finite sample leaves the core stranded for every later block. Rest
+    // is the demagnetised state JilesAtherton::reset writes.
+    discard_group_if_non_finite(state.magnetization, state.previous_field);
   }
 }
 

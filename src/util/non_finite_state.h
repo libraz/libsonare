@@ -20,6 +20,7 @@
 /// primitive cannot: a check in its inner loop is the O(samples) scan a realtime
 /// contract exists to avoid, and inspecting the cells costs O(cells) instead.
 
+#include <algorithm>
 #include <cmath>
 
 namespace sonare {
@@ -47,6 +48,21 @@ bool discard_group_if_non_finite(Cells&... cells) noexcept {
     return false;
   }
   ((cells = 0), ...);
+  return true;
+}
+
+/// @brief The same rule over a run of cells a filter holds as one history, such
+///        as a noise shaper's error taps.
+/// @details Identical in meaning to @ref discard_group_if_non_finite; the run
+/// form exists because a history long enough to live in an array cannot be named
+/// cell by cell without the length being written down twice.
+/// @return true when the run was discarded.
+template <typename Iterator, typename T>
+bool discard_run_if_non_finite(Iterator first, Iterator last, T post_reset_value) noexcept {
+  if (std::all_of(first, last, [](T cell) { return std::isfinite(cell); })) {
+    return false;
+  }
+  std::fill(first, last, post_reset_value);
   return true;
 }
 
