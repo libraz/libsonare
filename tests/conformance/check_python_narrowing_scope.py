@@ -153,12 +153,11 @@ SHARED_READERS = (
 )
 
 # The readers that ARE the shared family rather than a file-local copy of one:
-# the conversions above, plus the two range checks they route through, the
-# field-level twin of the integer one on the checked base, and the wording each
-# shares.
+# the conversions above, plus the two range checks they route through and the
+# wording each shares. Every name here is required to resolve; see
+# _undefined_shared_readers.
 SHARED_LOCAL_READERS = SHARED_READERS + (
     "_narrow_int",
-    "_narrow_field",
     "_narrowing_error",
     "_narrow_float",
     "_float_narrowing_error",
@@ -561,6 +560,22 @@ def _shared_reader_calls(tree: Path, readers: tuple[str, ...] = SHARED_READERS) 
     )
 
 
+def _undefined_shared_readers(tree: Path) -> list[str]:
+    """Names in SHARED_LOCAL_READERS that no longer resolve in the scanned tree.
+
+    A name kept here after its function is gone exempts nothing, and it goes on
+    blessing whatever takes the name next without that ever being reviewed. So
+    an entry expires with the function it names.
+    """
+    defined = {
+        node.name
+        for path in tree.rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef)
+    }
+    return [name for name in SHARED_LOCAL_READERS if name not in defined]
+
+
 def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[str]]]:
     """Every failure class, as (heading, lines).
 
@@ -693,6 +708,16 @@ def main() -> int:
     print(f"structs on ctypes.Structure directly: {len(scan.plain_structs)}")
 
     failures = evaluate(scan, records, data["floor"])
+    # Asked of the real tree rather than inside evaluate, which the self-tests
+    # call over scratch trees that define none of these names.
+    undefined = _undefined_shared_readers(args.tree)
+    if undefined:
+        failures.append(
+            (
+                "These shared-family names no longer exist, so they exempt nothing",
+                undefined,
+            )
+        )
     for heading, lines in failures:
         print(f"\n{heading}:", *lines, sep="\n", file=sys.stderr)
     return 1 if failures else 0
