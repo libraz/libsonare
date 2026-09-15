@@ -170,10 +170,10 @@ std::pair<ChordTemplate, float> find_best_chord(const float* chroma,
 std::pair<ChordTemplate, float> find_best_chord(const std::array<float, 12>& chroma,
                                                 const std::vector<ChordTemplate>& templates);
 
-/// @brief Finds the best matching chord with key context bias.
-/// @param chroma Chroma vector [12]
-/// @param templates Vector of templates to search
-/// @brief Converts chord quality to string.
+/// @brief Converts chord quality to the suffix a template's own label carries.
+/// @note Diverges from @c Chord::to_string at @c Major on purpose, and only there:
+///       a template label spells @c Cmaj so the quality is visible, while a chord
+///       name follows the chord-symbol convention and writes C major as @c C.
 std::string chord_quality_to_string(ChordQuality quality);
 
 /// @brief Returns the published name of @p quality, as every binding spells it.
