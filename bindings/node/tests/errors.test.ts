@@ -9,6 +9,7 @@ import {
   SonareError,
   synthPresetPatch,
 } from '../src/index.js';
+import { addonSourceText } from './_addon_sources.js';
 
 describe('SonareError', () => {
   it('exposes an ErrorCode enum aligned with the C ABI', () => {
@@ -149,7 +150,7 @@ describe('SonareError is a value class with brand-based instanceof', () => {
   });
 });
 
-/**
+/*
  * `CErrorFromException` is the addon's hand-written switch from a core
  * `sonare::ErrorCode` to the C-ABI code the caller sees, and it duplicates the
  * C ABI's own `map_sonare_exception`. An enumerator missing from it reaches JS
@@ -158,6 +159,10 @@ describe('SonareError is a value class with brand-based instanceof', () => {
  * paths, and this addon exposes no entry point that writes a file. So the
  * switch is asserted against the enum it mirrors, and against the C-ABI table
  * that is its oracle.
+ */
+/**
+ * A file in the CORE tree. Addon sources go through `addonSourceText` instead,
+ * so `src/addon/` keeps one definition across the test tree.
  */
 const repoFile = (relative: string): string =>
   readFileSync(new URL(`../../../${relative}`, import.meta.url).pathname, 'utf8');
@@ -203,10 +208,7 @@ function switchArms(text: string, signature: string): Map<string, string> {
 }
 
 const addonArms = (): Map<string, string> =>
-  switchArms(
-    repoFile('bindings/node/src/addon/sonare_wrap_utils.cpp'),
-    'SonareError CErrorFromException(',
-  );
+  switchArms(addonSourceText('sonare_wrap_utils.cpp'), 'SonareError CErrorFromException(');
 
 /** The C ABI's own exception map, which the addon's copy must agree with. */
 const oracleArms = (): Map<string, string> =>
@@ -227,7 +229,7 @@ describe('the addon exception map covers every core ErrorCode', () => {
     expect([...addonArms().keys()].sort()).toEqual([...enumerators].sort());
     // A default: would satisfy the count above while still sending a future
     // enumerator to SONARE_ERROR_UNKNOWN, which is the failure this prevents.
-    const text = repoFile('bindings/node/src/addon/sonare_wrap_utils.cpp');
+    const text = addonSourceText('sonare_wrap_utils.cpp');
     const start = text.indexOf('SonareError CErrorFromException(');
     expect(text.slice(start, text.indexOf('\n}', start))).not.toMatch(/\bdefault\s*:/);
   });

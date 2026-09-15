@@ -76,6 +76,25 @@ export function addonSources(): AddonSource[] {
 }
 
 /**
+ * The text of one addon translation unit, by its path relative to `src/addon/`.
+ *
+ * A test that needs a single addon file reads it through here rather than
+ * spelling the tree's location a second time: `src/addon/` is named once, in
+ * {@link ADDON_ROOT}, so a file that moves surfaces as a failed lookup naming
+ * the file instead of as a stale path constant elsewhere. Throws rather than
+ * returning an empty string, because a caller scanning `''` finds nothing and
+ * reads as a clean sweep.
+ */
+export function addonSourceText(file: string): string {
+  const sources = addonSources();
+  const found = sources.find((source) => source.file === file);
+  if (found === undefined) {
+    throw new Error(`no addon source named ${file} among the ${sources.length} under src/addon/`);
+  }
+  return found.text;
+}
+
+/**
  * Top-level config keys the streaming-chain addon skips before flattening.
  *
  * `StreamingMasteringChain`'s TypeScript constructor validates its config leaf
@@ -737,6 +756,180 @@ function addonEntryPointRegistrations(
     }
   }
   return found;
+}
+
+/** A count of each registration SPELLING, taken without reading a symbol. */
+export interface RegistrationCensus {
+  /** `InstanceMethod` / `StaticMethod`, in either the template or the argument form. */
+  methods: number;
+  /** `Napi::Function::New`, in either form. */
+  functionNews: number;
+  /** `exports.Set(` — each is a function registration or a class export. */
+  exportSets: number;
+  /** `DefineClass(` — one per ObjectWrap class, and so one per constructor. */
+  defineClasses: number;
+}
+
+/**
+ * Counts each registration spelling by its bare token.
+ *
+ * Deliberately NOT built on the matcher: this exists to DISAGREE with it, and a
+ * census derived from it could only ever agree with itself. The patterns here
+ * are coarser on purpose — a token rather than a parsed registration — so a
+ * registration whose fuller shape the matcher has stopped reading is still
+ * counted here and the two totals part company. Never refactor this onto
+ * `addonEntryPointRegistrations`.
+ */
+export function registrationCensus(sources: AddonSource[] = addonSources()): RegistrationCensus {
+  const census: RegistrationCensus = {
+    methods: 0,
+    functionNews: 0,
+    exportSets: 0,
+    defineClasses: 0,
+  };
+  for (const { text } of sources) {
+    const code = withoutComments(text);
+    census.methods += [...code.matchAll(/(?:Instance|Static)Method\s*[(<]/g)].length;
+    census.functionNews += [...code.matchAll(/Napi::Function::New\b/g)].length;
+    census.exportSets += [...code.matchAll(/exports\.Set\s*\(/g)].length;
+    census.defineClasses += [...code.matchAll(/DefineClass\s*\(/g)].length;
+  }
+  return census;
+}
+
+/**
+ * Registration spellings the matcher cannot read.
+ *
+ * Each reason is about the SPELLING, not about whether the tree uses it today:
+ * "not used here" stops being true the moment someone uses it, whereas what a
+ * form does to the matcher stays true and is why its count has to be zero. A
+ * spelling that appears is invisible to every guard built on the matcher at
+ * once — the narrowing sweep, the catch-harness check and the positional-reader
+ * table all lose the same entry point in the same silence — so it is named here
+ * rather than left to the totals, which would report only that a number moved.
+ */
+const UNRECOGNISED_REGISTRATION: ReadonlyArray<{
+  spelling: string;
+  pattern: RegExp;
+  why: string;
+}> = [
+  {
+    spelling: 'InstanceMethod("name", &Class::Method)',
+    pattern: /(?:Instance|Static)Method\s*\(/g,
+    why: 'passes its symbol as an argument instead of as the <&Symbol> template parameter the matcher captures',
+  },
+  {
+    spelling: 'Napi::Function::New<&Fn>(env)',
+    pattern: /Napi::Function::New\s*</g,
+    why: 'carries no &Fn argument for the matcher to take the symbol from',
+  },
+  {
+    spelling: 'InstanceAccessor / StaticAccessor',
+    pattern: /(?:Instance|Static)Accessor\s*[(<]/g,
+    why: 'reaches JS as a property whose getter and setter are entry points with no method registration behind them',
+  },
+  {
+    spelling: 'InstanceValue / StaticValue',
+    pattern: /(?:Instance|Static)Value\s*\(/g,
+    why: 'attaches a value directly, so a function attached this way is an entry point with no registration at all',
+  },
+  {
+    spelling: 'exports.Set(Napi::String::New(env, "name"), ...)',
+    pattern: /exports\.Set\s*\(\s*Napi::String/g,
+    why: 'builds the export name rather than spelling it as the string literal the matcher reads',
+  },
+];
+
+/** Where an unrecognised spelling appears, with what it costs the matcher. */
+export interface UnrecognisedSpellingSite {
+  file: string;
+  line: number;
+  spelling: string;
+  why: string;
+}
+
+/** Every appearance of a spelling the matcher cannot read. */
+export function unrecognisedRegistrationSpellings(
+  sources: AddonSource[] = addonSources(),
+): UnrecognisedSpellingSite[] {
+  const sites: UnrecognisedSpellingSite[] = [];
+  for (const { file, text } of sources) {
+    const code = withoutComments(text);
+    for (const { spelling, pattern, why } of UNRECOGNISED_REGISTRATION) {
+      for (const match of code.matchAll(new RegExp(pattern.source, 'g'))) {
+        const at = match.index ?? 0;
+        sites.push({ file, line: code.slice(0, at).split('\n').length, spelling, why });
+      }
+    }
+  }
+  return sites;
+}
+
+/**
+ * Every registration-census failure class, as data.
+ *
+ * Two accounting identities plus the absences. The identities are what keeps the
+ * matcher honest: it reads a registration's SHAPE, so a shape it stops reading
+ * drops an entry point out of every population at once, while the token counts
+ * below still see it. Separated from the assertions for the same reason {@link
+ * evaluateNarrowingScope} is.
+ */
+export function evaluateRegistrationCensus(
+  sources: AddonSource[] = addonSources(),
+  floor = { registrations: 400 },
+): NarrowingFinding[] {
+  const findings: NarrowingFinding[] = [];
+  const census = registrationCensus(sources);
+  const matched = entryPointGuards(sources).length;
+
+  // Two zeroes reconcile perfectly, so pin the size before comparing anything.
+  if (matched < floor.registrations) {
+    findings.push({
+      heading: 'The scan no longer finds the population it is sized for',
+      lines: [`registrations: found ${matched}, floor is ${floor.registrations}`],
+    });
+  }
+
+  if (census.exportSets !== census.functionNews + census.defineClasses) {
+    findings.push({
+      heading:
+        'An exports.Set( is neither a function registration nor a class export, so the addon ' +
+        'reaches JS through a form this census does not account for',
+      lines: [
+        `exports.Set(: ${census.exportSets}`,
+        `Napi::Function::New: ${census.functionNews}`,
+        `DefineClass(: ${census.defineClasses}`,
+      ],
+    });
+  }
+
+  const counted = census.methods + census.functionNews + census.defineClasses;
+  if (counted !== matched) {
+    findings.push({
+      heading:
+        'The registration spellings present and the registrations the matcher reads disagree: a ' +
+        'registration is written in a form the matcher cannot see, or the definition behind one ' +
+        'it did read cannot be located, or one of these tokens is being used for something that ' +
+        'is not a registration',
+      lines: [
+        `Instance/StaticMethod: ${census.methods}`,
+        `Napi::Function::New: ${census.functionNews}`,
+        `DefineClass( (one constructor each): ${census.defineClasses}`,
+        `counted ${counted}, matcher reads ${matched}`,
+      ],
+    });
+  }
+
+  const unrecognised = unrecognisedRegistrationSpellings(sources);
+  if (unrecognised.length > 0) {
+    findings.push({
+      heading:
+        'These registrations are written in a form the matcher cannot read, so the entry points ' +
+        'behind them are absent from every guard built on it',
+      lines: unrecognised.map((site) => `${site.file}:${site.line} ${site.spelling} — ${site.why}`),
+    });
+  }
+  return findings;
 }
 
 /** One failure class, with the lines that made it fire. */
