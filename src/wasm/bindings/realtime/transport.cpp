@@ -91,7 +91,9 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
   }
   engine_.set_tempo_segments(std::move(parsed));
 }
-void RealtimeEngineWasm::setTimeSignature(int numerator, int denominator) {
+void RealtimeEngineWasm::setTimeSignature(const val& numerator_val, const val& denominator_val) {
+  const int numerator = checkedIntFromVal(numerator_val, "numerator");
+  const int denominator = checkedIntFromVal(denominator_val, "denominator");
   // Mirror the C-ABI guard (sonare_engine_set_time_signature): reject a
   // non-positive numerator/denominator instead of silently collapsing to 1/1
   // (tempo_map clamps with std::max(...,1)).
@@ -200,7 +202,8 @@ void RealtimeEngineWasm::setMarkers(val markers) {
 
 int RealtimeEngineWasm::markerCount() const { return static_cast<int>(engine_.marker_count()); }
 
-val RealtimeEngineWasm::markerByIndex(int index) const {
+val RealtimeEngineWasm::markerByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   sonare::transport::Marker marker{};
   if (index < 0 || !engine_.marker_by_index(static_cast<size_t>(index), &marker)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "marker index out of range");
@@ -208,7 +211,8 @@ val RealtimeEngineWasm::markerByIndex(int index) const {
   return markerToVal(marker);
 }
 
-val RealtimeEngineWasm::marker(int id) const {
+val RealtimeEngineWasm::marker(const val& id_val) const {
+  const int id = checkedIntFromVal(id_val, "id");
   sonare::transport::Marker marker{};
   if (!engine_.marker_by_id(static_cast<uint32_t>(id), &marker)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown marker id");
@@ -216,7 +220,8 @@ val RealtimeEngineWasm::marker(int id) const {
   return markerToVal(marker);
 }
 
-void RealtimeEngineWasm::seekMarker(int id, int64_t render_frame) {
+void RealtimeEngineWasm::seekMarker(const val& id_val, int64_t render_frame) {
+  const int id = checkedIntFromVal(id_val, "id");
   // Mirror the C API (sonare_engine_seek_marker): a sample-accurate seek is
   // queued as a kSeekMarker command so it lands at the requested render frame
   // instead of mutating transport state immediately.
@@ -256,7 +261,10 @@ val RealtimeEngineWasm::getTransportState() const {
   return out;
 }
 
-void RealtimeEngineWasm::setLoopFromMarkers(int start_marker_id, int end_marker_id) {
+void RealtimeEngineWasm::setLoopFromMarkers(const val& start_marker_id_val,
+                                            const val& end_marker_id_val) {
+  const int start_marker_id = checkedIntFromVal(start_marker_id_val, "startMarkerId");
+  const int end_marker_id = checkedIntFromVal(end_marker_id_val, "endMarkerId");
   if (!engine_.set_loop_from_markers(static_cast<uint32_t>(start_marker_id),
                                      static_cast<uint32_t>(end_marker_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown loop marker id");
@@ -306,7 +314,8 @@ val RealtimeEngineWasm::metronome() const {
   return out;
 }
 
-int64_t RealtimeEngineWasm::countInEndSample(int64_t start_sample, int bars) const {
+int64_t RealtimeEngineWasm::countInEndSample(int64_t start_sample, const val& bars_val) const {
+  const int bars = checkedIntFromVal(bars_val, "bars");
   return engine_.count_in_end_sample(start_sample, bars);
 }
 

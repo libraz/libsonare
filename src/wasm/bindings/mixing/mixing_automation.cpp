@@ -15,9 +15,13 @@
 // [pre-inserts... post-inserts...]. param_id is processor-specific. sample_pos
 // is in absolute samples from the start of processing. curve: 0 = Linear,
 // 1 = Exponential, 2 = Hold, 3 = SCurve.
-void MixerWasm::scheduleInsertAutomation(unsigned int strip_index, unsigned int insert_index,
-                                         unsigned int param_id, double sample_pos, float value,
-                                         int curve) {
+void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& insert_index_val,
+                                         const val& param_id_val, double sample_pos, float value,
+                                         const val& curve_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const unsigned int insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const unsigned int param_id = checkedUintFromVal(param_id_val, "paramId");
+  const int curve = checkedIntFromVal(curve_val, "curve");
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
   if (strip == nullptr) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -34,7 +38,9 @@ void MixerWasm::scheduleInsertAutomation(unsigned int strip_index, unsigned int 
 
 // Reads a meter snapshot at the given tap point. tap: 0 = pre-fader,
 // 1 = post-fader (see SonareMeterTap). Returns the full snapshot.
-val MixerWasm::meterTap(unsigned int strip_index, int tap) {
+val MixerWasm::meterTap(const val& strip_index_val, const val& tap_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const int tap = checkedIntFromVal(tap_val, "tap");
   SonareMixMeterSnapshot snapshot{};
   checkStripError(sonare_strip_meter_tap(stripAt(strip_index), tap, &snapshot),
                   "failed to read meter tap");
@@ -44,7 +50,8 @@ val MixerWasm::meterTap(unsigned int strip_index, int tap) {
 // Reads the strip's current (post-fader) meter snapshot. Tap-less, mirroring
 // the Node/Python stripMeter contract which calls sonare_strip_meter; the
 // tap-selectable variant is meterTap.
-val MixerWasm::stripMeter(unsigned int strip_index) {
+val MixerWasm::stripMeter(const val& strip_index_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   SonareMixMeterSnapshot snapshot{};
   checkStripError(sonare_strip_meter(stripAt(strip_index), &snapshot),
                   "failed to read strip meter");
@@ -61,30 +68,40 @@ val MixerWasm::busMeter(std::string bus_id) {
 // Schedules sample-accurate fader automation on a strip. sample_pos uses the
 // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential, 2 = Hold,
 // 3 = SCurve.
-void MixerWasm::scheduleFaderAutomation(unsigned int strip_index, double sample_pos, float fader_db,
-                                        int curve) {
+void MixerWasm::scheduleFaderAutomation(const val& strip_index_val, double sample_pos,
+                                        float fader_db, const val& curve_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(sonare_strip_schedule_fader_automation(
                       stripAt(strip_index), static_cast<int64_t>(sample_pos), fader_db, curve),
                   "failed to schedule fader automation");
 }
 
-void MixerWasm::schedulePanAutomation(unsigned int strip_index, double sample_pos, float pan,
-                                      int curve) {
+void MixerWasm::schedulePanAutomation(const val& strip_index_val, double sample_pos, float pan,
+                                      const val& curve_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(sonare_strip_schedule_pan_automation(
                       stripAt(strip_index), static_cast<int64_t>(sample_pos), pan, curve),
                   "failed to schedule pan automation");
 }
 
-void MixerWasm::scheduleWidthAutomation(unsigned int strip_index, double sample_pos, float width,
-                                        int curve) {
+void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sample_pos, float width,
+                                        const val& curve_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(sonare_strip_schedule_width_automation(
                       stripAt(strip_index), static_cast<int64_t>(sample_pos), width, curve),
                   "failed to schedule width automation");
 }
 
 // Schedules sample-accurate send-level automation on a strip's send.
-void MixerWasm::scheduleSendAutomation(unsigned int strip_index, size_t send_index,
-                                       double sample_pos, float db, int curve) {
+void MixerWasm::scheduleSendAutomation(const val& strip_index_val, const val& send_index_val,
+                                       double sample_pos, float db, const val& curve_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const std::size_t send_index =
+      static_cast<std::size_t>(checkedUintFromVal(send_index_val, "sendIndex"));
+  const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(
       sonare_strip_schedule_send_automation(stripAt(strip_index), send_index,
                                             static_cast<int64_t>(sample_pos), db, curve),
@@ -103,7 +120,8 @@ void MixerWasm::scheduleSendAutomation(unsigned int strip_index, size_t send_ind
 // ring holds, so the cap drops no point. Without both steps a large or negative
 // count reached `std::vector(n)` directly, and in WASM that is not an
 // exception a caller can see: it is an out-of-memory abort of the whole module.
-val MixerWasm::readGoniometerLatest(unsigned int strip_index, double max_points) {
+val MixerWasm::readGoniometerLatest(const val& strip_index_val, double max_points) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const size_t requested = wasmCountArg(max_points, "maxPoints");
   SonareStrip* strip = stripAt(strip_index);
   val out = val::array();

@@ -129,7 +129,9 @@ val js_mastering_platform_names() {
   return out;
 }
 
-val js_master_audio(std::string preset_name, val samples, int sample_rate, val overrides) {
+val js_master_audio(std::string preset_name, val samples, const val& sample_rate_val,
+                    val overrides) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   auto preset = mastering::api::preset_from_string(preset_name);
   auto overrides_vec = masteringParamsFromObject(overrides);
@@ -153,7 +155,8 @@ val js_master_audio(std::string preset_name, val samples, int sample_rate, val o
 }
 
 val js_master_audio_stereo(std::string preset_name, val left_samples, val right_samples,
-                           int sample_rate, val overrides) {
+                           const val& sample_rate_val, val overrides) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masterAudioStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
@@ -180,8 +183,9 @@ val js_master_audio_stereo(std::string preset_name, val left_samples, val right_
   return out;
 }
 
-val js_master_audio_with_progress(std::string preset_name, val samples, int sample_rate,
+val js_master_audio_with_progress(std::string preset_name, val samples, const val& sample_rate_val,
                                   val overrides, val progress_callback, val cancel_callback) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   auto preset = mastering::api::preset_from_string(preset_name);
   auto config = mastering::api::preset_config(preset);
@@ -221,8 +225,10 @@ val js_master_audio_with_progress(std::string preset_name, val samples, int samp
 }
 
 val js_master_audio_stereo_with_progress(std::string preset_name, val left_samples,
-                                         val right_samples, int sample_rate, val overrides,
-                                         val progress_callback, val cancel_callback) {
+                                         val right_samples, const val& sample_rate_val,
+                                         val overrides, val progress_callback,
+                                         val cancel_callback) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masterAudioStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
@@ -278,7 +284,9 @@ val js_mastering_stereo_analysis_names() {
   return stringVectorToVal(mastering::api::stereo_analysis_names());
 }
 
-val js_mastering_process(std::string processor_name, val samples, int sample_rate, val params) {
+val js_mastering_process(std::string processor_name, val samples, const val& sample_rate_val,
+                         val params) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   auto result = mastering::api::apply_named_processor(
@@ -295,7 +303,8 @@ val js_mastering_process(std::string processor_name, val samples, int sample_rat
 }
 
 val js_mastering_process_stereo(std::string processor_name, val left_samples, val right_samples,
-                                int sample_rate, val params) {
+                                const val& sample_rate_val, val params) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masteringProcessStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
@@ -318,7 +327,8 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
 }
 
 val js_mastering_pair_process(std::string processor_name, val source_samples, val reference_samples,
-                              int sample_rate, val params) {
+                              const val& sample_rate_val, val params) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
                                "reference samples", "masteringPairProcess input", false);
   std::vector<float> source = float32ArrayToVector(source_samples);
@@ -340,7 +350,9 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
 }
 
 std::string js_mastering_pair_analyze(std::string analysis_name, val source_samples,
-                                      val reference_samples, int sample_rate, val params) {
+                                      val reference_samples, const val& sample_rate_val,
+                                      val params) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
                                "reference samples", "masteringPairAnalyze input", false);
   std::vector<float> source = float32ArrayToVector(source_samples);
@@ -354,7 +366,8 @@ std::string js_mastering_pair_analyze(std::string analysis_name, val source_samp
 }
 
 std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samples,
-                                        val right_samples, int sample_rate, val params) {
+                                        val right_samples, const val& sample_rate_val, val params) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masteringStereoAnalyze input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
@@ -414,7 +427,9 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
   return config;
 }
 
-std::string js_mastering_assistant_suggest(val samples, int sample_rate, val params_obj) {
+std::string js_mastering_assistant_suggest(val samples, const val& sample_rate_val,
+                                           val params_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
@@ -423,7 +438,8 @@ std::string js_mastering_assistant_suggest(val samples, int sample_rate, val par
   return mastering::assistant::assistant_result_to_json(result);
 }
 
-std::string js_mastering_audio_profile(val samples, int sample_rate, val params_obj) {
+std::string js_mastering_audio_profile(val samples, const val& sample_rate_val, val params_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
@@ -435,7 +451,8 @@ std::string js_mastering_audio_profile(val samples, int sample_rate, val params_
 }
 
 std::string js_mastering_assistant_suggest_stereo(val left_samples, val right_samples,
-                                                  int sample_rate, val params_obj) {
+                                                  const val& sample_rate_val, val params_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<float> interleaved = interleaveValidatedPair(
       left_samples, right_samples, sample_rate, "masteringAssistantSuggestStereo input");
   const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
@@ -444,8 +461,9 @@ std::string js_mastering_assistant_suggest_stereo(val left_samples, val right_sa
   return mastering::assistant::assistant_result_to_json(result);
 }
 
-std::string js_mastering_audio_profile_stereo(val left_samples, val right_samples, int sample_rate,
-                                              val params_obj) {
+std::string js_mastering_audio_profile_stereo(val left_samples, val right_samples,
+                                              const val& sample_rate_val, val params_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<float> interleaved = interleaveValidatedPair(
       left_samples, right_samples, sample_rate, "masteringAudioProfileStereo input");
   std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
@@ -476,7 +494,9 @@ std::vector<mastering::maximizer::StreamingPlatform> streamingPlatformsFromVal(v
   return out;
 }
 
-std::string js_mastering_streaming_preview(val samples, int sample_rate, val platforms_obj) {
+std::string js_mastering_streaming_preview(val samples, const val& sample_rate_val,
+                                           val platforms_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const Audio audio = loadValidatedAudio(samples, sample_rate);
   const auto platforms = streamingPlatformsFromVal(platforms_obj);
   const auto results = platforms.empty()
@@ -486,7 +506,8 @@ std::string js_mastering_streaming_preview(val samples, int sample_rate, val pla
 }
 
 std::string js_mastering_streaming_preview_stereo(val left_samples, val right_samples,
-                                                  int sample_rate, val platforms_obj) {
+                                                  const val& sample_rate_val, val platforms_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<float> interleaved = interleaveValidatedPair(
       left_samples, right_samples, sample_rate, "masteringStreamingPreviewStereo input");
   const size_t frames = interleaved.size() / 2;

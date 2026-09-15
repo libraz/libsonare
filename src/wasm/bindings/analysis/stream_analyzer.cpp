@@ -182,7 +182,9 @@ class StreamAnalyzerWrapper {
   size_t availableFrames() const { return analyzer_->available_frames(); }
 
   /// @brief Reads frames in Float32 SOA format.
-  val readFramesSoa(size_t max_frames) {
+  val readFramesSoa(const val& max_frames_val) {
+    const auto max_frames =
+        static_cast<std::size_t>(checkedUintFromVal(max_frames_val, "maxFrames"));
     FrameBuffer buffer;
     analyzer_->read_frames_soa(max_frames, buffer);
 
@@ -207,7 +209,9 @@ class StreamAnalyzerWrapper {
   /// @brief Reads frames in quantized Uint8 format (4x bandwidth reduction).
   /// @param quantize_config Optional quantization ranges (undefined = defaults);
   ///        widen these for a stream louder/quieter than the default ranges.
-  val readFramesU8(size_t max_frames, val quantize_config) {
+  val readFramesU8(const val& max_frames_val, val quantize_config) {
+    const auto max_frames =
+        static_cast<std::size_t>(checkedUintFromVal(max_frames_val, "maxFrames"));
     QuantizedFrameBufferU8 buffer;
     QuantizeConfig qconfig = quantizeConfigFromVal(quantize_config);
     analyzer_->read_frames_quantized_u8(max_frames, buffer, qconfig);
@@ -230,7 +234,9 @@ class StreamAnalyzerWrapper {
   /// @brief Reads frames in quantized Int16 format (2x bandwidth reduction).
   /// @param quantize_config Optional quantization ranges (undefined = defaults);
   ///        widen these for a stream louder/quieter than the default ranges.
-  val readFramesI16(size_t max_frames, val quantize_config) {
+  val readFramesI16(const val& max_frames_val, val quantize_config) {
+    const auto max_frames =
+        static_cast<std::size_t>(checkedUintFromVal(max_frames_val, "maxFrames"));
     QuantizedFrameBufferI16 buffer;
     QuantizeConfig qconfig = quantizeConfigFromVal(quantize_config);
     analyzer_->read_frames_quantized_i16(max_frames, buffer, qconfig);
@@ -250,7 +256,10 @@ class StreamAnalyzerWrapper {
     return out;
   }
 
-  void reset(size_t base_sample_offset) { analyzer_->reset(base_sample_offset); }
+  void reset(const val& base_sample_offset) {
+    analyzer_->reset(
+        static_cast<std::size_t>(checkedUintFromVal(base_sample_offset, "baseSampleOffset")));
+  }
 
   val stats() {
     AnalyzerStats s = analyzer_->stats();

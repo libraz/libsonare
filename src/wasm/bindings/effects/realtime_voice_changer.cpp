@@ -87,7 +87,9 @@ class RealtimeVoiceChangerWrapper {
   explicit RealtimeVoiceChangerWrapper(val config)
       : changer_(realtimeVoiceChangerConfigFromVal(config)) {}
 
-  void prepare(double sample_rate, int max_block_size, int channels) {
+  void prepare(double sample_rate, const val& max_block_size_val, const val& channels_val) {
+    const int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
+    const int channels = checkedIntFromVal(channels_val, "channels");
     changer_.prepare(sample_rate, max_block_size, channels);
     // Pre-warm the per-instance scratch buffers so the first process* call
     // does not trigger an allocation. The `ensure_*_capacity` helpers only
@@ -148,15 +150,17 @@ class RealtimeVoiceChangerWrapper {
     output.call<void>("set", view);
   }
 
-  val processInterleaved(val samples, int channels) {
+  val processInterleaved(val samples, const val& channels_val) {
     require_prepared();
     const int length = samples["length"].as<int>();
     val output = val::global("Float32Array").new_(length);
-    processInterleavedInto(samples, channels, output);
+    // Forwarded unnarrowed: processInterleavedInto narrows it under the same key.
+    processInterleavedInto(samples, channels_val, output);
     return output;
   }
 
-  void processInterleavedInto(val samples, int channels, val output) {
+  void processInterleavedInto(val samples, const val& channels_val, val output) {
+    const int channels = checkedIntFromVal(channels_val, "channels");
     require_prepared();
     const int length = samples["length"].as<int>();
     if (channels <= 0 || length % channels != 0) {
@@ -194,7 +198,8 @@ class RealtimeVoiceChangerWrapper {
   // WASM heap), calls processPrepared*, then reads the output view. No JS↔C++
   // sample-level crossings and no allocations on the audio thread.
 
-  val getMonoInputBuffer(int num_samples) {
+  val getMonoInputBuffer(const val& num_samples_val) {
+    const int num_samples = checkedIntFromVal(num_samples_val, "numSamples");
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -204,7 +209,8 @@ class RealtimeVoiceChangerWrapper {
     return val(typed_memory_view(static_cast<size_t>(num_samples), mono_input_.data()));
   }
 
-  val getMonoOutputBuffer(int num_samples) {
+  val getMonoOutputBuffer(const val& num_samples_val) {
+    const int num_samples = checkedIntFromVal(num_samples_val, "numSamples");
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
       throw sonare::SonareException(
@@ -215,7 +221,8 @@ class RealtimeVoiceChangerWrapper {
     return val(typed_memory_view(static_cast<size_t>(num_samples), mono_output_.data()));
   }
 
-  void processPreparedMono(int num_samples) {
+  void processPreparedMono(const val& num_samples_val) {
+    const int num_samples = checkedIntFromVal(num_samples_val, "numSamples");
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
       throw sonare::SonareException(
@@ -231,7 +238,9 @@ class RealtimeVoiceChangerWrapper {
     changer_.process_block(mono_input_.data(), mono_output_.data(), num_samples);
   }
 
-  val getInterleavedInputBuffer(int num_frames, int num_channels) {
+  val getInterleavedInputBuffer(const val& num_frames_val, const val& num_channels_val) {
+    const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
+    const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -248,7 +257,9 @@ class RealtimeVoiceChangerWrapper {
     return val(typed_memory_view(length, interleaved_input_.data()));
   }
 
-  val getInterleavedOutputBuffer(int num_frames, int num_channels) {
+  val getInterleavedOutputBuffer(const val& num_frames_val, const val& num_channels_val) {
+    const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
+    const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -265,7 +276,9 @@ class RealtimeVoiceChangerWrapper {
     return val(typed_memory_view(length, interleaved_output_.data()));
   }
 
-  void processPreparedInterleaved(int num_frames, int num_channels) {
+  void processPreparedInterleaved(const val& num_frames_val, const val& num_channels_val) {
+    const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
+    const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -309,7 +322,9 @@ class RealtimeVoiceChangerWrapper {
   // Float32Array, so the worklet can hand the in/out buffers straight
   // through with no interleave/deinterleave passes.
 
-  val getPlanarChannelBuffer(int channel, int num_frames) {
+  val getPlanarChannelBuffer(const val& channel_val, const val& num_frames_val) {
+    const int channel = checkedIntFromVal(channel_val, "channel");
+    const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
     require_prepared();
     if (num_frames <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -330,7 +345,8 @@ class RealtimeVoiceChangerWrapper {
                                  planar_[static_cast<size_t>(channel)].data()));
   }
 
-  void processPreparedPlanar(int num_frames) {
+  void processPreparedPlanar(const val& num_frames_val) {
+    const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
     require_prepared();
     if (num_frames <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

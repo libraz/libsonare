@@ -351,7 +351,12 @@ std::string stringProperty(val object, const char* key, const std::string& defau
 /// is present (not undefined/null) and is a JS number, otherwise std::nullopt.
 /// Unlike floatProperty (presence-checked with fallback), a present-but-wrong-type
 /// value yields nullopt so the caller skips the assignment instead of coercing.
-std::optional<float> optionalNumber(const val& v);
+/// @details A present number narrows through @ref checkedFloatFromVal. A wrong
+///          type is absent; a number float cannot hold is wrong, and reading it
+///          raw made it an infinity indistinguishable from a requested one.
+/// @throws SonareException(InvalidParameter) naming @p key when @p v is a number
+///         outside the 32-bit float range.
+std::optional<float> optionalNumber(const val& v, const char* key);
 /// @brief Boolean sibling of optionalNumber: returns the value only when @p v is
 /// present and a JS boolean, otherwise std::nullopt.
 std::optional<bool> optionalBool(const val& v);

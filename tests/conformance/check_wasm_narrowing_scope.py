@@ -74,6 +74,17 @@ Neither route can produce the other's answer by construction, so:
   with the cast pattern made to match nothing, both checks above go green and
   certify a scanner that has stopped working, so a floor is pinned.
 
+A floor sized to a population the work is meant to REMOVE stops being a check on
+the scanner and becomes a check on the work not happening.  The positional
+narrow-integer population was converted to ``val`` reads, so ``parameters`` /
+``functions`` / ``files`` now count only what remains by design: the 64-bit
+family, which refuses rather than wraps, and the constructors, whose parameter
+types are spelled in the registration.  The evidence that the scan still matches
+therefore rests on ``registrations`` and ``declarations``, which are two orders
+of magnitude larger and are untouched by any conversion, and on the injection
+ablation -- one added embind function taking one narrow integer parameter is
+reported as ungraded no matter how small the graded population has become.
+
 The positional population is counted twice on the same principle, by the two
 directions of one relation:
 

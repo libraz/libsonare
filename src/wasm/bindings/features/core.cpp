@@ -54,17 +54,23 @@ float js_hz_to_midi(float hz) { return hz_to_midi(hz); }
 float js_midi_to_hz(float midi) { return midi_to_hz(midi); }
 std::string js_hz_to_note(float hz) { return hz_to_note(hz); }
 float js_note_to_hz(const std::string& note) { return note_to_hz(note); }
-float js_frames_to_time(int frames, int sr, int hop_length) {
-  return frames_to_time(frames, sr, hop_length);
+float js_frames_to_time(const val& frames, const val& sr, const val& hop_length) {
+  return frames_to_time(checkedIntFromVal(frames, "frames"), checkedIntFromVal(sr, "sr"),
+                        checkedIntFromVal(hop_length, "hopLength"));
 }
-int js_time_to_frames(float time, int sr, int hop_length) {
-  return time_to_frames(time, sr, hop_length);
+int js_time_to_frames(float time, const val& sr, const val& hop_length) {
+  return time_to_frames(time, checkedIntFromVal(sr, "sr"),
+                        checkedIntFromVal(hop_length, "hopLength"));
 }
-int js_frames_to_samples(int frames, int hop_length, int n_fft) {
-  return frames_to_samples(frames, hop_length, n_fft);
+int js_frames_to_samples(const val& frames, const val& hop_length, const val& n_fft) {
+  return frames_to_samples(checkedIntFromVal(frames, "frames"),
+                           checkedIntFromVal(hop_length, "hopLength"),
+                           checkedIntFromVal(n_fft, "nFft"));
 }
-int js_samples_to_frames(int samples, int hop_length, int n_fft) {
-  return samples_to_frames(samples, hop_length, n_fft);
+int js_samples_to_frames(const val& samples, const val& hop_length, const val& n_fft) {
+  return samples_to_frames(checkedIntFromVal(samples, "samples"),
+                           checkedIntFromVal(hop_length, "hopLength"),
+                           checkedIntFromVal(n_fft, "nFft"));
 }
 
 val js_power_to_db(val values, float ref, float amin, float top_db) {
@@ -109,7 +115,10 @@ val js_deemphasis(val samples, float coef, val zi) {
   return vectorToFloat32Array(deemphasis(data, coef, zi.as<float>()));
 }
 
-val js_trim_silence(val samples, float top_db, int frame_length, int hop_length) {
+val js_trim_silence(val samples, float top_db, const val& frame_length_val,
+                    const val& hop_length_val) {
+  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
   validateFiniteVector(data, "trimSilence");
   auto result = trim(data, top_db, frame_length, hop_length);
@@ -120,7 +129,10 @@ val js_trim_silence(val samples, float top_db, int frame_length, int hop_length)
   return out;
 }
 
-val js_split_silence(val samples, float top_db, int frame_length, int hop_length) {
+val js_split_silence(val samples, float top_db, const val& frame_length_val,
+                     const val& hop_length_val) {
+  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
   validateFiniteVector(data, "splitSilence");
   auto ranges = split(data, top_db, frame_length, hop_length);
@@ -133,7 +145,9 @@ val js_split_silence(val samples, float top_db, int frame_length, int hop_length
   return vectorToInt32Array(flat);
 }
 
-val js_frame_signal(val samples, int frame_length, int hop_length) {
+val js_frame_signal(val samples, const val& frame_length_val, const val& hop_length_val) {
+  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
   validateFiniteVector(data, "frameSignal");
   val out = val::object();
@@ -142,24 +156,30 @@ val js_frame_signal(val samples, int frame_length, int hop_length) {
   return out;
 }
 
-val js_tone(float frequency, int sample_rate, float duration, float phase, float amplitude) {
-  const Audio audio = tone(frequency, sample_rate, duration, phase, amplitude);
+val js_tone(float frequency, const val& sample_rate, float duration, float phase, float amplitude) {
+  const Audio audio =
+      tone(frequency, checkedIntFromVal(sample_rate, "sampleRate"), duration, phase, amplitude);
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
 }
 
-val js_chirp(float fmin, float fmax, int sample_rate, float duration, bool linear) {
-  const Audio audio = chirp(fmin, fmax, sample_rate, duration, linear);
+val js_chirp(float fmin, float fmax, const val& sample_rate, float duration, bool linear) {
+  const Audio audio =
+      chirp(fmin, fmax, checkedIntFromVal(sample_rate, "sampleRate"), duration, linear);
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
 }
 
-val js_clicks(val times, int sample_rate, int length, float frequency, float click_duration) {
+val js_clicks(val times, const val& sample_rate_val, const val& length_val, float frequency,
+              float click_duration) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int length = checkedIntFromVal(length_val, "length");
   std::vector<float> values = float32ArrayToVector(times);
   validateFiniteVector(values, "clicks");
   const Audio audio = clicks(values, sample_rate, length, frequency, click_duration);
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
 }
 
-val js_pad_center(val values, int size, float pad_value) {
+val js_pad_center(val values, const val& size_val, float pad_value) {
+  const int size = checkedIntFromVal(size_val, "size");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "padCenter");
   if (size < 0) {
@@ -168,7 +188,8 @@ val js_pad_center(val values, int size, float pad_value) {
   return vectorToFloat32Array(pad_center(data, static_cast<size_t>(size), pad_value));
 }
 
-val js_fix_length(val values, int size, float pad_value) {
+val js_fix_length(val values, const val& size_val, float pad_value) {
+  const int size = checkedIntFromVal(size_val, "size");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "fixLength");
   if (size < 0) {
@@ -188,8 +209,9 @@ std::vector<int> intArrayToVector(val arr) {
   return out;
 }
 
-val js_fix_frames(val frames, int x_min, int x_max, bool pad) {
-  return vectorToInt32Array(fix_frames(intArrayToVector(frames), x_min, x_max, pad));
+val js_fix_frames(val frames, const val& x_min, const val& x_max, bool pad) {
+  return vectorToInt32Array(fix_frames(intArrayToVector(frames), checkedIntFromVal(x_min, "xMin"),
+                                       checkedIntFromVal(x_max, "xMax"), pad));
 }
 
 val js_onset_backtrack(val events, val energy) {
@@ -198,14 +220,21 @@ val js_onset_backtrack(val events, val energy) {
   return vectorToInt32Array(onset_backtrack(intArrayToVector(events), energy_values));
 }
 
-val js_peak_pick(val values, int pre_max, int post_max, int pre_avg, int post_avg, float delta,
-                 int wait) {
+val js_peak_pick(val values, const val& pre_max, const val& post_max, const val& pre_avg,
+                 const val& post_avg, float delta, const val& wait) {
+  const int pre_max_frames = checkedIntFromVal(pre_max, "preMax");
+  const int post_max_frames = checkedIntFromVal(post_max, "postMax");
+  const int pre_avg_frames = checkedIntFromVal(pre_avg, "preAvg");
+  const int post_avg_frames = checkedIntFromVal(post_avg, "postAvg");
+  const int wait_frames = checkedIntFromVal(wait, "wait");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "peakPick");
-  return vectorToInt32Array(peak_pick(data, pre_max, post_max, pre_avg, post_avg, delta, wait));
+  return vectorToInt32Array(peak_pick(data, pre_max_frames, post_max_frames, pre_avg_frames,
+                                      post_avg_frames, delta, wait_frames));
 }
 
-val js_vector_normalize(val values, int norm_type, float threshold) {
+val js_vector_normalize(val values, const val& norm_type_val, float threshold) {
+  const int norm_type = checkedIntFromVal(norm_type_val, "normType");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "vectorNormalize");
   NormType norm = NormType::Inf;
@@ -215,7 +244,9 @@ val js_vector_normalize(val values, int norm_type, float threshold) {
   return vectorToFloat32Array(normalize(data, norm, threshold));
 }
 
-val js_pcen(val values, int n_bins, int n_frames, val options) {
+val js_pcen(val values, const val& n_bins_val, const val& n_frames_val, val options) {
+  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   std::vector<float> data = float32ArrayToVector(values);
   validateMatrix(data, n_bins, n_frames, "pcen");
   PcenConfig config;
@@ -231,7 +262,9 @@ val js_pcen(val values, int n_bins, int n_frames, val options) {
   return vectorToFloat32Array(pcen(data, n_bins, n_frames, config));
 }
 
-val js_tonnetz(val chromagram, int n_chroma, int n_frames) {
+val js_tonnetz(val chromagram, const val& n_chroma_val, const val& n_frames_val) {
+  const int n_chroma = checkedIntFromVal(n_chroma_val, "nChroma");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   std::vector<float> data = float32ArrayToVector(chromagram);
   validateMatrix(data, n_chroma, n_frames, "tonnetz");
   return vectorToFloat32Array(tonnetz(data.data(), n_chroma, n_frames));
@@ -257,8 +290,11 @@ TempogramMode tempogramModeFromValue(val mode) {
                                 "tempogram mode must be 'autocorrelation' or 'cosine'");
 }
 
-val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length, val mode,
-                 bool center, bool norm) {
+val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
+                 const val& win_length_val, val mode, bool center, bool norm) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "tempogram");
   validatePositiveSampleRate("tempogram", sample_rate);
@@ -276,8 +312,12 @@ val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_le
   return out;
 }
 
-val js_cyclic_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length,
-                        float bpm_min, int n_bins) {
+val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
+                        const val& win_length_val, float bpm_min, const val& n_bins_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "cyclicTempogram");
   validatePositiveSampleRate("cyclicTempogram", sample_rate);
@@ -294,8 +334,11 @@ val js_cyclic_tempogram(val onset_envelope, int sample_rate, int hop_length, int
   return out;
 }
 
-val js_plp(val onset_envelope, int sample_rate, int hop_length, float tempo_min, float tempo_max,
-           int win_length) {
+val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
+           float tempo_min, float tempo_max, const val& win_length_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "plp");
   validatePositiveSampleRate("plp", sample_rate);
@@ -308,7 +351,12 @@ val js_plp(val onset_envelope, int sample_rate, int hop_length, float tempo_min,
   return vectorToFloat32Array(plp(data, config));
 }
 
-val js_onset_envelope(val samples, int sample_rate, int n_fft, int hop_length, int n_mels) {
+val js_onset_envelope(val samples, const val& sample_rate_val, const val& n_fft_val,
+                      const val& hop_length_val, const val& n_mels_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
@@ -317,8 +365,14 @@ val js_onset_envelope(val samples, int sample_rate, int n_fft, int hop_length, i
   return vectorToFloat32Array(compute_onset_strength(audio, mel_config, OnsetConfig()));
 }
 
-val js_onset_strength_multi(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
-                            int n_bands) {
+val js_onset_strength_multi(val samples, const val& sample_rate_val, const val& n_fft_val,
+                            const val& hop_length_val, const val& n_mels_val,
+                            const val& n_bands_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
@@ -334,8 +388,11 @@ val js_onset_strength_multi(val samples, int sample_rate, int n_fft, int hop_len
   return out;
 }
 
-val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length,
-                         bool center, bool norm) {
+val js_fourier_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
+                         const val& win_length_val, bool center, bool norm) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "fourierTempogram");
   validatePositiveSampleRate("fourierTempogram", sample_rate);
@@ -352,8 +409,11 @@ val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, in
   return out;
 }
 
-val js_tempogram_ratio(val tempogram_data, int win_length, int sample_rate, int hop_length,
-                       val factors) {
+val js_tempogram_ratio(val tempogram_data, const val& win_length_val, const val& sample_rate_val,
+                       const val& hop_length_val, val factors) {
+  const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const bool has_factors = !factors.isUndefined() && !factors.isNull();
   if (has_factors) {
     validateWasmFloat32ArrayPair(tempogram_data, "tempogram data", factors, "factors",

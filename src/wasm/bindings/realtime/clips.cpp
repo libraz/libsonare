@@ -403,7 +403,8 @@ void RealtimeEngineWasm::setClips(val clips) {
   engine_.set_clips(std::move(schedules));
 }
 
-val RealtimeEngineWasm::prebakedClipChannels(uint32_t clip_id) const {
+val RealtimeEngineWasm::prebakedClipChannels(const val& clip_id_val) const {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const auto it = std::find(clip_ids_.begin(), clip_ids_.end(), clip_id);
   if (it == clip_ids_.end()) return val::null();
   const size_t index = static_cast<size_t>(std::distance(clip_ids_.begin(), it));
@@ -422,8 +423,9 @@ val RealtimeEngineWasm::prebakedClipChannels(uint32_t clip_id) const {
 
 int RealtimeEngineWasm::clipCount() const { return static_cast<int>(engine_.clip_count()); }
 
-int RealtimeEngineWasm::createClipPageProvider(int num_channels, int64_t num_samples,
+int RealtimeEngineWasm::createClipPageProvider(const val& num_channels_val, int64_t num_samples,
                                                int64_t page_frames) {
+  const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   if (!sonare::engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "clip page provider dimensions must be positive");
@@ -439,7 +441,9 @@ int RealtimeEngineWasm::createClipPageProvider(int num_channels, int64_t num_sam
   return static_cast<int>(clip_page_providers_.size());
 }
 
-void RealtimeEngineWasm::supplyClipPage(int provider_id, int64_t page_index, val channels) {
+void RealtimeEngineWasm::supplyClipPage(const val& provider_id_val, int64_t page_index,
+                                        val channels) {
+  const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
   auto provider = liveProviderById(clip_page_providers_, provider_id);
   if (!provider) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pageProvider is not live");
@@ -447,7 +451,8 @@ void RealtimeEngineWasm::supplyClipPage(int provider_id, int64_t page_index, val
   provider->supply(page_index, channels);
 }
 
-void RealtimeEngineWasm::clearClipPage(int provider_id, int64_t page_index) {
+void RealtimeEngineWasm::clearClipPage(const val& provider_id_val, int64_t page_index) {
+  const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
   auto provider = liveProviderById(clip_page_providers_, provider_id);
   if (!provider) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pageProvider is not live");
@@ -455,7 +460,8 @@ void RealtimeEngineWasm::clearClipPage(int provider_id, int64_t page_index) {
   provider->clear(page_index);
 }
 
-void RealtimeEngineWasm::destroyClipPageProvider(int provider_id) {
+void RealtimeEngineWasm::destroyClipPageProvider(const val& provider_id_val) {
+  const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
   if (provider_id <= 0 || static_cast<size_t>(provider_id) > clip_page_providers_.size()) return;
   clip_page_providers_[static_cast<size_t>(provider_id - 1)].reset();
 }

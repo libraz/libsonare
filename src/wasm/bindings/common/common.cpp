@@ -530,11 +530,11 @@ std::string stringProperty(val object, const char* key, const std::string& defau
   return value.isUndefined() ? default_value : value.as<std::string>();
 }
 
-std::optional<float> optionalNumber(const val& v) {
+std::optional<float> optionalNumber(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull() || v.typeOf().as<std::string>() != "number") {
     return std::nullopt;
   }
-  return v.as<float>();
+  return checkedFloatFromVal(v, key);
 }
 
 std::optional<bool> optionalBool(const val& v) {

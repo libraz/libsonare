@@ -30,22 +30,24 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
   // dropping it here left a NaN request looking like an omitted key, and made
   // this the one surface that answered differently from the C ABI. Finite
   // out-of-range values stay clamped -- that is the documented contract.
-  if (const auto semitones = optionalNumber(objectProperty(config, "semitones")); semitones) {
+  if (const auto semitones = optionalNumber(objectProperty(config, "semitones"), "semitones");
+      semitones) {
     if (!std::isfinite(*semitones)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "StreamingRetune: semitones must be finite");
     }
     result.semitones = std::clamp(*semitones, -24.0f, 24.0f);
   }
-  if (const auto mix = optionalNumber(objectProperty(config, "mix")); mix) {
+  if (const auto mix = optionalNumber(objectProperty(config, "mix"), "mix"); mix) {
     if (!std::isfinite(*mix)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "StreamingRetune: mix must be finite");
     }
     result.mix = std::clamp(*mix, 0.0f, 1.0f);
   }
-  const auto grain_size = optionalNumber(objectProperty(config, "grainSize"));
-  const auto snake_case_grain_size = optionalNumber(objectProperty(config, "grain_size"));
+  const auto grain_size = optionalNumber(objectProperty(config, "grainSize"), "grainSize");
+  const auto snake_case_grain_size =
+      optionalNumber(objectProperty(config, "grain_size"), "grain_size");
   const auto grain = snake_case_grain_size ? snake_case_grain_size : grain_size;
   if (grain) {
     if (!std::isfinite(*grain)) {
@@ -70,7 +72,8 @@ class StreamingRetuneWrapper {
   explicit StreamingRetuneWrapper(val config)
       : StreamingRetuneWrapper(streamingRetuneConfigFromVal(config)) {}
 
-  void prepare(double sample_rate, int max_block_size) {
+  void prepare(double sample_rate, const val& max_block_size_val) {
+    const int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
     retune_.prepare(sample_rate, max_block_size);
     max_block_size_ = max_block_size;
     prepared_ = true;

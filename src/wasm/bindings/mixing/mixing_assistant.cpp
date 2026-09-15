@@ -196,11 +196,12 @@ assistant::MixAssistantConfig assistantConfigFromParams(val params_obj) {
 // assistant only suggests: applying the scene is the caller's separate step
 // through Mixer.fromSceneJson.
 std::string js_mixing_assistant_suggest(val left_channels, val right_channels, val track_ids,
-                                        val track_names, int sample_rate, val params_obj) {
+                                        val track_names, const val& sample_rate, val params_obj) {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   const assistant::MixAssistantConfig config = assistantConfigFromParams(params_obj);
   const AssistantInput input =
-      buildAssistantInput(left_channels, right_channels, track_ids, track_names, sample_rate);
+      buildAssistantInput(left_channels, right_channels, track_ids, track_names,
+                          checkedIntFromVal(sample_rate, "sampleRate"));
   return assistant::mix_assistant_result_to_json(assistant::suggest_scene(input.tracks, config));
 #else
   (void)left_channels;
@@ -216,12 +217,13 @@ std::string js_mixing_assistant_suggest(val left_channels, val right_channels, v
 // As js_mixing_assistant_suggest, but returns only the suggested scene, in the
 // schema Mixer.fromSceneJson reads.
 std::string js_mixing_assistant_suggest_scene_json(val left_channels, val right_channels,
-                                                   val track_ids, val track_names, int sample_rate,
-                                                   val params_obj) {
+                                                   val track_ids, val track_names,
+                                                   const val& sample_rate, val params_obj) {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   const assistant::MixAssistantConfig config = assistantConfigFromParams(params_obj);
   const AssistantInput input =
-      buildAssistantInput(left_channels, right_channels, track_ids, track_names, sample_rate);
+      buildAssistantInput(left_channels, right_channels, track_ids, track_names,
+                          checkedIntFromVal(sample_rate, "sampleRate"));
   const auto result = assistant::suggest_scene(input.tracks, config);
   return mixing::api::scene_to_json(result.scene);
 #else

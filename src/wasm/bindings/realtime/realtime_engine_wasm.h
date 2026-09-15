@@ -46,10 +46,12 @@ class RealtimeEngineWasm {
                      int telemetry_capacity);
   RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
                      int telemetry_capacity, int max_channels);
-  void prepare(double sample_rate, int max_block_size, int command_capacity,
-               int telemetry_capacity);
-  void prepareWithChannels(double sample_rate, int max_block_size, int command_capacity,
-                           int telemetry_capacity, int max_channels);
+  void prepare(double sample_rate, const emscripten::val& max_block_size,
+               const emscripten::val& command_capacity, const emscripten::val& telemetry_capacity);
+  void prepareWithChannels(double sample_rate, const emscripten::val& max_block_size,
+                           const emscripten::val& command_capacity,
+                           const emscripten::val& telemetry_capacity,
+                           const emscripten::val& max_channels);
 
   // ---- Transport & timing (realtime_engine_transport.cpp) --------------
   void play(int64_t render_frame);
@@ -60,62 +62,68 @@ class RealtimeEngineWasm {
   void seekPpq(double ppq, int64_t render_frame);
   void setTempo(double bpm);
   void setTempoSegments(emscripten::val segments);
-  void setTimeSignature(int numerator, int denominator);
+  void setTimeSignature(const emscripten::val& numerator_val,
+                        const emscripten::val& denominator_val);
   void setTimeSignatureSegments(emscripten::val segments);
   int64_t sampleAtPpq(double ppq);
   void setLoop(double start_ppq, double end_ppq, bool enabled);
   void setMarkers(emscripten::val markers);
   int markerCount() const;
-  emscripten::val markerByIndex(int index) const;
-  emscripten::val marker(int id) const;
-  void seekMarker(int id, int64_t render_frame);
-  void setLoopFromMarkers(int start_marker_id, int end_marker_id);
+  emscripten::val markerByIndex(const emscripten::val& index_val) const;
+  emscripten::val marker(const emscripten::val& id_val) const;
+  void seekMarker(const emscripten::val& id_val, int64_t render_frame);
+  void setLoopFromMarkers(const emscripten::val& start_marker_id_val,
+                          const emscripten::val& end_marker_id_val);
   void setMetronome(emscripten::val config);
   emscripten::val metronome() const;
-  int64_t countInEndSample(int64_t start_sample, int bars) const;
+  int64_t countInEndSample(int64_t start_sample, const emscripten::val& bars_val) const;
   emscripten::val getTransportState() const;
 
   // ---- Parameters & automation (realtime_engine_params.cpp) ------------
   void addParameter(emscripten::val info);
   int parameterCount() const;
-  emscripten::val parameterInfoByIndex(int index) const;
+  emscripten::val parameterInfoByIndex(const emscripten::val& index_val) const;
   emscripten::val parameterInfo(double id) const;
   void setAutomationLane(double param_id, emscripten::val points);
   int automationLaneCount() const;
   void setParameter(double param_id, float value, int64_t render_frame);
   void setParameterSmoothed(double param_id, float value, int64_t render_frame);
   void setParamSmoothingMs(float smoothing_ms);
-  void setSoloMute(uint32_t lane_index, bool solo, bool mute, int64_t render_frame);
-  void setTrackMonitorMode(uint32_t lane_index, int mode, int64_t render_frame);
+  void setSoloMute(const emscripten::val& lane_index_val, bool solo, bool mute,
+                   int64_t render_frame);
+  void setTrackMonitorMode(const emscripten::val& lane_index_val, const emscripten::val& mode_val,
+                           int64_t render_frame);
   void clearParameters();
 
   // ---- MIDI instruments, control & events (realtime_engine_midi.cpp) ---
-  void setBuiltinInstrument(uint32_t destination_id, emscripten::val config);
+  void setBuiltinInstrument(const emscripten::val& destination_id_val, emscripten::val config);
   void setMidiClips(emscripten::val clips_val);
-  void setSynthInstrument(uint32_t destination_id, emscripten::val patch);
-  double resolveInstrumentAutomationId(uint32_t destination_id, const std::string& param_name);
+  void setSynthInstrument(const emscripten::val& destination_id_val, emscripten::val patch);
+  double resolveInstrumentAutomationId(const emscripten::val& destination_id_val,
+                                       const std::string& param_name);
   void loadSoundFont(emscripten::val data);
-  void setSf2Instrument(uint32_t destination_id, emscripten::val config);
+  void setSf2Instrument(const emscripten::val& destination_id_val, emscripten::val config);
 #if defined(SONARE_WITH_ARRANGEMENT)
   void bindInstrument(uint32_t destination_id,
                       std::unique_ptr<sonare::midi::MidiInstrument> instrument);
 #endif
-  void clearMidiInstrument(uint32_t destination_id);
+  void clearMidiInstrument(const emscripten::val& destination_id_val);
   size_t midiInstrumentCount() const;
-  void bindMidiCc(int channel, int controller, uint32_t param_id, float min_value, float max_value);
+  void bindMidiCc(const emscripten::val& channel_val, const emscripten::val& controller_val,
+                  const emscripten::val& param_id_val, float min_value, float max_value);
   void bindMidiCcBinding(emscripten::val binding);
   void clearMidiCcBindings();
   size_t midiCcBindingCount() const;
-  void setMidiFx(uint32_t destination_id, const std::string& config_json);
-  void clearMidiFx(uint32_t destination_id);
-  void setMidiInputSource(uint32_t destination_id);
+  void setMidiFx(const emscripten::val& destination_id_val, const std::string& config_json);
+  void clearMidiFx(const emscripten::val& destination_id_val);
+  void setMidiInputSource(const emscripten::val& destination_id_val);
   void clearMidiInputSource();
   size_t midiInputPendingCount() const;
-  void setMidiDestinationExternal(uint32_t destination_id, bool external);
+  void setMidiDestinationExternal(const emscripten::val& destination_id_val, bool external);
   void setExternalMidiClockEnabled(bool enabled);
   uint32_t externalMidiDroppedCount() const;
   size_t externalMidiPendingCount() const;
-  emscripten::val drainExternalMidi(int max_records);
+  emscripten::val drainExternalMidi(const emscripten::val& max_records_val);
   // Scalar scratch drain for the AudioWorklet external-MIDI SAB path. This
   // avoids embind materialising JS arrays/objects in the render callback.
   bool popExternalMidiToScratch();
@@ -124,61 +132,85 @@ class RealtimeEngineWasm {
   uint32_t externalMidiScratchByteWord() const;
   uint32_t externalMidiScratchByteCount() const;
   void consumeExternalMidiScratch();
-  void pushMidiInputNoteOn(int group, int channel, int note, int velocity,
+  void pushMidiInputNoteOn(const emscripten::val& group_val, const emscripten::val& channel_val,
+                           const emscripten::val& note_val, const emscripten::val& velocity_val,
                            int64_t port_time_samples);
-  void pushMidiInputNoteOff(int group, int channel, int note, int velocity,
+  void pushMidiInputNoteOff(const emscripten::val& group_val, const emscripten::val& channel_val,
+                            const emscripten::val& note_val, const emscripten::val& velocity_val,
                             int64_t port_time_samples);
-  void pushMidiInputCc(int group, int channel, int controller, int value,
+  void pushMidiInputCc(const emscripten::val& group_val, const emscripten::val& channel_val,
+                       const emscripten::val& controller_val, const emscripten::val& value_val,
                        int64_t port_time_samples);
-  void pushMidiNoteOn(uint32_t destination_id, int group, int channel, int note, int velocity,
-                      int64_t render_frame);
-  void pushMidiNoteOff(uint32_t destination_id, int group, int channel, int note, int velocity,
-                       int64_t render_frame);
-  void pushMidiCc(uint32_t destination_id, int group, int channel, int controller, int value,
-                  int64_t render_frame);
-  void pushMidiUmp(uint32_t destination_id, uint32_t word0, int64_t render_frame);
-  void pushMidiSysex(uint32_t destination_id, emscripten::val data, int64_t render_frame);
+  void pushMidiNoteOn(const emscripten::val& destination_id_val, const emscripten::val& group_val,
+                      const emscripten::val& channel_val, const emscripten::val& note_val,
+                      const emscripten::val& velocity_val, int64_t render_frame);
+  void pushMidiNoteOff(const emscripten::val& destination_id_val, const emscripten::val& group_val,
+                       const emscripten::val& channel_val, const emscripten::val& note_val,
+                       const emscripten::val& velocity_val, int64_t render_frame);
+  void pushMidiCc(const emscripten::val& destination_id_val, const emscripten::val& group_val,
+                  const emscripten::val& channel_val, const emscripten::val& controller_val,
+                  const emscripten::val& value_val, int64_t render_frame);
+  void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& word0_val,
+                   int64_t render_frame);
+  void pushMidiSysex(const emscripten::val& destination_id_val, emscripten::val data,
+                     int64_t render_frame);
   void pushMidiPanic(int64_t render_frame);
 
   // ---- Mixer: tracks, buses, strips (realtime_engine_mixer.cpp) --------
   void setTrackLanes(emscripten::val lanes);
-  void setLaneSidechain(uint32_t track_id, unsigned int insert_index, uint32_t source_track_id);
+  void setLaneSidechain(const emscripten::val& track_id_val,
+                        const emscripten::val& insert_index_val,
+                        const emscripten::val& source_track_id_val);
   void setTrackBuses(emscripten::val buses);
-  void setBusStripJson(uint32_t bus_id, const std::string& scene_json);
-  void setTrackStripJson(uint32_t track_id, const std::string& scene_json);
-  void setTrackStripEqBandJson(uint32_t track_id, int band_index, const std::string& band_json);
-  void setTrackStripInsertBypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
+  void setBusStripJson(const emscripten::val& bus_id_val, const std::string& scene_json);
+  void setTrackStripJson(const emscripten::val& track_id_val, const std::string& scene_json);
+  void setTrackStripEqBandJson(const emscripten::val& track_id_val,
+                               const emscripten::val& band_index_val, const std::string& band_json);
+  void setTrackStripInsertBypassed(const emscripten::val& track_id_val,
+                                   const emscripten::val& insert_index_val, bool bypassed,
                                    bool reset_on_bypass);
   void setMasterStripJson(const std::string& scene_json);
-  void setMasterStripEqBandJson(int band_index, const std::string& band_json);
-  void setMasterStripInsertBypassed(unsigned int insert_index, bool bypassed, bool reset_on_bypass);
-  void setTrackStripInsertParamByName(uint32_t track_id, unsigned int insert_index,
+  void setMasterStripEqBandJson(const emscripten::val& band_index_val,
+                                const std::string& band_json);
+  void setMasterStripInsertBypassed(const emscripten::val& insert_index_val, bool bypassed,
+                                    bool reset_on_bypass);
+  void setTrackStripInsertParamByName(const emscripten::val& track_id_val,
+                                      const emscripten::val& insert_index_val,
                                       const std::string& param_name, float value);
-  void setMasterStripInsertParamByName(unsigned int insert_index, const std::string& param_name,
-                                       float value);
-  void setBusStripInsertParamByName(uint32_t bus_id, unsigned int insert_index,
+  void setMasterStripInsertParamByName(const emscripten::val& insert_index_val,
+                                       const std::string& param_name, float value);
+  void setBusStripInsertParamByName(const emscripten::val& bus_id_val,
+                                    const emscripten::val& insert_index_val,
                                     const std::string& param_name, float value);
-  void setBusStripInsertBypassed(uint32_t bus_id, unsigned int insert_index, bool bypassed,
+  void setBusStripInsertBypassed(const emscripten::val& bus_id_val,
+                                 const emscripten::val& insert_index_val, bool bypassed,
                                  bool reset_on_bypass);
-  double resolveTrackInsertAutomationId(uint32_t track_id, unsigned int insert_index,
+  double resolveTrackInsertAutomationId(const emscripten::val& track_id_val,
+                                        const emscripten::val& insert_index_val,
                                         const std::string& param_name);
-  double resolveMasterInsertAutomationId(unsigned int insert_index, const std::string& param_name);
-  double resolveBusInsertAutomationId(uint32_t bus_id, unsigned int insert_index,
+  double resolveMasterInsertAutomationId(const emscripten::val& insert_index_val,
+                                         const std::string& param_name);
+  double resolveBusInsertAutomationId(const emscripten::val& bus_id_val,
+                                      const emscripten::val& insert_index_val,
                                       const std::string& param_name);
-  void setTrackStripPan(uint32_t track_id, float pan);
-  void setTrackStripPanLaw(uint32_t track_id, int pan_law);
-  void setTrackStripPanMode(uint32_t track_id, int pan_mode);
-  void setTrackStripDualPan(uint32_t track_id, float left_pan, float right_pan);
-  void setTrackStripChannelDelaySamples(uint32_t track_id, int delay_samples);
+  void setTrackStripPan(const emscripten::val& track_id_val, float pan);
+  void setTrackStripPanLaw(const emscripten::val& track_id_val, const emscripten::val& pan_law_val);
+  void setTrackStripPanMode(const emscripten::val& track_id_val,
+                            const emscripten::val& pan_mode_val);
+  void setTrackStripDualPan(const emscripten::val& track_id_val, float left_pan, float right_pan);
+  void setTrackStripChannelDelaySamples(const emscripten::val& track_id_val,
+                                        const emscripten::val& delay_samples_val);
 
   // ---- Clips & paged providers (realtime_engine_clips.cpp) -------------
   void setClips(emscripten::val clips);
-  emscripten::val prebakedClipChannels(uint32_t clip_id) const;
+  emscripten::val prebakedClipChannels(const emscripten::val& clip_id_val) const;
   int clipCount() const;
-  int createClipPageProvider(int num_channels, int64_t num_samples, int64_t page_frames);
-  void supplyClipPage(int provider_id, int64_t page_index, emscripten::val channels);
-  void clearClipPage(int provider_id, int64_t page_index);
-  void destroyClipPageProvider(int provider_id);
+  int createClipPageProvider(const emscripten::val& num_channels_val, int64_t num_samples,
+                             int64_t page_frames);
+  void supplyClipPage(const emscripten::val& provider_id_val, int64_t page_index,
+                      emscripten::val channels);
+  void clearClipPage(const emscripten::val& provider_id_val, int64_t page_index);
+  void destroyClipPageProvider(const emscripten::val& provider_id_val);
   emscripten::val popClipPageRequest();
   // Allocation-free scalar variant for the AudioWorklet SAB request ring.
   // popClipPageRequest() remains for public/control-plane callers that need an
@@ -192,7 +224,8 @@ class RealtimeEngineWasm {
   double clipPagePrefetchFrames() const;
 
   // ---- Capture / recording (realtime_engine_capture.cpp) ---------------
-  void setCaptureBuffer(int num_channels, int capacity_frames);
+  void setCaptureBuffer(const emscripten::val& num_channels_val,
+                        const emscripten::val& capacity_frames_val);
   void armCapture(bool armed);
   void setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled);
   void setCaptureSource(emscripten::val source);
@@ -207,20 +240,25 @@ class RealtimeEngineWasm {
   int graphNodeCount() const;
   int graphConnectionCount() const;
   emscripten::val process(emscripten::val channels_val);
-  void prepareChannels(int num_channels, int max_frames);
-  emscripten::val getChannelBuffer(int channel, int num_frames);
-  void processPrepared(int num_frames);
-  void prepareMonitorChannels(int num_channels, int max_frames);
-  emscripten::val getMonitorChannelBuffer(int channel, int num_frames);
-  void processPreparedWithMonitor(int num_frames);
+  void prepareChannels(const emscripten::val& num_channels_val,
+                       const emscripten::val& max_frames_val);
+  emscripten::val getChannelBuffer(const emscripten::val& channel_val,
+                                   const emscripten::val& num_frames_val);
+  void processPrepared(const emscripten::val& num_frames_val);
+  void prepareMonitorChannels(const emscripten::val& num_channels_val,
+                              const emscripten::val& max_frames_val);
+  emscripten::val getMonitorChannelBuffer(const emscripten::val& channel_val,
+                                          const emscripten::val& num_frames_val);
+  void processPreparedWithMonitor(const emscripten::val& num_frames_val);
   emscripten::val processWithMonitor(emscripten::val channels_val);
-  emscripten::val renderOffline(emscripten::val channels_val, int block_size, bool finalize);
+  emscripten::val renderOffline(emscripten::val channels_val, const emscripten::val& block_size_val,
+                                bool finalize);
   void finishOfflineRender();
   emscripten::val bounceOffline(emscripten::val options_val);
   emscripten::val freezeOffline(emscripten::val options_val);
 
   // ---- Telemetry & metering (realtime_engine_telemetry.cpp) ------------
-  emscripten::val drainTelemetry(int max_records);
+  emscripten::val drainTelemetry(const emscripten::val& max_records_val);
   // Scalar scratch drain for the AudioWorklet SAB path. Unlike drainTelemetry,
   // this never materializes JS arrays or objects per render quantum.
   bool popTelemetryToScratch();
@@ -231,22 +269,23 @@ class RealtimeEngineWasm {
   int64_t telemetryScratchAudibleTimelineSample() const;
   int32_t telemetryScratchGraphLatencySamplesQ8() const;
   uint32_t telemetryScratchValue() const;
-  emscripten::val drainMeterTelemetry(int max_records);
+  emscripten::val drainMeterTelemetry(const emscripten::val& max_records_val);
   bool popMeterTelemetryToScratch();
   uint32_t meterScratchTargetId() const;
   int64_t meterScratchRenderFrame() const;
-  float meterScratchValue(int field) const;
-  emscripten::val drainMeterTelemetryWide(int max_records);
-  unsigned int configureScopeTelemetry(int interval_frames, unsigned int band_count);
-  emscripten::val drainScopeTelemetry(int max_records);
+  float meterScratchValue(const emscripten::val& field_val) const;
+  emscripten::val drainMeterTelemetryWide(const emscripten::val& max_records_val);
+  unsigned int configureScopeTelemetry(const emscripten::val& interval_frames_val,
+                                       const emscripten::val& band_count_val);
+  emscripten::val drainScopeTelemetry(const emscripten::val& max_records_val);
   bool popScopeTelemetryToScratch();
   uint32_t scopeScratchTargetId() const;
   int64_t scopeScratchRenderFrame() const;
   uint32_t scopeScratchBandCount() const;
-  float scopeScratchBand(uint32_t index) const;
+  float scopeScratchBand(const emscripten::val& index_val) const;
   uint32_t scopeScratchPointCount() const;
-  float scopeScratchPointLeft(uint32_t index) const;
-  float scopeScratchPointRight(uint32_t index) const;
+  float scopeScratchPointLeft(const emscripten::val& index_val) const;
+  float scopeScratchPointRight(const emscripten::val& index_val) const;
 
  private:
   // Maps a JS-supplied queue depth to the engine's size_t capacity. 0 selects

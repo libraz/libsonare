@@ -135,7 +135,8 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
   }
 }
 
-val MixerWasm::inputLeftView(size_t index) {
+val MixerWasm::inputLeftView(const val& index_val) {
+  const size_t index = static_cast<size_t>(checkedUintFromVal(index_val, "index"));
   if (index >= left_scratch_.size()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "mixer input index out of range");
@@ -143,7 +144,8 @@ val MixerWasm::inputLeftView(size_t index) {
   return val(typed_memory_view(static_cast<size_t>(block_size_), left_scratch_[index].data()));
 }
 
-val MixerWasm::inputRightView(size_t index) {
+val MixerWasm::inputRightView(const val& index_val) {
+  const size_t index = static_cast<size_t>(checkedUintFromVal(index_val, "index"));
   if (index >= right_scratch_.size()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "mixer input index out of range");
@@ -159,7 +161,8 @@ val MixerWasm::outputRightView() {
   return val(typed_memory_view(static_cast<size_t>(block_size_), out_scratch_right_.data()));
 }
 
-void MixerWasm::processPreparedStereo(size_t num_samples) {
+void MixerWasm::processPreparedStereo(const val& num_samples_val) {
+  const size_t num_samples = static_cast<size_t>(checkedUintFromVal(num_samples_val, "numSamples"));
   if (num_samples == 0 || num_samples > static_cast<size_t>(block_size_)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid prepared mixer block length");
@@ -184,7 +187,7 @@ void MixerWasm::processPreparedStereo(size_t num_samples) {
   }
 }
 
-void MixerWasm::configureMeter(bool enabled, int true_peak_oversample) {
+void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample) {
   if (!enabled) {
     meter_active_ = false;
     return;
@@ -192,7 +195,8 @@ void MixerWasm::configureMeter(bool enabled, int true_peak_oversample) {
   // Same acceptance as the offline meteringTruePeakDb entry point; the core
   // resolves the request to a factor its realtime filter implements and raises
   // anything below the BS.1770-4 4x minimum.
-  const int factor = true_peak_oversample == 0 ? 4 : true_peak_oversample;
+  const int requested = checkedIntFromVal(true_peak_oversample, "truePeakOversample");
+  const int factor = requested == 0 ? 4 : requested;
   if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "meter oversample must be 0 or a power of two from 1 to 16");
@@ -238,8 +242,8 @@ bool MixerWasm::latchMeterSnapshot() {
   return true;
 }
 
-float MixerWasm::meterScratchValue(int field) const {
-  switch (field) {
+float MixerWasm::meterScratchValue(const val& field) const {
+  switch (checkedIntFromVal(field, "field")) {
     case 0:
       return meter_scratch_.peak_db[0];
     case 1:

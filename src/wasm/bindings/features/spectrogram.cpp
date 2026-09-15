@@ -71,7 +71,11 @@ std::vector<float> load_validated_matrix(const char* fn_name, val input, int row
 // Features - Spectrogram
 // ============================================================================
 
-val js_stft(val samples, int sample_rate, int n_fft, int hop_length) {
+val js_stft(val samples, const val& sample_rate_val, const val& n_fft_val,
+            const val& hop_length_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
@@ -92,7 +96,11 @@ val js_stft(val samples, int sample_rate, int n_fft, int hop_length) {
   return out;
 }
 
-val js_stft_db(val samples, int sample_rate, int n_fft, int hop_length) {
+val js_stft_db(val samples, const val& sample_rate_val, const val& n_fft_val,
+               const val& hop_length_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
@@ -113,8 +121,13 @@ val js_stft_db(val samples, int sample_rate, int n_fft, int hop_length) {
 // Features - Mel Spectrogram
 // ============================================================================
 
-val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
-                       float fmin, float fmax, bool htk) {
+val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft_val,
+                       const val& hop_length_val, const val& n_mels_val, float fmin, float fmax,
+                       bool htk) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
@@ -143,8 +156,14 @@ val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, 
   return out;
 }
 
-val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels, int n_mfcc,
-            float fmin, float fmax, bool htk, float lifter) {
+val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
+            const val& hop_length_val, const val& n_mels_val, const val& n_mfcc_val, float fmin,
+            float fmax, bool htk, float lifter) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
@@ -166,7 +185,11 @@ val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
   return out;
 }
 
-val js_mel_delta(val features, int n_features, int n_frames, int width) {
+val js_mel_delta(val features, const val& n_features_val, const val& n_frames_val,
+                 const val& width_val) {
+  const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int width = checkedIntFromVal(width_val, "width");
   std::vector<float> data =
       load_validated_matrix("melDelta", features, n_features, n_frames, "features", "n_features");
   if (width < 3 || width % 2 == 0) {
@@ -176,8 +199,11 @@ val js_mel_delta(val features, int n_features, int n_frames, int width) {
   return vectorToFloat32Array(MelSpectrogram::delta(data.data(), n_features, n_frames, width));
 }
 
-val js_reassigned_spectrogram(val samples, int sample_rate, int n_fft, int hop_length,
-                              float ref_power, bool fill_nan) {
+val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val& n_fft_val,
+                              const val& hop_length_val, float ref_power, bool fill_nan) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const Audio audio = loadValidatedAudio(samples, sample_rate);
   validate_positive("reassignedSpectrogram", n_fft, "n_fft");
   validate_positive("reassignedSpectrogram", hop_length, "hop_length");
@@ -203,8 +229,13 @@ val js_reassigned_spectrogram(val samples, int sample_rate, int n_fft, int hop_l
 // [(n_fft/2 + 1) x n_frames]. Mirrors feature::mel_to_stft.
 //
 // hop_length is intentionally absent: feature::mel_to_stft does not consume it.
-val js_mel_to_stft(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft, float fmin,
-                   float fmax, bool htk) {
+val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val,
+                   const val& sample_rate_val, const val& n_fft_val, float fmin, float fmax,
+                   bool htk) {
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   validate_sample_rate("melToStft", sample_rate);
   std::vector<float> data =
       load_validated_matrix("melToStft", mel_power, n_mels, n_frames, "melPower", "n_mels");
@@ -229,8 +260,15 @@ val js_mel_to_stft(val mel_power, int n_mels, int n_frames, int sample_rate, int
 
 // Inverse: Mel power spectrogram -> audio via Griffin-Lim. Mirrors
 // feature::mel_to_audio.
-val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft,
-                    int hop_length, float fmin, float fmax, int n_iter, bool htk) {
+val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_val,
+                    const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
+                    float fmin, float fmax, const val& n_iter_val, bool htk) {
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   validate_sample_rate("melToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "melPower", "n_mels");
@@ -252,8 +290,15 @@ val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, in
   return vectorToFloat32Array(out_vec);
 }
 
-val js_griffin_lim(val magnitude, int n_bins, int n_frames, int sample_rate, int n_fft,
-                   int hop_length, int n_iter, float momentum) {
+val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val,
+                   const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
+                   const val& n_iter_val, float momentum) {
+  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   validate_sample_rate("griffinLim", sample_rate);
   std::vector<float> data =
       load_validated_matrix("griffinLim", magnitude, n_bins, n_frames, "magnitude", "n_bins");
@@ -274,7 +319,11 @@ val js_griffin_lim(val magnitude, int n_bins, int n_frames, int sample_rate, int
 
 // Inverse: MFCC matrix [n_mfcc x n_frames] -> Mel power spectrogram.
 // Mirrors feature::mfcc_to_mel.
-val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels, float lifter) {
+val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, const val& n_mels_val,
+                   float lifter) {
+  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   std::vector<float> data =
       load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
   validate_positive("mfccToMel", n_mels, "n_mels");
@@ -289,8 +338,17 @@ val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels, float lifter)
 }
 
 // Inverse: MFCC matrix -> audio via Griffin-Lim. Mirrors feature::mfcc_to_audio.
-val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_rate, int n_fft,
-                     int hop_length, float fmin, float fmax, int n_iter, bool htk, float lifter) {
+val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
+                     const val& n_mels_val, const val& sample_rate_val, const val& n_fft_val,
+                     const val& hop_length_val, float fmin, float fmax, const val& n_iter_val,
+                     bool htk, float lifter) {
+  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   validate_sample_rate("mfccToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
@@ -313,8 +371,15 @@ val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_
   return vectorToFloat32Array(out_vec);
 }
 
-val js_cqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, int hop_length,
-                    float fmin, int bins_per_octave, int n_iter) {
+val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
+                    const val& sample_rate_val, const val& hop_length_val, float fmin,
+                    const val& bins_per_octave_val, const val& n_iter_val) {
+  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   validate_sample_rate("cqtToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("cqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");
@@ -333,8 +398,15 @@ val js_cqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, in
   return vectorToFloat32Array(std::vector<float>(result.data(), result.data() + result.size()));
 }
 
-val js_vqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, int hop_length,
-                    float fmin, int bins_per_octave, float gamma, int n_iter) {
+val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
+                    const val& sample_rate_val, const val& hop_length_val, float fmin,
+                    const val& bins_per_octave_val, float gamma, const val& n_iter_val) {
+  const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
+  const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
   validate_sample_rate("vqtToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("vqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");

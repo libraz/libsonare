@@ -36,8 +36,9 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
 
 }  // namespace
 
-void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val config) {
+void RealtimeEngineWasm::setBuiltinInstrument(const val& destination_id_val, val config) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   sonare::midi::BuiltinSynthConfig cfg;
   if (!config.isUndefined() && !config.isNull()) {
     if (hasProperty(config, "waveform")) {
@@ -69,7 +70,7 @@ void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val confi
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(sonare::midi::clamp_synth_config(cfg));
   bindInstrument(destination_id, std::move(synth));
 #else
-  (void)destination_id;
+  (void)destination_id_val;
   (void)config;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
@@ -165,8 +166,9 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
 // Project.bounceWithSynthInstrument. Unknown preset names throw. A sample patch
 // carries its bank as `sampleBankId`, the same key the bounce reads; the synth
 // takes a share, so the caller may release its handle right afterwards.
-void RealtimeEngineWasm::setSynthInstrument(uint32_t destination_id, val patch) {
+void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val patch) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const SonareSynthPatch c_patch = sonare_wasm_synth::synthPatchFromVal(patch);
   sonare::midi::synth::NativeSynthConfig cfg;
   const char* error = nullptr;
@@ -181,7 +183,7 @@ void RealtimeEngineWasm::setSynthInstrument(uint32_t destination_id, val patch) 
   }
   bindInstrument(destination_id, std::move(synth));
 #else
-  (void)destination_id;
+  (void)destination_id_val;
   (void)patch;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
@@ -194,12 +196,13 @@ void RealtimeEngineWasm::setSynthInstrument(uint32_t destination_id, val patch) 
 // bound instrument, the instrument exposes no automatable parameters, or the
 // key is unknown. Like the insert resolvers, the id is returned as a double so
 // the full 32-bit unsigned reserved id survives the JS boundary.
-double RealtimeEngineWasm::resolveInstrumentAutomationId(uint32_t destination_id,
+double RealtimeEngineWasm::resolveInstrumentAutomationId(const val& destination_id_val,
                                                          const std::string& param_name) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   return static_cast<double>(engine_.resolve_instrument_automation_id(destination_id, param_name));
 #else
-  (void)destination_id;
+  (void)destination_id_val;
   (void)param_name;
   return -1.0;
 #endif
@@ -232,8 +235,9 @@ void RealtimeEngineWasm::loadSoundFont(val data) {
 // SoundFont the player's NativeSynth GM fallback is the data-free floor
 // (live MIDI stays audible). config is { gain?, polyphony? }
 // ("0 / omit => default").
-void RealtimeEngineWasm::setSf2Instrument(uint32_t destination_id, val config) {
+void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val config) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   sonare::midi::synth::Sf2PlayerConfig cfg;
   if (!config.isUndefined() && !config.isNull()) {
     // 0 selects the player's own default; a value the player would replace in
@@ -263,7 +267,7 @@ void RealtimeEngineWasm::setSf2Instrument(uint32_t destination_id, val config) {
   player->set_soundfont(soundfont_);
   bindInstrument(destination_id, std::move(player));
 #else
-  (void)destination_id;
+  (void)destination_id_val;
   (void)config;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
@@ -297,15 +301,16 @@ void RealtimeEngineWasm::bindInstrument(uint32_t destination_id,
 }
 #endif
 
-void RealtimeEngineWasm::clearMidiInstrument(uint32_t destination_id) {
+void RealtimeEngineWasm::clearMidiInstrument(const val& destination_id_val) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   engine_.set_midi_instrument(destination_id, nullptr);
   builtin_instruments_.erase(
       std::remove_if(builtin_instruments_.begin(), builtin_instruments_.end(),
                      [&](const auto& entry) { return entry.first == destination_id; }),
       builtin_instruments_.end());
 #else
-  (void)destination_id;
+  (void)destination_id_val;
 #endif
 }
 
@@ -317,9 +322,12 @@ size_t RealtimeEngineWasm::midiInstrumentCount() const {
 #endif
 }
 
-void RealtimeEngineWasm::bindMidiCc(int channel, int controller, uint32_t param_id, float min_value,
-                                    float max_value) {
+void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controller_val,
+                                    const val& param_id_val, float min_value, float max_value) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int controller = checkedIntFromVal(controller_val, "controller");
+  const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
   if (channel < 0 || channel > 15 || controller < 0 || controller > 127 || param_id == 0 ||
       !std::isfinite(min_value) || !std::isfinite(max_value) || max_value < min_value) {
     throw sonare::SonareException(
@@ -331,9 +339,9 @@ void RealtimeEngineWasm::bindMidiCc(int channel, int controller, uint32_t param_
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to bind MIDI CC");
   }
 #else
-  (void)channel;
-  (void)controller;
-  (void)param_id;
+  (void)channel_val;
+  (void)controller_val;
+  (void)param_id_val;
   (void)min_value;
   (void)max_value;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -397,8 +405,9 @@ size_t RealtimeEngineWasm::midiCcBindingCount() const {
 #endif
 }
 
-void RealtimeEngineWasm::setMidiFx(uint32_t destination_id, const std::string& config_json) {
+void RealtimeEngineWasm::setMidiFx(const val& destination_id_val, const std::string& config_json) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   sonare::midi::MidiFxChain chain;
   wasmMidiFxChainFromJson(config_json, &chain);
   if (!engine_.set_midi_fx(destination_id, chain)) {
@@ -406,27 +415,28 @@ void RealtimeEngineWasm::setMidiFx(uint32_t destination_id, const std::string& c
                                   "failed to install MIDI-FX insert");
   }
 #else
-  (void)destination_id;
+  (void)destination_id_val;
   (void)config_json;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
 
-void RealtimeEngineWasm::clearMidiFx(uint32_t destination_id) {
+void RealtimeEngineWasm::clearMidiFx(const val& destination_id_val) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  engine_.clear_midi_fx(destination_id);
+  engine_.clear_midi_fx(checkedUintFromVal(destination_id_val, "destinationId"));
 #else
-  (void)destination_id;
+  (void)destination_id_val;
 #endif
 }
 
-void RealtimeEngineWasm::setMidiInputSource(uint32_t destination_id) {
+void RealtimeEngineWasm::setMidiInputSource(const val& destination_id_val) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  engine_.set_midi_input_source(&midi_input_source_, destination_id);
+  engine_.set_midi_input_source(&midi_input_source_,
+                                checkedUintFromVal(destination_id_val, "destinationId"));
   midi_input_source_enabled_ = true;
 #else
-  (void)destination_id;
+  (void)destination_id_val;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -450,14 +460,15 @@ size_t RealtimeEngineWasm::midiInputPendingCount() const {
 // Route the MIDI of `destination_id` (a track lane) to the external output
 // queue instead of the internal instrument rack, so the track plays an
 // external device. Clearing it restores internal-synth playback.
-void RealtimeEngineWasm::setMidiDestinationExternal(uint32_t destination_id, bool external) {
+void RealtimeEngineWasm::setMidiDestinationExternal(const val& destination_id_val, bool external) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   if (!engine_.set_midi_destination_external(destination_id, external)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "external MIDI destination table is full");
   }
 #else
-  (void)destination_id;
+  (void)destination_id_val;
   (void)external;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
@@ -511,9 +522,10 @@ size_t RealtimeEngineWasm::externalMidiPendingCount() const {
 // coincide during straight playback and diverge across a loop/seek -- see
 // RealtimeEngine::drain_external_midi. Reconcile via the telemetry block's
 // renderFrame/timelineSample pair when scheduling sample-accurately.
-val RealtimeEngineWasm::drainExternalMidi(int max_records) {
+val RealtimeEngineWasm::drainExternalMidi(const val& max_records_val) {
   val out = val::array();
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
   // One queue record lowers to at most this many MIDI-1 messages, so a smaller
   // budget can never consume a record and the drain would report nothing while
   // the queue keeps growing. The bound is read from the shared lowering type so
@@ -547,7 +559,7 @@ val RealtimeEngineWasm::drainExternalMidi(int max_records) {
     }
   }
 #else
-  (void)max_records;
+  (void)max_records_val;
 #endif
   return out;
 }
@@ -592,19 +604,34 @@ void RealtimeEngineWasm::consumeExternalMidiScratch() {
   }
 }
 
-void RealtimeEngineWasm::pushMidiInputNoteOn(int group, int channel, int note, int velocity,
+void RealtimeEngineWasm::pushMidiInputNoteOn(const val& group_val, const val& channel_val,
+                                             const val& note_val, const val& velocity_val,
                                              int64_t port_time_samples) {
+  const int group = checkedIntFromVal(group_val, "group");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int note = checkedIntFromVal(note_val, "note");
+  const int velocity = checkedIntFromVal(velocity_val, "velocity");
   pushMidiInputEvent(group, channel, note, velocity, port_time_samples, true);
 }
 
-void RealtimeEngineWasm::pushMidiInputNoteOff(int group, int channel, int note, int velocity,
+void RealtimeEngineWasm::pushMidiInputNoteOff(const val& group_val, const val& channel_val,
+                                              const val& note_val, const val& velocity_val,
                                               int64_t port_time_samples) {
+  const int group = checkedIntFromVal(group_val, "group");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int note = checkedIntFromVal(note_val, "note");
+  const int velocity = checkedIntFromVal(velocity_val, "velocity");
   pushMidiInputEvent(group, channel, note, velocity, port_time_samples, false);
 }
 
-void RealtimeEngineWasm::pushMidiInputCc(int group, int channel, int controller, int value,
+void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channel_val,
+                                         const val& controller_val, const val& value_val,
                                          int64_t port_time_samples) {
 #if defined(SONARE_WITH_ARRANGEMENT)
+  const int group = checkedIntFromVal(group_val, "group");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int controller = checkedIntFromVal(controller_val, "controller");
+  const int value = checkedIntFromVal(value_val, "value");
   if (!midi_input_source_enabled_ || group < 0 || group > 15 || channel < 0 || channel > 15 ||
       controller < 0 || controller > 127 || value < 0 || value > 127) {
     throw sonare::SonareException(
@@ -620,24 +647,36 @@ void RealtimeEngineWasm::pushMidiInputCc(int group, int channel, int controller,
                                   "failed to enqueue MIDI input CC");
   }
 #else
-  (void)group;
-  (void)channel;
-  (void)controller;
-  (void)value;
+  (void)group_val;
+  (void)channel_val;
+  (void)controller_val;
+  (void)value_val;
   (void)port_time_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
 }
 
-void RealtimeEngineWasm::pushMidiNoteOn(uint32_t destination_id, int group, int channel, int note,
-                                        int velocity, int64_t render_frame) {
+void RealtimeEngineWasm::pushMidiNoteOn(const val& destination_id_val, const val& group_val,
+                                        const val& channel_val, const val& note_val,
+                                        const val& velocity_val, int64_t render_frame) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const int group = checkedIntFromVal(group_val, "group");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int note = checkedIntFromVal(note_val, "note");
+  const int velocity = checkedIntFromVal(velocity_val, "velocity");
   pushMidiNote(destination_id, group, channel, note, velocity, render_frame,
                sonare::rt::CommandType::kMidiNoteOnImmediate);
 }
 
-void RealtimeEngineWasm::pushMidiNoteOff(uint32_t destination_id, int group, int channel, int note,
-                                         int velocity, int64_t render_frame) {
+void RealtimeEngineWasm::pushMidiNoteOff(const val& destination_id_val, const val& group_val,
+                                         const val& channel_val, const val& note_val,
+                                         const val& velocity_val, int64_t render_frame) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const int group = checkedIntFromVal(group_val, "group");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int note = checkedIntFromVal(note_val, "note");
+  const int velocity = checkedIntFromVal(velocity_val, "velocity");
   pushMidiNote(destination_id, group, channel, note, velocity, render_frame,
                sonare::rt::CommandType::kMidiNoteOffImmediate);
 }
@@ -647,8 +686,14 @@ void RealtimeEngineWasm::pushMidiNoteOff(uint32_t destination_id, int group, int
 // registered host instrument at @p render_frame (-1 = immediate). Values are
 // 7-bit; channel 0..15, group 0..15. The scalar fields are packed into arg.i
 // using the encoding documented in rt/command.h (kMidiCcImmediate).
-void RealtimeEngineWasm::pushMidiCc(uint32_t destination_id, int group, int channel, int controller,
-                                    int value, int64_t render_frame) {
+void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& group_val,
+                                    const val& channel_val, const val& controller_val,
+                                    const val& value_val, int64_t render_frame) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const int group = checkedIntFromVal(group_val, "group");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int controller = checkedIntFromVal(controller_val, "controller");
+  const int value = checkedIntFromVal(value_val, "value");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || controller < 0 ||
       controller > 127 || value < 0 || value > 127) {
     throw sonare::SonareException(
@@ -677,8 +722,12 @@ void RealtimeEngineWasm::pushMidiCc(uint32_t destination_id, int group, int chan
 // through one kind-aware decoder, so a controller bound to automation is driven
 // whichever call the host used. It used to reach the sequencer only, which made
 // this the one live path that silently skipped the CC -> automation mapping.
-void RealtimeEngineWasm::pushMidiUmp(uint32_t destination_id, uint32_t word0,
+void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& word0_val,
                                      int64_t render_frame) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  // A UMP word is idiomatically spelled `(0x2 << 28) | …` in JS, which is a
+  // signed int once bit 31 is set, so the whole 32-bit range is legal here.
+  const uint32_t word0 = checkedWordFromVal(word0_val, "word0");
   if (((word0 >> 28) & 0x0Fu) != 0x2u) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidParameter,
@@ -701,7 +750,9 @@ void RealtimeEngineWasm::pushMidiUmp(uint32_t destination_id, uint32_t word0,
 // Uint8Array before the call returns. Reaches the registered host instrument at
 // @p render_frame (-1 = immediate). Mirrors the C ABI
 // sonare_engine_push_midi_sysex.
-void RealtimeEngineWasm::pushMidiSysex(uint32_t destination_id, val data, int64_t render_frame) {
+void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
+                                       int64_t render_frame) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
   // Distinguish the two rejection classes the C ABI reports (it bypasses the
   // C-ABI translation unit here, so the mapping is reproduced): malformed or

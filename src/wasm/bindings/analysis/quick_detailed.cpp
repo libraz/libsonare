@@ -12,9 +12,13 @@
 // languages.
 // ============================================================================
 
-val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
-                   int n_fft, int hop_length, int max_candidates) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_analyze_bpm(val samples, const val& sample_rate, float bpm_min, float bpm_max,
+                   float start_bpm, const val& n_fft_val, const val& hop_length_val,
+                   const val& max_candidates_val) {
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int max_candidates = checkedIntFromVal(max_candidates_val, "maxCandidates");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_bpm): reject inverted
   // BPM ranges and non-positive sizing instead of letting the analyzer silently
   // clamp them, so WASM rejects identically to the C ABI / Node.
@@ -55,9 +59,11 @@ val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, f
   return out;
 }
 
-val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
-                      int n_fft, int hop_length) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_analyze_rhythm(val samples, const val& sample_rate, float bpm_min, float bpm_max,
+                      float start_bpm, const val& n_fft_val, const val& hop_length_val) {
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_rhythm).
   if (bpm_min <= 0.0f || bpm_max <= bpm_min || n_fft <= 0 || hop_length <= 0) {
     throw SonareException(
@@ -91,9 +97,10 @@ val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max
   return out;
 }
 
-val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_length,
-                        float compression_threshold) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_analyze_dynamics(val samples, const val& sample_rate, float window_sec,
+                        const val& hop_length_val, float compression_threshold) {
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_dynamics): reject a
   // non-positive window or hop and a negative threshold instead of clamping.
   if (window_sec <= 0.0f || hop_length <= 0 || compression_threshold < 0.0f) {
@@ -122,9 +129,14 @@ val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_
   return out;
 }
 
-val js_analyze_timbre(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
-                      int n_mfcc, float window_sec) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
+                      const val& hop_length_val, const val& n_mels_val, const val& n_mfcc_val,
+                      float window_sec) {
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+  const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_timbre).
   if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 || window_sec <= 0.0f) {
     throw SonareException(
@@ -166,10 +178,10 @@ val js_analyze_timbre(val samples, int sample_rate, int n_fft, int hop_length, i
   return out;
 }
 
-val js_detect_key_candidates_default(val samples, int sample_rate) {
+val js_detect_key_candidates_default(val samples, const val& sample_rate) {
+  const int rate = checkedIntFromVal(sample_rate, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
-  const auto candidates =
-      quick::detect_key_candidates(data.data(), data.size(), sample_rate, KeyConfig{});
+  const auto candidates = quick::detect_key_candidates(data.data(), data.size(), rate, KeyConfig{});
   val out = val::array();
   for (const auto& cand : candidates) {
     val entry = val::object();

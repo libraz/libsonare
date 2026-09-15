@@ -73,8 +73,8 @@ mastering::repair::DereverbClassicalConfig readDereverbConfig(
 
 }  // namespace
 
-val js_mastering_repair_declick(val samples, int sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_mastering_repair_declick(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DeclickConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
@@ -130,8 +130,8 @@ mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(const std::s
 
 }  // namespace
 
-val js_mastering_repair_denoise_classical(val samples, int sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DenoiseClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "mode")) {
@@ -172,8 +172,8 @@ val js_mastering_repair_denoise_classical(val samples, int sample_rate, val opti
   return vectorToFloat32Array(out);
 }
 
-val js_mastering_repair_declip(val samples, int sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DeclipConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
@@ -214,8 +214,8 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
 
 }  // namespace
 
-val js_mastering_repair_decrackle(val samples, int sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_mastering_repair_decrackle(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DecrackleConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
@@ -232,8 +232,8 @@ val js_mastering_repair_decrackle(val samples, int sample_rate, val options) {
   return vectorToFloat32Array(out);
 }
 
-val js_mastering_repair_dehum(val samples, int sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DehumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
@@ -250,8 +250,8 @@ val js_mastering_repair_dehum(val samples, int sample_rate, val options) {
   return vectorToFloat32Array(out);
 }
 
-val js_mastering_repair_dereverb_classical(val samples, int sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DereverbClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     cfg = readDereverbConfig(options, cfg);
@@ -312,8 +312,8 @@ val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
   return out;
 }
 
-val js_mastering_repair_trim_silence(val samples, int sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::TrimSilenceConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);

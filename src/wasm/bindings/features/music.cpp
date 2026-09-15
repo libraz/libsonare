@@ -12,12 +12,12 @@
 // Features - Chroma
 // ============================================================================
 
-val js_chroma(val samples, int sample_rate, int n_fft, int hop_length) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_chroma(val samples, const val& sample_rate, const val& n_fft, const val& hop_length) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   ChromaConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
+  config.n_fft = checkedIntFromVal(n_fft, "nFft");
+  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
 
   Chroma chroma = Chroma::compute(audio, config);
 
@@ -62,51 +62,55 @@ val chromaToVal(const Chroma& chroma) {
   return out;
 }
 
-val js_chroma_cens(val samples, int sample_rate, int hop_length, int n_chroma,
-                   int bins_per_octave) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_chroma_cens(val samples, const val& sample_rate, const val& hop_length, const val& n_chroma,
+                   const val& bins_per_octave_val) {
+  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   SONARE_CHECK(bins_per_octave > 0 && bins_per_octave <= std::numeric_limits<int>::max() / 7,
                ErrorCode::InvalidParameter);
 
   ChromaCensConfig config;
-  config.base.cqt.hop_length = hop_length;
+  config.base.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.base.cqt.bins_per_octave = bins_per_octave;
   config.base.cqt.n_bins = 7 * bins_per_octave;
-  config.base.n_chroma = n_chroma;
+  config.base.n_chroma = checkedIntFromVal(n_chroma, "nChroma");
   return chromaToVal(chroma_cens(audio, config));
 }
 
-val js_chroma_cqt(val samples, int sample_rate, int hop_length, int n_chroma, int bins_per_octave) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, const val& n_chroma,
+                  const val& bins_per_octave_val) {
+  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   SONARE_CHECK(bins_per_octave > 0 && bins_per_octave <= std::numeric_limits<int>::max() / 7,
                ErrorCode::InvalidParameter);
 
   ChromaCqtConfig config;
-  config.cqt.hop_length = hop_length;
+  config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.cqt.bins_per_octave = bins_per_octave;
   config.cqt.n_bins = 7 * bins_per_octave;
-  config.n_chroma = n_chroma;
+  config.n_chroma = checkedIntFromVal(n_chroma, "nChroma");
   return chromaToVal(chroma_cqt(audio, config));
 }
 
-val js_bass_chroma(val samples, int sample_rate, int hop_length, int n_chroma) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_bass_chroma(val samples, const val& sample_rate, const val& hop_length,
+                   const val& n_chroma) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   BassChromaConfig config;
-  config.cqt.hop_length = hop_length;
-  config.n_chroma = n_chroma;
+  config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
+  config.n_chroma = checkedIntFromVal(n_chroma, "nChroma");
   return chromaToVal(bass_chroma(audio, config));
 }
 
-val js_nnls_chroma_ex(val samples, int sample_rate, bool enable_stft_blend, float stft_blend_weight,
-                      int stft_blend_n_fft, int hop_length) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blend,
+                      float stft_blend_weight, const val& stft_blend_n_fft, const val& hop_length) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   NnlsChromaConfig config;
   config.enable_stft_blend = enable_stft_blend;
   config.stft_blend_weight = stft_blend_weight;
-  config.stft_blend_n_fft = stft_blend_n_fft;
-  config.cqt.hop_length = hop_length;
+  config.stft_blend_n_fft = checkedIntFromVal(stft_blend_n_fft, "stftBlendNFft");
+  config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
   Chroma chroma = nnls_chroma(audio, config);
 
   val out = val::object();
@@ -118,10 +122,10 @@ val js_nnls_chroma_ex(val samples, int sample_rate, bool enable_stft_blend, floa
   return out;
 }
 
-val js_nnls_chroma(val samples, int sample_rate, bool enable_stft_blend, float stft_blend_weight,
-                   int stft_blend_n_fft) {
+val js_nnls_chroma(val samples, const val& sample_rate, bool enable_stft_blend,
+                   float stft_blend_weight, const val& stft_blend_n_fft) {
   return js_nnls_chroma_ex(samples, sample_rate, enable_stft_blend, stft_blend_weight,
-                           stft_blend_n_fft, constants::kDefaultHopLength);
+                           stft_blend_n_fft, val(constants::kDefaultHopLength));
 }
 
 // ============================================================================
@@ -131,9 +135,12 @@ val js_nnls_chroma(val samples, int sample_rate, bool enable_stft_blend, float s
 // Mirrors sonare_analyze_sections / SonareSectionResult and the Node/Python
 // analyzeSections: detects song-structure sections and returns an array of
 // { type, name, start, end, energyLevel, confidence }.
-val js_analyze_sections(val samples, int sample_rate, int n_fft = 2048, int hop_length = 512,
-                        float min_section_sec = 4.0f) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+// Embind passes every argument, so the narrowed sizes carry no C++ default.
+val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_val,
+                        const val& hop_length_val, float min_section_sec = 4.0f) {
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_sections): reject
   // non-positive sizing instead of silently substituting struct defaults, so
   // WASM rejects identically to the C ABI / Node. The TS layer (which always
@@ -167,10 +174,14 @@ val js_analyze_sections(val samples, int sample_rate, int n_fft = 2048, int hop_
 // Mirrors sonare_analyze_melody / SonareMelodyResult: extracts the melody
 // contour via YIN and returns { points: [{ time, frequency, confidence }],
 // pitchRangeOctaves, pitchStability, meanFrequency, vibratoRate }.
-val js_analyze_melody(val samples, int sample_rate, float fmin = 65.0f, float fmax = 2093.0f,
-                      int frame_length = 2048, int hop_length = 256, float threshold = 0.1f,
-                      bool use_pyin = false, bool center = true) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+// Embind passes every argument, so the narrowed sizes carry no C++ default, and
+// neither can the float parameters that precede them.
+val js_analyze_melody(val samples, const val& sample_rate, float fmin, float fmax,
+                      const val& frame_length_val, const val& hop_length_val,
+                      float threshold = 0.1f, bool use_pyin = false, bool center = true) {
+  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror the flat C ABI config contract (sonare_analyze_melody_ex): reject an
   // inverted/zero frequency range, non-positive sizing and a non-positive
   // threshold instead of silently substituting struct defaults. use_pyin/center
@@ -229,54 +240,54 @@ val cqtResultToVal(const CqtResult& result) {
   return out;
 }
 
-val js_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
-           int bins_per_octave) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_cqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+           const val& n_bins, const val& bins_per_octave) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
-  config.hop_length = hop_length;
+  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.fmin = fmin;
-  config.n_bins = n_bins;
-  config.bins_per_octave = bins_per_octave;
+  config.n_bins = checkedIntFromVal(n_bins, "nBins");
+  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
 
   return cqtResultToVal(cqt(audio, config));
 }
 
-val js_pseudo_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
-                  int bins_per_octave) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_pseudo_cqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+                  const val& n_bins, const val& bins_per_octave) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
-  config.hop_length = hop_length;
+  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.fmin = fmin;
-  config.n_bins = n_bins;
-  config.bins_per_octave = bins_per_octave;
+  config.n_bins = checkedIntFromVal(n_bins, "nBins");
+  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
 
   return cqtResultToVal(pseudo_cqt(audio, config));
 }
 
-val js_hybrid_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
-                  int bins_per_octave) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+                  const val& n_bins, const val& bins_per_octave) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   CqtConfig config;
-  config.hop_length = hop_length;
+  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.fmin = fmin;
-  config.n_bins = n_bins;
-  config.bins_per_octave = bins_per_octave;
+  config.n_bins = checkedIntFromVal(n_bins, "nBins");
+  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
 
   return cqtResultToVal(hybrid_cqt(audio, config));
 }
 
-val js_vqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
-           int bins_per_octave, float gamma) {
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+val js_vqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+           const val& n_bins, const val& bins_per_octave, float gamma) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
   VqtConfig config;
-  config.hop_length = hop_length;
+  config.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.fmin = fmin;
-  config.n_bins = n_bins;
-  config.bins_per_octave = bins_per_octave;
+  config.n_bins = checkedIntFromVal(n_bins, "nBins");
+  config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
   config.gamma = gamma;
 
   return cqtResultToVal(vqt(audio, config));

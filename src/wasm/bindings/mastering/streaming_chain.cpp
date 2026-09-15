@@ -40,9 +40,15 @@ class StreamingMasteringChainWrapper {
   explicit StreamingMasteringChainWrapper(val config)
       : chain_(masteringChainConfigFromVal(config), streamingOptionsFromVal(config)) {}
 
-  void prepare(double sample_rate, int max_block_size, int num_channels) {
-    chain_.prepare(sample_rate, max_block_size, num_channels);
-    max_block_size_ = max_block_size;
+  // The two block dimensions arrive as val rather than as int: embind's integer
+  // glue wraps, so 2^32 + n reaches a narrow parameter as n and asks for a block
+  // nobody requested. sample_rate is a double, which is what a JS number already
+  // is, so it has nothing to wrap into.
+  void prepare(double sample_rate, const val& max_block_size, const val& num_channels) {
+    const int block_size = checkedIntFromVal(max_block_size, "maxBlockSize");
+    const int channels = checkedIntFromVal(num_channels, "numChannels");
+    chain_.prepare(sample_rate, block_size, channels);
+    max_block_size_ = block_size;
   }
 
   val processMono(val samples) {

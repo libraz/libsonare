@@ -91,9 +91,11 @@ void ProjectWasm::annotateChords(val chords) {
   }
 }
 
-void ProjectWasm::setAssistSidecar(const std::string& module_id, uint32_t schema_version,
-                                   uint32_t target_track_id, double region_start_ppq,
+void ProjectWasm::setAssistSidecar(const std::string& module_id, const val& schema_version_val,
+                                   const val& target_track_id_val, double region_start_ppq,
                                    double region_end_ppq, val payload) {
+  const uint32_t schema_version = checkedUintFromVal(schema_version_val, "schemaVersion");
+  const uint32_t target_track_id = checkedUintFromVal(target_track_id_val, "targetTrackId");
   std::vector<uint8_t> bytes = uint8ArrayToVector(payload);
   const SonareError err = sonare_project_set_assist_sidecar(
       project_.get(), module_id.c_str(), schema_version, target_track_id, region_start_ppq,
@@ -126,7 +128,8 @@ val ProjectWasm::getAssistSidecar(double index) const {
   return out;
 }
 
-void ProjectWasm::setOverlapPolicy(uint32_t policy) {
+void ProjectWasm::setOverlapPolicy(const val& policy_val) {
+  const uint32_t policy = checkedUintFromVal(policy_val, "policy");
   const SonareError err = sonare_project_set_overlap_policy(project_.get(), policy);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set overlap policy");
@@ -158,7 +161,8 @@ void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   }
 }
 
-uint32_t ProjectWasm::setMarker(uint32_t marker_id, double ppq, const std::string& name) {
+uint32_t ProjectWasm::setMarker(const val& marker_id_val, double ppq, const std::string& name) {
+  const uint32_t marker_id = checkedUintFromVal(marker_id_val, "markerId");
   uint32_t out_id = 0;
   const SonareError err =
       sonare_project_set_marker(project_.get(), marker_id, ppq, name.c_str(), &out_id);
@@ -185,7 +189,8 @@ uint32_t ProjectWasm::setMarkerEx(val marker) {
   return out_id;
 }
 
-val ProjectWasm::markerByIndex(int index) const {
+val ProjectWasm::markerByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   SonareProjectMarker desc{};
   const SonareError err =
       sonare_project_marker_by_index(project_.get(), static_cast<size_t>(index), &desc);
@@ -207,7 +212,8 @@ val ProjectWasm::markerByIndex(int index) const {
   return out;
 }
 
-val ProjectWasm::trackByIndex(int index) const {
+val ProjectWasm::trackByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   SonareProjectTrack d{};
   const SonareError err =
       sonare_project_track_by_index(project_.get(), static_cast<size_t>(index), &d);
@@ -224,7 +230,8 @@ val ProjectWasm::trackByIndex(int index) const {
   return out;
 }
 
-val ProjectWasm::clipByIndex(int index) const {
+val ProjectWasm::clipByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   SonareProjectClip d{};
   const SonareError err =
       sonare_project_clip_by_index(project_.get(), static_cast<size_t>(index), &d);
@@ -243,7 +250,8 @@ val ProjectWasm::clipByIndex(int index) const {
   return out;
 }
 
-val ProjectWasm::sourceByIndex(int index) const {
+val ProjectWasm::sourceByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   SonareProjectSource d{};
   const SonareError err =
       sonare_project_source_by_index(project_.get(), static_cast<size_t>(index), &d);
@@ -325,7 +333,8 @@ double ProjectWasm::timeSignatureCount() const {
   return static_cast<double>(out);
 }
 
-val ProjectWasm::tempoSegmentByIndex(int index) const {
+val ProjectWasm::tempoSegmentByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   SonareProjectTempoSegment seg{};
   const SonareError err =
       sonare_project_tempo_segment_by_index(project_.get(), static_cast<size_t>(index), &seg);
@@ -343,7 +352,8 @@ val ProjectWasm::tempoSegmentByIndex(int index) const {
   return out;
 }
 
-val ProjectWasm::timeSignatureByIndex(int index) const {
+val ProjectWasm::timeSignatureByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   SonareProjectTimeSignatureSegment seg{};
   const SonareError err =
       sonare_project_time_signature_by_index(project_.get(), static_cast<size_t>(index), &seg);

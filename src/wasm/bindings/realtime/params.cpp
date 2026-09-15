@@ -65,7 +65,8 @@ int RealtimeEngineWasm::parameterCount() const {
   return static_cast<int>(parameters_.parameter_count());
 }
 
-val RealtimeEngineWasm::parameterInfoByIndex(int index) const {
+val RealtimeEngineWasm::parameterInfoByIndex(const val& index_val) const {
+  const int index = checkedIntFromVal(index_val, "index");
   sonare::automation::ParameterInfo info{};
   if (index < 0 || !parameters_.parameter_info_by_index(static_cast<size_t>(index), &info)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -185,8 +186,9 @@ void RealtimeEngineWasm::setParamSmoothingMs(float smoothing_ms) {
   engine_.set_param_smoothing_ms(smoothing_ms);
 }
 
-void RealtimeEngineWasm::setSoloMute(uint32_t lane_index, bool solo, bool mute,
+void RealtimeEngineWasm::setSoloMute(const val& lane_index_val, bool solo, bool mute,
                                      int64_t render_frame) {
+  const uint32_t lane_index = checkedUintFromVal(lane_index_val, "laneIndex");
 #if defined(SONARE_WITH_MIXING)
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetSoloMute;
@@ -212,7 +214,10 @@ void RealtimeEngineWasm::setSoloMute(uint32_t lane_index, bool solo, bool mute,
 #endif
 }
 
-void RealtimeEngineWasm::setTrackMonitorMode(uint32_t lane_index, int mode, int64_t render_frame) {
+void RealtimeEngineWasm::setTrackMonitorMode(const val& lane_index_val, const val& mode_val,
+                                             int64_t render_frame) {
+  const uint32_t lane_index = checkedUintFromVal(lane_index_val, "laneIndex");
+  const int mode = checkedIntFromVal(mode_val, "mode");
   // The C-ABI guard runs before the feature gate, so invalid modes remain an
   // InvalidParameter even in an analysis-only (mixing-disabled) WASM build.
   if (mode < 0 || mode > 2) {

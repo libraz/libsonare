@@ -9,7 +9,8 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
-void ProjectWasm::setMidiEvents(uint32_t clip_id, val events) {
+void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const size_t count = events.isUndefined() || events.isNull() ? 0 : events["length"].as<size_t>();
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
@@ -79,15 +80,24 @@ val ProjectWasm::exportClipFile() {
   return vectorToUint8Array(out);
 }
 
-void ProjectWasm::setProgram(uint32_t clip_id, int program, int bank) {
+void ProjectWasm::setProgram(const val& clip_id_val, const val& program_val, const val& bank_val) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
+  const int program = checkedIntFromVal(program_val, "program");
+  const int bank = checkedIntFromVal(bank_val, "bank");
   const SonareError err = sonare_project_set_program(project_.get(), clip_id, program, bank);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set MIDI program");
   }
 }
 
-void ProjectWasm::setProgramOnChannel(uint32_t clip_id, uint32_t group, uint32_t channel,
-                                      int program, int bank) {
+void ProjectWasm::setProgramOnChannel(const val& clip_id_val, const val& group_val,
+                                      const val& channel_val, const val& program_val,
+                                      const val& bank_val) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
+  const uint32_t group = checkedUintFromVal(group_val, "group");
+  const uint32_t channel = checkedUintFromVal(channel_val, "channel");
+  const int program = checkedIntFromVal(program_val, "program");
+  const int bank = checkedIntFromVal(bank_val, "bank");
   const SonareError err =
       sonare_project_set_program_on_channel(project_.get(), clip_id, static_cast<uint8_t>(group),
                                             static_cast<uint8_t>(channel), program, bank);
@@ -96,14 +106,16 @@ void ProjectWasm::setProgramOnChannel(uint32_t clip_id, uint32_t group, uint32_t
   }
 }
 
-void ProjectWasm::bakeMidiFx(uint32_t clip_id, const std::string& config_json) {
+void ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_json) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const SonareError err = sonare_project_bake_midi_fx(project_.get(), clip_id, config_json.c_str());
   if (err != SONARE_OK) {
     throwCError(err, "failed to set MIDI FX");
   }
 }
 
-val ProjectWasm::bakeMidiFxWithSourceIndex(uint32_t clip_id, const std::string& config_json) {
+val ProjectWasm::bakeMidiFxWithSourceIndex(const val& clip_id_val, const std::string& config_json) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   // Sized from the non-destructive preview so the bake is a single pass with an
   // exactly-fitting buffer, rather than a bake that has to be repeated when the
   // guess is short.
@@ -126,7 +138,8 @@ val ProjectWasm::bakeMidiFxWithSourceIndex(uint32_t clip_id, const std::string& 
   return vectorToInt32Array(source_index);
 }
 
-uint32_t ProjectWasm::previewMidiFxCount(uint32_t clip_id, const std::string& config_json) {
+uint32_t ProjectWasm::previewMidiFxCount(const val& clip_id_val, const std::string& config_json) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   size_t count = 0;
   const SonareError err =
       sonare_project_preview_midi_fx_count(project_.get(), clip_id, config_json.c_str(), &count);
@@ -136,11 +149,12 @@ uint32_t ProjectWasm::previewMidiFxCount(uint32_t clip_id, const std::string& co
   return static_cast<uint32_t>(count);
 }
 
-void ProjectWasm::setMidiFx(uint32_t clip_id, const std::string& config_json) {
+void ProjectWasm::setMidiFx(const val& clip_id, const std::string& config_json) {
   bakeMidiFx(clip_id, config_json);
 }
 
-val ProjectWasm::validateMidiNotes(uint32_t clip_id) {
+val ProjectWasm::validateMidiNotes(const val& clip_id_val) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   SonareNotePairValidation result{};
   const SonareError err = sonare_project_validate_midi_notes(project_.get(), clip_id, &result);
   if (err != SONARE_OK) {
@@ -176,7 +190,8 @@ SonareProjectTempoOptions tempoOptionsFrom(val options) {
 
 }  // namespace
 
-val ProjectWasm::analyzeTempo(val audio, int sample_rate, val options) {
+val ProjectWasm::analyzeTempo(val audio, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> samples = float32ArrayToVector(audio);
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
@@ -206,8 +221,10 @@ val ProjectWasm::analyzeTempo(val audio, int sample_rate, val options) {
   return output;
 }
 
-float ProjectWasm::autoTempo(val audio, int sample_rate, int candidate_index,
+float ProjectWasm::autoTempo(val audio, const val& sample_rate_val, const val& candidate_index_val,
                              bool apply_time_signatures, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int candidate_index = checkedIntFromVal(candidate_index_val, "candidateIndex");
   std::vector<float> samples = float32ArrayToVector(audio);
   float bpm = 0.0f;
   const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
@@ -218,7 +235,8 @@ float ProjectWasm::autoTempo(val audio, int sample_rate, int candidate_index,
   return bpm;
 }
 
-double ProjectWasm::snapToGrid(double ppq, double strength, int division) {
+double ProjectWasm::snapToGrid(double ppq, double strength, const val& division_val) {
+  const int division = checkedIntFromVal(division_val, "division");
   double out = 0.0;
   const SonareError err =
       sonare_project_snap_to_grid_ex(project_.get(), ppq, strength, division, &out);
@@ -234,52 +252,64 @@ val js_nullable_string(const char* value) {
   return value != nullptr ? val(std::string(value)) : val::null();
 }
 
-val js_midi_gm_instrument_name(int program) {
-  return js_nullable_string(sonare_midi_gm_instrument_name(program));
+val js_midi_gm_instrument_name(const val& program) {
+  return js_nullable_string(sonare_midi_gm_instrument_name(checkedIntFromVal(program, "program")));
 }
 
 int js_midi_gm_program_for_name(const std::string& name) {
   return sonare_midi_gm_program_for_name(name.c_str());
 }
 
-val js_midi_gm_family_name(int family) {
-  return js_nullable_string(sonare_midi_gm_family_name(family));
+val js_midi_gm_family_name(const val& family) {
+  return js_nullable_string(sonare_midi_gm_family_name(checkedIntFromVal(family, "family")));
 }
 
-int js_midi_gm_family_first_program(int family) {
-  return sonare_midi_gm_family_first_program(family);
+int js_midi_gm_family_first_program(const val& family) {
+  return sonare_midi_gm_family_first_program(checkedIntFromVal(family, "family"));
 }
 
-val js_midi_gm2_instrument_name(int bank_lsb, int program) {
-  return js_nullable_string(sonare_midi_gm2_instrument_name(bank_lsb, program));
+val js_midi_gm2_instrument_name(const val& bank_lsb, const val& program) {
+  return js_nullable_string(sonare_midi_gm2_instrument_name(checkedIntFromVal(bank_lsb, "bankLsb"),
+                                                            checkedIntFromVal(program, "program")));
 }
 
-val js_midi_gm_drum_name(int note) { return js_nullable_string(sonare_midi_gm_drum_name(note)); }
+val js_midi_gm_drum_name(const val& note) {
+  return js_nullable_string(sonare_midi_gm_drum_name(checkedIntFromVal(note, "note")));
+}
 
 int js_midi_gm_drum_note_for_name(const std::string& name) {
   return sonare_midi_gm_drum_note_for_name(name.c_str());
 }
 
-val js_midi_gm2_drum_set_name(int bank_lsb) {
-  return js_nullable_string(sonare_midi_gm2_drum_set_name(bank_lsb));
+val js_midi_gm2_drum_set_name(const val& bank_lsb) {
+  return js_nullable_string(sonare_midi_gm2_drum_set_name(checkedIntFromVal(bank_lsb, "bankLsb")));
 }
 
-val js_midi_gm2_drum_name(int bank_lsb, int note) {
-  return js_nullable_string(sonare_midi_gm2_drum_name(bank_lsb, note));
+val js_midi_gm2_drum_name(const val& bank_lsb, const val& note) {
+  return js_nullable_string(sonare_midi_gm2_drum_name(checkedIntFromVal(bank_lsb, "bankLsb"),
+                                                      checkedIntFromVal(note, "note")));
 }
 
-val js_midi_cc_name(int controller) { return js_nullable_string(sonare_midi_cc_name(controller)); }
+val js_midi_cc_name(const val& controller) {
+  return js_nullable_string(sonare_midi_cc_name(checkedIntFromVal(controller, "controller")));
+}
 
 int js_midi_cc_index_for_name(const std::string& name) {
   return sonare_midi_cc_index_for_name(name.c_str());
 }
 
-val js_midi_per_note_controller_name(int index) {
-  return js_nullable_string(sonare_midi_per_note_controller_name(index));
+val js_midi_per_note_controller_name(const val& index) {
+  return js_nullable_string(
+      sonare_midi_per_note_controller_name(checkedIntFromVal(index, "index")));
 }
 
-val js_midi_bank_program(double ppq, int group, int channel, int bank_msb, int bank_lsb,
-                         int program) {
+val js_midi_bank_program(double ppq, const val& group_val, const val& channel_val,
+                         const val& bank_msb_val, const val& bank_lsb_val, const val& program_val) {
+  const int group = checkedIntFromVal(group_val, "group");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int bank_msb = checkedIntFromVal(bank_msb_val, "bankMsb");
+  const int bank_lsb = checkedIntFromVal(bank_lsb_val, "bankLsb");
+  const int program = checkedIntFromVal(program_val, "program");
   SonareMidiEventPod events[3]{};
   size_t count = 0;
   const SonareError err =
@@ -353,8 +383,10 @@ std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
   return out;
 }
 
-val js_midi_cc_learn(val events, uint32_t param_id, float min_value, float max_value,
-                     int min_movement) {
+val js_midi_cc_learn(val events, const val& param_id_val, float min_value, float max_value,
+                     const val& min_movement_val) {
+  const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
+  const int min_movement = checkedIntFromVal(min_movement_val, "minMovement");
   const size_t count = events.isUndefined() || events.isNull() ? 0 : events["length"].as<size_t>();
   std::vector<SonareMidiEventPod> pods(count);
   for (size_t i = 0; i < count; ++i) {
@@ -393,8 +425,10 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
 // selected the binding whose id is 5, and 5.5 selected it too. The object-field
 // spelling of the same field reads through checkedUintFromVal, so both paths
 // refuse what neither can represent.
-val js_midi_param_to_cc(val bindings, val param_id, float unit_value, int group, double ppq) {
+val js_midi_param_to_cc(val bindings, val param_id, float unit_value, const val& group_val,
+                        double ppq) {
   const uint32_t requested_param_id = checkedUintFromVal(param_id, "paramId");
+  const int group = checkedIntFromVal(group_val, "group");
   std::vector<SonareMidiCcBinding> cc_bindings = js_cc_bindings_from_val(bindings);
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(

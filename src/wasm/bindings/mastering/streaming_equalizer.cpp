@@ -117,13 +117,16 @@ class EqualizerWrapper {
     max_block_size_ = max_block_size;
   }
 
-  void setBand(int index, val band) {
-    processor_.set_band(static_cast<size_t>(index), eqBandFromVal(band));
+  void setBand(const val& index, val band) {
+    processor_.set_band(static_cast<size_t>(checkedIntFromVal(index, "index")),
+                        eqBandFromVal(band));
   }
 
   void clear() { processor_.clear(); }
 
-  void setPhaseMode(int mode) { processor_.set_phase_mode(eqPhaseFromInt(mode)); }
+  void setPhaseMode(const val& mode) {
+    processor_.set_phase_mode(eqPhaseFromInt(checkedIntFromVal(mode, "mode")));
+  }
 
   void setAutoGain(bool enabled) { processor_.set_auto_gain_enabled(enabled); }
 
@@ -221,10 +224,11 @@ class EqualizerWrapper {
   // The curve to draw over the analyzer `spectrum()` returns. Takes the
   // placement as the same ordinal the C ABI does rather than a string, so the
   // wrapper stays a marshaller and the naming lives in the TS facade.
-  val magnitudeResponse(int placement, val frequencies_hz) const {
+  val magnitudeResponse(const val& placement, val frequencies_hz) const {
+    const int placement_id = checkedIntFromVal(placement, "placement");
     std::vector<float> frequencies = float32ArrayToVector(frequencies_hz);
     std::vector<float> out(frequencies.size(), 0.0f);
-    processor_.magnitude_response_db(eqPlacementFromInt(placement), frequencies.data(),
+    processor_.magnitude_response_db(eqPlacementFromInt(placement_id), frequencies.data(),
                                      frequencies.size(), out.data());
     return vectorToFloat32Array(out);
   }

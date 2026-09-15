@@ -253,8 +253,8 @@ class PolyphonicAnalysisWasm {
   editing::polyphony::PolyphonicAnalysis analysis_;
 };
 
-PolyphonicAnalysisWasm* createPolyphonicAnalysis(val samples, int sample_rate, val config) {
-  return new PolyphonicAnalysisWasm(samples, sample_rate, config);
+PolyphonicAnalysisWasm* createPolyphonicAnalysis(val samples, const val& sample_rate, val config) {
+  return new PolyphonicAnalysisWasm(samples, checkedIntFromVal(sample_rate, "sampleRate"), config);
 }
 
 void registerPolyphonyBindings() {

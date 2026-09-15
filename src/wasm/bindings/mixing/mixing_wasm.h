@@ -62,101 +62,104 @@ class MixerWasm {
   // [pre-inserts... post-inserts...]. param_id is processor-specific. sample_pos
   // is in absolute samples from the start of processing. curve: 0 = Linear,
   // 1 = Exponential.
-  void scheduleInsertAutomation(unsigned int strip_index, unsigned int insert_index,
-                                unsigned int param_id, double sample_pos, float value, int curve);
+  void scheduleInsertAutomation(const val& strip_index, const val& insert_index,
+                                const val& param_id, double sample_pos, float value,
+                                const val& curve);
 
   // Borrowed strip handle by index in [0, stripCount()). Throws if out of range.
   // The handle is owned by the mixer; do not free it.
   SonareStrip* stripAt(unsigned int strip_index);
 
   // Sets the strip's input trim in dB.
-  void setInputTrimDb(unsigned int strip_index, float db);
+  void setInputTrimDb(const val& strip_index_val, float db);
 
   // Sets the strip's fader level in dB.
-  void setFaderDb(unsigned int strip_index, float db);
+  void setFaderDb(const val& strip_index_val, float db);
 
   // Sets the strip's pan position. pan_mode is the SONARE_PAN_MODE_* ordinal;
   // pass SONARE_PAN_MODE_KEEP (-1) to keep the strip's current pan mode (e.g. a
   // scene-defined mode) on a plain pan nudge.
-  void setPan(unsigned int strip_index, float pan, int pan_mode);
+  void setPan(const val& strip_index_val, float pan, const val& pan_mode_val);
 
   // Sets the strip's stereo width.
-  void setWidth(unsigned int strip_index, float width);
+  void setWidth(const val& strip_index_val, float width);
 
   // Sets the strip's mute state.
-  void setMuted(unsigned int strip_index, bool muted);
+  void setMuted(const val& strip_index_val, bool muted);
 
   // Sets the strip's solo state. Takes effect on the next process without a
   // graph recompile.
-  void setSoloed(unsigned int strip_index, bool soloed);
+  void setSoloed(const val& strip_index_val, bool soloed);
 
   // Marks a strip as solo-safe so it is never implied-muted by another strip's
   // solo. Takes effect on the next process without a graph recompile.
-  void setSoloSafe(unsigned int strip_index, bool solo_safe);
+  void setSoloSafe(const val& strip_index_val, bool solo_safe);
 
   // Inverts the polarity of the left and/or right channel.
-  void setPolarityInvert(unsigned int strip_index, bool invert_left, bool invert_right);
+  void setPolarityInvert(const val& strip_index_val, bool invert_left, bool invert_right);
 
   // Sets the strip's pan law. pan_law: 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB,
   // 3 = linear (0 dB).
-  void setPanLaw(unsigned int strip_index, int pan_law);
+  void setPanLaw(const val& strip_index_val, const val& pan_law_val);
 
   // Sets a per-strip channel delay in samples. This changes the strip's reported
   // latency; recompile to re-run latency compensation.
-  void setChannelDelaySamples(unsigned int strip_index, int delay_samples);
+  void setChannelDelaySamples(const val& strip_index_val, const val& delay_samples_val);
 
   // Sets the strip's live VCA gain offset in dB (not persisted to the scene).
-  void setVcaOffsetDb(unsigned int strip_index, float offset_db);
+  void setVcaOffsetDb(const val& strip_index_val, float offset_db);
 
   // Sets independent left/right pan positions (dual-pan mode).
-  void setDualPan(unsigned int strip_index, float left_pan, float right_pan);
+  void setDualPan(const val& strip_index_val, float left_pan, float right_pan);
 
   // Sets the strip's surround pan from a JS object {azimuth, elevation,
   // divergence, lfe, distance}; absent/non-numeric fields fall back to the
   // centered point-source default.
-  void setSurroundPan(unsigned int strip_index, val pan);
+  void setSurroundPan(const val& strip_index_val, val pan);
 
   // Adds a post-construction send to the strip. timing mirrors SonareSendTiming:
   // 0 = post-fader, 1 = pre-fader. Returns the new send's index.
-  size_t addSend(unsigned int strip_index, std::string id, std::string destination_bus_id,
-                 float send_db, int timing);
+  size_t addSend(const val& strip_index_val, std::string id, std::string destination_bus_id,
+                 float send_db, const val& timing_val);
 
   // Sets the send level (in dB) for an existing send by index.
-  void setSendDb(unsigned int strip_index, size_t send_index, float send_db);
+  void setSendDb(const val& strip_index_val, const val& send_index_val, float send_db);
 
   // Removes the send at send_index (in add order) from the strip. Higher send
   // indices shift down by one after removal; recompile before processing.
-  void removeSend(unsigned int strip_index, size_t send_index);
+  void removeSend(const val& strip_index_val, const val& send_index_val);
 
   // Reads a meter snapshot at the given tap point. tap: 0 = pre-fader,
   // 1 = post-fader (see SonareMeterTap). Returns the full snapshot.
-  val meterTap(unsigned int strip_index, int tap);
+  val meterTap(const val& strip_index_val, const val& tap_val);
 
   // Reads the strip's current (post-fader) meter snapshot. Tap-less, mirroring
   // the Node/Python stripMeter contract which calls sonare_strip_meter; the
   // tap-selectable variant is meterTap.
-  val stripMeter(unsigned int strip_index);
+  val stripMeter(const val& strip_index_val);
   val busMeter(std::string bus_id);
 
   // Schedules sample-accurate fader automation on a strip. sample_pos uses the
   // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential.
-  void scheduleFaderAutomation(unsigned int strip_index, double sample_pos, float fader_db,
-                               int curve);
+  void scheduleFaderAutomation(const val& strip_index_val, double sample_pos, float fader_db,
+                               const val& curve_val);
 
-  void schedulePanAutomation(unsigned int strip_index, double sample_pos, float pan, int curve);
+  void schedulePanAutomation(const val& strip_index_val, double sample_pos, float pan,
+                             const val& curve_val);
 
-  void scheduleWidthAutomation(unsigned int strip_index, double sample_pos, float width, int curve);
+  void scheduleWidthAutomation(const val& strip_index_val, double sample_pos, float width,
+                               const val& curve_val);
 
   // Schedules sample-accurate send-level automation on a strip's send.
-  void scheduleSendAutomation(unsigned int strip_index, size_t send_index, double sample_pos,
-                              float db, int curve);
+  void scheduleSendAutomation(const val& strip_index_val, const val& send_index_val,
+                              double sample_pos, float db, const val& curve_val);
 
   // Reads up to max_points of the strip's most recent goniometer samples.
   // Returns an array of { left, right } points (oldest to newest).
   /// @param max_points Requested point count. A @c double, not a @c size_t, so
   ///        the guard can still see a negative or non-finite JS number — see
   ///        the definition.
-  val readGoniometerLatest(unsigned int strip_index, double max_points);
+  val readGoniometerLatest(const val& strip_index_val, double max_points);
 
   // Resolves a strip's index from its id. Returns -1 when the id is not found;
   // the TS wrapper maps -1 to null for cross-binding consistency (Node returns
@@ -190,15 +193,15 @@ class MixerWasm {
 
   void processStereoInto(val left_channels, val right_channels, val out_left, val out_right);
 
-  val inputLeftView(size_t index);
+  val inputLeftView(const val& index);
 
-  val inputRightView(size_t index);
+  val inputRightView(const val& index);
 
   val outputLeftView();
 
   val outputRightView();
 
-  void processPreparedStereo(size_t num_samples);
+  void processPreparedStereo(const val& num_samples);
 
   // Turns the master-output meter on or off. While on, processPreparedStereo
   // meters the stereo master it just produced, so the caller neither copies the
@@ -215,7 +218,7 @@ class MixerWasm {
   // Enabling resets the meter, so a reading never mixes audio from before a
   // period when metering was off. Re-enabling at the same factor does not
   // reallocate, which keeps it usable from an audio-thread message handler.
-  void configureMeter(bool enabled, int true_peak_oversample);
+  void configureMeter(bool enabled, const val& true_peak_oversample);
 
   // Latest meter reading, describing the most recently metered block. All dB
   // fields are finite and floored at kFloorDb (-120). Throws when the meter has
@@ -234,7 +237,7 @@ class MixerWasm {
   // meterScratchValue for the fields the two share: 0 peakDbL, 1 peakDbR,
   // 2 rmsDbL, 3 rmsDbR, 4 correlation, 5 truePeakDbL, 6 truePeakDbR. Anything
   // else reads 0.
-  float meterScratchValue(int field) const;
+  float meterScratchValue(const val& field) const;
 
   // Reports the longest audible serial processor-tail path to the master
   // (samples). Lazily compiles if the topology is dirty.
@@ -277,7 +280,8 @@ class MixerWasm {
   sonare::mixing::MeterSnapshot meter_scratch_{};
 };
 
-MixerWasm* createMixerFromSceneJson(std::string json, int sample_rate, int block_size);
+MixerWasm* createMixerFromSceneJson(std::string json, const val& sample_rate,
+                                    const val& block_size);
 
 // Each domain TU registers its slice of the single Mixer class_ handle. The core
 // TU (mixing.cpp) creates the handle, registers the free functions, and calls

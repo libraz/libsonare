@@ -206,7 +206,9 @@ val RealtimeEngineWasm::process(val channels_val) {
 // quantum, so process() never touches the C++/JS heap allocators on the audio
 // thread (mirrors RealtimeVoiceChanger's prepared API). Call
 // prepareChannels(numChannels, maxFrames) once on the main thread first.
-void RealtimeEngineWasm::prepareChannels(int num_channels, int max_frames) {
+void RealtimeEngineWasm::prepareChannels(const val& num_channels_val, const val& max_frames_val) {
+  const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
+  const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
   if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "RealtimeEngine.prepareChannels: channels must be within 1.." +
@@ -224,7 +226,9 @@ void RealtimeEngineWasm::prepareChannels(int num_channels, int max_frames) {
   }
 }
 
-val RealtimeEngineWasm::getChannelBuffer(int channel, int num_frames) {
+val RealtimeEngineWasm::getChannelBuffer(const val& channel_val, const val& num_frames_val) {
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (channel < 0 || channel >= prepared_channels_) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "RealtimeEngine.getChannelBuffer: channel out of range; call "
@@ -238,7 +242,8 @@ val RealtimeEngineWasm::getChannelBuffer(int channel, int num_frames) {
                                prepared_storage_[static_cast<size_t>(channel)].data()));
 }
 
-void RealtimeEngineWasm::processPrepared(int num_frames) {
+void RealtimeEngineWasm::processPrepared(const val& num_frames_val) {
+  const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "RealtimeEngine.processPrepared: prepareChannels() must be "
@@ -257,7 +262,10 @@ void RealtimeEngineWasm::processPrepared(int num_frames) {
 // instead: the program plane stays untouched and the cue lands in its own
 // planes. Call prepareMonitorChannels() once, off the audio thread, after
 // prepareChannels().
-void RealtimeEngineWasm::prepareMonitorChannels(int num_channels, int max_frames) {
+void RealtimeEngineWasm::prepareMonitorChannels(const val& num_channels_val,
+                                                const val& max_frames_val) {
+  const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
+  const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
   if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "RealtimeEngine.prepareMonitorChannels: channels must be "
@@ -276,7 +284,9 @@ void RealtimeEngineWasm::prepareMonitorChannels(int num_channels, int max_frames
   }
 }
 
-val RealtimeEngineWasm::getMonitorChannelBuffer(int channel, int num_frames) {
+val RealtimeEngineWasm::getMonitorChannelBuffer(const val& channel_val, const val& num_frames_val) {
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (channel < 0 || channel >= monitor_channels_) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidParameter,
@@ -292,7 +302,8 @@ val RealtimeEngineWasm::getMonitorChannelBuffer(int channel, int num_frames) {
                                monitor_storage_[static_cast<size_t>(channel)].data()));
 }
 
-void RealtimeEngineWasm::processPreparedWithMonitor(int num_frames) {
+void RealtimeEngineWasm::processPreparedWithMonitor(const val& num_frames_val) {
+  const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "RealtimeEngine.processPreparedWithMonitor: prepareChannels() "
@@ -337,7 +348,8 @@ val RealtimeEngineWasm::processWithMonitor(val channels_val) {
   return out;
 }
 
-val RealtimeEngineWasm::renderOffline(val channels_val, int block_size, bool finalize) {
+val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_val, bool finalize) {
+  const int block_size = checkedIntFromVal(block_size_val, "blockSize");
   // Mirror the C-ABI oracle (sonare_engine_render_offline): a never-prepared
   // engine renders nothing and cannot signal through telemetry, so fail closed
   // instead of handing back a silent buffer that reads as a completed render.

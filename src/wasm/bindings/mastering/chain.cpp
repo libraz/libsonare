@@ -8,8 +8,12 @@
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
-val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_db,
-                 int true_peak_oversample, float release_ms, bool apply_gain_at_input_rate) {
+val js_mastering(val samples, const val& sample_rate_val, float target_lufs, float ceiling_db,
+                 const val& true_peak_oversample_val, float release_ms,
+                 bool apply_gain_at_input_rate) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int true_peak_oversample =
+      checkedIntFromVal(true_peak_oversample_val, "truePeakOversample");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   mastering::maximizer::LoudnessOptimizeConfig config;
@@ -274,7 +278,8 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   return out;
 }
 
-val js_mastering_chain(val samples, int sample_rate, val config) {
+val js_mastering_chain(val samples, const val& sample_rate_val, val config) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
@@ -295,7 +300,9 @@ val js_mastering_chain(val samples, int sample_rate, val config) {
   return out;
 }
 
-val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_rate, val config) {
+val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sample_rate_val,
+                              val config) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masteringChainStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
@@ -323,8 +330,9 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_ra
 }
 
 // Mastering chain (mono) with progress callback
-val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
+val js_mastering_chain_with_progress(val samples, const val& sample_rate_val, val config,
                                      val progress_callback, val cancel_callback) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
@@ -358,9 +366,10 @@ val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
 }
 
 // Mastering chain (stereo) with progress callback
-val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples, int sample_rate,
-                                            val config, val progress_callback,
-                                            val cancel_callback) {
+val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
+                                            const val& sample_rate_val, val config,
+                                            val progress_callback, val cancel_callback) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masteringChainStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);

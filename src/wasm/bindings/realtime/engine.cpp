@@ -24,23 +24,29 @@ size_t RealtimeEngineWasm::capacity(int requested) {
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
                                        int telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, 64);
+  prepareWithChannels(sample_rate, val(max_block_size), val(command_capacity),
+                      val(telemetry_capacity), val(64));
 }
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
                                        int telemetry_capacity, int max_channels) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity,
-                      max_channels);
+  prepareWithChannels(sample_rate, val(max_block_size), val(command_capacity),
+                      val(telemetry_capacity), val(max_channels));
 }
 
-void RealtimeEngineWasm::prepare(double sample_rate, int max_block_size, int command_capacity,
-                                 int telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, 64);
+void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size,
+                                 const val& command_capacity, const val& telemetry_capacity) {
+  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(64));
 }
 
-void RealtimeEngineWasm::prepareWithChannels(double sample_rate, int max_block_size,
-                                             int command_capacity, int telemetry_capacity,
-                                             int max_channels) {
+void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_block_size_val,
+                                             const val& command_capacity_val,
+                                             const val& telemetry_capacity_val,
+                                             const val& max_channels_val) {
+  const int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
+  const int command_capacity = checkedIntFromVal(command_capacity_val, "commandCapacity");
+  const int telemetry_capacity = checkedIntFromVal(telemetry_capacity_val, "telemetryCapacity");
+  const int max_channels = checkedIntFromVal(max_channels_val, "maxChannels");
   validatePrepare(sample_rate, max_block_size);
   // Both the bound and the message it reports come from the engine's constant,
   // so raising the ceiling moves the guard and the text a host reads together.

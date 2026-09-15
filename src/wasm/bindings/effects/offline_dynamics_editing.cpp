@@ -70,7 +70,8 @@ val makeDynamicsResult(const std::vector<float>& samples, int latency_samples) {
 
 }  // namespace
 
-val js_mastering_dynamics_compressor(val samples, int sample_rate, val options) {
+val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::CompressorConfig cfg;
@@ -106,7 +107,8 @@ val js_mastering_dynamics_compressor(val samples, int sample_rate, val options) 
   return makeDynamicsResult(data, latency);
 }
 
-val js_mastering_dynamics_gate(val samples, int sample_rate, val options) {
+val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::GateConfig cfg;
@@ -129,7 +131,8 @@ val js_mastering_dynamics_gate(val samples, int sample_rate, val options) {
   return makeDynamicsResult(data, latency);
 }
 
-val js_mastering_dynamics_transient_shaper(val samples, int sample_rate, val options) {
+val js_mastering_dynamics_transient_shaper(val samples, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::TransientShaperConfig cfg;
@@ -200,22 +203,29 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
 
 }  // namespace
 
-float js_scale_quantize_midi(int root, int mode_mask, float midi, float reference_midi) {
-  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(root, mode_mask, reference_midi));
+float js_scale_quantize_midi(const val& root, const val& mode_mask, float midi,
+                             float reference_midi) {
+  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
+      checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
   return q.quantize_midi(midi);
 }
 
-float js_scale_correction_semitones(int root, int mode_mask, float midi, float reference_midi) {
-  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(root, mode_mask, reference_midi));
+float js_scale_correction_semitones(const val& root, const val& mode_mask, float midi,
+                                    float reference_midi) {
+  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
+      checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), reference_midi));
   return q.correction_semitones(midi);
 }
 
-bool js_scale_pitch_class_enabled(int root, int mode_mask, int pitch_class) {
+bool js_scale_pitch_class_enabled(const val& root, const val& mode_mask,
+                                  const val& pitch_class_val) {
+  const int pitch_class = checkedIntFromVal(pitch_class_val, "pitchClass");
   if (pitch_class < 0 || pitch_class > 11) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "scalePitchClassEnabled: pitchClass must be in [0, 11]");
   }
-  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(root, mode_mask, 0.0f));
+  editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
+      checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), 0.0f));
   return q.pitch_class_enabled(pitch_class);
 }
 
@@ -223,7 +233,9 @@ bool js_scale_pitch_class_enabled(int root, int mode_mask, int pitch_class) {
 // Core - Resample
 // ============================================================================
 
-val js_resample(val samples, int src_sr, int target_sr) {
+val js_resample(val samples, const val& src_sr_val, const val& target_sr_val) {
+  const int src_sr = checkedIntFromVal(src_sr_val, "srcSr");
+  const int target_sr = checkedIntFromVal(target_sr_val, "targetSr");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), src_sr);
   if (target_sr < kMinAudioSampleRate || target_sr > kMaxAudioSampleRate) {

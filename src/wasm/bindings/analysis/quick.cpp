@@ -303,12 +303,14 @@ val analysisResultToVal(const AnalysisResult& result) {
 // Quick API (high-level)
 // ============================================================================
 
-float js_detect_bpm(val samples, int sample_rate) {
+float js_detect_bpm(val samples, const val& sample_rate_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   return quick::detect_bpm(audio.data(), audio.size(), sample_rate);
 }
 
-val js_detect_key(val samples, int sample_rate) {
+val js_detect_key(val samples, const val& sample_rate_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   Key key = quick::detect_key(audio.data(), audio.size(), sample_rate);
 
@@ -321,9 +323,14 @@ val js_detect_key(val samples, int sample_rate) {
   return result;
 }
 
-val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_length,
-                               bool use_hpss, bool loudness_weighted, float high_pass_hz, val modes,
-                               int profile_type, std::string genre_hint) {
+val js_detect_key_with_options(val samples, const val& sample_rate_val, const val& n_fft_val,
+                               const val& hop_length_val, bool use_hpss, bool loudness_weighted,
+                               float high_pass_hz, val modes, const val& profile_type_val,
+                               std::string genre_hint) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   KeyConfig config;
   config.n_fft = n_fft;
@@ -349,9 +356,14 @@ val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_
   return result;
 }
 
-val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_length, bool use_hpss,
-                             bool loudness_weighted, float high_pass_hz, val modes,
-                             int profile_type, std::string genre_hint) {
+val js_detect_key_candidates(val samples, const val& sample_rate_val, const val& n_fft_val,
+                             const val& hop_length_val, bool use_hpss, bool loudness_weighted,
+                             float high_pass_hz, val modes, const val& profile_type_val,
+                             std::string genre_hint) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   KeyConfig config;
   config.n_fft = n_fft;
@@ -397,7 +409,8 @@ int onsetWindowFrames(val options, const char* key, int default_value) {
   return frames;
 }
 
-val js_detect_onsets(val samples, int sample_rate, val options) {
+val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   OnsetDetectConfig config;
   config.n_fft = intProperty(options, "nFft", config.n_fft);
@@ -421,22 +434,34 @@ val js_detect_onsets(val samples, int sample_rate, val options) {
   return vectorToFloat32Array(onsets);
 }
 
-val js_detect_beats(val samples, int sample_rate) {
+val js_detect_beats(val samples, const val& sample_rate_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), sample_rate);
   return vectorToFloat32Array(beats);
 }
 
-val js_detect_downbeats(val samples, int sample_rate) {
+val js_detect_downbeats(val samples, const val& sample_rate_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   std::vector<float> downbeats = quick::detect_downbeats(audio.data(), audio.size(), sample_rate);
   return vectorToFloat32Array(downbeats);
 }
 
-val js_detect_chords(val samples, int sample_rate, float min_duration, float smoothing_window,
-                     float threshold, bool use_triads_only, int n_fft, int hop_length,
-                     bool use_beat_sync, bool use_hmm, int hmm_beam_width, bool use_key_context,
-                     int key_root, int key_mode, bool detect_inversions, int chroma_method) {
+val js_detect_chords(val samples, const val& sample_rate_val, float min_duration,
+                     float smoothing_window, float threshold, bool use_triads_only,
+                     const val& n_fft_val, const val& hop_length_val, bool use_beat_sync,
+                     bool use_hmm, const val& hmm_beam_width_val, bool use_key_context,
+                     const val& key_root_val, const val& key_mode_val, bool detect_inversions,
+                     const val& chroma_method_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hmm_beam_width = checkedIntFromVal(hmm_beam_width_val, "hmmBeamWidth");
+  const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
+  const int key_mode = checkedIntFromVal(key_mode_val, "keyMode");
+  const int chroma_method = checkedIntFromVal(chroma_method_val, "chromaMethod");
+
   // Reject out-of-range enum-like fields up front, matching the C ABI's
   // sonare_detect_chords_ex: chroma_method must be 0/1, and when key context is
   // enabled the key root/mode must be in range (otherwise they are unused).
@@ -468,11 +493,21 @@ val js_detect_chords(val samples, int sample_rate, float min_duration, float smo
   return result;
 }
 
-val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sample_rate,
-                                 float min_duration, float smoothing_window, float threshold,
-                                 bool use_triads_only, int n_fft, int hop_length,
-                                 bool use_beat_sync, bool use_hmm, int hmm_beam_width,
-                                 bool use_key_context, bool detect_inversions, int chroma_method) {
+val js_chord_functional_analysis(val samples, const val& key_root_val, const val& key_mode_val,
+                                 const val& sample_rate_val, float min_duration,
+                                 float smoothing_window, float threshold, bool use_triads_only,
+                                 const val& n_fft_val, const val& hop_length_val,
+                                 bool use_beat_sync, bool use_hmm, const val& hmm_beam_width_val,
+                                 bool use_key_context, bool detect_inversions,
+                                 const val& chroma_method_val) {
+  const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
+  const int key_mode = checkedIntFromVal(key_mode_val, "keyMode");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int hmm_beam_width = checkedIntFromVal(hmm_beam_width_val, "hmmBeamWidth");
+  const int chroma_method = checkedIntFromVal(chroma_method_val, "chromaMethod");
+
   // Mirror the C ABI's sonare_chord_functional_analysis: chroma_method must be
   // 0/1, and key_root/key_mode are range-checked unconditionally because they
   // both drive the Roman-numeral labelling and (when use_key_context is set)
@@ -558,7 +593,8 @@ std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const ch
   return out;
 }
 
-val js_analyze(val samples, int sample_rate, val options) {
+val js_analyze(val samples, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MusicAnalyzerConfig config;
   // Field semantics (positive BPM range, even nFft, positive beam width, ...)
@@ -703,8 +739,10 @@ val acousticParametersToVal(const AcousticParameters& params) {
   return out;
 }
 
-val js_analyze_impulse_response_ex(val samples, int sample_rate, int n_octave_bands,
-                                   float min_decay_db) {
+val js_analyze_impulse_response_ex(val samples, const val& sample_rate_val,
+                                   const val& n_octave_bands_val, float min_decay_db) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_octave_bands = checkedIntFromVal(n_octave_bands_val, "nOctaveBands");
   if (!std::isfinite(min_decay_db) || min_decay_db <= 0.0f) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "analyzeImpulseResponse: minDecayDb must be finite and > 0");
@@ -716,13 +754,17 @@ val js_analyze_impulse_response_ex(val samples, int sample_rate, int n_octave_ba
   return acousticParametersToVal(analyze_impulse_response(audio, config));
 }
 
-val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands) {
+val js_analyze_impulse_response(val samples, const val& sample_rate, const val& n_octave_bands) {
   return js_analyze_impulse_response_ex(samples, sample_rate, n_octave_bands, 30.0f);
 }
 
-val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
-                       int n_third_octave_subbands, float min_decay_db,
+val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_octave_bands_val,
+                       const val& n_third_octave_subbands_val, float min_decay_db,
                        float noise_floor_margin_db) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_octave_bands = checkedIntFromVal(n_octave_bands_val, "nOctaveBands");
+  const int n_third_octave_subbands =
+      checkedIntFromVal(n_third_octave_subbands_val, "nThirdOctaveSubbands");
   // Mirror the C ABI's sonare_detect_acoustic guard so a negative band/subband
   // count or non-positive decay window is rejected here too, instead of silently
   // producing an empty-subband result (the C++ core treats them as benign).
@@ -971,7 +1013,8 @@ val js_synthesize_rir(val opts) {
   return out;
 }
 
-val js_estimate_room(val samples, int sample_rate, val opts) {
+val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
   std::vector<float> data = float32ArrayToVector(samples);
   validateAcousticInput(data);
@@ -1033,7 +1076,8 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
   return out;
 }
 
-val js_room_morph(val samples, int sample_rate, val opts) {
+val js_room_morph(val samples, const val& sample_rate_val, val opts) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
   std::vector<float> data = float32ArrayToVector(samples);
   validateAcousticInput(data);
@@ -1077,8 +1121,9 @@ val js_room_morph(val samples, int sample_rate, val opts) {
 #endif  // SONARE_WITH_ACOUSTIC_SIM
 
 // Analyze with progress callback
-val js_analyze_with_progress(val samples, int sample_rate, val progress_callback,
+val js_analyze_with_progress(val samples, const val& sample_rate_val, val progress_callback,
                              val cancel_callback) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MusicAnalyzer analyzer(audio);
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {

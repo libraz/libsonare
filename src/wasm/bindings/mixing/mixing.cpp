@@ -177,8 +177,10 @@ val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   return out;
 }
 
-MixerWasm* createMixerFromSceneJson(std::string json, int sample_rate, int block_size) {
-  return MixerWasm::fromSceneJson(std::move(json), sample_rate, block_size);
+MixerWasm* createMixerFromSceneJson(std::string json, const val& sample_rate,
+                                    const val& block_size) {
+  return MixerWasm::fromSceneJson(std::move(json), checkedIntFromVal(sample_rate, "sampleRate"),
+                                  checkedIntFromVal(block_size, "blockSize"));
 }
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
 
@@ -193,6 +195,21 @@ val optionAt(val options, const char* key, int index) {
     return value[index];
   }
   return value;
+}
+
+// Numeric sibling of optionAt. A rejection names the option the way the caller
+// spelled it: the element label only for an array, since a scalar broadcast to
+// every strip is not "faderDb[3]".
+std::optional<float> optionalNumberAt(val options, const char* key, int index) {
+  if (!hasProperty(options, key)) {
+    return std::nullopt;
+  }
+  val value = options[key];
+  if (val::global("Array").call<bool>("isArray", value)) {
+    const std::string element = std::string(key) + "[" + std::to_string(index) + "]";
+    return optionalNumber(value[index], element.c_str());
+  }
+  return optionalNumber(value, key);
 }
 
 // Reached only on the build without a mixing graph, where a strip is configured
@@ -307,7 +324,8 @@ void checkOneShotSetter(SonareError err, const char* what) {
 
 }  // namespace
 
-val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val options) {
+val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   // require_non_zero defaults to true: mixStereo has no meaning over zero
   // input channels, so requireMatchedLength rejects that itself now.
   const int count =
@@ -376,10 +394,10 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
       }
       strips.push_back(strip);
 
-      if (auto v = optionalNumber(optionAt(options, "inputTrimDb", index))) {
+      if (auto v = optionalNumberAt(options, "inputTrimDb", index)) {
         checkOneShotSetter(sonare_strip_set_input_trim_db(strip, *v), "failed to set input trim");
       }
-      if (auto v = optionalNumber(optionAt(options, "faderDb", index))) {
+      if (auto v = optionalNumberAt(options, "faderDb", index)) {
         checkOneShotSetter(sonare_strip_set_fader_db(strip, *v), "failed to set fader");
       }
       // pan and panMode are independent fields: either one alone must apply.
@@ -388,14 +406,14 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
       // centre (0.0f, a fresh strip's pan) for an absent position.
       const val pan_mode = optionAt(options, "panMode", index);
       const bool has_pan_mode = !pan_mode.isUndefined() && !pan_mode.isNull();
-      const auto pan = optionalNumber(optionAt(options, "pan", index));
+      const auto pan = optionalNumberAt(options, "pan", index);
       if (pan || has_pan_mode) {
         checkOneShotSetter(sonare_strip_set_pan(strip, pan.value_or(0.0f),
                                                 has_pan_mode ? panModeOrdinalFromVal(pan_mode)
                                                              : SONARE_PAN_MODE_KEEP),
                            "failed to set pan");
       }
-      if (auto v = optionalNumber(optionAt(options, "width", index))) {
+      if (auto v = optionalNumberAt(options, "width", index)) {
         checkOneShotSetter(sonare_strip_set_width(strip, *v), "failed to set width");
       }
       if (auto v = optionalBool(optionAt(options, "muted", index))) {
@@ -441,10 +459,10 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     mixing::ChannelStrip strip;
     strip.prepare(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
 
-    if (auto v = optionalNumber(optionAt(options, "inputTrimDb", index))) {
+    if (auto v = optionalNumberAt(options, "inputTrimDb", index)) {
       strip.set_input_trim_db(*v);
     }
-    if (auto v = optionalNumber(optionAt(options, "faderDb", index))) {
+    if (auto v = optionalNumberAt(options, "faderDb", index)) {
       strip.set_fader_db(*v);
     }
     // Independent of each other, as on the graph path above. Here "keep the
@@ -454,10 +472,10 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     if (!pan_mode.isUndefined() && !pan_mode.isNull()) {
       strip.set_pan_mode(panModeFromVal(pan_mode));
     }
-    if (auto v = optionalNumber(optionAt(options, "pan", index))) {
+    if (auto v = optionalNumberAt(options, "pan", index)) {
       strip.set_pan(*v);
     }
-    if (auto v = optionalNumber(optionAt(options, "width", index))) {
+    if (auto v = optionalNumberAt(options, "width", index)) {
       strip.set_width(*v);
     }
     if (auto v = optionalBool(optionAt(options, "muted", index))) {

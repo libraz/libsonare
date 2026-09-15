@@ -31,7 +31,10 @@ const char* captureSourceName(sonare::engine::CaptureSource source) {
 
 }  // namespace
 
-void RealtimeEngineWasm::setCaptureBuffer(int num_channels, int capacity_frames) {
+void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
+                                          const val& capacity_frames_val) {
+  const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
+  const int capacity_frames = checkedIntFromVal(capacity_frames_val, "capacityFrames");
   if (num_channels <= 0 || capacity_frames <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "capture buffer dimensions must be positive");

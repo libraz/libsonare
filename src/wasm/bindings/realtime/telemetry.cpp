@@ -5,7 +5,8 @@
 
 #include "realtime_engine_wasm.h"
 
-val RealtimeEngineWasm::drainTelemetry(int max_records) {
+val RealtimeEngineWasm::drainTelemetry(const val& max_records_val) {
+  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
   sonare::engine::Telemetry telemetry{};
@@ -54,7 +55,8 @@ int32_t RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8() const {
 
 uint32_t RealtimeEngineWasm::telemetryScratchValue() const { return telemetry_scratch_.value; }
 
-val RealtimeEngineWasm::drainMeterTelemetry(int max_records) {
+val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
+  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
 #if defined(SONARE_WITH_MIXING)
@@ -103,7 +105,8 @@ int64_t RealtimeEngineWasm::meterScratchRenderFrame() const {
   return meter_telemetry_scratch_.render_frame;
 }
 
-float RealtimeEngineWasm::meterScratchValue(int field) const {
+float RealtimeEngineWasm::meterScratchValue(const val& field_val) const {
+  const int field = checkedIntFromVal(field_val, "field");
   switch (field) {
     case 0:
       return meter_telemetry_scratch_.peak_db[0];
@@ -135,7 +138,8 @@ float RealtimeEngineWasm::meterScratchValue(int field) const {
 // Per-plane meter drain for surround targets. peakDb/rmsDb/truePeakDb are JS
 // arrays of channelCount planes (canonical WAVE order); drainMeterTelemetry
 // stays the stereo fast path. Shares one queue with it — call only one.
-val RealtimeEngineWasm::drainMeterTelemetryWide(int max_records) {
+val RealtimeEngineWasm::drainMeterTelemetryWide(const val& max_records_val) {
+  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
 #if defined(SONARE_WITH_MIXING)
@@ -177,8 +181,10 @@ val RealtimeEngineWasm::drainMeterTelemetryWide(int max_records) {
   return out;
 }
 
-unsigned int RealtimeEngineWasm::configureScopeTelemetry(int interval_frames,
-                                                         unsigned int band_count) {
+unsigned int RealtimeEngineWasm::configureScopeTelemetry(const val& interval_frames_val,
+                                                         const val& band_count_val) {
+  const int interval_frames = checkedIntFromVal(interval_frames_val, "intervalFrames");
+  const uint32_t band_count = checkedUintFromVal(band_count_val, "bandCount");
 #if defined(SONARE_WITH_MIXING)
   return engine_.configure_scope_telemetry(interval_frames, band_count);
 #else
@@ -188,7 +194,8 @@ unsigned int RealtimeEngineWasm::configureScopeTelemetry(int interval_frames,
 #endif
 }
 
-val RealtimeEngineWasm::drainScopeTelemetry(int max_records) {
+val RealtimeEngineWasm::drainScopeTelemetry(const val& max_records_val) {
+  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
 #if defined(SONARE_WITH_MIXING)
@@ -238,19 +245,22 @@ int64_t RealtimeEngineWasm::scopeScratchRenderFrame() const {
 uint32_t RealtimeEngineWasm::scopeScratchBandCount() const {
   return scope_telemetry_scratch_.band_count;
 }
-float RealtimeEngineWasm::scopeScratchBand(uint32_t index) const {
+float RealtimeEngineWasm::scopeScratchBand(const val& index_val) const {
+  const uint32_t index = checkedUintFromVal(index_val, "index");
   return index < scope_telemetry_scratch_.bands.size() ? scope_telemetry_scratch_.bands[index]
                                                        : 0.0f;
 }
 uint32_t RealtimeEngineWasm::scopeScratchPointCount() const {
   return scope_telemetry_scratch_.point_count;
 }
-float RealtimeEngineWasm::scopeScratchPointLeft(uint32_t index) const {
+float RealtimeEngineWasm::scopeScratchPointLeft(const val& index_val) const {
+  const uint32_t index = checkedUintFromVal(index_val, "index");
   return index < scope_telemetry_scratch_.points.size()
              ? scope_telemetry_scratch_.points[index].left
              : 0.0f;
 }
-float RealtimeEngineWasm::scopeScratchPointRight(uint32_t index) const {
+float RealtimeEngineWasm::scopeScratchPointRight(const val& index_val) const {
+  const uint32_t index = checkedUintFromVal(index_val, "index");
   return index < scope_telemetry_scratch_.points.size()
              ? scope_telemetry_scratch_.points[index].right
              : 0.0f;

@@ -106,49 +106,49 @@ struct ProjectWasm {
   val importExternalStems(val request);
   val addLoopRecordingTakes(val desc);
   val addMidiClip(double start_ppq, double length_ppq);
-  uint32_t splitClip(uint32_t clip_id, double split_ppq);
-  void trimClip(uint32_t clip_id, double start_ppq, double length_ppq);
-  void moveClip(uint32_t clip_id, double start_ppq, uint32_t track_id);
-  void setTrackKind(uint32_t track_id, uint32_t kind);
-  void setClipWarpRef(uint32_t clip_id, uint32_t warp_ref_id);
-  void setClipWarpMode(uint32_t clip_id, val mode_val);
+  uint32_t splitClip(const val& clip_id, double split_ppq);
+  void trimClip(const val& clip_id, double start_ppq, double length_ppq);
+  void moveClip(const val& clip_id, double start_ppq, const val& track_id);
+  void setTrackKind(const val& track_id, const val& kind);
+  void setClipWarpRef(const val& clip_id, const val& warp_ref_id);
+  void setClipWarpMode(const val& clip_id, val mode_val);
   void setWarpMap(val desc);
-  void removeWarpMap(uint32_t warp_ref_id);
-  void setTrackMidiDestination(uint32_t track_id, uint32_t destination_id);
-  void setTrackGain(uint32_t track_id, float gain);
-  void setTrackMute(uint32_t track_id, bool mute);
-  void setTrackSolo(uint32_t track_id, bool solo);
-  void setTrackPan(uint32_t track_id, float pan);
+  void removeWarpMap(const val& warp_ref_id);
+  void setTrackMidiDestination(const val& track_id, const val& destination_id);
+  void setTrackGain(const val& track_id, float gain);
+  void setTrackMute(const val& track_id, bool mute);
+  void setTrackSolo(const val& track_id, bool solo);
+  void setTrackPan(const val& track_id, float pan);
   void undo();
   void redo();
   void clearHistory();
-  void setMaxUndoDepth(size_t depth);
-  void setMaxHistoryBytes(size_t bytes);
+  void setMaxUndoDepth(const val& depth);
+  void setMaxHistoryBytes(const val& bytes);
 
-  void setMidiEvents(uint32_t clip_id, val events);
+  void setMidiEvents(const val& clip_id, val events);
   uint32_t importSmf(val data);
   val exportSmf();
   uint32_t importClipFile(val data);
   val exportClipFile();
-  void setProgram(uint32_t clip_id, int program, int bank);
-  void setProgramOnChannel(uint32_t clip_id, uint32_t group, uint32_t channel, int program,
-                           int bank);
-  void bakeMidiFx(uint32_t clip_id, const std::string& config_json);
+  void setProgram(const val& clip_id, const val& program, const val& bank);
+  void setProgramOnChannel(const val& clip_id, const val& group, const val& channel,
+                           const val& program, const val& bank);
+  void bakeMidiFx(const val& clip_id, const std::string& config_json);
   // Bakes and returns the per-event provenance as an Int32Array: entry i is the
   // input event index transformed event i derives from, or -1 when it has none.
-  val bakeMidiFxWithSourceIndex(uint32_t clip_id, const std::string& config_json);
+  val bakeMidiFxWithSourceIndex(const val& clip_id, const std::string& config_json);
   // Non-destructive: how many events the same bake would produce.
-  uint32_t previewMidiFxCount(uint32_t clip_id, const std::string& config_json);
-  void setMidiFx(uint32_t clip_id, const std::string& config_json);
+  uint32_t previewMidiFxCount(const val& clip_id, const std::string& config_json);
+  void setMidiFx(const val& clip_id, const std::string& config_json);
 
   // Pre-flight check for hanging / unmatched notes in a MIDI clip. Returns
   // { ok, unmatchedNoteOns, unmatchedNoteOffs }; throws if the clip id is
   // unknown or not a MIDI clip.
-  val validateMidiNotes(uint32_t clip_id);
-  val analyzeTempo(val audio, int sample_rate, val options);
-  float autoTempo(val audio, int sample_rate, int candidate_index, bool apply_time_signatures,
-                  val options);
-  double snapToGrid(double ppq, double strength, int division);
+  val validateMidiNotes(const val& clip_id);
+  val analyzeTempo(val audio, const val& sample_rate, val options);
+  float autoTempo(val audio, const val& sample_rate, const val& candidate_index,
+                  bool apply_time_signatures, val options);
+  double snapToGrid(double ppq, double strength, const val& division);
 
   // Compiles the project into a renderable timeline, returning a small JS
   // object { diagnosticCount, hasTimeline, messages }.
@@ -241,27 +241,27 @@ struct ProjectWasm {
   // Edit operations (undoable; route through EditHistory commands)
   // --------------------------------------------------------------------------
 
-  void removeClip(uint32_t clip_id);
-  void setClipGain(uint32_t clip_id, float gain);
+  void removeClip(const val& clip_id);
+  void setClipGain(const val& clip_id, float gain);
 
   // Reads a { lengthPpq?, curve? } fade descriptor; curve accepts the ordinal or
   // a string ("linear"/"equal-power"/"equalPower"/"equal_power"/...).
   static SonareProjectClipFade clipFadeFromVal(val desc);
 
-  void setClipFade(uint32_t clip_id, val fade_in, val fade_out);
+  void setClipFade(const val& clip_id, val fade_in, val fade_out);
   val unresolvedAudioSourceIds() const;
-  void setSourceAudio(uint32_t source_id, val audio, int channels, int sample_rate);
-  void setAudioSourceMetadata(uint32_t source_id, const std::string& content_hash,
+  void setSourceAudio(const val& source_id, val audio, const val& channels, const val& sample_rate);
+  void setAudioSourceMetadata(const val& source_id, const std::string& content_hash,
                               const std::string& external_stem_role);
-  void setClipTakes(uint32_t clip_id, val takes_val, uint32_t active_take_id);
-  void setClipCompSegments(uint32_t clip_id, val segments_val);
-  void setClipLoop(uint32_t clip_id, int loop_mode, double loop_length_ppq,
+  void setClipTakes(const val& clip_id, val takes_val, const val& active_take_id);
+  void setClipCompSegments(const val& clip_id, val segments_val);
+  void setClipLoop(const val& clip_id, const val& loop_mode, double loop_length_ppq,
                    double loop_crossfade_ppq);
-  void setClipSource(uint32_t clip_id, uint32_t source_id);
-  uint32_t duplicateClip(uint32_t clip_id, double new_start_ppq);
-  void removeTrack(uint32_t track_id);
-  void renameTrack(uint32_t track_id, const std::string& name);
-  void setTrackRoute(uint32_t track_id, const std::string& channel_strip_ref,
+  void setClipSource(const val& clip_id, const val& source_id);
+  uint32_t duplicateClip(const val& clip_id, double new_start_ppq);
+  void removeTrack(const val& track_id);
+  void renameTrack(const val& track_id, const std::string& name);
+  void setTrackRoute(const val& track_id, const std::string& channel_strip_ref,
                      const std::string& output_target);
 
   // Reads a JS array of { ppq, value, curve? } automation breakpoints into the
@@ -272,9 +272,9 @@ struct ProjectWasm {
   static SonareAutomationLaneDesc automationLaneDescFromVal(
       val desc, std::vector<SonareAutomationPoint>* storage);
 
-  double addAutomationLane(uint32_t track_id, val desc);
-  void editAutomationLane(uint32_t track_id, double target_param_id, val desc);
-  void removeAutomationLane(uint32_t track_id, double target_param_id);
+  double addAutomationLane(const val& track_id, val desc);
+  void editAutomationLane(const val& track_id, double target_param_id, val desc);
+  void removeAutomationLane(const val& track_id, double target_param_id);
 
   // --------------------------------------------------------------------------
   // MIR annotation streams (undoable)
@@ -287,9 +287,9 @@ struct ProjectWasm {
   // Assist sidecars (opaque module state)
   // --------------------------------------------------------------------------
 
-  void setAssistSidecar(const std::string& module_id, uint32_t schema_version,
-                        uint32_t target_track_id, double region_start_ppq, double region_end_ppq,
-                        val payload);
+  void setAssistSidecar(const std::string& module_id, const val& schema_version_val,
+                        const val& target_track_id_val, double region_start_ppq,
+                        double region_end_ppq, val payload);
   double assistSidecarCount() const;
   val getAssistSidecar(double index) const;
 
@@ -297,23 +297,23 @@ struct ProjectWasm {
   // Project-level configuration, counts, and timeline metadata
   // --------------------------------------------------------------------------
 
-  void setOverlapPolicy(uint32_t policy);
+  void setOverlapPolicy(const val& policy_val);
   uint32_t getOverlapPolicy() const;
   double getSampleRate() const;
   void setMixerSceneJson(const std::string& scene_json);
-  uint32_t setMarker(uint32_t marker_id, double ppq, const std::string& name);
+  uint32_t setMarker(const val& marker_id_val, double ppq, const std::string& name);
   uint32_t setMarkerEx(val marker);
-  val markerByIndex(int index) const;
-  val trackByIndex(int index) const;
-  val clipByIndex(int index) const;
-  val sourceByIndex(int index) const;
+  val markerByIndex(const val& index_val) const;
+  val trackByIndex(const val& index_val) const;
+  val clipByIndex(const val& index_val) const;
+  val sourceByIndex(const val& index_val) const;
   double markerCount() const;
   double trackCount() const;
   double clipCount() const;
   double sourceCount() const;
   double tempoSegmentCount() const;
-  val tempoSegmentByIndex(int index) const;
-  val timeSignatureByIndex(int index) const;
+  val tempoSegmentByIndex(const val& index_val) const;
+  val timeSignatureByIndex(const val& index_val) const;
   double timeSignatureCount() const;
 
   // Replaces the project's tempo map from an array of { startPpq, bpm,
@@ -336,29 +336,29 @@ struct ProjectWasm {
 // Standalone MIDI helper / GM-table free functions (bodies in project_midi.cpp).
 uint32_t js_project_abi_version();
 val js_nullable_string(const char* value);
-val js_midi_gm_instrument_name(int program);
+val js_midi_gm_instrument_name(const val& program);
 int js_midi_gm_program_for_name(const std::string& name);
-val js_midi_gm_family_name(int family);
-int js_midi_gm_family_first_program(int family);
-val js_midi_gm2_instrument_name(int bank_lsb, int program);
-val js_midi_gm_drum_name(int note);
+val js_midi_gm_family_name(const val& family);
+int js_midi_gm_family_first_program(const val& family);
+val js_midi_gm2_instrument_name(const val& bank_lsb, const val& program);
+val js_midi_gm_drum_name(const val& note);
 int js_midi_gm_drum_note_for_name(const std::string& name);
-val js_midi_gm2_drum_set_name(int bank_lsb);
-val js_midi_gm2_drum_name(int bank_lsb, int note);
-val js_midi_cc_name(int controller);
+val js_midi_gm2_drum_set_name(const val& bank_lsb);
+val js_midi_gm2_drum_name(const val& bank_lsb, const val& note);
+val js_midi_cc_name(const val& controller);
 int js_midi_cc_index_for_name(const std::string& name);
-val js_midi_per_note_controller_name(int index);
-val js_midi_bank_program(double ppq, int group, int channel, int bank_msb, int bank_lsb,
-                         int program);
+val js_midi_per_note_controller_name(const val& index);
+val js_midi_bank_program(double ppq, const val& group, const val& channel, const val& bank_msb,
+                         const val& bank_lsb, const val& program);
 SonareMidiEventPod js_midi_event_from_val(val event);
 val js_midi_event_to_val(const SonareMidiEventPod& event);
 SonareMidiCcBinding js_cc_binding_from_val(val object);
 val js_cc_binding_to_val(const SonareMidiCcBinding& binding);
 std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings);
-val js_midi_cc_learn(val events, uint32_t param_id, float min_value, float max_value,
-                     int min_movement);
+val js_midi_cc_learn(val events, const val& param_id, float min_value, float max_value,
+                     const val& min_movement);
 val js_midi_cc_to_breakpoint(val bindings, val event);
-val js_midi_param_to_cc(val bindings, val param_id, float unit_value, int group, double ppq);
+val js_midi_param_to_cc(val bindings, val param_id, float unit_value, const val& group, double ppq);
 val js_midi_route_events(val events, val config);
 
 // NativeSynth preset / enum free functions (bodies in project_bounce.cpp).

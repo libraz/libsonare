@@ -302,7 +302,8 @@ bool vc_preset_in_range(int preset) {
 
 // Maps a voice-character preset ordinal to its canonical id string (e.g.
 // "bright-idol"). Returns null for an out-of-range / unknown ordinal.
-val js_voice_character_preset_id(int preset) {
+val js_voice_character_preset_id(const val& preset_val) {
+  const int preset = checkedIntFromVal(preset_val, "preset");
   if (!vc_preset_in_range(preset)) {
     throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
   }
@@ -317,7 +318,8 @@ val js_voice_character_preset_id(int preset) {
 // Returns the voice-changer config for a preset ordinal as a JS object. Keys
 // are camelCase to match the Node addon getter (the two JS surfaces agree).
 // Null for an out-of-range ordinal.
-val js_realtime_voice_changer_preset_config(int preset) {
+val js_realtime_voice_changer_preset_config(const val& preset_val) {
+  const int preset = checkedIntFromVal(preset_val, "preset");
   if (!vc_preset_in_range(preset)) {
     throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
   }

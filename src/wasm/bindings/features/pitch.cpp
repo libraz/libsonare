@@ -9,8 +9,11 @@
 // Features - Pitch
 // ============================================================================
 
-val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
-                 float fmax, float threshold, bool fill_na) {
+val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
+                 const val& hop_length_val, float fmin, float fmax, float threshold, bool fill_na) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
@@ -45,8 +48,12 @@ val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length,
   return out;
 }
 
-val js_pitch_pyin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
-                  float fmax, float threshold, bool fill_na) {
+val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_length_val,
+                  const val& hop_length_val, float fmin, float fmax, float threshold,
+                  bool fill_na) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
@@ -110,21 +117,30 @@ val js_note_segments(val f0_hz, val voiced_prob, float frame_rate, val options) 
 
 // Per-octave tuning offset from a list of detected pitches. Mirrors the C ABI
 // sonare_pitch_tuning / librosa.pitch_tuning.
-float js_pitch_tuning(val frequencies, float resolution, int bins_per_octave) {
+float js_pitch_tuning(val frequencies, float resolution, const val& bins_per_octave_val) {
+  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   std::vector<float> data = float32ArrayToVector(frequencies);
   return pitch_tuning(data, resolution, bins_per_octave);
 }
 
 // Global tuning offset of an audio signal. Mirrors the C ABI
 // sonare_estimate_tuning / librosa.estimate_tuning.
-float js_estimate_tuning(val samples, int sample_rate, int n_fft, int hop_length, float resolution,
-                         int bins_per_octave) {
+float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_fft_val,
+                         const val& hop_length_val, float resolution,
+                         const val& bins_per_octave_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
-val js_piptrack(val samples, int sample_rate, int n_fft, int hop_length, float fmin, float fmax,
-                float threshold) {
+val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
+                const val& hop_length_val, float fmin, float fmax, float threshold) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const Audio audio = loadValidatedAudio(samples, sample_rate);
   const PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin, fmax, threshold);
   val out = val::object();
