@@ -398,7 +398,15 @@ void BoundaryDetector::detect_boundaries() {
   // spans frame_stride_ hops, so the effective hop duration scales accordingly;
   // frame_stride_ is 1 (no change) for all normal-length inputs.
   float hop_duration = static_cast<float>(hop_length_) * static_cast<float>(frame_stride_) / sr_;
-  int min_peak_distance = static_cast<int>(config_.peak_distance / hop_duration);
+  // Bound before the cast, not after: converting a value int cannot represent is
+  // undefined, so a later clamp only narrows a result that is already undefined.
+  // The curve length is the saturating value -- a distance that long admits one
+  // peak, which is what an unbounded separation asks for.
+  const float distance_frames = config_.peak_distance / hop_duration;
+  const auto frame_count = static_cast<float>(novelty_curve_.size());
+  int min_peak_distance = std::isfinite(distance_frames)
+                              ? static_cast<int>(std::min(distance_frames, frame_count))
+                              : static_cast<int>(frame_count);
   min_peak_distance = std::max(1, min_peak_distance);
 
   // Find local maxima above both thresholds. The relative one ranks peaks within
