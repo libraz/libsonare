@@ -98,13 +98,25 @@ val js_stream_analyzer_config_default() {
 /// @brief JavaScript wrapper for StreamAnalyzer.
 class StreamAnalyzerWrapper {
  public:
-  StreamAnalyzerWrapper(int sample_rate, int n_fft, int hop_length, int n_mels, float fmin,
-                        float fmax, float tuning_ref_hz, bool compute_magnitude, bool compute_mel,
-                        bool compute_chroma, bool compute_onset, bool compute_spectral,
-                        int emit_every_n_frames, int magnitude_downsample,
+  StreamAnalyzerWrapper(const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
+                        const val& n_mels_val, float fmin, float fmax, float tuning_ref_hz,
+                        bool compute_magnitude, bool compute_mel, bool compute_chroma,
+                        bool compute_onset, bool compute_spectral,
+                        const val& emit_every_n_frames_val, const val& magnitude_downsample_val,
                         double max_pending_frames, double max_progression_entries,
-                        float key_update_interval_sec, float bpm_update_interval_sec, int window,
-                        int output_format) {
+                        float key_update_interval_sec, float bpm_update_interval_sec,
+                        const val& window_val, const val& output_format_val) {
+    // The narrow integers arrive as val because embind's integer glue wraps, so
+    // a request past 2^32 would reach the config as a small legal one.
+    const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+    const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+    const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+    const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
+    const int emit_every_n_frames = checkedIntFromVal(emit_every_n_frames_val, "emitEveryNFrames");
+    const int magnitude_downsample =
+        checkedIntFromVal(magnitude_downsample_val, "magnitudeDownsample");
+    const int window = checkedIntFromVal(window_val, "window");
+    const int output_format = checkedIntFromVal(output_format_val, "outputFormat");
     // The shared facade check rather than a message of this file's own, so the
     // four surfaces answer an unsupported config identically.
     StreamConfig requested;
@@ -376,8 +388,9 @@ void registerStreamAnalyzerBindings() {
   // Streaming - StreamAnalyzer
   function("streamAnalyzerConfigDefault", &js_stream_analyzer_config_default);
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
-      .constructor<int, int, int, int, float, float, float, bool, bool, bool, bool, bool, int, int,
-                   double, double, float, float, int, int>()
+      .constructor<const val&, const val&, const val&, const val&, float, float, float, bool, bool,
+                   bool, bool, bool, const val&, const val&, double, double, float, float,
+                   const val&, const val&>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("finalize", &StreamAnalyzerWrapper::finalize)

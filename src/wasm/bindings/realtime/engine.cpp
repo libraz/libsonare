@@ -22,16 +22,16 @@ size_t RealtimeEngineWasm::capacity(int requested) {
   return requested == 0 ? 1024 : static_cast<size_t>(requested);
 }
 
-RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
-                                       int telemetry_capacity) {
-  prepareWithChannels(sample_rate, val(max_block_size), val(command_capacity),
-                      val(telemetry_capacity), val(64));
+RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
+                                       const val& command_capacity, const val& telemetry_capacity) {
+  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(64));
 }
 
-RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
-                                       int telemetry_capacity, int max_channels) {
-  prepareWithChannels(sample_rate, val(max_block_size), val(command_capacity),
-                      val(telemetry_capacity), val(max_channels));
+RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
+                                       const val& command_capacity, const val& telemetry_capacity,
+                                       const val& max_channels) {
+  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity,
+                      max_channels);
 }
 
 void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size,
@@ -81,8 +81,11 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_
 
 void registerRealtimeEngineBindings() {
   class_<RealtimeEngineWasm> cls("RealtimeEngine");
-  cls.constructor<double, int, int, int>()
-      .constructor<double, int, int, int, int>()
+  // The block size and the capacities are registered as val rather than as int:
+  // embind's integer glue wraps, so a request past 2^32 would reach a narrow
+  // parameter as a small legal one and build an engine nobody asked for.
+  cls.constructor<double, const val&, const val&, const val&>()
+      .constructor<double, const val&, const val&, const val&, const val&>()
       .function("prepare", &RealtimeEngineWasm::prepare)
       .function("prepareWithChannels", &RealtimeEngineWasm::prepareWithChannels);
   registerRealtimeEngineTransport(cls);

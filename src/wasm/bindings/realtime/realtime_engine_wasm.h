@@ -42,10 +42,13 @@ class RealtimeEngineWasm {
   // which would leave the engine's sample-rate state internally inconsistent.
   static void validatePrepare(double sample_rate, int max_block_size);
 
-  RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
-                     int telemetry_capacity);
-  RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
-                     int telemetry_capacity, int max_channels);
+  RealtimeEngineWasm(double sample_rate, const emscripten::val& max_block_size,
+                     const emscripten::val& command_capacity,
+                     const emscripten::val& telemetry_capacity);
+  RealtimeEngineWasm(double sample_rate, const emscripten::val& max_block_size,
+                     const emscripten::val& command_capacity,
+                     const emscripten::val& telemetry_capacity,
+                     const emscripten::val& max_channels);
   void prepare(double sample_rate, const emscripten::val& max_block_size,
                const emscripten::val& command_capacity, const emscripten::val& telemetry_capacity);
   void prepareWithChannels(double sample_rate, const emscripten::val& max_block_size,

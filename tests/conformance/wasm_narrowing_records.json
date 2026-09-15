@@ -107,53 +107,7 @@
         "reason": "A 64-bit parameter is registered through __embind_register_bigint, not through the integer path: its toWireType converts a JS number with BigInt(value), which throws on a fractional and on a non-finite one, and no number below 2^63 has anything to wrap into. The blessing belongs to the width, not to the field: this pattern selects on the declared type alone, so the population is every 64-bit parameter -- timeline positions and page ordinals alike -- and naming it after one of those meanings would claim a check nothing performs. The one residue is a request past 2^63, where the BigInt-to-i64 conversion truncates; it is integral, so it cannot arrive by the fractional truncation these records exist for, and no field of any meaning here addresses a domain that large."
       }
     ],
-    "constructors": [
-      {
-        "file": "bindings/analysis/stream_analyzer.cpp",
-        "arity": 20,
-        "indices": [
-          0,
-          1,
-          2,
-          3,
-          12,
-          13,
-          18,
-          19
-        ],
-        "status": "open",
-        "defect": "wraps",
-        "selects": "a different stream-analysis configuration: sample rate, FFT size, hop",
-        "reason": "The StreamAnalyzer constructor spells its parameter types in the registration, so nothing points at a declaration and the arity is the key. Same shape as extent_or_size, recorded separately because the scan reaches it by a different route."
-      },
-      {
-        "file": "bindings/realtime/engine.cpp",
-        "arity": 4,
-        "indices": [
-          1,
-          2,
-          3
-        ],
-        "status": "open",
-        "defect": "wraps",
-        "selects": "a different block size or ring capacity for the engine being constructed",
-        "reason": "The four-argument RealtimeEngine constructor. maxBlockSize and the two ring capacities wrap, and the capacity ceiling is applied after the conversion."
-      },
-      {
-        "file": "bindings/realtime/engine.cpp",
-        "arity": 5,
-        "indices": [
-          1,
-          2,
-          3,
-          4
-        ],
-        "status": "open",
-        "defect": "wraps",
-        "selects": "a different block size, ring capacity or channel count",
-        "reason": "The five-argument overload of the same constructor, which adds maxChannels. Recorded apart from the four-argument one because two overloads in one file are told apart only by how many arguments they take."
-      }
-    ],
+    "constructors": [],
     "parameters": []
   }
 }
