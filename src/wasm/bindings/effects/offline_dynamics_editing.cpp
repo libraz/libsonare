@@ -77,14 +77,20 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
   mastering::dynamics::CompressorConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "thresholdDb")) {
-      cfg.threshold_db = options["thresholdDb"].as<float>();
+      cfg.threshold_db = checkedFloatFromVal(options["thresholdDb"], "thresholdDb");
     }
-    if (hasProperty(options, "ratio")) cfg.ratio = options["ratio"].as<float>();
-    if (hasProperty(options, "attackMs")) cfg.attack_ms = options["attackMs"].as<float>();
-    if (hasProperty(options, "releaseMs")) cfg.release_ms = options["releaseMs"].as<float>();
-    if (hasProperty(options, "kneeDb")) cfg.knee_db = options["kneeDb"].as<float>();
+    if (hasProperty(options, "ratio")) cfg.ratio = checkedFloatFromVal(options["ratio"], "ratio");
+    if (hasProperty(options, "attackMs")) {
+      cfg.attack_ms = checkedFloatFromVal(options["attackMs"], "attackMs");
+    }
+    if (hasProperty(options, "releaseMs")) {
+      cfg.release_ms = checkedFloatFromVal(options["releaseMs"], "releaseMs");
+    }
+    if (hasProperty(options, "kneeDb")) {
+      cfg.knee_db = checkedFloatFromVal(options["kneeDb"], "kneeDb");
+    }
     if (hasProperty(options, "makeupGainDb")) {
-      cfg.makeup_gain_db = options["makeupGainDb"].as<float>();
+      cfg.makeup_gain_db = checkedFloatFromVal(options["makeupGainDb"], "makeupGainDb");
     }
     if (hasProperty(options, "autoMakeup")) cfg.auto_makeup = options["autoMakeup"].as<bool>();
     if (hasProperty(options, "detector")) {
@@ -94,11 +100,13 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
       cfg.sidechain_hpf_enabled = options["sidechainHpfEnabled"].as<bool>();
     }
     if (hasProperty(options, "sidechainHpfHz")) {
-      cfg.sidechain_hpf_hz = options["sidechainHpfHz"].as<float>();
+      cfg.sidechain_hpf_hz = checkedFloatFromVal(options["sidechainHpfHz"], "sidechainHpfHz");
     }
-    if (hasProperty(options, "pdrTimeMs")) cfg.pdr_time_ms = options["pdrTimeMs"].as<float>();
+    if (hasProperty(options, "pdrTimeMs")) {
+      cfg.pdr_time_ms = checkedFloatFromVal(options["pdrTimeMs"], "pdrTimeMs");
+    }
     if (hasProperty(options, "pdrReleaseScale")) {
-      cfg.pdr_release_scale = options["pdrReleaseScale"].as<float>();
+      cfg.pdr_release_scale = checkedFloatFromVal(options["pdrReleaseScale"], "pdrReleaseScale");
     }
   }
   mastering::dynamics::Compressor processor(cfg);
@@ -114,16 +122,26 @@ val js_mastering_dynamics_gate(val samples, const val& sample_rate_val, val opti
   mastering::dynamics::GateConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "thresholdDb")) {
-      cfg.threshold_db = options["thresholdDb"].as<float>();
+      cfg.threshold_db = checkedFloatFromVal(options["thresholdDb"], "thresholdDb");
     }
-    if (hasProperty(options, "attackMs")) cfg.attack_ms = options["attackMs"].as<float>();
-    if (hasProperty(options, "releaseMs")) cfg.release_ms = options["releaseMs"].as<float>();
-    if (hasProperty(options, "rangeDb")) cfg.range_db = options["rangeDb"].as<float>();
-    if (hasProperty(options, "holdMs")) cfg.hold_ms = options["holdMs"].as<float>();
+    if (hasProperty(options, "attackMs")) {
+      cfg.attack_ms = checkedFloatFromVal(options["attackMs"], "attackMs");
+    }
+    if (hasProperty(options, "releaseMs")) {
+      cfg.release_ms = checkedFloatFromVal(options["releaseMs"], "releaseMs");
+    }
+    if (hasProperty(options, "rangeDb")) {
+      cfg.range_db = checkedFloatFromVal(options["rangeDb"], "rangeDb");
+    }
+    if (hasProperty(options, "holdMs")) {
+      cfg.hold_ms = checkedFloatFromVal(options["holdMs"], "holdMs");
+    }
     if (hasProperty(options, "closeThresholdDb")) {
-      cfg.close_threshold_db = options["closeThresholdDb"].as<float>();
+      cfg.close_threshold_db = checkedFloatFromVal(options["closeThresholdDb"], "closeThresholdDb");
     }
-    if (hasProperty(options, "keyHpfHz")) cfg.key_hpf_hz = options["keyHpfHz"].as<float>();
+    if (hasProperty(options, "keyHpfHz")) {
+      cfg.key_hpf_hz = checkedFloatFromVal(options["keyHpfHz"], "keyHpfHz");
+    }
   }
   mastering::dynamics::Gate processor(cfg);
   int latency = 0;
@@ -138,32 +156,34 @@ val js_mastering_dynamics_transient_shaper(val samples, const val& sample_rate_v
   mastering::dynamics::TransientShaperConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (hasProperty(options, "attackGainDb")) {
-      cfg.attack_gain_db = options["attackGainDb"].as<float>();
+      cfg.attack_gain_db = checkedFloatFromVal(options["attackGainDb"], "attackGainDb");
     }
     if (hasProperty(options, "sustainGainDb")) {
-      cfg.sustain_gain_db = options["sustainGainDb"].as<float>();
+      cfg.sustain_gain_db = checkedFloatFromVal(options["sustainGainDb"], "sustainGainDb");
     }
     if (hasProperty(options, "fastAttackMs")) {
-      cfg.fast_attack_ms = options["fastAttackMs"].as<float>();
+      cfg.fast_attack_ms = checkedFloatFromVal(options["fastAttackMs"], "fastAttackMs");
     }
     if (hasProperty(options, "fastReleaseMs")) {
-      cfg.fast_release_ms = options["fastReleaseMs"].as<float>();
+      cfg.fast_release_ms = checkedFloatFromVal(options["fastReleaseMs"], "fastReleaseMs");
     }
     if (hasProperty(options, "slowAttackMs")) {
-      cfg.slow_attack_ms = options["slowAttackMs"].as<float>();
+      cfg.slow_attack_ms = checkedFloatFromVal(options["slowAttackMs"], "slowAttackMs");
     }
     if (hasProperty(options, "slowReleaseMs")) {
-      cfg.slow_release_ms = options["slowReleaseMs"].as<float>();
+      cfg.slow_release_ms = checkedFloatFromVal(options["slowReleaseMs"], "slowReleaseMs");
     }
     if (hasProperty(options, "sensitivity")) {
-      cfg.sensitivity = options["sensitivity"].as<float>();
+      cfg.sensitivity = checkedFloatFromVal(options["sensitivity"], "sensitivity");
     }
-    if (hasProperty(options, "maxGainDb")) cfg.max_gain_db = options["maxGainDb"].as<float>();
+    if (hasProperty(options, "maxGainDb")) {
+      cfg.max_gain_db = checkedFloatFromVal(options["maxGainDb"], "maxGainDb");
+    }
     if (hasProperty(options, "gainSmoothingMs")) {
-      cfg.gain_smoothing_ms = options["gainSmoothingMs"].as<float>();
+      cfg.gain_smoothing_ms = checkedFloatFromVal(options["gainSmoothingMs"], "gainSmoothingMs");
     }
     if (hasProperty(options, "lookaheadMs")) {
-      cfg.lookahead_ms = options["lookaheadMs"].as<float>();
+      cfg.lookahead_ms = checkedFloatFromVal(options["lookaheadMs"], "lookaheadMs");
     }
   }
   mastering::dynamics::TransientShaper processor(cfg);

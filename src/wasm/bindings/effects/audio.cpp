@@ -1290,9 +1290,9 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
       if (hasProperty(op, "endSample")) {
         region.end_sample = static_cast<int64_t>(op["endSample"].as<double>());
       }
-      if (hasProperty(op, "lowHz")) region.low_hz = op["lowHz"].as<float>();
-      if (hasProperty(op, "highHz")) region.high_hz = op["highHz"].as<float>();
-      if (hasProperty(op, "gainDb")) region.gain_db = op["gainDb"].as<float>();
+      if (hasProperty(op, "lowHz")) region.low_hz = checkedFloatFromVal(op["lowHz"], "lowHz");
+      if (hasProperty(op, "highHz")) region.high_hz = checkedFloatFromVal(op["highHz"], "highHz");
+      if (hasProperty(op, "gainDb")) region.gain_db = checkedFloatFromVal(op["gainDb"], "gainDb");
       region.mode =
           hasProperty(op, "mode") ? parseSpectralEditMode(op["mode"]) : SpectralEditMode::Gain;
       region_ops.push_back(region);

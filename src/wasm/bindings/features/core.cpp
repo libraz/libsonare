@@ -103,7 +103,7 @@ val js_preemphasis(val samples, float coef, val zi) {
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(preemphasis(data, coef));
   }
-  return vectorToFloat32Array(preemphasis(data, coef, zi.as<float>()));
+  return vectorToFloat32Array(preemphasis(data, coef, checkedFloatFromVal(zi, "zi")));
 }
 
 val js_deemphasis(val samples, float coef, val zi) {
@@ -112,7 +112,7 @@ val js_deemphasis(val samples, float coef, val zi) {
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(deemphasis(data, coef));
   }
-  return vectorToFloat32Array(deemphasis(data, coef, zi.as<float>()));
+  return vectorToFloat32Array(deemphasis(data, coef, checkedFloatFromVal(zi, "zi")));
 }
 
 val js_trim_silence(val samples, float top_db, const val& frame_length_val,
