@@ -901,8 +901,8 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
 
 /// @brief Flat POD mirror of @c mastering::repair::DereverbClassicalConfig.
 typedef struct {
-  float threshold;         // late-reverb detection threshold (default 0.05)
-  float attenuation;       // suppression amount, linear (default 0.5)
+  float threshold;         // late-reverb detection threshold (default 0, no gate)
+  float attenuation;       // suppression amount, linear (default 1, full)
   int n_fft;               // STFT size (default 1024, power of two)
   int hop_length;          // hop in samples (default 256)
   float t60_sec;           // estimated T60 (default 0.4)
