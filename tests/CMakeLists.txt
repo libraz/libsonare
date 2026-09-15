@@ -209,6 +209,7 @@ if(BUILD_MASTERING)
     mastering/chain_latency_test.cpp
     mastering/common_test.cpp
     mastering/mastering_metrics_test.cpp
+    mastering/mastering_state_non_finite_recovery_test.cpp
     mastering/repair_metrics_test.cpp
     mastering/property_test.cpp
     mastering/preset_test.cpp
@@ -237,13 +238,18 @@ if(BUILD_MASTERING)
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
+    mastering/non_finite_substitution_count_test.cpp
     mastering/multiband_test.cpp
     mastering/offline_runner_blocking_test.cpp
     mastering/param_wiring_test.cpp
     mastering/config_zero_init_test.cpp
     mastering/repair_test.cpp
+    mastering/repair_stereo_denoise_test.cpp
+    mastering/repair_stereo_impulse_test.cpp
+    mastering/repair_stereo_hum_test.cpp
     mastering/dereverb_room_test.cpp
     mastering/saturation_test.cpp
+    mastering/saturation_state_non_finite_recovery_test.cpp
     mastering/set_parameter_test.cpp
     mastering/tape_oversample_test.cpp
     mastering/true_peak_limiter_block_invariance_test.cpp
@@ -348,6 +354,7 @@ if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/reverb_tail_test.cpp)
   target_sources(sonare_tests PRIVATE effects/dattorro_modulation_test.cpp)
   target_sources(sonare_tests PRIVATE effects/modulation_inserts_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/effects_state_non_finite_recovery_test.cpp)
   if(NOT BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_fx)
   endif()
