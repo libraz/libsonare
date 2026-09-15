@@ -57,6 +57,7 @@ node = [
   "assert_nibble",
   "assert_u32",
   "assert_int64",           # safe-integer-range sibling of assert_int32, same family
+  "assert_non_negative_safe_integer", # non-negative sibling of assert_int64, same family; assert_u32 caps lower and assert_int64 ignores sign
   "assert_project_midi_events",
   "midi1_event",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
