@@ -30,6 +30,7 @@ from ._runtime import (
     _guard_buffer,
     _out_float_array,
     _out_int_array,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_int_array,
@@ -255,8 +256,8 @@ def mel_spectrogram(
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
+        _to_c_float(fmin, "fmin"),
+        _to_c_float(fmax, "fmax"),
         ctypes.c_int(1 if htk else 0),
         ctypes.byref(out),
     )
@@ -316,10 +317,10 @@ def mfcc(
         _to_c_int(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
         _to_c_int(n_mfcc, "n_mfcc"),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
+        _to_c_float(fmin, "fmin"),
+        _to_c_float(fmax, "fmax"),
         ctypes.c_int(1 if htk else 0),
-        ctypes.c_float(lifter),
+        _to_c_float(lifter, "lifter"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -574,7 +575,7 @@ def spectral_bandwidth(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(p),
+        _to_c_float(p, "p"),
     )
 
 
@@ -644,7 +645,7 @@ def spectral_rolloff(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(roll_percent),
+        _to_c_float(roll_percent, "roll_percent"),
     )
 
 
@@ -780,8 +781,8 @@ def spectral_contrast(
             _to_c_int(n_fft, "n_fft"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_int(n_bands, "n_bands"),
-            ctypes.c_float(fmin),
-            ctypes.c_float(quantile),
+            _to_c_float(fmin, "fmin"),
+            _to_c_float(quantile, "quantile"),
             ctypes.byref(out),
             ctypes.byref(out_rows),
             ctypes.byref(out_cols),
@@ -864,7 +865,7 @@ def zero_crossings(
         rc = lib.sonare_zero_crossings(
             c_array,
             _to_c_size_t(length, "length"),
-            ctypes.c_float(threshold),
+            _to_c_float(threshold, "threshold"),
             ctypes.c_int(1 if ref_magnitude else 0),
             ctypes.c_int(1 if pad else 0),
             ctypes.c_int(1 if zero_pos else 0),
@@ -906,7 +907,7 @@ def pitch_tuning(
     rc = lib.sonare_pitch_tuning(
         c_array,
         _to_c_size_t(length, "length"),
-        ctypes.c_float(resolution),
+        _to_c_float(resolution, "resolution"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.byref(out),
     )
@@ -947,7 +948,7 @@ def estimate_tuning(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(resolution),
+        _to_c_float(resolution, "resolution"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
         ctypes.byref(out),
     )
@@ -978,9 +979,9 @@ def piptrack(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
-        ctypes.c_float(threshold),
+        _to_c_float(fmin, "fmin"),
+        _to_c_float(fmax, "fmax"),
+        _to_c_float(threshold, "threshold"),
         ctypes.byref(n_bins),
         ctypes.byref(n_frames),
         ctypes.byref(pitches),
@@ -1023,7 +1024,7 @@ def reassigned_spectrogram(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(ref_power),
+        _to_c_float(ref_power, "ref_power"),
         ctypes.c_int(bool(fill_nan)),
         ctypes.byref(out),
     )
@@ -1283,9 +1284,9 @@ def pitch_yin(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
-        ctypes.c_float(threshold),
+        _to_c_float(fmin, "fmin"),
+        _to_c_float(fmax, "fmax"),
+        _to_c_float(threshold, "threshold"),
         ctypes.c_int(1 if fill_na else 0),
         ctypes.byref(out),
     )
@@ -1340,9 +1341,9 @@ def pitch_pyin(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
-        ctypes.c_float(threshold),
+        _to_c_float(fmin, "fmin"),
+        _to_c_float(fmax, "fmax"),
+        _to_c_float(threshold, "threshold"),
         ctypes.c_int(1 if fill_na else 0),
         ctypes.byref(out),
     )
@@ -1399,7 +1400,7 @@ def note_segments(
         _to_c_size_t(f0_count, "f0_count"),
         probability_array,
         _to_c_size_t(probability_count, "probability_count"),
-        ctypes.c_float(frame_rate),
+        _to_c_float(frame_rate, "frame_rate"),
         ctypes.byref(config),
         ctypes.byref(out),
     )

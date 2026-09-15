@@ -31,6 +31,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _out_float_array,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -64,8 +65,8 @@ def voice_change(
                 c_array,
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
-                ctypes.c_float(pitch_semitones),
-                ctypes.c_float(formant_factor),
+                _to_c_float(pitch_semitones, "pitch_semitones"),
+                _to_c_float(formant_factor, "formant_factor"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -620,7 +621,9 @@ class StreamingRetune:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
         handle = self._lib.sonare_streaming_retune_create(
-            ctypes.c_float(semitones), ctypes.c_float(mix), _to_c_int(grain_size, "grain_size")
+            _to_c_float(semitones, "semitones"),
+            _to_c_float(mix, "mix"),
+            _to_c_int(grain_size, "grain_size"),
         )
         if not handle:
             raise SonareValueError("streaming retune: semitones and mix must be finite")
@@ -682,8 +685,8 @@ class StreamingRetune:
         _check(
             self._lib.sonare_streaming_retune_set_config(
                 self._handle,
-                ctypes.c_float(current["semitones"] if semitones is None else semitones),
-                ctypes.c_float(current["mix"] if mix is None else mix),
+                _to_c_float(current["semitones"] if semitones is None else semitones, "semitones"),
+                _to_c_float(current["mix"] if mix is None else mix, "mix"),
                 _to_c_int(requested_grain_size, "requested_grain_size"),
             )
         )

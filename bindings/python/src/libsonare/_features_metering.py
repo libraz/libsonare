@@ -30,6 +30,7 @@ from ._runtime import (
     _narrow_int,
     _optional_float_array_result,
     _out_float_array,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -323,7 +324,7 @@ def metering_silence_ratio(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        ctypes.c_float(threshold_db),
+        _to_c_float(threshold_db, "threshold_db"),
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
         ctypes.byref(out),
@@ -439,7 +440,7 @@ def metering_detect_clipping(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        ctypes.c_float(threshold),
+        _to_c_float(threshold, "threshold"),
         _to_c_size_t(min_region_samples, "min_region_samples"),
         ctypes.byref(out),
     )
@@ -798,8 +799,8 @@ def metering_spectrum(
         _to_c_int(n_fft, "n_fft"),
         ctypes.c_int(1 if apply_octave_smoothing else 0),
         _to_c_int(octave_fraction, "octave_fraction"),
-        ctypes.c_float(db_ref),
-        ctypes.c_float(db_amin),
+        _to_c_float(db_ref, "db_ref"),
+        _to_c_float(db_amin, "db_amin"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -872,8 +873,8 @@ def metering_spectrum_frame(
         c_n_fft,
         ctypes.c_int(1 if apply_octave_smoothing else 0),
         _to_c_int(octave_fraction, "octave_fraction"),
-        ctypes.c_float(db_ref),
-        ctypes.c_float(db_amin),
+        _to_c_float(db_ref, "db_ref"),
+        _to_c_float(db_amin, "db_amin"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -1020,10 +1021,10 @@ def metering_dynamic_range(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        ctypes.c_float(window_sec),
-        ctypes.c_float(hop_sec),
-        ctypes.c_float(low_percentile),
-        ctypes.c_float(high_percentile),
+        _to_c_float(window_sec, "window_sec"),
+        _to_c_float(hop_sec, "hop_sec"),
+        _to_c_float(low_percentile, "low_percentile"),
+        _to_c_float(high_percentile, "high_percentile"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -1052,8 +1053,8 @@ def _scale_scalar(
     rc = getattr(lib, name)(
         _to_c_int(root, "root"),
         _to_c_uint16(mode_mask, "mode_mask"),
-        ctypes.c_float(reference_midi),
-        ctypes.c_float(midi),
+        _to_c_float(reference_midi, "reference_midi"),
+        _to_c_float(midi, "midi"),
         ctypes.byref(out),
     )
     _check(rc)

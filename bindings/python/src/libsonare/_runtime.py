@@ -6,11 +6,12 @@ import contextlib
 import ctypes
 import functools
 import inspect
+import math
 import operator
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import IntEnum
 from numbers import Integral
-from typing import Any, SupportsIndex, TypeVar, cast
+from typing import Any, SupportsFloat, SupportsIndex, TypeVar, cast
 
 import numpy as np
 
@@ -274,10 +275,20 @@ def _guard_buffer(*arg_names: str) -> Callable[[_GuardedFn], _GuardedFn]:
 
 
 def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
-    """Reject NaN / Inf scalar inputs with :class:`SonareValueError`."""
-    v = float(value)
+    """Reject NaN / Inf scalar inputs with :class:`SonareValueError`.
+
+    The float32 range is not checked here -- :func:`_narrow_float` does that
+    where the value is converted. What this owes the caller either way is a
+    refusal naming the argument, so an integer too large for a double is
+    refused rather than escaping as a bare ``OverflowError``.
+    """
+    refusal = f"{fn_name}: {arg_name} must be a finite number"
+    try:
+        v = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise SonareValueError(refusal) from exc
     if not np.isfinite(v):
-        raise SonareValueError(f"{fn_name}: {arg_name} must be a finite number")
+        raise SonareValueError(refusal)
     return v
 
 
@@ -665,6 +676,60 @@ def _to_c_uint8(value: object, name: str) -> ctypes.c_uint8:
 def _to_c_size_t(value: object, name: str) -> ctypes.c_size_t:
     """Narrow a caller-supplied integer onto ``size_t``; see :func:`_narrow_int`."""
     return ctypes.c_size_t(_narrow_int(value, name, 0, _SIZE_T_MAX))
+
+
+# Largest finite value a 32-bit float represents. A double above it does not
+# overflow on conversion, it saturates to an infinity ctypes hands on as a
+# legal value.
+_FLOAT32_MAX = 3.4028234663852886e38
+
+
+def _narrow_float(value: object, name: str) -> float:
+    """Return ``value`` as a plain ``float``, or refuse what a C type would change.
+
+    The float half of the family, and the one implementation behind
+    :func:`_to_c_float`. A Python float is an IEEE double, so ``c_float`` halves
+    the exponent range without raising: ``c_float(1e40)`` is ``inf`` and
+    ``c_float(-1e40)`` is ``-inf``. That is saturation rather than the integer
+    family's wrap, and the consequence is the one :func:`_narrow_int` describes
+    — the caller's quantity arrives as another legal value, and on the fields
+    documented to read a non-finite input as "unspecified" it is
+    indistinguishable from a deliberate request. A NaN or an infinity passed in
+    directly folds onto the same reading, so it is refused here too.
+
+    An ``int`` is accepted: a caller writes ``1`` as readily as ``1.0``. A
+    ``bool`` is refused rather than read as 0/1, for the reason
+    :func:`_narrow_int` gives.
+
+    Args:
+        value: Caller-supplied number.
+        name: Field or argument name, named in the error message.
+
+    Returns:
+        The value as a plain ``float``.
+
+    Raises:
+        SonareValueError: If ``value`` is not a number, or does not fit.
+    """
+    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            pass
+        else:
+            if math.isfinite(number) and abs(number) <= _FLOAT32_MAX:
+                return number
+    raise SonareValueError(_float_narrowing_error(name))
+
+
+def _float_narrowing_error(name: str) -> str:
+    """Word one refusal for the float half, as :func:`_narrowing_error` does for ints."""
+    return f"{name} must be a finite number within [-{_FLOAT32_MAX:g}, {_FLOAT32_MAX:g}]"
+
+
+def _to_c_float(value: object, name: str) -> ctypes.c_float:
+    """Narrow a caller-supplied number onto a C ``float``; see :func:`_narrow_float`."""
+    return ctypes.c_float(_narrow_float(value, name))
 
 
 _PAN_MODE_NAMES = {

@@ -24,6 +24,7 @@ from ._runtime import (
     _pan_law_value,
     _pan_mode_value,
     _send_timing_value,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_int64,
@@ -223,7 +224,7 @@ class Mixer:
             lib.sonare_mixer_add_vca_group(
                 self._handle,
                 group_id.encode("utf-8"),
-                ctypes.c_float(gain_db),
+                _to_c_float(gain_db, "gain_db"),
                 member_ptr,
                 ctypes.c_size_t(len(member_list)),
             )
@@ -247,7 +248,7 @@ class Mixer:
             lib.sonare_mixer_set_vca_group_gain_db(
                 self._handle,
                 group_id.encode("utf-8"),
-                ctypes.c_float(gain_db),
+                _to_c_float(gain_db, "gain_db"),
             )
         )
 
@@ -364,14 +365,16 @@ class Mixer:
     def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None:
         """Set a strip's live VCA gain offset in dB (not persisted to the scene)."""
         handle = self._strip_handle(strip)
-        _check(_get_lib().sonare_strip_set_vca_offset_db(handle, ctypes.c_float(offset_db)))
+        _check(
+            _get_lib().sonare_strip_set_vca_offset_db(handle, _to_c_float(offset_db, "offset_db"))
+        )
 
     def set_dual_pan(self, strip: StripRef, left: float, right: float) -> None:
         """Set independent left/right pan positions for a strip (dual-pan mode)."""
         handle = self._strip_handle(strip)
         _check(
             _get_lib().sonare_strip_set_dual_pan(
-                handle, ctypes.c_float(left), ctypes.c_float(right)
+                handle, _to_c_float(left, "left"), _to_c_float(right, "right")
             )
         )
 
@@ -407,12 +410,12 @@ class Mixer:
     def set_fader_db(self, strip: StripRef, db: float) -> None:
         """Set a strip's fader gain in dB (takes effect without a recompile)."""
         handle = self._strip_handle(strip)
-        _check(_get_lib().sonare_strip_set_fader_db(handle, ctypes.c_float(db)))
+        _check(_get_lib().sonare_strip_set_fader_db(handle, _to_c_float(db, "db")))
 
     def set_input_trim_db(self, strip: StripRef, db: float) -> None:
         """Set a strip's input trim in dB."""
         handle = self._strip_handle(strip)
-        _check(_get_lib().sonare_strip_set_input_trim_db(handle, ctypes.c_float(db)))
+        _check(_get_lib().sonare_strip_set_input_trim_db(handle, _to_c_float(db, "db")))
 
     def set_pan(self, strip: StripRef, pan: float, pan_mode: int | str | None = None) -> None:
         """Set a strip's pan position.
@@ -426,13 +429,15 @@ class Mixer:
         handle = self._strip_handle(strip)
         mode = -1 if pan_mode is None else _pan_mode_value(pan_mode)
         _check(
-            _get_lib().sonare_strip_set_pan(handle, ctypes.c_float(pan), _to_c_int(mode, "mode"))
+            _get_lib().sonare_strip_set_pan(
+                handle, _to_c_float(pan, "pan"), _to_c_int(mode, "mode")
+            )
         )
 
     def set_width(self, strip: StripRef, width: float) -> None:
         """Set a strip's stereo width."""
         handle = self._strip_handle(strip)
-        _check(_get_lib().sonare_strip_set_width(handle, ctypes.c_float(width)))
+        _check(_get_lib().sonare_strip_set_width(handle, _to_c_float(width, "width")))
 
     def set_muted(self, strip: StripRef, muted: bool) -> None:
         """Set a strip's mute state (takes effect without a recompile)."""
@@ -461,7 +466,7 @@ class Mixer:
                 handle,
                 send_id.encode("utf-8"),
                 destination_bus_id.encode("utf-8"),
-                ctypes.c_float(send_db),
+                _to_c_float(send_db, "send_db"),
                 ctypes.c_int(_send_timing_value(timing)),
                 ctypes.byref(index_out),
             )
@@ -473,7 +478,7 @@ class Mixer:
         handle = self._strip_handle(strip)
         _check(
             _get_lib().sonare_strip_set_send_db(
-                handle, _to_c_size_t(index, "index"), ctypes.c_float(db)
+                handle, _to_c_size_t(index, "index"), _to_c_float(db, "db")
             )
         )
 
@@ -578,7 +583,7 @@ class Mixer:
             _get_lib().sonare_strip_schedule_fader_automation(
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
-                ctypes.c_float(fader_db),
+                _to_c_float(fader_db, "fader_db"),
                 ctypes.c_int(_curve_value(curve)),
             )
         )
@@ -596,7 +601,7 @@ class Mixer:
             _get_lib().sonare_strip_schedule_pan_automation(
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
-                ctypes.c_float(pan),
+                _to_c_float(pan, "pan"),
                 ctypes.c_int(_curve_value(curve)),
             )
         )
@@ -614,7 +619,7 @@ class Mixer:
             _get_lib().sonare_strip_schedule_width_automation(
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
-                ctypes.c_float(width),
+                _to_c_float(width, "width"),
                 ctypes.c_int(_curve_value(curve)),
             )
         )
@@ -634,7 +639,7 @@ class Mixer:
                 handle,
                 _to_c_size_t(send_index, "send_index"),
                 _to_c_int64(sample_pos, "sample_pos"),
-                ctypes.c_float(db),
+                _to_c_float(db, "db"),
                 ctypes.c_int(_curve_value(curve)),
             )
         )
@@ -670,7 +675,7 @@ class Mixer:
                 _to_c_uint(insert_index, "insert_index"),
                 _to_c_uint(param_id, "param_id"),
                 _to_c_int64(sample_pos, "sample_pos"),
-                ctypes.c_float(value),
+                _to_c_float(value, "value"),
                 ctypes.c_int(_curve_value(curve)),
             )
         )
@@ -939,13 +944,14 @@ def mix_stereo(
             if input_trim_db is not None:
                 _check(
                     lib.sonare_strip_set_input_trim_db(
-                        strip_handles[-1], ctypes.c_float(input_trim_db[index])
+                        strip_handles[-1],
+                        _to_c_float(input_trim_db[index], f"input_trim_db[{index}]"),
                     )
                 )
             if fader_db is not None:
                 _check(
                     lib.sonare_strip_set_fader_db(
-                        strip_handles[-1], ctypes.c_float(fader_db[index])
+                        strip_handles[-1], _to_c_float(fader_db[index], f"fader_db[{index}]")
                     )
                 )
             # pan and pan_mode are independent options: either one alone has to
@@ -962,12 +968,16 @@ def mix_stereo(
             _check(
                 lib.sonare_strip_set_pan(
                     strip_handles[-1],
-                    ctypes.c_float(pan[index] if pan is not None else 0.0),
+                    _to_c_float(pan[index] if pan is not None else 0.0, f"pan[{index}]"),
                     ctypes.c_int(_pan_mode_value(mode)),
                 )
             )
             if width is not None:
-                _check(lib.sonare_strip_set_width(strip_handles[-1], ctypes.c_float(width[index])))
+                _check(
+                    lib.sonare_strip_set_width(
+                        strip_handles[-1], _to_c_float(width[index], f"width[{index}]")
+                    )
+                )
             if muted is not None:
                 _check(
                     lib.sonare_strip_set_muted(

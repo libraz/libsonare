@@ -3,6 +3,8 @@
     "files": 60,
     "narrowings": 65,
     "array_narrowings": 5,
+    "float_narrowings": 10,
+    "shared_float_reader_calls": 120,
     "shared_reader_calls": 600
   },
   "shapes": [
@@ -15,6 +17,11 @@
       "name": "integer-literal",
       "argument_pattern": "-?\\d+",
       "reason": "A literal written in this file is not a caller value."
+    },
+    {
+      "name": "float-literal",
+      "argument_pattern": "-?\\d+\\.\\d*(?:[eE][-+]?\\d+)?",
+      "reason": "A literal written in this file is not a caller value; the 0.0 sites seed an out-parameter."
     },
     {
       "name": "container-length",
@@ -40,6 +47,48 @@
       "argument": "length",
       "type": "c_size_t",
       "reason": "The element count _to_c_float_array reports for the buffer being passed alongside it, so it is the size of an allocation that already succeeded rather than a number the caller chose."
+    },
+    {
+      "file": "_analysis_reports.py",
+      "argument": "decay_db",
+      "type": "c_float",
+      "reason": "The saturation probe itself: analyze_impulse_response reads .value off this conversion and refuses a non-finite or non-positive result, so the conversion is the measurement rather than the argument."
+    },
+    {
+      "file": "_analysis_reports.py",
+      "argument": "decay_db_c",
+      "type": "c_float",
+      "reason": "Already narrowed: the .value of the probe above, past its finite-and-positive check."
+    },
+    {
+      "file": "_conversions.py",
+      "argument": "blend_weight",
+      "type": "c_float",
+      "reason": "The saturation probe itself: nnls_chroma reads .value off this conversion and refuses anything outside a finite [0, 1]."
+    },
+    {
+      "file": "_conversions.py",
+      "argument": "blend_weight_c",
+      "type": "c_float",
+      "reason": "Already narrowed: the .value of the probe above, past its finite [0, 1] check."
+    },
+    {
+      "file": "_effects_mastering.py",
+      "argument": "target_db",
+      "type": "c_float",
+      "reason": "The saturation probe itself: normalize_rms reads .value off this conversion and refuses a non-finite result or one above 0 dBFS."
+    },
+    {
+      "file": "_effects_mastering.py",
+      "argument": "target_db_c",
+      "type": "c_float",
+      "reason": "Already narrowed: the .value of the probe above, past its finite and at-or-below-0-dBFS check."
+    },
+    {
+      "file": "_mastering_streaming.py",
+      "argument": "peak",
+      "type": "c_float",
+      "reason": "NaN here is the C ABI's spelling for no offline peak measured, so the conversion must be able to carry one; the caller's own value goes through _narrow_float where it enters instead."
     }
   ],
   "plain_structs": [],

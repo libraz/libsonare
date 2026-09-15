@@ -41,8 +41,8 @@ _FFI_TYPES_GLOB = "bindings/python/src/libsonare/_ffi_types_*.py"
 _PADDING_NAMES = ("reserved", "_pad", "pad", "padding")
 
 
-# The binding's own base, which adds a range check on integer field assignment
-# and changes nothing about the layout a record is read from.
+# The binding's own base, which checks an integer or `c_float` field on
+# assignment and changes nothing about the layout a record is read from.
 _STRUCTURE_BASES = ("Structure", "Union", "CStruct")
 
 

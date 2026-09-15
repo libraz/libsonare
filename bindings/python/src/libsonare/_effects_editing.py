@@ -45,6 +45,7 @@ from ._runtime import (
     _out_float_array,
     _require_power_of_two,
     _resolve_enum,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_int32,
@@ -262,13 +263,13 @@ def time_stretch(
             "sonare_time_stretch",
             samples,
             _to_c_int(sample_rate, "sample_rate"),
-            ctypes.c_float(rate),
+            _to_c_float(rate, "rate"),
         )
     return _call_float_transform(
         "sonare_time_stretch_ex",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        ctypes.c_float(rate),
+        _to_c_float(rate, "rate"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
     )
@@ -311,13 +312,13 @@ def pitch_shift(
             "sonare_pitch_shift",
             samples,
             _to_c_int(sample_rate, "sample_rate"),
-            ctypes.c_float(semitones),
+            _to_c_float(semitones, "semitones"),
         )
     return _call_float_transform(
         "sonare_pitch_shift_ex",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        ctypes.c_float(semitones),
+        _to_c_float(semitones, "semitones"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
     )
@@ -352,8 +353,8 @@ def pitch_correct_to_midi(
         "sonare_pitch_correct_to_midi",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        ctypes.c_float(current_midi),
-        ctypes.c_float(target_midi),
+        _to_c_float(current_midi, "current_midi"),
+        _to_c_float(target_midi, "target_midi"),
     )
 
 
@@ -423,7 +424,7 @@ def pitch_correct_to_midi_timevarying(
                 voiced_array,
                 _to_c_size_t(n_frames, "n_frames"),
                 _to_c_int(hop_length, "hop_length"),
-                ctypes.c_float(target_midi),
+                _to_c_float(target_midi, "target_midi"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -568,7 +569,7 @@ def note_stretch(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(onset_sample, "onset_sample"),
         _to_c_int(resolved_offset, "resolved_offset"),
-        ctypes.c_float(stretch_ratio),
+        _to_c_float(stretch_ratio, "stretch_ratio"),
     )
 
 
@@ -817,7 +818,7 @@ def extract_notes(
         prob_array,
         voiced_array,
         _to_c_size_t(n_frames, "n_frames"),
-        ctypes.c_float(frame_rate),
+        _to_c_float(frame_rate, "frame_rate"),
         ctypes.byref(config),
         ctypes.byref(out),
     )
@@ -1057,7 +1058,7 @@ def render_notes(
                 _to_c_size_t(envelope_count, "envelope_count"),
                 f0_array,
                 _to_c_size_t(n_frames, "n_frames"),
-                ctypes.c_float(c_frame_rate),
+                _to_c_float(c_frame_rate, "frame_rate"),
                 ctypes.byref(config),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -1153,9 +1154,9 @@ def decompose_note_pitch(
     rc = lib.sonare_decompose_note_pitch(
         f0_array,
         _to_c_size_t(n_frames, "n_frames"),
-        ctypes.c_float(frame_rate),
-        ctypes.c_float(median_hz),
-        ctypes.c_float(0.0 if vibrato_cutoff_hz is None else vibrato_cutoff_hz),
+        _to_c_float(frame_rate, "frame_rate"),
+        _to_c_float(median_hz, "median_hz"),
+        _to_c_float(0.0 if vibrato_cutoff_hz is None else vibrato_cutoff_hz, "vibrato_cutoff_hz"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -1215,7 +1216,7 @@ def _note_set_edit(
         prob_array,
         voiced_array,
         _to_c_size_t(n_frames, "n_frames"),
-        ctypes.c_float(frame_rate),
+        _to_c_float(frame_rate, "frame_rate"),
         ctypes.byref(config),
         c_notes,
         _to_c_size_t(note_count, "note_count"),

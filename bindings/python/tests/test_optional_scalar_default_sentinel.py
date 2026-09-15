@@ -61,7 +61,15 @@ class TestMelFrequencyBounds:
         # The diagnostic has to name the field, so a caller passing several
         # optional bounds knows which one was refused.
         assert field in str(excinfo.value)
-        assert "finite non-negative" in str(excinfo.value)
+        # Which layer answers is part of the contract. A negative bound is
+        # representable, so it reaches the core and the core's domain check
+        # refuses it. A non-finite one never leaves the binding: the argument
+        # reader refuses it there, because the conversion that would carry it
+        # is the same one that folds a saturating value onto it.
+        wording = (
+            "finite non-negative" if math.isfinite(value) else "must be a finite number within"
+        )
+        assert wording in str(excinfo.value)
 
     @pytest.mark.parametrize("field", ["fmin", "fmax"])
     def test_zero_selects_the_librosa_default(self, field: str) -> None:

@@ -18,6 +18,8 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
+    _narrow_float,
+    _to_c_float,
     _to_c_float_array,
     _to_c_float_array_owned,
     _to_c_int,
@@ -93,15 +95,18 @@ class StreamingMasteringChain:
                 raise RuntimeError(
                     "libsonare was built without streaming loudness static-gain support"
                 )
+            # NaN is how the C ABI spells "no offline peak measured", so the
+            # caller's own value is narrowed here rather than at the conversion:
+            # a saturating one would arrive as that same reading.
             peak = (
                 math.nan
                 if loudness_static_gain_peak_db is None
-                else float(loudness_static_gain_peak_db)
+                else _narrow_float(loudness_static_gain_peak_db, "loudness_static_gain_peak_db")
             )
             handle = lib.sonare_streaming_mastering_chain_create_ex(
                 param_array,
                 _to_c_size_t(param_count, "param_count"),
-                ctypes.c_float(float(loudness_static_gain_db)),
+                _to_c_float(loudness_static_gain_db, "loudness_static_gain_db"),
                 ctypes.c_float(peak),
             )
         else:
@@ -350,17 +355,19 @@ class StreamingEqualizer:
     def set_gain_scale(self, scale: float) -> None:
         """Set all-band EQ gain scale as a 0.0..2.0 multiplier."""
         self._ensure_open()
-        _check(self._lib.sonare_eq_set_gain_scale(self._handle, ctypes.c_float(float(scale))))
+        _check(self._lib.sonare_eq_set_gain_scale(self._handle, _to_c_float(scale, "scale")))
 
     def set_output_gain_db(self, gain_db: float) -> None:
         """Set post-EQ output gain in dB."""
         self._ensure_open()
-        _check(self._lib.sonare_eq_set_output_gain_db(self._handle, ctypes.c_float(float(gain_db))))
+        _check(
+            self._lib.sonare_eq_set_output_gain_db(self._handle, _to_c_float(gain_db, "gain_db"))
+        )
 
     def set_output_pan(self, pan: float) -> None:
         """Set post-EQ stereo balance in -1.0..1.0; mono input ignores pan."""
         self._ensure_open()
-        _check(self._lib.sonare_eq_set_output_pan(self._handle, ctypes.c_float(float(pan))))
+        _check(self._lib.sonare_eq_set_output_pan(self._handle, _to_c_float(pan, "pan")))
 
     @_guard_buffer("samples")
     def set_sidechain_mono(self, samples: Sequence[float] | list[float]) -> None:

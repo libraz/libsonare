@@ -55,6 +55,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _planar_channel_arrays,
+    _to_c_float,
     _to_c_int64,
     _validate_c_int_field,
 )
@@ -118,7 +119,7 @@ class _EngineIoMixin:
     def set_input_monitor(self, enabled: bool, gain: float = 1.0) -> None:
         _check(
             _get_lib().sonare_engine_set_input_monitor(
-                self._require_handle(), int(enabled), ctypes.c_float(float(gain))
+                self._require_handle(), int(enabled), _to_c_float(gain, "gain")
             )
         )
 

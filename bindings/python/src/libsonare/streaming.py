@@ -28,6 +28,7 @@ from ._runtime import (
     _from_c_float_array,
     _from_c_int_array,
     _get_lib,
+    _to_c_float,
     _to_c_float_array,
     _to_c_size_t,
 )
@@ -299,7 +300,7 @@ class StreamAnalyzer:
         """Set the expected total duration (s) for pattern-lock timing."""
         _check(
             _get_lib().sonare_stream_analyzer_set_expected_duration(
-                self._require_handle(), ctypes.c_float(float(duration_seconds))
+                self._require_handle(), _to_c_float(duration_seconds, "duration_seconds")
             )
         )
 
@@ -316,7 +317,7 @@ class StreamAnalyzer:
         """
         _check(
             _get_lib().sonare_stream_analyzer_set_normalization_gain(
-                self._require_handle(), ctypes.c_float(float(gain))
+                self._require_handle(), _to_c_float(gain, "gain")
             )
         )
 
@@ -329,7 +330,7 @@ class StreamAnalyzer:
         """
         _check(
             _get_lib().sonare_stream_analyzer_set_tuning_ref_hz(
-                self._require_handle(), ctypes.c_float(float(ref_hz))
+                self._require_handle(), _to_c_float(ref_hz, "ref_hz")
             )
         )
 

@@ -71,6 +71,10 @@ class ShippingTreeTest(unittest.TestCase):
         self.assertGreaterEqual(
             scope._shared_reader_calls(scope.BINDING), floor["shared_reader_calls"]
         )
+        self.assertGreaterEqual(
+            scope._shared_reader_calls(scope.BINDING, ("_to_c_float",)),
+            floor["shared_float_reader_calls"],
+        )
 
 
 class FailureClassTest(_SyntheticTree):
@@ -175,7 +179,41 @@ class FailureClassTest(_SyntheticTree):
     def test_an_aliased_ctypes_import_is_the_only_report(self) -> None:
         """The known common mode: a conversion reached without the qualification."""
         root = self.tree("from ctypes import c_int\n\n\ndef f(n):\n    return c_int(n)\n")
-        self.only(self.evaluate(root), "import a ctypes integer type directly")
+        self.only(self.evaluate(root), "import a ctypes numeric type directly")
+
+    def test_an_aliased_float_import_is_the_only_report(self) -> None:
+        """The same common mode on the float half, which has its own type list."""
+        root = self.tree("from ctypes import c_float\n\n\ndef f(x):\n    return c_float(x)\n")
+        self.only(self.evaluate(root), "import a ctypes numeric type directly")
+
+    def test_an_unrecorded_float_narrowing_is_the_only_report(self) -> None:
+        """A float saturates rather than wraps, and is the same population."""
+        root = self.tree("import ctypes\n\n\ndef f(x):\n    return ctypes.c_float(x)\n")
+        lines = self.only(self.evaluate(root), "neither performed by the shared reader")
+        self.assertIn("ctypes.c_float(x)", lines[0])
+
+    def test_a_float_narrowing_through_the_shared_reader_reports_nothing(self) -> None:
+        """The routed spelling is not a site, so the fix clears its own report."""
+        root = self.tree("import ctypes\n\n\ndef f(x):\n    return _to_c_float(x, 'x')\n")
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_a_c_double_conversion_is_not_a_narrowing(self) -> None:
+        """The boundary of the float half: a Python float already IS a double."""
+        root = self.tree("import ctypes\n\n\ndef f(x):\n    return ctypes.c_double(x)\n")
+        scan = scope.Scan(root)
+        self.assertEqual(len(scan.sites), 0)
+        self.assertEqual(scan.token_counts["m.py"], 0)
+
+    def test_a_shrunken_float_population_is_the_only_report(self) -> None:
+        """Pinned apart from the total, so a growing integer count cannot hide it."""
+        root = self.tree("import ctypes\n\n\ndef f(n):\n    return ctypes.c_int(n)\n")
+        records = {
+            "shapes": [{"name": "any", "argument_pattern": ".+", "reason": "not the subject"}],
+            "narrowings": [],
+        }
+        failures = self.evaluate(root, records=records, floor={"float_narrowings": 1})
+        lines = self.only(failures, "no longer finds the population")
+        self.assertIn("float_narrowings: found 0", lines[0])
 
     def test_a_stale_record_is_the_only_report(self) -> None:
         root = self.tree("import ctypes\n")
@@ -241,6 +279,13 @@ class ScanFidelityTest(_SyntheticTree):
         scan = scope.Scan(root)
         self.assertEqual(len(scan.sites), 0)
         self.assertEqual(scan.token_counts["m.py"], 0)
+
+    def test_a_float_narrowing_is_seen_by_both_scans(self) -> None:
+        """Both routes carry the float type list, so their agreement still asserts."""
+        root = self.tree("import ctypes\n\n\ndef f(x):\n    return ctypes.c_float(x)\n")
+        scan = scope.Scan(root)
+        self.assertEqual(len(scan.sites), 1)
+        self.assertEqual(scan.token_counts["m.py"], 1)
 
     def test_a_narrowing_split_across_lines_is_seen_by_both_scans(self) -> None:
         root = self.tree(

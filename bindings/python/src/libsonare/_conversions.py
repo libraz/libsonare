@@ -19,6 +19,7 @@ from ._runtime import (
     _int_array_result,
     _out_float_array,
     _out_int_array,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_int_array,
@@ -36,31 +37,31 @@ def _unsupported_feature_symbol(symbol: str) -> SonareError:
 def hz_to_mel(hz: float) -> float:
     """Convert frequency in Hz to Mel scale."""
     lib = _get_lib()
-    return float(lib.sonare_hz_to_mel(ctypes.c_float(hz)))
+    return float(lib.sonare_hz_to_mel(_to_c_float(hz, "hz")))
 
 
 def mel_to_hz(mel: float) -> float:
     """Convert Mel scale value to frequency in Hz."""
     lib = _get_lib()
-    return float(lib.sonare_mel_to_hz(ctypes.c_float(mel)))
+    return float(lib.sonare_mel_to_hz(_to_c_float(mel, "mel")))
 
 
 def hz_to_midi(hz: float) -> float:
     """Convert frequency in Hz to MIDI note number."""
     lib = _get_lib()
-    return float(lib.sonare_hz_to_midi(ctypes.c_float(hz)))
+    return float(lib.sonare_hz_to_midi(_to_c_float(hz, "hz")))
 
 
 def midi_to_hz(midi: float) -> float:
     """Convert MIDI note number to frequency in Hz."""
     lib = _get_lib()
-    return float(lib.sonare_midi_to_hz(ctypes.c_float(midi)))
+    return float(lib.sonare_midi_to_hz(_to_c_float(midi, "midi")))
 
 
 def hz_to_note(hz: float) -> str:
     """Convert frequency in Hz to note name (e.g. 'A4')."""
     lib = _get_lib()
-    result = lib.sonare_hz_to_note(ctypes.c_float(hz))
+    result = lib.sonare_hz_to_note(_to_c_float(hz, "hz"))
     return result.decode("utf-8") if result else ""
 
 
@@ -85,7 +86,7 @@ def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int:
     lib = _get_lib()
     return int(
         lib.sonare_time_to_frames(
-            ctypes.c_float(time), _to_c_int(sr, "sr"), _to_c_int(hop_length, "hop_length")
+            _to_c_float(time, "time"), _to_c_int(sr, "sr"), _to_c_int(hop_length, "hop_length")
         )
     )
 
@@ -124,9 +125,9 @@ def power_to_db(
     return _call_float_transform(
         "sonare_power_to_db",
         values,
-        ctypes.c_float(ref),
-        ctypes.c_float(amin),
-        ctypes.c_float(top_db),
+        _to_c_float(ref, "ref"),
+        _to_c_float(amin, "amin"),
+        _to_c_float(top_db, "top_db"),
         arg_name="values",
     )
 
@@ -141,9 +142,9 @@ def amplitude_to_db(
     return _call_float_transform(
         "sonare_amplitude_to_db",
         values,
-        ctypes.c_float(ref),
-        ctypes.c_float(amin),
-        ctypes.c_float(top_db),
+        _to_c_float(ref, "ref"),
+        _to_c_float(amin, "amin"),
+        _to_c_float(top_db, "top_db"),
         arg_name="values",
     )
 
@@ -151,14 +152,14 @@ def amplitude_to_db(
 def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
     """Convert dB values back to power."""
     return _call_float_transform(
-        "sonare_db_to_power", values, ctypes.c_float(ref), arg_name="values"
+        "sonare_db_to_power", values, _to_c_float(ref, "ref"), arg_name="values"
     )
 
 
 def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
     """Convert dB values back to amplitude."""
     return _call_float_transform(
-        "sonare_db_to_amplitude", values, ctypes.c_float(ref), arg_name="values"
+        "sonare_db_to_amplitude", values, _to_c_float(ref, "ref"), arg_name="values"
     )
 
 
@@ -171,8 +172,8 @@ def preemphasis(
     return _call_float_transform(
         "sonare_preemphasis",
         samples,
-        ctypes.c_float(coef),
-        ctypes.c_float(0.0 if zi is None else zi),
+        _to_c_float(coef, "coef"),
+        _to_c_float(0.0 if zi is None else zi, "zi"),
         ctypes.c_int(0 if zi is None else 1),
     )
 
@@ -186,8 +187,8 @@ def deemphasis(
     return _call_float_transform(
         "sonare_deemphasis",
         samples,
-        ctypes.c_float(coef),
-        ctypes.c_float(0.0 if zi is None else zi),
+        _to_c_float(coef, "coef"),
+        _to_c_float(0.0 if zi is None else zi, "zi"),
         ctypes.c_int(0 if zi is None else 1),
     )
 
@@ -208,7 +209,7 @@ def trim_silence(
         rc = lib.sonare_trim_silence(
             c_array,
             _to_c_size_t(length, "length"),
-            ctypes.c_float(top_db),
+            _to_c_float(top_db, "top_db"),
             _to_c_int(frame_length, "frame_length"),
             _to_c_int(hop_length, "hop_length"),
             ctypes.byref(out),
@@ -234,7 +235,7 @@ def split_silence(
         rc = lib.sonare_split_silence(
             c_array,
             _to_c_size_t(length, "length"),
-            ctypes.c_float(top_db),
+            _to_c_float(top_db, "top_db"),
             _to_c_int(frame_length, "frame_length"),
             _to_c_int(hop_length, "hop_length"),
             ctypes.byref(out),
@@ -280,7 +281,7 @@ def pad_center(
         "sonare_pad_center",
         values,
         _to_c_size_t(target_size, "target_size"),
-        ctypes.c_float(pad_value),
+        _to_c_float(pad_value, "pad_value"),
         arg_name="values",
     )
 
@@ -297,7 +298,7 @@ def fix_length(
         "sonare_fix_length",
         values,
         _to_c_size_t(target_size, "target_size"),
-        ctypes.c_float(pad_value),
+        _to_c_float(pad_value, "pad_value"),
         arg_name="values",
     )
 
@@ -355,7 +356,7 @@ def peak_pick(
             _to_c_int(post_max, "post_max"),
             _to_c_int(pre_avg, "pre_avg"),
             _to_c_int(post_avg, "post_avg"),
-            ctypes.c_float(delta),
+            _to_c_float(delta, "delta"),
             _to_c_int(wait, "wait"),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -374,7 +375,7 @@ def vector_normalize(
         "sonare_vector_normalize",
         values,
         _to_c_int(norm_type, "norm_type"),
-        ctypes.c_float(threshold),
+        _to_c_float(threshold, "threshold"),
         arg_name="values",
     )
 
@@ -403,11 +404,11 @@ def pcen(
             _to_c_int(n_frames, "n_frames"),
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_int(hop_length, "hop_length"),
-            ctypes.c_float(time_constant),
-            ctypes.c_float(gain),
-            ctypes.c_float(bias),
-            ctypes.c_float(power),
-            ctypes.c_float(eps),
+            _to_c_float(time_constant, "time_constant"),
+            _to_c_float(gain, "gain"),
+            _to_c_float(bias, "bias"),
+            _to_c_float(power, "power"),
+            _to_c_float(eps, "eps"),
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
@@ -487,7 +488,7 @@ def cyclic_tempogram(
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_int(win_length, "win_length"),
-            ctypes.c_float(bpm_min),
+            _to_c_float(bpm_min, "bpm_min"),
             _to_c_int(n_bins, "n_bins"),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -511,8 +512,8 @@ def plp(
         onset_envelope,
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(hop_length, "hop_length"),
-        ctypes.c_float(tempo_min),
-        ctypes.c_float(tempo_max),
+        _to_c_float(tempo_min, "tempo_min"),
+        _to_c_float(tempo_max, "tempo_max"),
         _to_c_int(win_length, "win_length"),
         arg_name="onset_envelope",
     )

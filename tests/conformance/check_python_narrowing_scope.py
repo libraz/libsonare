@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep every Python-to-C integer narrowing in the ctypes binding accounted for.
+"""Keep every Python-to-C numeric narrowing in the ctypes binding accounted for.
 
 Four populations, all enforced here, all drifting for the same reason -- a new
 module can convert a caller's number however it likes and nothing notices:
@@ -12,6 +12,13 @@ module can convert a caller's number however it likes and nothing notices:
   recorded with the mechanism that makes it harmless.  The array constructor
   ``(ctypes.c_uint8 * n)(*values)`` is the same conversion applied to every
   element, so it counts as a site and is keyed on the element expression.
+  ``ctypes.c_float(value)`` belongs to this population for the same reason by a
+  different mechanism: a Python float is an IEEE double, so ``c_float(1e40)``
+  saturates to an infinity instead of wrapping and instead of raising.  That is
+  not a wrap, and it is the same defect -- the caller's quantity is folded onto
+  another legal value, and on every field whose contract reads a non-finite
+  input as "unspecified" the folded value is what a deliberate request looks
+  like.
 * **Struct field assignment.**  The same conversion happens on assignment to a
   ``ctypes.Structure`` field, and there the field's own type is the only thing
   that knows the bound, so a struct must inherit the base that reads it.
@@ -21,7 +28,7 @@ module can convert a caller's number however it likes and nothing notices:
   front of it, so the mask is the reportable shape rather than the assignment.
   A bare ``int(...)`` is not reported: truncating to an integer is deliberate.
 * **File-local readers.**  A helper that converts a caller's number to a ctypes
-  integer is a reader, and a reader outside the shared family means a change to
+  scalar is a reader, and a reader outside the shared family means a change to
   the conversion contract reaches some call sites and not others.
 
 The records live in ``python_narrowing_records.json`` and are read as data.  A
@@ -87,14 +94,14 @@ RECORDS = Path(__file__).resolve().parent / "python_narrowing_records.json"
 # exemptions below therefore name what is trusted, so a new helper next to one
 # is reported rather than blessed by its address.
 
-# The struct base whose __setattr__ range-checks an integer field against the
-# field's own declared type. Its own definition is the one class allowed to sit
-# on ctypes.Structure directly, because it is what installs that check.
+# The struct base whose __setattr__ checks an integer or a `c_float` field
+# against the field's own declared type. Its own definition is the one class
+# allowed to sit on ctypes.Structure directly, because it installs that check.
 STRUCT_BASE = "CStruct"
 
-# Spelled out rather than matched loosely: `c_float`, `c_char_p` and the pointer
-# types cannot wrap, and sweeping them in would bury the population this exists
-# for.
+# Spelled out rather than matched loosely: `c_char_p` and the pointer types
+# carry no numeric range to leave, and sweeping them in would bury the
+# population this exists for.
 INTEGER_TYPES = (
     "c_int",
     "c_int8",
@@ -113,6 +120,15 @@ INTEGER_TYPES = (
     "c_size_t",
     "c_ssize_t",
 )
+
+# Kept in its own list because the failure differs: an integer wraps, a float
+# saturates to an infinity. `c_double` is absent -- a Python float already IS a
+# double, so that conversion has nothing to narrow.
+FLOAT_TYPES = ("c_float",)
+
+# What both scans match on. Every population below keys on the spelling rather
+# than on which list a type came from, so the two halves cannot drift apart.
+NARROWING_TYPES = INTEGER_TYPES + FLOAT_TYPES
 
 # A mask that folds a value into a C integer width. Only these are reported in
 # front of a field assignment: they pre-empt the checked base's range check,
@@ -133,15 +149,19 @@ SHARED_READERS = (
     "_to_c_uint16",
     "_to_c_uint8",
     "_to_c_size_t",
+    "_to_c_float",
 )
 
 # The readers that ARE the shared family rather than a file-local copy of one:
-# the eight conversions above, plus the range check they all route through, its
-# field-level twin on the checked base, and the wording the two share.
+# the conversions above, plus the two range checks they route through, the
+# field-level twin of the integer one on the checked base, and the wording each
+# shares.
 SHARED_LOCAL_READERS = SHARED_READERS + (
     "_narrow_int",
     "_narrow_field",
     "_narrowing_error",
+    "_narrow_float",
+    "_float_narrowing_error",
 )
 
 
@@ -229,7 +249,7 @@ class Scan:
 
             # Scan A: over the parsed syntax.
             for node in ast.walk(tree):
-                conversion = _ctypes_integer_conversion(node)
+                conversion = _ctypes_narrowing_conversion(node)
                 if conversion is None or not node.args or _within(exempt, node.lineno):
                     continue
                 ctype, container = conversion
@@ -249,7 +269,7 @@ class Scan:
             self._collect_aliased_imports(path, tree)
 
     def _collect_structure_bases(self, path: Path, tree: ast.Module) -> None:
-        """A struct not on the checked base truncates every integer field it has."""
+        """A struct off the checked base folds every integer and float field it has."""
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef) or node.name == STRUCT_BASE:
                 continue
@@ -278,12 +298,12 @@ class Scan:
                     self.masked_fields.append((path, node.lineno, ast.unparse(target), masked))
 
     def _collect_local_readers(self, path: Path, tree: ast.Module) -> None:
-        """A module-level helper whose whole job is a ctypes integer conversion."""
+        """A module-level helper whose whole job is a ctypes scalar conversion."""
         for node in ast.walk(tree):
             if not isinstance(node, ast.FunctionDef) or node.name in SHARED_LOCAL_READERS:
                 continue
             returns = ast.unparse(node.returns) if node.returns is not None else ""
-            if not any(f"ctypes.{name}" == returns for name in INTEGER_TYPES):
+            if not any(f"ctypes.{name}" == returns for name in NARROWING_TYPES):
                 continue
             self.local_readers.append((path, node.lineno, node.name))
 
@@ -293,7 +313,7 @@ class Scan:
             if not isinstance(node, ast.ImportFrom) or node.module != "ctypes":
                 continue
             for alias in node.names:
-                if alias.name in INTEGER_TYPES:
+                if alias.name in NARROWING_TYPES:
                     self.aliased_imports.append((path, node.lineno, alias.name))
             continue
 
@@ -341,14 +361,14 @@ def _token_scan(source: str, exempt: list[tuple[int, int]]) -> int:
 
 
 def _token_calls(stream: list[tokenize.TokenInfo]) -> int:
-    """``ctypes . <integer type> (`` followed by anything but ``)``."""
+    """``ctypes . <narrowing type> (`` followed by anything but ``)``."""
     count = 0
     for i in range(len(stream) - 4):
         names = [stream[i + k] for k in range(5)]
         if (
             names[0].string == "ctypes"
             and names[1].string == "."
-            and names[2].string in INTEGER_TYPES
+            and names[2].string in NARROWING_TYPES
             and names[3].string == "("
             and names[4].string != ")"
         ):
@@ -357,7 +377,7 @@ def _token_calls(stream: list[tokenize.TokenInfo]) -> int:
 
 
 def _token_arrays(stream: list[tokenize.TokenInfo]) -> int:
-    """``( ctypes . <integer type> * ... ) (`` followed by anything but ``)``.
+    """``( ctypes . <narrowing type> * ... ) (`` followed by anything but ``)``.
 
     The count expression between the type and the closing paren is arbitrary, so
     the run cannot be matched by a fixed window the way the call spelling is: the
@@ -369,7 +389,7 @@ def _token_arrays(stream: list[tokenize.TokenInfo]) -> int:
             stream[i - 1].string == "("
             and stream[i].string == "ctypes"
             and stream[i + 1].string == "."
-            and stream[i + 2].string in INTEGER_TYPES
+            and stream[i + 2].string in NARROWING_TYPES
             and stream[i + 3].string == "*"
         ):
             continue
@@ -394,27 +414,27 @@ def _matching_close(stream: list[tokenize.TokenInfo], start: int) -> int | None:
     return None
 
 
-def _ctypes_integer_conversion(node: ast.AST) -> tuple[str, bool] | None:
-    """The integer type a call converts through, and whether it is an array type.
+def _ctypes_narrowing_conversion(node: ast.AST) -> tuple[str, bool] | None:
+    """The scalar type a call converts through, and whether it is an array type.
 
     Two spellings reach the same C conversion: ``ctypes.c_int(x)`` narrows one
     value, ``(ctypes.c_int * n)(*xs)`` narrows every element of ``xs``.
     """
     if not isinstance(node, ast.Call):
         return None
-    if _is_ctypes_integer(node.func):
+    if _is_ctypes_narrowing(node.func):
         return node.func.attr, False
     if isinstance(node.func, ast.BinOp) and isinstance(node.func.op, ast.Mult):
         for side in (node.func.left, node.func.right):
-            if _is_ctypes_integer(side):
+            if _is_ctypes_narrowing(side):
                 return side.attr, True
     return None
 
 
-def _is_ctypes_integer(node: ast.AST) -> bool:
+def _is_ctypes_narrowing(node: ast.AST) -> bool:
     return (
         isinstance(node, ast.Attribute)
-        and node.attr in INTEGER_TYPES
+        and node.attr in NARROWING_TYPES
         and isinstance(node.value, ast.Name)
         and node.value.id == "ctypes"
     )
@@ -518,6 +538,10 @@ def _self_check(scan: Scan, floor: dict) -> list[str]:
         # Pinned apart from the total: the array spelling is a small population
         # a growing scalar count would otherwise hide the disappearance of.
         "array_narrowings": sum(1 for site in scan.sites if site.container),
+        # Same reason, for the float half: it is the smaller of the two type
+        # lists and the one a predicate written for integers drops silently.
+        "float_narrowings": sum(1 for site in scan.sites if site.type in FLOAT_TYPES),
+        "shared_float_reader_calls": _shared_reader_calls(scan.tree, ("_to_c_float",)),
         "shared_reader_calls": _shared_reader_calls(scan.tree),
     }
     return [
@@ -528,9 +552,9 @@ def _self_check(scan: Scan, floor: dict) -> list[str]:
     ]
 
 
-def _shared_reader_calls(tree: Path) -> int:
-    """How many sites route through the shared family, as the population's floor."""
-    pattern = re.compile(r"\b(?:" + "|".join(SHARED_READERS) + r")\(")
+def _shared_reader_calls(tree: Path, readers: tuple[str, ...] = SHARED_READERS) -> int:
+    """How many sites route through the named readers, as the population's floor."""
+    pattern = re.compile(r"\b(?:" + "|".join(readers) + r")\(")
     return sum(
         len(pattern.findall(strip_lexical(p.read_text(encoding="utf-8"))))
         for p in tree.rglob("*.py")
@@ -567,7 +591,7 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if aliased:
         failures.append(
             (
-                "These modules import a ctypes integer type directly, which puts "
+                "These modules import a ctypes numeric type directly, which puts "
                 "a conversion beyond the qualification both scans depend on",
                 [f"  {_display(p)}:{line}  from ctypes import {name}" for p, line, name in aliased],
             )
