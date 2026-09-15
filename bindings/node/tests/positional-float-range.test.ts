@@ -91,14 +91,18 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
     }
   });
 
-  it('passes a non-finite bpmMin through to the core', () => {
-    // Deliberate: the reader settles overflow, not what a field makes of
-    // Infinity, so each non-finite input is answered where it is interpreted.
-    const infinite = capture(() => run(Number.POSITIVE_INFINITY));
-    expect(isSonareError(infinite)).toBe(true);
-    expect((infinite as { code: number }).code).toBe(ErrorCode.InvalidParameter);
-    expect(() => run(Number.NaN)).not.toThrow();
-    expect(typeof run(Number.NaN).bpm).toBe('number');
+  it('passes a non-finite bpmMin through to the core, which refuses it', () => {
+    // Deliberate: the reader settles overflow, not what a field makes of a
+    // non-finite value, so each one is answered where it is interpreted. Both
+    // are answered the same way, and asserting them separately is the point --
+    // a bound written as an ordered comparison answers NaN and an infinity
+    // differently, because NaN loses every comparison while an infinity wins
+    // one of them.
+    for (const value of [Number.POSITIVE_INFINITY, Number.NaN]) {
+      const caught = capture(() => run(value));
+      expect(isSonareError(caught), `bpmMin ${value}`).toBe(true);
+      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    }
   });
 
   it('answers 1e300 differently from the Infinity it would have become', () => {
