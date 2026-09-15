@@ -452,7 +452,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   // sonare_free_section_result(&r) would delete[] an uninitialised pointer.
   out->sections = nullptr;
   out->section_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || min_section_sec < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || !std::isfinite(min_section_sec) || min_section_sec < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

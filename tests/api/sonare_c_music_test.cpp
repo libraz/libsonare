@@ -515,3 +515,46 @@ TEST_CASE(
     REQUIRE(result.point_count == 0);
   }
 }
+
+TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_api][sections]") {
+  // A non-finite min_section_sec is carried unchanged into
+  // SectionConfig::peak_distance and divided by a frame duration inside
+  // BoundaryDetector, so an unrejected infinity or NaN reaches a
+  // static_cast<int> of a non-representable value.
+  auto samples = generate_sine(440.0f, 22050, 1.0f);
+
+  SECTION("infinity") {
+    SonareSectionResult result;
+    std::memset(&result, 0xAA, sizeof(result));
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, 2048, 512,
+                                    std::numeric_limits<float>::infinity(),
+                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_section_result(&result);
+    REQUIRE(result.sections == nullptr);
+    REQUIRE(result.section_count == 0);
+  }
+
+  SECTION("NaN") {
+    SonareSectionResult result;
+    std::memset(&result, 0xAA, sizeof(result));
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, 2048, 512,
+                                    std::numeric_limits<float>::quiet_NaN(),
+                                    &result) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_section_result(&result);
+    REQUIRE(result.sections == nullptr);
+    REQUIRE(result.section_count == 0);
+  }
+
+  SECTION("a legitimate value still produces a working result") {
+    SonareSectionResult result;
+    std::memset(&result, 0xAA, sizeof(result));
+    REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), 22050, 2048, 512, 0.05f,
+                                    &result) == SONARE_OK);
+    REQUIRE(result.section_count > 0);
+    REQUIRE(result.sections != nullptr);
+    REQUIRE(result.sections[0].start == 0.0f);
+    REQUIRE(std::isfinite(result.sections[0].end));
+    REQUIRE(result.sections[0].end > result.sections[0].start);
+    sonare_free_section_result(&result);
+  }
+}
