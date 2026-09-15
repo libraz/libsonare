@@ -40,6 +40,16 @@ Napi::Value EmitSpectrumResult(Napi::Env env, const SonareSpectrumResult& result
   return out;
 }
 
+// Copies a heap float series into a JS Float32Array. An empty series arrives as
+// a null pointer with a zero count, which becomes an empty array.
+Napi::Float32Array EmitFloatSeries(Napi::Env env, const float* values, size_t count) {
+  auto out = Napi::Float32Array::New(env, count);
+  if (count > 0 && values != nullptr) {
+    std::memcpy(out.Data(), values, count * sizeof(float));
+  }
+  return out;
+}
+
 Napi::Value EmitWaveformPeaksResult(Napi::Env env, const SonareWaveformPeaksResult& result) {
   const size_t total = static_cast<size_t>(result.channels) * result.bucket_count;
   auto min_values = Napi::Float32Array::New(env, total);
@@ -175,6 +185,49 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
   result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
   result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, channels, sampleRate?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int channels = node_narrow_int(env, info[1], "channels");
+  int sr = node_arg_int(info, 2, 22050);
+  if (channels <= 0) {
+    Napi::RangeError::New(env, "channels must be > 0").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
+    Napi::TypeError::New(env, "interleaved length must be a multiple of channels")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
+
+  float* momentary = nullptr;
+  size_t momentary_count = 0;
+  float* short_term = nullptr;
+  size_t short_term_count = 0;
+  SonareError err =
+      sonare_lufs_series_interleaved(typed.Data(), frames, channels, sr, &momentary,
+                                     &momentary_count, &short_term, &short_term_count);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("momentary", EmitFloatSeries(env, momentary, momentary_count));
+  result.Set("shortTerm", EmitFloatSeries(env, short_term, short_term_count));
+  sonare_free_floats(momentary);
+  sonare_free_floats(short_term);
   return result;
   SONARE_NODE_CATCH(env)
 }

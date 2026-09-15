@@ -1470,6 +1470,13 @@ def lufs_interleaved(
     *,
     validate: bool = True,
 ) -> LufsResult: ...
+def lufs_series_interleaved(
+    samples: FloatSamples,
+    channels: int,
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
+) -> tuple[list[float], list[float]]: ...
 def ebur128_loudness_range(
     samples: FloatSamples,
     sample_rate: int = 22050,

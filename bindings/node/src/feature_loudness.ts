@@ -1,6 +1,6 @@
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
-import type { LufsResult } from './types.js';
+import type { LufsResult, LufsSeriesResult } from './types.js';
 import type { ValidateOptions } from './validation.js';
 import { assertSamples } from './validation.js';
 
@@ -29,6 +29,52 @@ export function lufsInterleaved(
 ): LufsResult {
   const request = samples instanceof Float32Array ? { samples, channels, sampleRate } : samples;
   return addon.lufsInterleaved(request.samples, request.channels, request.sampleRate ?? 22050);
+}
+
+/**
+ * Per-block momentary (400 ms) and short-term (3 s) LUFS series for an
+ * interleaved buffer of `frames * channels` samples, measured with ITU-R
+ * BS.1770-4 channel summing. The per-channel frame count is derived from the
+ * buffer length and `channels`.
+ *
+ * This is not recoverable from {@link momentaryLufs} / {@link shortTermLufs}:
+ * those measure one channel each, and the standard sums the K-weighted
+ * per-channel block energies rather than mixing per-channel loudness in dB. Both
+ * series come out of one K-weighting pass. For `channels === 1` they match the
+ * mono meters element for element.
+ *
+ * Pass the buffer's actual `sampleRate`: the default (22050) is non-standard for
+ * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
+ * loudness.
+ *
+ * @example
+ * ```ts
+ * const { momentary, shortTerm } = lufsSeriesInterleaved({
+ *   samples: interleavedStereo,
+ *   channels: 2,
+ *   sampleRate: 48000,
+ * });
+ * ```
+ */
+export function lufsSeriesInterleaved(
+  request: FeatureSamplesRequest & { channels: number },
+): LufsSeriesResult;
+export function lufsSeriesInterleaved(
+  samples: Float32Array,
+  channels: number,
+  sampleRate?: number,
+): LufsSeriesResult;
+export function lufsSeriesInterleaved(
+  samples: Float32Array | (FeatureSamplesRequest & { channels: number }),
+  channels = 0,
+  sampleRate = 22050,
+): LufsSeriesResult {
+  const request = samples instanceof Float32Array ? { samples, channels, sampleRate } : samples;
+  return addon.lufsSeriesInterleaved(
+    request.samples,
+    request.channels,
+    request.sampleRate ?? 22050,
+  );
 }
 
 /**

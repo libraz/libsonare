@@ -61,6 +61,7 @@ export {
   estimateTuning,
   hpssWithResidual,
   lufsInterleaved,
+  lufsSeriesInterleaved,
   nnFilter,
   phaseVocoder,
   pitchTuning,

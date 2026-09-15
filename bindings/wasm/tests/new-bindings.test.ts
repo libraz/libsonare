@@ -15,6 +15,8 @@ import {
   hpssWithResidual,
   init,
   lufsInterleaved,
+  lufsSeriesInterleaved,
+  momentaryLufs,
   nnFilter,
   phaseVocoder,
   pitchPyin,
@@ -35,6 +37,27 @@ const SR = 22050;
 
 function makeSine(durationSec: number, freqHz: number): Float32Array {
   return genSine(freqHz, durationSec, { amp: 0.5, sampleRate: SR });
+}
+
+/** Deterministic white noise; a different `seed` is an uncorrelated realization. */
+function noise(durationSec: number, seed: number, amplitude = 0.25): Float32Array {
+  const n = Math.floor(SR * durationSec);
+  const out = new Float32Array(n);
+  let state = seed >>> 0;
+  for (let i = 0; i < n; i++) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    out[i] = amplitude * ((2 * (state >>> 8)) / (1 << 24) - 1);
+  }
+  return out;
+}
+
+function interleave(left: Float32Array, right: Float32Array): Float32Array {
+  const out = new Float32Array(left.length * 2);
+  for (let i = 0; i < left.length; i++) {
+    out[2 * i] = left[i];
+    out[2 * i + 1] = right[i];
+  }
+  return out;
 }
 
 /** Single-frequency power estimate (Goertzel), used to probe a tone's energy. */
@@ -366,6 +389,51 @@ describe('newly exposed WASM functions', () => {
     const r = lufsInterleaved(interleaved, 2, SR);
     expect(Number.isFinite(r.integratedLufs)).toBe(true);
     expect(r.integratedLufs).toBeLessThan(0);
+  });
+
+  it('lufsSeriesInterleaved sums channel energies rather than averaging loudness', () => {
+    // BS.1770-4 sums the K-weighted per-channel block energies, so two
+    // uncorrelated channels at one level read 10*log10(2) above their
+    // per-channel mean. A facade that measured each channel and averaged the
+    // results in dB would put this difference at exactly 0.
+    const left = noise(4, 12345);
+    const right = noise(4, 987654321);
+    const { momentary, shortTerm } = lufsSeriesInterleaved(interleave(left, right), 2, SR);
+    const monoLeft = momentaryLufs(left, SR);
+    const monoRight = momentaryLufs(right, SR);
+
+    expect(momentary.length).toBe(monoLeft.length);
+    expect(momentary.length).toBe(monoRight.length);
+    expect(allFinite(momentary)).toBe(true);
+    for (let i = 0; i < momentary.length; i++) {
+      expect(momentary[i] - 0.5 * (monoLeft[i] + monoRight[i])).toBeCloseTo(3.0103, 1);
+    }
+    expect(shortTerm.length).toBeGreaterThan(0);
+    expect(allFinite(shortTerm)).toBe(true);
+  });
+
+  it('lufsSeriesInterleaved matches the mono meters for one channel', () => {
+    const x = noise(4, 24680);
+    const { momentary, shortTerm } = lufsSeriesInterleaved({
+      samples: x,
+      channels: 1,
+      sampleRate: SR,
+    });
+    expect(Array.from(momentary)).toEqual(Array.from(momentaryLufs(x, SR)));
+    expect(shortTerm.length).toBeGreaterThan(0);
+  });
+
+  it('lufsSeriesInterleaved returns an empty series below a window', () => {
+    // 2 s clears the 400 ms momentary window and not the 3 s short-term one.
+    const x = noise(2, 13579);
+    const { momentary, shortTerm } = lufsSeriesInterleaved(interleave(x, x), 2, SR);
+    expect(momentary.length).toBeGreaterThan(0);
+    expect(shortTerm.length).toBe(0);
+  });
+
+  it('lufsSeriesInterleaved rejects a non-positive channel count', () => {
+    const x = noise(1, 555);
+    expect(() => lufsSeriesInterleaved(interleave(x, x), 0, SR)).toThrow();
   });
 
   it('ebur128LoudnessRange is finite and non-negative', () => {

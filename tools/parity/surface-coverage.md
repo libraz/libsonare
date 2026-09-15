@@ -12,7 +12,7 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 | creative effects | 39 | 38/39 | 38/39 | 38/39 | 15/39 |
 | feature extraction | 135 | 119/135 | 119/135 | 119/135 | 48/135 |
 | mastering | 78 | 68/78 | 68/78 | 70/78 | 8/78 |
-| metering | 28 | 28/28 | 26/28 | 28/28 | 7/28 |
+| metering | 29 | 29/29 | 27/29 | 29/29 | 7/29 |
 | mixing & routing | 48 | 48/48 | 48/48 | 48/48 | 2/48 |
 | polyphony | 13 | 13/13 | 13/13 | 13/13 | 4/13 |
 | project & arrangement | 141 | 134/141 | 133/141 | 133/141 | 10/141 |
@@ -21,4 +21,4 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 | sample bank | 5 | 5/5 | 5/5 | 5/5 | 1/5 |
 | streaming | 33 | 31/33 | 31/33 | 31/33 | 7/33 |
 | voice changer | 20 | 20/20 | 20/20 | 19/20 | 3/20 |
-| **all domains** | **727** | **679/727** | **676/727** | **677/727** | **132/727** |
+| **all domains** | **728** | **680/728** | **677/728** | **678/728** | **132/728** |

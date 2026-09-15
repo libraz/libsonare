@@ -5,6 +5,7 @@ import type {
   WasmDecomposeResult,
   WasmHpssWithResidualResult,
   WasmLufsResult,
+  WasmLufsSeriesResult,
   WasmMatrix2dResult,
 } from './sonare.js';
 import type { ValidateOptions } from './validation';
@@ -189,6 +190,11 @@ export interface HpssWithResidualRequest {
   hardMask?: boolean;
 }
 export interface LufsInterleavedRequest extends ValidateOptions {
+  samples: Float32Array;
+  channels: number;
+  sampleRate?: number;
+}
+export interface LufsSeriesInterleavedRequest extends ValidateOptions {
   samples: Float32Array;
   channels: number;
   sampleRate?: number;
@@ -746,6 +752,53 @@ export function lufsInterleaved(
   assertSampleRate('lufsInterleaved', sampleRate);
   assertInterleavedSamples('lufsInterleaved', samples, channels, options.validate !== false);
   return requireModule().lufsInterleaved(samples, channels, sampleRate);
+}
+
+/**
+ * Per-block momentary (400 ms) and short-term (3 s) LUFS series for an
+ * interleaved buffer of `frames * channels` samples, measured with ITU-R
+ * BS.1770-4 channel summing. The per-channel frame count is derived from the
+ * buffer length and `channels`.
+ *
+ * This is not recoverable from `momentaryLufs` / `shortTermLufs`: those measure
+ * one channel each, and the standard sums the K-weighted per-channel block
+ * energies rather than mixing per-channel loudness in dB. Both series come out
+ * of one K-weighting pass. For `channels === 1` they match the mono meters
+ * element for element.
+ *
+ * Pass the buffer's actual `sampleRate`: the default (22050) is non-standard for
+ * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
+ * loudness.
+ *
+ * @example
+ * ```ts
+ * const { momentary, shortTerm } = lufsSeriesInterleaved({
+ *   samples: interleavedStereo,
+ *   channels: 2,
+ *   sampleRate: 48000,
+ * });
+ * ```
+ */
+export function lufsSeriesInterleaved(request: LufsSeriesInterleavedRequest): WasmLufsSeriesResult;
+export function lufsSeriesInterleaved(
+  samples: Float32Array,
+  channels: number,
+  sampleRate?: number,
+  options?: ValidateOptions,
+): WasmLufsSeriesResult;
+export function lufsSeriesInterleaved(
+  samples: Float32Array | LufsSeriesInterleavedRequest,
+  channels = 0,
+  sampleRate = 22050,
+  options: ValidateOptions = {},
+): WasmLufsSeriesResult {
+  if (!(samples instanceof Float32Array)) {
+    const r = samples;
+    return lufsSeriesInterleaved(r.samples, r.channels, r.sampleRate, r);
+  }
+  assertSampleRate('lufsSeriesInterleaved', sampleRate);
+  assertInterleavedSamples('lufsSeriesInterleaved', samples, channels, options.validate !== false);
+  return requireModule().lufsSeriesInterleaved(samples, channels, sampleRate);
 }
 
 /**

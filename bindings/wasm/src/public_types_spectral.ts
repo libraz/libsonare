@@ -667,6 +667,17 @@ export interface LufsResult {
 }
 
 /**
+ * The two per-block loudness series a multi-channel measurement builds, in
+ * LUFS. A signal shorter than a window yields an empty series for it.
+ */
+export interface LufsSeriesResult {
+  /** 400 ms momentary series. */
+  momentary: Float32Array;
+  /** 3 s short-term series. */
+  shortTerm: Float32Array;
+}
+
+/**
  * HPSS (Harmonic-Percussive Source Separation) result
  */
 export interface HpssResult {

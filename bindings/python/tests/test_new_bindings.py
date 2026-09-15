@@ -216,6 +216,66 @@ def test_lufs_interleaved_rejects_non_multiple_length() -> None:
         libsonare.lufs_interleaved(truncated, 2, SR)
 
 
+def _noise(seed: int, seconds: float = 4.0, amplitude: float = 0.25) -> np.ndarray:
+    """Deterministic white noise; a different ``seed`` is an uncorrelated realization."""
+    rng = np.random.default_rng(seed)
+    n = int(SR * seconds)
+    return (amplitude * rng.uniform(-1.0, 1.0, n)).astype(np.float32)
+
+
+def test_lufs_series_interleaved_sums_channel_energies() -> None:
+    # BS.1770-4 sums the K-weighted per-channel block energies, so two
+    # uncorrelated channels at one level read 10*log10(2) above their per-channel
+    # mean. A facade that measured each channel and averaged the results in dB
+    # would put this difference at exactly 0.
+    left = _noise(12345)
+    right = _noise(987654321)
+    interleaved = np.stack([left, right], axis=1).reshape(-1)
+
+    momentary, short_term = libsonare.lufs_series_interleaved(interleaved, 2, SR)
+    mono_left = np.asarray(libsonare.momentary_lufs(left, SR), dtype=np.float64)
+    mono_right = np.asarray(libsonare.momentary_lufs(right, SR), dtype=np.float64)
+
+    stereo = np.asarray(momentary, dtype=np.float64)
+    assert stereo.size == mono_left.size == mono_right.size
+    assert _finite(stereo)
+    assert np.allclose(stereo - 0.5 * (mono_left + mono_right), 3.0103, atol=0.2)
+    # The short-term series is measured over the same buffer at the 3 s window.
+    assert len(short_term) > 0
+    assert _finite(short_term)
+
+
+def test_lufs_series_interleaved_matches_mono_meters_for_one_channel() -> None:
+    x = _noise(24680, seconds=4.0)
+    momentary, short_term = libsonare.lufs_series_interleaved(x, 1, SR)
+    assert momentary == pytest.approx(libsonare.momentary_lufs(x, SR))
+    assert short_term == pytest.approx(libsonare.short_term_lufs(x, SR))
+
+
+def test_lufs_series_interleaved_returns_empty_series_below_a_window() -> None:
+    # 2 s clears the 400 ms momentary window and not the 3 s short-term one; the
+    # short window is empty rather than an error.
+    x = _noise(13579, seconds=2.0)
+    interleaved = np.stack([x, x], axis=1).reshape(-1)
+    momentary, short_term = libsonare.lufs_series_interleaved(interleaved, 2, SR)
+    assert len(momentary) > 0
+    assert short_term == []
+
+
+def test_lufs_series_interleaved_rejects_bad_channel_count() -> None:
+    x = _tone()
+    interleaved = np.stack([x, x], axis=1).reshape(-1)
+    with pytest.raises(ValueError, match="channels must be > 0"):
+        libsonare.lufs_series_interleaved(interleaved, 0, SR)
+
+
+def test_lufs_series_interleaved_rejects_non_multiple_length() -> None:
+    x = _tone()
+    interleaved = np.stack([x, x], axis=1).reshape(-1)
+    with pytest.raises(ValueError, match="divisible by channels"):
+        libsonare.lufs_series_interleaved(interleaved[:-1], 2, SR)
+
+
 def test_ebur128_loudness_range_is_finite_nonnegative() -> None:
     lra = libsonare.ebur128_loudness_range(_tone())
     assert math.isfinite(lra)

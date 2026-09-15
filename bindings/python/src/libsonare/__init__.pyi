@@ -244,6 +244,9 @@ from .analyzer import (
     lufs_interleaved as lufs_interleaved,
 )
 from .analyzer import (
+    lufs_series_interleaved as lufs_series_interleaved,
+)
+from .analyzer import (
     master_audio as master_audio,
 )
 from .analyzer import (

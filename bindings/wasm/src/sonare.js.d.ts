@@ -554,6 +554,17 @@ export interface WasmLufsResult {
   loudnessRange: number;
 }
 
+/**
+ * The two per-block loudness series a multi-channel measurement builds, in
+ * LUFS. A signal shorter than a window yields an empty series for it.
+ */
+export interface WasmLufsSeriesResult {
+  /** 400 ms momentary series. */
+  momentary: Float32Array;
+  /** 3 s short-term series. */
+  shortTerm: Float32Array;
+}
+
 export interface WasmMasteringResult {
   samples: Float32Array;
   sampleRate: number;
@@ -2741,6 +2752,11 @@ export interface SonareModule {
   momentaryLufs: (samples: Float32Array, sampleRate: number) => Float32Array;
   shortTermLufs: (samples: Float32Array, sampleRate: number) => Float32Array;
   lufsInterleaved: (samples: Float32Array, channels: number, sampleRate: number) => WasmLufsResult;
+  lufsSeriesInterleaved: (
+    samples: Float32Array,
+    channels: number,
+    sampleRate: number,
+  ) => WasmLufsSeriesResult;
   ebur128LoudnessRange: (samples: Float32Array, sampleRate: number) => number;
 
   // Core - Resample

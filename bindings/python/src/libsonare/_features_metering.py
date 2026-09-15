@@ -28,6 +28,8 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _narrow_int,
+    _optional_float_array_result,
+    _out_float_array,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -170,6 +172,64 @@ def lufs_interleaved(
         max_short_term_lufs=float(out.max_short_term_lufs),
         loudness_range=float(out.loudness_range),
     )
+
+
+def lufs_series_interleaved(
+    samples: Sequence[float] | list[float],
+    channels: int,
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
+) -> tuple[list[float], list[float]]:
+    """Momentary and short-term LUFS series for an interleaved multi-channel buffer.
+
+    Measured with ITU-R BS.1770-4 channel summing, so this is not recoverable
+    from :func:`momentary_lufs` / :func:`short_term_lufs`: the standard sums the
+    K-weighted per-channel block energies rather than mixing per-channel loudness
+    in dB. Both series come out of one K-weighting pass. For ``channels == 1``
+    they match the mono meters element for element.
+
+    Args:
+        samples: Interleaved input buffer of ``frames * channels`` values.
+        channels: Channel count (must be > 0).
+        sample_rate: Sample rate in Hz. The default (22050) is non-standard for
+            audio; pass the buffer's actual rate, as K-weighting is sample-rate
+            dependent and a wrong rate yields wrong loudness.
+        validate: Reject empty / NaN / Inf input (default ``True``).
+
+    Returns:
+        ``(momentary, short_term)`` — the 400 ms and 3 s series in LUFS. A signal
+        shorter than a window yields an empty series for it, not an error.
+    """
+    sample_buf = _validate_samples("lufs_series_interleaved", samples, validate=validate)
+    if channels <= 0:
+        raise SonareValueError("lufs_series_interleaved: channels must be > 0")
+    lib = _get_lib()
+    c_array, total = _to_c_float_array(sample_buf)
+    if total % channels != 0:
+        raise SonareValueError(
+            "lufs_series_interleaved: interleaved samples length must be divisible by channels"
+        )
+    frames = total // channels
+    with (
+        _out_float_array(lib) as (out_momentary, momentary_length),
+        _out_float_array(lib) as (out_short_term, short_term_length),
+    ):
+        rc = lib.sonare_lufs_series_interleaved(
+            c_array,
+            _to_c_size_t(frames, "frames"),
+            _to_c_int(channels, "channels"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(out_momentary),
+            ctypes.byref(momentary_length),
+            ctypes.byref(out_short_term),
+            ctypes.byref(short_term_length),
+        )
+        _check(rc)
+        return (
+            _optional_float_array_result(out_momentary, momentary_length.value),
+            _optional_float_array_result(out_short_term, short_term_length.value),
+        )
 
 
 def ebur128_loudness_range(

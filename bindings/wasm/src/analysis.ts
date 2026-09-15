@@ -29,6 +29,7 @@ export {
   ebur128LoudnessRange,
   estimateTuning,
   lufsInterleaved,
+  lufsSeriesInterleaved,
   pitchTuning,
   polyFeatures,
   rmsEnergy,

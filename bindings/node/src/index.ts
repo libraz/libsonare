@@ -101,6 +101,7 @@ export type {
   KeyMode,
   KeyProfile,
   LufsResult,
+  LufsSeriesResult,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringChainSection,

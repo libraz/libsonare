@@ -234,6 +234,20 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareLufsResult),
     ]
 
+    # sonare_lufs_series_interleaved (two heap series, each pointer/length pair
+    # independently optional)
+    lib.sonare_lufs_series_interleaved.restype = ctypes.c_int32
+    lib.sonare_lufs_series_interleaved.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     # sonare_ebur128_loudness_range (scalar)
     lib.sonare_ebur128_loudness_range.restype = ctypes.c_int32
     lib.sonare_ebur128_loudness_range.argtypes = [

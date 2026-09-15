@@ -416,6 +416,10 @@ python = [
 # channels internally — passing both an interleaved buffer and a redundant frame
 # count would let them disagree. The frames-derived shape is the documented
 # cross-binding convention; not order drift.
+# lufs_series_interleaved (python): same C shape and the same frames derivation,
+# listed for python alone because the TS extractor reads the request-object
+# overload first and sees one `request` parameter, so node and wasm never reach
+# the order comparison. An entry for them would suppress nothing.
 # chord_functional_analysis: C is (options-bag, key_root, key_mode); the facades
 # put (key_root, key_mode) first and INLINE the SonareChordDetectionOptions
 # fields after them — the same ergonomic options-inlining + key-first shape
@@ -528,6 +532,7 @@ python = [
   "scale_quantize_midi",
   "scale_correction_semitones",
   "lufs_interleaved",
+  "lufs_series_interleaved",
   "chord_functional_analysis",
   "analyze_melody",
   "pitch_correct_to_midi_timevarying",

@@ -58,6 +58,24 @@ val js_lufs_interleaved(val samples, int channels, int sample_rate) {
   return out;
 }
 
+// Per-block momentary (400 ms) and short-term (3 s) LUFS series for interleaved
+// multi-channel input, with the BS.1770-4 channel sum. Mirrors the C ABI
+// sonare_lufs_series_interleaved, except that both series are always requested:
+// they fall out of one K-weighting pass, so there is nothing to save by skipping
+// one. Returns { momentary, shortTerm }.
+val js_lufs_series_interleaved(val samples, int channels, int sample_rate) {
+  size_t frames = 0;
+  std::vector<float> data = loadValidatedInterleaved(samples, channels, sample_rate, &frames);
+  std::vector<float> momentary;
+  std::vector<float> short_term;
+  metering::lufs_interleaved(data.data(), frames, channels, sample_rate, {}, &momentary,
+                             &short_term);
+  val out = val::object();
+  out.set("momentary", vectorToFloat32Array(momentary));
+  out.set("shortTerm", vectorToFloat32Array(short_term));
+  return out;
+}
+
 // EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer. Mirrors
 // the C ABI sonare_ebur128_loudness_range.
 float js_ebur128_loudness_range(val samples, int sample_rate) {
@@ -470,6 +488,7 @@ void registerMeteringBindings() {
   function("momentaryLufs", &js_momentary_lufs);
   function("shortTermLufs", &js_short_term_lufs);
   function("lufsInterleaved", &js_lufs_interleaved);
+  function("lufsSeriesInterleaved", &js_lufs_series_interleaved);
   function("ebur128LoudnessRange", &js_ebur128_loudness_range);
 
   // Metering — basic / true-peak / clipping / dynamic range
