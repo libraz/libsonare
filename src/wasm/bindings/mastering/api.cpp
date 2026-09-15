@@ -511,7 +511,7 @@ std::vector<mastering::maximizer::StreamingPlatform> streamingPlatformsFromVal(v
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "platforms must be an array");
   }
-  const int length = platforms["length"].as<int>();
+  const int length = static_cast<int>(wasmArrayLikeLength(platforms, "platforms"));
   out.reserve(static_cast<size_t>(length));
   for (int index = 0; index < length; ++index) {
     val platform = platforms[index];

@@ -21,7 +21,7 @@ std::vector<Mode> modesFromVal(val modes) {
   if (modes.isUndefined() || modes.isNull()) {
     return out;
   }
-  const int length = modes["length"].as<int>();
+  const int length = static_cast<int>(wasmArrayLikeLength(modes, "modes"));
   out.reserve(static_cast<size_t>(length));
   for (int i = 0; i < length; ++i) {
     const int mode = modes[i].as<int>();

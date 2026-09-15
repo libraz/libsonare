@@ -24,7 +24,7 @@ val ProjectWasm::importExternalStems(val request) {
                                   "external stem import requires a request with stems array");
   }
   const val stem_values = request["stems"];
-  const size_t count = stem_values["length"].as<size_t>();
+  const size_t count = wasmArrayLikeLength(stem_values, "stems");
   std::vector<SonareExternalStemDesc> descriptors;
   std::vector<std::string> names;
   std::vector<std::string> roles;

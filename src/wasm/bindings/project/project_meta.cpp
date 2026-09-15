@@ -22,7 +22,7 @@ struct AudioSourceMetadataGuard {
 void ProjectWasm::annotateKeys(val keys) {
   std::vector<SonareProjectKeySegment> segments;
   if (!keys.isUndefined() && !keys.isNull()) {
-    const size_t count = keys["length"].as<size_t>();
+    const size_t count = wasmArrayLikeLength(keys, "keys");
     segments.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       val entry = keys[i];
@@ -48,7 +48,7 @@ void ProjectWasm::annotateChords(val chords) {
   std::vector<std::vector<uint8_t>> ext_storage;
   std::vector<std::string> roman_storage;
   if (!chords.isUndefined() && !chords.isNull()) {
-    const size_t count = chords["length"].as<size_t>();
+    const size_t count = wasmArrayLikeLength(chords, "chords");
     symbols.reserve(count);
     ext_storage.reserve(count);
     roman_storage.reserve(count);
@@ -67,7 +67,7 @@ void ProjectWasm::annotateChords(val chords) {
       if (hasProperty(entry, "extensions")) {
         val ext_arr = entry["extensions"];
         if (val::global("Array").call<bool>("isArray", ext_arr)) {
-          const size_t ec = ext_arr["length"].as<size_t>();
+          const size_t ec = wasmArrayLikeLength(ext_arr, "extensions");
           exts.reserve(ec);
           for (size_t e = 0; e < ec; ++e) {
             exts.push_back(static_cast<uint8_t>(ext_arr[e].as<int>()));
@@ -370,7 +370,7 @@ val ProjectWasm::timeSignatureByIndex(const val& index_val) const {
 void ProjectWasm::setTempoSegments(val segments) {
   std::vector<SonareProjectTempoSegment> segs;
   if (!segments.isUndefined() && !segments.isNull()) {
-    const unsigned count = segments["length"].as<unsigned>();
+    const unsigned count = static_cast<unsigned>(wasmArrayLikeLength(segments, "segments"));
     segs.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
       val entry = segments[i];
@@ -391,7 +391,7 @@ void ProjectWasm::setTempoSegments(val segments) {
 void ProjectWasm::setTimeSignatures(val segments) {
   std::vector<SonareProjectTimeSignatureSegment> segs;
   if (!segments.isUndefined() && !segments.isNull()) {
-    const unsigned count = segments["length"].as<unsigned>();
+    const unsigned count = static_cast<unsigned>(wasmArrayLikeLength(segments, "segments"));
     segs.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
       val entry = segments[i];

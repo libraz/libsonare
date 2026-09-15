@@ -72,7 +72,7 @@ describe('WASM binding sources stay on the shared common.h field readers', () =>
 
     // A file that reads the same expression twice must keep two entries.
     const repeated = bareArrayLengthReadSites().filter(
-      (s) => s.file === 'project/project_bounce.cpp' && s.expression.startsWith('bindings['),
+      (s) => s.file === 'realtime/transport.cpp' && s.expression.startsWith('segments['),
     );
     expect(repeated.length).toBeGreaterThan(1);
     expect(repeated.map((s) => s.occurrence)).toEqual(repeated.map((_, index) => index + 1));

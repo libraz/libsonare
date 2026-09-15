@@ -101,7 +101,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     clip.loop_length_samples = int64Property(clip_val, "loopLengthSamples", 0);
     clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
     val events_val = clip_val["events"];
-    const uint32_t event_count = events_val["length"].as<uint32_t>();
+    const uint32_t event_count = static_cast<uint32_t>(wasmArrayLikeLength(events_val, "events"));
     clip.events.reserve(event_count);
     for (uint32_t j = 0; j < event_count; ++j) {
       val event_val = events_val[j];

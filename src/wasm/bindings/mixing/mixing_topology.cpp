@@ -44,7 +44,7 @@ void MixerWasm::addVcaGroup(std::string id, float gain_db, val members) {
   std::vector<std::string> member_storage;
   std::vector<const char*> member_ptrs;
   if (!members.isUndefined() && !members.isNull()) {
-    const int count = members["length"].as<int>();
+    const int count = static_cast<int>(wasmArrayLikeLength(members, "members"));
     member_storage.reserve(static_cast<size_t>(count));
     member_ptrs.reserve(static_cast<size_t>(count));
     for (int i = 0; i < count; ++i) {
@@ -85,7 +85,7 @@ void MixerWasm::setVcaGroupGainDb(std::string id, float gain_db) {
 void MixerWasm::setVcaGroupMembers(std::string id, val members) {
   std::vector<std::string> member_storage;
   std::vector<const char*> member_ptrs;
-  const int count = members["length"].as<int>();
+  const int count = static_cast<int>(wasmArrayLikeLength(members, "members"));
   member_storage.reserve(static_cast<size_t>(count));
   member_ptrs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) member_storage.push_back(members[i].as<std::string>());

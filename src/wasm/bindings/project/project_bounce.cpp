@@ -232,7 +232,7 @@ std::vector<SonareBuiltinInstrumentBinding> ProjectWasm::builtinBindingsFromVal(
     return out;
   }
   if (val::global("Array").call<bool>("isArray", bindings)) {
-    const size_t count = bindings["length"].as<size_t>();
+    const size_t count = wasmArrayLikeLength(bindings, "bindings");
     out.reserve(count);
     for (size_t i = 0; i < count; ++i) {
       out.push_back(builtinBindingFromVal(bindings[i]));
@@ -291,7 +291,7 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
       return binding;
     };
     if (val::global("Array").call<bool>("isArray", bindings)) {
-      const size_t count = bindings["length"].as<size_t>();
+      const size_t count = wasmArrayLikeLength(bindings, "bindings");
       synths.reserve(count);
       for (size_t i = 0; i < count; ++i) synths.push_back(bindingFromVal(bindings[i]));
     } else {
@@ -395,7 +395,7 @@ val ProjectWasm::bounceWithSf2Instrument(val bindings, val options) {
   std::vector<SonareSf2InstrumentBinding> players;
   if (!bindings.isUndefined() && !bindings.isNull()) {
     if (val::global("Array").call<bool>("isArray", bindings)) {
-      const size_t count = bindings["length"].as<size_t>();
+      const size_t count = wasmArrayLikeLength(bindings, "bindings");
       players.reserve(count);
       for (size_t i = 0; i < count; ++i) {
         players.push_back(sf2BindingFromVal(bindings[i]));

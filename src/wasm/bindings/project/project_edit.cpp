@@ -107,7 +107,7 @@ void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "clip takes must be an array");
   }
-  const size_t count = takes_val["length"].as<size_t>();
+  const size_t count = wasmArrayLikeLength(takes_val, "takes");
   std::vector<SonareProjectClipTake> takes;
   std::vector<std::string> name_storage;
   takes.reserve(count);
@@ -140,7 +140,7 @@ void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) 
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "clip comp segments must be an array");
   }
-  const size_t count = segments_val["length"].as<size_t>();
+  const size_t count = wasmArrayLikeLength(segments_val, "segments");
   std::vector<SonareProjectClipCompSegment> segments;
   segments.reserve(count);
   for (size_t i = 0; i < count; ++i) {

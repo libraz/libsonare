@@ -14,11 +14,17 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyze,
+  detectKeyCandidates,
   type EngineAutomationPoint,
+  type EngineMidiEvent,
   ErrorCode,
   fixFrames,
   init,
   isSonareError,
+  Mixer,
+  masteringStreamingPreview,
+  mixingScenePresetJson,
+  Project,
   RealtimeEngine,
   RealtimeVoiceChanger,
   type SonareError,
@@ -431,5 +437,429 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     } finally {
       engine.destroy();
     }
+  });
+});
+
+/**
+ * A second batch of raw `["length"].as<T>()` reads, found by the shared
+ * narrowing scanner (`tests/conformance/check_wasm_narrowing_scope.py`)
+ * rather than by hand. Each entry point pairs a rejection of a wrapped,
+ * negative or fractional length with a control that proves the length is
+ * really being read: two legal counts producing a measurably different
+ * count on the other side, most of them read back through `project.toJson()`
+ * -- the value in these entry points is project state, so the control that
+ * matters is that a saved project reloads with the count it was given.
+ *
+ * A caller-supplied object like `{ length: -1 }` reaches most of these
+ * directly: the facade forwards its argument without transforming it. A few
+ * entry points require `Array.isArray(...)` to be true before the length is
+ * even read, or call `.map()` on the argument in TypeScript before forwarding
+ * it -- `Array.prototype.map` reads `.length` itself and refuses to allocate
+ * a result past the engine's own array-length ceiling (2**32 - 1), so `-1`
+ * and `1.5` cannot reach the native reader through those entry points at all
+ * (a real Array's `.length` is always a safe non-negative integer below that
+ * ceiling; there is no JS value that both passes `Array.isArray` and carries
+ * a negative or fractional `.length`). Those entry points are driven instead
+ * with a real, sparse Array whose `.length` exceeds the WASM budget
+ * (kMaxWasmFloat32Elements, 64 Mi) -- legal by the engine's own rules, empty
+ * of real elements, and still refused before any allocation.
+ */
+describe('a second batch of array-like `.length` reads refuse a wrapped, negative or fractional count', () => {
+  const WRAPPING_LENGTHS = [2 ** 32 + 5, -1, 1.5];
+
+  /** A real, empty Array whose `.length` is legal but exceeds the WASM budget. */
+  function hugeArray(): unknown[] {
+    const arr: unknown[] = [];
+    arr.length = 100_000_000;
+    return arr;
+  }
+
+  it('sizes masteringStreamingPreview platforms from the real array length', () => {
+    const samples = makeSine(1, 220);
+    const platform = (name: string) => ({ name, targetLufs: -14, ceilingDb: -1 });
+    const platformCount = (platforms: unknown): number =>
+      JSON.parse(masteringStreamingPreview({ samples, sampleRate: SR, platforms } as never))
+        .platforms.length;
+    // The control: two legal platform lists preview that many platforms.
+    expect(platformCount([platform('a')])).toBe(1);
+    expect(platformCount([platform('a'), platform('b')])).toBe(2);
+    for (const length of WRAPPING_LENGTHS) {
+      expectInvalidParameter(() => platformCount({ length }));
+    }
+  });
+
+  it('reads addVcaGroup/setVcaGroupMembers members from the real array length', () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, 512);
+    try {
+      const membersOf = (id: string): string[] =>
+        JSON.parse(mixer.toSceneJson()).vcaGroups.find((group: { id: string }) => group.id === id)
+          .members;
+      // The control: two legal member lists keep the members they carry.
+      mixer.addVcaGroup('vg1', 0, ['a']);
+      expect(membersOf('vg1')).toEqual(['a']);
+      mixer.addVcaGroup('vg2', 0, ['a', 'b']);
+      expect(membersOf('vg2')).toEqual(['a', 'b']);
+      for (const length of WRAPPING_LENGTHS) {
+        expectInvalidParameter(() =>
+          mixer.addVcaGroup('bad', 0, { length } as unknown as string[]),
+        );
+      }
+
+      mixer.addVcaGroup('vg3', 0, []);
+      mixer.setVcaGroupMembers('vg3', ['a']);
+      expect(membersOf('vg3')).toEqual(['a']);
+      mixer.setVcaGroupMembers('vg3', ['a', 'b']);
+      expect(membersOf('vg3')).toEqual(['a', 'b']);
+      for (const length of WRAPPING_LENGTHS) {
+        expectInvalidParameter(() =>
+          mixer.setVcaGroupMembers('vg3', { length } as unknown as string[]),
+        );
+      }
+    } finally {
+      mixer.destroy();
+    }
+  });
+
+  it('reads setWarpMap anchors from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const anchorsOf = (): unknown[] => JSON.parse(project.toJson()).warp_maps[0].anchors;
+      const anchor = (i: number) => ({ warpSample: i * 10, sourceSample: i * 10 });
+      // The control: two legal anchor lists (2 and 3 -- setWarpMap requires at
+      // least 2) reload with that many anchors.
+      project.setWarpMap({ id: 1, anchors: [anchor(0), anchor(1)] });
+      expect(anchorsOf().length).toBe(2);
+      project.setWarpMap({ id: 1, anchors: [anchor(0), anchor(1), anchor(2)] });
+      expect(anchorsOf().length).toBe(3);
+      for (const length of WRAPPING_LENGTHS) {
+        expectInvalidParameter(() =>
+          project.setWarpMap({
+            id: 1,
+            anchors: { length } as unknown as Parameters<typeof project.setWarpMap>[0]['anchors'],
+          }),
+        );
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads annotateKeys from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const keysOf = (): unknown[] => JSON.parse(project.toJson()).annotation.keys;
+      const key = (i: number) => ({ startPpq: i, endPpq: i + 1, tonicPc: 0, mode: 0 });
+      // The control: two legal key-segment lists reload with that many segments.
+      project.annotateKeys([key(0)]);
+      expect(keysOf().length).toBe(1);
+      project.annotateKeys([key(0), key(1)]);
+      expect(keysOf().length).toBe(2);
+      for (const length of WRAPPING_LENGTHS) {
+        expectInvalidParameter(() =>
+          project.annotateKeys({ length } as unknown as Parameters<typeof project.annotateKeys>[0]),
+        );
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads annotateChords from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const chordsOf = (): unknown[] => JSON.parse(project.toJson()).annotation.chords;
+      const chord = (i: number) => ({ startPpq: i, endPpq: i + 1, rootPc: 0, quality: 0 });
+      // The control: two legal chord lists reload with that many chords.
+      project.annotateChords([chord(0)]);
+      expect(chordsOf().length).toBe(1);
+      project.annotateChords([chord(0), chord(1)]);
+      expect(chordsOf().length).toBe(2);
+      for (const length of WRAPPING_LENGTHS) {
+        expectInvalidParameter(() =>
+          project.annotateChords({ length } as unknown as Parameters<
+            typeof project.annotateChords
+          >[0]),
+        );
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads annotateChords extensions from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const extensionsOf = (): unknown[] =>
+        JSON.parse(project.toJson()).annotation.chords[0].extensions;
+      const chordWithExtensions = (extensions: unknown) => [
+        { startPpq: 0, endPpq: 1, rootPc: 0, quality: 0, extensions },
+      ];
+      // The control: two legal extension lists reload with that many extensions.
+      project.annotateChords(chordWithExtensions([9]) as never);
+      expect(extensionsOf()).toEqual([9]);
+      project.annotateChords(chordWithExtensions([9, 11]) as never);
+      expect(extensionsOf()).toEqual([9, 11]);
+      // `Array.isArray` gates this site, so only a real (if sparse) Array
+      // reaches it; -1 and 1.5 cannot be a real Array's `.length` at all.
+      expectInvalidParameter(() =>
+        project.annotateChords(chordWithExtensions(hugeArray()) as never),
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads project.setTempoSegments from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      // The control: two legal tempo maps reload with that many segments.
+      project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+      expect(project.tempoSegmentCount()).toBe(1);
+      project.setTempoSegments([
+        { startPpq: 0, bpm: 120 },
+        { startPpq: 4, bpm: 90 },
+      ]);
+      expect(project.tempoSegmentCount()).toBe(2);
+      for (const length of WRAPPING_LENGTHS) {
+        expectInvalidParameter(() =>
+          project.setTempoSegments({ length } as unknown as Parameters<
+            typeof project.setTempoSegments
+          >[0]),
+        );
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads project.setTimeSignatures from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      // The control: two legal time-signature maps reload with that many entries.
+      project.setTimeSignatures([{ startPpq: 0, numerator: 4, denominator: 4 }]);
+      expect(project.timeSignatureCount()).toBe(1);
+      project.setTimeSignatures([
+        { startPpq: 0, numerator: 4, denominator: 4 },
+        { startPpq: 4, numerator: 3, denominator: 4 },
+      ]);
+      expect(project.timeSignatureCount()).toBe(2);
+      for (const length of WRAPPING_LENGTHS) {
+        expectInvalidParameter(() =>
+          project.setTimeSignatures({ length } as unknown as Parameters<
+            typeof project.setTimeSignatures
+          >[0]),
+        );
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
+  function buildMidiProject(): Project {
+    const project = new Project();
+    project.setSampleRate(48000);
+    const trackId = project.addTrack({ kind: 'midi', name: 't' });
+    const { clipId } = project.addMidiClip(0, 4);
+    project.setMidiEvents(clipId, [
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(3, 0, 0, 60, 0),
+    ]);
+    void trackId;
+    return project;
+  }
+
+  it('reads bounceWithBuiltinInstrument bindings from the real array length', () => {
+    // The control: a lone valid binding renders; a second binding with an
+    // unknown waveform trips validation, which only fires if it was read.
+    const one = buildMidiProject();
+    expect(() => one.bounceWithBuiltinInstrument([{ destinationId: 0 }], {})).not.toThrow();
+    one.destroy();
+    const two = buildMidiProject();
+    expect(() =>
+      two.bounceWithBuiltinInstrument(
+        [{ destinationId: 0 }, { destinationId: 0, waveform: 'bogus' as never }],
+        {},
+      ),
+    ).toThrow();
+    two.destroy();
+    // `Array.isArray` gates this site: a non-Array is read as one binding
+    // instead of reaching the count, so the attack needs a real Array too.
+    const attack = buildMidiProject();
+    expectInvalidParameter(() => attack.bounceWithBuiltinInstrument(hugeArray() as never, {}));
+    attack.destroy();
+  });
+
+  it('reads bounceWithSynthInstrument bindings from the real array length', () => {
+    const one = buildMidiProject();
+    expect(() => one.bounceWithSynthInstrument([{ destinationId: 0 }], {})).not.toThrow();
+    one.destroy();
+    const two = buildMidiProject();
+    expect(() =>
+      two.bounceWithSynthInstrument(
+        [{ destinationId: 0 }, { destinationId: 0, waveform: 'bogus' } as never],
+        {},
+      ),
+    ).toThrow();
+    two.destroy();
+    // Array.isArray(instrument) selects the array path in the facade too; a
+    // non-Array takes the single-instrument path instead.
+    const attack = buildMidiProject();
+    expectInvalidParameter(() => attack.bounceWithSynthInstrument(hugeArray() as never, {}));
+    attack.destroy();
+  });
+
+  it('reads bounceWithSf2Instrument bindings from the real array length', () => {
+    const one = buildMidiProject();
+    expect(() => one.bounceWithSf2Instrument([{ destinationId: 0 }], {})).not.toThrow();
+    one.destroy();
+    const two = buildMidiProject();
+    expect(() =>
+      two.bounceWithSf2Instrument([{ destinationId: 0 }, { destinationId: 0, polyphony: 1.5 }], {}),
+    ).toThrow();
+    two.destroy();
+    const attack = buildMidiProject();
+    expectInvalidParameter(() => attack.bounceWithSf2Instrument(hugeArray() as never, {}));
+    attack.destroy();
+  });
+
+  it('reads setClipTakes from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio', name: 't' });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
+      const takesOf = (): unknown[] => JSON.parse(project.toJson()).clips[0].takes;
+      // The control: two legal take lists reload with that many takes.
+      project.setClipTakes(clipId, [{ id: 1 }], 1);
+      expect(takesOf().length).toBe(1);
+      project.setClipTakes(clipId, [{ id: 1 }, { id: 2 }], 1);
+      expect(takesOf().length).toBe(2);
+      // Array.isArray gates this site, so the attack needs a real Array.
+      expectInvalidParameter(() => project.setClipTakes(clipId, hugeArray() as never, 1));
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads setClipCompSegments from the real array length, verified by reload', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio', name: 't' });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
+      project.setClipTakes(clipId, [{ id: 1 }], 1);
+      const segmentsOf = (): unknown[] => JSON.parse(project.toJson()).clips[0].comp_segments;
+      // The control: two legal comp-segment lists reload with that many segments.
+      project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: 1 }]);
+      expect(segmentsOf().length).toBe(1);
+      project.setClipCompSegments(clipId, [
+        { startPpq: 0, endPpq: 1, takeId: 1 },
+        { startPpq: 1, endPpq: 2, takeId: 1 },
+      ]);
+      expect(segmentsOf().length).toBe(2);
+      expectInvalidParameter(() => project.setClipCompSegments(clipId, hugeArray() as never));
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('reads importExternalStems stems from the real array length', () => {
+    const stem = (name: string) => ({
+      name,
+      layout: 'mono' as const,
+      planarSamples: [new Float32Array(4800)],
+    });
+    const project1 = new Project();
+    project1.setSampleRate(48000);
+    // The control: two legal stem lists import that many tracks.
+    expect(
+      project1.importExternalStems({ sampleRate: 48000, stems: [stem('a')] }).trackIds.length,
+    ).toBe(1);
+    project1.destroy();
+    const project2 = new Project();
+    project2.setSampleRate(48000);
+    expect(
+      project2.importExternalStems({ sampleRate: 48000, stems: [stem('a'), stem('b')] }).trackIds
+        .length,
+    ).toBe(2);
+    project2.destroy();
+    // `.stems.map(...)` in the facade requires a real Array too.
+    const project3 = new Project();
+    project3.setSampleRate(48000);
+    expectInvalidParameter(() =>
+      project3.importExternalStems({ sampleRate: 48000, stems: hugeArray() } as never),
+    );
+    project3.destroy();
+  });
+
+  it('sizes setMidiClips events per-clip from the real array length', () => {
+    const rms = (events: unknown): number => {
+      const engine = new RealtimeEngine(48000, 2048);
+      try {
+        engine.setBuiltinInstrument({ gain: 0.5 }, 0);
+        engine.setMidiClips([
+          {
+            id: 1,
+            trackId: 0,
+            destinationId: 0,
+            lengthSamples: 8192,
+            events: events as EngineMidiEvent[],
+          },
+        ]);
+        engine.play();
+        const out = engine.process([new Float32Array(2048), new Float32Array(2048)]);
+        let sum = 0;
+        for (const value of out[0]) {
+          sum += value * value;
+        }
+        return Math.sqrt(sum / out[0].length);
+      } finally {
+        engine.destroy();
+      }
+    };
+    // The control: an empty event list renders silence; one note-on does not.
+    expect(rms([])).toBe(0);
+    expect(
+      rms([{ renderFrame: 0, word0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100, wordCount: 1 }]),
+    ).toBeGreaterThan(0);
+    for (const length of WRAPPING_LENGTHS) {
+      const engine = new RealtimeEngine(48000, 2048);
+      try {
+        engine.setBuiltinInstrument({ gain: 0.5 }, 0);
+        expectInvalidParameter(() =>
+          engine.setMidiClips([
+            {
+              id: 1,
+              trackId: 0,
+              destinationId: 0,
+              lengthSamples: 8192,
+              events: { length } as unknown as Parameters<
+                typeof engine.setMidiClips
+              >[0][number]['events'],
+            },
+          ]),
+        );
+      } finally {
+        engine.destroy();
+      }
+    }
+  });
+
+  it('sizes detectKeyCandidates modes from the real array length', () => {
+    const samples = makeSine(1, 220);
+    // The control: two legal mode lists return that many times the 12
+    // pitch-class candidates detectKeyCandidates emits per mode.
+    expect(detectKeyCandidates(samples, SR, { modes: ['major'] }).length).toBe(12);
+    expect(detectKeyCandidates(samples, SR, { modes: ['major', 'minor'] }).length).toBe(24);
+    // `modes.map(...)` in the facade requires a real Array too, and
+    // `Array.prototype.map` refuses to allocate past the engine's own
+    // array-length ceiling before -1 or 1.5 could reach the native reader.
+    expectInvalidParameter(() => detectKeyCandidates(samples, SR, { modes: hugeArray() as never }));
   });
 });
