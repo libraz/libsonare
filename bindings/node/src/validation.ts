@@ -207,6 +207,26 @@ export function assertU32(fnName: string, value: number, argName: string): void 
 }
 
 /**
+ * Reject an argument that is not a count: a non-negative integer a JS number
+ * still denotes exactly.
+ *
+ * Neither neighbour says this. {@link assertU32} caps at `0xffffffff`, which is
+ * a different domain — the width of a C `uint32_t`, not the range over which a
+ * JS number is an exact integer — and {@link assertInt64} ignores sign, so a
+ * negative count passes it and arrives at a `size_t` parameter as an enormous
+ * positive one. A field that is a length, a capacity or an index needs both
+ * halves, which is what this is for; the field's own upper bound stays the
+ * callee's to enforce.
+ */
+export function assertNonNegativeSafeInteger(fnName: string, value: number, argName: string): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(
+      `${fnName}: ${argName} must be a non-negative integer no greater than Number.MAX_SAFE_INTEGER`,
+    );
+  }
+}
+
+/**
  * {@link assertInt32}'s 64-bit sibling, for a field the addon reads as `int64`.
  *
  * The bound is the safe-integer range rather than the C type's, because a JS

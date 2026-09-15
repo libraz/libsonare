@@ -161,8 +161,11 @@ bool ParseAutomationTargetKind(Napi::Env env, const Napi::Value& value, uint32_t
         .ThrowAsJavaScriptException();
     return false;
   }
-  const double ordinal = value.As<Napi::Number>().DoubleValue();
-  if (!std::isfinite(ordinal) || std::trunc(ordinal) != ordinal || ordinal < 0.0 || ordinal > 2.0) {
+  // The int the ordinal has to be is the shared reader's; which ints name a
+  // target kind is this field's.
+  int ordinal = 0;
+  if (!Int32Value(env, value, "automation target kind", &ordinal)) return false;
+  if (ordinal < SONARE_AUTOMATION_TARGET_OPAQUE || ordinal > SONARE_AUTOMATION_TARGET_TRACK_PAN) {
     Napi::RangeError::New(env, "Invalid automation target kind: " + std::to_string(ordinal))
         .ThrowAsJavaScriptException();
     return false;

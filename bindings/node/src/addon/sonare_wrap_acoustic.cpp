@@ -26,21 +26,15 @@ namespace {
 constexpr int kAcousticMinSampleRate = 8000;
 constexpr int kAcousticMaxSampleRate = 384000;
 
-// Reads a deterministic late-tail seed, keeping @p fallback when the option is
-// absent or <= 0 (the C ABI's "seed == 0 keeps the library default", so seed: 0
-// yields the same RIR on every surface instead of seeding the PRNG with 0). The
-// read is int64 because the C ABI's seed is a uint32: an int32 read turned every
-// seed above 2^31-1 negative and silently substituted the default, leaving half
-// the seed space unreachable. A value past the uint32 range is rejected rather
-// than substituted, since a silent default is what made the gap invisible.
+// Reads a deterministic late-tail seed, keeping @p fallback for seed 0 (the C
+// ABI's "seed == 0 keeps the library default", so seed: 0 yields the same RIR on
+// every surface instead of seeding the PRNG with 0). The uint32 reader is the
+// C ABI's own width: anything outside it is refused rather than substituted,
+// since a silent default is what once made half the seed space unreachable
+// without a symptom.
 unsigned SeedFromOptions(const Napi::Object& opts, unsigned fallback) {
-  const int64_t seed_in = node_int64_option(opts, "seed", kZeroIsSentinel);
-  if (seed_in <= 0) return fallback;
-  if (seed_in > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "seed must be within [0, 4294967295]");
-  }
-  return static_cast<unsigned>(seed_in);
+  const uint32_t seed_in = node_uint32_option(opts, "seed", kZeroIsSentinel);
+  return seed_in == 0 ? fallback : seed_in;
 }
 
 // Throws (via ThrowAsJavaScriptException) and returns false when the rate is out
@@ -62,24 +56,18 @@ bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
 // directly), which is why the guard has to be reachable from the core rather
 // than sitting in the C-ABI translation unit.
 
-// Validates the RIR shape/timing config against the same bounds the C ABI checks
+// Validates the RIR timing config against the same bounds the C ABI checks
 // before building a room, so Node rejects (rather than silently accepts) the
-// NaN/out-of-range inputs the C ABI/Python already refuse.
-void ValidateRirShapeAndTiming(const sonare::acoustic::SourceListener& placement,
-                               const sonare::acoustic::RirSynthConfig& cfg) {
+// out-of-range inputs the C ABI/Python already refuse.
+void ValidateRirShapeAndTiming(const sonare::acoustic::RirSynthConfig& cfg) {
   using namespace sonare::acoustic;
-  const auto finite3 = [](const Vec3& v) {
-    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-  };
-  if (!finite3(placement.source) || !finite3(placement.listener)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "source/listener position must be finite");
-  }
-  if (!std::isfinite(cfg.max_seconds) || cfg.max_seconds < 0.0f ||
-      cfg.max_seconds > kMaxRirSeconds || !std::isfinite(cfg.mixing_time_ms) ||
-      cfg.mixing_time_ms < 0.0f || cfg.mixing_time_ms > kMaxRirMixingTimeMs ||
-      !std::isfinite(cfg.crossfade_ms) || cfg.crossfade_ms < 0.0f ||
-      cfg.crossfade_ms > kMaxRirCrossfadeMs) {
+  // Finiteness is FiniteFloatProperty's at the read, for the placement as well
+  // as for maxSeconds and mixingTimeMs; what is left here is each field's own
+  // bound. crossfadeMs keeps its check because it reaches this through
+  // ZeroIsDefault rather than a reader.
+  if (cfg.max_seconds < 0.0f || cfg.max_seconds > kMaxRirSeconds || cfg.mixing_time_ms < 0.0f ||
+      cfg.mixing_time_ms > kMaxRirMixingTimeMs || !std::isfinite(cfg.crossfade_ms) ||
+      cfg.crossfade_ms < 0.0f || cfg.crossfade_ms > kMaxRirCrossfadeMs) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "RIR timing parameters out of range");
   }
@@ -159,13 +147,11 @@ std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* ke
 // per-band bandAbsorption > scalar absorption.
 sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float def_absorption) {
   using namespace sonare::acoustic;
-  const sonare::RoomDimensions dims{FloatProperty(opts, "lengthM", 7.0f),
-                                    FloatProperty(opts, "widthM", 5.0f),
-                                    FloatProperty(opts, "heightM", 3.0f)};
-  if (!std::isfinite(dims.length) || !std::isfinite(dims.width) || !std::isfinite(dims.height)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "room dimensions must be finite");
-  }
+  // A non-finite dimension is refused by the reader, which names the key the
+  // caller wrote rather than the three together.
+  const sonare::RoomDimensions dims{FiniteFloatProperty(opts, "lengthM", 7.0f),
+                                    FiniteFloatProperty(opts, "widthM", 5.0f),
+                                    FiniteFloatProperty(opts, "heightM", 3.0f)};
 
   // The precedence, the [0, 1] coefficient rejection and the band-wise
   // scattering all come from the core builder the C ABI calls, so the same
@@ -181,10 +167,11 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
 }
 
 sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts) {
-  return {{FloatProperty(opts, "sourceX", 1.0f), FloatProperty(opts, "sourceY", 1.0f),
-           FloatProperty(opts, "sourceZ", 1.2f)},
-          {FloatProperty(opts, "listenerX", 5.0f), FloatProperty(opts, "listenerY", 4.0f),
-           FloatProperty(opts, "listenerZ", 1.7f)}};
+  return {
+      {FiniteFloatProperty(opts, "sourceX", 1.0f), FiniteFloatProperty(opts, "sourceY", 1.0f),
+       FiniteFloatProperty(opts, "sourceZ", 1.2f)},
+      {FiniteFloatProperty(opts, "listenerX", 5.0f), FiniteFloatProperty(opts, "listenerY", 4.0f),
+       FiniteFloatProperty(opts, "listenerZ", 1.7f)}};
 }
 
 std::vector<float> AudioToVector(const sonare::Audio& audio) {
@@ -254,8 +241,8 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
   cfg.seed = SeedFromOptions(opts, cfg.seed);
-  cfg.max_seconds = FloatProperty(opts, "maxSeconds", cfg.max_seconds);
-  cfg.mixing_time_ms = FloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
+  cfg.max_seconds = FiniteFloatProperty(opts, "maxSeconds", cfg.max_seconds);
+  cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
   // crossfadeMs == 0 keeps the RirSynthConfig default (5 ms), matching the C ABI's
   // "crossfade_ms == 0 means keep the library default"; a literal zero crossfade
   // shifts the splice by ~1 sample and clicks. Every other value is the caller's
@@ -277,7 +264,7 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
                                  .or_default(cfg.air.humidity_percent);
 
   const auto placement = PlacementFromOptions(opts);
-  ValidateRirShapeAndTiming(placement, cfg);
+  ValidateRirShapeAndTiming(cfg);
   const auto result =
       sonare::acoustic::synthesize_rir(RoomFromOptions(opts, 0.2f), placement, sample_rate, cfg);
   std::vector<float> rir = AudioToVector(result.rir);
@@ -385,14 +372,14 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   cfg.target = RoomFromOptions(opts, 0.2f);
   cfg.placement = PlacementFromOptions(opts);
   cfg.source_tail_suppression =
-      FloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);
-  cfg.wet = FloatProperty(opts, "wet", cfg.wet);
+      FiniteFloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);
+  cfg.wet = FiniteFloatProperty(opts, "wet", cfg.wet);
   cfg.ism_order = IntProperty(opts, "ismOrder", cfg.ism_order);
   cfg.seed = SeedFromOptions(opts, cfg.seed);
-  cfg.max_seconds = FloatProperty(opts, "maxSeconds", cfg.max_seconds);
+  cfg.max_seconds = FiniteFloatProperty(opts, "maxSeconds", cfg.max_seconds);
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
-  cfg.mixing_time_ms = FloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
+  cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
   // Same crossfade sentinel rule as SynthesizeRir above.
   cfg.crossfade_ms =
       sonare::ZeroIsDefault(FloatProperty(opts, "crossfadeMs", 0.0f))

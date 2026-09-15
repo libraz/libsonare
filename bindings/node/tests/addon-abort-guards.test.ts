@@ -158,8 +158,32 @@ const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
     'Instance method on PolyphonicAnalysis, which needs an analysed chord; its note-index rejection is driven by polyphonic-analysis.test.ts.',
   ],
   [
+    'processWithOffset',
+    'Instance method on StreamAnalyzer, which needs a configured session; its sample-offset rejection is driven by basic_streaming_metering.test.ts.',
+  ],
+  [
+    'readFramesI16',
+    'Instance method on StreamAnalyzer, which needs a configured session; its frame-count rejection is driven by basic_streaming_metering.test.ts.',
+  ],
+  [
+    'readFramesSoa',
+    'Instance method on StreamAnalyzer, which needs a configured session; its frame-count rejection is driven by basic_streaming_metering.test.ts.',
+  ],
+  [
+    'readFramesU8',
+    'Instance method on StreamAnalyzer, which needs a configured session; its frame-count rejection is driven by basic_streaming_metering.test.ts.',
+  ],
+  [
     'readGoniometerLatest',
     'Instance method on Mixer, which needs a configured strip and a running meter; covered by metering-and-scale.test.ts.',
+  ],
+  [
+    'reset',
+    'Instance method on StreamAnalyzer, which needs a configured session; its base-offset rejection is driven by basic_streaming_metering.test.ts.',
+  ],
+  [
+    'setBand',
+    'Instance method on StreamingEqualizer, which needs an initialized equalizer; its band-index rejection is driven by basic_streaming_metering.test.ts.',
   ],
   [
     'setNoteEdit',

@@ -25,6 +25,7 @@ using sonare_node::BoolProperty;
 using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int32Arg;
+using sonare_node::Int32Value;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
 using sonare_node::kZeroIsSentinel;

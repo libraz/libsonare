@@ -160,7 +160,7 @@ export function bareHasSites(): BareHasSite[] {
  * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|String|MidiByte)Property|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Word|Float|FiniteFloat|Double|Bool|String|MidiByte|NonNegativeSizeT)Property|OptionAt)\s*\(/;
 
 /**
  * Matches a reader call and captures its literal key, for either arity.
@@ -172,7 +172,7 @@ const OPTION_READER =
  * set of the graph entry points.
  */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Word|Float|Double|Bool|MidiByte)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Word|Float|FiniteFloat|Double|Bool|MidiByte|NonNegativeSizeT)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
 
 /**
  * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter
@@ -694,9 +694,11 @@ function enclosingDefinition(spans: DefinitionSpan[], at: number): string {
 }
 
 /**
- * The N-API accessors that WRAP. `DoubleValue` and `FloatValue` are absent on
- * purpose: neither is a modular conversion, so neither can turn a caller's
- * number into a different legal one the way ToInt32 does.
+ * The N-API accessors that WRAP. `DoubleValue` and `FloatValue` are absent
+ * because neither is a modular conversion — not because neither can change a
+ * caller's number. `FloatValue` saturates a double past FLT_MAX to an infinity,
+ * which folds the caller's quantity onto another legal value by a non-modular
+ * route; this pattern does not cover it.
  */
 const WRAPPING_ACCESSOR =
   /\.\s*As<Napi::Number>\(\)\s*\.\s*(Int32Value|Uint32Value|Int64Value)\s*\(\s*\)/g;

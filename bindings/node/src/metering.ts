@@ -1,6 +1,11 @@
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
-import { assertInt32, assertSamples, assertSamplesInWindow } from './validation.js';
+import {
+  assertInt32,
+  assertNonNegativeSafeInteger,
+  assertSamples,
+  assertSamplesInWindow,
+} from './validation.js';
 
 // The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
 // here so the windowed pre-scan covers exactly the span the call will read; a
@@ -251,9 +256,7 @@ export function meteringDetectClipping(
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringDetectClipping', request.samples, request.validate !== false);
   const minRegionSamples = request.minRegionSamples ?? 1;
-  if (!Number.isInteger(minRegionSamples) || minRegionSamples < 0) {
-    throw new RangeError('meteringDetectClipping: minRegionSamples must be a non-negative integer');
-  }
+  assertNonNegativeSafeInteger('meteringDetectClipping', minRegionSamples, 'minRegionSamples');
   return addon.meteringDetectClipping(
     request.samples,
     request.sampleRate ?? 22050,

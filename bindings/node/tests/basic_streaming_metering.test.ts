@@ -224,6 +224,20 @@ describe('StreamingMasteringChain', () => {
 });
 
 describe('StreamingEqualizer', () => {
+  it('refuses a band index that is not a non-negative integer', () => {
+    // RED WHEN: setBand goes back to casting an int to size_t. A negative index
+    // arrives at set_band as an enormous positive one, which is an edit to a
+    // band nobody named rather than a refusal.
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    const band = { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true } as const;
+    const refused = /finite non-negative integer no greater than Number\.MAX_SAFE_INTEGER/;
+    for (const index of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => eq.setBand(index, band), `index ${index}`).toThrow(refused);
+    }
+    // Positive control: the refusals above are about the index, not the band.
+    expect(() => eq.setBand(0, band)).not.toThrow();
+  });
+
   it('processes stereo blocks and exposes a spectrum snapshot', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
@@ -974,15 +988,16 @@ describe('StreamAnalyzer external offsets', () => {
       Number.NaN,
     ];
 
+    // The wording is the shared NonNegativeSizeTArg reader's, which these six
+    // entry points now read through instead of a file-local copy of its domain.
+    const refused = /finite non-negative integer no greater than Number\.MAX_SAFE_INTEGER/;
     for (const value of invalidValues) {
-      expect(() => analyzer.processWithOffset(new Float32Array([0]), value)).toThrow(
-        /safe integer/,
-      );
-      expect(() => analyzer.readFramesSoa(value)).toThrow(/safe integer/);
-      expect(() => analyzer.readFrames(value)).toThrow(/safe integer/);
-      expect(() => analyzer.readFramesU8(value)).toThrow(/safe integer/);
-      expect(() => analyzer.readFramesI16(value)).toThrow(/safe integer/);
-      expect(() => analyzer.reset(value)).toThrow(/safe integer/);
+      expect(() => analyzer.processWithOffset(new Float32Array([0]), value)).toThrow(refused);
+      expect(() => analyzer.readFramesSoa(value)).toThrow(refused);
+      expect(() => analyzer.readFrames(value)).toThrow(refused);
+      expect(() => analyzer.readFramesU8(value)).toThrow(refused);
+      expect(() => analyzer.readFramesI16(value)).toThrow(refused);
+      expect(() => analyzer.reset(value)).toThrow(refused);
     }
 
     analyzer.reset(Number.MAX_SAFE_INTEGER);

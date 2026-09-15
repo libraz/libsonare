@@ -69,6 +69,17 @@ inline uint32_t node_narrow_uint32(Napi::Env env, const Napi::Value& value, cons
       env, value, name, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max())));
 }
 
+/// @brief uint16 sibling of @ref node_narrow_number.
+/// @details The narrowing cast is what makes this a member rather than a cast at
+///   the site: 65536 lands on 0 and -1 on 0xFFFF, both inside the width, so a C
+///   ABI taking a uint16_t mask or index cannot tell either from a caller's
+///   choice. A field with a domain narrower than the width still owns that
+///   bound; this only closes the wrap.
+inline uint16_t node_narrow_uint16(Napi::Env env, const Napi::Value& value, const char* name) {
+  return static_cast<uint16_t>(node_narrow_number(
+      env, value, name, 0.0, static_cast<double>(std::numeric_limits<uint16_t>::max())));
+}
+
 /// @brief Raw 32-bit word sibling of @ref node_narrow_number (a UMP word, a
 ///        packed MIDI 1.0 message).
 /// @details Deliberately NOT @ref node_narrow_uint32: the whole 32-bit range is
@@ -113,6 +124,23 @@ inline float node_narrow_float(Napi::Env env, const Napi::Value& value, const ch
         env, std::string(name) + " must be a finite number within the 32-bit float range");
   }
   return static_cast<float>(number);
+}
+
+/// @brief Finite sibling of @ref node_narrow_float, for a field with no
+///        "unspecified" spelling.
+/// @details @ref node_narrow_float passes a non-finite through because several
+///   fields document one as meaning unspecified. Where a field documents no such
+///   value, an infinity is out of domain rather than a request, and this refuses
+///   it in the same words the overflow is refused in -- one wording, because a
+///   caller cannot act on which of the two produced the value.
+/// @throws Napi::RangeError naming @p name.
+inline float node_narrow_finite_float(Napi::Env env, const Napi::Value& value, const char* name) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number)) {
+    throw Napi::RangeError::New(
+        env, std::string(name) + " must be a finite number within the 32-bit float range");
+  }
+  return node_narrow_float(env, value, name);
 }
 
 /// @brief Marks a key whose 0 the library reads as "keep the default" rather
@@ -269,6 +297,18 @@ inline int node_int_option(const Napi::Object& object, const char* key, ZeroIsSe
   return node_narrow_int(object.Env(), value, key);
 }
 
+/// @brief Read a uint32 option whose 0 is the library default
+///        (@ref ZeroIsSentinel), refusing a fraction.
+/// @details The object-key counterpart of the @ref OptionalUint32Arg overload
+///   below; there is no plain-fallback `node_uint32_option`, because a uint32
+///   key whose default is not 0 has no site here yet.
+inline uint32_t node_uint32_option(const Napi::Object& object, const char* key, ZeroIsSentinel) {
+  Napi::Value value = object.Get(key);
+  if (!value.IsNumber()) return 0;
+  node_refuse_fraction(object.Env(), value, key);
+  return node_narrow_uint32(object.Env(), value, key);
+}
+
 /// @brief Read a float option from a JS object, falling back if missing.
 inline float node_float_option(const Napi::Object& object, const char* key, float fallback) {
   Napi::Value value = object.Get(key);
@@ -400,6 +440,17 @@ inline float FloatProperty(const Napi::Object& obj, const char* key, float fallb
   if (value.IsUndefined() || value.IsNull()) return fallback;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
   return node_narrow_float(obj.Env(), value, key);
+}
+
+/// @brief Read a float property that must be finite
+///        (@ref node_narrow_finite_float).
+/// @details Use where the field documents no "unspecified" spelling, so an
+///   infinity is refused by name instead of travelling on as one.
+inline float FiniteFloatProperty(const Napi::Object& obj, const char* key, float fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return node_narrow_finite_float(obj.Env(), value, key);
 }
 
 /// @brief Read a double property: undefined/null returns the fallback, any other
@@ -584,6 +635,44 @@ inline bool RequiredMidiByteValue(Napi::Env env, const Napi::Value& value, const
   return true;
 }
 
+/// @brief Read a value as an int, rejecting anything a float-to-integer cast
+///        cannot represent: a non-number is a TypeError, a non-finite,
+///        fractional or out-of-int-range number a RangeError.
+/// @details The strict sibling of @ref RequiredIntValue. Both refuse a value the
+///   int cannot hold; this one additionally refuses a FRACTION, because it
+///   serves the fields whose int is an ordinal or a count rather than a
+///   magnitude, where 1.5 truncating to 1 selects something the caller did not
+///   name. It reports by leaving a pending exception rather than unwinding, so a
+///   caller staging several fields can bail on the first.
+///
+///   A RangeError here and a SonareError for the same 2^32 + 1 in the TS facade
+///   is not a contradiction: each layer guards a different boundary. The facade
+///   guards the library's public domain, so it pre-empts a native refusal and
+///   reports that code; this guards the C int itself, where the value has no
+///   faithful representation at all. A facade caller never reaches this check.
+/// @return false without touching @p out on rejection.
+inline bool Int32Value(Napi::Env env, const Napi::Value& value, const char* name, int* out) {
+  if (env.IsExceptionPending() || out == nullptr) return false;
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+
+  const double number = value.As<Napi::Number>().DoubleValue();
+  constexpr double kMinInt = static_cast<double>(std::numeric_limits<int>::min());
+  constexpr double kMaxInt = static_cast<double>(std::numeric_limits<int>::max());
+  if (!std::isfinite(number) || std::trunc(number) != number || number < kMinInt ||
+      number > kMaxInt) {
+    Napi::RangeError::New(
+        env, std::string(name) + " must be a finite integer within the native int range")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+
+  *out = static_cast<int>(number);
+  return true;
+}
+
 /// @brief Resolve a built-in oscillator waveform given as a JS string or a JS
 ///        number to its @ref SonareSynthWaveform ordinal.
 /// @details Both spellings reach the same rejection naming the accepted set.
@@ -665,6 +754,19 @@ inline bool RequiredStringProperty(Napi::Env env, const Napi::Object& obj, const
   return RequiredStringValue(env, obj.Get(key), key, out);
 }
 
+/// @brief Object-key form of @ref Int32Value: undefined/null reads as
+///        @p fallback, anything else goes through the strict int read.
+inline bool Int32Property(Napi::Env env, const Napi::Object& obj, const char* key, int fallback,
+                          int* out) {
+  if (env.IsExceptionPending() || out == nullptr) return false;
+  const Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return Int32Value(env, value, key, out);
+}
+
 // Fourth family, the positional-argument counterpart of the Required*/*Property
 // readers, for entry points whose arguments arrive as info[i] rather than as
 // object keys:
@@ -709,15 +811,11 @@ inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t
   return RequiredIntValue(env, value, name, out);
 }
 
-/// @brief Read an optional positional argument as an int, rejecting anything a
-///        float-to-integer cast cannot represent. An absent, undefined or null
-///        argument reads as @p fallback; a non-number is a TypeError and a
-///        non-finite, fractional or out-of-int-range number a RangeError.
-///
-/// This is the strict sibling of OptionalIntArg. Both refuse a value the int
-/// cannot hold; this one additionally refuses a wrong TYPE and rejects a
-/// fractional number, and it reports by leaving a pending exception rather than
-/// unwinding, so a caller that must stage several fields can bail on the first.
+/// @brief Positional form of @ref Int32Value: an absent, undefined or null
+///        argument reads as @p fallback, anything else goes through the strict
+///        int read.
+/// @details The strict sibling of OptionalIntArg -- that one refuses only what
+///   the int cannot hold, this one also refuses a wrong type and a fraction.
 inline bool Int32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index, const char* name,
                      int fallback, int* out) {
   if (env.IsExceptionPending() || out == nullptr) return false;
@@ -726,24 +824,7 @@ inline bool Int32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index
     *out = fallback;
     return true;
   }
-  if (!value.IsNumber()) {
-    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-
-  const double number = value.As<Napi::Number>().DoubleValue();
-  constexpr double kMinInt = static_cast<double>(std::numeric_limits<int>::min());
-  constexpr double kMaxInt = static_cast<double>(std::numeric_limits<int>::max());
-  if (!std::isfinite(number) || std::trunc(number) != number || number < kMinInt ||
-      number > kMaxInt) {
-    Napi::RangeError::New(
-        env, std::string(name) + " must be a finite integer within the native int range")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-
-  *out = static_cast<int>(number);
-  return true;
+  return Int32Value(env, value, name, out);
 }
 
 /// @brief Read an optional uint32 positional argument.
@@ -851,6 +932,28 @@ inline bool OptionalMidiByteArg(Napi::Env env, const Napi::CallbackInfo& info, s
   return RequiredMidiByteValue(env, value, name, out);
 }
 
+/// @brief The size_t domain both readers below enforce, written once: a finite
+///        non-negative integer representable as both a JS number and a native
+///        size_t. Expects @p value to have been type-checked already.
+inline bool node_read_size_t_domain(Napi::Env env, const Napi::Value& value, const char* name,
+                                    size_t* out) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  constexpr double kMaxSafeInteger = 9007199254740991.0;  // Number.MAX_SAFE_INTEGER
+  const double max_size_t = static_cast<double>(std::numeric_limits<size_t>::max());
+  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 ||
+      number > kMaxSafeInteger || number > max_size_t) {
+    Napi::RangeError::New(
+        env, std::string(name) +
+                 " must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER "
+                 "or the native size_t maximum")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+
+  *out = static_cast<size_t>(number);
+  return true;
+}
+
 /// @brief Read a positional argument as a size_t, rejecting anything that is not
 ///        a finite non-negative integer representable as both a JS number and a
 ///        native size_t. A wrong type is a TypeError, an out-of-domain number a
@@ -862,22 +965,24 @@ inline bool NonNegativeSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, s
     Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
     return false;
   }
+  return node_read_size_t_domain(env, info[index], name, out);
+}
 
-  const double value = info[index].As<Napi::Number>().DoubleValue();
-  constexpr double kMaxSafeInteger = 9007199254740991.0;  // Number.MAX_SAFE_INTEGER
-  const double max_size_t = static_cast<double>(std::numeric_limits<size_t>::max());
-  if (!std::isfinite(value) || std::trunc(value) != value || value < 0.0 ||
-      value > kMaxSafeInteger || value > max_size_t) {
-    Napi::RangeError::New(
-        env, std::string(name) +
-                 " must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER "
-                 "or the native size_t maximum")
-        .ThrowAsJavaScriptException();
+/// @brief Object-key form of @ref NonNegativeSizeTArg: undefined/null reads as
+///        @p fallback, any other non-number is a TypeError.
+inline bool NonNegativeSizeTProperty(Napi::Env env, const Napi::Object& obj, const char* key,
+                                     size_t fallback, size_t* out) {
+  if (env.IsExceptionPending() || out == nullptr) return false;
+  const Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, std::string(key) + " must be a number").ThrowAsJavaScriptException();
     return false;
   }
-
-  *out = static_cast<size_t>(value);
-  return true;
+  return node_read_size_t_domain(env, value, key, out);
 }
 
 }  // namespace sonare_node

@@ -85,13 +85,17 @@ export const READER_FAMILIES: Readonly<
     node_int64_option: 'substitute',
     node_int_option: 'substitute',
     node_string_option: 'substitute',
+    node_uint32_option: 'substitute',
     // Presence + type checked: undefined/null takes the default, anything else
     // of the wrong type is refused by name (node_require_property_type).
     BoolProperty: 'refuse',
     DoubleProperty: 'refuse',
+    FiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
+    Int32Property: 'refuse',
     Int64Property: 'refuse',
     IntProperty: 'refuse',
+    NonNegativeSizeTProperty: 'refuse',
     MidiByteProperty: 'refuse',
     StringProperty: 'refuse',
     SynthEnumProperty: 'refuse',

@@ -466,8 +466,11 @@ Napi::Value StreamingEqualizerWrap::SetBand(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (index, bandObject)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Read as a size_t rather than cast from an int: a negative index would arrive
+  // at set_band as a huge positive one.
+  size_t index = 0;
+  if (!sonare_node::NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SONARE_NODE_TRY
-  size_t index = static_cast<size_t>(sonare_node::node_narrow_int(env, info[0], "index"));
   sonare::mastering::eq::EqBand band = EqBandFromObject(info[1].As<Napi::Object>());
   eq_->set_band(index, band);
   return env.Undefined();
@@ -816,8 +819,16 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   size_t max_bands = 8;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    sample_rate = static_cast<int>(std::lround(DoubleProperty(options, "sampleRate", sample_rate)));
-    max_bands = static_cast<size_t>(std::lround(DoubleProperty(options, "maxBands", max_bands)));
+    // Read as an int rather than rounded from a double: std::lround of a
+    // non-finite is unspecified, and the arbitrary int it yields then meets a
+    // range check it can pass. The supported-rate bound stays below.
+    if (!Int32Property(env, options, "sampleRate", sample_rate, &sample_rate)) {
+      return env.Undefined();
+    }
+    // Positivity stays below, where the C ABI's own bound is; this is the read.
+    if (!NonNegativeSizeTProperty(env, options, "maxBands", max_bands, &max_bands)) {
+      return env.Undefined();
+    }
   }
   SONARE_NODE_TRY
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();

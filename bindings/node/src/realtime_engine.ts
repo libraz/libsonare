@@ -37,6 +37,7 @@ import type {
   Sf2InstrumentConfig,
   SynthPatch,
 } from './types.js';
+import { assertNonNegativeSafeInteger } from './validation.js';
 import {
   engineAutomationPointValue,
   normalizeSynthInstrument,
@@ -592,18 +593,18 @@ export class RealtimeEngine {
       this.native.setCaptureBuffer(numChannelsOrChannels);
       return;
     }
-    if (
-      !Number.isSafeInteger(numChannelsOrChannels) ||
-      numChannelsOrChannels <= 0 ||
-      capacityFrames === undefined ||
-      !Number.isSafeInteger(capacityFrames) ||
-      capacityFrames <= 0
-    ) {
+    const fnName = 'RealtimeEngine.setCaptureBuffer';
+    if (capacityFrames === undefined) {
       throw new RangeError('capture channel count and capacity must be positive safe integers');
     }
-    // The runtime validation above proves this optional overload argument is a
-    // positive safe integer; retain that fact for TypeScript's type system.
-    this.native.setCaptureBuffer(numChannelsOrChannels, capacityFrames as number);
+    // Two clauses, two owners: that each is a count a JS number still denotes is
+    // the shared check's, that neither may be zero is this buffer's.
+    assertNonNegativeSafeInteger(fnName, numChannelsOrChannels, 'numChannels');
+    assertNonNegativeSafeInteger(fnName, capacityFrames, 'capacityFrames');
+    if (numChannelsOrChannels <= 0 || capacityFrames <= 0) {
+      throw new RangeError('capture channel count and capacity must be positive safe integers');
+    }
+    this.native.setCaptureBuffer(numChannelsOrChannels, capacityFrames);
   }
 
   armCapture(armed = true): void {

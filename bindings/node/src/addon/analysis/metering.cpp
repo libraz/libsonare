@@ -524,7 +524,7 @@ Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int root = node_narrow_int(env, info[0], "root");
-  uint16_t mask = static_cast<uint16_t>(node_narrow_int(env, info[1], "mask"));
+  uint16_t mask = node_narrow_uint16(env, info[1], "mask");
   int pitch_class = node_narrow_int(env, info[2], "pitchClass");
   int out_enabled = 0;
   SonareError err = sonare_scale_pitch_class_enabled(root, mask, pitch_class, &out_enabled);

@@ -100,10 +100,6 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'roommorph:airHumidityPercent',
       'roommorph:airTemperatureC',
       'roommorph:crossfadeMs',
-      'roommorph:maxSeconds',
-      'roommorph:mixingTimeMs',
-      'roommorph:sourceTailSuppression',
-      'roommorph:wet',
       'setclips:gain',
       'setmetronome:accentGain',
       'setmetronome:beatGain',
@@ -113,6 +109,18 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'synthesizerir:airHumidityPercent',
       'synthesizerir:airTemperatureC',
       'synthesizerir:crossfadeMs',
+    ],
+  ],
+  // Same class as above, one reader along: the addon reads these six through the
+  // FINITE float reader, so a non-finite is refused there as well as a wrong
+  // type. Embind still coerces, so the divergence and its reason are unchanged.
+  [
+    'FiniteFloatProperty>floatProperty',
+    [
+      'roommorph:maxSeconds',
+      'roommorph:mixingTimeMs',
+      'roommorph:sourceTailSuppression',
+      'roommorph:wet',
       'synthesizerir:maxSeconds',
       'synthesizerir:mixingTimeMs',
     ],
@@ -465,7 +473,7 @@ describe('the scanner sees what it claims to', () => {
     // lists already catch both, but this states the number a reader of this file
     // is being asked to believe.
     const live = new Set(mismatchedFields().map((field) => field.readerPair));
-    expect(live.size).toBe(18);
+    expect(live.size).toBe(19);
     expect([...live].every((pair) => ACCOUNTED.has(pair))).toBe(true);
   });
 });

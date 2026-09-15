@@ -8,7 +8,7 @@ import type {
   StftDbResult,
   StftResult,
 } from './types.js';
-import { assertSamples } from './validation.js';
+import { assertFiniteScalar, assertSamples } from './validation.js';
 
 /** Common input for one-shot feature extraction requests. */
 export interface FeatureSamplesRequest {
@@ -241,15 +241,19 @@ export function reassignedSpectrogram(
       ? { samples, sampleRate, nFft, hopLength, refPower, fillNan }
       : samples;
   assertSamples('reassignedSpectrogram', request.samples, true);
-  if (!Number.isFinite(request.refPower ?? 1e-6) || (request.refPower ?? 1e-6) < 0) {
-    throw new RangeError('reassignedSpectrogram: refPower must be finite and non-negative');
+  // Finiteness is the shared scalar check's; the reference power's own floor
+  // stays here, where the quantity is known to be a power.
+  const resolvedRefPower = request.refPower ?? 1e-6;
+  assertFiniteScalar('reassignedSpectrogram', resolvedRefPower, 'refPower');
+  if (resolvedRefPower < 0) {
+    throw new RangeError('reassignedSpectrogram: refPower must be non-negative');
   }
   return addon.reassignedSpectrogram(
     request.samples,
     request.sampleRate ?? 22050,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
-    request.refPower ?? 1e-6,
+    resolvedRefPower,
     request.fillNan ?? false,
   );
 }

@@ -1134,11 +1134,10 @@ int read_window_type(Napi::Env env, const Napi::Value& value) {
     // 31 because that does not change what was asked for, but 1.5 selecting
     // hamming is a window the caller never named. A domain check, not a
     // narrowing one -- node_narrow_int has already accepted the value.
-    const double number = value.As<Napi::Number>().DoubleValue();
-    if (std::isfinite(number) && std::trunc(number) != number) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "spectralEdit: window ordinal must be an integer, not " + std::to_string(number));
+    if (sonare_node::node_is_fraction(value)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "spectralEdit: window ordinal must be an integer, not " +
+                                        std::to_string(value.As<Napi::Number>().DoubleValue()));
     }
     const int ordinal = sonare_node::node_narrow_int(env, value, "window");
     if (ordinal < SONARE_WINDOW_HANN || ordinal > SONARE_WINDOW_RECTANGULAR) {

@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <string>
 #include <vector>
 
@@ -72,27 +71,6 @@ Napi::Int16Array Int16FromVec(Napi::Env env, const std::vector<int16_t>& vec) {
     std::memcpy(out.Data(), vec.data(), vec.size() * sizeof(int16_t));
   }
   return out;
-}
-
-bool SafeSizeTFromValue(const Napi::Value& value, const char* name, size_t* out) {
-  Napi::Env env = value.Env();
-  if (!value.IsNumber()) {
-    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-
-  constexpr double kMaxSafeInteger = 9007199254740991.0;  // Number.MAX_SAFE_INTEGER
-  const double number = value.As<Napi::Number>().DoubleValue();
-  if (!std::isfinite(number) || number < 0.0 || std::floor(number) != number ||
-      number > kMaxSafeInteger ||
-      number > static_cast<double>(std::numeric_limits<size_t>::max())) {
-    Napi::RangeError::New(env, std::string(name) + " must be a non-negative safe integer")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-
-  *out = static_cast<size_t>(number);
-  return true;
 }
 
 // Narrows an already-read config value to a native int, rejecting anything the
@@ -296,7 +274,7 @@ Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   size_t offset = 0;
-  if (!SafeSizeTFromValue(info[1], "sampleOffset", &offset)) return env.Undefined();
+  if (!NonNegativeSizeTArg(env, info, 1, "sampleOffset", &offset)) return env.Undefined();
   SONARE_NODE_TRY
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
   analyzer_->process(typed.Data(), typed.ElementLength(), offset);
@@ -338,7 +316,7 @@ Napi::Value StreamAnalyzerWrap::ReadFramesSoa(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   size_t max_frames = 0;
-  if (!SafeSizeTFromValue(info[0], "maxFrames", &max_frames)) return env.Undefined();
+  if (!NonNegativeSizeTArg(env, info, 0, "maxFrames", &max_frames)) return env.Undefined();
   SONARE_NODE_TRY
   sonare::FrameBuffer buffer;
   analyzer_->read_frames_soa(max_frames, buffer);
@@ -373,7 +351,7 @@ Napi::Value StreamAnalyzerWrap::ReadFramesU8(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   size_t max_frames = 0;
-  if (!SafeSizeTFromValue(info[0], "maxFrames", &max_frames)) return env.Undefined();
+  if (!NonNegativeSizeTArg(env, info, 0, "maxFrames", &max_frames)) return env.Undefined();
   SONARE_NODE_TRY
   sonare::QuantizedFrameBufferU8 buffer;
   sonare::QuantizeConfig qconfig =
@@ -407,7 +385,7 @@ Napi::Value StreamAnalyzerWrap::ReadFramesI16(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   size_t max_frames = 0;
-  if (!SafeSizeTFromValue(info[0], "maxFrames", &max_frames)) return env.Undefined();
+  if (!NonNegativeSizeTArg(env, info, 0, "maxFrames", &max_frames)) return env.Undefined();
   SONARE_NODE_TRY
   sonare::QuantizedFrameBufferI16 buffer;
   sonare::QuantizeConfig qconfig =
@@ -438,7 +416,7 @@ Napi::Value StreamAnalyzerWrap::Reset(const Napi::CallbackInfo& info) {
   }
   size_t base_offset = 0;
   if (info.Length() >= 1 && !info[0].IsUndefined() &&
-      !SafeSizeTFromValue(info[0], "baseOffset", &base_offset)) {
+      !NonNegativeSizeTArg(env, info, 0, "baseOffset", &base_offset)) {
     return env.Undefined();
   }
   SONARE_NODE_TRY

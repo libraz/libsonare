@@ -278,6 +278,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['BoolProperty', 'Reads a boolean, so it has no integer zero to land on.'],
   ['DoubleProperty', 'Reads a double; truncation is not in play.'],
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
+  ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
   ['StringProperty', 'Reads a string, so it has no numeric fallback at all.'],
   ['node_bool_option', 'Reads a boolean, so it has no integer zero to land on.'],
   ['node_double_option', 'Reads a double; truncation is not in play.'],
@@ -290,6 +291,18 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   [
     'MidiByteProperty',
     'Refuses a non-integer outright, so no fractional value can truncate onto its zero. The exemption belongs to the READER rather than to any field, which is why it is recorded here instead of once per call site: a site moving off it onto a truncating reader must start owing a reason.',
+  ],
+  [
+    'node_uint32_option',
+    'Carries only the ZeroIsSentinel overload, so no call can spell a literal-zero fallback, and it refuses a fraction besides. Both are properties of the READER, so a site that moves to a plain-fallback uint32 reader starts owing a reason.',
+  ],
+  [
+    'Int32Property',
+    'Refuses a non-integer outright, as MidiByteProperty does, so no fractional value can truncate onto its zero.',
+  ],
+  [
+    'NonNegativeSizeTProperty',
+    'Refuses a non-integer outright, and takes an out-pointer besides, so no fractional value can truncate onto its zero.',
   ],
   [
     'RequiredIntProperty',
