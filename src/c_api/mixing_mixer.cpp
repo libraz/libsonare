@@ -130,7 +130,7 @@ SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count) 
 SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float gain_db,
                                        const char* const* members, size_t member_count) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id || (member_count > 0 && !members)) {
+  if (!mixer || !id || !finite(gain_db) || (member_count > 0 && !members)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -173,7 +173,7 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
 
 SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* id, float gain_db) {
   SONARE_C_API_ENTRY;
-  if (!mixer || !id) {
+  if (!mixer || !id || !finite(gain_db)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY

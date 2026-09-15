@@ -476,6 +476,66 @@ TEST_CASE("C-API VCA group gain setter updates live gain and scene state", "[mix
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("C-API VCA group gain rejects non-finite and applies a valid value", "[mixing][capi]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 4096;
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+  const char* members[] = {"lead"};
+
+  // A non-finite gain must not create the group, and the strip's gain must be
+  // left untouched (checked below via readback, not merely a rejected call).
+  REQUIRE(sonare_mixer_add_vca_group(mixer, "lead-vca", nan, members, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_add_vca_group(mixer, "lead-vca", inf, members, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  size_t group_count = 0;
+  REQUIRE(sonare_mixer_vca_group_count(mixer, &group_count) == SONARE_OK);
+  REQUIRE(group_count == 0);
+
+  std::vector<float> input(kBlock, 1.0f);
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+  std::vector<float> out_l(kBlock, 0.0f);
+  std::vector<float> out_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(1.0f, 0.01f));
+
+  // A valid gain is applied on the live strip.
+  REQUIRE(sonare_mixer_add_vca_group(mixer, "lead-vca", -6.0f, members, 1) == SONARE_OK);
+  out_l.assign(kBlock, 0.0f);
+  out_r.assign(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.501187f, 0.01f));
+
+  // A non-finite gain update must be rejected and leave the applied gain unchanged.
+  REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, "lead-vca", nan) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, "lead-vca", inf) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  out_l.assign(kBlock, 0.0f);
+  out_r.assign(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.501187f, 0.01f));
+
+  // A valid gain update is applied.
+  REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, "lead-vca", -12.0f) == SONARE_OK);
+  out_l.assign(kBlock, 0.0f);
+  out_r.assign(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.251189f, 0.01f));
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("C-API strip setters reflect into scene JSON for cached fields", "[mixing][capi]") {
   // Load a two-strip scene, mutate a strip through the runtime setters, then
   // serialize and re-parse. Fields that the C layer caches into scene_strip
