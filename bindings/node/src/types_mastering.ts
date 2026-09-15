@@ -782,6 +782,24 @@ export interface MasteringResult {
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited?: boolean;
   latencySamples?: number;
+  /**
+   * Input samples a processor replaced with a finite in-domain value because
+   * they were not finite.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded result
+   * from a clean one: the substitution leaves the output finite, in range and
+   * free of any error while carrying samples that are not a function of what
+   * you supplied. `0` means every output sample was computed from the input.
+   *
+   * @example
+   * ```ts
+   * const result = masteringProcess('maximizer.truePeakLimiter', samples, 44100);
+   * if (result.nonFiniteSubstitutionCount > 0) {
+   *   // part of `result.samples` is unrelated to `samples`
+   * }
+   * ```
+   */
+  nonFiniteSubstitutionCount: number;
 }
 
 export interface MasteringStereoResult {
@@ -794,6 +812,13 @@ export interface MasteringStereoResult {
   latencySamples: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
+  /**
+   * Input samples a processor replaced with a finite in-domain value because
+   * they were not finite, summed over both channels. See
+   * {@link MasteringResult.nonFiniteSubstitutionCount} for what a non-zero
+   * count means.
+   */
+  nonFiniteSubstitutionCount: number;
 }
 
 /** Generic traversal view used by chain-config tooling; public configs are fully typed below. */
@@ -1102,6 +1127,24 @@ export interface MasteringChainResult {
   outputLra: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;
+  /**
+   * Input samples a chain stage replaced with a finite in-domain value because
+   * they were not finite, aggregated over every stage the chain ran.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded result
+   * from a clean one: the substitution leaves the output finite, in range and
+   * free of any error while carrying samples that are not a function of what
+   * you supplied. `0` means every output sample was computed from the input.
+   *
+   * @example
+   * ```ts
+   * const result = masterAudio(samples, 44100, 'pop');
+   * if (result.nonFiniteSubstitutionCount > 0) {
+   *   // part of `result.samples` is unrelated to `samples`
+   * }
+   * ```
+   */
+  nonFiniteSubstitutionCount: number;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
   report: MasteringReport;
@@ -1119,6 +1162,8 @@ export interface MasteringChainStereoResult {
   outputTruePeakDbtp: number;
   outputLra: number;
   loudnessTargetLimited: boolean;
+  /** Aggregated over every stage the chain ran and over both channels. */
+  nonFiniteSubstitutionCount: number;
   stageGainReductions: StageGainReduction[];
   report: MasteringReport;
 }

@@ -153,6 +153,8 @@ Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object expor
           InstanceMethod<&StreamingMasteringChainWrap::Reset>("reset"),
           InstanceMethod<&StreamingMasteringChainWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&StreamingMasteringChainWrap::StageNames>("stageNames"),
+          InstanceMethod<&StreamingMasteringChainWrap::NonFiniteSubstitutionCount>(
+              "nonFiniteSubstitutionCount"),
           InstanceMethod<&StreamingMasteringChainWrap::Destroy>("destroy"),
       });
 
@@ -370,6 +372,19 @@ Napi::Value StreamingMasteringChainWrap::StageNames(const Napi::CallbackInfo& in
     out.Set(static_cast<uint32_t>(i), Napi::String::New(env, names[i]));
   }
   return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingMasteringChainWrap::NonFiniteSubstitutionCount(
+    const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!chain_) {
+    Napi::Error::New(env, "StreamingMasteringChain is not initialized")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, chain_->non_finite_substitution_count());
   SONARE_NODE_CATCH(env)
 }
 

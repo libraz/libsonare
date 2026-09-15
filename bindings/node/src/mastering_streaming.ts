@@ -129,6 +129,35 @@ export class StreamingMasteringChain {
   stageNames(): string[] {
     return this.native.stageNames();
   }
+
+  /**
+   * Input samples a chain stage replaced with a finite in-domain value because
+   * they were not finite.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded stream
+   * from a clean one. A stage that meets a non-finite sample substitutes an
+   * in-domain finite one rather than propagating it, so the output stays
+   * finite, in range and free of any error while carrying samples that are not
+   * a function of the block you supplied. A non-zero count is what says so.
+   *
+   * Cumulative over every block processed since the last {@link prepare}, and
+   * summed across the chain's stages and both channels. {@link prepare}
+   * rebuilds the stages and so restarts the count from zero; {@link reset}
+   * clears processor state only and leaves the count standing. Reports `0`
+   * before the chain has been prepared, and throws after {@link destroy}.
+   *
+   * @example
+   * ```typescript
+   * const out = chain.processMono(block);
+   * if (chain.nonFiniteSubstitutionCount() > 0) {
+   *   // the audio produced so far is not a function of the blocks supplied
+   * }
+   * ```
+   */
+  nonFiniteSubstitutionCount(): number {
+    return this.native.nonFiniteSubstitutionCount();
+  }
+
   /**
    * Release the native resources now instead of waiting for garbage collection.
    * Idempotent; any other method called afterwards throws. A long-lived process

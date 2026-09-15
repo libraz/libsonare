@@ -50,6 +50,7 @@ class StreamingMasteringChainWrap : public Napi::ObjectWrap<StreamingMasteringCh
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value StageNames(const Napi::CallbackInfo& info);
+  Napi::Value NonFiniteSubstitutionCount(const Napi::CallbackInfo& info);
   Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain_;

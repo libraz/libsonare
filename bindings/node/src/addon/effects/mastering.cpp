@@ -72,14 +72,17 @@ void SetMasteringReport(Napi::Env env, Napi::Object out, const Report& report) {
 }
 
 // Append the chain-metric fields (output true peak, LRA, per-stage gain
-// reductions) shared by every mastering-chain result object. MonoChainResult
-// and StereoChainResult both derive ChainMetrics, so the same builder serves
-// both paths.
-void SetChainMetrics(Napi::Env env, Napi::Object out,
-                     const sonare::mastering::api::ChainMetrics& metrics) {
+// reductions, substitution count) shared by every mastering-chain result
+// object. Takes the whole result rather than its ChainMetrics base: the
+// substitution count lives on the audio-result base instead, and a builder
+// given only one of the two bases would silently drop whichever it cannot see.
+template <typename Result>
+void SetChainMetrics(Napi::Env env, Napi::Object out, const Result& metrics) {
   out.Set("outputTruePeakDbtp", Napi::Number::New(env, metrics.output_true_peak_dbtp));
   out.Set("outputLra", Napi::Number::New(env, metrics.output_lra));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, metrics.loudness_target_limited));
+  out.Set("nonFiniteSubstitutionCount",
+          Napi::Number::New(env, metrics.non_finite_substitution_count));
   Napi::Array reductions = Napi::Array::New(env, metrics.stage_gain_reductions.size());
   for (size_t i = 0; i < metrics.stage_gain_reductions.size(); ++i) {
     Napi::Object entry = Napi::Object::New(env);
@@ -126,6 +129,8 @@ void SetCChainMetrics(Napi::Env env, Napi::Object out, const Result& result) {
   out.Set("outputTruePeakDbtp", Napi::Number::New(env, result.output_true_peak_dbtp));
   out.Set("outputLra", Napi::Number::New(env, result.output_lra));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited != 0));
+  out.Set("nonFiniteSubstitutionCount",
+          Napi::Number::New(env, result.non_finite_substitution_count));
   Napi::Array reductions = Napi::Array::New(env, result.stage_gain_reductions_count);
   for (size_t index = 0; index < result.stage_gain_reductions_count; ++index) {
     Napi::Object entry = Napi::Object::New(env);
@@ -235,6 +240,8 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
+  out.Set("nonFiniteSubstitutionCount",
+          Napi::Number::New(env, result.non_finite_substitution_count));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -268,6 +275,8 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
+  out.Set("nonFiniteSubstitutionCount",
+          Napi::Number::New(env, result.non_finite_substitution_count));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -309,6 +318,8 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
+  out.Set("nonFiniteSubstitutionCount",
+          Napi::Number::New(env, result.non_finite_substitution_count));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -1105,6 +1116,8 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
+  out.Set("nonFiniteSubstitutionCount",
+          Napi::Number::New(env, result.non_finite_substitution_count));
   return out;
   SONARE_NODE_CATCH(env)
 }
