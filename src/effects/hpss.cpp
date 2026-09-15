@@ -5,6 +5,7 @@
 #include <climits>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -118,19 +119,18 @@ float compute_median(float* values, size_t n) {
 }
 
 #ifndef __EMSCRIPTEN__
-/// @brief Executes fn(start, end) in parallel over [0, total).
+/// @brief Executes fn(start, end) across n_workers threads over [0, total).
 template <typename F>
-void parallel_for(int total, F&& fn) {
-  int n_threads = static_cast<int>(std::thread::hardware_concurrency());
-  if (n_threads <= 1 || total <= 1) {
+void parallel_for(int total, int n_workers, F&& fn) {
+  if (n_workers <= 1 || total <= 1) {
     fn(0, total);
     return;
   }
-  n_threads = std::min(n_threads, total);
+  n_workers = std::min(n_workers, total);
   std::vector<std::future<void>> futures;
-  futures.reserve(n_threads);
-  int chunk = (total + n_threads - 1) / n_threads;
-  for (int i = 0; i < n_threads; ++i) {
+  futures.reserve(n_workers);
+  int chunk = (total + n_workers - 1) / n_workers;
+  for (int i = 0; i < n_workers; ++i) {
     int start = i * chunk;
     int end = std::min(start + chunk, total);
     if (start >= end) break;
@@ -138,18 +138,37 @@ void parallel_for(int total, F&& fn) {
   }
   for (auto& f : futures) f.get();
 }
+
+/// @brief Workers the host offers, as the worker-count policy takes it.
+int available_workers() { return static_cast<int>(std::thread::hardware_concurrency()); }
 #endif
 
 }  // namespace
+
+int median_filter_worker_count(int total, int kernel_size, int staged_column_length,
+                               int host_concurrency) {
+  if (total <= 1 || host_concurrency <= 1) return 1;
+  const int offered = std::min(total, host_concurrency);
+
+  // Two kernel-wide float arrays per worker, plus the vertical filter's staged
+  // column pair. 64-bit throughout: on wasm32 the product outruns size_t.
+  const uint64_t per_worker_bytes = 2u * sizeof(float) *
+                                    (static_cast<uint64_t>(std::max(kernel_size, 0)) +
+                                     static_cast<uint64_t>(std::max(staged_column_length, 0)));
+  if (per_worker_bytes == 0) return offered;
+
+  const uint64_t affordable = static_cast<uint64_t>(kMaxHpssScratchBytes) / per_worker_bytes;
+  if (affordable >= static_cast<uint64_t>(offered)) return offered;
+  return affordable == 0 ? 1 : static_cast<int>(affordable);
+}
 
 std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, int n_frames,
                                             int kernel_size) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
-  // Bound before the per-thread allocations below, not after: each worker
-  // builds its own pair, so the cost is 8 bytes x kernel x thread count rather
-  // than a per-element constant. WASM's bounded heap reports the overflow as an
-  // allocation failure; an overcommitting host accepts it and maps for 20 s.
+  // Bound before the per-thread allocations below, not after. This bounds one
+  // factor only -- the product is held by the worker count at the parallel_for
+  // below, since each worker builds its own kernel-wide pair.
   SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
                    "median_filter_horizontal: kernel_size " + std::to_string(kernel_size) +
                        " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
@@ -204,7 +223,10 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
   };
 
 #ifndef __EMSCRIPTEN__
-  parallel_for(n_bins, process_rows);
+  // The horizontal filter stages nothing per column, so the kernel pair is its
+  // whole per-worker scratch.
+  parallel_for(n_bins, median_filter_worker_count(n_bins, kernel_size, 0, available_workers()),
+               process_rows);
 #else
   process_rows(0, n_bins);
 #endif
@@ -216,11 +238,9 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
                                           int kernel_size) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
-  // Bound before the per-thread allocations below, not after: alongside its
-  // n_bins staging pair each worker builds a kernel-sized pair, so that term of
-  // the cost is 8 bytes x kernel x thread count rather than a per-element
-  // constant. WASM's bounded heap reports the overflow as an allocation failure;
-  // an overcommitting host accepts it and maps for 20 s.
+  // Bound before the per-thread allocations below, not after. This bounds one
+  // factor only -- the product, kernel pair plus n_bins staging pair per worker,
+  // is held by the worker count at the parallel_for below.
   SONARE_CHECK_MSG(kernel_size <= kMaxHpssKernelSize, ErrorCode::InvalidParameter,
                    "median_filter_vertical: kernel_size " + std::to_string(kernel_size) +
                        " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
@@ -288,7 +308,9 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
   };
 
 #ifndef __EMSCRIPTEN__
-  parallel_for(n_frames, process_cols);
+  parallel_for(n_frames,
+               median_filter_worker_count(n_frames, kernel_size, n_bins, available_workers()),
+               process_cols);
 #else
   process_cols(0, n_frames);
 #endif

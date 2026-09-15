@@ -3,6 +3,7 @@
 /// @file hpss.h
 /// @brief Harmonic-Percussive Source Separation (HPSS).
 
+#include <cstddef>
 #include <vector>
 
 #include "core/audio.h"
@@ -14,13 +15,33 @@ namespace sonare {
 /// @details Set past the edge of meaningful input rather than to a memory
 ///          budget: a kernel is a median width in STFT frames or bins, and an
 ///          hour at hop 512 / 48 kHz is about 337k frames, so a caller at this
-///          bound has stopped choosing a resolution. Cost is a PRODUCT and not
-///          a per-element constant -- each worker allocates its own
-///          sliding-median array and scratch window, so residency is 8 bytes x
-///          kernel x @c hardware_concurrency() and scales with the host.
+///          bound has stopped choosing a resolution. It bounds one factor of the
+///          scratch residency and cannot bound the product; the worker count is
+///          what holds that, through @ref median_filter_worker_count.
 ///          Shares a value with @ref kMaxStftNFft by coincidence: that one counts
 ///          samples and is pinned by an assertion, this one may move freely.
 inline constexpr int kMaxHpssKernelSize = 1 << 19;
+
+/// @brief Scratch the median-filter workers may hold at once, summed over all of them.
+/// @details A budget, not a measurement. The per-worker arrays are scratch rather
+///          than data, so they are sized to stay small beside the spectrogram
+///          they filter; this leaves the largest legal kernel a double-digit
+///          worker count and a 262145-bin staging column a worker per 2 MiB.
+inline constexpr std::size_t kMaxHpssScratchBytes = 64u * 1024u * 1024u;
+
+/// @brief Workers a median filter divides its work across, for one shape.
+/// @param total Rows for the horizontal filter, columns for the vertical one.
+/// @param kernel_size Median kernel; every worker holds two arrays this wide.
+/// @param staged_column_length @c n_bins for the vertical filter, which stages a
+///        column pair per worker as well; 0 for the horizontal filter, which does not.
+/// @param host_concurrency Workers the host offers.
+/// @return At least 1, and never above @p total or @p host_concurrency.
+/// @details Scratch residency is a PRODUCT of per-worker bytes and worker count,
+///          so a ceiling on either factor alone leaves the other free to scale it.
+///          The worker count is the factor that gives way, keeping the total
+///          within @ref kMaxHpssScratchBytes on a host of any size.
+int median_filter_worker_count(int total, int kernel_size, int staged_column_length,
+                               int host_concurrency);
 
 /// @brief Configuration for HPSS algorithm.
 /// @details HPSS separates audio into harmonic (tonal) and percussive (transient)

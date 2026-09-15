@@ -1195,3 +1195,106 @@ TEST_CASE("every hpss entry point reaches the kernel ceiling", "[hpss]") {
     REQUIRE_NOTHROW(entry.call(HpssConfig()));
   }
 }
+
+namespace {
+
+/// @brief Scratch a median filter holds at once, for a worker count and shape.
+/// @details Two kernel-wide float arrays per worker, and for the vertical filter
+///          a staged column pair on top of them. Restated here from the filters'
+///          own declarations rather than read back out of the policy, so this
+///          does not share a source with the thing it checks.
+uint64_t median_filter_scratch_bytes(int workers, int kernel_size, int staged_column_length) {
+  return static_cast<uint64_t>(workers) * 2u * sizeof(float) *
+         (static_cast<uint64_t>(kernel_size) + static_cast<uint64_t>(staged_column_length));
+}
+
+/// Host sizes the policy is asked about. The large entries are the point: a
+/// permitted kernel there costs hundreds of megabytes, and the machine this is
+/// developed on cannot reach that case by running anything.
+constexpr int kHostSizes[] = {1, 2, 8, 18, 64, 128, 1024};
+
+}  // namespace
+
+TEST_CASE("the worker count holds the scratch product on a host of any size", "[hpss]") {
+  // The kernel ceiling bounds one factor of a product, and bounding a factor is
+  // not bounding a product -- the worker count carries the rest, falling as the
+  // kernel grows. Asserted against a literal rather than against
+  // kMaxHpssScratchBytes, because a case that reads the budget back cannot tell a
+  // correct bound from one quietly raised.
+  constexpr uint64_t kResidencyCeiling = 128u * 1024u * 1024u;
+  const int largest_legal = kMaxHpssKernelSize - 1;
+  // Bins of the largest STFT the analysis side accepts, which is the widest
+  // column the vertical filter can be asked to stage.
+  const int widest_staged_column = kMaxStftNFft / 2 + 1;
+  const int total = 1'000'000;
+
+  for (int host : kHostSizes) {
+    CAPTURE(host);
+
+    const int horizontal = median_filter_worker_count(total, largest_legal, 0, host);
+    CAPTURE(horizontal);
+    REQUIRE(horizontal >= 1);
+    REQUIRE(horizontal <= host);
+    REQUIRE(median_filter_scratch_bytes(horizontal, largest_legal, 0) <= kResidencyCeiling);
+
+    const int vertical =
+        median_filter_worker_count(total, largest_legal, widest_staged_column, host);
+    CAPTURE(vertical);
+    REQUIRE(vertical >= 1);
+    REQUIRE(vertical <= host);
+    REQUIRE(median_filter_scratch_bytes(vertical, largest_legal, widest_staged_column) <=
+            kResidencyCeiling);
+  }
+}
+
+TEST_CASE("the scratch bound leaves ordinary filter shapes every worker", "[hpss]") {
+  // Without this, one worker everywhere would satisfy the case above. These are
+  // the shapes HPSS runs in practice, and the bound has to be invisible at all of
+  // them however large the host is.
+  const int default_kernel = HpssConfig().kernel_size_harmonic;
+  const int n_bins = 1025;
+  const int total = 4096;
+
+  for (int host : kHostSizes) {
+    CAPTURE(host);
+    REQUIRE(median_filter_worker_count(total, default_kernel, 0, host) == std::min(total, host));
+    REQUIRE(median_filter_worker_count(total, default_kernel, n_bins, host) ==
+            std::min(total, host));
+  }
+
+  // Never more workers than there is work, and never fewer than one.
+  REQUIRE(median_filter_worker_count(3, default_kernel, 0, 128) == 3);
+  REQUIRE(median_filter_worker_count(1, default_kernel, 0, 128) == 1);
+  REQUIRE(median_filter_worker_count(total, default_kernel, 0, 0) == 1);
+}
+
+TEST_CASE("a filter the scratch bound slowed down still covers every row", "[hpss]") {
+  // Lowering the worker count re-chunks the division, so it has to still reach
+  // every row. The shape is picked so the bound genuinely binds rather than
+  // returning what the host offered anyway.
+  const int n_bins = 64;
+  const int n_frames = 4;
+  const int largest_legal = kMaxHpssKernelSize - 1;
+  REQUIRE(median_filter_worker_count(n_bins, largest_legal, 0, n_bins) < n_bins);
+
+  std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames);
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 0; t < n_frames; ++t) {
+      magnitude[static_cast<size_t>(k) * n_frames + t] = static_cast<float>(k * n_frames + t);
+    }
+  }
+
+  // The window spans the whole row, so every cell is its row's median: the mean
+  // of the two middle entries, exactly representable here.
+  const std::vector<float> filtered =
+      median_filter_horizontal(magnitude.data(), n_bins, n_frames, largest_legal);
+  REQUIRE(filtered.size() == magnitude.size());
+  for (int k = 0; k < n_bins; ++k) {
+    CAPTURE(k);
+    const float expected = static_cast<float>(k * n_frames) + 1.5f;
+    for (int t = 0; t < n_frames; ++t) {
+      CAPTURE(t);
+      REQUIRE(filtered[static_cast<size_t>(k) * n_frames + t] == expected);
+    }
+  }
+}
