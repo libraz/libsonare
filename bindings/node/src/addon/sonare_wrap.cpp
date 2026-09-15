@@ -118,6 +118,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::ShortTermLufs, "shortTermLufs"));
   exports.Set("lufsInterleaved",
               Napi::Function::New(env, &SonareWrap::LufsInterleaved, "lufsInterleaved"));
+  exports.Set("lufsSeriesInterleaved", Napi::Function::New(env, &SonareWrap::LufsSeriesInterleaved,
+                                                           "lufsSeriesInterleaved"));
   exports.Set("ebur128LoudnessRange",
               Napi::Function::New(env, &SonareWrap::Ebur128LoudnessRange, "ebur128LoudnessRange"));
   exports.Set("meteringPeakDb",

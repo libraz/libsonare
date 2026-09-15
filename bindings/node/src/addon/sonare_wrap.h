@@ -65,6 +65,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MomentaryLufs(const Napi::CallbackInfo& info);
   static Napi::Value ShortTermLufs(const Napi::CallbackInfo& info);
   static Napi::Value LufsInterleaved(const Napi::CallbackInfo& info);
+  static Napi::Value LufsSeriesInterleaved(const Napi::CallbackInfo& info);
   static Napi::Value Ebur128LoudnessRange(const Napi::CallbackInfo& info);
 
   // Metering - basic / true-peak / clipping / dynamic range
