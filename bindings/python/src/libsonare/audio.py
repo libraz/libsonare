@@ -10,9 +10,11 @@ import numpy as np
 
 from ._runtime import (
     _check,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _out_float_array,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -152,6 +154,9 @@ from .types import (
     BpmAnalysisResult,
     ChordAnalysisResult,
     ChromaResult,
+    ClippingRegion,
+    ClippingReport,
+    DynamicRangeReport,
     DynamicsResult,
     HpssResult,
     Key,
@@ -166,6 +171,7 @@ from .types import (
     PitchClass,
     PitchResult,
     RhythmResult,
+    SpectrumReport,
     StftResult,
     TimbreResult,
 )
@@ -954,6 +960,260 @@ class Audio:
     def resample(self, target_sr: int) -> list[float]:
         """Resample audio to a different sample rate."""
         return _resample(self.data, self.sample_rate, target_sr)
+
+    # --- Metering (handle form) ---
+    #
+    # Each of these reads the handle's own validated samples instead of
+    # ``self.data`` (a fresh 4N-byte copy per access), so they skip the
+    # per-call finiteness scan and the defensive copy their ``metering_*``
+    # free-function twins pay. Parameters, order and defaults mirror those
+    # twins; see :mod:`libsonare._features_metering`.
+
+    def peak_db(self) -> float:
+        """Sample-peak in dBFS over the buffer."""
+        out = ctypes.c_float(0.0)
+        rc = self._lib.sonare_audio_peak_db(self._require_handle(), ctypes.byref(out))
+        _check(rc)
+        return float(out.value)
+
+    def rms_db(self) -> float:
+        """RMS level in dBFS over the buffer."""
+        out = ctypes.c_float(0.0)
+        rc = self._lib.sonare_audio_rms_db(self._require_handle(), ctypes.byref(out))
+        _check(rc)
+        return float(out.value)
+
+    def dc_offset(self) -> float:
+        """DC offset (mean) of the buffer in linear amplitude."""
+        out = ctypes.c_float(0.0)
+        rc = self._lib.sonare_audio_dc_offset(self._require_handle(), ctypes.byref(out))
+        _check(rc)
+        return float(out.value)
+
+    def crest_factor_db(self) -> float:
+        """Crest factor in dB (peak_db - rms_db)."""
+        out = ctypes.c_float(0.0)
+        rc = self._lib.sonare_audio_crest_factor_db(self._require_handle(), ctypes.byref(out))
+        _check(rc)
+        return float(out.value)
+
+    def silence_ratio(
+        self,
+        threshold_db: float = -45.0,
+        frame_length: int = 1024,
+        hop_length: int = 256,
+    ) -> float:
+        """Fraction of analysis frames whose RMS is below ``threshold_db``."""
+        out = ctypes.c_float(0.0)
+        rc = self._lib.sonare_audio_silence_ratio(
+            self._require_handle(),
+            _to_c_float(threshold_db, "threshold_db"),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        return float(out.value)
+
+    def true_peak_db(self, oversample_factor: int = 4) -> float:
+        """Inter-sample (true) peak in dBFS.
+
+        ``oversample_factor`` must be a power of two in [1, 16]; pass 0 for the
+        library default (4).
+        """
+        out = ctypes.c_float(0.0)
+        rc = self._lib.sonare_audio_true_peak_db(
+            self._require_handle(),
+            _to_c_int(oversample_factor, "oversample_factor"),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        return float(out.value)
+
+    def detect_clipping(
+        self,
+        threshold: float = 0.999,
+        min_region_samples: int = 1,
+    ) -> ClippingReport:
+        """Detect contiguous runs of clipped samples."""
+        from ._ffi import SonareClippingResult
+
+        handle = self._require_handle()
+        out = SonareClippingResult()
+        rc = self._lib.sonare_audio_detect_clipping(
+            handle,
+            _to_c_float(threshold, "threshold"),
+            _to_c_size_t(min_region_samples, "min_region_samples"),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        try:
+            regions = [
+                ClippingRegion(
+                    start_sample=int(out.regions[i].start_sample),
+                    end_sample=int(out.regions[i].end_sample),
+                    length=int(out.regions[i].length),
+                    peak=float(out.regions[i].peak),
+                )
+                for i in range(int(out.region_count))
+            ]
+            return ClippingReport(
+                clipped_samples=int(out.clipped_samples),
+                clipping_ratio=float(out.clipping_ratio),
+                max_clipped_peak=float(out.max_clipped_peak),
+                regions=regions,
+            )
+        finally:
+            self._lib.sonare_free_clipping_result(ctypes.byref(out))
+
+    def dynamic_range(
+        self,
+        window_sec: float = 0.0,
+        hop_sec: float = 0.0,
+        low_percentile: float = -1.0,
+        high_percentile: float = -1.0,
+    ) -> DynamicRangeReport:
+        """Sliding-window dynamic range (high_percentile - low_percentile, in dB).
+
+        Pass 0.0 for ``window_sec`` / ``hop_sec`` to use the library default
+        (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile`` a
+        NEGATIVE value (the default ``-1.0``) selects the library default
+        percentiles (low=0.10, high=0.95); ``0.0`` is a real request for the
+        0th percentile (the minimum-RMS window), not the default.
+        """
+        from ._ffi import SonareDynamicRangeResult
+
+        handle = self._require_handle()
+        out = SonareDynamicRangeResult()
+        rc = self._lib.sonare_audio_dynamic_range(
+            handle,
+            _to_c_float(window_sec, "window_sec"),
+            _to_c_float(hop_sec, "hop_sec"),
+            _to_c_float(low_percentile, "low_percentile"),
+            _to_c_float(high_percentile, "high_percentile"),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        try:
+            windows = [float(out.window_rms_db[i]) for i in range(int(out.window_count))]
+            return DynamicRangeReport(
+                dynamic_range_db=float(out.dynamic_range_db),
+                low_percentile_db=float(out.low_percentile_db),
+                high_percentile_db=float(out.high_percentile_db),
+                window_rms_db=windows,
+            )
+        finally:
+            self._lib.sonare_free_dynamic_range_result(ctypes.byref(out))
+
+    def spectrum(
+        self,
+        n_fft: int = 0,
+        apply_octave_smoothing: bool = False,
+        octave_fraction: int = 0,
+        db_ref: float = 0.0,
+        db_amin: float = 0.0,
+    ) -> SpectrumReport:
+        """Welch-averaged magnitude / power / dB spectrum over the whole buffer.
+
+        This is NOT a single-frame snapshot: the signal is split into
+        Hann-windowed, 50%-overlapping ``n_fft``-length frames whose power
+        spectra are averaged across the entire buffer (Welch's method), so
+        transients are smeared by the averaging. For a true single-frame FFT
+        use :meth:`spectrum_frame`.
+
+        Pass 0 for ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin``
+        to use the library defaults (2048 / 3 / 1.0 / kEpsilon).
+        """
+        from ._ffi import SonareSpectrumResult
+
+        handle = self._require_handle()
+        out = SonareSpectrumResult()
+        rc = self._lib.sonare_audio_spectrum(
+            handle,
+            _to_c_int(n_fft, "n_fft"),
+            ctypes.c_int(1 if apply_octave_smoothing else 0),
+            _to_c_int(octave_fraction, "octave_fraction"),
+            _to_c_float(db_ref, "db_ref"),
+            _to_c_float(db_amin, "db_amin"),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        try:
+            count = int(out.bin_count)
+            return SpectrumReport(
+                frequencies=_from_c_float_array(out.frequencies, count),
+                magnitude=_from_c_float_array(out.magnitude, count),
+                power=_from_c_float_array(out.power, count),
+                db=_from_c_float_array(out.db, count),
+                n_fft=int(out.n_fft),
+                sample_rate=int(out.sample_rate),
+            )
+        finally:
+            self._lib.sonare_free_spectrum_result(ctypes.byref(out))
+
+    def spectrum_frame(
+        self,
+        frame_offset: int = 0,
+        n_fft: int = 0,
+        apply_octave_smoothing: bool = False,
+        octave_fraction: int = 0,
+        db_ref: float = 0.0,
+        db_amin: float = 0.0,
+    ) -> SpectrumReport:
+        """True single-frame mono magnitude / power / dB spectrum (one Hann-windowed FFT).
+
+        Unlike :meth:`spectrum` (Welch-averaged), this is a single
+        ``n_fft``-length FFT for spectrum-analyzer "moment" snapshots. The
+        frame spans ``[frame_offset, frame_offset + n_fft)``; samples past the
+        end are zero-padded. Pass 0 for ``frame_offset`` for the first frame
+        and 0 for ``n_fft`` / ``octave_fraction`` / ``db_ref`` / ``db_amin``
+        for the library defaults (2048 / 3 / 1.0 / kEpsilon).
+
+        Cost per call is set by ``n_fft`` rather than by the buffer's length,
+        so this may be polled over a long recording frame by frame -- and
+        because it reads the handle's own samples, each poll costs no fresh
+        copy of the buffer, unlike the ``metering_spectrum_frame`` free
+        function over :attr:`data`.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
+        """
+        from ._ffi import SonareSpectrumResult
+
+        handle = self._require_handle()
+        out = SonareSpectrumResult()
+        rc = self._lib.sonare_audio_spectrum_frame(
+            handle,
+            _to_c_size_t(frame_offset, "frame_offset"),
+            _to_c_int(n_fft, "n_fft"),
+            ctypes.c_int(1 if apply_octave_smoothing else 0),
+            _to_c_int(octave_fraction, "octave_fraction"),
+            _to_c_float(db_ref, "db_ref"),
+            _to_c_float(db_amin, "db_amin"),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        try:
+            count = int(out.bin_count)
+            return SpectrumReport(
+                frequencies=_from_c_float_array(out.frequencies, count),
+                magnitude=_from_c_float_array(out.magnitude, count),
+                power=_from_c_float_array(out.power, count),
+                db=_from_c_float_array(out.db, count),
+                n_fft=int(out.n_fft),
+                sample_rate=int(out.sample_rate),
+            )
+        finally:
+            self._lib.sonare_free_spectrum_result(ctypes.byref(out))
+
+    def ebur128_loudness_range(self) -> float:
+        """EBU R128 / Tech 3342 Loudness Range (LRA) in LU."""
+        out = ctypes.c_float(0.0)
+        rc = self._lib.sonare_audio_ebur128_loudness_range(
+            self._require_handle(), ctypes.byref(out)
+        )
+        _check(rc)
+        return float(out.value)
 
     def close(self) -> None:
         """Free the underlying audio resource."""

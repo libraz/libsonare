@@ -12,6 +12,8 @@ from .types import (
     BpmAnalysisResult,
     ChordAnalysisResult,
     ChromaResult,
+    ClippingReport,
+    DynamicRangeReport,
     DynamicsResult,
     HpssResult,
     Key,
@@ -26,6 +28,7 @@ from .types import (
     PitchClass,
     PitchResult,
     RhythmResult,
+    SpectrumReport,
     StftResult,
     TimbreResult,
 )
@@ -228,6 +231,45 @@ class Audio:
         fill_na: bool = False,
     ) -> PitchResult: ...
     def resample(self, target_sr: int) -> list[float]: ...
+    def peak_db(self) -> float: ...
+    def rms_db(self) -> float: ...
+    def dc_offset(self) -> float: ...
+    def crest_factor_db(self) -> float: ...
+    def silence_ratio(
+        self,
+        threshold_db: float = -45.0,
+        frame_length: int = 1024,
+        hop_length: int = 256,
+    ) -> float: ...
+    def true_peak_db(self, oversample_factor: int = 4) -> float: ...
+    def detect_clipping(
+        self, threshold: float = 0.999, min_region_samples: int = 1
+    ) -> ClippingReport: ...
+    def dynamic_range(
+        self,
+        window_sec: float = 0.0,
+        hop_sec: float = 0.0,
+        low_percentile: float = -1.0,
+        high_percentile: float = -1.0,
+    ) -> DynamicRangeReport: ...
+    def spectrum(
+        self,
+        n_fft: int = 0,
+        apply_octave_smoothing: bool = False,
+        octave_fraction: int = 0,
+        db_ref: float = 0.0,
+        db_amin: float = 0.0,
+    ) -> SpectrumReport: ...
+    def spectrum_frame(
+        self,
+        frame_offset: int = 0,
+        n_fft: int = 0,
+        apply_octave_smoothing: bool = False,
+        octave_fraction: int = 0,
+        db_ref: float = 0.0,
+        db_amin: float = 0.0,
+    ) -> SpectrumReport: ...
+    def ebur128_loudness_range(self) -> float: ...
     def close(self) -> None: ...
     def __enter__(self) -> Audio: ...
     def __exit__(self, *args: object) -> None: ...

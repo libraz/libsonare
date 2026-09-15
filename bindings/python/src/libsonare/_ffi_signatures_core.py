@@ -97,6 +97,83 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_audio_analyze.restype = ctypes.c_int32
     lib.sonare_audio_analyze.argtypes = [ctypes.c_void_p, ctypes.POINTER(SonareAnalysisResult)]
 
+    # --- Metering (handle form) ---
+
+    lib.sonare_audio_peak_db.restype = ctypes.c_int32
+    lib.sonare_audio_peak_db.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
+
+    lib.sonare_audio_rms_db.restype = ctypes.c_int32
+    lib.sonare_audio_rms_db.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
+
+    lib.sonare_audio_dc_offset.restype = ctypes.c_int32
+    lib.sonare_audio_dc_offset.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
+
+    lib.sonare_audio_crest_factor_db.restype = ctypes.c_int32
+    lib.sonare_audio_crest_factor_db.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
+
+    lib.sonare_audio_silence_ratio.restype = ctypes.c_int32
+    lib.sonare_audio_silence_ratio.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_float),
+    ]
+
+    lib.sonare_audio_true_peak_db.restype = ctypes.c_int32
+    lib.sonare_audio_true_peak_db.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_float),
+    ]
+
+    lib.sonare_audio_detect_clipping.restype = ctypes.c_int32
+    lib.sonare_audio_detect_clipping.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_float,
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareClippingResult),
+    ]
+
+    lib.sonare_audio_dynamic_range.restype = ctypes.c_int32
+    lib.sonare_audio_dynamic_range.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(SonareDynamicRangeResult),
+    ]
+
+    lib.sonare_audio_spectrum.restype = ctypes.c_int32
+    lib.sonare_audio_spectrum.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(SonareSpectrumResult),
+    ]
+
+    lib.sonare_audio_spectrum_frame.restype = ctypes.c_int32
+    lib.sonare_audio_spectrum_frame.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(SonareSpectrumResult),
+    ]
+
+    lib.sonare_audio_ebur128_loudness_range.restype = ctypes.c_int32
+    lib.sonare_audio_ebur128_loudness_range.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_float),
+    ]
+
     # --- Quick detection functions ---
 
     # sonare_detect_bpm
