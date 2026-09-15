@@ -32,6 +32,7 @@ import {
   entryPointGuards,
   evaluateNarrowingScope,
   integerNarrowingSites,
+  isSharedNarrowingReader,
   SHARED_READER_FILE,
 } from './_addon_sources.js';
 
@@ -76,6 +77,29 @@ const UNGUARDED_ENTRY_POINT: AddonSource[] = [
   },
 ];
 
+/**
+ * The shared header's own shape: one narrowing inside the family, one beside it.
+ *
+ * Both sit in the file the rule used to trust by name, so the second is exactly
+ * what that trust swallowed whole — and the header really has grown four
+ * hand-written predicates next to the family since it was written. A run that
+ * reports the second and not the first is the measurement that the trust now
+ * belongs to the symbol rather than to the address.
+ */
+const SHARED_HEADER: AddonSource[] = [
+  {
+    file: SHARED_READER_FILE,
+    text: [
+      'inline int node_narrow_int(Napi::Env env, const Napi::Value& value, const char* name) {',
+      '  return value.As<Napi::Number>().Int32Value();',
+      '}',
+      'inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const char* key) {',
+      '  return obj.Get(key).As<Napi::Number>().Uint32Value();',
+      '}',
+    ].join('\n'),
+  },
+];
+
 /** A tree with neither defect, so any finding on it is a false positive. */
 const CLEAN: AddonSource[] = [
   {
@@ -111,12 +135,14 @@ describe('caller integers are narrowed in one place', () => {
     expect(integerNarrowingSites()).toEqual([]);
   });
 
-  it('keeps every narrowing in the shared header', () => {
-    const outside = integerNarrowingSites().filter((site) => site.file !== SHARED_READER_FILE);
+  it('keeps every narrowing inside the shared narrowing family', () => {
+    const outside = integerNarrowingSites().filter((site) => !isSharedNarrowingReader(site.owner));
     expect(
-      outside.map((site) => `${site.file}:${site.line} ${site.receiver}.${site.accessor}()`),
-      `Read the value through the node_narrow_* family in ${SHARED_READER_FILE}, or record the ` +
-        'site in NARROWING_ALLOWLIST with the mechanism that makes it harmless.',
+      outside.map(
+        (site) => `${site.file}:${site.line} ${site.receiver}.${site.accessor}() in ${site.owner}`,
+      ),
+      'Read the value through the node_narrow_* family, or record the site in ' +
+        'NARROWING_ALLOWLIST with the mechanism that makes it harmless.',
     ).toEqual([]);
   });
 });
@@ -135,9 +161,28 @@ describe('each narrowing-scope failure class fires on its own', () => {
   it('reports a stray narrowing, and only that', () => {
     const lines = only(
       evaluateNarrowingScope(STRAY_NARROWING, new Map(), NO_FLOOR),
-      'outside the shared header',
+      'outside the shared narrowing family',
     );
-    expect(lines).toEqual(['fake.cpp:4 info[0].Int32Value()']);
+    expect(lines).toEqual(['fake.cpp:4 info[0].Int32Value() in Fn']);
+  });
+
+  it('accepts a narrowing the shared family performs', () => {
+    const inside = integerNarrowingSites(SHARED_HEADER).filter((site) =>
+      isSharedNarrowingReader(site.owner),
+    );
+    expect(inside.map((site) => site.owner)).toEqual(['node_narrow_int']);
+  });
+
+  it('reports a narrowing written beside the family in the family own file', () => {
+    const lines = only(
+      evaluateNarrowingScope(SHARED_HEADER, new Map(), NO_FLOOR),
+      'outside the shared narrowing family',
+    );
+    // The file is the one the rule used to trust outright, so this line existing
+    // at all is the change: the address no longer launders the conversion.
+    expect(lines).toEqual([
+      `${SHARED_READER_FILE}:5 obj.Get(key).Uint32Value() in MidiByteProperty`,
+    ]);
   });
 
   it('reports an entry point with nowhere to catch, and only that', () => {
@@ -170,6 +215,67 @@ describe('each narrowing-scope failure class fires on its own', () => {
   });
 });
 
+/**
+ * A site's owner is the function whose BODY encloses it, not the definition that
+ * happens to sit above it.
+ *
+ * Both spellings below broke an owner taken from the nearest preceding
+ * definition, and they break it in opposite directions: one credits a site to a
+ * function that had already closed, the other credits it to a control-flow
+ * keyword. The first is the one that matters — a site credited to the shared
+ * family is accepted in silence, which is worse than the filename rule this
+ * replaced, because a filename cannot misattribute a site to a function.
+ */
+describe('a narrowing is owned by the body that encloses it', () => {
+  /** A narrowing at FILE SCOPE, written after the shared reader has closed. */
+  const AFTER_A_CLOSED_BODY: AddonSource[] = [
+    {
+      file: SHARED_READER_FILE,
+      text: [
+        'inline int node_narrow_int(Napi::Env env, const Napi::Value& v, const char* n) {',
+        '  return 0;',
+        '}',
+        'const int kSneak = Fallback().As<Napi::Number>().Int32Value();',
+      ].join('\n'),
+    },
+  ];
+
+  /** A narrowing the shared reader performs inside one of its own branches. */
+  const INSIDE_A_BRANCH: AddonSource[] = [
+    {
+      file: SHARED_READER_FILE,
+      text: [
+        'inline int node_narrow_int(Napi::Env env, const Napi::Value& v, const char* n) {',
+        '  if (v.IsNumber()) {',
+        '    return v.As<Napi::Number>().Int32Value();',
+        '  }',
+        '  return 0;',
+        '}',
+      ].join('\n'),
+    },
+  ];
+
+  it('does not credit a file-scope narrowing to the definition above it', () => {
+    expect(integerNarrowingSites(AFTER_A_CLOSED_BODY)[0].owner).toBe('');
+  });
+
+  it('reports that file-scope narrowing rather than accepting it', () => {
+    const findings = evaluateNarrowingScope(AFTER_A_CLOSED_BODY, new Map(), NO_FLOOR);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].lines).toEqual([
+      `${SHARED_READER_FILE}:4 Fallback().Int32Value() in (file scope)`,
+    ]);
+  });
+
+  it('credits a branch inside the shared reader to the reader, not to the branch', () => {
+    expect(integerNarrowingSites(INSIDE_A_BRANCH)[0].owner).toBe('node_narrow_int');
+  });
+
+  it('accepts that branch, so a guarded reader is not reported against itself', () => {
+    expect(evaluateNarrowingScope(INSIDE_A_BRANCH, new Map(), NO_FLOOR)).toEqual([]);
+  });
+});
+
 describe('the narrowing scanner sees what it claims to', () => {
   const widths: AddonSource[] = [
     {
@@ -199,5 +305,27 @@ describe('the narrowing scanner sees what it claims to', () => {
 
   it('keys a site on its receiver, so an allowlist entry survives a line move', () => {
     expect(integerNarrowingSites(STRAY_NARROWING)[0].id).toBe('fake.cpp:info[0]:Int32Value');
+  });
+
+  it('attributes a narrowing to the function it is written inside', () => {
+    expect(integerNarrowingSites(SHARED_HEADER).map((site) => site.owner)).toEqual([
+      'node_narrow_int',
+      'MidiByteProperty',
+    ]);
+  });
+
+  it('gives a narrowing above every definition no owner, so nothing launders it', () => {
+    const fileScope: AddonSource[] = [
+      {
+        file: SHARED_READER_FILE,
+        text: 'const int kD = Fallback().As<Napi::Number>().Int32Value();\n',
+      },
+    ];
+    expect(integerNarrowingSites(fileScope)[0].owner).toBe('');
+    const findings = evaluateNarrowingScope(fileScope, new Map(), NO_FLOOR);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].lines).toEqual([
+      `${SHARED_READER_FILE}:1 Fallback().Int32Value() in (file scope)`,
+    ]);
   });
 });

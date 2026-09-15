@@ -583,8 +583,114 @@ export interface NarrowingSite {
   accessor: string;
   /** The expression the conversion is taken on. */
   receiver: string;
+  /** The function the conversion is written inside, `''` above the first one. */
+  owner: string;
   /** `file:receiver:accessor` — stable across line moves, so allowlists do not rot. */
   id: string;
+}
+
+/**
+ * The family a narrowing is allowed to be written inside.
+ *
+ * A SYMBOL rather than a filename, and that is the whole of it: the trust
+ * belongs to the readers that range-check before converting, not to the file
+ * they happen to sit in. A file grows, and the last four predicates added to
+ * this one wrote their own comparison next to the family without ever asking to
+ * be trusted — they inherited it from the address. Naming the family means a
+ * helper added beside it is reported, and an accepted narrowing has to say which
+ * reader performed it.
+ */
+export const SHARED_NARROWING_READER = /^node_narrow_\w+$/;
+
+/** Whether a narrowing's enclosing function IS the shared narrowing family. */
+export function isSharedNarrowingReader(owner: string): boolean {
+  return SHARED_NARROWING_READER.test(owner);
+}
+
+/**
+ * The head of a function definition: a return type, a name, a parameter list,
+ * then the body's opening brace.
+ *
+ * `}` is excluded from the parameter list on purpose: without it the class spans
+ * a newline and swallows the previous function's closing brace, so the NEXT
+ * declaration is read as that macro's parameters and disappears from the
+ * population.
+ */
+const DEFINITION_HEAD = /^[\w:<>,&*\s]*?\b(?:\w+::)?(\w+)\s*\(([^;{}]*?)\)\s*(?:const\s*)?\{/;
+
+/**
+ * Heads that open a BLOCK rather than a function body.
+ *
+ * `if (cond) {` matches {@link DEFINITION_HEAD} exactly — a name, a parenthesised
+ * list, a brace — so without this a narrowing inside a branch is owned by `if`
+ * rather than by the function the branch is in, and a correctly guarded reader is
+ * reported against itself.
+ */
+const CONTROL_FLOW_HEAD = /^(?:if|for|while|switch|catch)$/;
+
+/** A function definition with the extent of its body. */
+interface DefinitionSpan {
+  name: string;
+  params: string;
+  /** Offset of the body's opening brace. */
+  open: number;
+  /** Offset one past the body's closing brace. */
+  end: number;
+}
+
+/**
+ * Every function definition in @p code, located by brace balance.
+ *
+ * THE extractor: everything that needs to know which function an offset belongs
+ * to comes through here, because an owner that disagreed between two extractors
+ * would be the same misattribution one level up. The body's EXTENT is what makes
+ * this more than a list of starts — a site written after a body has closed
+ * belongs to no function, and crediting it to the definition above it is how a
+ * file-scope narrowing silently inherited the shared family's exemption.
+ */
+function definitionSpans(code: string): DefinitionSpan[] {
+  const spans: DefinitionSpan[] = [];
+  for (const match of code.matchAll(new RegExp(DEFINITION_HEAD.source, 'gm'))) {
+    if (CONTROL_FLOW_HEAD.test(match[1])) {
+      continue;
+    }
+    const open = code.indexOf('{', (match.index ?? 0) + match[0].length - 1);
+    if (open < 0) {
+      continue;
+    }
+    let depth = 0;
+    for (let i = open; i < code.length; i++) {
+      if (code[i] === '{') {
+        depth++;
+      } else if (code[i] === '}') {
+        depth--;
+        if (depth === 0) {
+          spans.push({ name: match[1], params: match[2], open, end: i + 1 });
+          break;
+        }
+      }
+    }
+  }
+  return spans;
+}
+
+/**
+ * The innermost body containing @p at, or `''` when the offset is at file scope.
+ *
+ * Containment, never proximity. `''` is a real answer rather than a fallback: a
+ * narrowing at file scope has no owner, so it can match no trusted name and is
+ * reported.
+ */
+function enclosingDefinition(spans: DefinitionSpan[], at: number): string {
+  let owner = '';
+  let narrowest = Number.POSITIVE_INFINITY;
+  for (const span of spans) {
+    if (span.open <= at && at < span.end && span.end - span.open < narrowest) {
+      owner = span.name;
+      narrowest = span.end - span.open;
+    }
+  }
+  return owner;
 }
 
 /**
@@ -603,8 +709,8 @@ const WRAPPING_ACCESSOR =
  * A wrapped value is always inside the target type, so nothing downstream can
  * tell it from a setting the caller chose — which is why the conversion has to
  * live in one place that range-checks it, rather than being spelled out per
- * site. The shared header is that place, and it is the only file where a hit
- * here is expected.
+ * site. The {@link SHARED_NARROWING_READER} family is that place, and each site
+ * carries the function it was written inside so a caller can say so.
  *
  * Takes its sources so the self-tests can drive this exact function rather than
  * a re-implementation of it, which would only ever agree with itself.
@@ -613,6 +719,7 @@ export function integerNarrowingSites(sources: AddonSource[] = addonSources()): 
   const sites: NarrowingSite[] = [];
   for (const { file, text } of sources) {
     const code = withoutComments(text);
+    const spans = definitionSpans(code);
     for (const match of code.matchAll(new RegExp(WRAPPING_ACCESSOR.source, 'g'))) {
       const at = match.index ?? 0;
       const before = code.slice(0, at);
@@ -622,6 +729,7 @@ export function integerNarrowingSites(sources: AddonSource[] = addonSources()): 
         line: before.split('\n').length,
         accessor: match[1],
         receiver,
+        owner: enclosingDefinition(spans, at),
         id: `${file}:${receiver}:${match[1]}`,
       });
     }
@@ -637,34 +745,16 @@ export interface EntryPointGuardSite {
   guarded: boolean;
 }
 
-/** Function bodies keyed by their bare name, located by brace balance. */
+/** Entry-point bodies keyed by their bare name, from {@link definitionSpans}. */
 function bodiesByName(sources: AddonSource[]): Map<string, { file: string; body: string }> {
   const found = new Map<string, { file: string; body: string }>();
   for (const { file, text } of sources) {
     const code = withoutComments(text);
-    for (const match of code.matchAll(
-      // `}` is excluded from the parameter list on purpose: without it the
-      // class spans a newline and swallows the previous function's closing
-      // brace, so the NEXT declaration is read as that macro's parameters and
-      // disappears from the population.
-      /^[\w:<>,&*\s]*?\b(?:[\w]+::)?(\w+)\s*\(([^;{}]*?)\)\s*(?:const\s*)?\{/gm,
-    )) {
-      if (!match[2].includes('CallbackInfo')) {
+    for (const span of definitionSpans(code)) {
+      if (!span.params.includes('CallbackInfo')) {
         continue;
       }
-      const open = code.indexOf('{', (match.index ?? 0) + match[0].length - 1);
-      let depth = 0;
-      for (let i = open; i < code.length; i++) {
-        if (code[i] === '{') {
-          depth++;
-        } else if (code[i] === '}') {
-          depth--;
-          if (depth === 0) {
-            found.set(match[1], { file, body: code.slice(open, i + 1) });
-            break;
-          }
-        }
-      }
+      found.set(span.name, { file, body: code.slice(span.open, span.end) });
     }
   }
   return found;
@@ -971,14 +1061,17 @@ export function evaluateNarrowingScope(
   }
 
   const stray = narrowings
-    .filter((site) => site.file !== SHARED_READER_FILE)
+    .filter((site) => !isSharedNarrowingReader(site.owner))
     .filter((site) => !allowlist.has(site.id));
   if (stray.length > 0) {
     findings.push({
       heading:
-        'These integer narrowings sit outside the shared header, so a value the target type ' +
-        'cannot hold arrives as a different legal one',
-      lines: stray.map((site) => `${site.file}:${site.line} ${site.receiver}.${site.accessor}()`),
+        'These integer narrowings sit outside the shared narrowing family, so a value the target ' +
+        'type cannot hold arrives as a different legal one',
+      lines: stray.map(
+        (site) =>
+          `${site.file}:${site.line} ${site.receiver}.${site.accessor}() in ${site.owner || '(file scope)'}`,
+      ),
     });
   }
 
