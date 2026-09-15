@@ -170,7 +170,9 @@ from ._cli_project import (
 from ._cli_project import (
     _write_project_json as _write_project_json,
 )
+from ._errors import SonareValueError
 from ._facade import rebind_facade_exports as _rebind_facade_exports
+from ._runtime import _C_INT_MAX, _C_INT_MIN, _narrow_int
 
 
 class _ContractArgumentParser(argparse.ArgumentParser):
@@ -334,11 +336,25 @@ def _pitch_threshold(value: str) -> float:
     return parsed
 
 
-def _positive_int(value: str) -> int:
+def _c_int_option(value: str, requirement: str) -> int:
+    """Read an option value as a C ``int``, refusing in the type argparse expects.
+
+    The native CLI parses every integer option through ``std::stoi`` before
+    dispatch, so a value past the signed range is a usage error on both surfaces.
+    """
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
-        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+        raise argparse.ArgumentTypeError(requirement) from exc
+    try:
+        return _narrow_int(parsed, "value", _C_INT_MIN, _C_INT_MAX)
+    except SonareValueError as exc:
+        raise argparse.ArgumentTypeError("must fit in a signed 32-bit integer") from exc
+
+
+def _positive_int(value: str) -> int:
+    # Type half shared, semantic half local: "positive" is this option's own rule.
+    parsed = _c_int_option(value, "must be a positive integer")
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed
@@ -352,10 +368,7 @@ def _candidate_count(value: str) -> int:
     """
     if value == "true":
         return 5
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise argparse.ArgumentTypeError("must be an integer or 'true'") from exc
+    return _c_int_option(value, "must be an integer or 'true'")
 
 
 # The contract type of a ``type=`` callable that stands in for a builtin. Left

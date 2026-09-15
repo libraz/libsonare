@@ -109,11 +109,57 @@ def test_key_candidates_matches_the_native_cli_value_by_value(
         assert candidate_calls == []
 
 
-@pytest.mark.parametrize("value", ["", "bogus", "1.5", "true "])
+# The native CLI reads every integer option through std::stoi before dispatch,
+# so a value past the signed range is a usage error there. 2**31 is the first
+# value that parses as an integer and still does not fit.
+_OUT_OF_C_INT_RANGE = [str(2**31), str(-(2**31) - 1), str(2**32), str(2**64 + 7)]
+
+
+@pytest.mark.parametrize("value", ["", "bogus", "1.5", "true "] + _OUT_OF_C_INT_RANGE)
 def test_key_candidates_refuses_a_value_the_native_cli_refuses(value) -> None:
-    """Only the integer forms and the ``true`` shorthand get through."""
+    """Only the in-range integer forms and the ``true`` shorthand get through."""
+    # Positive control: the neighbouring in-range values still parse, and to
+    # themselves, so a parser that refused everything could not pass.
+    for accepted, expected in (("5", 5), ("true", 5), (str(2**31 - 1), 2**31 - 1)):
+        parsed = _parser().parse_args(["key", "input.wav", f"--candidates={accepted}"])
+        assert parsed.candidates == expected
+
     with pytest.raises(SystemExit) as raised:
         _parser().parse_args(["key", "input.wav", f"--candidates={value}"])
+    assert raised.value.code == 2
+
+
+@pytest.mark.parametrize("value", _OUT_OF_C_INT_RANGE)
+@pytest.mark.parametrize(
+    ("argv", "option", "attribute"),
+    (
+        (["pitch", "input.wav"], "--hop-length", "hop_length"),
+        (["analyze", "input.wav"], "--meter-denominator", "meter_denominator"),
+    ),
+)
+def test_a_positive_int_option_past_the_c_int_range_is_a_usage_error(
+    argv, option, attribute, value
+) -> None:
+    """The bound is the C type's, and it is reached at the stage the native CLI uses.
+
+    Without it the value parsed, the file was decoded, and the refusal arrived
+    from the library as exit 3 -- the same argv the native CLI refuses as exit 2.
+    """
+    # Positive control: two in-range values, one of them the largest that fits.
+    for accepted in ("256", str(2**31 - 1)):
+        parsed = _parser().parse_args([*argv, f"{option}={accepted}"])
+        assert getattr(parsed, attribute) == int(accepted)
+
+    with pytest.raises(SystemExit) as raised:
+        _parser().parse_args([*argv, f"{option}={value}"])
+    assert raised.value.code == 2
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "1.5", "bogus"])
+def test_a_positive_int_option_still_refuses_its_own_semantic_range(value) -> None:
+    """The semantic half stayed at the option; only the type half moved to the shared reader."""
+    with pytest.raises(SystemExit) as raised:
+        _parser().parse_args(["pitch", "input.wav", f"--hop-length={value}"])
     assert raised.value.code == 2
 
 
