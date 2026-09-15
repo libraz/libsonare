@@ -5,6 +5,7 @@
 #include "mastering/common/loudness_measure.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -24,6 +25,91 @@ namespace {
 float true_peak_to_dbtp(float peak) noexcept {
   if (peak < sonare::constants::kEpsilon) return sonare::constants::kFloorDb;
   return linear_to_db(peak);
+}
+
+// The series carry the library defaults; naming the config here also pins the
+// four mirrors in loudness_measure.h against metering's own values.
+constexpr metering::LufsConfig kSeriesConfig{};
+static_assert(kMomentaryWindowSeconds == kSeriesConfig.momentary_duration_sec,
+              "momentary window mirror drifted from metering::LufsConfig");
+static_assert(kShortTermWindowSeconds == kSeriesConfig.short_term_duration_sec,
+              "short-term window mirror drifted from metering::LufsConfig");
+static_assert(kMomentaryWindowSeconds * (1.0f - metering::kLufsMomentaryOverlap) ==
+                  kLoudnessSeriesHopSeconds,
+              "momentary hop mirror drifted from metering::kLufsMomentaryOverlap");
+static_assert(kLoudnessSeriesHopSeconds == metering::kLufsShortTermHopSec,
+              "short-term hop mirror drifted from metering::kLufsShortTermHopSec");
+
+// Linear-domain peak across de-interleaved channels. The buffer overload
+// measures the channel in place; wrapping it in an Audio would deep-copy a
+// second track-length buffer for nothing, which on an album-length master is
+// hundreds of megabytes held only to be read once.
+float interleaved_true_peak(const float* samples, std::size_t frames, int channels,
+                            int oversample_factor) {
+  float peak = 0.0f;
+  std::vector<float> channel(frames);
+  for (int index = 0; index < channels; ++index) {
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+      channel[frame] =
+          samples[frame * static_cast<std::size_t>(channels) + static_cast<std::size_t>(index)];
+    }
+    peak = std::max(peak, metering::true_peak(channel.data(), channel.size(), oversample_factor));
+  }
+  return peak;
+}
+
+// Shared body behind both interleaved summary overloads; @p series may be null.
+LoudnessSummary interleaved_summary(const float* samples, std::size_t frames, int channels,
+                                    int sample_rate, int true_peak_oversample,
+                                    LoudnessSeries* series) {
+  const metering::LufsResult lufs =
+      metering::lufs_interleaved(samples, frames, channels, sample_rate, kSeriesConfig,
+                                 series != nullptr ? &series->momentary_lufs : nullptr,
+                                 series != nullptr ? &series->short_term_lufs : nullptr);
+  return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
+          true_peak_to_dbtp(interleaved_true_peak(samples, frames, channels, true_peak_oversample)),
+          lufs.loudness_range};
+}
+
+// Shared body behind both stereo planar summary overloads; @p series may be null.
+LoudnessSummary stereo_planar_summary(const float* left, const float* right, std::size_t frames,
+                                      int sample_rate, int true_peak_oversample,
+                                      LoudnessSeries* series) {
+  // BS.1770 channel summing is only exposed on an interleaved buffer, so build
+  // one, measure, and release it before the per-channel true peak — which reads
+  // the caller's planar buffers directly. The interleaved copy is then the only
+  // track-length temporary this call ever holds, and it is gone before the
+  // second measurement starts.
+  metering::LufsResult lufs;
+  {
+    std::vector<float> interleaved(frames * 2);
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+      interleaved[2 * frame] = left[frame];
+      interleaved[2 * frame + 1] = right[frame];
+    }
+    lufs = metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate, kSeriesConfig,
+                                      series != nullptr ? &series->momentary_lufs : nullptr,
+                                      series != nullptr ? &series->short_term_lufs : nullptr);
+  }
+  const float true_peak = std::max(metering::true_peak(left, frames, true_peak_oversample),
+                                   metering::true_peak(right, frames, true_peak_oversample));
+  return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
+          true_peak_to_dbtp(true_peak), lufs.loudness_range};
+}
+
+// Silence is -inf in a loudness series. Floor it the way true_peak_to_dbtp
+// floors a silent peak, so differencing two silent blocks yields 0, not NaN.
+float floored_lufs(float lufs) noexcept {
+  return std::isfinite(lufs) ? lufs : sonare::constants::kFloorDb;
+}
+
+void difference_series(const std::vector<float>& before, const std::vector<float>& after,
+                       std::vector<float>* out) {
+  if (out == nullptr) return;
+  out->resize(before.size());
+  for (std::size_t index = 0; index < before.size(); ++index) {
+    (*out)[index] = floored_lufs(after[index]) - floored_lufs(before[index]);
+  }
 }
 
 }  // namespace
@@ -95,24 +181,7 @@ LoudnessSummary measure_loudness_summary(const Audio& audio, int true_peak_overs
 LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::size_t frames,
                                                      int channels, int sample_rate,
                                                      int true_peak_oversample) {
-  const metering::LufsResult lufs =
-      metering::lufs_interleaved(samples, frames, channels, sample_rate);
-  float true_peak = 0.0f;
-  std::vector<float> channel(frames);
-  for (int index = 0; index < channels; ++index) {
-    for (std::size_t frame = 0; frame < frames; ++frame) {
-      channel[frame] =
-          samples[frame * static_cast<std::size_t>(channels) + static_cast<std::size_t>(index)];
-    }
-    // The buffer overload measures the de-interleaved channel in place. Wrapping
-    // it in an Audio first would deep-copy a second track-length buffer for
-    // nothing, which on an album-length master is hundreds of megabytes held
-    // only to be read once.
-    true_peak = std::max(true_peak,
-                         metering::true_peak(channel.data(), channel.size(), true_peak_oversample));
-  }
-  return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
-          true_peak_to_dbtp(true_peak), lufs.loudness_range};
+  return interleaved_summary(samples, frames, channels, sample_rate, true_peak_oversample, nullptr);
 }
 
 LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const float* right,
@@ -123,24 +192,128 @@ LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const 
         ErrorCode::InvalidParameter,
         "measure_loudness_summary_stereo_planar: channel pointer is null with non-zero frames");
   }
-  // BS.1770 channel summing is only exposed on an interleaved buffer, so build
-  // one, measure, and release it before the per-channel true peak — which reads
-  // the caller's planar buffers directly. The interleaved copy is then the only
-  // track-length temporary this call ever holds, and it is gone before the
-  // second measurement starts.
-  metering::LufsResult lufs;
-  {
-    std::vector<float> interleaved(frames * 2);
-    for (std::size_t frame = 0; frame < frames; ++frame) {
-      interleaved[2 * frame] = left[frame];
-      interleaved[2 * frame + 1] = right[frame];
-    }
-    lufs = metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate);
+  return stereo_planar_summary(left, right, frames, sample_rate, true_peak_oversample, nullptr);
+}
+
+LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::size_t frames,
+                                                     int channels, int sample_rate,
+                                                     int true_peak_oversample,
+                                                     LoudnessSeries* series) {
+  if (series == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "measure_loudness_summary_interleaved: series pointer is null");
   }
-  const float true_peak = std::max(metering::true_peak(left, frames, true_peak_oversample),
-                                   metering::true_peak(right, frames, true_peak_oversample));
+  if (samples == nullptr && frames != 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_loudness_summary_interleaved: samples pointer is null with non-zero frame count");
+  }
+  return interleaved_summary(samples, frames, channels, sample_rate, true_peak_oversample, series);
+}
+
+LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const float* right,
+                                                       std::size_t frames, int sample_rate,
+                                                       int true_peak_oversample,
+                                                       LoudnessSeries* series) {
+  if (series == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "measure_loudness_summary_stereo_planar: series pointer is null");
+  }
+  if ((left == nullptr || right == nullptr) && frames != 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_loudness_summary_stereo_planar: channel pointer is null with non-zero frames");
+  }
+  return stereo_planar_summary(left, right, frames, sample_rate, true_peak_oversample, series);
+}
+
+void measure_loudness_series_interleaved(const float* samples, std::size_t frames, int channels,
+                                         int sample_rate, LoudnessSeries* series) {
+  if (series == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "measure_loudness_series_interleaved: series pointer is null");
+  }
+  if (samples == nullptr && frames != 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_loudness_series_interleaved: samples pointer is null with non-zero frame count");
+  }
+  metering::lufs_interleaved(samples, frames, channels, sample_rate, kSeriesConfig,
+                             &series->momentary_lufs, &series->short_term_lufs);
+}
+
+void measure_loudness_series_stereo_planar(const float* left, const float* right,
+                                           std::size_t frames, int sample_rate,
+                                           LoudnessSeries* series) {
+  if (series == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "measure_loudness_series_stereo_planar: series pointer is null");
+  }
+  if ((left == nullptr || right == nullptr) && frames != 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_loudness_series_stereo_planar: channel pointer is null with non-zero frames");
+  }
+  std::vector<float> interleaved(frames * 2);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    interleaved[2 * frame] = left[frame];
+    interleaved[2 * frame + 1] = right[frame];
+  }
+  metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate, kSeriesConfig,
+                             &series->momentary_lufs, &series->short_term_lufs);
+}
+
+void stage_level_delta_lu(const LoudnessSeries& before, const LoudnessSeries& after,
+                          std::vector<float>* momentary_delta,
+                          std::vector<float>* short_term_delta) {
+  if (before.momentary_lufs.size() != after.momentary_lufs.size() ||
+      before.short_term_lufs.size() != after.short_term_lufs.size()) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "stage_level_delta_lu: series lengths differ, so the stage changed the frame count");
+  }
+  difference_series(before.momentary_lufs, after.momentary_lufs, momentary_delta);
+  difference_series(before.short_term_lufs, after.short_term_lufs, short_term_delta);
+}
+
+LoudnessSummary measure_residual_loudness_summary(const float* before, const float* after,
+                                                  std::size_t frames, int sample_rate,
+                                                  int true_peak_oversample) {
+  if ((before == nullptr || after == nullptr) && frames != 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_residual_loudness_summary: input pointer is null with non-zero frames");
+  }
+  std::vector<float> residual(frames);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    residual[frame] = before[frame] - after[frame];
+  }
+  const metering::LufsResult lufs =
+      metering::lufs_interleaved(residual.data(), frames, 1, sample_rate, kSeriesConfig);
   return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
-          true_peak_to_dbtp(true_peak), lufs.loudness_range};
+          true_peak_to_dbtp(metering::true_peak(residual.data(), frames, true_peak_oversample)),
+          lufs.loudness_range};
+}
+
+LoudnessSummary measure_residual_loudness_summary_stereo_planar(
+    const float* before_left, const float* before_right, const float* after_left,
+    const float* after_right, std::size_t frames, int sample_rate, int true_peak_oversample) {
+  if ((before_left == nullptr || before_right == nullptr || after_left == nullptr ||
+       after_right == nullptr) &&
+      frames != 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "measure_residual_loudness_summary_stereo_planar: channel pointer is null with non-zero "
+        "frames");
+  }
+  std::vector<float> left(frames);
+  std::vector<float> right(frames);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    left[frame] = before_left[frame] - after_left[frame];
+    right[frame] = before_right[frame] - after_right[frame];
+  }
+  return stereo_planar_summary(left.data(), right.data(), frames, sample_rate, true_peak_oversample,
+                               nullptr);
 }
 
 }  // namespace sonare::mastering::common

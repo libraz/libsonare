@@ -1,10 +1,22 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <vector>
 
+#include "mastering/api/internal_processor_runner.h"
+#include "mastering/common/loudness_measure.h"
+#include "mastering/dynamics/compressor.h"
 #include "mastering/master.h"
+#include "mastering/repair/declick.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/decrackle.h"
+#include "mastering/repair/dehum.h"
+#include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/dereverb_classical.h"
+#include "metering/lufs.h"
 #include "rt/adaa.h"
 #include "rt/delay_line.h"
 #include "rt/envelope_follower.h"
@@ -68,11 +80,11 @@ TEST_CASE("Mastering umbrella header exposes representative modules", "[masterin
   REQUIRE(maximizer.config().ceiling_db == -1.0f);
 }
 
-// The historical "mastering::common::* aliases of rt::*" test was removed when
-// the rt shim layer under mastering/common/ was deleted; rt primitives are now
-// consumed directly via #include "rt/...". The remaining tests in this file
-// continue to exercise the umbrella header and the real common/ implementations
-// (Biquad, JilesAtherton, loudness_measure, NoiseTracker).
+// There is no mastering::common::* alias layer over rt::*: rt primitives are
+// included directly as "rt/...", and the cases below exercise them under those
+// names. What this file covers from common/ is NoiseTracker and
+// loudness_measure. Biquad and the Jiles-Atherton hysteresis model are covered
+// by the eq_* and hysteresis_* files, not here.
 
 TEST_CASE("ParamSmoother reaches target immediately with zero time", "[mastering]") {
   ParamSmoother smoother(0.0f, 0.0f, 48000.0);
@@ -527,4 +539,308 @@ TEST_CASE("NoiseTracker reset clears learned state", "[mastering]") {
 
   REQUIRE(tracker.noise_psd()[0] < 0.000001f);
   REQUIRE_THROWS(tracker.update(nullptr));
+}
+
+// ---------------------------------------------------------------------------
+// Loudness series
+// ---------------------------------------------------------------------------
+
+namespace {
+
+namespace common = sonare::mastering::common;
+
+std::vector<float> series_tone(std::size_t frames, int sample_rate, float hz, float amplitude,
+                               std::size_t silent_head = 0) {
+  std::vector<float> out(frames, 0.0f);
+  for (std::size_t i = silent_head; i < frames; ++i) {
+    const double phase = sonare::constants::kTwoPiD * static_cast<double>(hz) *
+                         static_cast<double>(i) / static_cast<double>(sample_rate);
+    out[i] = amplitude * static_cast<float>(std::sin(phase));
+  }
+  return out;
+}
+
+// Index of the first element carrying a measurement; a block covering only
+// silence is -inf, which is what makes the two series' origins observable.
+std::ptrdiff_t first_finite(const std::vector<float>& series) {
+  for (std::size_t i = 0; i < series.size(); ++i) {
+    if (std::isfinite(series[i])) return static_cast<std::ptrdiff_t>(i);
+  }
+  return -1;
+}
+
+/// Records how many blocks the offline runner hands a processor. The runner's
+/// block loop is the only source a per-stage gain-reduction series could read,
+/// so its call count bounds that series' resolution.
+class CountingProcessor : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double sample_rate, int max_block_size) override {
+    prepare(sample_rate, max_block_size, 1);
+  }
+  void prepare(double, int, int) override { calls = 0; }
+  void process(float* const*, int, int) override { ++calls; }
+  void reset() override {}
+
+  int calls = 0;
+};
+
+}  // namespace
+
+// The block layout is fixed by the spec, so the element count is a closed-form
+// function of the input length. The expected values below are derived from
+// ITU-R BS.1770-4 (400 ms window / 100 ms hop) and EBU R128 (3 s window /
+// 100 ms hop) by hand, not from the constants the implementation mirrors:
+// 4 s yields (4.0 - 0.4) / 0.1 + 1 = 37 momentary and (4.0 - 3.0) / 0.1 + 1 = 11
+// short-term blocks at any rate. A hop off by a single sample moves both counts.
+TEST_CASE("Loudness series block counts follow the BS.1770 window and hop", "[mastering]") {
+  for (const int sample_rate : {44100, 48000}) {
+    INFO("sample_rate = " << sample_rate);
+    const std::size_t frames = static_cast<std::size_t>(4 * sample_rate);
+    const auto samples = series_tone(frames, sample_rate, 1000.0f, 0.25f);
+
+    common::LoudnessSeries series;
+    common::measure_loudness_series_interleaved(samples.data(), frames, 1, sample_rate, &series);
+
+    CHECK(series.momentary_lufs.size() == 37);
+    CHECK(series.short_term_lufs.size() == 11);
+  }
+}
+
+// Both series advance by 100 ms but start at their own window length, so the
+// element concurrent with short_term[j] is momentary[j + 26]. A signal that is
+// silent for exactly 3 s exposes the offset: the first block of each series to
+// carry any tone differs by that lead.
+TEST_CASE("Loudness series share a hop but not an origin", "[mastering]") {
+  constexpr int kSampleRate = 44100;
+  const std::size_t frames = static_cast<std::size_t>(5 * kSampleRate);
+  const std::size_t silent_head = static_cast<std::size_t>(3 * kSampleRate);
+  const auto samples = series_tone(frames, kSampleRate, 1000.0f, 0.25f, silent_head);
+
+  common::LoudnessSeries series;
+  common::measure_loudness_series_interleaved(samples.data(), frames, 1, kSampleRate, &series);
+
+  const std::ptrdiff_t first_momentary = first_finite(series.momentary_lufs);
+  const std::ptrdiff_t first_short_term = first_finite(series.short_term_lufs);
+  REQUIRE(first_momentary >= 0);
+  REQUIRE(first_short_term >= 0);
+  CHECK(first_momentary == 27);
+  CHECK(first_short_term == 1);
+  CHECK(first_momentary - first_short_term ==
+        static_cast<std::ptrdiff_t>(common::kShortTermSeriesLead));
+}
+
+// Only complete windows are emitted, so a signal shorter than a window yields no
+// measurement at all rather than one taken over a sub-spec window.
+TEST_CASE("Loudness series stay empty below their window length", "[mastering]") {
+  constexpr int kSampleRate = 48000;
+
+  SECTION("under 400 ms leaves both series empty") {
+    const std::size_t frames = static_cast<std::size_t>(0.3 * kSampleRate);
+    const auto samples = series_tone(frames, kSampleRate, 1000.0f, 0.25f);
+    common::LoudnessSeries series;
+    common::measure_loudness_series_interleaved(samples.data(), frames, 1, kSampleRate, &series);
+    CHECK(series.momentary_lufs.empty());
+    CHECK(series.short_term_lufs.empty());
+  }
+
+  SECTION("under 3 s keeps momentary but empties short-term") {
+    const std::size_t frames = static_cast<std::size_t>(2.9 * kSampleRate);
+    const auto samples = series_tone(frames, kSampleRate, 1000.0f, 0.25f);
+    common::LoudnessSeries series;
+    common::measure_loudness_series_interleaved(samples.data(), frames, 1, kSampleRate, &series);
+    CHECK_FALSE(series.momentary_lufs.empty());
+    CHECK(series.short_term_lufs.empty());
+  }
+}
+
+// The series are the measurement's own intermediate, not a second pass over the
+// same audio. Reducing them independently must reproduce the scalars bit for
+// bit; any tolerance here would hide a second measurement.
+TEST_CASE("Loudness series reduce to the summary scalars exactly", "[mastering]") {
+  constexpr int kSampleRate = 44100;
+  const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
+  auto samples = series_tone(frames, kSampleRate, 440.0f, 0.3f);
+  // Break the stationarity so max-M, max-S and the final block differ from each
+  // other; on a constant tone every block is equal and the check is vacuous.
+  for (std::size_t i = frames / 2; i < frames; ++i) samples[i] *= 0.25f;
+
+  common::LoudnessSeries series;
+  const common::LoudnessSummary summary = common::measure_loudness_summary_interleaved(
+      samples.data(), frames, 1, kSampleRate, common::kDefaultTruePeakOversample, &series);
+
+  REQUIRE_FALSE(series.momentary_lufs.empty());
+  REQUIRE_FALSE(series.short_term_lufs.empty());
+  const float max_momentary =
+      *std::max_element(series.momentary_lufs.begin(), series.momentary_lufs.end());
+  const float max_short_term =
+      *std::max_element(series.short_term_lufs.begin(), series.short_term_lufs.end());
+  CHECK(max_momentary == summary.max_momentary_lufs);
+  CHECK(max_short_term == summary.max_short_term_lufs);
+  // The returned array is the one the loudness range was computed from.
+  CHECK(sonare::metering::lra_from_short_term_blocks(series.short_term_lufs) ==
+        summary.loudness_range);
+  // A constant series would satisfy the two maxima trivially.
+  CHECK(max_momentary >
+        *std::min_element(series.momentary_lufs.begin(), series.momentary_lufs.end()));
+}
+
+// The mono meter is the one-channel case of the interleaved meter, so the
+// series overload must not introduce a second code path.
+TEST_CASE("Single-channel series overload matches the mono summary bit for bit", "[mastering]") {
+  constexpr int kSampleRate = 48000;
+  const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
+  auto samples = series_tone(frames, kSampleRate, 440.0f, 0.3f);
+  // A stationary tone makes the loudness range zero on both sides and max-M
+  // equal to max-S, so two of the five comparisons would hold even if the two
+  // paths diverged. Breaking the stationarity gives all five distinct values.
+  for (std::size_t i = frames / 2; i < frames; ++i) samples[i] *= 0.25f;
+  const sonare::Audio audio = sonare::Audio::from_buffer(samples.data(), frames, kSampleRate);
+
+  const common::LoudnessSummary mono = common::measure_loudness_summary(audio);
+  common::LoudnessSeries series;
+  const common::LoudnessSummary interleaved = common::measure_loudness_summary_interleaved(
+      samples.data(), frames, 1, kSampleRate, common::kDefaultTruePeakOversample, &series);
+
+  // The fixture's job is to make these five comparisons distinguishable; if the
+  // signal ever goes stationary again, two of them go trivial in silence.
+  CHECK(mono.loudness_range > 0.0f);
+  CHECK(mono.max_momentary_lufs != mono.max_short_term_lufs);
+
+  CHECK(interleaved.integrated_lufs == mono.integrated_lufs);
+  CHECK(interleaved.max_momentary_lufs == mono.max_momentary_lufs);
+  CHECK(interleaved.max_short_term_lufs == mono.max_short_term_lufs);
+  CHECK(interleaved.true_peak_dbtp == mono.true_peak_dbtp);
+  CHECK(interleaved.loudness_range == mono.loudness_range);
+}
+
+// A static gain is the one stage whose level delta has a closed form, so it is
+// the lower bound the delta must satisfy exactly.
+TEST_CASE("Stage level delta reports a static gain as a flat offset", "[mastering]") {
+  constexpr int kSampleRate = 44100;
+  const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
+  const auto before_samples = series_tone(frames, kSampleRate, 440.0f, 0.4f);
+  std::vector<float> after_samples(before_samples);
+  for (float& sample : after_samples) sample *= 0.5f;
+
+  common::LoudnessSeries before;
+  common::LoudnessSeries after;
+  common::measure_loudness_series_interleaved(before_samples.data(), frames, 1, kSampleRate,
+                                              &before);
+  common::measure_loudness_series_interleaved(after_samples.data(), frames, 1, kSampleRate, &after);
+
+  std::vector<float> momentary_delta;
+  std::vector<float> short_term_delta;
+  common::stage_level_delta_lu(before, after, &momentary_delta, &short_term_delta);
+
+  REQUIRE(momentary_delta.size() == before.momentary_lufs.size());
+  REQUIRE(short_term_delta.size() == before.short_term_lufs.size());
+  REQUIRE_FALSE(momentary_delta.empty());
+  for (const float delta : momentary_delta) {
+    CHECK_THAT(delta, WithinAbs(-6.0206f, 0.01f));
+  }
+  for (const float delta : short_term_delta) {
+    CHECK_THAT(delta, WithinAbs(-6.0206f, 0.01f));
+  }
+}
+
+// Silent blocks are -inf on both sides; subtracting them directly would emit a
+// NaN into a report vector.
+TEST_CASE("Stage level delta reports silence as no change", "[mastering]") {
+  constexpr int kSampleRate = 48000;
+  const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
+  const std::vector<float> silence(frames, 0.0f);
+
+  common::LoudnessSeries series;
+  common::measure_loudness_series_interleaved(silence.data(), frames, 1, kSampleRate, &series);
+  REQUIRE_FALSE(series.momentary_lufs.empty());
+  REQUIRE_FALSE(std::isfinite(series.momentary_lufs.front()));
+
+  std::vector<float> momentary_delta;
+  common::stage_level_delta_lu(series, series, &momentary_delta, nullptr);
+  REQUIRE(momentary_delta.size() == series.momentary_lufs.size());
+  for (const float delta : momentary_delta) {
+    CHECK(delta == 0.0f);
+  }
+}
+
+TEST_CASE("Stage level delta refuses series of differing length", "[mastering]") {
+  common::LoudnessSeries before;
+  common::LoudnessSeries after;
+  before.momentary_lufs = {-20.0f, -21.0f};
+  after.momentary_lufs = {-20.0f};
+  std::vector<float> delta;
+  CHECK_THROWS(common::stage_level_delta_lu(before, after, &delta, nullptr));
+}
+
+// The residual is what a stage removed. Against a silent output it is the input
+// itself, which pins the subtraction's orientation.
+TEST_CASE("Residual loudness of a fully removed signal matches the input", "[mastering]") {
+  constexpr int kSampleRate = 44100;
+  const std::size_t frames = static_cast<std::size_t>(4 * kSampleRate);
+  const auto before_samples = series_tone(frames, kSampleRate, 440.0f, 0.4f);
+  const std::vector<float> after_samples(frames, 0.0f);
+
+  const common::LoudnessSummary residual = common::measure_residual_loudness_summary(
+      before_samples.data(), after_samples.data(), frames, kSampleRate);
+  const common::LoudnessSummary input =
+      common::measure_loudness_summary_interleaved(before_samples.data(), frames, 1, kSampleRate);
+
+  CHECK(residual.integrated_lufs == input.integrated_lufs);
+  CHECK(residual.true_peak_dbtp == input.true_peak_dbtp);
+  // An unchanged stage leaves nothing behind.
+  const common::LoudnessSummary nothing = common::measure_residual_loudness_summary(
+      before_samples.data(), before_samples.data(), frames, kSampleRate);
+  CHECK_FALSE(std::isfinite(nothing.integrated_lufs));
+}
+
+// The offline runner hands a processor one block of min(n + latency, 64 Ki)
+// samples at a time, so `last_gain_reduction_db()` read once per block cannot
+// produce more elements than that. At 44.1 kHz a one-second input is a single
+// block: a gain-reduction series read there would hold exactly one element,
+// which is the scalar the chain already reports. Raising that resolution means
+// changing the runner's block size, which is what keeps a real per-stage
+// gain-reduction series out of this change.
+TEST_CASE("Offline runner blocks bound a per-stage gain-reduction series", "[mastering]") {
+  namespace internal = sonare::mastering::api::internal;
+
+  SECTION("one second at 44.1 kHz is a single block") {
+    std::vector<float> samples(44100, 0.1f);
+    CountingProcessor processor;
+    internal::run_processor_mono(processor, samples, 44100);
+    CHECK(processor.calls == 1);
+  }
+
+  SECTION("the counter does move above the block cap") {
+    std::vector<float> samples(3 * static_cast<std::size_t>(internal::kOfflineProcessorBlockSize),
+                               0.1f);
+    CountingProcessor processor;
+    internal::run_processor_mono(processor, samples, 44100);
+    CHECK(processor.calls == 3);
+  }
+
+  SECTION("the compressor adds no latency that would split the block") {
+    sonare::mastering::dynamics::Compressor compressor;
+    // Declaring prepare(double, int) hides the base three-argument overload, so
+    // the channel-aware form the runner uses is only reachable through the base.
+    sonare::rt::ProcessorBase& as_processor = compressor;
+    as_processor.prepare(44100.0, 44100, 1);
+    CHECK(as_processor.latency_samples() == 0);
+  }
+}
+
+// The residual tap subtracts the chain input from the post-repair buffer in
+// place, which only holds while every repair stage preserves the frame count.
+TEST_CASE("Chain repair stages preserve the frame count", "[mastering]") {
+  namespace repair = sonare::mastering::repair;
+  constexpr int kSampleRate = 44100;
+  const std::size_t frames = static_cast<std::size_t>(0.5 * kSampleRate);
+  const auto samples = series_tone(frames, kSampleRate, 440.0f, 0.4f);
+  const sonare::Audio input = sonare::Audio::from_buffer(samples.data(), frames, kSampleRate);
+
+  CHECK(repair::declick(input).size() == frames);
+  CHECK(repair::declip(input).size() == frames);
+  CHECK(repair::decrackle(input).size() == frames);
+  CHECK(repair::dehum(input).size() == frames);
+  CHECK(repair::dereverb_classical(input).size() == frames);
+  CHECK(repair::denoise_classical(input).size() == frames);
 }

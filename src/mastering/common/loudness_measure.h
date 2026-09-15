@@ -14,6 +14,7 @@
 /// shared mutable state.
 
 #include <cstddef>
+#include <vector>
 
 #include "core/audio.h"
 
@@ -23,6 +24,22 @@ namespace sonare::mastering::common {
 ///        `metering::true_peak_db()`'s own default so callers do not have to
 ///        depend on `metering/true_peak.h` to pick a sensible value.
 inline constexpr int kDefaultTruePeakOversample = 4;
+
+/// @brief Hop between consecutive elements of either loudness series, in
+///        seconds. Mirrors the value ITU-R BS.1770-4 / EBU R128 fixes, so
+///        callers do not depend on `metering/lufs.h`; pinned in the .cpp.
+inline constexpr float kLoudnessSeriesHopSeconds = 0.1f;
+
+/// @brief Momentary measurement window (BS.1770-4 Annex 2), in seconds.
+inline constexpr float kMomentaryWindowSeconds = 0.4f;
+
+/// @brief Short-term measurement window (EBU R128), in seconds.
+inline constexpr float kShortTermWindowSeconds = 3.0f;
+
+/// @brief Index offset aligning the two series: `short_term_lufs[j]` ends at the
+///        same frame as `momentary_lufs[j + kShortTermSeriesLead]`. That is
+///        (kShortTermWindowSeconds - kMomentaryWindowSeconds) over the shared hop.
+inline constexpr std::size_t kShortTermSeriesLead = 26;
 
 /// @brief Combined LUFS / true-peak result. Use this when both numbers are
 ///        needed in a single pass — it makes the call site less verbose and
@@ -42,6 +59,23 @@ struct LoudnessSummary {
   float max_short_term_lufs = 0.0f;
   float true_peak_dbtp = 0.0f;
   float loudness_range = 0.0f;
+};
+
+/// @brief The per-block series the scalar loudness meters are reduced from.
+///
+/// Both series advance by @ref kLoudnessSeriesHopSeconds but do not share an
+/// origin: only complete windows are emitted, so element 0 of each ends at its
+/// own window length. @ref kShortTermSeriesLead is the resulting index offset,
+/// and reading element `k` of both as the same instant is the mistake this
+/// field pair invites.
+///
+/// A series is empty when the input is shorter than its window - under 0.4 s for
+/// @ref momentary_lufs, under 3 s for @ref short_term_lufs. That is the meter's
+/// "no measurement", not a value taken over a sub-spec window. A fully silent
+/// block is `-inf`, the value the scalar meters also report for silence.
+struct LoudnessSeries {
+  std::vector<float> momentary_lufs;
+  std::vector<float> short_term_lufs;
 };
 
 /// @brief Integrated LUFS of @p audio (BS.1770-4 / EBU R128).
@@ -123,6 +157,64 @@ LoudnessSummary measure_loudness_summary_interleaved(
 ///          caller's own buffers for the true peak.
 LoudnessSummary measure_loudness_summary_stereo_planar(
     const float* left, const float* right, std::size_t frames, int sample_rate,
+    int true_peak_oversample = kDefaultTruePeakOversample);
+
+/// @brief @ref measure_loudness_summary_interleaved that also yields the series
+///        its scalars are reduced from.
+/// @details One K-weighting pass, not two: the series are the measurement's own
+///          intermediate rather than a second measurement of the same audio.
+/// @param series Receives both series; must not be null. Overwritten.
+LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::size_t frames,
+                                                     int channels, int sample_rate,
+                                                     int true_peak_oversample,
+                                                     LoudnessSeries* series);
+
+/// @brief @ref measure_loudness_summary_stereo_planar that also yields the
+///        series, keeping the same BS.1770 channel summing.
+LoudnessSummary measure_loudness_summary_stereo_planar(const float* left, const float* right,
+                                                       std::size_t frames, int sample_rate,
+                                                       int true_peak_oversample,
+                                                       LoudnessSeries* series);
+
+/// @brief Series only, for callers that do not need the scalars.
+void measure_loudness_series_interleaved(const float* samples, std::size_t frames, int channels,
+                                         int sample_rate, LoudnessSeries* series);
+
+/// @brief Stereo planar counterpart of @ref measure_loudness_series_interleaved.
+void measure_loudness_series_stereo_planar(const float* left, const float* right,
+                                           std::size_t frames, int sample_rate,
+                                           LoudnessSeries* series);
+
+/// @brief Per-hop level difference a stage made, in LU: `after - before`, so a
+///        negative element is attenuation.
+/// @details This measures the signal, NOT a processor's internal gain reduction.
+///          For a stage that reshapes the spectrum the two differ, and for a
+///          stage with no gain element at all this is still defined - which is
+///          why it is spelled as a level delta and names no stage. Silent
+///          blocks (`-inf`) are floored to the shared dB floor on both sides
+///          before subtracting, so the result is finite and two silent blocks
+///          report no change rather than a NaN.
+/// @param before Series measured at the stage's input.
+/// @param after Series measured at the stage's output. Must match @p before in
+///        length, which holds whenever the stage preserved the frame count.
+/// @param momentary_delta Receives the momentary difference; may be null.
+/// @param short_term_delta Receives the short-term difference; may be null.
+void stage_level_delta_lu(const LoudnessSeries& before, const LoudnessSeries& after,
+                          std::vector<float>* momentary_delta,
+                          std::vector<float>* short_term_delta);
+
+/// @brief Loudness of the difference signal `before - after`, i.e. what a stage
+///        removed rather than what it left.
+/// @details Holds one frame-length temporary for the difference and releases it
+///          before returning. Both pointers must be non-null when @p frames > 0.
+LoudnessSummary measure_residual_loudness_summary(
+    const float* before, const float* after, std::size_t frames, int sample_rate,
+    int true_peak_oversample = kDefaultTruePeakOversample);
+
+/// @brief Stereo planar counterpart of @ref measure_residual_loudness_summary.
+LoudnessSummary measure_residual_loudness_summary_stereo_planar(
+    const float* before_left, const float* before_right, const float* after_left,
+    const float* after_right, std::size_t frames, int sample_rate,
     int true_peak_oversample = kDefaultTruePeakOversample);
 
 }  // namespace sonare::mastering::common
