@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from numbers import Integral
 from typing import Any
 
 import numpy as np
@@ -37,6 +36,7 @@ from ._ffi import (
 )
 from ._runtime import (
     _C_INT_MAX,
+    _C_INT_MIN,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -46,6 +46,8 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _int_refusal,
+    _narrow_int,
     _out_float_array,
     _require_power_of_two,
     _resolve_enum,
@@ -69,18 +71,24 @@ def _unsupported_effect_symbol(symbol: str) -> SonareError:
     )
 
 
+def _trim_length(value: int, arg_name: str) -> int:
+    """Narrow one ``trim`` window length, refusing anything a C ``int`` would wrap.
+
+    The type and range halves are :func:`_narrow_int`, the check every ``_to_c_*``
+    reader runs; positive is this argument's own.
+    """
+    domain = "must fit in a positive signed 32-bit integer"
+    try:
+        length = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
+    except SonareValueError as exc:
+        raise _int_refusal("trim", value, arg_name, domain) from exc
+    if length <= 0:
+        raise SonareValueError(f"trim: {arg_name} {domain}")
+    return length
+
+
 def _validate_trim_options(frame_length: int, hop_length: int) -> tuple[int, int]:
-    if isinstance(frame_length, bool) or not isinstance(frame_length, Integral):
-        raise SonareValueError("trim: frame_length must be an integer")
-    if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
-        raise SonareValueError("trim: hop_length must be an integer")
-    frame_length = int(frame_length)
-    hop_length = int(hop_length)
-    if frame_length <= 0 or frame_length > _C_INT_MAX:
-        raise SonareValueError("trim: frame_length must fit in a positive signed 32-bit integer")
-    if hop_length <= 0 or hop_length > _C_INT_MAX:
-        raise SonareValueError("trim: hop_length must fit in a positive signed 32-bit integer")
-    return frame_length, hop_length
+    return _trim_length(frame_length, "frame_length"), _trim_length(hop_length, "hop_length")
 
 
 def normalize(
