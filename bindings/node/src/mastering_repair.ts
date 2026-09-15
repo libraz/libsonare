@@ -1,5 +1,5 @@
 import { addon } from './native.js';
-import type { DeclickStereoResult, RoomEstimateResult } from './types.js';
+import type { DeclickStereoResult, DeclipStereoResult, RoomEstimateResult } from './types.js';
 
 /** Common input fields for offline repair processors. */
 export interface MasteringRepairSamplesRequest {
@@ -214,6 +214,38 @@ export function masteringRepairDeclip(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return addon.masteringRepairDeclip(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDeclipStereo`. */
+export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Offline LPC-based declipper for a stereo pair, reconstructing the union of
+ * both channels' clipped runs.
+ *
+ * Each channel reconstructs the whole of every union run it has at least one
+ * clipped sample in; a channel with no clipped sample in a run is left
+ * untouched there, since reconstructing unclipped audio to match the other
+ * side would replace real samples with an estimate. `linkedRuns` on either
+ * report counts the runs whose reconstruction reached past this channel's own
+ * clipped samples because the other channel's run was wider -- a clipped
+ * plateau in only one channel produces no linking at all, and it is always 0
+ * from {@link masteringRepairDeclip}. See {@link masteringRepairDeclip} for
+ * the 512-sample LPC-vs-interpolation cap, which applies per channel here.
+ */
+export function masteringRepairDeclipStereo(
+  request: MasteringRepairDeclipStereoRequest,
+): DeclipStereoResult {
+  return addon.masteringRepairDeclipStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /** Offline crackle suppressor (median or wavelet-shrinkage). */

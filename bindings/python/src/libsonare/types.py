@@ -76,6 +76,9 @@ from ._types_analysis import (
     ClickDetection as ClickDetection,
 )
 from ._types_analysis import (
+    ClipDetection as ClipDetection,
+)
+from ._types_analysis import (
     ClippingRegion as ClippingRegion,
 )
 from ._types_analysis import (
@@ -86,6 +89,12 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     DeclickStereoResult as DeclickStereoResult,
+)
+from ._types_analysis import (
+    DeclipReport as DeclipReport,
+)
+from ._types_analysis import (
+    DeclipStereoResult as DeclipStereoResult,
 )
 from ._types_analysis import (
     DereverbClassicalConfig as DereverbClassicalConfig,

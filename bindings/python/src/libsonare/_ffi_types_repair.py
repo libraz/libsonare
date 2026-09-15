@@ -150,6 +150,41 @@ class SonareDeclipConfig(CStruct):
     ]
 
 
+class SonareClipDetection(CStruct):
+    """Maps to SonareClipDetection in sonare_c.h."""
+
+    _fields_ = [
+        ("sample_count", ctypes.c_size_t),
+        ("sample_fraction", ctypes.c_float),
+        ("run_count", ctypes.c_size_t),
+        ("longest_run_samples", ctypes.c_size_t),
+    ]
+
+
+class SonareDeclipReport(CStruct):
+    """Maps to SonareDeclipReport in sonare_c.h."""
+
+    _fields_ = [
+        ("detected", SonareClipDetection),
+        ("lpc_reconstructed_runs", ctypes.c_size_t),
+        ("interpolated_runs", ctypes.c_size_t),
+        ("repaired_samples", ctypes.c_size_t),
+        ("linked_runs", ctypes.c_size_t),
+    ]
+
+
+class SonareDeclipStereoResult(CStruct):
+    """Maps to SonareDeclipStereoResult in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("left_report", SonareDeclipReport),
+        ("right_report", SonareDeclipReport),
+    ]
+
+
 # SonareDecrackleConfig.mode values.
 SONARE_DECRACKLE_MODE_MEDIAN = 0
 SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE = 1

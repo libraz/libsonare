@@ -1,6 +1,9 @@
 import { getSonareModule } from './module_state';
 import type { RoomEstimateResult } from './public_types_acoustic';
-import type { MasteringRepairDeclickStereoResult } from './public_types_mastering';
+import type {
+  MasteringRepairDeclickStereoResult,
+  MasteringRepairDeclipStereoResult,
+} from './public_types_mastering';
 
 function requireModule() {
   return getSonareModule();
@@ -151,6 +154,13 @@ export interface MasteringRepairDeclipRequest extends DeclipOptions {
   sampleRate: number;
 }
 
+/** Request form of `masteringRepairDeclipStereo`. */
+export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
 /** Algorithms accepted by `masteringRepairDecrackle`. */
 export type DecrackleMode = 'median' | 'waveletShrinkage';
 
@@ -250,6 +260,45 @@ export function masteringRepairDeclip(
       ? { samples, sampleRate: sampleRate as number, ...options }
       : samples;
   return requireModule().masteringRepairDeclip(request.samples, request.sampleRate, request);
+}
+
+/**
+ * Offline LPC-based declipper for a stereo pair.
+ *
+ * Takes the union of both channels' clipped runs. Each channel reconstructs
+ * the whole of every union run it has at least one clipped sample in; a
+ * channel with none is left untouched there — reconstructing unclipped audio
+ * to match the other side would replace real samples with an estimate. A
+ * plateau clipped in only one channel therefore produces no linking:
+ * `linkedRuns` is non-zero only where both channels are clipped in the same
+ * region with different extents.
+ */
+export function masteringRepairDeclipStereo(
+  request: MasteringRepairDeclipStereoRequest,
+): MasteringRepairDeclipStereoResult;
+export function masteringRepairDeclipStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config?: DeclipOptions,
+): MasteringRepairDeclipStereoResult;
+export function masteringRepairDeclipStereo(
+  left: Float32Array | MasteringRepairDeclipStereoRequest,
+  right?: Float32Array,
+  sampleRate?: number,
+  config: DeclipOptions = {},
+): MasteringRepairDeclipStereoResult {
+  const request: MasteringRepairDeclipStereoRequest =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, ...config }
+      : left;
+  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDeclipStereo(
+    leftSamples,
+    rightSamples,
+    rate ?? 22050,
+    options,
+  );
 }
 
 /** Offline crackle suppressor (median or wavelet-shrinkage). */

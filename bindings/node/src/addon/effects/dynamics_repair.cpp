@@ -525,6 +525,111 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+/// @brief Marshal one channel's clip detection into the JS shape shared by the
+///        declip stereo report.
+Napi::Object EmitClipDetection(Napi::Env env, const SonareClipDetection& detection) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("sampleCount", Napi::Number::New(env, static_cast<double>(detection.sample_count)));
+  out.Set("sampleFraction", Napi::Number::New(env, detection.sample_fraction));
+  out.Set("runCount", Napi::Number::New(env, static_cast<double>(detection.run_count)));
+  out.Set("longestRunSamples",
+          Napi::Number::New(env, static_cast<double>(detection.longest_run_samples)));
+  return out;
+}
+
+Napi::Object EmitDeclipReport(Napi::Env env, const SonareDeclipReport& report) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("detected", EmitClipDetection(env, report.detected));
+  out.Set("lpcReconstructedRuns",
+          Napi::Number::New(env, static_cast<double>(report.lpc_reconstructed_runs)));
+  out.Set("interpolatedRuns",
+          Napi::Number::New(env, static_cast<double>(report.interpolated_runs)));
+  out.Set("repairedSamples", Napi::Number::New(env, static_cast<double>(report.repaired_samples)));
+  out.Set("linkedRuns", Napi::Number::New(env, static_cast<double>(report.linked_runs)));
+  return out;
+}
+
+/// @brief Read a SonareDeclipConfig options bag, applying the same field names
+///        and defaults as the mono facade's C++ DeclipConfig mapping above --
+///        the two structs share their shape, this is the C-ABI mirror of that
+///        reading.
+SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDeclipConfig config) {
+  config.clip_threshold = FloatProperty(options, "clipThreshold", config.clip_threshold);
+  config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
+  config.iterations = IntProperty(options, "iterations", config.iterations);
+  config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);
+  return config;
+}
+
+/// @brief Frees both heap-owned channels of a SonareDeclipStereoResult on
+///        scope exit -- the struct carries no dedicated free function, unlike
+///        the CResultGuard-eligible C-ABI results elsewhere in the addon.
+class DeclipStereoResultGuard {
+ public:
+  explicit DeclipStereoResultGuard(SonareDeclipStereoResult* result) : result_(result) {}
+  DeclipStereoResultGuard(const DeclipStereoResultGuard&) = delete;
+  DeclipStereoResultGuard& operator=(const DeclipStereoResultGuard&) = delete;
+  ~DeclipStereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  SonareDeclipStereoResult* result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(env, "masteringRepairDeclipStereo: left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  // Library defaults (sonare_c_mastering.h SonareDeclipConfig), applied before
+  // any options key overrides a field.
+  SonareDeclipConfig config{0.98f, 36, 2, 0.65f};
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    config = read_declip_config_c(info[3].As<Napi::Object>(), config);
+  }
+  SonareDeclipStereoResult result{};
+  SonareError err = sonare_mastering_repair_declip_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  DeclipStereoResultGuard guard(&result);
+  auto left_out = Napi::Float32Array::New(env, result.length);
+  auto right_out = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("leftReport", EmitDeclipReport(env, result.left_report));
+  out.Set("rightReport", EmitDeclipReport(env, result.right_report));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {

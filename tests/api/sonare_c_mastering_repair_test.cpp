@@ -265,6 +265,100 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
+  const int sr = 22050;
+  // Different tones, so returning one channel twice fails on content alone.
+  auto left = generate_sine(440.0f, sr, 0.3f);
+  auto right = generate_sine(880.0f, sr, 0.3f);
+  for (auto& s : left) s *= 0.5f;
+  for (auto& s : right) s *= 0.5f;
+
+  // Declip does not link the way declick does: a channel with no clipped sample
+  // of its own in a run is left alone there rather than reconstructed to match.
+  // Linking therefore needs the SAME region clipped in both channels to
+  // DIFFERENT extents -- [2000,2010) in both, carried on to 2040 in the right
+  // only, so the union run is [2000,2040) and the left is dragged past its own
+  // 10 clipped samples. The isolated right-only run at 5000 is the control for
+  // the other half of the rule.
+  const size_t kSharedBegin = 2000, kSharedEnd = 2010;
+  const size_t kRightWideEnd = 2040;
+  const size_t kRightOnlyBegin = 5000, kRightOnlyEnd = 5010;
+  for (size_t i = kSharedBegin; i < kSharedEnd; ++i) left[i] = 1.0f;
+  for (size_t i = kSharedBegin; i < kRightWideEnd; ++i) right[i] = 1.0f;
+  for (size_t i = kRightOnlyBegin; i < kRightOnlyEnd; ++i) right[i] = 1.0f;
+  const std::vector<float> left_input = left;
+
+  SECTION("a wider run on one side extends the other side's reconstruction") {
+    SonareDeclipStereoResult out{};
+    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr,
+                                                  nullptr, &out) == SONARE_OK);
+    REQUIRE(out.left != nullptr);
+    REQUIRE(out.right != nullptr);
+    REQUIRE(out.length == left.size());
+
+    // The fixture only witnesses the rule while each channel clips on its own.
+    CHECK(out.left_report.detected.run_count == 1);
+    CHECK(out.left_report.detected.sample_count == kSharedEnd - kSharedBegin);
+    CHECK(out.right_report.detected.run_count == 2);
+
+    // The asymmetry is the whole point: the left is carried past its own
+    // clipped samples by the right's wider run, while the right's own detection
+    // already spans that run and so borrows nothing.
+    CHECK(out.left_report.linked_runs > 0);
+    CHECK(out.right_report.linked_runs == 0);
+
+    // A run only the right channel clipped leaves the left untouched -- this is
+    // where declick would have repaired both.
+    for (size_t i = kRightOnlyBegin; i < kRightOnlyEnd; ++i) {
+      CHECK(out.left[i] == Catch::Approx(left_input[i]).margin(1e-6));
+    }
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("the extended region differs from the mono entry point") {
+    SonareDeclipStereoResult stereo{};
+    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr,
+                                                  nullptr, &stereo) == SONARE_OK);
+    float* mono = nullptr;
+    size_t mono_length = 0;
+    REQUIRE(sonare_mastering_repair_declip(left.data(), left.size(), sr, nullptr, &mono,
+                                           &mono_length) == SONARE_OK);
+    REQUIRE(mono_length == stereo.length);
+
+    // The mono pass never sees the right channel's run, so it stops at 2010.
+    bool differs = false;
+    for (size_t i = kSharedEnd; i < kRightWideEnd; ++i) {
+      if (stereo.left[i] != mono[i]) differs = true;
+    }
+    CHECK(differs);
+
+    sonare_free_floats(mono);
+    sonare_free_floats(stereo.left);
+    sonare_free_floats(stereo.right);
+  }
+
+  SECTION("clears the result before refusing") {
+    SonareDeclipStereoResult out{};
+    out.left = non_null_sentinel_float_ptr();
+    out.length = 123;
+    out.left_report.repaired_samples = 99;
+    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), 0,
+                                                  nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out.left == nullptr);
+    CHECK(out.right == nullptr);
+    CHECK(out.length == 0);
+    CHECK(out.left_report.repaired_samples == 0);
+  }
+
+  SECTION("refuses a null result") {
+    REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr,
+                                                  nullptr,
+                                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
   const int sr = 48000;
   auto samples = generate_sine(440.0f, sr, 0.5f);

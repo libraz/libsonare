@@ -256,6 +256,63 @@ val js_mastering_repair_declip(val samples, const val& sample_rate, val options)
 
 namespace {
 
+val declipDetectionToVal(const mastering::repair::ClipDetection& detected) {
+  val out = val::object();
+  out.set("sampleCount", detected.sample_count);
+  out.set("sampleFraction", detected.sample_fraction);
+  out.set("runCount", detected.run_count);
+  out.set("longestRunSamples", detected.longest_run_samples);
+  return out;
+}
+
+val declipReportToVal(const mastering::repair::DeclipReport& report) {
+  val out = val::object();
+  out.set("detected", declipDetectionToVal(report.detected));
+  out.set("lpcReconstructedRuns", report.lpc_reconstructed_runs);
+  out.set("interpolatedRuns", report.interpolated_runs);
+  out.set("repairedSamples", report.repaired_samples);
+  out.set("linkedRuns", report.linked_runs);
+  return out;
+}
+
+}  // namespace
+
+// Declips a stereo pair, reconstructing the union of both channels' own
+// clipped runs: a channel with at least one clipped sample in a union run
+// reconstructs the whole of it, so a plateau clipped in only one channel
+// produces no linking, while overlapping runs of different extents do (the
+// narrower channel is what reaches past its own clipped samples). Calls the
+// core directly rather than the C ABI, matching every other wrapper in this
+// file -- sonare_c_mastering_repair.cpp is not part of the WASM binding
+// sources.
+val js_mastering_repair_declip_stereo(val left_samples, val right_samples,
+                                      const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairDeclipStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  mastering::repair::DeclipConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
+    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+    cfg.iterations = repairIntOption(options, "iterations", cfg.iterations);
+    cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
+  }
+  mastering::repair::DeclipStereoResult result = mastering::repair::declip_stereo(left, right, cfg);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left_out));
+  out.set("right", vectorToFloat32Array(right_out));
+  out.set("leftReport", declipReportToVal(result.left_report));
+  out.set("rightReport", declipReportToVal(result.right_report));
+  return out;
+}
+
+namespace {
+
 mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name) {
   std::string s = name;
   std::transform(s.begin(), s.end(), s.begin(),
@@ -415,6 +472,7 @@ void registerRepairBindings() {
   function("masteringRepairDeclickStereo", &js_mastering_repair_declick_stereo);
   function("masteringRepairDenoiseClassical", &js_mastering_repair_denoise_classical);
   function("masteringRepairDeclip", &js_mastering_repair_declip);
+  function("masteringRepairDeclipStereo", &js_mastering_repair_declip_stereo);
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);
   function("masteringRepairDehum", &js_mastering_repair_dehum);
   function("masteringRepairDereverbClassical", &js_mastering_repair_dereverb_classical);

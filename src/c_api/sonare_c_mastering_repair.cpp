@@ -173,6 +173,19 @@ SonareDeclickReport to_c_declick_report(const sonare::mastering::repair::Declick
   return c;
 }
 
+SonareDeclipReport to_c_declip_report(const sonare::mastering::repair::DeclipReport& cpp) {
+  SonareDeclipReport c{};
+  c.detected.sample_count = cpp.detected.sample_count;
+  c.detected.sample_fraction = cpp.detected.sample_fraction;
+  c.detected.run_count = cpp.detected.run_count;
+  c.detected.longest_run_samples = cpp.detected.longest_run_samples;
+  c.lpc_reconstructed_runs = cpp.lpc_reconstructed_runs;
+  c.interpolated_runs = cpp.interpolated_runs;
+  c.repaired_samples = cpp.repaired_samples;
+  c.linked_runs = cpp.linked_runs;
+  return c;
+}
+
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 void clear_float_output(float** out, size_t* out_length) {
@@ -257,6 +270,38 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
     Audio result = sonare::mastering::repair::declip(audio, to_cpp_declip_config(config));
     return copy_audio_result(result, out, out_length);
   });
+}
+
+SonareError sonare_mastering_repair_declip_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareDeclipConfig* config,
+                                                  SonareDeclipStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = SonareDeclipStereoResult{};
+
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const auto result = sonare::mastering::repair::declip_stereo(
+      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
+      to_cpp_declip_config(config));
+  out->length = result.left.size();
+  out->left_report = to_c_declip_report(result.left_report);
+  out->right_report = to_c_declip_report(result.right_report);
+  std::unique_ptr<float[]> left_out(new float[out->length]);
+  std::unique_ptr<float[]> right_out(new float[out->length]);
+  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+  out->left = release_array(left_out);
+  out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,

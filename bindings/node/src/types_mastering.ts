@@ -892,6 +892,56 @@ export interface DeclickStereoResult {
   rightReport: DeclickReport;
 }
 
+/** One channel's clip detection, from {@link masteringRepairDeclipStereo}. Counts runs, not samples. */
+export interface ClipDetection {
+  /** Samples at or past the clip threshold. */
+  sampleCount: number;
+  /** `sampleCount` divided by the input length. */
+  sampleFraction: number;
+  /** Runs of consecutive clipped samples. */
+  runCount: number;
+  /** A run past the 512-sample cap takes the interpolation fallback instead of the solver. */
+  longestRunSamples: number;
+}
+
+/**
+ * What one channel's declip pass found and what it did to it, from
+ * {@link masteringRepairDeclipStereo}.
+ */
+export interface DeclipReport {
+  /** This channel's own analysis of the input. */
+  detected: ClipDetection;
+  /** Runs the LPC solver filled. */
+  lpcReconstructedRuns: number;
+  /**
+   * Runs past the 512-sample cap, filled by interpolation instead: for these,
+   * `lpcOrder`, `iterations` and `lpcBlend` had no effect.
+   */
+  interpolatedRuns: number;
+  /** Samples overwritten by either fill. */
+  repairedSamples: number;
+  /**
+   * Of the repaired runs, those reaching past this channel's own clipped
+   * samples because the other channel's run was wider.
+   */
+  linkedRuns: number;
+}
+
+/**
+ * A declipped stereo pair and what each channel's pass did, from
+ * {@link masteringRepairDeclipStereo}.
+ *
+ * Each channel reconstructs the whole of every union run it has at least one
+ * clipped sample in; a channel with no clipped sample in a run is left
+ * untouched there, so `leftReport` and `rightReport` can genuinely differ.
+ */
+export interface DeclipStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: DeclipReport;
+  rightReport: DeclipReport;
+}
+
 /** What gain-matching one take to another's loudness took, and produced. */
 export interface LoudnessMatchResult {
   /** The source, gain-matched to the reference's integrated loudness. */

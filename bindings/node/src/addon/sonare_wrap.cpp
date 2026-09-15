@@ -356,6 +356,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                   "masteringRepairDenoiseClassical"));
   exports.Set("masteringRepairDeclip", Napi::Function::New(env, &SonareWrap::MasteringRepairDeclip,
                                                            "masteringRepairDeclip"));
+  exports.Set("masteringRepairDeclipStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDeclipStereo,
+                                  "masteringRepairDeclipStereo"));
   exports.Set(
       "masteringRepairDecrackle",
       Napi::Function::New(env, &SonareWrap::MasteringRepairDecrackle, "masteringRepairDecrackle"));

@@ -26,6 +26,7 @@ from ._ffi import (
     SonareDeclickConfig,
     SonareDeclickStereoResult,
     SonareDeclipConfig,
+    SonareDeclipStereoResult,
     SonareDecrackleConfig,
     SonareDehumConfig,
     SonareDenoiseClassicalConfig,
@@ -61,8 +62,11 @@ from ._runtime import (
 )
 from .types import (
     ClickDetection,
+    ClipDetection,
     DeclickReport,
     DeclickStereoResult,
+    DeclipReport,
+    DeclipStereoResult,
     DereverbClassicalConfig,
     RoomEstimate,
 )
@@ -535,6 +539,98 @@ def mastering_repair_declip(
         lpc_blend=float(lpc_blend),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_declip, samples, sample_rate, config)
+
+
+def _extract_declip_report(raw: Any) -> DeclipReport:
+    detected = raw.detected
+    return DeclipReport(
+        detected=ClipDetection(
+            sample_count=int(detected.sample_count),
+            sample_fraction=float(detected.sample_fraction),
+            run_count=int(detected.run_count),
+            longest_run_samples=int(detected.longest_run_samples),
+        ),
+        lpc_reconstructed_runs=int(raw.lpc_reconstructed_runs),
+        interpolated_runs=int(raw.interpolated_runs),
+        repaired_samples=int(raw.repaired_samples),
+        linked_runs=int(raw.linked_runs),
+    )
+
+
+@_guard_buffer("left", "right")
+def mastering_repair_declip_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    clip_threshold: float = 0.98,
+    lpc_order: int = 36,
+    iterations: int = 2,
+    lpc_blend: float = 0.65,
+) -> DeclipStereoResult:
+    """Declips a stereo pair over the union of both channels' clipped runs.
+
+    Each channel reconstructs the whole of every union run it has at least
+    one clipped sample in; a channel with none in a run is left untouched
+    there -- reconstructing unclipped audio to match the other side would
+    replace real samples with an estimate, so this is not
+    :func:`mastering_repair_declick_stereo`'s behaviour. A clipped plateau
+    present in only one channel therefore produces no linking at all: linking
+    needs both channels clipped in the same region with different extents.
+
+    Args:
+        left: Left channel input buffer (any sequence convertible to float32).
+        right: Right channel input buffer, same length as ``left``.
+        sample_rate: Sample rate in Hz (default 22050).
+        clip_threshold: Amplitude above which a sample is considered clipped
+            (default 0.98).
+        lpc_order: LPC order used for prediction (default 36).
+        iterations: LPC reconstruction iterations (default 2).
+        lpc_blend: LPC vs interpolation blend (default 0.65).
+
+    Returns:
+        :class:`DeclipStereoResult` with the declipped channels and each
+        channel's own detection/repair report.
+    """
+    lib = _get_lib()
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    config = SonareDeclipConfig(  # noqa: F405
+        clip_threshold=float(clip_threshold),
+        lpc_order=int(lpc_order),
+        iterations=int(iterations),
+        lpc_blend=float(lpc_blend),
+    )
+    out = SonareDeclipStereoResult()  # noqa: F405
+    rc = lib.sonare_mastering_repair_declip_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        n = int(out.length)
+        return DeclipStereoResult(
+            left=[float(out.left[i]) for i in range(n)],
+            right=[float(out.right[i]) for i in range(n)],
+            length=n,
+            left_report=_extract_declip_report(out.left_report),
+            right_report=_extract_declip_report(out.right_report),
+        )
+    finally:
+        # No dedicated free function for this result: `left`/`right` are each
+        # released with sonare_free_floats (see SonareDeclipStereoResult in
+        # sonare_c_mastering.h). A refused call leaves `out` at its
+        # zero-initialized default, so both pointers are still NULL here.
+        if out.left:
+            lib.sonare_free_floats(out.left)
+        if out.right:
+            lib.sonare_free_floats(out.right)
 
 
 @_guard_buffer("samples")

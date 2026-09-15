@@ -328,6 +328,9 @@ from .analyzer import (
     mastering_repair_declip as mastering_repair_declip,
 )
 from .analyzer import (
+    mastering_repair_declip_stereo as mastering_repair_declip_stereo,
+)
+from .analyzer import (
     mastering_repair_decrackle as mastering_repair_decrackle,
 )
 from .analyzer import (
@@ -712,6 +715,7 @@ from .types import (
     ChromaResult as ChromaResult,
 )
 from .types import ClickDetection as ClickDetection
+from .types import ClipDetection as ClipDetection
 from .types import ClipPageRequest as ClipPageRequest
 from .types import ClippingRegion as ClippingRegion
 from .types import ClippingReport as ClippingReport
@@ -720,6 +724,8 @@ from .types import (
 )
 from .types import DeclickReport as DeclickReport
 from .types import DeclickStereoResult as DeclickStereoResult
+from .types import DeclipReport as DeclipReport
+from .types import DeclipStereoResult as DeclipStereoResult
 from .types import DereverbClassicalConfig as DereverbClassicalConfig
 from .types import DynamicRangeReport as DynamicRangeReport
 from .types import (

@@ -605,6 +605,36 @@
     ],
     "size": 32
   },
+  "SonareClipDetection": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "sample_count",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "sample_fraction",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "run_count",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "longest_run_samples",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
   "SonareClipPageRequest": {
     "align": 8,
     "fields": [
@@ -952,6 +982,78 @@
       }
     ],
     "size": 16
+  },
+  "SonareDeclipReport": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "detected",
+        "offset": 0,
+        "size": 32
+      },
+      {
+        "kind": "unsigned",
+        "name": "lpc_reconstructed_runs",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "interpolated_runs",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "repaired_samples",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "linked_runs",
+        "offset": 56,
+        "size": 8
+      }
+    ],
+    "size": 64
+  },
+  "SonareDeclipStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "left_report",
+        "offset": 24,
+        "size": 64
+      },
+      {
+        "kind": "aggregate",
+        "name": "right_report",
+        "offset": 88,
+        "size": 64
+      }
+    ],
+    "size": 152
   },
   "SonareDecomposeStemsConfig": {
     "align": 8,

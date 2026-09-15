@@ -303,6 +303,63 @@ export interface MasteringRepairDeclickStereoResult {
   rightReport: DeclickReport;
 }
 
+/**
+ * What a declip analysis found in one channel of a
+ * {@link MasteringRepairDeclipStereoResult}.
+ */
+export interface ClipDetection {
+  /** Samples at or past `clipThreshold`. */
+  sampleCount: number;
+  /** `sampleCount` divided by the input length. */
+  sampleFraction: number;
+  /** Runs of consecutive clipped samples. */
+  runCount: number;
+  /** A run past the 512-sample cap takes the interpolation fallback instead of the solver. */
+  longestRunSamples: number;
+}
+
+/**
+ * What a declip pass found in one channel of a
+ * {@link MasteringRepairDeclipStereoResult} and what it did to it.
+ */
+export interface DeclipReport {
+  /** This channel's own analysis of the input. */
+  detected: ClipDetection;
+  /** Runs the Janssen solver filled. */
+  lpcReconstructedRuns: number;
+  /**
+   * Runs past the LPC gap cap, filled by interpolation instead: for these,
+   * `lpcOrder`, `iterations` and `lpcBlend` had no effect.
+   */
+  interpolatedRuns: number;
+  /** Samples overwritten by either fill. */
+  repairedSamples: number;
+  /**
+   * Of the repaired runs, those reaching past this channel's own clipped
+   * samples because the other channel's run was wider. Always 0 from the
+   * mono `masteringRepairDeclip`.
+   */
+  linkedRuns: number;
+}
+
+/**
+ * A declipped stereo pair and what each channel's pass found and did.
+ *
+ * Declip takes the union of both channels' clipped runs. Each channel
+ * reconstructs the whole of every union run it has at least one clipped
+ * sample in; a channel with none is left untouched there. `linkedRuns` is
+ * therefore 0 for a plateau clipped in only one channel, and non-zero only
+ * where both channels are clipped in the same region with different
+ * extents — the narrower channel is what reaches past its own clipped
+ * samples.
+ */
+export interface MasteringRepairDeclipStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: DeclipReport;
+  rightReport: DeclipReport;
+}
+
 export type MasteringProcessorParams = Record<string, number | boolean>;
 
 /**

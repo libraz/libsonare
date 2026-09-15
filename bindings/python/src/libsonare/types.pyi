@@ -770,6 +770,15 @@ class ClickDetection:
         self, count: int, rejected: int, longest_run_samples: int, per_second: float
     ) -> None: ...
 
+class ClipDetection:
+    sample_count: int
+    sample_fraction: float
+    run_count: int
+    longest_run_samples: int
+    def __init__(
+        self, sample_count: int, sample_fraction: float, run_count: int, longest_run_samples: int
+    ) -> None: ...
+
 class ClippingRegion:
     start_sample: int
     end_sample: int
@@ -1104,6 +1113,36 @@ class DeclickStereoResult:
         length: int,
         left_report: DeclickReport,
         right_report: DeclickReport,
+    ) -> None: ...
+
+class DeclipReport:
+    detected: ClipDetection
+    lpc_reconstructed_runs: int
+    interpolated_runs: int
+    repaired_samples: int
+    linked_runs: int
+    def __init__(
+        self,
+        detected: ClipDetection,
+        lpc_reconstructed_runs: int,
+        interpolated_runs: int,
+        repaired_samples: int,
+        linked_runs: int,
+    ) -> None: ...
+
+class DeclipStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DeclipReport
+    right_report: DeclipReport
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        left_report: DeclipReport,
+        right_report: DeclipReport,
     ) -> None: ...
 
 class MasteringResult:

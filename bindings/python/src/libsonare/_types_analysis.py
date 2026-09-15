@@ -1391,6 +1391,57 @@ class DeclickStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ClipDetection:
+    """What one channel's clip detector found, independent of repair.
+
+    ``sample_fraction`` is ``sample_count`` divided by the input length.
+    ``longest_run_samples`` past the 512-sample cap takes the interpolation
+    fallback instead of the LPC solver.
+    """
+
+    sample_count: int
+    sample_fraction: float
+    run_count: int
+    longest_run_samples: int
+
+
+@dataclass(frozen=True, slots=True)
+class DeclipReport:
+    """What one channel's declip pass found and did to it.
+
+    ``lpc_reconstructed_runs`` is runs the solver filled;
+    ``interpolated_runs`` is runs past the 512-sample cap filled by cubic /
+    linear interpolation instead, for which ``lpc_order``, ``iterations`` and
+    ``lpc_blend`` had no effect. ``linked_runs`` is the part of the repaired
+    runs reaching past this channel's own clipped samples because the other
+    channel's run was wider -- always 0 from the mono declip entry point.
+    """
+
+    detected: ClipDetection
+    lpc_reconstructed_runs: int
+    interpolated_runs: int
+    repaired_samples: int
+    linked_runs: int
+
+
+@dataclass(frozen=True, slots=True)
+class DeclipStereoResult:
+    """A declipped stereo pair and what each channel's pass did.
+
+    Declip repairs the union of both channels' clipped runs: each channel
+    reconstructs the whole of every union run it has at least one clipped
+    sample in, and is left untouched where it has none, so a run clipped in
+    only one channel produces no linking at all.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DeclipReport
+    right_report: DeclipReport
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 

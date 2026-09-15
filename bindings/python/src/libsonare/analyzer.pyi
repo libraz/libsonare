@@ -17,6 +17,7 @@ from .types import (
     ClippingReport,
     CqtResult,
     DeclickStereoResult,
+    DeclipStereoResult,
     DereverbClassicalConfig,
     DynamicRangeReport,
     DynamicsResult,
@@ -1736,6 +1737,16 @@ def mastering_repair_declip(
     iterations: int = 2,
     lpc_blend: float = 0.65,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_declip_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    clip_threshold: float = 0.98,
+    lpc_order: int = 36,
+    iterations: int = 2,
+    lpc_blend: float = 0.65,
+) -> DeclipStereoResult: ...
 def mastering_repair_decrackle(
     samples: FloatSamples,
     sample_rate: int = 22050,

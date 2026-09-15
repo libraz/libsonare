@@ -965,6 +965,54 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
                                            const SonareDeclipConfig* config, float** out,
                                            size_t* out_length);
 
+/// @brief Flat POD mirror of @c mastering::repair::ClipDetection.
+typedef struct {
+  size_t sample_count;         // samples at or past clip_threshold
+  float sample_fraction;       // sample_count divided by the input length
+  size_t run_count;            // runs of consecutive clipped samples
+  size_t longest_run_samples;  // a run past the 512-sample cap takes the
+                               // interpolation fallback instead of the solver
+} SonareClipDetection;
+
+/// @brief What one channel's declip pass found and what it did to it.
+typedef struct {
+  SonareClipDetection detected;   // this channel's own analysis of the input
+  size_t lpc_reconstructed_runs;  // runs the solver filled
+  size_t interpolated_runs;       // runs past the cap, filled by interpolation:
+                                  // for these lpc_order, iterations and
+                                  // lpc_blend had no effect
+  size_t repaired_samples;        // samples overwritten by either fill
+  size_t linked_runs;             // of the repaired runs, those reaching past
+                                  // this channel's own clipped samples because
+                                  // the other channel's run was wider; always 0
+                                  // from the mono entry point
+} SonareDeclipReport;
+
+/// @brief A declipped stereo pair and what each channel's pass did.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  SonareDeclipReport left_report;
+  SonareDeclipReport right_report;
+} SonareDeclipStereoResult;
+
+/// @brief Declips a stereo pair over the union of both channels' clipped runs.
+/// @details One clipped plateau rarely ends on the same sample in both
+///   channels, and a run a single sample splits on one side only reconstructs
+///   differently there, which moves the image. Each channel therefore
+///   reconstructs the whole of every union run it has at least one clipped
+///   sample in. A channel with none in a run is left untouched there --
+///   reconstructing unclipped audio to match the other side would replace real
+///   samples with an estimate, so this is not the declicker's behaviour.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_declip_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareDeclipConfig* config,
+                                                  SonareDeclipStereoResult* out);
+
 // Algorithm modes for sonare_mastering_repair_decrackle.
 #define SONARE_DECRACKLE_MODE_MEDIAN 0
 #define SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE 1

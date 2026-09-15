@@ -395,6 +395,30 @@ export interface WasmDeclickStereoResult {
   rightReport: WasmDeclickReport;
 }
 
+/** What a declip analysis found in one channel, as `masteringRepairDeclipStereo` returns it. */
+export interface WasmClipDetection {
+  sampleCount: number;
+  sampleFraction: number;
+  runCount: number;
+  longestRunSamples: number;
+}
+
+/** What a declip pass found in one channel of a stereo declip and what it did to it. */
+export interface WasmDeclipReport {
+  detected: WasmClipDetection;
+  lpcReconstructedRuns: number;
+  interpolatedRuns: number;
+  repairedSamples: number;
+  linkedRuns: number;
+}
+
+export interface WasmDeclipStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: WasmDeclipReport;
+  rightReport: WasmDeclipReport;
+}
+
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
@@ -2126,6 +2150,12 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairDeclipStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmDeclipStereoResult;
   masteringRepairDecrackle: (
     samples: Float32Array,
     sampleRate: number,
