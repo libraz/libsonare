@@ -76,6 +76,7 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   result.input_lufs = input_lufs;
   result.output_lufs = common::measure_lufs(result.audio);
   result.applied_gain_db = linear_to_db(gain);
+  result.non_finite_substitution_count = limiter.non_finite_substitution_count();
   result.loudness_target_limited =
       std::isfinite(input_lufs) &&
       api::detail::loudness_target_was_limited(requested_gain_db, gain_db, config.target_lufs,

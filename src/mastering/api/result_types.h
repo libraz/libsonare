@@ -67,6 +67,8 @@ struct ProcessorOutcome {
   /// gain, so the reported output LUFS is the achieved value and not the
   /// requested target. Only the loudness-normalizing processors set it.
   bool loudness_target_limited = false;
+  /// @copydoc MonoAudioResult::non_finite_substitution_count
+  std::uint32_t non_finite_substitution_count = 0;
 };
 
 /// @brief Result of one mono named-processor call: the shared audio fields plus
@@ -80,6 +82,7 @@ struct MonoProcessorResult : MonoAudioResult {
     latency_samples = outcome.latency_samples;
     applied_gain_db += outcome.applied_gain_db;
     loudness_target_limited = loudness_target_limited || outcome.loudness_target_limited;
+    accumulate_substitutions(non_finite_substitution_count, outcome.non_finite_substitution_count);
   }
 };
 
@@ -110,6 +113,7 @@ struct StereoProcessorResult : StereoAudioResult {
     latency_samples = outcome.latency_samples;
     applied_gain_db += outcome.applied_gain_db;
     loudness_target_limited = loudness_target_limited || outcome.loudness_target_limited;
+    accumulate_substitutions(non_finite_substitution_count, outcome.non_finite_substitution_count);
   }
 };
 

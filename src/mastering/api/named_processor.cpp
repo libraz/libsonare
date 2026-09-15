@@ -1,8 +1,10 @@
 #include "mastering/api/named_processor.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <type_traits>
 #include <utility>
 
 #include "core/audio.h"
@@ -135,30 +137,61 @@ class ChannelSet {
   std::vector<float>* right_;
 };
 
+// Only the processors that replace a non-finite sample with a finite in-domain
+// one carry a count; for the rest there is nothing to report, so the runners
+// below ask the type rather than the dispatch branch. Asking per branch would
+// need a decision at every one of them, and a new substituting processor would
+// arrive reporting nothing with no site left unwritten to notice.
+template <typename Processor, typename = void>
+struct reports_substitutions : std::false_type {};
+template <typename Processor>
+struct reports_substitutions<
+    Processor,
+    std::void_t<decltype(std::declval<const Processor&>().non_finite_substitution_count())>>
+    : std::true_type {};
+
+template <typename Processor>
+void record_substitutions(const Processor& processor, ProcessorOutcome& outcome) {
+  if constexpr (reports_substitutions<Processor>::value) {
+    accumulate_substitutions(outcome.non_finite_substitution_count,
+                             processor.non_finite_substitution_count());
+  }
+}
+
+// The offline final stages report through a size_t out-parameter while the
+// outcome carries a uint32_t; saturate rather than wrap, because a wrapped total
+// could read as zero and zero is the one value the count promises.
+std::uint32_t narrow_substitutions(std::size_t count) noexcept {
+  constexpr std::size_t kMax = static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
+  return static_cast<std::uint32_t>(count > kMax ? kMax : count);
+}
+
 // Run a processor over the whole channel set with latency compensation. One
 // processor instance handles every channel, so a channel-linked detector stays
-// linked. The reported latency is captured into @p latency_samples for
-// informational purposes (`MonoResult::latency_samples`); the returned audio is
-// already time-aligned (leading `latency` samples have been dropped and the
-// tail has been flushed via zero-padding by the shared runner).
+// linked. The reported latency is captured into @p outcome for informational
+// purposes (`MonoResult::latency_samples`); the returned audio is already
+// time-aligned (leading `latency` samples have been dropped and the tail has
+// been flushed via zero-padding by the shared runner).
 template <typename Processor>
 void run_processor(Processor& processor, ChannelSet& channels, int sample_rate,
-                   int& latency_samples) {
+                   ProcessorOutcome& outcome) {
   if (channels.count() == 2) {
     internal::run_processor_stereo(processor, channels.left(), channels.right(), sample_rate);
   } else {
     internal::run_processor_mono(processor, channels.left(), sample_rate);
   }
-  latency_samples = processor.latency_samples();
+  outcome.latency_samples = processor.latency_samples();
+  record_substitutions(processor, outcome);
 }
 
 // Stereo-native counterpart used by the stereo-only branches, which build their
 // processor from a stereo-specific config and never see a mono channel set.
 template <typename Processor>
 void run_processor_stereo(Processor& processor, std::vector<float>& left, std::vector<float>& right,
-                          int sample_rate, int& latency_samples) {
+                          int sample_rate, ProcessorOutcome& outcome) {
   internal::run_processor_stereo(processor, left, right, sample_rate);
-  latency_samples = processor.latency_samples();
+  outcome.latency_samples = processor.latency_samples();
+  record_substitutions(processor, outcome);
 }
 
 // Applies a whole-buffer offline transform to each channel independently.
@@ -249,111 +282,110 @@ constexpr int kProbeSampleRate = 48000;
 // A parameter that IS out of range still throws, from the branch that read it.
 bool try_configure_processor(const std::string& name, const ParamMap& params, ChannelSet channels,
                              int sample_rate, ProcessorOutcome& outcome) {
-  // Aliases into the outcome: every value this dispatch computes lands in the
+  // Alias into the outcome: every value this dispatch computes lands in the
   // one struct the caller copies whole.
-  int& latency_samples = outcome.latency_samples;
   float& applied_gain_db = outcome.applied_gain_db;
   if (name == "dynamics.brickwallLimiter") {
     dynamics::BrickwallLimiter p(detail::brickwall_limiter_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.compressor") {
     dynamics::Compressor p(compressor_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.deesser") {
     dynamics::DeEsser p(detail::deesser_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.expander") {
     dynamics::Expander p(detail::expander_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.gate") {
     dynamics::Gate p(detail::gate_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.limiter") {
     dynamics::Limiter p(limiter_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.parallelComp") {
     dynamics::ParallelComp p(detail::parallel_comp_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.sidechainRouter") {
     dynamics::SidechainRouter p(detail::sidechain_router_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.duckingProcessor") {
     dynamics::DuckingProcessor p(detail::ducking_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.transientShaper") {
     dynamics::TransientShaper p(detail::transient_shaper_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.upwardCompressor") {
     dynamics::UpwardCompressor p(detail::upward_compressor_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.upwardExpander") {
     dynamics::UpwardExpander p(detail::upward_expander_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "dynamics.vocalRider") {
     dynamics::VocalRider p(detail::vocal_rider_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.tilt") {
     eq::TiltEq p;
     detail::configure_tilt(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.apiStyle") {
     eq::ApiStyleEq p;
     detail::configure_api_style(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.parametric") {
     eq::ParametricEq p;
     configure_parametric(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.equalizer") {
     // The only config that has to know the channel count up front; take it from
     // the set being processed rather than assuming mono.
     eq::EqualizerProcessor p(detail::equalizer_config(params, channels.count()));
     detail::configure_equalizer(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.minimumPhase") {
     eq::MinimumPhaseEq p;
     detail::configure_minimum_phase(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.linearPhase") {
     eq::LinearPhaseEq p(detail::linear_phase_config(params));
     detail::configure_linear_phase_bands(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.dynamic") {
     eq::DynamicEq p;
     detail::configure_dynamic_eq_bands(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.pultec") {
     eq::PultecEq p;
     detail::configure_pultec(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.cutFilter") {
     eq::CutFilter p;
     detail::configure_cut_filter(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.bandPass") {
     eq::BandPassEq p;
     detail::configure_band_pass(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.shelving") {
     eq::ShelvingEq p;
     detail::configure_shelving(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.graphic") {
     eq::GraphicEq p;
     detail::configure_graphic(p, params);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "maximizer.maximizer") {
     maximizer::Maximizer p(detail::maximizer_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "maximizer.truePeakLimiter") {
     maximizer::TruePeakLimiter p(detail::true_peak_limiter_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "maximizer.softKneeMax") {
     maximizer::SoftKneeMax p(detail::soft_knee_max_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "maximizer.adaptiveRelease") {
     maximizer::AdaptiveRelease p(detail::adaptive_release_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "maximizer.loudnessOptimize") {
     maximizer::LoudnessOptimizeConfig config;
     config.target_lufs = f(params, "targetLufs", config.target_lufs);
@@ -374,47 +406,47 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     });
   } else if (name == "saturation.tape") {
     saturation::Tape p(detail::tape_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.exciter") {
     saturation::Exciter p(detail::exciter_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.bitcrusher") {
     saturation::BitCrusher p(detail::bitcrusher_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.hardClipper") {
     saturation::HardClipper p(detail::hard_clipper_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.softClipper") {
     saturation::SoftClipper p(detail::soft_clipper_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.waveshaper") {
     saturation::Waveshaper p(detail::waveshaper_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.tube") {
     saturation::Tube p(detail::tube_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.transformer") {
     saturation::Transformer p(detail::transformer_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.multibandExciter") {
     saturation::MultibandExciter p(detail::multiband_exciter_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.ampSim") {
     saturation::AmpSim p(detail::amp_sim_config(params));
     detail::apply_amp_cab_ir(params, p);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "spectral.airBand") {
     spectral::AirBand p(detail::air_band_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "spectral.lowEndFocus") {
     spectral::LowEndFocus p(detail::low_end_focus_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "spectral.presenceEnhancer") {
     spectral::PresenceEnhancer p(detail::presence_enhancer_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "spectral.spectralShaper") {
     spectral::SpectralShaper p(detail::spectral_shaper_config(params));
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
     // The band-splitting processors are channel-generic: the crossover and each
     // band's dynamics stage size their state to the prepared channel count, and
     // MasteringChain already runs them over a mono buffer. They therefore
@@ -426,31 +458,31 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     config.crossover = crossover_config(params);
     detail::populate_compressor_bands(config, params);
     multiband::MultibandCompressor p(config);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "multiband.expander") {
     multiband::MultibandExpanderConfig config;
     config.crossover = crossover_config(params);
     detail::populate_expander_bands(config, params);
     multiband::MultibandExpander p(config);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "multiband.limiter") {
     multiband::MultibandLimiterConfig config;
     config.crossover = crossover_config(params);
     detail::populate_limiter_bands(config, params);
     multiband::MultibandLimiter p(config);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "multiband.saturation") {
     multiband::MultibandSaturationConfig config;
     config.crossover = crossover_config(params);
     detail::populate_saturation_bands(config, params);
     multiband::MultibandSaturation p(config);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "multiband.dynamicEq") {
     multiband::MultibandDynamicEqConfig config;
     config.crossover = crossover_config(params);
     detail::populate_dynamic_eq_bands(config, params);
     multiband::MultibandDynamicEq p(config);
-    run_processor(p, channels, sample_rate, latency_samples);
+    run_processor(p, channels, sample_rate, outcome);
   } else if (name == "repair.declick") {
     repair::DeclickConfig config;
     config.threshold = f(params, "threshold", config.threshold);
@@ -547,8 +579,13 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     final::BitDepthConfig config;
     config.target_bits = i(params, "targetBits", config.target_bits);
     config.clamp = b(params, "clamp", config.clamp);
-    apply_per_channel(channels, sample_rate,
-                      [&](const Audio& audio, int) { return final::bit_depth(audio, config); });
+    apply_per_channel(channels, sample_rate, [&](const Audio& audio, int) {
+      std::size_t non_finite = 0;
+      Audio out = final::bit_depth(audio, config, &non_finite);
+      accumulate_substitutions(outcome.non_finite_substitution_count,
+                               narrow_substitutions(non_finite));
+      return out;
+    });
   } else if (name == "final.dither") {
     final::DitherConfig config;
     config.type = checked_enum<final::DitherType>(i(params, "type", 2), 4, "dither type");
@@ -559,7 +596,11 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
       // Decorrelate the dither noise across stereo channels (no-op for the left
       // channel, channel_index 0).
       config.seed = base_seed ^ (static_cast<uint32_t>(channel_index) * kDitherChannelSeedSalt);
-      return final::dither(audio, config);
+      std::size_t non_finite = 0;
+      Audio out = final::dither(audio, config, &non_finite);
+      accumulate_substitutions(outcome.non_finite_substitution_count,
+                               narrow_substitutions(non_finite));
+      return out;
     });
   } else if (name == "final.outputChain") {
     final::DitherConfig dither_config;
@@ -578,7 +619,16 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
       // output_chain() directly.
       dither_config.seed =
           base_seed ^ (static_cast<uint32_t>(channel_index) * kDitherChannelSeedSalt);
-      return final::bit_depth(final::dither(audio, dither_config), bit_depth_config);
+      // Both steps are counted, as output_chain() itself sums them: the dither
+      // step substitutes first, so the bit-depth step sees a finite input and
+      // contributes only where dither is bypassed.
+      std::size_t dither_non_finite = 0;
+      std::size_t bit_depth_non_finite = 0;
+      Audio out = final::bit_depth(final::dither(audio, dither_config, &dither_non_finite),
+                                   bit_depth_config, &bit_depth_non_finite);
+      accumulate_substitutions(outcome.non_finite_substitution_count,
+                               narrow_substitutions(dither_non_finite + bit_depth_non_finite));
+      return out;
     });
   } else {
     return false;
@@ -710,43 +760,47 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   result.right.assign(right, right + length);
   result.sample_rate = sample_rate;
   result.input_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
+  // One outcome for every branch, including the stereo-only ones: a branch that
+  // reported straight into the result would carry only the fields it was written
+  // for, which is what this struct exists to prevent.
+  ProcessorOutcome outcome;
   // Set only by the loudness branch below, which decides `loudness_target_limited`
   // against the output loudness this function measures once at the end anyway.
   float loudness_target_lufs = 0.0f;
   float loudness_requested_gain_db = std::numeric_limits<float>::quiet_NaN();
   float loudness_applied_gain_db = 0.0f;
   if (try_run_effects_insert_stereo(name, params, result.left, result.right, sample_rate,
-                                    result.latency_samples)) {
+                                    outcome.latency_samples)) {
     // Handled by the streaming-effects insert path below; fall through to the
     // shared LUFS measurement at the end of the function.
   } else if (name == "stereo.autoPan") {
     stereo::AutoPan p(detail::auto_pan_config(map));
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "stereo.haasEnhancer") {
     stereo::HaasEnhancer p(detail::haas_enhancer_config(map));
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "stereo.imager") {
     stereo::Imager p(detail::imager_config(map));
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "stereo.monoMaker") {
     stereo::MonoMaker p(detail::mono_maker_config(map));
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "stereo.phaseAlign") {
     stereo::PhaseAlign p(detail::phase_align_config(map));
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "stereo.stereoBalance") {
     stereo::StereoBalance p(detail::stereo_balance_config(map));
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "eq.midSide") {
     eq::MidSideEq p;
     detail::configure_mid_side(p, map);
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "multiband.imager") {
     multiband::MultibandImagerConfig config;
     config.crossover = crossover_config(map);
     detail::populate_imager_bands(config, map);
     multiband::MultibandImager p(config);
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "maximizer.loudnessOptimize") {
     const maximizer::LoudnessOptimizeConfig defaults;
     const float target_lufs = f(map, "targetLufs", defaults.target_lufs);
@@ -777,11 +831,11 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
       result.applied_gain_db += gain_db;
     }
     maximizer::TruePeakLimiter p(config);
-    run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
     // The shared runner has already drained and trimmed the limiter's internal
     // delay, exactly like loudness_optimize() on the mono path. Do not make the
     // caller compensate an output that is already time-aligned.
-    result.latency_samples = 0;
+    outcome.latency_samples = 0;
   } else if (name == "repair.trimSilence") {
     // One range cuts both channels, so they stay equal length. The rule that
     // picks it lives in trim_silence_stereo rather than here.
@@ -835,7 +889,6 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
                                   return repair::dereverb_classical_stereo(left, right, config);
                                 });
   } else {
-    ProcessorOutcome outcome;
     // Shared dispatch, handed both channels at once. An rt::ProcessorBase stage
     // is therefore built ONCE for the pair, which is what keeps a linked
     // detector linked: dynamics.compressor and its siblings derive a single
@@ -862,8 +915,8 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
       throw SonareException(ErrorCode::InvalidParameter,
                             "stereo processor produced mismatched channel lengths: " + name);
     }
-    result.apply(outcome);
   }
+  result.apply(outcome);
 
   result.output_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
   result.loudness_target_limited =

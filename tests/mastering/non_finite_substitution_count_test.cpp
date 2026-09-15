@@ -28,12 +28,15 @@
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/api/chain.h"
+#include "mastering/api/named_processor.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/final/bit_depth.h"
 #include "mastering/final/dither.h"
 #include "mastering/final/output_chain.h"
 #include "mastering/maximizer/adaptive_release.h"
+#include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/maximizer.h"
 #include "mastering/maximizer/soft_knee_max.h"
 #include "mastering/maximizer/true_peak_limiter.h"
@@ -182,6 +185,26 @@ float stage_gain_reduction_db(const sonare::mastering::api::MonoChainResult& res
     if (reduction.stage == stage) return reduction.gain_reduction_db;
   }
   return 0.0f;
+}
+
+// ---------------------------------------------------------------------------
+// Named-processor aggregate
+// ---------------------------------------------------------------------------
+// A caller of the one-shot dispatch holds a result rather than a processor, so
+// the count on that result is its only observable. The dispatch refuses a
+// non-finite input just as the chain does, so the driver is again a parameter
+// that makes a stage produce one: SoftKneeMax applies input_gain_db as a linear
+// multiply and nothing bounds it, so a dB value whose linear form overflows a
+// float hands the knee an infinity that never came from the caller.
+
+/// Ceiling the soft-knee cases run at. Under the fixture peak, so the knee is
+/// shaping on a clean run rather than passing the signal through.
+constexpr float kSoftKneeCeilingDb = -20.0f;
+/// db_to_linear of this is an infinity, so the knee's drive multiply overflows.
+constexpr float kOverflowingInputGainDb = 1.0e6f;
+
+std::vector<sonare::mastering::api::Param> soft_knee_params(float input_gain_db) {
+  return {{"inputGainDb", input_gain_db}, {"ceilingDb", kSoftKneeCeilingDb}};
 }
 
 /// Runs @p chain over the fixture in kBlockSize blocks and returns the output.
@@ -491,4 +514,113 @@ TEST_CASE("StreamingMasteringChain accumulates its substitutions across blocks",
     drive_streaming(chain, program);
     REQUIRE(chain.non_finite_substitution_count() > after_one_block);
   }
+}
+
+TEST_CASE("apply_named_processor reports the substitutions its processor made",
+          "[mastering][named-processor][non-finite]") {
+  using sonare::mastering::api::apply_named_processor;
+
+  const std::vector<float> program = chain_program();
+
+  SECTION("ordinary audio leaves the count at zero") {
+    const auto result =
+        apply_named_processor("maximizer.softKneeMax", program.data(), program.size(),
+                              kChainSampleRate, soft_knee_params(0.0f));
+    // Non-vacuity: a ceiling above the fixture peak would leave the knee passing
+    // the signal through, and the zero below would say nothing.
+    REQUIRE(finite_peak(program) > sonare::db_to_linear(kSoftKneeCeilingDb));
+    REQUIRE(finite_peak(result.samples) < finite_peak(program));
+    REQUIRE(result.non_finite_substitution_count == 0u);
+  }
+
+  SECTION("a stage producing non-finite samples moves the count") {
+    const auto result =
+        apply_named_processor("maximizer.softKneeMax", program.data(), program.size(),
+                              kChainSampleRate, soft_knee_params(kOverflowingInputGainDb));
+    REQUIRE(result.non_finite_substitution_count > 0u);
+    // The buffer the caller gets back is finite either way, which is why the
+    // count is the only signal there is.
+    REQUIRE(non_finite_count(result.samples) == 0u);
+  }
+}
+
+TEST_CASE("apply_named_processor_stereo reports the substitutions its processor made",
+          "[mastering][named-processor][non-finite]") {
+  using sonare::mastering::api::apply_named_processor_stereo;
+
+  // Driven through the stereo entry as well as the mono one: it reaches the
+  // shared dispatch by a different route, and a result assembled there would
+  // carry the count only if the stereo path threads the same outcome.
+  const std::vector<float> program = chain_program();
+
+  SECTION("ordinary audio leaves the count at zero") {
+    const auto result =
+        apply_named_processor_stereo("maximizer.softKneeMax", program.data(), program.data(),
+                                     program.size(), kChainSampleRate, soft_knee_params(0.0f));
+    REQUIRE(finite_peak(result.left) < finite_peak(program));
+    REQUIRE(result.non_finite_substitution_count == 0u);
+  }
+
+  SECTION("a stage producing non-finite samples moves the count") {
+    const auto result = apply_named_processor_stereo(
+        "maximizer.softKneeMax", program.data(), program.data(), program.size(), kChainSampleRate,
+        soft_knee_params(kOverflowingInputGainDb));
+    REQUIRE(result.non_finite_substitution_count > 0u);
+    REQUIRE(non_finite_count(result.left) == 0u);
+    REQUIRE(non_finite_count(result.right) == 0u);
+  }
+}
+
+TEST_CASE("loudness_optimize reports the substitutions its internal limiter made",
+          "[mastering][loudness][non-finite]") {
+  using sonare::mastering::maximizer::loudness_optimize;
+  using sonare::mastering::maximizer::LoudnessOptimizeConfig;
+
+  const std::vector<float> program = chain_program();
+  const sonare::Audio audio =
+      sonare::Audio::from_buffer(program.data(), program.size(), kChainSampleRate);
+
+  SECTION("ordinary audio leaves the count at zero") {
+    LoudnessOptimizeConfig config;
+    config.ceiling_db = kChainCeilingDb;
+    const auto result = loudness_optimize(audio, config);
+    // Non-vacuity: the ceiling sits under the fixture peak, so the limiter is
+    // holding the output down rather than passing it through.
+    REQUIRE(finite_peak(program) > sonare::db_to_linear(kChainCeilingDb));
+    REQUIRE(finite_peak(std::vector<float>(result.audio.data(),
+                                           result.audio.data() + result.audio.size())) <=
+            sonare::db_to_linear(kChainCeilingDb) * 1.05f);
+    REQUIRE(result.non_finite_substitution_count == 0u);
+  }
+
+  SECTION("a normalization gain that overflows moves the count") {
+    // Both fields are validated for finiteness only, so a target this far above
+    // the input survives and the ceiling headroom does not bound it back down:
+    // db_to_linear of the resulting gain overflows and the static multiply hands
+    // the limiter an infinity the caller never supplied.
+    LoudnessOptimizeConfig config;
+    config.target_lufs = 1.0e6f;
+    config.ceiling_db = 1.0e6f;
+    const auto result = loudness_optimize(audio, config);
+    REQUIRE(result.non_finite_substitution_count > 0u);
+  }
+}
+
+TEST_CASE("a stereo-only branch reports the substitutions it made",
+          "[mastering][named-processor][non-finite]") {
+  using sonare::mastering::api::apply_named_processor_stereo;
+
+  // maximizer.loudnessOptimize has no mono branch, so it is dispatched by the
+  // stereo entry directly rather than through the shared dispatch the cases
+  // above reach. A result assembled there carries the count only if that branch
+  // threads the same outcome the shared one does.
+  const std::vector<float> program = chain_program();
+  const std::vector<sonare::mastering::api::Param> params{{"targetLufs", 1.0e6},
+                                                          {"ceilingDb", 1.0e6}};
+  const auto result =
+      apply_named_processor_stereo("maximizer.loudnessOptimize", program.data(), program.data(),
+                                   program.size(), kChainSampleRate, params);
+  REQUIRE(result.non_finite_substitution_count > 0u);
+  REQUIRE(non_finite_count(result.left) == 0u);
+  REQUIRE(non_finite_count(result.right) == 0u);
 }

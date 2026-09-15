@@ -3,6 +3,8 @@
 /// @file loudness_optimize.h
 /// @brief Offline loudness normalization helper with peak ceiling.
 
+#include <cstdint>
+
 #include "core/audio.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 
@@ -43,6 +45,10 @@ struct LoudnessOptimizeResult {
   /// Always 0: the returned audio is time-aligned because this helper
   /// compensates the internal true-peak limiter's look-ahead latency itself.
   int latency_samples = 0;
+  /// Non-finite samples the internal true-peak limiter replaced with a finite
+  /// in-domain one, so the output is finite and in range while carrying samples
+  /// unrelated to the input.
+  std::uint32_t non_finite_substitution_count = 0;
 };
 
 /// @brief Rate-independent validation shared by every loudness entry point.
