@@ -51,7 +51,7 @@ class SampleBankWasm {
   // its own in the C ABI, so an absent field is left at zero here and narrowing
   // one axis leaves the other whole. The TS facade takes setIndex as a field of
   // the same object and splits it here, as the Node addon does.
-  void addZone(double set_index, val zone);
+  void addZone(const val& set_index_val, val zone);
 
   double sampleCount() const;
   double setCount() const;

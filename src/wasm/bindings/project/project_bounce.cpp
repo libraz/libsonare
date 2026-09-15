@@ -110,15 +110,11 @@ uint32_t SampleBankWasm::addSample(val data, val desc) {
   return index;
 }
 
-void SampleBankWasm::addZone(double set_index, val zone) {
-  // Validated on the double rather than through wasmCountArg: on wasm32 a
-  // size_t is 32 bits, so bounding its result at 2^32-1 is a tautology the
-  // compiler warns about and -Werror rejects.
-  if (!std::isfinite(set_index) || set_index < 0.0 || set_index > 4294967295.0 ||
-      std::floor(set_index) != set_index) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "setIndex must be an integer in [0, 4294967295]");
-  }
+void SampleBankWasm::addZone(const val& set_index_val, val zone) {
+  // Taken as a val rather than a double so the shared uint32 reader can serve:
+  // wasmCountArg cannot, because on wasm32 a size_t is 32 bits and bounding its
+  // result at 2^32-1 is a tautology -Werror rejects.
+  const uint32_t set_index = checkedUintFromVal(set_index_val, "setIndex");
   // An absent bag leaves the C struct zero-initialized, which the C ABI
   // documents as the neutral zone; a present one that is not an object is a
   // caller mistake rather than a default.
@@ -139,7 +135,7 @@ void SampleBankWasm::addZone(double set_index, val zone) {
   c.gain = static_cast<float>(numberField(zone, "gain", "sample zone", 0.0));
   c.pan_units = static_cast<float>(numberField(zone, "panUnits", "sample zone", 0.0));
 
-  const SonareError err = sonare_sample_bank_add_zone(bank_, static_cast<uint32_t>(set_index), &c);
+  const SonareError err = sonare_sample_bank_add_zone(bank_, set_index, &c);
   if (err != SONARE_OK) throwCError(err, "failed to add a zone to the sample bank");
 }
 
