@@ -61,22 +61,23 @@ PhaseScopeResult phase_scope(const float* left, const float* right, size_t lengt
     return result;
   }
 
-  for (size_t i = 0; i < length; ++i) {
-    const PhaseScopePoint point = make_point(left, right, i);
-    abs_angle_sum += std::abs(point.angle_rad);
-    result.max_radius = std::max(result.max_radius, point.radius);
-  }
-  result.average_abs_angle_rad = static_cast<float>(abs_angle_sum / static_cast<double>(length));
-
   // Deterministic decimation into max_points contiguous buckets, keeping the
   // largest-radius sample of each bucket so transient peaks are preserved. Shared
   // bucket math lives in detail::decimate_max so it cannot diverge from the
   // vectorscope.
   result.points.reserve(max_points);
+  // decimate_max visits every index once, ascending, so the summary accumulates in make.
   detail::decimate_max(
-      length, max_points, [&](size_t i) { return make_point(left, right, i); },
+      length, max_points,
+      [&](size_t i) {
+        const PhaseScopePoint point = make_point(left, right, i);
+        abs_angle_sum += std::abs(point.angle_rad);
+        result.max_radius = std::max(result.max_radius, point.radius);
+        return point;
+      },
       [](const PhaseScopePoint& p) { return p.radius; },
       [&](const PhaseScopePoint& best) { result.points.push_back(best); });
+  result.average_abs_angle_rad = static_cast<float>(abs_angle_sum / static_cast<double>(length));
   return result;
 }
 

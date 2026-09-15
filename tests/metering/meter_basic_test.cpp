@@ -372,6 +372,30 @@ TEST_CASE("phase scope full-resolution path matches exact per-sample values", "[
                WithinAbs(static_cast<float>(sonare::constants::kPiD) / 3.0f, 1e-6f));
 }
 
+TEST_CASE("phase scope summary stats do not depend on the point budget", "[meter]") {
+  constexpr size_t kLength = 1000;
+  constexpr size_t kMaxPoints = 64;
+  std::vector<float> left(kLength);
+  std::vector<float> right(kLength);
+  for (size_t i = 0; i < kLength; ++i) {
+    const auto t = static_cast<float>(i);
+    left[i] = std::sin(t * 0.031f) * (0.2f + 0.8f * std::abs(std::sin(t * 0.0017f)));
+    right[i] = std::cos(t * 0.047f) * 0.6f;
+  }
+
+  const auto full = metering::phase_scope(left.data(), right.data(), kLength);
+  const auto budgeted = metering::phase_scope(left.data(), right.data(), kLength, kMaxPoints);
+
+  // A budget at or above the length takes the full-resolution path, where the
+  // comparison below would hold trivially.
+  REQUIRE(full.points.size() == kLength);
+  REQUIRE(budgeted.points.size() == kMaxPoints);
+
+  // Exact, not approximate: both paths visit every index once, ascending.
+  REQUIRE(budgeted.average_abs_angle_rad == full.average_abs_angle_rad);
+  REQUIRE(budgeted.max_radius == full.max_radius);
+}
+
 TEST_CASE("LUFS returns silence for silent audio", "[meter]") {
   const std::vector<float> samples(48000, 0.0f);
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
