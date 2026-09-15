@@ -744,7 +744,7 @@ class RecordsTest(unittest.TestCase):
             for entry in data["shapes"] + data["constructors"] + data["parameters"]
             if entry.get("status") == "benign"
         ]
-        self.assertEqual([entry["name"] for entry in benign], ["sample_position"])
+        self.assertEqual([entry["name"] for entry in benign], ["sixty_four_bit"])
         self.assertEqual(benign[0]["defect"], "refuses")
         self.assertTrue(benign[0]["mechanism"])
 

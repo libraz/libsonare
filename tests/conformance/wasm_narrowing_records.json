@@ -87,7 +87,7 @@
     },
     "shapes": [
       {
-        "name": "sample_position",
+        "name": "sixty_four_bit",
         "types": ["int64_t", "uint64_t"],
         "parameter_pattern": ".",
         "count": 27,
@@ -101,7 +101,7 @@
             "note": "The shipped embind glue, where the 64-bit toWireType lives. It is the build's output and no committed file carries it, so the citation is marked built: an absent dist is not a failure, a dist whose glue no longer reads this way is. The other half of the claim -- that this population is the 64-bit one at all -- is derived from the declared types rather than cited."
           }
         ],
-        "reason": "A 64-bit parameter is registered through __embind_register_bigint, not through the integer path: its toWireType converts a JS number with BigInt(value), which throws on a fractional and on a non-finite one, and no number below 2^63 has anything to wrap into. The one residue is a request past 2^63, where the BigInt-to-i64 conversion truncates -- four billion times beyond the longest timeline any of these fields addresses, and integral, so it cannot arrive by the truncation these records exist for."
+        "reason": "A 64-bit parameter is registered through __embind_register_bigint, not through the integer path: its toWireType converts a JS number with BigInt(value), which throws on a fractional and on a non-finite one, and no number below 2^63 has anything to wrap into. The blessing belongs to the width, not to the field: this pattern selects on the declared type alone, so the population is every 64-bit parameter -- timeline positions and page ordinals alike -- and naming it after one of those meanings would claim a check nothing performs. The one residue is a request past 2^63, where the BigInt-to-i64 conversion truncates; it is integral, so it cannot arrive by the fractional truncation these records exist for, and no field of any meaning here addresses a domain that large."
       },
       {
         "name": "entity_handle",
