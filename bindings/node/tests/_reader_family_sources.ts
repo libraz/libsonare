@@ -211,7 +211,10 @@ const NOT_CODE = /^\s*(?:\/\/|\*|#)/;
  * `readDereverbConfig` on the other.
  */
 export function normalizeEntryPoint(fn: string): string {
-  return fn.replace(/^(?:js_|Read|read)/, '').replace(/_/g, '').toLowerCase();
+  return fn
+    .replace(/^(?:js_|Read|read)/, '')
+    .replace(/_/g, '')
+    .toLowerCase();
 }
 
 const treeOf = (surface: 'node' | 'wasm'): string => (surface === 'node' ? NODE_TREE : WASM_TREE);

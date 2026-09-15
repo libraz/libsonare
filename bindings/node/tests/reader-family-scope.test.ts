@@ -49,6 +49,13 @@ import {
  * AN ENTRY EXPIRES WITH ITS DIVERGENCE. Bringing a field into agreement means
  * deleting its line here in the same change, or the register keeps asserting a
  * reviewed decision about a name the next field would inherit.
+ *
+ * ASK THIS REGISTER BY READER PAIR, NEVER BY FIELD NAME. A subsystem's fields
+ * are not all spelled with its name: the reader pairs ending `repairFloatOption`
+ * / `repairIntOption` / `repairBoolOption` hold 27 fields, of which 12 are
+ * `dereverbconfig:*` and carry no trace of the subsystem in their id. Counting
+ * by name returns 15 and looks like an answer. The pair is what a migration
+ * actually moves, so the pair is what says whether it moved.
  */
 const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND COERCES IT — 132 fields.
@@ -219,38 +226,12 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   ],
   [
     'Uint32Property>uintProperty',
-    [
-      'setmidiclips:destinationId',
-      'setmidiclips:id',
-      'setmidiclips:trackId',
-    ],
+    ['setmidiclips:destinationId', 'setmidiclips:id', 'setmidiclips:trackId'],
   ],
-  [
-    'Int64Property>intProperty',
-    [
-      'bounceoffline:ditherSeed',
-      'freezeoffline:clipId',
-    ],
-  ],
-  [
-    'DoubleProperty>doubleProperty',
-    [
-      'setmidiclips:startPpq',
-      'settemposegments:endBpm',
-    ],
-  ],
-  [
-    'WordProperty>wordProperty',
-    [
-      'setmidievents:data1',
-    ],
-  ],
-  [
-    'DoubleProperty>floatProperty',
-    [
-      'tempooptionsfrom:rampThreshold',
-    ],
-  ],
+  ['Int64Property>intProperty', ['bounceoffline:ditherSeed', 'freezeoffline:clipId']],
+  ['DoubleProperty>doubleProperty', ['setmidiclips:startPpq', 'settemposegments:endBpm']],
+  ['WordProperty>wordProperty', ['setmidievents:data1']],
+  ['DoubleProperty>floatProperty', ['tempooptionsfrom:rampThreshold']],
 
   // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND ANSWERS WITH THE DEFAULT — 27 fields.
   //
@@ -294,12 +275,7 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'masteringrepairdenoiseclassical:nFft',
     ],
   ],
-  [
-    'BoolProperty>repairBoolOption',
-    [
-      'dereverbconfig:wpeEnabled',
-    ],
-  ],
+  ['BoolProperty>repairBoolOption', ['dereverbconfig:wpeEnabled']],
 
   // THE ADDON ANSWERS WITH THE DEFAULT WHERE EMBIND COERCES — 10 fields.
   //
@@ -326,12 +302,7 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'estimatemeter:subdivisionWeight',
     ],
   ],
-  [
-    'node_int_option>setNumberOption',
-    [
-      'estimatemeter:denominator',
-    ],
-  ],
+  ['node_int_option>setNumberOption', ['estimatemeter:denominator']],
 ]);
 
 /** Two surfaces reading one field two ways, the shape the register answers. */
@@ -424,9 +395,7 @@ describe('each failure class fires on its own', () => {
   });
 
   it('reports a record that matches no live disagreement, and only that', () => {
-    const reasons = new Map([
-      ['FloatProperty>floatProperty', ['fake:gain', 'gone:hopLength']],
-    ]);
+    const reasons = new Map([['FloatProperty>floatProperty', ['fake:gain', 'gone:hopLength']]]);
     const lines = only(evaluateReaderFamilyScope(DISAGREEING, reasons, 0), 'no longer live');
     expect(lines).toEqual(['gone:hopLength (recorded under FloatProperty>floatProperty)']);
   });
@@ -444,7 +413,10 @@ describe('each failure class fires on its own', () => {
 
   it('reports a shrunken population, and only that', () => {
     const reasons = new Map([['FloatProperty>floatProperty', ['fake:gain']]]);
-    const lines = only(evaluateReaderFamilyScope(DISAGREEING, reasons, 2), 'population it is sized for');
+    const lines = only(
+      evaluateReaderFamilyScope(DISAGREEING, reasons, 2),
+      'population it is sized for',
+    );
     expect(lines).toEqual(['paired fields: found 1, floor is 2']);
   });
 });
