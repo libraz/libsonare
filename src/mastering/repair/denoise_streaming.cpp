@@ -8,10 +8,12 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
 
+using sonare::discard_run_if_non_finite;
 using sonare::constants::kSpectrumEpsilon;
 
 namespace {
@@ -133,6 +135,7 @@ void StreamingDenoise::process(float* const* channels, int num_channels, int num
   }
 
   const auto fft = static_cast<std::size_t>(n_fft_);
+  bool analyzed = false;
   for (int i = 0; i < num_samples; ++i) {
     for (int ch = 0; ch < num_channels; ++ch) {
       input_ring_[fft * static_cast<std::size_t>(ch) + static_cast<std::size_t>(input_write_)] =
@@ -141,9 +144,20 @@ void StreamingDenoise::process(float* const* channels, int num_channels, int num
     input_write_ = input_write_ + 1 == n_fft_ ? 0 : input_write_ + 1;
     if (--samples_to_next_frame_ == 0) {
       analyze_frame();
+      analyzed = true;
       samples_to_next_frame_ = hop_length_;
     }
   }
+
+  // Once per block, and skipped entirely by a block that took no frame, so the
+  // sweep runs min(blocks, frames) times rather than once per either. The cells
+  // outnumber a hop's samples by an order of magnitude, so per-frame would cost
+  // more than the transforms it guards at a long block, and per-block would cost
+  // more than that again at a short one. A block that took no frame changed no
+  // state: the input ring poisons nothing until a frame is taken from it.
+  // Placed before the output is handed back, so a poisoned sample is zeroed on
+  // its way out rather than after the caller has seen it.
+  if (analyzed && discard_non_finite_state()) note_non_finite_discard();
 
   // Reads the arithmetic above rather than trusting it: an underrun here would
   // otherwise leave the host a block of stale samples and a silent desync.
@@ -160,6 +174,23 @@ void StreamingDenoise::process(float* const* channels, int num_channels, int num
     queue_read_ = queue_read_ + 1 == queue_capacity_ ? 0 : queue_read_ + 1;
     --queue_size_;
   }
+}
+
+bool StreamingDenoise::discard_non_finite_state() noexcept {
+  bool discarded = tracker_->discard_non_finite_state();
+  discarded |= stage_->discard_non_finite_state();
+  // Not redundant beside the tracker's reset: the reset only clears the seed, and
+  // NoiseTracker reseeds from the next frame, which this ring still supplies.
+  discarded |= discard_run_if_non_finite(input_ring_.begin(), input_ring_.end(), 0.0f);
+  discarded |= discard_run_if_non_finite(synthesis_ring_.begin(), synthesis_ring_.end(), 0.0f);
+  discarded |= discard_run_if_non_finite(window_sum_ring_.begin(), window_sum_ring_.end(), 0.0f);
+  // Values only; the fill count is what this block's output owes the caller.
+  discarded |= discard_run_if_non_finite(output_queue_.begin(), output_queue_.end(), 0.0f);
+  if (discarded) {
+    std::fill(spectra_.begin(), spectra_.end(), std::complex<float>{});
+    std::fill(held_spectra_.begin(), held_spectra_.end(), std::complex<float>{});
+  }
+  return discarded;
 }
 
 void StreamingDenoise::analyze_frame() {

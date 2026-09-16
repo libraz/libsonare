@@ -86,6 +86,18 @@ class StreamingDenoise : public rt::ProcessorBase {
   /// Builds one frame from the input rings, masks it and overlap-adds it.
   void analyze_frame();
 
+  /// @brief Returns every value-carrying cell to its post-reset state when a
+  ///        non-finite value has reached one. Called once per process() that
+  ///        took a frame, and not at all by one that took none.
+  /// @details Timing state is deliberately untouched -- the queue's fill, the
+  ///   smoother's frame count and the ring cursors decide how many samples this
+  ///   block owes, so returning them would make the block underrun the delay it
+  ///   already reported. The input ring goes with the rest because the sample
+  ///   that caused the discard is still in it and the tracker would reseed from
+  ///   it on the next frame.
+  /// @return true when anything was discarded.
+  bool discard_non_finite_state() noexcept;
+
   /// Overlap-adds one masked frame at @p start and finalizes one hop of output.
   void emit_frame(const double* gains, const std::complex<float>* source);
 

@@ -15,9 +15,12 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
+
+using sonare::discard_run_if_non_finite;
 
 namespace detail {
 
@@ -42,6 +45,17 @@ const double* MedianGainSmoother::push(const double* raw_frame) {
 const double* MedianGainSmoother::flush() {
   if (pushed_ == 0) return nullptr;
   return emit(pushed_ - 1, /*has_next=*/false);
+}
+
+bool MedianGainSmoother::discard_non_finite_state() noexcept {
+  // Unity, not zero: these cells are gains, and a discarded frame that silences
+  // its band is a louder defect than the one it recovers from.
+  bool discarded = false;
+  for (auto& frame : raw_) {
+    discarded |= discard_run_if_non_finite(frame.begin(), frame.end(), 1.0);
+  }
+  discarded |= discard_run_if_non_finite(out_.begin(), out_.end(), 1.0);
+  return discarded;
 }
 
 const double* MedianGainSmoother::emit(int target, bool has_next) {
@@ -535,6 +549,15 @@ const double* GainStage::flush() {
   if (smoother_ == nullptr) return nullptr;
   const double* smoothed = smoother_->flush();
   return smoothed == nullptr ? nullptr : finish(smoothed);
+}
+
+bool GainStage::discard_non_finite_state() noexcept {
+  bool discarded =
+      discard_run_if_non_finite(prev_clean_power_.begin(), prev_clean_power_.end(), 0.0);
+  discarded |= discard_run_if_non_finite(raw_.begin(), raw_.end(), 1.0);
+  discarded |= discard_run_if_non_finite(out_.begin(), out_.end(), 1.0);
+  if (smoother_ != nullptr) discarded |= smoother_->discard_non_finite_state();
+  return discarded;
 }
 
 void GainStage::compute_raw(const double* power_frame, const double* noise_frame, double* raw) {

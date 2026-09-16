@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <random>
 #include <string>
 #include <vector>
@@ -283,4 +284,39 @@ TEST_CASE("StreamingDenoise process allocates nothing", "[mastering][repair][den
     processor.process(channels, 1, 512);
   }
   CHECK(guard.count() == 0);
+}
+
+TEST_CASE("StreamingDenoise recovers from a non-finite sample and counts one block",
+          "[mastering][repair][denoise-streaming]") {
+  const auto input = with_noise(tone(14400, 440.0f, 0.3f), 0.05f, 31u);
+
+  // The control comes first. A processor that bumped the counter unconditionally
+  // would satisfy every assertion below it, so "zero on clean material" is what
+  // makes the count mean anything.
+  StreamingDenoise clean_processor(streaming_default());
+  clean_processor.prepare(kSampleRate, 512, 1);
+  const auto clean_output = run_mono(clean_processor, input, 512);
+  REQUIRE(rms(clean_output) > 0.0f);
+  REQUIRE(clean_processor.non_finite_discard_count() == 0);
+
+  StreamingDenoise processor(streaming_default());
+  processor.prepare(kSampleRate, 512, 1);
+  std::vector<float> poisoned = input;
+  poisoned[1000] = std::numeric_limits<float>::quiet_NaN();
+  const auto output = run_mono(processor, poisoned, 512);
+
+  CHECK(processor.non_finite_discard_count() > 0);
+  // One caller sample is resident in four consecutive analysis frames, so a
+  // count bumped per frame instead of per block would read four here.
+  CHECK(processor.non_finite_discard_count() <= 2);
+
+  // Recovery, not detection, is the point: a processor that counted and carried
+  // the poison forward would pass everything above and fail here. The tail also
+  // has to still carry signal, or returning silence forever would pass too.
+  constexpr std::size_t kTail = 8000;
+  for (std::size_t i = kTail; i < output.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(std::isfinite(output[i]));
+  }
+  CHECK(rms(output, kTail) > 0.0f);
 }

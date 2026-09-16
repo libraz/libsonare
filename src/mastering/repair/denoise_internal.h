@@ -55,6 +55,14 @@ class MedianGainSmoother {
   /// @return Null when nothing was ever pushed.
   const double* flush();
 
+  /// @brief Zeroes the held frames when a non-finite value has reached one.
+  /// @details The frame count is deliberately left alone. It decides whether a
+  ///   push answers or waits for a successor, so returning it would cost the
+  ///   caller an emitted frame, and a front end whose output timing depends on
+  ///   one frame per push would drop a hop.
+  /// @return true when the frames were discarded.
+  [[nodiscard]] bool discard_non_finite_state() noexcept;
+
  private:
   const double* emit(int target, bool has_next);
   double* slot(int frame);
@@ -87,6 +95,11 @@ class GainStage {
   /// @brief Answers for the last pushed frame, which has no successor.
   /// @return Null when nothing is pending, which is every non-smoothing pass.
   const double* flush();
+
+  /// @brief Returns the decision-directed recursion and the smoother's frames to
+  ///        their post-reset values when a non-finite value has reached one.
+  /// @return true when either was discarded.
+  [[nodiscard]] bool discard_non_finite_state() noexcept;
 
  private:
   void compute_raw(const double* power_frame, const double* noise_frame, double* raw);

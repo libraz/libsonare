@@ -25,6 +25,17 @@ class NoiseTracker {
   Mode mode() const noexcept { return mode_; }
   void reset();
 
+  /// @brief Returns every tracked cell to its post-reset value when a non-finite
+  ///        value has reached one, so the next frame reseeds instead of carrying
+  ///        the poison forward.
+  /// @details Not a free recovery, unlike a filter's: reseeding takes the floor
+  ///   from whatever frame arrives next, and a minimum-tracking mode then holds
+  ///   it for the half second its window spans. The caller owns the counting --
+  ///   this reports rather than records, because a tracker is driven once per
+  ///   STFT frame and its owner is driven once per block.
+  /// @return true when the cells were discarded.
+  [[nodiscard]] bool discard_non_finite_state() noexcept;
+
  private:
   void validate_power(const float* power_spectrum) const;
   void initialize(const float* power_spectrum);

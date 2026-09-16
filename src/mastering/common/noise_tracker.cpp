@@ -142,6 +142,19 @@ void NoiseTracker::reset() {
   std::fill(smoothed_presence_.begin(), smoothed_presence_.end(), 0.0f);
 }
 
+bool NoiseTracker::discard_non_finite_state() noexcept {
+  const auto finite = [](const std::vector<float>& cells) {
+    return std::all_of(cells.begin(), cells.end(), [](float cell) { return std::isfinite(cell); });
+  };
+  if (finite(noise_psd_) && finite(speech_presence_) && finite(smoothed_power_) &&
+      finite(local_min_) && finite(previous_min_) && finite(candidate_min_) &&
+      finite(smoothed_presence_)) {
+    return false;
+  }
+  reset();
+  return true;
+}
+
 void NoiseTracker::validate_power(const float* power_spectrum) const {
   if (power_spectrum == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "power_spectrum must not be null");
