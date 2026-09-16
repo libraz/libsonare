@@ -67,6 +67,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
 
   float largest_abs_gain = 0.0f;
   const float smoothing = time_to_coefficient(sample_rate_, cfg.gain_smoothing_ms);
+  bool discarded = false;
   if (cfg.linked_detection) {
     const int excluded_channel = detector_excluded_channel(num_channels);
     for (int i = 0; i < num_samples; ++i) {
@@ -101,9 +102,9 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
     // are recursive, and the gain state is fed by the detectors, so a non-finite
     // sample that reached either would otherwise outlive every later block.
     for (int ch = 0; ch < num_channels; ++ch) {
-      followers_[static_cast<size_t>(ch)].discard_if_non_finite();
+      discarded |= followers_[static_cast<size_t>(ch)].discard_if_non_finite();
     }
-    discard_if_non_finite(linked_gain_state_db_, 0.0f);
+    discarded |= discard_if_non_finite(linked_gain_state_db_, 0.0f);
   } else {
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& follower = followers_[static_cast<size_t>(ch)];
@@ -125,10 +126,11 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
         if (std::abs(gain_state) > std::abs(largest_abs_gain)) largest_abs_gain = gain_state;
       }
       // Two floats per channel, once per block; see the linked branch.
-      follower.discard_if_non_finite();
-      discard_if_non_finite(gain_state, 0.0f);
+      discarded |= follower.discard_if_non_finite();
+      discarded |= discard_if_non_finite(gain_state, 0.0f);
     }
   }
+  if (discarded) note_non_finite_discard();
 
   last_gain_db_ = largest_abs_gain;
 }

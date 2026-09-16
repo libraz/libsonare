@@ -22,6 +22,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -106,6 +107,10 @@ using BlockProcessor = std::function<std::vector<float>(const std::vector<float>
 struct Owner {
   BlockProcessor process;
   std::function<float()> meter;
+  /// The owner's own discard count, read through the accessor a caller has.
+  /// Recovery is asserted on values above; without this the count could stay at
+  /// zero for every owner here and every one of those assertions would hold.
+  std::function<uint32_t()> discards;
 };
 using MakeOwner = std::function<Owner()>;
 
@@ -126,7 +131,8 @@ MakeOwner make_owner(Config config, Meter meter) {
       flat.insert(flat.end(), right.begin(), right.end());
       return flat;
     };
-    return Owner{std::move(process), [processor, meter]() { return meter(*processor); }};
+    return Owner{std::move(process), [processor, meter]() { return meter(*processor); },
+                 [processor]() { return processor->non_finite_discard_count(); }};
   };
 }
 
@@ -251,7 +257,7 @@ void require_rejoins_control(const Blocks& control, const Blocks& poisoned, int 
 
 /// Drives one owner three times -- clean, clean at another level, and poisoned
 /// -- and asserts the invariant against the first.
-void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value) {
+uint32_t check_owner(const MakeOwner& make, int recovery_blocks, float poison_value) {
   const int block_count = std::max(recovery_blocks + kHorizonSlack, kMinimumCleanBlocks);
   Owner control_owner = make();
   const Blocks control = run_stream(control_owner.process, block_count, 1.0f, 0.0f, false);
@@ -274,6 +280,9 @@ void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value)
   // non-finite operand and drops it instead of propagating it.
   REQUIRE_FALSE(std::any_of(control.begin(), control.end(), block_has_non_finite));
   REQUIRE(std::isfinite(control_meter));
+  // A clean run discards nothing, so a count read after the poisoned run below
+  // is the poison's and not the fixture's.
+  REQUIRE(control_owner.discards() == 0);
 
   Owner poisoned_owner = make();
   const Blocks poisoned = run_stream(poisoned_owner.process, block_count, 1.0f, poison_value, true);
@@ -282,6 +291,16 @@ void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value)
   // The meter is folded from the values the detector produced, so it reports a
   // stranded detector even over blocks whose audio has already rejoined.
   REQUIRE(poisoned_owner.meter() == control_meter);
+  // The published unit is one process() call, and exactly one block carried the
+  // sample -- so a count above one is a bump per channel, per cell or per
+  // sample, which makes the number depend on the block size. Zero is legal here
+  // and is not read as agreement: whether this value reaches the cell at all
+  // depends on the fold in front of it, which is why the caller below requires
+  // the three values together to drive it.
+  const uint32_t discards = poisoned_owner.discards();
+  INFO("discards " << discards);
+  REQUIRE(discards <= 1);
+  return discards;
 }
 
 /// Every owner is driven with all three poison values. Which of them can reach a
@@ -290,10 +309,17 @@ void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value)
 /// so a single value tests one owner's state and merely its input handling at
 /// the next.
 void check_owner(const MakeOwner& make, int recovery_blocks) {
+  uint32_t reached = 0;
   for (const float poison_value : poison_values()) {
     INFO("poison value " << poison_value);
-    check_owner(make, recovery_blocks, poison_value);
+    reached += check_owner(make, recovery_blocks, poison_value);
   }
+  // Un-reach is a failure, not a silence. Every owner here recovers by
+  // discarding a cell, so at least one of the three values must drive the count
+  // off zero -- an owner whose counter is never bumped satisfies every value
+  // assertion above while reporting, to a caller, that it lost nothing.
+  INFO("values that reached the count " << reached << " of " << poison_values().size());
+  REQUIRE(reached > 0);
 }
 
 }  // namespace

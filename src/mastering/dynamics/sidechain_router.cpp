@@ -99,7 +99,7 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
 
   // One float, once per block: the follower is recursive, so a non-finite
   // detector value that reached it would otherwise outlive every later block.
-  follower_.discard_if_non_finite();
+  if (follower_.discard_if_non_finite()) note_non_finite_discard();
 
   last_gain_reduction_db_ = max_reduction;
 }

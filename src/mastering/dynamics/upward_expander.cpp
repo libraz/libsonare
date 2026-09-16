@@ -82,7 +82,7 @@ void UpwardExpander::process(float* const* channels, int num_channels, int num_s
   // One float, once per block: the follower is recursive, so a non-finite level
   // that reached it would otherwise outlive every later block. Only followers_[0]
   // advances under linked detection, so it is the only cell to scrub.
-  follower.discard_if_non_finite();
+  if (follower.discard_if_non_finite()) note_non_finite_discard();
 
   last_gain_db_ = max_gain;
 }

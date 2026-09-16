@@ -56,6 +56,7 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
 
   float max_reduction = 0.0f;
   const float ceiling = db_to_linear(cfg.output_ceiling_db);
+  bool discarded = false;
   if (cfg.linked_detection) {
     const int excluded_channel = detector_excluded_channel(num_channels);
     for (int i = 0; i < num_samples; ++i) {
@@ -87,7 +88,7 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
     // level that reached it would otherwise outlive every later block. The
     // limiter gain is recursive too but cannot be stranded -- a non-finite
     // magnitude fails the ordered comparison that is the only path into it.
-    followers_[0].discard_if_non_finite();
+    discarded |= followers_[0].discard_if_non_finite();
   } else {
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& follower = followers_[static_cast<size_t>(ch)];
@@ -104,9 +105,10 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
         max_reduction = std::min(max_reduction, reduction_db);
       }
       // One float per channel, once per block; see the linked branch.
-      follower.discard_if_non_finite();
+      discarded |= follower.discard_if_non_finite();
     }
   }
+  if (discarded) note_non_finite_discard();
 
   last_gain_reduction_db_ = max_reduction;
 }

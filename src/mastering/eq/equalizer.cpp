@@ -115,6 +115,9 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
            mid_iir_.non_finite_discard_count() + side_iir_.non_finite_discard_count();
   };
   const uint64_t iir_discards_before = iir_discards();
+  // The analyser runs inside publish_spectrum_snapshot below, after the filters,
+  // so its count is read on either side of that call rather than here.
+  const uint32_t spectrum_discards_before = spectrum_analyzer_.non_finite_discard_count();
   if (has_dynamic_bands_) {
     update_dynamic_state(const_cast<const float* const*>(channels), num_channels, num_samples);
     // Before the detector's reading reaches coefficient design, so a poisoned
@@ -190,10 +193,11 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   discarded |= smoothed_discarded;
   discarded |= discard_if_non_finite(last_auto_gain_db_, 0.0f);
   discarded |= iir_discards() != iir_discards_before;
-  if (discarded) note_non_finite_discard();
   apply_output_gain_and_pan(channels, num_channels, num_samples);
   publish_spectrum_snapshot(pre_snapshot, const_cast<const float* const*>(channels), num_channels,
                             num_samples);
+  discarded |= spectrum_analyzer_.non_finite_discard_count() != spectrum_discards_before;
+  if (discarded) note_non_finite_discard();
   clear_sidechain();
 }
 

@@ -106,6 +106,7 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
+  bool discarded = false;
   if (tube_config_.oversample_factor == 1) {
     for (int ch = 0; ch < num_channels; ++ch) {
       for (int i = 0; i < num_samples; ++i) {
@@ -114,8 +115,9 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
       }
       // One float per channel, once per block: the Miller low-pass is the only
       // cell that recirculates its own output.
-      sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
+      discarded |= sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
     }
+    if (discarded) note_non_finite_discard();
     return;
   }
 
@@ -143,8 +145,9 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
       const float dry = dry_delays_[static_cast<size_t>(ch)].process(input[i]);
       channels[ch][i] = dry * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
     }
-    sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
+    discarded |= sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void Tube::reset() {

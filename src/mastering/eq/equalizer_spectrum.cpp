@@ -165,6 +165,7 @@ void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
   const double elapsed_seconds =
       sample_rate_ > 0.0 ? static_cast<double>(std::max(elapsed_samples, 0)) / sample_rate_ : 0.0;
   const float release = static_cast<float>(std::exp(-elapsed_seconds / kProfileReleaseSeconds));
+  bool discarded = false;
   for (size_t band = 0; band < kSpectrumProfileBands; ++band) {
     double power = 0.0;
     for (int bin = band_bin_begin_[band]; bin < band_bin_end_[band]; ++bin) {
@@ -176,8 +177,12 @@ void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
     // Dividing the summed bin power by the window's equivalent noise bandwidth
     // undoes the spreading of a tone across the window's main lobe, so a
     // full-scale sine reports 0 dB in the band that contains it.
-    const float level_db =
-        std::max(kFloorDb, power_to_db_scalar(static_cast<float>(power / window_enbw_)));
+    const float band_db = power_to_db_scalar(static_cast<float>(power / window_enbw_));
+    // The fold below answers with its FIRST argument for a non-finite second, so
+    // a non-finite band reads as silence and leaves nothing to show for it. The
+    // order is the clamp this band needs; what it must not do is go unreported.
+    discarded |= !std::isfinite(band_db);
+    const float level_db = std::max(kFloorDb, band_db);
     if (!has_profile_ || level_db >= profile_db_[band]) {
       profile_db_[band] = level_db;
     } else {
@@ -198,8 +203,9 @@ void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
   // measured absence on the signals tried, not a proof no input reaches here,
   // which is why no test covers it -- a positive control could not be satisfied.
   for (float& band_db : profile_db_) {
-    discard_if_non_finite(band_db, kFloorDb);
+    discarded |= discard_if_non_finite(band_db, kFloorDb);
   }
+  if (discarded) non_finite_discards_.bump();
 }
 
 EqualizerSpectrumSnapshot EqualizerProcessor::spectrum_snapshot() const noexcept {

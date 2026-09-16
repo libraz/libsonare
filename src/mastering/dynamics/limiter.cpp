@@ -132,7 +132,7 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
   // and makes the coefficient non-finite, which the smoother multiplies into its
   // own state. Bounding that to one block is not a repair of it; the coefficient
   // stays non-finite and poisons the next block's first sample.
-  gain_smoother_.discard_if_non_finite();
+  if (gain_smoother_.discard_if_non_finite()) note_non_finite_discard();
 
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));
 }

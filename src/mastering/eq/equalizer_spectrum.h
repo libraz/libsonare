@@ -11,6 +11,7 @@
 
 #include "core/fft.h"
 #include "mastering/eq/spectrum_engine.h"
+#include "rt/overflow_counter.h"
 
 namespace sonare::mastering::eq {
 
@@ -48,6 +49,12 @@ class EqSpectrumAnalyzer {
   /// hop has elapsed, otherwise with the profile of the latest transform.
   void analyze(const float* const* channels, int num_channels, int num_samples,
                std::array<float, kSpectrumProfileBands>& out) noexcept;
+  /// @brief How many transforms rested a band a non-finite level had reached.
+  /// @details Nothing else clears the fall ballistics, so the discard is the only
+  ///   recovery. This class is outside rt::ProcessorBase, so it carries the
+  ///   counter the base gives every processor and its owner folds the difference
+  ///   into one bump per block.
+  uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
 
  private:
   void append(const float* const* channels, int num_channels, int num_samples) noexcept;
@@ -78,6 +85,7 @@ class EqSpectrumAnalyzer {
   // Set only once prepare() has built every buffer. analyze() is inert until
   // then, so a never-prepared or part-way-failed analyser cannot be read.
   bool ready_ = false;
+  rt::OverflowCounter non_finite_discards_;
 };
 
 }  // namespace sonare::mastering::eq

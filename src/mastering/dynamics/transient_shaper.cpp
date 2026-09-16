@@ -66,6 +66,7 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
 
   ensure_followers(num_channels);
   float largest_abs_gain = 0.0f;
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& fast = fast_followers_[static_cast<size_t>(ch)];
     auto& slow = slow_followers_[static_cast<size_t>(ch)];
@@ -95,10 +96,11 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
     // both followers and is recursive itself, so a non-finite sample that
     // reached any of them would otherwise outlive every later block. The
     // lookahead line is a FIFO: its copy of the sample ages out on its own.
-    fast.discard_if_non_finite();
-    slow.discard_if_non_finite();
-    discard_if_non_finite(gain_state_db_[static_cast<size_t>(ch)], 0.0f);
+    discarded |= fast.discard_if_non_finite();
+    discarded |= slow.discard_if_non_finite();
+    discarded |= discard_if_non_finite(gain_state_db_[static_cast<size_t>(ch)], 0.0f);
   }
+  if (discarded) note_non_finite_discard();
 
   last_gain_db_ = largest_abs_gain;
 }
