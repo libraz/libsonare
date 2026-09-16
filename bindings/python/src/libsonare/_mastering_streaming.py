@@ -340,7 +340,9 @@ class StreamingEqualizer:
         lib = _get_lib()
         if not hasattr(lib, "sonare_eq_create"):
             raise RuntimeError("libsonare was built without streaming equalizer support")
-        handle = lib.sonare_eq_create(float(sample_rate), int(max_block_size))
+        handle = lib.sonare_eq_create(
+            float(sample_rate), _to_c_int(max_block_size, "max_block_size")
+        )
         if not handle:
             raise RuntimeError("failed to create StreamingEqualizer")
         self._lib = lib
@@ -408,7 +410,11 @@ class StreamingEqualizer:
         c_array, length = _to_c_float_array(samples)
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
         channels = channel_array_type(ctypes.cast(c_array, ctypes.POINTER(ctypes.c_float)))
-        _check(self._lib.sonare_eq_set_sidechain(self._handle, channels, ctypes.c_int(1), length))
+        _check(
+            self._lib.sonare_eq_set_sidechain(
+                self._handle, channels, ctypes.c_int(1), _to_c_int(length, "length")
+            )
+        )
         self._sidechain_refs = (c_array, channels)
 
     @_guard_buffer("left", "right")
@@ -482,7 +488,11 @@ class StreamingEqualizer:
         c_array, length = _to_c_float_array_owned(samples)
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
         channels = channel_array_type(ctypes.cast(c_array, ctypes.POINTER(ctypes.c_float)))
-        _check(self._lib.sonare_eq_process(self._handle, channels, ctypes.c_int(1), length))
+        _check(
+            self._lib.sonare_eq_process(
+                self._handle, channels, ctypes.c_int(1), _to_c_int(length, "length")
+            )
+        )
         self._sidechain_refs = None
         return [float(c_array[i]) for i in range(length)]
 

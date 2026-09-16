@@ -36,8 +36,10 @@ from ._runtime import (
     _guard_buffer,
     _narrow_int,
     _to_c_float_array,
+    _to_c_int,
     _to_c_size_t,
     _to_c_uint8,
+    _to_c_uint32,
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
 
@@ -119,7 +121,7 @@ class _ProjectInspectionMixin:
                 self._require_handle(),
                 c_array,
                 _to_c_size_t(length, "length"),
-                int(sample_rate),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(options),
                 candidates,
                 ctypes.c_size_t(len(candidates)),
@@ -181,7 +183,7 @@ class _ProjectInspectionMixin:
                 self._require_handle(),
                 c_array,
                 _to_c_size_t(length, "length"),
-                int(sample_rate),
+                _to_c_int(sample_rate, "sample_rate"),
                 ctypes.byref(options),
                 _to_c_size_t(candidate_index, "candidate_index"),
                 _to_c_uint8(1 if apply_time_signatures else 0, "apply_time_signatures"),
@@ -203,7 +205,7 @@ class _ProjectInspectionMixin:
                 self._require_handle(),
                 float(ppq),
                 float(strength),
-                int(division),
+                _to_c_int(division, "division"),
                 ctypes.byref(out_ppq),
             )
         )
@@ -357,8 +359,8 @@ class _ProjectInspectionMixin:
             _get_lib().sonare_project_set_assist_sidecar(
                 self._require_handle(),
                 module_id.encode("utf-8"),
-                int(schema_version),
-                int(target_track_id),
+                _to_c_uint32(schema_version, "schema_version"),
+                _to_c_uint32(target_track_id, "target_track_id"),
                 float(region_start_ppq),
                 float(region_end_ppq),
                 buf,
@@ -376,7 +378,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectAssistSidecar()
         _check(
             lib.sonare_project_get_assist_sidecar(
-                self._require_handle(), int(index), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         try:
@@ -418,7 +420,11 @@ class _ProjectInspectionMixin:
 
     def set_overlap_policy(self, policy: int) -> None:
         """Set the project's clip-overlap policy ordinal."""
-        _check(_get_lib().sonare_project_set_overlap_policy(self._require_handle(), int(policy)))
+        _check(
+            _get_lib().sonare_project_set_overlap_policy(
+                self._require_handle(), _to_c_uint32(policy, "policy")
+            )
+        )
 
     def set_marker(self, marker_id: int, ppq: float, name: str) -> int:
         """Add or replace a marker; return its (possibly newly allocated) id.
@@ -429,7 +435,7 @@ class _ProjectInspectionMixin:
         _check(
             _get_lib().sonare_project_set_marker(
                 self._require_handle(),
-                int(marker_id),
+                _to_c_uint32(marker_id, "marker_id"),
                 float(ppq),
                 name.encode("utf-8") if name is not None else None,
                 ctypes.byref(out_id),
@@ -494,7 +500,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectTrack()
         _check(
             _get_lib().sonare_project_track_by_index(
-                self._require_handle(), int(index), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         return ProjectTrack(
@@ -513,7 +519,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectClip()
         _check(
             _get_lib().sonare_project_clip_by_index(
-                self._require_handle(), int(index), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         return ProjectClip(
@@ -534,7 +540,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectSource()
         _check(
             _get_lib().sonare_project_source_by_index(
-                self._require_handle(), int(index), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         content_hash = ""
@@ -551,7 +557,9 @@ class _ProjectInspectionMixin:
                 try:
                     _check(
                         lib.sonare_project_get_audio_source_metadata(
-                            self._require_handle(), int(raw.id), ctypes.byref(metadata)
+                            self._require_handle(),
+                            _to_c_uint32(raw.id, "source_id"),
+                            ctypes.byref(metadata),
                         )
                     )
                     content_hash = metadata.content_hash.decode() if metadata.content_hash else ""

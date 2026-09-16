@@ -78,7 +78,11 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _to_c_float,
+    _to_c_int,
+    _to_c_int64,
     _to_c_size_t,
+    _to_c_uint32,
 )
 from .types import (
     AutomationCurve,
@@ -198,23 +202,33 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             prepare_with_channels(
                 self._require_handle(),
                 float(sample_rate),
-                int(max_block_size),
-                int(command_capacity),
-                int(telemetry_capacity),
-                *(() if not supports_max_channels else (int(max_channels),)),
+                _to_c_int(max_block_size, "max_block_size"),
+                _to_c_size_t(command_capacity, "command_capacity"),
+                _to_c_size_t(telemetry_capacity, "telemetry_capacity"),
+                *(() if not supports_max_channels else (_to_c_int(max_channels, "max_channels"),)),
             )
         )
 
     def play(self, render_frame: int = -1) -> None:
-        _check(_get_lib().sonare_engine_play(self._require_handle(), int(render_frame)))
+        _check(
+            _get_lib().sonare_engine_play(
+                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+            )
+        )
 
     def stop(self, render_frame: int = -1) -> None:
-        _check(_get_lib().sonare_engine_stop(self._require_handle(), int(render_frame)))
+        _check(
+            _get_lib().sonare_engine_stop(
+                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+            )
+        )
 
     def seek_sample(self, timeline_sample: int, render_frame: int = -1) -> None:
         _check(
             _get_lib().sonare_engine_seek_sample(
-                self._require_handle(), int(timeline_sample), int(render_frame)
+                self._require_handle(),
+                _to_c_int64(timeline_sample, "timeline_sample"),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )
 
@@ -240,7 +254,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     def seek_ppq(self, ppq: float, render_frame: int = -1) -> None:
         _check(
-            _get_lib().sonare_engine_seek_ppq(self._require_handle(), float(ppq), int(render_frame))
+            _get_lib().sonare_engine_seek_ppq(
+                self._require_handle(), float(ppq), _to_c_int64(render_frame, "render_frame")
+            )
         )
 
     def set_tempo(self, bpm: float) -> None:
@@ -250,7 +266,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def set_time_signature(self, numerator: int, denominator: int) -> None:
         _check(
             _get_lib().sonare_engine_set_time_signature(
-                self._require_handle(), int(numerator), int(denominator)
+                self._require_handle(),
+                _to_c_int(numerator, "numerator"),
+                _to_c_int(denominator, "denominator"),
             )
         )
 
@@ -339,7 +357,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def set_loop(self, start_ppq: float, end_ppq: float, enabled: bool = True) -> None:
         _check(
             _get_lib().sonare_engine_set_loop(
-                self._require_handle(), float(start_ppq), float(end_ppq), int(enabled)
+                self._require_handle(), float(start_ppq), float(end_ppq), 1 if enabled else 0
             )
         )
 
@@ -376,7 +394,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         raw = SonareParameterInfo()
         _check(
             _get_lib().sonare_engine_parameter_info_by_index(
-                self._require_handle(), int(index), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         return _parameter_from_c(raw)
@@ -385,7 +403,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         raw = SonareParameterInfo()
         _check(
             _get_lib().sonare_engine_parameter_info(
-                self._require_handle(), int(id), ctypes.byref(raw)
+                self._require_handle(), _to_c_uint32(id, "id"), ctypes.byref(raw)
             )
         )
         return _parameter_from_c(raw)
@@ -403,7 +421,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         _check(
             _get_lib().sonare_engine_set_automation_lane(
-                self._require_handle(), int(param_id), raw_points, len(points)
+                self._require_handle(),
+                _to_c_uint32(param_id, "param_id"),
+                raw_points,
+                len(points),
             )
         )
 
@@ -433,27 +454,35 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         raw = SonareEngineMarker()
         _check(
             _get_lib().sonare_engine_marker_by_index(
-                self._require_handle(), int(index), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         return _marker_from_c(raw)
 
     def marker(self, id: int) -> EngineMarker:
         raw = SonareEngineMarker()
-        _check(_get_lib().sonare_engine_marker(self._require_handle(), int(id), ctypes.byref(raw)))
+        _check(
+            _get_lib().sonare_engine_marker(
+                self._require_handle(), _to_c_uint32(id, "id"), ctypes.byref(raw)
+            )
+        )
         return _marker_from_c(raw)
 
     def seek_marker(self, marker_id: int, render_frame: int = -1) -> None:
         _check(
             _get_lib().sonare_engine_seek_marker(
-                self._require_handle(), int(marker_id), int(render_frame)
+                self._require_handle(),
+                _to_c_uint32(marker_id, "marker_id"),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )
 
     def set_loop_from_markers(self, start_marker_id: int, end_marker_id: int) -> None:
         _check(
             _get_lib().sonare_engine_set_loop_from_markers(
-                self._require_handle(), int(start_marker_id), int(end_marker_id)
+                self._require_handle(),
+                _to_c_uint32(start_marker_id, "start_marker_id"),
+                _to_c_uint32(end_marker_id, "end_marker_id"),
             )
         )
 
@@ -470,7 +499,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         out = ctypes.c_int64()
         _check(
             _get_lib().sonare_engine_count_in_end_sample(
-                self._require_handle(), int(start_sample), int(bars), ctypes.byref(out)
+                self._require_handle(),
+                _to_c_int64(start_sample, "start_sample"),
+                _to_c_int(bars, "bars"),
+                ctypes.byref(out),
             )
         )
         return int(out.value)
@@ -501,7 +533,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             raise RuntimeError("libsonare was built without live-parameter support")
         _check(
             lib.sonare_engine_set_parameter(
-                self._require_handle(), int(param_id), float(value), int(render_frame)
+                self._require_handle(),
+                _to_c_uint32(param_id, "param_id"),
+                _to_c_float(value, "value"),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )
 
@@ -512,7 +547,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             raise RuntimeError("libsonare was built without live-parameter support")
         _check(
             lib.sonare_engine_set_parameter_smoothed(
-                self._require_handle(), int(param_id), float(value), int(render_frame)
+                self._require_handle(),
+                _to_c_uint32(param_id, "param_id"),
+                _to_c_float(value, "value"),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )
 
@@ -527,7 +565,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         if not hasattr(lib, "sonare_engine_set_param_smoothing_ms"):
             raise RuntimeError("libsonare was built without live-parameter support")
         _check(
-            lib.sonare_engine_set_param_smoothing_ms(self._require_handle(), float(smoothing_ms))
+            lib.sonare_engine_set_param_smoothing_ms(
+                self._require_handle(), _to_c_float(smoothing_ms, "smoothing_ms")
+            )
         )
 
     def set_solo_mute(
@@ -539,10 +579,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(
             lib.sonare_engine_set_solo_mute(
                 self._require_handle(),
-                int(lane_index),
+                _to_c_uint32(lane_index, "lane_index"),
                 1 if solo else 0,
                 1 if mute else 0,
-                int(render_frame),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )
 
@@ -568,7 +608,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         _check(
             lib.sonare_engine_set_track_monitor_mode(
-                self._require_handle(), int(lane_index), mode_value, int(render_frame)
+                self._require_handle(),
+                _to_c_uint32(lane_index, "lane_index"),
+                _to_c_int(mode_value, "mode"),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )
 
@@ -639,7 +682,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             raise RuntimeError("libsonare was built without external-MIDI output support")
         _check(
             lib.sonare_engine_set_midi_destination_external(
-                self._require_handle(), int(destination_id), 1 if external else 0
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                1 if external else 0,
             )
         )
 
@@ -736,7 +781,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_drain_external_midi"):
             raise RuntimeError("libsonare was built without external-MIDI output support")
-        capacity = int(max_records)
+        capacity = _to_c_size_t(max_records, "max_records").value
         raw = (SonareExternalMidiEvent * capacity)()
         written = ctypes.c_size_t()
         results: list[ExternalMidiEvent] = []
@@ -747,7 +792,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             cap = min(capacity, remaining)
             _check(
                 lib.sonare_engine_drain_external_midi(
-                    self._require_handle(), raw, cap, ctypes.byref(written)
+                    self._require_handle(),
+                    raw,
+                    _to_c_size_t(cap, "max_records"),
+                    ctypes.byref(written),
                 )
             )
             count = int(written.value)

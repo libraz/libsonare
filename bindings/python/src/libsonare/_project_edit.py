@@ -51,6 +51,7 @@ from ._runtime import (
     _narrow_int,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int64,
     _to_c_size_t,
     _to_c_uint32,
     _warp_mode_value,
@@ -86,7 +87,9 @@ class _ProjectEditMixin:
             source_id = ctypes.c_uint32()
             _check(
                 lib.sonare_project_unresolved_audio_source_id_by_index(
-                    self._require_handle(), index, ctypes.byref(source_id)
+                    self._require_handle(),
+                    _to_c_size_t(index, "index"),
+                    ctypes.byref(source_id),
                 )
             )
             ids.append(int(source_id.value))
@@ -99,13 +102,16 @@ class _ProjectEditMixin:
         backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
             raise SonareValueError("audio length must be a multiple of channels")
+        # Narrowed before the frame count is derived from it, so a `channels`
+        # the C type cannot hold is refused under its own name.
+        channel_count = _to_c_int(channels, "channels")
         _check(
             _get_lib().sonare_project_set_source_audio(
                 self._require_handle(),
                 _to_c_uint32(source_id, "source_id"),
                 backing,
-                total // channels,
-                _to_c_int(channels, "channels"),
+                _to_c_int64(total // channel_count.value, "frames"),
+                channel_count,
                 _to_c_int(sample_rate, "sample_rate"),
             )
         )
@@ -382,7 +388,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_set_track_kind(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                _track_kind_value(kind),
+                _to_c_uint32(_track_kind_value(kind), "kind"),
             )
         )
 
@@ -402,7 +408,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_set_clip_warp_mode(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                _warp_mode_value(mode),
+                _to_c_uint32(_warp_mode_value(mode), "mode"),
             )
         )
 
@@ -687,7 +693,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_set_clip_loop(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                int(mode),
+                _to_c_int(mode, "loop_mode"),
                 length,
                 crossfade,
             )

@@ -62,11 +62,11 @@ def tone(
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_tone(
-                frequency,
-                sample_rate,
-                duration,
-                phase,
-                amplitude,
+                _to_c_float(frequency, "frequency"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_float(duration, "duration"),
+                _to_c_float(phase, "phase"),
+                _to_c_float(amplitude, "amplitude"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -86,11 +86,11 @@ def chirp(
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_chirp(
-                fmin,
-                fmax,
-                sample_rate,
-                duration,
-                int(linear),
+                _to_c_float(fmin, "fmin"),
+                _to_c_float(fmax, "fmax"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_float(duration, "duration"),
+                1 if linear else 0,
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -112,11 +112,11 @@ def clicks(
         _check(
             lib.sonare_clicks(
                 data,
-                count,
-                sample_rate,
-                length,
-                frequency,
-                click_duration,
+                _to_c_size_t(count, "times length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(length, "length"),
+                _to_c_float(frequency, "frequency"),
+                _to_c_float(click_duration, "click_duration"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )
@@ -1104,12 +1104,12 @@ def cross_similarity(
     out = SonareSegmentMatrix()
     rc = _get_lib().sonare_segment_cross_similarity(
         x_array,
-        x_rows,
-        x_cols,
+        _to_c_int(x_rows, "x_rows"),
+        _to_c_int(x_cols, "x_cols"),
         y_array,
-        y_rows,
-        y_cols,
-        k,
+        _to_c_int(y_rows, "y_rows"),
+        _to_c_int(y_cols, "y_cols"),
+        _to_c_int(k, "k"),
         metric.encode(),
         mode.encode(),
         ctypes.byref(out),
@@ -1134,11 +1134,11 @@ def recurrence_matrix(
     out = SonareSegmentMatrix()
     rc = lib.sonare_segment_recurrence_matrix(
         c_data,
-        rows,
-        cols,
-        k,
-        width,
-        int(sym),
+        _to_c_int(rows, "rows"),
+        _to_c_int(cols, "cols"),
+        _to_c_int(k, "k"),
+        _to_c_int(width, "width"),
+        1 if sym else 0,
         metric.encode(),
         mode.encode(),
         ctypes.byref(out),
@@ -1156,7 +1156,11 @@ def recurrence_to_lag(
     c_recurrence, _ = _segment_input("recurrence_to_lag", recurrence, n, n, arg_name="recurrence")
     lib = _get_lib()
     out = SonareSegmentMatrix()
-    _check(lib.sonare_segment_recurrence_to_lag(c_recurrence, n, int(pad), ctypes.byref(out)))
+    _check(
+        lib.sonare_segment_recurrence_to_lag(
+            c_recurrence, _to_c_int(n, "n"), 1 if pad else 0, ctypes.byref(out)
+        )
+    )
     return _segment_matrix_result(lib, out)
 
 
@@ -1169,7 +1173,11 @@ def lag_to_recurrence(
     c_lag, _ = _segment_input("lag_to_recurrence", lag, n_rows, n_lags, arg_name="lag")
     lib = _get_lib()
     out = SonareSegmentMatrix()
-    _check(lib.sonare_segment_lag_to_recurrence(c_lag, n_rows, n_lags, ctypes.byref(out)))
+    _check(
+        lib.sonare_segment_lag_to_recurrence(
+            c_lag, _to_c_int(n_rows, "n_rows"), _to_c_int(n_lags, "n_lags"), ctypes.byref(out)
+        )
+    )
     return _segment_matrix_result(lib, out)
 
 
@@ -1188,11 +1196,11 @@ def subsegment(
     _check(
         lib.sonare_segment_subsegment(
             c_data,
-            rows,
-            cols,
+            _to_c_int(rows, "rows"),
+            _to_c_int(cols, "cols"),
             c_boundaries,
-            count,
-            n_segments,
+            _to_c_size_t(count, "boundaries length"),
+            _to_c_int(n_segments, "n_segments"),
             ctypes.byref(out),
         )
     )
@@ -1211,7 +1219,14 @@ def agglomerative(
     lib = _get_lib()
     out = SonareSegmentIndices()
     _check(
-        lib.sonare_segment_agglomerative(c_data, rows, cols, k, linkage.encode(), ctypes.byref(out))
+        lib.sonare_segment_agglomerative(
+            c_data,
+            _to_c_int(rows, "rows"),
+            _to_c_int(cols, "cols"),
+            _to_c_int(k, "k"),
+            linkage.encode(),
+            ctypes.byref(out),
+        )
     )
     return _segment_indices_result(lib, out)
 
@@ -1231,11 +1246,11 @@ def path_enhance(
     _check(
         lib.sonare_segment_path_enhance(
             c_recurrence,
-            n,
-            win,
-            max_ratio,
-            min_ratio,
-            n_filters,
+            _to_c_int(n, "n"),
+            _to_c_int(win, "win"),
+            _to_c_int(max_ratio, "max_ratio"),
+            _to_c_int(min_ratio, "min_ratio"),
+            _to_c_int(n_filters, "n_filters"),
             ctypes.byref(out),
         )
     )

@@ -20,6 +20,10 @@ from ._runtime import (
     _pan_law_value,
     _pan_mode_value,
     _send_timing_value,
+    _to_c_float,
+    _to_c_int,
+    _to_c_uint,
+    _to_c_uint32,
 )
 
 
@@ -98,7 +102,10 @@ class _EngineMixingMixin:
         """
         _check(
             _get_lib().sonare_engine_set_lane_sidechain(
-                self._require_handle(), int(track_id), int(insert_index), int(source_track_id)
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_uint32(source_track_id, "source_track_id"),
             )
         )
 
@@ -126,7 +133,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_bus_strip_json(
                 self._require_handle(),
-                int(bus_id),
+                _to_c_uint32(bus_id, "bus_id"),
                 scene_json.encode("utf-8"),
             )
         )
@@ -135,7 +142,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_json(
                 self._require_handle(),
-                int(track_id),
+                _to_c_uint32(track_id, "track_id"),
                 scene_json.encode("utf-8"),
             )
         )
@@ -146,8 +153,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_eq_band_json(
                 self._require_handle(),
-                int(track_id),
-                int(band_index),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_int(band_index, "band_index"),
                 _band_json_arg(band),
             )
         )
@@ -156,8 +163,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_eq_band_json(
                 self._require_handle(),
-                int(track_id),
-                int(band_index),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_int(band_index, "band_index"),
                 band_json.encode("utf-8"),
             )
         )
@@ -168,8 +175,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_insert_bypassed(
                 self._require_handle(),
-                int(track_id),
-                int(insert_index),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint(insert_index, "insert_index"),
                 1 if bypassed else 0,
                 1 if reset_on_bypass else 0,
             )
@@ -181,10 +188,10 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_insert_param_by_name(
                 self._require_handle(),
-                int(track_id),
-                int(insert_index),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint(insert_index, "insert_index"),
                 param_name.encode("utf-8"),
-                float(value),
+                _to_c_float(value, "value"),
             )
         )
 
@@ -193,8 +200,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_pan(
                 self._require_handle(),
-                int(track_id),
-                float(pan),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_float(pan, "pan"),
             )
         )
 
@@ -207,7 +214,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_law(
                 self._require_handle(),
-                int(track_id),
+                _to_c_uint32(track_id, "track_id"),
                 _pan_law_value(pan_law),
             )
         )
@@ -217,7 +224,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_mode(
                 self._require_handle(),
-                int(track_id),
+                _to_c_uint32(track_id, "track_id"),
                 _pan_mode_value(pan_mode),
             )
         )
@@ -227,9 +234,9 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_dual_pan(
                 self._require_handle(),
-                int(track_id),
-                float(left_pan),
-                float(right_pan),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_float(left_pan, "left_pan"),
+                _to_c_float(right_pan, "right_pan"),
             )
         )
 
@@ -238,8 +245,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_track_strip_channel_delay_samples(
                 self._require_handle(),
-                int(track_id),
-                int(delay_samples),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_int(delay_samples, "delay_samples"),
             )
         )
 
@@ -255,7 +262,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_master_strip_eq_band_json(
                 self._require_handle(),
-                int(band_index),
+                _to_c_int(band_index, "band_index"),
                 _band_json_arg(band),
             )
         )
@@ -264,7 +271,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_master_strip_eq_band_json(
                 self._require_handle(),
-                int(band_index),
+                _to_c_int(band_index, "band_index"),
                 band_json.encode("utf-8"),
             )
         )
@@ -275,7 +282,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_master_strip_insert_bypassed(
                 self._require_handle(),
-                int(insert_index),
+                _to_c_uint(insert_index, "insert_index"),
                 1 if bypassed else 0,
                 1 if reset_on_bypass else 0,
             )
@@ -287,9 +294,9 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_master_strip_insert_param_by_name(
                 self._require_handle(),
-                int(insert_index),
+                _to_c_uint(insert_index, "insert_index"),
                 param_name.encode("utf-8"),
-                float(value),
+                _to_c_float(value, "value"),
             )
         )
 
@@ -304,10 +311,10 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_bus_strip_insert_param_by_name(
                 self._require_handle(),
-                int(bus_id),
-                int(insert_index),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
                 param_name.encode("utf-8"),
-                float(value),
+                _to_c_float(value, "value"),
             )
         )
 
@@ -322,8 +329,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_bus_strip_insert_bypassed(
                 self._require_handle(),
-                int(bus_id),
-                int(insert_index),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
                 1 if bypassed else 0,
                 1 if reset_on_bypass else 0,
             )
@@ -353,8 +360,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_resolve_track_insert_automation_id(
                 self._require_handle(),
-                int(track_id),
-                int(insert_index),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint(insert_index, "insert_index"),
                 param_name.encode("utf-8"),
                 ctypes.byref(out_id),
             )
@@ -370,7 +377,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_resolve_master_insert_automation_id(
                 self._require_handle(),
-                int(insert_index),
+                _to_c_uint(insert_index, "insert_index"),
                 param_name.encode("utf-8"),
                 ctypes.byref(out_id),
             )
@@ -389,8 +396,8 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_resolve_bus_insert_automation_id(
                 self._require_handle(),
-                int(bus_id),
-                int(insert_index),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
                 param_name.encode("utf-8"),
                 ctypes.byref(out_id),
             )

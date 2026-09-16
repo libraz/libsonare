@@ -16,6 +16,8 @@ from ._runtime import (
     _check,
     _get_lib,
     _planar_channel_arrays,
+    _to_c_int,
+    _to_c_int64,
 )
 
 
@@ -27,7 +29,10 @@ class ClipPageProvider:
         handle = ctypes.c_void_p()
         _check(
             _get_lib().sonare_clip_page_provider_create(
-                int(num_channels), int(num_samples), int(page_frames), ctypes.byref(handle)
+                _to_c_int(num_channels, "num_channels"),
+                _to_c_int64(num_samples, "num_samples"),
+                _to_c_int64(page_frames, "page_frames"),
+                ctypes.byref(handle),
             )
         )
         self._handle = handle
@@ -60,15 +65,19 @@ class ClipPageProvider:
         _check(
             _get_lib().sonare_clip_page_provider_supply(
                 self._require_handle(),
-                int(page_index),
+                _to_c_int64(page_index, "page_index"),
                 ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-                len(arrays),
-                frames,
+                _to_c_int(len(arrays), "num_channels"),
+                _to_c_int64(frames, "frames"),
             )
         )
 
     def clear(self, page_index: int) -> None:
-        _check(_get_lib().sonare_clip_page_provider_clear(self._require_handle(), int(page_index)))
+        _check(
+            _get_lib().sonare_clip_page_provider_clear(
+                self._require_handle(), _to_c_int64(page_index, "page_index")
+            )
+        )
 
 
 class FileClipPageProvider(ClipPageProvider):

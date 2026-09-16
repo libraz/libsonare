@@ -51,7 +51,7 @@ def _get_lib() -> ctypes.CDLL:
 
 def _generic_error(rc: int) -> SonareError:
     """Build a :class:`SonareError` from the code's own generic string."""
-    msg = _get_lib().sonare_error_message(rc)
+    msg = _get_lib().sonare_error_message(_to_c_int32(rc, "rc"))
     return SonareError(rc, msg.decode("utf-8") if msg else f"sonare error {rc}")
 
 

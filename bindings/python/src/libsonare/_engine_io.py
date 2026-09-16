@@ -56,7 +56,10 @@ from ._runtime import (
     _get_lib,
     _planar_channel_arrays,
     _to_c_float,
+    _to_c_int,
     _to_c_int64,
+    _to_c_size_t,
+    _to_c_uint,
     _validate_c_int_field,
 )
 
@@ -92,19 +95,22 @@ class _EngineIoMixin:
         )
 
     def arm_capture(self, armed: bool = True) -> None:
-        _check(_get_lib().sonare_engine_arm_capture(self._require_handle(), int(armed)))
+        _check(_get_lib().sonare_engine_arm_capture(self._require_handle(), 1 if armed else 0))
 
     def set_capture_punch(self, start_sample: int, end_sample: int, enabled: bool = True) -> None:
         _check(
             _get_lib().sonare_engine_set_capture_punch(
-                self._require_handle(), int(start_sample), int(end_sample), int(enabled)
+                self._require_handle(),
+                _to_c_int64(start_sample, "start_sample"),
+                _to_c_int64(end_sample, "end_sample"),
+                1 if enabled else 0,
             )
         )
 
     def set_capture_source(self, source: str | int) -> None:
         _check(
             _get_lib().sonare_engine_set_capture_source(
-                self._require_handle(), _capture_source_value(source)
+                self._require_handle(), _to_c_int(_capture_source_value(source), "source")
             )
         )
 
@@ -112,14 +118,14 @@ class _EngineIoMixin:
         """Shift capture on the timeline; positive values delay the punch window."""
         _check(
             _get_lib().sonare_engine_set_record_offset_samples(
-                self._require_handle(), int(offset_samples)
+                self._require_handle(), _to_c_int64(offset_samples, "offset_samples")
             )
         )
 
     def set_input_monitor(self, enabled: bool, gain: float = 1.0) -> None:
         _check(
             _get_lib().sonare_engine_set_input_monitor(
-                self._require_handle(), int(enabled), _to_c_float(gain, "gain")
+                self._require_handle(), 1 if enabled else 0, _to_c_float(gain, "gain")
             )
         )
 
@@ -191,7 +197,10 @@ class _EngineIoMixin:
         arrays, ptrs, frame_count = self._channel_arrays(channels)
         _check_realtime(
             _get_lib().sonare_engine_process(
-                self._require_handle(), ptrs, len(arrays), int(frame_count)
+                self._require_handle(),
+                ptrs,
+                _to_c_int(len(arrays), "num_channels"),
+                _to_c_int(frame_count, "frame_count"),
             )
         )
         return [
@@ -210,7 +219,11 @@ class _EngineIoMixin:
         )
         _check_realtime(
             _get_lib().sonare_engine_process_with_monitor(
-                self._require_handle(), ptrs, monitor_ptrs, len(arrays), int(frame_count)
+                self._require_handle(),
+                ptrs,
+                monitor_ptrs,
+                _to_c_int(len(arrays), "num_channels"),
+                _to_c_int(frame_count, "frame_count"),
             )
         )
         output = [
@@ -253,9 +266,9 @@ class _EngineIoMixin:
             _get_lib().sonare_engine_render_offline_ex(
                 self._require_handle(),
                 ptrs,
-                len(arrays),
-                int(frame_count),
-                int(block_size),
+                _to_c_int(len(arrays), "num_channels"),
+                _to_c_int64(frame_count, "frame_count"),
+                _to_c_int(block_size, "block_size"),
                 1 if finalize else 0,
             )
         )
@@ -367,11 +380,12 @@ class _EngineIoMixin:
     def drain_telemetry(self, max_records: int = 1024) -> list[EngineTelemetry]:
         if max_records <= 0:
             return []
-        raw = (SonareEngineTelemetry * int(max_records))()
+        capacity = _to_c_size_t(max_records, "max_records")
+        raw = (SonareEngineTelemetry * capacity.value)()
         written = ctypes.c_size_t()
         _check(
             _get_lib().sonare_engine_drain_telemetry(
-                self._require_handle(), raw, int(max_records), ctypes.byref(written)
+                self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )
         return [_telemetry_from_c(raw[i]) for i in range(written.value)]
@@ -435,11 +449,12 @@ class _EngineIoMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_drain_meter_telemetry"):
             raise RuntimeError("libsonare was built without meter-telemetry support")
-        raw = (SonareMeterTelemetryRecord * int(max_records))()
+        capacity = _to_c_size_t(max_records, "max_records")
+        raw = (SonareMeterTelemetryRecord * capacity.value)()
         written = ctypes.c_size_t()
         _check(
             lib.sonare_engine_drain_meter_telemetry(
-                self._require_handle(), raw, int(max_records), ctypes.byref(written)
+                self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )
         return [_meter_telemetry_from_c(raw[i]) for i in range(written.value)]
@@ -456,11 +471,12 @@ class _EngineIoMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_drain_meter_telemetry_wide"):
             raise RuntimeError("libsonare was built without meter-telemetry support")
-        raw = (SonareMeterTelemetryRecordWide * int(max_records))()
+        capacity = _to_c_size_t(max_records, "max_records")
+        raw = (SonareMeterTelemetryRecordWide * capacity.value)()
         written = ctypes.c_size_t()
         _check(
             lib.sonare_engine_drain_meter_telemetry_wide(
-                self._require_handle(), raw, int(max_records), ctypes.byref(written)
+                self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )
         return [_meter_telemetry_wide_from_c(raw[i]) for i in range(written.value)]
@@ -479,8 +495,8 @@ class _EngineIoMixin:
         _check(
             lib.sonare_engine_configure_scope_telemetry(
                 self._require_handle(),
-                int(interval_frames),
-                int(band_count),
+                _to_c_int(interval_frames, "interval_frames"),
+                _to_c_uint(band_count, "band_count"),
                 ctypes.byref(applied),
             )
         )
@@ -493,11 +509,12 @@ class _EngineIoMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_drain_scope_telemetry"):
             raise RuntimeError("libsonare was built without scope-telemetry support")
-        raw = (SonareScopeTelemetryRecord * int(max_records))()
+        capacity = _to_c_size_t(max_records, "max_records")
+        raw = (SonareScopeTelemetryRecord * capacity.value)()
         written = ctypes.c_size_t()
         _check(
             lib.sonare_engine_drain_scope_telemetry(
-                self._require_handle(), raw, int(max_records), ctypes.byref(written)
+                self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )
         return [_scope_telemetry_from_c(raw[i]) for i in range(written.value)]

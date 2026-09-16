@@ -26,6 +26,7 @@ from ._runtime import (
     _generic_error,
     _get_lib,
     _to_c_float_array,
+    _to_c_int,
     _to_c_size_t,
     _validate_samples,
 )
@@ -164,7 +165,7 @@ def synth_enum_tables() -> dict[str, tuple[str, ...]]:
         raise RuntimeError("libsonare was built without the NativeSynth enum ABI")
     out: dict[str, tuple[str, ...]] = {}
     for key, kind in _SYNTH_ENUM_KINDS.items():
-        raw = lib.sonare_synth_enum_names(kind)
+        raw = lib.sonare_synth_enum_names(_to_c_int(kind, "kind"))
         if not raw:
             out[key] = ()
             continue
