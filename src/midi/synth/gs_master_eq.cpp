@@ -63,6 +63,7 @@ void GsMasterEqFilter::reset() noexcept {
 void GsMasterEqFilter::process(float* left, float* right, int n) noexcept {
   if (n <= 0) return;
   float* channels[2] = {left, right};
+  bool discarded = false;
   for (int ch = 0; ch < 2; ++ch) {
     float* buf = channels[ch];
     if (buf == nullptr) continue;
@@ -71,14 +72,15 @@ void GsMasterEqFilter::process(float* left, float* right, int n) noexcept {
       for (int i = 0; i < n; ++i) buf[i] = state.process(buf[i]);
       // Two floats per shelf per channel, once per block. Nothing else clears
       // this filter: it survives every note-on and only prepare() resets it.
-      discard_group_if_non_finite(state.z1, state.z2);
+      discarded |= discard_group_if_non_finite(state.z1, state.z2);
     }
     if (high_active_) {
       rt::BiquadState& state = high_[ch];
       for (int i = 0; i < n; ++i) buf[i] = state.process(buf[i]);
-      discard_group_if_non_finite(state.z1, state.z2);
+      discarded |= discard_group_if_non_finite(state.z1, state.z2);
     }
   }
+  if (discarded) non_finite_discards_.bump();
 }
 
 }  // namespace sonare::midi::synth

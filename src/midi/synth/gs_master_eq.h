@@ -19,6 +19,7 @@
 #include <cstdint>
 
 #include "rt/biquad_design.h"
+#include "rt/overflow_counter.h"
 
 namespace sonare::midi::synth {
 
@@ -48,6 +49,21 @@ bool gs_master_eq_is_flat(const GsMasterEq& eq) noexcept;
 /// Stereo two-band shelving EQ across the output.
 class GsMasterEqFilter {
  public:
+  GsMasterEqFilter() = default;
+  // The discard counter is an atomic, which has no copy, and Sf2Player holds one
+  // of these and is movable. Copying carries the filter and leaves the count at
+  // zero, because the count describes the instance that did the discarding.
+  GsMasterEqFilter(const GsMasterEqFilter& other) noexcept { assign(other); }
+  GsMasterEqFilter& operator=(const GsMasterEqFilter& other) noexcept {
+    if (this != &other) assign(other);
+    return *this;
+  }
+  GsMasterEqFilter(GsMasterEqFilter&& other) noexcept { assign(other); }
+  GsMasterEqFilter& operator=(GsMasterEqFilter&& other) noexcept {
+    if (this != &other) assign(other);
+    return *this;
+  }
+
   /// CONTROL thread: bind the design to @p sample_rate and clear the histories.
   void prepare(double sample_rate) noexcept;
 
@@ -63,12 +79,31 @@ class GsMasterEqFilter {
   /// AUDIO thread: filter @p n frames in place. A null channel is skipped.
   void process(float* left, float* right, int n) noexcept;
 
+  /// @brief How many blocks returned a shelf history a non-finite sample had
+  ///        reached. Cumulative since prepare().
+  /// @details Nothing else clears these filters -- they survive every note-on --
+  ///   so the discard is the only recovery, and without a count it happens with
+  ///   no trace at all. This class is outside rt::ProcessorBase, so it carries
+  ///   the counter the base gives every processor.
+  uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
+
  private:
+  void assign(const GsMasterEqFilter& other) noexcept {
+    sample_rate_ = other.sample_rate_;
+    low_active_ = other.low_active_;
+    high_active_ = other.high_active_;
+    for (int ch = 0; ch < 2; ++ch) {
+      low_[ch] = other.low_[ch];
+      high_[ch] = other.high_[ch];
+    }
+  }
+
   double sample_rate_ = 48000.0;
   bool low_active_ = false;
   bool high_active_ = false;
   rt::BiquadState low_[2];
   rt::BiquadState high_[2];
+  rt::OverflowCounter non_finite_discards_;
 };
 
 }  // namespace sonare::midi::synth
