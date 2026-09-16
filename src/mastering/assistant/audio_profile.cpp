@@ -331,7 +331,16 @@ DefectProfile measure_defects(const Audio& audio) {
   defects.noise_band_peak_dbfs = *peak_band;
   defects.noise_band_peak_index = static_cast<int>(peak_band - noise.band_floor_dbfs);
 
-  const auto hum = repair::detect_hum(samples, size, sample_rate);
+  // Searched at both mains frequencies and the more prominent one kept. The
+  // detector's default search spans a couple of Hz around 50, so a 60 Hz series
+  // lands at the search boundary with a prominence barely above clean material:
+  // neither found nor reported as absent.
+  repair::DehumConfig hum_50;
+  repair::DehumConfig hum_60;
+  hum_60.fundamental_hz = 60.0f;
+  const auto at_50 = repair::detect_hum(samples, size, sample_rate, hum_50);
+  const auto at_60 = repair::detect_hum(samples, size, sample_rate, hum_60);
+  const auto& hum = at_60.fundamental_prominence > at_50.fundamental_prominence ? at_60 : at_50;
   defects.hum_fundamental_hz = hum.fundamental_hz;
   defects.hum_fundamental_prominence = hum.fundamental_prominence;
   defects.hum_harmonics = hum.harmonics;

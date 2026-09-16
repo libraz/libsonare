@@ -178,7 +178,7 @@ TEST_CASE("Defect profile hum fields separate a planted mains series from a clea
   REQUIRE(planted.hum_fundamental_prominence > 5.0f * clean.hum_fundamental_prominence);
 }
 
-TEST_CASE("Defect profile reports a 60 Hz mains series at the hum search boundary",
+TEST_CASE("Defect profile finds a 60 Hz mains series, not just a 50 Hz one",
           "[mastering][assistant][defects]") {
   auto hummed = tone(440.0f, 0.2f);
   add_tone(hummed, 60.0f, 0.10f);
@@ -190,14 +190,13 @@ TEST_CASE("Defect profile reports a 60 Hz mains series at the hum search boundar
 
   CAPTURE(clean.hum_fundamental_hz, planted.hum_fundamental_hz, clean.hum_fundamental_prominence,
           planted.hum_fundamental_prominence, planted.hum_harmonics);
-  // The detector's default search reaches a couple of Hz either side of 50 Hz,
-  // so the reading lands on the boundary rather than on 60 and the prominence
-  // barely parts from the clean tone's. Pinned because the field doc claims it:
-  // a caller reading a low prominence as "clean" is reading a search that could
-  // not get to the series.
-  REQUIRE(planted.hum_fundamental_hz < 55.0f);
-  REQUIRE(planted.hum_fundamental_hz == clean.hum_fundamental_hz);
-  REQUIRE(planted.hum_fundamental_prominence < 2.0f * clean.hum_fundamental_prominence);
+  // One detector search reaches a couple of Hz either side of its configured
+  // fundamental, so it can only ever find one of the two mains frequencies; the
+  // other lands on the search boundary at a prominence barely above clean
+  // material, which reads as "no hum" and is not. The profile searches both.
+  REQUIRE(std::abs(planted.hum_fundamental_hz - 60.0f) <= 0.25f);
+  REQUIRE(planted.hum_fundamental_prominence > 5.0f * clean.hum_fundamental_prominence);
+  REQUIRE(planted.hum_harmonics >= 2);
 }
 
 TEST_CASE("Defect profile late decay separates a reverberant copy from the dry bursts",

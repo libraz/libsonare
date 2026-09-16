@@ -53,11 +53,12 @@ struct GenreCandidate {
 ///          is what separates a clean recording from one nothing looked at --
 ///          the two are the same field values otherwise.
 ///
-///          Every detector runs with its own default config, which confines the
-///          hum search to a couple of Hz around 50 Hz. A 60 Hz mains series is
-///          reported at that search boundary rather than at 60, with a
-///          prominence barely above what the search picks out of clean
-///          programme material: neither found nor reported as absent.
+///          Each detector runs with its own default config, except hum: that
+///          search spans a couple of Hz around its configured fundamental and so
+///          reaches only one mains frequency, reporting the other at the search
+///          boundary with a prominence barely above clean programme material.
+///          Hum is therefore searched at both 50 and 60 Hz and the more
+///          prominent result kept, and @ref hum_fundamental_hz says which won.
 struct DefectProfile {
   /// True once all six detectors have run over this signal. False says none of
   /// them did: the caller did not ask, or the input was shorter than the noise
