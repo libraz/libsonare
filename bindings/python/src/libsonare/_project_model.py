@@ -451,15 +451,17 @@ def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMid
         def _get(key: str, default: object) -> object:
             return getattr(binding, key, default)
 
+    # Passed unconverted so the struct's own narrowing sees each caller value;
+    # int() would truncate a fraction past it and land on a neighbouring CC.
     return SonareMidiCcBinding(
-        cc_number=int(cast(int, _get("cc_number", 0))),
-        channel=int(cast(int, _get("channel", 0xFF))),
-        kind=int(cast(int, _get("kind", MIDI_CC_CONTROL_CHANGE_7))),
-        cc_lsb_number=int(cast(int, _get("cc_lsb_number", 0))),
-        selector_msb=int(cast(int, _get("selector_msb", 0))),
-        selector_lsb=int(cast(int, _get("selector_lsb", 0))),
+        cc_number=_get("cc_number", 0),
+        channel=_get("channel", 0xFF),
+        kind=_get("kind", MIDI_CC_CONTROL_CHANGE_7),
+        cc_lsb_number=_get("cc_lsb_number", 0),
+        selector_msb=_get("selector_msb", 0),
+        selector_lsb=_get("selector_lsb", 0),
         reserved=0,
-        param_id=int(cast(int, _get("param_id", 0))),
+        param_id=_get("param_id", 0),
         min_value=float(cast(float, _get("min_value", 0.0))),
         max_value=float(cast(float, _get("max_value", 1.0))),
     )
@@ -733,7 +735,9 @@ class SynthPatch:
         def _set_int(name: str, bit: int, value: int | None) -> None:
             if value is None:
                 return
-            setattr(c, name, int(value))
+            # Assigned unconverted so the struct's own narrowing sees the
+            # caller's value; int() would truncate a fraction past it.
+            setattr(c, name, value)
             c.present_fields |= bit
 
         c.preset = _strip_va_prefix(self.preset).encode("utf-8")[: SONARE_SYNTH_PRESET_NAME_MAX - 1]
@@ -803,7 +807,7 @@ class SynthPatch:
         _set_float("bus_drive", SONARE_SYNTH_FIELD_BUS_DRIVE, self.bus_drive)
         # Sample engine: no presence bits, because only a sample patch reads the
         # block at all. That is what keeps set 0 addressable without one.
-        c.sample_set = 0 if self.sample_set is None else int(self.sample_set)
+        c.sample_set = 0 if self.sample_set is None else self.sample_set
         c.sample_level = 0.0 if self.sample_level is None else float(self.sample_level)
         c.sample_loop = _sample_loop_value(self.sample_loop)
         c.sample_start_offset = (
@@ -942,10 +946,12 @@ def _make_instrument_callbacks(
     """
     cbs = SonareInstrumentCallbacks()
     cbs.user_data = None
+    # Assigned unconverted so the struct's own narrowing sees the instrument's
+    # value; int() would truncate a fractional latency past it.
     latency = getattr(instrument, "latency_samples", 0)
-    cbs.latency_samples = int(latency) if latency else 0
+    cbs.latency_samples = latency if latency else 0
     tail = getattr(instrument, "tail_samples", 0)
-    cbs.tail_samples = int(tail) if tail else 0
+    cbs.tail_samples = tail if tail else 0
 
     prepare = getattr(instrument, "prepare", None)
     if callable(prepare):

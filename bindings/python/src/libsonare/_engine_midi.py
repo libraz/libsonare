@@ -435,11 +435,11 @@ class _EngineMidiMixin:
         _check(
             lib.sonare_engine_push_midi_input_note_on(
                 self._require_handle(),
-                int(group),
-                int(channel),
-                int(note),
-                int(velocity),
-                int(port_time_samples),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(note, "note"),
+                _to_c_uint8(velocity, "velocity"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
             )
         )
 
@@ -458,11 +458,11 @@ class _EngineMidiMixin:
         _check(
             lib.sonare_engine_push_midi_input_note_off(
                 self._require_handle(),
-                int(group),
-                int(channel),
-                int(note),
-                int(velocity),
-                int(port_time_samples),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(note, "note"),
+                _to_c_uint8(velocity, "velocity"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
             )
         )
 
@@ -481,11 +481,11 @@ class _EngineMidiMixin:
         _check(
             lib.sonare_engine_push_midi_input_cc(
                 self._require_handle(),
-                int(group),
-                int(channel),
-                int(controller),
-                int(value),
-                int(port_time_samples),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(controller, "controller"),
+                _to_c_uint8(value, "value"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
             )
         )
 
@@ -509,12 +509,12 @@ class _EngineMidiMixin:
         _check(
             lib.sonare_engine_push_midi_note_on(
                 self._require_handle(),
-                int(destination_id),
-                int(group),
-                int(channel),
-                int(note),
-                int(velocity),
-                int(render_frame),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(note, "note"),
+                _to_c_uint8(velocity, "velocity"),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )
 
@@ -538,11 +538,11 @@ class _EngineMidiMixin:
         _check(
             lib.sonare_engine_push_midi_note_off(
                 self._require_handle(),
-                int(destination_id),
-                int(group),
-                int(channel),
-                int(note),
-                int(velocity),
-                int(render_frame),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(note, "note"),
+                _to_c_uint8(velocity, "velocity"),
+                _to_c_int64(render_frame, "render_frame"),
             )
         )

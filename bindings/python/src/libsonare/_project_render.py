@@ -101,12 +101,14 @@ class _ProjectRenderMixin:
         built-in synth.
         """
         lib = _get_lib()
+        # Passed unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it.
         options = SonareProjectBounceOptions(
-            total_frames=int(total_frames),
-            block_size=int(block_size),
-            num_channels=int(num_channels),
-            sample_rate=int(sample_rate),
-            instrument_latency_samples=int(instrument_latency_samples),
+            total_frames=total_frames,
+            block_size=block_size,
+            num_channels=num_channels,
+            sample_rate=sample_rate,
+            instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
             _check(
@@ -160,20 +162,22 @@ class _ProjectRenderMixin:
             raise RuntimeError("libsonare was built without the built-in instrument bounce ABI")
         if instruments is None:
             patch = instrument if instrument is not None else BuiltinSynthConfig()
-            bindings = [(int(destination_id), patch)]
+            bindings = [(destination_id, patch)]
         else:
-            bindings = [(int(dst), patch) for dst, patch in instruments]
+            bindings = [(dst, patch) for dst, patch in instruments]
         count = len(bindings)
         c_bindings = (SonareBuiltinInstrumentBinding * count)()
         for i, (dst, patch) in enumerate(bindings):
             c_bindings[i].destination_id = dst
             c_bindings[i].config = patch._to_c()
+        # Passed unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it.
         options = SonareProjectBounceOptions(
-            total_frames=int(total_frames),
-            block_size=int(block_size),
-            num_channels=int(num_channels),
-            sample_rate=int(sample_rate),
-            instrument_latency_samples=int(instrument_latency_samples),
+            total_frames=total_frames,
+            block_size=block_size,
+            num_channels=num_channels,
+            sample_rate=sample_rate,
+            instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
             _check(
@@ -245,9 +249,9 @@ class _ProjectRenderMixin:
         if not hasattr(lib, "sonare_project_bounce_with_synth_instruments"):
             raise RuntimeError("libsonare was built without the NativeSynth bounce ABI")
         if instruments is None:
-            bindings = [(int(destination_id), _synth_patch_arg(instrument))]
+            bindings = [(destination_id, _synth_patch_arg(instrument))]
         else:
-            bindings = [(int(dst), _synth_patch_arg(patch)) for dst, patch in instruments]
+            bindings = [(dst, _synth_patch_arg(patch)) for dst, patch in instruments]
         count = len(bindings)
         c_bindings = (SonareSynthInstrumentBinding * count)()
         for i, (dst, patch) in enumerate(bindings):
@@ -261,12 +265,14 @@ class _ProjectRenderMixin:
             )
             bank = patch.sample_bank
             c_bindings[i].sample_bank = bank._require_handle() if bank is not None else None
+        # Passed unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it.
         options = SonareProjectBounceOptions(
-            total_frames=int(total_frames),
-            block_size=int(block_size),
-            num_channels=int(num_channels),
-            sample_rate=int(sample_rate),
-            instrument_latency_samples=int(instrument_latency_samples),
+            total_frames=total_frames,
+            block_size=block_size,
+            num_channels=num_channels,
+            sample_rate=sample_rate,
+            instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
             _check(
@@ -398,20 +404,22 @@ class _ProjectRenderMixin:
             raise RuntimeError("libsonare was built without the SoundFont ABI")
         if instruments is None:
             patch = instrument if instrument is not None else Sf2InstrumentConfig()
-            bindings = [(int(destination_id), patch)]
+            bindings = [(destination_id, patch)]
         else:
-            bindings = [(int(dst), patch) for dst, patch in instruments]
+            bindings = [(dst, patch) for dst, patch in instruments]
         count = len(bindings)
         c_bindings = (SonareSf2InstrumentBinding * count)()
         for i, (dst, patch) in enumerate(bindings):
             c_bindings[i].destination_id = dst
             c_bindings[i].config = patch._to_c()
+        # Passed unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it.
         options = SonareProjectBounceOptions(
-            total_frames=int(total_frames),
-            block_size=int(block_size),
-            num_channels=int(num_channels),
-            sample_rate=int(sample_rate),
-            instrument_latency_samples=int(instrument_latency_samples),
+            total_frames=total_frames,
+            block_size=block_size,
+            num_channels=num_channels,
+            sample_rate=sample_rate,
+            instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
             _check(
@@ -476,9 +484,9 @@ class _ProjectRenderMixin:
                 raise SonareValueError(
                     "bounce_with_instruments requires `instrument` or `instruments`"
                 )
-            bindings = [(int(destination_id), instrument)]
+            bindings = [(destination_id, instrument)]
         else:
-            bindings = [(int(dst), inst) for dst, inst in instruments]
+            bindings = [(dst, inst) for dst, inst in instruments]
         count = len(bindings)
 
         errors: list[BaseException] = []
@@ -492,12 +500,14 @@ class _ProjectRenderMixin:
             c_bindings[i].destination_id = dst
             c_bindings[i].callbacks = _make_instrument_callbacks(inst, errors, keepalive)
 
+        # Passed unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it.
         options = SonareProjectBounceOptions(
-            total_frames=int(total_frames),
-            block_size=int(block_size),
-            num_channels=int(num_channels),
-            sample_rate=int(sample_rate),
-            instrument_latency_samples=int(instrument_latency_samples),
+            total_frames=total_frames,
+            block_size=block_size,
+            num_channels=num_channels,
+            sample_rate=sample_rate,
+            instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
             rc = lib.sonare_project_bounce_with_instruments(

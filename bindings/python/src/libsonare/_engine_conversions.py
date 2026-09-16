@@ -8,6 +8,8 @@ import operator
 from collections.abc import Mapping, Sequence
 
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     _UINT32_MAX,
     AutomationCurve,
     EngineClip,
@@ -38,6 +40,7 @@ from ._runtime import (
     SonareParameterInfo,
     SonareScopeTelemetryRecord,
     SonareValueError,
+    _narrow_int,
     _planar_channel_arrays,
     _validate_c_int_field,
     _warp_mode_value,
@@ -84,7 +87,9 @@ def _capture_source_value(source: str | int) -> int:
             return _CAPTURE_SOURCE_VALUES[source]
         except KeyError as exc:
             raise SonareValueError("capture source must be 'output' or 'input'") from exc
-    value = int(source)
+    # Narrowed rather than coerced: int(0.5) is the 0 the membership test below
+    # then accepts as "output", so a fractional ordinal would select a source.
+    value = _narrow_int(source, "capture source", _C_INT_MIN, _C_INT_MAX)
     if value in _CAPTURE_SOURCE_VALUES.values():
         return value
     raise SonareValueError("capture source must be 'output' or 'input'")
@@ -136,8 +141,10 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
         raise SonareValueError("marker id must be a positive uint32 integer")
     raw = SonareEngineMarker()
     raw.id = marker_id
-    raw.kind = int(marker.kind)
-    raw.key_fifths = int(marker.key_fifths)
+    # Assigned unconverted so the struct's own narrowing sees each caller value;
+    # int() would truncate a fraction past it.
+    raw.kind = marker.kind
+    raw.key_fifths = marker.key_fifths
     raw.key_minor = 1 if marker.key_minor else 0
     raw.ppq = float(marker.ppq)
     raw.name = _fixed_bytes(marker.name, 64)
@@ -202,18 +209,21 @@ def _clips_to_c(
             raise TypeError("clip page_provider must be a ClipPageProvider")
         if page_provider is not None:
             raw = SonareEngineClip()
-            raw.id = int(clip.id)
-            raw.track_id = int(clip.track_id)
+            # Assigned unconverted so the struct's own narrowing sees each
+            # caller value; int() would truncate a fraction past it. loop is the
+            # one exception -- it is a documented bool, spelled 0/1 here.
+            raw.id = clip.id
+            raw.track_id = clip.track_id
             raw.channels = None
             raw.num_channels = 0
             raw.num_samples = 0
             raw.start_ppq = float(clip.start_ppq)
-            raw.clip_offset_samples = int(clip.clip_offset_samples)
-            raw.length_samples = int(clip.length_samples) if clip.length_samples is not None else 0
-            raw.loop = int(clip.loop)
+            raw.clip_offset_samples = clip.clip_offset_samples
+            raw.length_samples = clip.length_samples if clip.length_samples is not None else 0
+            raw.loop = 1 if clip.loop else 0
             raw.gain = float(clip.gain)
-            raw.fade_in_samples = int(clip.fade_in_samples)
-            raw.fade_out_samples = int(clip.fade_out_samples)
+            raw.fade_in_samples = clip.fade_in_samples
+            raw.fade_out_samples = clip.fade_out_samples
             raw.warp_mode = _warp_mode_value(clip.warp_mode)
             raw.page_provider = page_provider._require_handle()
             if clip.warp_anchors:
@@ -229,20 +239,19 @@ def _clips_to_c(
             continue
         arrays, ptrs, num_samples = _planar_channel_arrays(clip.channels, subject="clip channels")
         raw = SonareEngineClip()
-        raw.id = int(clip.id)
-        raw.track_id = int(clip.track_id)
+        # As above: unconverted so the struct narrows, loop spelled 0/1.
+        raw.id = clip.id
+        raw.track_id = clip.track_id
         raw.channels = ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float)))
         raw.num_channels = len(arrays)
         raw.num_samples = num_samples
         raw.start_ppq = float(clip.start_ppq)
-        raw.clip_offset_samples = int(clip.clip_offset_samples)
-        raw.length_samples = (
-            int(clip.length_samples) if clip.length_samples is not None else num_samples
-        )
-        raw.loop = int(clip.loop)
+        raw.clip_offset_samples = clip.clip_offset_samples
+        raw.length_samples = clip.length_samples if clip.length_samples is not None else num_samples
+        raw.loop = 1 if clip.loop else 0
         raw.gain = float(clip.gain)
-        raw.fade_in_samples = int(clip.fade_in_samples)
-        raw.fade_out_samples = int(clip.fade_out_samples)
+        raw.fade_in_samples = clip.fade_in_samples
+        raw.fade_out_samples = clip.fade_out_samples
         raw.warp_mode = _warp_mode_value(clip.warp_mode)
         if clip.warp_anchors:
             anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
@@ -279,9 +288,11 @@ def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
 def _graph_connection_to_c(connection: EngineGraphConnection) -> SonareEngineGraphConnection:
     raw = SonareEngineGraphConnection()
     raw.source_node = _fixed_bytes(connection.source_node, 64)
-    raw.source_port = int(connection.source_port)
+    # Assigned unconverted so the struct's own narrowing sees each caller value;
+    # int() would truncate a fraction past it.
+    raw.source_port = connection.source_port
     raw.dest_node = _fixed_bytes(connection.dest_node, 64)
-    raw.dest_port = int(connection.dest_port)
+    raw.dest_port = connection.dest_port
     raw.mix = int(EngineGraphMix(connection.mix))
     return raw
 
@@ -290,7 +301,8 @@ def _graph_parameter_binding_to_c(
     binding: EngineGraphParameterBinding,
 ) -> SonareEngineGraphParameterBinding:
     raw = SonareEngineGraphParameterBinding()
-    raw.param_id = int(binding.param_id)
+    # Assigned unconverted so the struct's own narrowing sees the caller value.
+    raw.param_id = binding.param_id
     raw.node_id = _fixed_bytes(binding.node_id, 64)
     return raw
 

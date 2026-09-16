@@ -41,8 +41,10 @@ class _EngineMixingMixin:
             # prior stereo behavior.
             raw[i].source_channel_layout = 1
             if isinstance(lane, Mapping):
-                raw[i].track_id = int(
-                    cast(int, lane["track_id"] if "track_id" in lane else lane["trackId"])
+                # Assigned unconverted so the struct's own narrowing sees the
+                # caller value; int() would truncate a fraction past it.
+                raw[i].track_id = cast(
+                    int, lane["track_id"] if "track_id" in lane else lane["trackId"]
                 )
                 sends = cast(Sequence[Mapping[str, object]], lane.get("sends", []))
                 if sends:
@@ -50,8 +52,8 @@ class _EngineMixingMixin:
                     for send_index, send in enumerate(sends):
                         if not isinstance(send, Mapping):
                             raise TypeError("track lane send must be a mapping")
-                        send_array[send_index].bus_id = int(
-                            cast(int, send["bus_id"] if "bus_id" in send else send["busId"])
+                        send_array[send_index].bus_id = cast(
+                            int, send["bus_id"] if "bus_id" in send else send["busId"]
                         )
                         send_array[send_index].level_db = float(
                             cast(
@@ -85,13 +87,13 @@ class _EngineMixingMixin:
                     _UINT32_MAX,
                 )
                 if "source_channel_layout" in lane or "sourceChannelLayout" in lane:
-                    raw[i].source_channel_layout = int(
+                    raw[i].source_channel_layout = (
                         cast(int, lane["source_channel_layout"])
                         if "source_channel_layout" in lane
                         else cast(int, lane["sourceChannelLayout"])
                     )
             else:
-                raw[i].track_id = int(lane)
+                raw[i].track_id = lane
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
 
     def set_lane_sidechain(self, track_id: int, insert_index: int, source_track_id: int) -> None:
@@ -112,18 +114,18 @@ class _EngineMixingMixin:
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         raw = (SonareEngineBus * len(buses))()
         for i, bus in enumerate(buses):
-            raw[i].bus_id = int(cast(int, bus["bus_id"] if "bus_id" in bus else bus["busId"]))
+            # Assigned unconverted so the struct's own narrowing sees the caller
+            # value; int() would truncate a fraction past it.
+            raw[i].bus_id = cast(int, bus["bus_id"] if "bus_id" in bus else bus["busId"])
             raw[i].gain_db = float(
                 cast(float, bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0))
             )
             # ctypes zero-inits channel_layout to 0 (mono); default to stereo
             # (ChannelLayout.STEREO) unless the caller specifies it.
             if "channel_layout" in bus or "channelLayout" in bus:
-                raw[i].channel_layout = int(
-                    cast(
-                        int,
-                        bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"],
-                    )
+                raw[i].channel_layout = cast(
+                    int,
+                    bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"],
                 )
             else:
                 raw[i].channel_layout = 1

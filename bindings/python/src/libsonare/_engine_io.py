@@ -38,6 +38,10 @@ from ._ffi_types_core import (
     SonareScopeTelemetryRecord,
 )
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
+    _INT64_MAX,
+    _INT64_MIN,
     ClipPageRequest,
     EngineBounceOptions,
     EngineBounceResult,
@@ -54,6 +58,7 @@ from ._runtime import (
     _check_realtime,
     _from_c_float_array,
     _get_lib,
+    _narrow_int,
     _planar_channel_arrays,
     _to_c_float,
     _to_c_int,
@@ -73,13 +78,15 @@ class _EngineIoMixin:
         def _require_handle(self) -> ctypes.c_void_p: ...
 
     def set_capture_buffer(self, num_channels: int, capacity_frames: int) -> None:
-        if num_channels <= 0:
+        # Narrowed before the positivity checks: int(0.5) is a 0 they then refuse
+        # while naming positivity, and int(1024.5) is a buffer one frame short.
+        channel_count = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
+        frame_capacity = _narrow_int(capacity_frames, "capacity_frames", _INT64_MIN, _INT64_MAX)
+        if channel_count <= 0:
             raise SonareValueError("num_channels must be positive")
-        if capacity_frames <= 0:
+        if frame_capacity <= 0:
             raise SonareValueError("capacity_frames must be positive")
-        self._capture_arrays = [
-            (ctypes.c_float * int(capacity_frames))() for _ in range(int(num_channels))
-        ]
+        self._capture_arrays = [(ctypes.c_float * frame_capacity)() for _ in range(channel_count)]
         ptr_type = ctypes.POINTER(ctypes.c_float) * len(self._capture_arrays)
         self._capture_ptrs = ptr_type(
             *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in self._capture_arrays]
@@ -88,8 +95,8 @@ class _EngineIoMixin:
         raw.channels = ctypes.cast(
             self._capture_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))
         )
-        raw.num_channels = int(num_channels)
-        raw.capacity_frames = int(capacity_frames)
+        raw.num_channels = channel_count
+        raw.capacity_frames = frame_capacity
         _check(
             _get_lib().sonare_engine_set_capture_buffer(self._require_handle(), ctypes.byref(raw))
         )
@@ -170,7 +177,9 @@ class _EngineIoMixin:
         raw.parameter_binding_count = len(bindings)
         raw.input_node = _fixed_bytes(spec.input_node, 64)
         raw.output_node = _fixed_bytes(spec.output_node, 64)
-        raw.num_channels = int(spec.num_channels)
+        # Assigned unconverted so the struct's own narrowing sees the caller's
+        # value; int() would truncate a fraction past it.
+        raw.num_channels = spec.num_channels
         _check(_get_lib().sonare_engine_set_graph(self._require_handle(), ctypes.byref(raw)))
 
     def graph_node_count(self) -> int:
@@ -320,22 +329,24 @@ class _EngineIoMixin:
         # ones; test_bounce_dataclass_defaults_match_the_native_defaults keeps
         # the two from diverging.
         _check(lib.sonare_engine_bounce_options_default(ctypes.byref(raw_options)))
-        raw_options.total_frames = int(options.total_frames)
-        raw_options.block_size = int(options.block_size)
-        raw_options.num_channels = int(options.num_channels)
-        raw_options.target_sample_rate = int(options.target_sample_rate)
-        raw_options.source_sample_rate = int(options.source_sample_rate)
-        raw_options.normalize_lufs = int(options.normalize_lufs)
+        # Assigned unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it. normalize_lufs is the
+        # one exception -- it is a documented bool, spelled 0/1 here.
+        raw_options.total_frames = options.total_frames
+        raw_options.block_size = options.block_size
+        raw_options.num_channels = options.num_channels
+        raw_options.target_sample_rate = options.target_sample_rate
+        raw_options.source_sample_rate = options.source_sample_rate
+        raw_options.normalize_lufs = 1 if options.normalize_lufs else 0
         raw_options.target_lufs = float(options.target_lufs)
-        raw_options.dither = int(options.dither)
-        # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
-        # "keep the default 16", so a fractional word length would dither at 16
-        # and report success. block_size and num_channels above are not the same
-        # case -- the core rejects 0 on both.
+        raw_options.dither = options.dither
+        # Same narrowing as the fields above, worded against this entry point:
+        # int(0.5) is the 0 this field reads as "keep the default 16", so a
+        # fractional word length would dither at 16 and report success.
         raw_options.dither_bits = _validate_c_int_field(
             "bounce_offline", options.dither_bits, "dither_bits"
         )
-        raw_options.dither_seed = int(options.dither_seed)
+        raw_options.dither_seed = options.dither_seed
         raw_result = SonareEngineBounceResult()
         _check(
             lib.sonare_engine_bounce_offline(
@@ -359,10 +370,12 @@ class _EngineIoMixin:
 
     def freeze_offline(self, options: EngineFreezeOptions) -> EngineFreezeResult:
         raw_options = SonareEngineFreezeOptions()
-        raw_options.total_frames = int(options.total_frames)
-        raw_options.block_size = int(options.block_size)
-        raw_options.num_channels = int(options.num_channels)
-        raw_options.clip_id = int(options.clip_id)
+        # Assigned unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it.
+        raw_options.total_frames = options.total_frames
+        raw_options.block_size = options.block_size
+        raw_options.num_channels = options.num_channels
+        raw_options.clip_id = options.clip_id
         raw_options.start_ppq = float(options.start_ppq)
         raw_options.gain = float(options.gain)
         raw_result = SonareEngineFreezeResult()
@@ -427,7 +440,7 @@ class _EngineIoMixin:
             raise RuntimeError("libsonare was built without clip-page look-ahead support")
         _check(
             lib.sonare_engine_set_clip_page_prefetch_frames(
-                self._require_handle(), _to_c_int64(int(frames), "frames")
+                self._require_handle(), _to_c_int64(frames, "frames")
             )
         )
 

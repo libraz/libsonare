@@ -65,7 +65,9 @@ class _ProjectInspectionMixin:
         if adaptive_tempo is not None:
             options.adaptive_tempo = 1 if adaptive_tempo else 0
         if tempo_update_interval_beats is not None:
-            options.tempo_update_interval_beats = int(tempo_update_interval_beats)
+            # Assigned unconverted so the struct's own narrowing sees the
+            # caller's value; int() would truncate a fraction past it.
+            options.tempo_update_interval_beats = tempo_update_interval_beats
         if ramp_threshold is not None:
             options.ramp_threshold = float(ramp_threshold)
         if include_octave_candidates is not None:
@@ -233,8 +235,10 @@ class _ProjectInspectionMixin:
                     )
                 c_keys[i].start_ppq = float(seq[0])
                 c_keys[i].end_ppq = float(seq[1])
-                c_keys[i].tonic_pc = int(seq[2])
-                c_keys[i].mode = int(seq[3])
+                # Assigned unconverted so the struct's own narrowing sees each
+                # caller value; int() would truncate a fraction past it.
+                c_keys[i].tonic_pc = seq[2]
+                c_keys[i].mode = seq[3]
         _check(
             _get_lib().sonare_project_annotate_keys(
                 self._require_handle(), c_keys, _to_c_size_t(count, "count")
@@ -260,7 +264,9 @@ class _ProjectInspectionMixin:
                 extension_values = c.get("extensions", []) or []
                 if not isinstance(extension_values, Sequence) or isinstance(extension_values, str):
                     raise TypeError("chord extensions must be a sequence")
-                ext = [int(cast(int, value)) for value in extension_values]
+                # Left unconverted so the per-element narrowing below sees the
+                # caller's value; int() would truncate a fraction past it.
+                ext = list(extension_values)
                 ext_count = len(ext)
                 c_ext = (
                     (ctypes.c_uint8 * ext_count)(
@@ -278,11 +284,13 @@ class _ProjectInspectionMixin:
                 backing.append(roman_bytes)
                 c_chords[i].start_ppq = float(cast(float, c["start_ppq"]))
                 c_chords[i].end_ppq = float(cast(float, c["end_ppq"]))
-                c_chords[i].root_pc = int(cast(int, c.get("root_pc", 255)))
-                c_chords[i].quality = int(cast(int, c.get("quality", 0)))
+                # Assigned unconverted so the struct's own narrowing sees each
+                # caller value; int() would truncate a fraction past it.
+                c_chords[i].root_pc = c.get("root_pc", 255)
+                c_chords[i].quality = c.get("quality", 0)
                 c_chords[i].extensions = c_ext
                 c_chords[i].extension_count = _to_c_size_t(ext_count, "ext_count")
-                c_chords[i].slash_bass_pc = int(cast(int, c.get("slash_bass_pc", 255)))
+                c_chords[i].slash_bass_pc = c.get("slash_bass_pc", 255)
                 c_chords[i].roman_numeral = roman_bytes
                 c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
         _check(
@@ -451,9 +459,11 @@ class _ProjectInspectionMixin:
         the affected id is returned.
         """
         raw = SonareProjectMarker()
-        raw.id = int(marker.id)
-        raw.kind = int(marker.kind)
-        raw.key_fifths = int(marker.key_fifths)
+        # Assigned unconverted so the struct's own narrowing sees each caller
+        # value; int() would truncate a fraction past it.
+        raw.id = marker.id
+        raw.kind = marker.kind
+        raw.key_fifths = marker.key_fifths
         raw.key_minor = 1 if marker.key_minor else 0
         raw.ppq = float(marker.ppq)
         out_id = ctypes.c_uint32()
@@ -472,14 +482,14 @@ class _ProjectInspectionMixin:
         raw = SonareProjectMarker()
         _check(
             _get_lib().sonare_project_marker_by_index(
-                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         full_name = ctypes.c_char_p()
         lib = _get_lib()
         _check(
             lib.sonare_project_marker_name_by_index(
-                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(full_name)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(full_name)
             )
         )
         try:
@@ -641,10 +651,12 @@ class _ProjectInspectionMixin:
         count = len(rows)
         c_segments = (SonareProjectTimeSignatureSegment * count)()
         for i, seg in enumerate(rows):
+            numerator: object
+            denominator: object
             if isinstance(seg, Mapping):
                 start_ppq = float(seg["start_ppq"])
-                numerator = int(seg["numerator"])
-                denominator = int(seg["denominator"])
+                numerator = seg["numerator"]
+                denominator = seg["denominator"]
             else:
                 tup = tuple(seg)
                 if len(tup) < 3:
@@ -652,8 +664,10 @@ class _ProjectInspectionMixin:
                         f"segments[{i}] must contain (start_ppq, numerator, denominator)"
                     )
                 start_ppq = float(tup[0])
-                numerator = int(tup[1])
-                denominator = int(tup[2])
+                # Left unconverted so the struct's own narrowing below sees each
+                # caller value; int() would truncate a fraction past it.
+                numerator = tup[1]
+                denominator = tup[2]
             c_segments[i].start_ppq = start_ppq
             c_segments[i].numerator = numerator
             c_segments[i].denominator = denominator
@@ -702,7 +716,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectTempoSegment()
         _check(
             _get_lib().sonare_project_tempo_segment_by_index(
-                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         return {
@@ -720,7 +734,7 @@ class _ProjectInspectionMixin:
         raw = SonareProjectTimeSignatureSegment()
         _check(
             _get_lib().sonare_project_time_signature_by_index(
-                self._require_handle(), _to_c_size_t(int(index), "index"), ctypes.byref(raw)
+                self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         return {

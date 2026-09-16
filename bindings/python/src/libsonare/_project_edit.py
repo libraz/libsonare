@@ -29,6 +29,8 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     _SIZE_T_MAX,
     _UINT32_MAX,
     SonareAutomationLaneDescEx,
@@ -190,21 +192,23 @@ class _ProjectEditMixin:
         if audio is not None:
             backing, total = _to_c_float_array(audio, arg_name="audio")
             c_audio = backing
-            channels = int(audio_channels)
+            # Narrowed before the frame count is derived from it, so a fractional
+            # channel count is refused rather than silently becoming its floor.
+            channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
             if channels <= 0 or total % channels != 0:
                 raise SonareValueError("audio length must be a multiple of audio_channels")
             audio_frames = total // channels
         desc = SonareProjectClipDesc(
-            track_id=int(track_id),
+            track_id=track_id,
             is_midi=1 if is_midi else 0,
             start_ppq=float(start_ppq),
             length_ppq=float(length_ppq),
             source_offset_ppq=float(source_offset_ppq),
             gain=float(gain),
             audio_interleaved=c_audio,
-            audio_frames=int(audio_frames),
-            audio_channels=int(audio_channels) if audio is not None else 0,
-            audio_sample_rate=int(audio_sample_rate) if audio is not None else 0,
+            audio_frames=audio_frames,
+            audio_channels=channels if audio is not None else 0,
+            audio_sample_rate=audio_sample_rate if audio is not None else 0,
             source_uri=source_uri.encode("utf-8") if source_uri is not None else None,
         )
         out_id = ctypes.c_uint32()
@@ -263,13 +267,15 @@ class _ProjectEditMixin:
                     layout=int(cast(int, layout_value)),
                     planar_samples=c_planes,
                     frame_count=int(arrays[0].size),
-                    start_frame=int(cast(int, stem.get("start_frame", 0))),
+                    # Passed unconverted so the struct's own narrowing sees the
+                    # caller's value; the core refuses a negative start itself.
+                    start_frame=stem.get("start_frame", 0),
                 )
             )
         c_descs = (SonareExternalStemDesc * len(descs))(*descs)
         request = SonareExternalStemImportRequest(
             struct_version=0,
-            sample_rate=int(sample_rate),
+            sample_rate=sample_rate,
             stems=c_descs,
             stem_count=len(descs),
         )
@@ -304,20 +310,22 @@ class _ProjectEditMixin:
         capture data; each loop-length span becomes a separate take and the
         newest take is made active.
         """
-        channels = int(audio_channels)
+        # Narrowed before the frame count is derived from it, so a fractional
+        # channel count is refused rather than silently becoming its floor.
+        channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
         backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
             raise SonareValueError("audio length must be a multiple of audio_channels")
         frames = total // channels
         desc = SonareProjectLoopRecordingDesc(
-            track_id=int(track_id),
+            track_id=track_id,
             reserved=0,
             start_ppq=float(start_ppq),
             loop_length_ppq=float(loop_length_ppq),
             audio_interleaved=backing,
-            audio_frames=int(frames),
+            audio_frames=frames,
             audio_channels=channels,
-            audio_sample_rate=int(audio_sample_rate),
+            audio_sample_rate=audio_sample_rate,
         )
         out_clip = ctypes.c_uint32()
         out_take_count = ctypes.c_size_t()
@@ -507,7 +515,9 @@ class _ProjectEditMixin:
             c_anchors[i].source_sample = float(source_sample)
         encoded_name = name.encode("utf-8") if name else None
         desc = SonareProjectWarpMapDesc(
-            id=int(warp_ref_id),
+            # Passed unconverted so the struct's own narrowing sees the caller's
+            # value; int() would truncate a fraction past it.
+            id=warp_ref_id,
             name=encoded_name,
             anchors=c_anchors,
             anchor_count=count,
@@ -913,7 +923,7 @@ class _ProjectEditMixin:
         _check(
             _get_lib().sonare_project_set_max_undo_depth(
                 self._require_handle(),
-                _to_c_size_t(int(depth), "depth"),
+                _to_c_size_t(depth, "depth"),
             )
         )
 

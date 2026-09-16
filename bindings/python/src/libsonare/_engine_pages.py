@@ -11,10 +11,13 @@ from typing import BinaryIO
 import numpy as np
 
 from ._runtime import (
+    _INT64_MAX,
+    _INT64_MIN,
     ClipPageRequest,
     SonareValueError,
     _check,
     _get_lib,
+    _narrow_int,
     _planar_channel_arrays,
     _to_c_int,
     _to_c_int64,
@@ -107,7 +110,12 @@ class FileClipPageProvider(ClipPageProvider):
         self.num_channels = int(num_channels)
         self.num_samples = int(num_samples)
         self.page_frames = int(page_frames)
-        self.data_offset_bytes = int(data_offset_bytes)
+        # Narrowed rather than coerced: this one never reaches the C provider, so
+        # int(1024.5) would silently seek 1024 bytes in and read a page of
+        # misaligned frames. Integrality only -- nothing here bounds the offset.
+        self.data_offset_bytes = _narrow_int(
+            data_offset_bytes, "data_offset_bytes", _INT64_MIN, _INT64_MAX
+        )
 
     def close(self) -> None:
         file = getattr(self, "_file", None)
@@ -119,7 +127,9 @@ class FileClipPageProvider(ClipPageProvider):
     def supply_page(self, page_index: int) -> bool:
         if self._file is None:
             raise RuntimeError("FileClipPageProvider is closed")
-        page = int(page_index)
+        # Narrowed before the page arithmetic: int(2.5) is page 2, a whole page
+        # of the wrong frames supplied under the caller's index.
+        page = _narrow_int(page_index, "page_index", _INT64_MIN, _INT64_MAX)
         if page < 0:
             return False
         start_frame = page * self.page_frames
@@ -138,4 +148,4 @@ class FileClipPageProvider(ClipPageProvider):
         return True
 
     def supply_request(self, request: ClipPageRequest) -> bool:
-        return self.supply_page(int(request.sample) // self.page_frames)
+        return self.supply_page(request.sample // self.page_frames)
