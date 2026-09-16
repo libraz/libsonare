@@ -19,6 +19,14 @@
 ///          platform_names(), and the cross-surface option-domain comparison in
 ///          tests/conformance/cli_contract_v2.json fails when the two disagree,
 ///          so appending a row here fails that check until the parser follows.
+///
+///          Each row's comment says where its numbers come from: a standard, a
+///          published recommendation, or an original choice with no source.
+///          Sources, by the short names used below:
+///
+///          EBU R 128 (2020), Loudness normalisation and permitted maximum level of audio signals
+///          AES TD1004.1.15-10 (2015), Recommendation for Loudness of Audio Streaming
+///              and Network File Playback
 
 #include <array>
 #include <cstddef>
@@ -55,7 +63,10 @@ inline constexpr std::array<PlatformTarget, 8> kPlatformTargets = {{
     // Streaming family; no target distinct from the shared streaming default.
     {"youtube", false, 0.0f, 0.0f},
     // EBU R128 programme loudness.
+    // -1 dBTP is the same recommendation's permitted maximum true peak.
     {"broadcast", true, -23.0f, -1.0f},
+    // -16 LUFS is the loud end of the -16 to -20 LUFS band TD1004 recommends;
+    // -1 dBTP is R128's permitted maximum true peak.
     {"podcast", true, -16.0f, -1.0f},
     // Not modelled: the assistant carries no audiobook-specific loudness rule,
     // so the caller's values stand until one is added.
@@ -63,7 +74,9 @@ inline constexpr std::array<PlatformTarget, 8> kPlatformTargets = {{
     // Theatrical delivery is set by calibrated monitoring level rather than an
     // integrated target, so an integrated-loudness override does not apply.
     {"cinema", false, 0.0f, 0.0f},
-    // Loud delivery formats, mastered to a lower ceiling.
+    // Loud delivery formats, for playback that does not loudness-normalise.
+    // No published source for either number: -9 LUFS is chosen for density, and
+    // -0.3 dBTP spends 0.7 dB of the headroom R128 asks for to reach it.
     {"club", true, -9.0f, -0.3f},
     {"cd", true, -9.0f, -0.3f},
 }};
