@@ -125,11 +125,11 @@ class TruePeakLimiter : public rt::ProcessorBase {
   float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
   /// @brief Non-finite samples this stage replaced with a finite in-domain one.
   /// @details Monotonic since @ref prepare, which clears it; @ref reset does not.
-  ///          A NaN becomes silence and an infinity the ceiling, at both the input
-  ///          and the post-gain stage, so the output stays finite, in range and
-  ///          free of any error while carrying samples unrelated to the input. The
-  ///          count is per replacement, so a sample sanitized at both stages adds
-  ///          two; only zero versus non-zero is a contract.
+  ///          Each becomes silence, at the input and again after the gain, so the
+  ///          output stays finite, in range and free of any error while carrying
+  ///          samples unrelated to the input. The count is per replacement, so a
+  ///          sample replaced at both stages adds two; only zero versus non-zero
+  ///          is a contract.
   std::uint32_t non_finite_substitution_count() const noexcept {
     return non_finite_substitution_count_.load();
   }

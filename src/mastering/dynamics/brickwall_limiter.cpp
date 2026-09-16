@@ -2,26 +2,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <utility>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare::mastering::dynamics {
-namespace {
-
-float sanitize_sample(float sample, float ceiling) {
-  if (std::isnan(sample)) return 0.0f;
-  if (sample == std::numeric_limits<float>::infinity()) return ceiling;
-  if (sample == -std::numeric_limits<float>::infinity()) return -ceiling;
-  return sample;
-}
-
-}  // namespace
 
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
@@ -67,27 +58,37 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
   // changes its current() value inside acquire(), and we already called it.
   const BrickwallLimiterConfig& cfg = *adopt_snapshot_for_block();
 
+  // Before the detector reads the block, not after: a non-finite sample left in
+  // place drives the linked gain to zero, and every statistic below would then
+  // describe a reduction this stage never performed.
+  std::uint32_t substituted = 0;
+  for (int ch = 0; ch < num_channels; ++ch) {
+    substituted += static_cast<std::uint32_t>(
+        resolve_non_finite_run(SampleDestination::kIrreversibleOutput, channels[ch],
+                               static_cast<std::size_t>(num_samples)));
+  }
+
   limiter_.set_detector_excluded_channel(detector_excluded_channel(num_channels));
   limiter_.process(channels, num_channels, num_samples);
 
   const float ceiling = db_to_linear(cfg.ceiling_db);
   float min_sample_gain = 1.0f;
   hard_clip_count_ = 0;
-  std::uint32_t substituted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     for (int i = 0; i < num_samples; ++i) {
-      const float before = channels[ch][i];
-      channels[ch][i] = sanitize_sample(channels[ch][i], ceiling);
+      // The inner limiter can still emit a non-finite from a coefficient a
+      // previous block poisoned, and this buffer is the caller's. Silence is
+      // never over the ceiling, so it reaches the clip test as a no-op rather
+      // than as a clip.
+      if (resolve_non_finite(SampleDestination::kIrreversibleOutput, channels[ch][i])) {
+        ++substituted;
+      }
       const float abs_sample = std::abs(channels[ch][i]);
       if (abs_sample > ceiling && abs_sample > 0.0f) {
         const float gain = ceiling / abs_sample;
         channels[ch][i] *= gain;
         min_sample_gain = std::min(min_sample_gain, gain);
         ++hard_clip_count_;
-      } else if (!std::isfinite(before)) {
-        min_sample_gain = 0.0f;
-        ++hard_clip_count_;
-        ++substituted;
       }
     }
   }

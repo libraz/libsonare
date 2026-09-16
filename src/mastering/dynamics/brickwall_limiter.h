@@ -67,12 +67,12 @@ class BrickwallLimiter : public rt::ProcessorBase,
   int hard_clip_count() const noexcept { return hard_clip_count_; }
   /// @brief Non-finite samples this stage replaced with a finite in-domain one.
   /// @details Monotonic since @ref prepare, which clears it; @ref reset does not.
-  ///          A NaN becomes silence and an infinity the ceiling, so the output
-  ///          stays finite, in range and free of any error while carrying samples
-  ///          unrelated to the input. This count is the only thing that separates
-  ///          such a stream from a clean one -- @ref hard_clip_count cannot,
-  ///          because it also counts the ordinary over-ceiling samples the stage
-  ///          exists to pull down.
+  ///          Each becomes silence, so the output stays finite, in range and free
+  ///          of any error while carrying samples unrelated to the input. This
+  ///          count is the only thing that separates such a stream from a clean
+  ///          one -- @ref hard_clip_count cannot, because it counts the ordinary
+  ///          over-ceiling samples the stage exists to pull down and deliberately
+  ///          does not count a replacement, which was never clipped.
   std::uint32_t non_finite_substitution_count() const noexcept {
     return non_finite_substitution_count_.load();
   }

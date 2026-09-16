@@ -250,7 +250,7 @@ TEST_CASE("BrickwallLimiter guarantees ceiling", "[mastering][dynamics]") {
   REQUIRE(limiter.hard_clip_count() == 0);
 }
 
-TEST_CASE("BrickwallLimiter sanitizes non-finite output before the hard ceiling",
+TEST_CASE("BrickwallLimiter replaces a non-finite sample without claiming to have limited it",
           "[mastering][dynamics]") {
   BrickwallLimiter limiter({-6.0f, 0.0f, 0.0f});
   limiter.prepare(48000.0, 128);
@@ -260,13 +260,18 @@ TEST_CASE("BrickwallLimiter sanitizes non-finite output before the hard ceiling"
                                std::numeric_limits<float>::quiet_NaN(), 2.0f};
   process(limiter, signal);
 
-  for (float sample : signal) {
-    REQUIRE(std::isfinite(sample));
-    REQUIRE(std::abs(sample) <= 0.502f);
-  }
-  REQUIRE_THAT(signal[2], WithinAbs(0.0f, 0.0001f));
-  REQUIRE(limiter.last_gain_reduction_db() <= -120.0f);
-  REQUIRE(limiter.hard_clip_count() == 3);
+  // Silence for all three, whichever non-finite arrived: a ceiling would be a
+  // value this stage writes when it is limiting.
+  REQUIRE(signal[0] == 0.0f);
+  REQUIRE(signal[1] == 0.0f);
+  REQUIRE(signal[2] == 0.0f);
+  // The one representable sample is the only one the stage worked on, so it is
+  // the only one the statistics describe.
+  REQUIRE(std::abs(signal[3]) <= 0.502f);
+  REQUIRE(limiter.last_gain_reduction_db() < -5.5f);
+  REQUIRE(limiter.last_gain_reduction_db() > -120.0f);
+  REQUIRE(limiter.hard_clip_count() == 0);
+  REQUIRE(limiter.non_finite_substitution_count() == 3u);
 }
 
 TEST_CASE("BrickwallLimiter validates configuration", "[mastering][dynamics]") {

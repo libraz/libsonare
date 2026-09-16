@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <vector>
 
 #include "mastering/dynamics/channel_limits.h"
@@ -12,12 +12,16 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_sample.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::mastering::maximizer {
 
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
+using sonare::resolve_non_finite;
+using sonare::resolve_non_finite_run;
+using sonare::SampleDestination;
 
 namespace {
 
@@ -26,25 +30,6 @@ namespace {
 // sustained material. The per-sample gain is the minimum of the two.
 constexpr float kFastAttackMs = 0.1f;
 constexpr float kSlowAttackMs = 1.0f;
-
-/// Replaces a non-finite sample with a finite in-domain one and reports it in
-/// @p substituted, since nothing downstream can tell the replacement from a value
-/// the limiter computed.
-float sanitize_sample(float sample, float ceiling, std::uint32_t& substituted) {
-  if (std::isnan(sample)) {
-    ++substituted;
-    return 0.0f;
-  }
-  if (sample == std::numeric_limits<float>::infinity()) {
-    ++substituted;
-    return ceiling;
-  }
-  if (sample == -std::numeric_limits<float>::infinity()) {
-    ++substituted;
-    return -ceiling;
-  }
-  return sample;
-}
 
 }  // namespace
 
@@ -140,6 +125,18 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
+  // Before the upsampler and the detector read the block, not after: a
+  // non-finite sample left in place spreads across the reconstruction stencil,
+  // is counted once per oversampled position it reached, and drives the linked
+  // gain to zero so the reported reduction describes work never performed.
+  std::uint32_t substituted = 0;
+  for (int ch = 0; ch < num_channels; ++ch) {
+    substituted += static_cast<std::uint32_t>(
+        resolve_non_finite_run(SampleDestination::kIrreversibleOutput, channels[ch],
+                               static_cast<std::size_t>(num_samples)));
+  }
+  non_finite_substitution_count_.add(substituted);
+
   // All supported oversampling factors use the sample-accurate polyphase
   // brickwall path; validate_config rejects any other value.
   sonare::rt::ScopedNoDenormals no_denormals;
@@ -211,9 +208,13 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
 
     for (int ch = 0; ch < num_channels; ++ch) {
       const float delayed = oversampled_lookahead_[static_cast<size_t>(ch)].process(
-          sanitize_sample(oversampled_buffers_[static_cast<size_t>(ch)][os], ceiling, substituted));
-      limited_oversampled_buffers_[static_cast<size_t>(ch)][os] =
-          sanitize_sample(delayed * gain, ceiling, substituted);
+          oversampled_buffers_[static_cast<size_t>(ch)][os]);
+      // The gain is a recursive cell, so a previous block can hand this multiply
+      // a non-finite one. A ceiling here would be the loudest sample the stage
+      // can write, standing in for a product it never computed.
+      float limited = delayed * gain;
+      if (resolve_non_finite(SampleDestination::kIrreversibleOutput, limited)) ++substituted;
+      limited_oversampled_buffers_[static_cast<size_t>(ch)][os] = limited;
     }
 
     // The gain above lags the ideal one on a fast transient, so a post-lookahead
@@ -345,9 +346,12 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
   for (int i = 0; i < num_samples; ++i) {
     const float gain = input_rate_gain_[static_cast<size_t>(i)];
     for (int ch = 0; ch < num_channels; ++ch) {
-      const float delayed = lookahead_[static_cast<size_t>(ch)].process(
-          sanitize_sample(channels[ch][i], ceiling, substituted));
-      channels[ch][i] = sanitize_sample(delayed * gain, ceiling, substituted);
+      const float delayed = lookahead_[static_cast<size_t>(ch)].process(channels[ch][i]);
+      // See the polyphase path: the gain is recursive, so the product is guarded
+      // even though the input reached this stage finite.
+      float limited = delayed * gain;
+      if (resolve_non_finite(SampleDestination::kIrreversibleOutput, limited)) ++substituted;
+      channels[ch][i] = limited;
     }
     // Channel-linked residual guard, matching the polyphase path.
     float linked_output = 0.0f;
@@ -372,11 +376,12 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
 }
 
 void TruePeakLimiter::discard_non_finite_state() noexcept {
-  // Four floats, once per block. The input sanitizer keeps the samples finite but
-  // the detector reads the buffer before it, so a stranded cell does not surface
-  // as a non-finite output: every sample is substituted instead and the stage
-  // falls silent for the rest of the handle. The crest peak's std::max fold drops
-  // a NaN but keeps an infinity, which is the value an envelope over |x| actually
+  // Four floats, once per block. The block's samples reach the detector finite,
+  // so these cells are only ever stranded by a non-finite coefficient of their
+  // own; a stranded one does not surface as a non-finite output either, because
+  // the post-gain guard substitutes every sample instead and the stage falls
+  // silent for the rest of the handle. The crest peak's std::max fold drops a
+  // NaN but keeps an infinity, which is the value an envelope over |x| actually
   // acquires, and an infinite crest holds the release at its shortest for good.
   // The gain smoothers rest at unity, the crest detector's two halves together at
   // silence.
