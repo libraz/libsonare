@@ -542,16 +542,19 @@ TEST_CASE("Crackle detection reads the median criterion in wavelet mode too",
 
 TEST_CASE("Decrackle mono output survives the Haar seam extraction unchanged",
           "[repair][stereo][hum]") {
-  // Digests taken from the build that preceded the split of the forward
-  // transform, the shrinkage and the inverse into separate steps.
   const std::vector<float> left = crackle_fixture(0.0);
   const std::vector<float> right = crackle_fixture(0.35);
+  // The fixtures are quantized to a 24-bit grid, so their digests are the one
+  // thing here a different architecture reproduces; the recorded outputs are in
+  // the golden case below.
   REQUIRE(digest(left) == 0xc09020d7u);
   REQUIRE(digest(right) == 0x6e4ae955u);
-  REQUIRE(digest(decrackle(view(left), kMedian)) == 0x7262ef87u);
-  REQUIRE(digest(decrackle(view(right), kMedian)) == 0xd7a14dd5u);
-  REQUIRE(digest(decrackle(view(left), kWavelet)) == 0xdc4b2183u);
-  REQUIRE(digest(decrackle(view(right), kWavelet)) == 0x33135618u);
+  REQUIRE(digest(decrackle(view(left), kMedian)) != digest(left));
+  REQUIRE(digest(decrackle(view(right), kMedian)) != digest(right));
+  REQUIRE(digest(decrackle(view(left), kWavelet)) != digest(left));
+  REQUIRE(digest(decrackle(view(right), kWavelet)) != digest(right));
+  // The two modes are different shrinkages, not one behind two names.
+  REQUIRE(digest(decrackle(view(left), kMedian)) != digest(decrackle(view(left), kWavelet)));
 }
 
 TEST_CASE("Dehum and trim mono output are unchanged by the report and stereo work",
@@ -560,15 +563,18 @@ TEST_CASE("Dehum and trim mono output are unchanged by the report and stereo wor
   const std::vector<float> right = hum50_fixture(0.35);
   REQUIRE(digest(left) == 0x4214376du);
   REQUIRE(digest(right) == 0x399640edu);
-  REQUIRE(digest(dehum(view(left), kHum50Fixed)) == 0xd6be71c3u);
-  REQUIRE(digest(dehum(view(right), kHum50Fixed)) == 0x2c0f05e4u);
-  REQUIRE(digest(dehum(view(left), kHum50Adaptive)) == 0xe65b6560u);
-  REQUIRE(digest(dehum(view(right), kHum50Adaptive)) == 0x5a343eccu);
+  REQUIRE(digest(dehum(view(left), kHum50Fixed)) != digest(left));
+  REQUIRE(digest(dehum(view(right), kHum50Fixed)) != digest(right));
+  // Tracking the fundamental is a different cascade from holding it fixed.
+  REQUIRE(digest(dehum(view(left), kHum50Adaptive)) != digest(dehum(view(left), kHum50Fixed)));
+  REQUIRE(digest(dehum(view(right), kHum50Adaptive)) != digest(dehum(view(right), kHum50Fixed)));
 
   const std::vector<float> chord = hum60_fixture();
   REQUIRE(digest(chord) == 0x67b9b392u);
-  REQUIRE(digest(dehum(view(chord), DehumConfig{60.0f, 3, 20.0f})) == 0x6d434fe1u);
+  REQUIRE(digest(dehum(view(chord), DehumConfig{60.0f, 3, 20.0f})) != digest(chord));
 
+  // Trim copies the samples it keeps, so unlike the cascades above its digest is
+  // a slice of the input's and survives the move to another architecture.
   const std::vector<float> gated = gated_fixture(9600, 38400, 440.0);
   REQUIRE(digest(gated) == 0xe922ae85u);
   const Audio trimmed = trim_silence(view(gated), kTrim);
@@ -576,11 +582,39 @@ TEST_CASE("Dehum and trim mono output are unchanged by the report and stereo wor
   REQUIRE(trimmed.size() == 28799);
 }
 
+// The recorded halves of the two cases above, `[.]`-hidden like every other hash
+// freeze in this tree: the digest folds raw float samples, which is finer than
+// the reproducibility of a biquad cascade or a wavelet shrinkage across
+// architectures and libm implementations, so a value recorded on one host cannot
+// match another. It stays a same-environment refactor tripwire, run through
+// `make test-golden`. The decrackle digests precede the split of the forward
+// transform, the shrinkage and the inverse into separate steps; the dehum ones
+// precede the report and the stereo work.
+TEST_CASE("Dehum and decrackle mono digests stay stable", "[.][repair][stereo][hum][golden]") {
+  const std::vector<float> crackle_left = crackle_fixture(0.0);
+  const std::vector<float> crackle_right = crackle_fixture(0.35);
+  CHECK(digest(decrackle(view(crackle_left), kMedian)) == 0x7262ef87u);
+  CHECK(digest(decrackle(view(crackle_right), kMedian)) == 0xd7a14dd5u);
+  CHECK(digest(decrackle(view(crackle_left), kWavelet)) == 0xdc4b2183u);
+  CHECK(digest(decrackle(view(crackle_right), kWavelet)) == 0x33135618u);
+
+  const std::vector<float> hum_left = hum50_fixture(0.0);
+  const std::vector<float> hum_right = hum50_fixture(0.35);
+  CHECK(digest(dehum(view(hum_left), kHum50Fixed)) == 0xd6be71c3u);
+  CHECK(digest(dehum(view(hum_right), kHum50Fixed)) == 0x2c0f05e4u);
+  CHECK(digest(dehum(view(hum_left), kHum50Adaptive)) == 0xe65b6560u);
+  CHECK(digest(dehum(view(hum_right), kHum50Adaptive)) == 0x5a343eccu);
+  CHECK(digest(dehum(view(hum60_fixture()), DehumConfig{60.0f, 3, 20.0f})) == 0x6d434fe1u);
+}
+
 TEST_CASE("Dehum reports what the cascade did without moving the output", "[repair][stereo][hum]") {
   const std::vector<float> samples = hum50_fixture(0.0);
 
   DehumReport fixed_report;
-  REQUIRE(digest(dehum(view(samples), kHum50Fixed, &fixed_report)) == 0xd6be71c3u);
+  // Read against a call the same binary made rather than against a recorded
+  // value, so the claim is the report's and not the host's arithmetic.
+  REQUIRE(digest(dehum(view(samples), kHum50Fixed, &fixed_report)) ==
+          digest(dehum(view(samples), kHum50Fixed)));
   REQUIRE(fixed_report.notched_harmonics == kHum50Fixed.harmonics);
   REQUIRE(fixed_report.applied_fundamental_hz == kHum50Fixed.fundamental_hz);
   // Without tracking the frequency cannot move, and the zero is that
@@ -589,7 +623,8 @@ TEST_CASE("Dehum reports what the cascade did without moving the output", "[repa
   REQUIRE(fixed_report.detected.harmonics == static_cast<int>(kPlantedHum50Db.size()));
 
   DehumReport adaptive_report;
-  REQUIRE(digest(dehum(view(samples), kHum50Adaptive, &adaptive_report)) == 0xe65b6560u);
+  REQUIRE(digest(dehum(view(samples), kHum50Adaptive, &adaptive_report)) ==
+          digest(dehum(view(samples), kHum50Adaptive)));
   REQUIRE(adaptive_report.fundamental_drift_hz > 0.0f);
   // The tracker is clamped to the search window, so the drift cannot exceed it.
   REQUIRE(adaptive_report.fundamental_drift_hz <= kHum50Adaptive.search_range_hz);

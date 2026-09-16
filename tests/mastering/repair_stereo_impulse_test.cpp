@@ -355,18 +355,22 @@ TEST_CASE("Declip detection recovers the corpus clipped-sample count",
 
 TEST_CASE("Declick mono output survives the detector extraction unchanged",
           "[repair][stereo][impulse]") {
-  // Digests taken from the build that preceded the extraction.
   const std::vector<float> left = click_fixture(0.0);
   const std::vector<float> right = click_fixture(0.35);
-  REQUIRE(digest(declick(view(left), kCorpusDeclick)) == 0x89151232u);
-  REQUIRE(digest(declick(view(right), kCorpusDeclick)) == 0x540284deu);
-  // The repair moved the signal: the digests are not the inputs'.
+  // The fixtures are quantized to a 24-bit grid, so their digests are the one
+  // thing here a different architecture reproduces.
   REQUIRE(digest(view(left)) == 0xb7cec44bu);
   REQUIRE(digest(view(right)) == 0xe96f434fu);
+  // The repair moved the signal: its digest is not the input's.
+  REQUIRE(digest(declick(view(left), kCorpusDeclick)) != digest(view(left)));
+  REQUIRE(digest(declick(view(right), kCorpusDeclick)) != digest(view(right)));
 
   DeclickReport report;
   const Audio repaired = declick(view(left), kCorpusDeclick, &report);
-  REQUIRE(digest(repaired) == 0x89151232u);
+  // Asking for a report does not move a sample. Read against a call the same
+  // binary made rather than against a recorded value, so the claim is the
+  // extraction's and not the host's arithmetic.
+  REQUIRE(digest(repaired) == digest(declick(view(left), kCorpusDeclick)));
   REQUIRE(report.detected.count == kPlantedClicks);
   REQUIRE(report.repaired_runs == kPlantedClicks);
   REQUIRE(report.repaired_samples == kPlantedClicks * kPlantedClickWidth);
@@ -390,19 +394,39 @@ TEST_CASE("Declip mono output survives the detector extraction unchanged",
   DeclipConfig config;
   config.clip_threshold = threshold_in_file(left, right);
 
-  REQUIRE(digest(declip(view(left), config)) == 0x6fd0ee17u);
-  REQUIRE(digest(declip(view(right), config)) == 0xd76bca10u);
   REQUIRE(digest(view(left)) == 0x2c547f25u);
   REQUIRE(digest(view(right)) == 0x87fe27e5u);
+  REQUIRE(digest(declip(view(left), config)) != digest(view(left)));
+  REQUIRE(digest(declip(view(right), config)) != digest(view(right)));
 
   DeclipReport report;
   const Audio repaired = declip(view(left), config, &report);
-  REQUIRE(digest(repaired) == 0x6fd0ee17u);
+  REQUIRE(digest(repaired) == digest(declip(view(left), config)));
   REQUIRE(report.detected.sample_count == kPlantedClippedSamples);
   REQUIRE(report.lpc_reconstructed_runs == kPlantedClippedRuns);
   REQUIRE(report.interpolated_runs == 0);
   REQUIRE(report.repaired_samples == kPlantedClippedSamples);
   REQUIRE(report.linked_runs == 0);
+}
+
+// The recorded halves of the two cases above, `[.]`-hidden like every other hash
+// freeze in this tree: the digest folds raw float samples, which is finer than
+// the reproducibility of an LPC solve across architectures and libm
+// implementations, so a value recorded on one host cannot match another. It
+// stays a same-environment refactor tripwire, run through `make test-golden`.
+// Digests taken from the build that preceded the detector extraction.
+TEST_CASE("Declick and declip mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
+  const std::vector<float> click_left = click_fixture(0.0);
+  const std::vector<float> click_right = click_fixture(0.35);
+  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x89151232u);
+  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x540284deu);
+
+  const std::vector<float> clip_left = clip_fixture(0.0);
+  const std::vector<float> clip_right = clip_fixture(0.35);
+  DeclipConfig config;
+  config.clip_threshold = threshold_in_file(clip_left, clip_right);
+  CHECK(digest(declip(view(clip_left), config)) == 0x6fd0ee17u);
+  CHECK(digest(declip(view(clip_right), config)) == 0xd76bca10u);
 }
 
 TEST_CASE("Declip reports the runs that fall past the LPC gap cap", "[repair][stereo][impulse]") {

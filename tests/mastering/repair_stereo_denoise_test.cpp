@@ -1,7 +1,8 @@
 // Channel-linked denoise and dereverb: configuration rejection, the detectors,
 // the mask report, and what the linked mask buys over a time-domain transfer
-// ratio. The mono entry points are frozen by hash here because every case below
-// is written against them as the reference.
+// ratio. Every case below is written against the mono entry points as the
+// reference; the hash freeze that pins them is `[.]`-hidden, so what CI reads is
+// the linked path against a mono call made by the same binary.
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -181,7 +182,14 @@ const float kInf = std::numeric_limits<float>::infinity();
 
 // ---------------------------------------------------------------- mono freeze
 
-TEST_CASE("mono denoise and dereverb are unchanged", "[repair][stereo][denoise]") {
+// Hidden from the default run, like every other hash freeze in this tree: the
+// hash is taken over raw float samples, which is finer than the reproducibility
+// of an FFT across architectures and libm implementations, so a value recorded
+// on one host cannot match another. It stays a same-environment refactor
+// tripwire, run through `make test-golden`. The claims that do hold on any host
+// -- the linked path against the mono one, a report against the same call
+// without one -- are asserted in the cases below and stay in CI.
+TEST_CASE("mono denoise and dereverb are unchanged", "[.][repair][stereo][denoise][golden]") {
   const auto bed = make_bed(16384, 12345u);
   const Audio audio = as_audio(bed);
 
