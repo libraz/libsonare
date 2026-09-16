@@ -41,6 +41,22 @@ def test_spectral_contrast_returns_band_matrix() -> None:
     assert _finite(matrix)
 
 
+def test_spectral_contrast_band_narrower_than_a_bin_is_unmeasurable() -> None:
+    # At a 64-point transform the bin is 344.5 Hz, so band 0 (below fmin = 200 Hz)
+    # is emptied by the overlap trim and has nothing to average. That reaches the
+    # caller as NaN rather than a level borrowed from the bins around it.
+    matrix = libsonare.spectral_contrast(
+        _tone(), SR, n_fft=64, hop_length=16, n_bands=6, fmin=200.0
+    )
+    assert matrix.shape[0] == 7
+    assert matrix.shape[1] > 0
+
+    assert bool(np.all(np.isnan(matrix[0])))
+    # Every band wide enough to hold a bin still carries a number, so the
+    # assertion above cannot be passing on an all-NaN matrix.
+    assert _finite(matrix[1:])
+
+
 def test_poly_features_returns_coeff_matrix() -> None:
     matrix = libsonare.poly_features(_tone(), SR, order=1)
     assert matrix.shape[0] == 2  # order + 1

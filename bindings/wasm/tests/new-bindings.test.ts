@@ -100,6 +100,24 @@ describe('newly exposed WASM functions', () => {
     expect(allFinite(r.data)).toBe(true);
   });
 
+  it('spectralContrast reports a band narrower than one bin as unmeasurable', () => {
+    // At a 64-point transform the bin is 344.5 Hz, so band 0 (below fmin = 200 Hz)
+    // is emptied by the overlap trim and has nothing to average. That reaches the
+    // caller as NaN rather than a level borrowed from the bins around it.
+    const r = spectralContrast(makeSine(1, 440), SR, 64, 16, 6, 200.0);
+    expect(r.rows).toBe(7);
+    expect(r.cols).toBeGreaterThan(0);
+
+    for (let t = 0; t < r.cols; t++) {
+      expect(Number.isNaN(r.data[t])).toBe(true);
+    }
+    // Every band wide enough to hold a bin still carries a number, so the
+    // assertion above cannot be passing on an all-NaN matrix.
+    for (let b = 1; b < r.rows; b++) {
+      expect(allFinite(r.data.subarray(b * r.cols, (b + 1) * r.cols))).toBe(true);
+    }
+  });
+
   it('polyFeatures returns an (order+1) x nFrames matrix', () => {
     const r = polyFeatures(makeSine(1, 440), SR, 2048, 512, 1);
     expect(r.rows).toBe(2);
