@@ -1555,3 +1555,60 @@ TEST_CASE("Welch spectrum normalizes a zero-padded tail frame by its own window 
   // window the frame filled.
   REQUIRE_THAT(tail_result.magnitude[0], WithinAbs(full_result.magnitude[0], 1e-4f));
 }
+
+// peak_db absorbed a non-finite sample through peak_abs and published the silence
+// floor for audio that was never silent, while rms_db three functions away
+// answered nan for the same buffer -- two numbers a caller cannot reconcile. The
+// level meters report a finite dB floor by design, so neither absorbing nor
+// propagating fits: a buffer with no measurable level is refused.
+TEST_CASE("the level meters refuse audio they cannot measure", "[meter][numeric]") {
+  const float nan_sample = std::numeric_limits<float>::quiet_NaN();
+  const float inf_sample = std::numeric_limits<float>::infinity();
+
+  std::vector<float> poisoned(4096, 0.5f);
+  poisoned[1000] = nan_sample;
+  std::vector<float> clean(4096, 0.5f);
+
+  const Audio bad = Audio::from_buffer(poisoned.data(), poisoned.size(), 48000);
+  const Audio good = Audio::from_buffer(clean.data(), clean.size(), 48000);
+
+  SECTION("every level meter refuses, where they previously disagreed") {
+    REQUIRE_THROWS_AS(metering::peak_db(bad), SonareException);
+    REQUIRE_THROWS_AS(metering::rms_db(bad), SonareException);
+    REQUIRE_THROWS_AS(metering::crest_factor_db(bad), SonareException);
+    REQUIRE_THROWS_AS(metering::dc_offset(bad), SonareException);
+    REQUIRE_THROWS_AS(metering::true_peak(bad, 4), SonareException);
+    REQUIRE_THROWS_AS(metering::true_peak_db(bad, 4), SonareException);
+    REQUIRE_THROWS_AS(
+        metering::crest_factor_db_interleaved(poisoned.data(), poisoned.size() / 2, 2),
+        SonareException);
+  }
+
+  SECTION("an infinity is refused on the same footing") {
+    std::vector<float> with_inf(4096, 0.5f);
+    with_inf[7] = inf_sample;
+    const Audio audio = Audio::from_buffer(with_inf.data(), with_inf.size(), 48000);
+    REQUIRE_THROWS_AS(metering::peak_db(audio), SonareException);
+    REQUIRE_THROWS_AS(metering::true_peak(audio, 4), SonareException);
+  }
+
+  SECTION("the control: the same buffer without the non-finite still measures") {
+    // Without this the refusals above are satisfied by a meter that throws for
+    // every input, which is a different and worse function.
+    REQUIRE_THAT(metering::peak_db(good), WithinAbs(-6.0206f, 1e-3f));
+    REQUIRE_THAT(metering::rms_db(good), WithinAbs(-6.0206f, 1e-3f));
+    REQUIRE_THAT(metering::crest_factor_db(good), WithinAbs(0.0f, 1e-3f));
+    REQUIRE_THAT(metering::dc_offset(good), WithinAbs(0.5f, 1e-3f));
+    REQUIRE(std::isfinite(metering::true_peak(good, 4)));
+  }
+
+  SECTION("the detectors keep their own contract and still accept it") {
+    // clipping_ratio and silence_ratio are not level meters: they answer a
+    // question about the buffer rather than reporting its level, and the
+    // clipping detector is required to advance past a non-finite sample. The
+    // split is deliberate, so it is pinned here rather than left to be
+    // rediscovered as an inconsistency.
+    REQUIRE_NOTHROW(metering::clipping_ratio(bad, 0.999f));
+    REQUIRE_NOTHROW(metering::silence_ratio(bad, -60.0f, 1024, 512));
+  }
+}
