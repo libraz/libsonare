@@ -456,52 +456,58 @@ TEST_CASE("A clean bowed-string render leaves the discard count at zero",
 }
 
 TEST_CASE(
-    "A stribeck value outside the elasto-plastic model's own range raises the discard count "
-    "exactly once per call",
+    "A NaN stribeck value is replaced by its default before it can reach the elasto-plastic "
+    "divisor",
     "[midi][synth][non-finite]") {
-  // bowed_string.stribeck is gated behind elasto_plastic and reaches the render
-  // loop without ever passing through clamp_synth_patch (native_synth.h never
-  // mentions it, unlike every other bowed_string field): the constructor's
-  // clamp cannot protect a field it does not know about. Fed a non-finite
-  // value, BowedStringVoiceCore::start() computes ep_stribeck_v_ from it
-  // unclamped, and elasto_plastic_injection() divides by it on the very first
-  // sample, so the corruption is immediate rather than a divergence that needs
-  // many samples to arrive.
-  //
-  // Tried and rejected before this one: pushing SF2 initialFilterQ / NativeSynth
-  // resonance_q to their generator/patch extremes. Both TptSvf::set() (svf.h)
-  // and the ladder/Sallen-Key models (filter_models.h) clamp cutoff and Q to a
-  // finite, self-oscillation-safe range before using them, and a Q or cutoff
-  // fed as +-infinity compares normally against those bounds and lands on the
-  // clamp's finite edge rather than surviving. The elasto-plastic bristle's own
-  // z_ss floor (kEpZssFloor, bowed_string_voice.cpp) is similarly bounded away
-  // from zero for any FINITE input, so an extreme-but-finite bow velocity never
-  // reaches the division either. stribeck is the one field in this whole engine
-  // family with no clamp at all between the caller and a divisor.
-  auto make_synth = []() {
-    NativeSynthConfig cfg;
-    cfg.patch.mode = SynthEngineMode::kBowedString;
-    cfg.patch.bowed_string.elasto_plastic = true;
-    cfg.patch.bowed_string.stribeck = std::numeric_limits<float>::quiet_NaN();
-    auto synth = std::make_unique<NativeSynth>(cfg);
-    synth->prepare(kOutRate, 256);
-    return synth;
-  };
+  // bowed_string.stribeck used to reach the render loop without ever passing
+  // through clamp_synth_patch, so a non-finite value corrupted
+  // BowedStringVoiceCore's bristle state on the very first sample
+  // (elasto_plastic_injection() divides by it). clamp_synth_patch now
+  // sanitizes it, so the constructor is where this is stopped: the corrupted
+  // value never reaches the voice at all.
+  NativeSynthConfig cfg;
+  cfg.patch.mode = SynthEngineMode::kBowedString;
+  cfg.patch.bowed_string.elasto_plastic = true;
+  cfg.patch.bowed_string.stribeck = std::numeric_limits<float>::quiet_NaN();
+  NativeSynth synth(cfg);
+  REQUIRE(synth.patch().bowed_string.stribeck == 0.5f);  // bowed_string_voice.h's declared default
 
-  auto synth = make_synth();
-  synth->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 57, 110)));
-  // One process() call, long enough that the corrupted voice discards on
-  // hundreds of samples inside it; the unit is the call, not the sample.
-  const StereoRender out = render(*synth, 8192);
+  synth.prepare(kOutRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 57, 110)));
+  const StereoRender out = render(synth, 8192);
   for (float v : out.left) REQUIRE(std::isfinite(v));
   for (float v : out.right) REQUIRE(std::isfinite(v));
-  REQUIRE(synth->non_finite_discard_count() == 1u);
+  REQUIRE(synth.non_finite_discard_count() == 0u);
+}
 
-  // The bristle state stays corrupted (nothing in this engine recovers it), so
-  // a second call discards again -- the count is not a one-shot latch, it moves
-  // once per call that actually discarded.
-  render(*synth, 512);
-  REQUIRE(synth->non_finite_discard_count() == 2u);
+TEST_CASE("clamp_synth_patch sanitizes every field a bare std::clamp leaves NaN-transparent",
+          "[midi][synth][non-finite]") {
+  // std::clamp(NaN, lo, hi) returns NaN (both its comparisons are false), so a
+  // field clamped without patch_clamp_detail::sanitize first passes a NaN
+  // through untouched. Fields with no clamp at all are equally open. Covers
+  // both shapes: unclamped fields fall back to their declared struct default,
+  // clamped fields fall back to their default and then land inside the
+  // existing bounds.
+  using sonare::midi::synth::clamp_synth_patch;
+  using sonare::midi::synth::NativeSynthPatch;
+
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  NativeSynthPatch p;
+  // Unclamped (Group A): no std::clamp at all guarded these before this fix.
+  p.ks.body_coupling = nan;
+  p.percussion.noise_burst_interval_ms = nan;
+  p.pipe_organ.keytrack = nan;
+  // Clamped but NaN-transparent (Group B): std::clamp alone let NaN through.
+  p.amp_env.delay_ms = nan;
+  p.filter_env.sustain = nan;
+
+  const NativeSynthPatch clamped = clamp_synth_patch(p);
+
+  REQUIRE(clamped.ks.body_coupling == 0.0f);
+  REQUIRE(clamped.percussion.noise_burst_interval_ms == 10.0f);
+  REQUIRE(clamped.pipe_organ.keytrack == 0.0f);
+  REQUIRE(clamped.amp_env.delay_ms == 0.0f);    // default 0, inside [0, 5000]
+  REQUIRE(clamped.filter_env.sustain == 0.7f);  // default 0.7, inside [0, 1]
 }
 
 TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi][synth]") {

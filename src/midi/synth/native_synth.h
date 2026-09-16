@@ -722,17 +722,6 @@ class NativeSynth final : public MidiInstrument {
 /// unit of its own.
 namespace patch_clamp_detail {
 
-constexpr DahdsrConfig clamp_env(const DahdsrConfig& env) noexcept {
-  DahdsrConfig out{};
-  out.delay_ms = std::clamp(env.delay_ms, 0.0f, 5000.0f);
-  out.attack_ms = std::clamp(env.attack_ms, 0.0f, 20000.0f);
-  out.hold_ms = std::clamp(env.hold_ms, 0.0f, 5000.0f);
-  out.decay_ms = std::clamp(env.decay_ms, 0.0f, 20000.0f);
-  out.sustain = std::clamp(env.sustain, 0.0f, 1.0f);
-  out.release_ms = std::clamp(env.release_ms, 1.0f, 20000.0f);
-  return out;
-}
-
 /// Finite test usable during constant evaluation. `std::isfinite` is not
 /// `constexpr` in C++17; `value == value` rejects NaN and the magnitude
 /// bounds reject both infinities, which is the same predicate for `float`.
@@ -741,6 +730,17 @@ constexpr float sanitize(float value, float fallback) noexcept {
           value >= std::numeric_limits<float>::lowest())
              ? value
              : fallback;
+}
+
+constexpr DahdsrConfig clamp_env(const DahdsrConfig& env) noexcept {
+  DahdsrConfig out{};
+  out.delay_ms = std::clamp(sanitize(env.delay_ms, 0.0f), 0.0f, 5000.0f);
+  out.attack_ms = std::clamp(sanitize(env.attack_ms, 5.0f), 0.0f, 20000.0f);
+  out.hold_ms = std::clamp(sanitize(env.hold_ms, 0.0f), 0.0f, 5000.0f);
+  out.decay_ms = std::clamp(sanitize(env.decay_ms, 60.0f), 0.0f, 20000.0f);
+  out.sustain = std::clamp(sanitize(env.sustain, 0.7f), 0.0f, 1.0f);
+  out.release_ms = std::clamp(sanitize(env.release_ms, 120.0f), 1.0f, 20000.0f);
+  return out;
 }
 
 }  // namespace patch_clamp_detail
@@ -821,10 +821,18 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.ks.mute_harmonic, 0.0f), 0.0f, 16.0f);
   p.ks.slap = std::clamp(patch_clamp_detail::sanitize(p.ks.slap, 0.0f), 0.0f, 1.0f);
   p.ks.polarization = std::clamp(patch_clamp_detail::sanitize(p.ks.polarization, 0.0f), 0.0f, 1.0f);
+  p.ks.body_coupling = patch_clamp_detail::sanitize(p.ks.body_coupling, 0.0f);
+  p.ks.pluck_style = patch_clamp_detail::sanitize(p.ks.pluck_style, 0.0f);
+  p.ks.nail = patch_clamp_detail::sanitize(p.ks.nail, 0.0f);
+  p.ks.pickup_pos = patch_clamp_detail::sanitize(p.ks.pickup_pos, 0.0f);
+  p.ks.dispersion = patch_clamp_detail::sanitize(p.ks.dispersion, 0.0f);
+  p.ks.tension_mod = patch_clamp_detail::sanitize(p.ks.tension_mod, 0.0f);
+  p.ks.octave_mix = patch_clamp_detail::sanitize(p.ks.octave_mix, 0.0f);
   // Bounded here rather than only at use, so the touched node reports its real
   // range: a sweep over an unbounded divisor is a sweep over nothing.
   p.ks.harmonic_node =
       std::clamp(patch_clamp_detail::sanitize(p.ks.harmonic_node, 0.0f), 0.0f, 8.0f);
+  p.ks.keyoff_noise = patch_clamp_detail::sanitize(p.ks.keyoff_noise, 0.0f);
   p.modal.num_modes = std::clamp(p.modal.num_modes, 0, kMaxModalModes);
   for (ModalMode& mode : p.modal.modes) {
     mode.ratio = std::clamp(patch_clamp_detail::sanitize(mode.ratio, 1.0f), 0.01f, 64.0f);
@@ -884,6 +892,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.percussion.noise_cutoff_hz, 2500.0f), 20.0f, 20000.0f);
   p.percussion.noise_q =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.noise_q, 1.0f), 0.5f, 30.0f);
+  p.percussion.noise_burst_interval_ms =
+      patch_clamp_detail::sanitize(p.percussion.noise_burst_interval_ms, 10.0f);
+  p.percussion.noise_burst_decay_ms =
+      patch_clamp_detail::sanitize(p.percussion.noise_burst_decay_ms, 6.0f);
   p.percussion.shell_mix =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.shell_mix, 0.0f), 0.0f, 1.0f);
   p.percussion.shell_num_modes = std::clamp(p.percussion.shell_num_modes, 0, kMaxShellModes);
@@ -1001,6 +1013,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.pipe_organ.reed = std::clamp(patch_clamp_detail::sanitize(p.pipe_organ.reed, 0.0f), 0.0f, 1.0f);
   p.pipe_organ.radiation =
       std::clamp(patch_clamp_detail::sanitize(p.pipe_organ.radiation, 0.0f), 0.0f, 1.0f);
+  p.pipe_organ.keytrack = patch_clamp_detail::sanitize(p.pipe_organ.keytrack, 0.0f);
   p.pipe_organ.rank_count = std::clamp(p.pipe_organ.rank_count, 0, kMaxPipeRanks);
   for (auto& rank : p.pipe_organ.ranks) {
     rank.footage_mult =
@@ -1036,6 +1049,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.release_ms, 120.0f), 1.0f, 5000.0f);
   p.bowed_string.rosin =
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.rosin, 0.0f), 0.0f, 1.0f);
+  p.bowed_string.stribeck = patch_clamp_detail::sanitize(p.bowed_string.stribeck, 0.5f);
+  p.bowed_string.sympathetic = patch_clamp_detail::sanitize(p.bowed_string.sympathetic, 0.0f);
+  p.bowed_string.polarization = patch_clamp_detail::sanitize(p.bowed_string.polarization, 0.0f);
   p.reed.breath_pressure =
       std::clamp(patch_clamp_detail::sanitize(p.reed.breath_pressure, 0.6f), 0.0f, 1.0f);
   p.reed.vel_to_breath =
