@@ -77,12 +77,14 @@ float clipping_ratio(const Audio& audio, float threshold) {
 }
 
 float silence_ratio(const Audio& audio, float threshold_db, int frame_length, int hop_length) {
-  SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(frame_length > 0, ErrorCode::InvalidParameter, "frame_length must be > 0");
+  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
   // A NaN threshold makes every comparison below false, so the function reports
   // "no silence at all" for a request it could not evaluate. The check belongs
   // here rather than in the C-ABI wrapper: WASM calls this core function
   // directly, the way detect_clipping's sibling guard is already inherited.
-  SONARE_CHECK(std::isfinite(threshold_db), ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(std::isfinite(threshold_db), ErrorCode::InvalidParameter,
+                   "threshold_db must be finite, got " + util::to_text(threshold_db));
   if (audio.empty()) return 0.0f;
 
   size_t silent_frames = 0;

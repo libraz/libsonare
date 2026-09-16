@@ -50,7 +50,8 @@ float audio_rms_db(const Audio& audio) {
 }  // namespace
 
 Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
-  SONARE_CHECK(std::isfinite(gain_db), ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(std::isfinite(gain_db), ErrorCode::InvalidParameter,
+                   "gain_db must be finite, got " + util::to_text(gain_db));
   if (audio.empty()) return audio;
 
   float gain_linear = db_to_linear(gain_db);
@@ -76,8 +77,10 @@ Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
 }
 
 Audio normalize(const Audio& audio, float target_db, bool clip) {
-  SONARE_CHECK(std::isfinite(target_db) && (!clip || target_db <= 0.0f),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(std::isfinite(target_db), ErrorCode::InvalidParameter,
+                   "target_db must be finite, got " + util::to_text(target_db));
+  SONARE_CHECK_MSG(!clip || target_db <= 0.0f, ErrorCode::InvalidParameter,
+                   "target_db must be <= 0 when clip is set, got " + util::to_text(target_db));
   if (audio.empty()) return audio;
 
   float current_peak = audio_peak_db(audio);
@@ -91,8 +94,10 @@ Audio normalize(const Audio& audio, float target_db, bool clip) {
 }
 
 Audio normalize_rms(const Audio& audio, float target_db, bool clip) {
-  SONARE_CHECK(std::isfinite(target_db) && (!clip || target_db <= 0.0f),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(std::isfinite(target_db), ErrorCode::InvalidParameter,
+                   "target_db must be finite, got " + util::to_text(target_db));
+  SONARE_CHECK_MSG(!clip || target_db <= 0.0f, ErrorCode::InvalidParameter,
+                   "target_db must be <= 0 when clip is set, got " + util::to_text(target_db));
   if (audio.empty()) return audio;
 
   float current_rms = audio_rms_db(audio);
@@ -109,7 +114,8 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
                                                     int frame_length, int hop_length) {
   // Reject non-positive frame/hop before any loop or division: a zero/negative
   // hop_length spins the scan forever and a zero frame_length divides by zero.
-  SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(frame_length > 0, ErrorCode::InvalidParameter, "frame_length must be > 0");
+  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
   if (audio.empty()) return {0, 0};
 
   float threshold_linear = db_to_linear(threshold_db);
@@ -181,9 +187,12 @@ namespace {
 /// @param is_fade_in If true, fade in; if false, fade out
 Audio apply_fade(const Audio& audio, float duration_sec, bool is_fade_in) {
   const double requested_samples = static_cast<double>(duration_sec) * audio.sample_rate();
-  SONARE_CHECK(std::isfinite(duration_sec) && duration_sec >= 0.0f &&
-                   requested_samples <= static_cast<double>(std::numeric_limits<size_t>::max()),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(std::isfinite(duration_sec) && duration_sec >= 0.0f, ErrorCode::InvalidParameter,
+                   "duration_sec must be finite and >= 0, got " + util::to_text(duration_sec));
+  SONARE_CHECK_MSG(
+      requested_samples <= static_cast<double>(std::numeric_limits<size_t>::max()),
+      ErrorCode::InvalidParameter,
+      "duration_sec is too long for this sample rate, got " + util::to_text(duration_sec));
   if (audio.empty()) return audio;
 
   size_t fade_samples = static_cast<size_t>(requested_samples);

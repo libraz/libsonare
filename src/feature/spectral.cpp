@@ -18,6 +18,16 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
+/// @brief Rejects a non-positive spectrogram dimension, naming the one that failed.
+/// @details Hoisted so the four descriptors sharing this shape pay one copy of
+///          each message; the test order matches the conjunction it replaced.
+void check_spectrogram_shape(int n_bins, int n_frames, int sr, int n_fft) {
+  SONARE_CHECK_MSG(n_bins > 0, ErrorCode::InvalidParameter, "n_bins must be > 0");
+  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "n_frames must be > 0");
+  SONARE_CHECK_MSG(sr > 0, ErrorCode::InvalidParameter, "sr must be > 0");
+  SONARE_CHECK_MSG(n_fft > 0, ErrorCode::InvalidParameter, "n_fft must be > 0");
+}
+
 /// @brief Computes frequency for each FFT bin.
 std::vector<float> bin_frequencies(int n_bins, int sr, int n_fft) {
   std::vector<float> freqs(n_bins);
@@ -67,8 +77,8 @@ std::vector<float> spectral_centroid(const Spectrogram& spec, int sr) {
 
 std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_frames, int sr,
                                      int n_fft) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0 && sr > 0 && n_fft > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
 
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> centroid(n_frames);
@@ -104,11 +114,12 @@ std::vector<float> spectral_bandwidth(const Spectrogram& spec, int sr, float p) 
 
 std::vector<float> spectral_bandwidth(const float* magnitude, int n_bins, int n_frames, int sr,
                                       int n_fft, float p) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0 && sr > 0 && n_fft > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
   // An infinite p survives a bare p > 0 and is laundered into a finite lie:
   // pow(sum, 1/p) collapses to pow(x, 0) == 1, so every frame reads 1.0 Hz.
-  SONARE_CHECK(numeric::finite_positive(p), ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(numeric::finite_positive(p), ErrorCode::InvalidParameter,
+                   "p must be finite and > 0, got " + util::to_text(p));
 
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> centroids = spectral_centroid(magnitude, n_bins, n_frames, sr, n_fft);
@@ -149,9 +160,11 @@ std::vector<float> spectral_rolloff(const Spectrogram& spec, int sr, float roll_
 
 std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_frames, int sr,
                                     int n_fft, float roll_percent) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0 && sr > 0 && n_fft > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(roll_percent > 0.0f && roll_percent < 1.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
+  // Exclusive on both ends, so not SONARE_CHECK_RANGE.
+  SONARE_CHECK_MSG(roll_percent > 0.0f && roll_percent < 1.0f, ErrorCode::InvalidParameter,
+                   "roll_percent must be in (0, 1), got " + util::to_text(roll_percent));
 
   std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> rolloff(n_frames);
@@ -212,8 +225,9 @@ std::vector<float> spectral_flatness(const Spectrogram& spec) {
 }
 
 std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_frames) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  SONARE_CHECK_MSG(n_bins > 0, ErrorCode::InvalidParameter, "n_bins must be > 0");
+  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "n_frames must be > 0");
 
   constexpr double kAmin = static_cast<double>(constants::kEpsilon);
 
@@ -269,24 +283,33 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
 
 std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_bands, float fmin,
                                      float quantile) {
-  SONARE_CHECK(n_bands > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(quantile > 0.0f && quantile < 1.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(fmin > 0.0f && sr > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(n_bands > 0, ErrorCode::InvalidParameter, "n_bands must be > 0");
+  // Exclusive on both ends, so not SONARE_CHECK_RANGE.
+  SONARE_CHECK_MSG(quantile > 0.0f && quantile < 1.0f, ErrorCode::InvalidParameter,
+                   "quantile must be in (0, 1), got " + util::to_text(quantile));
+  // finite_positive rather than a bare fmin > 0: an infinite fmin is refused
+  // either way, but here it can say so instead of arriving at the Nyquist check.
+  SONARE_CHECK_MSG(numeric::finite_positive(fmin), ErrorCode::InvalidParameter,
+                   "fmin must be finite and > 0, got " + util::to_text(fmin));
+  SONARE_CHECK_MSG(sr > 0, ErrorCode::InvalidParameter, "sr must be > 0");
 
   const std::vector<float>& magnitude = spec.magnitude();
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
   int n_fft = spec.n_fft();
-  SONARE_CHECK(n_bins > 0 && n_frames > 0 && n_fft > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(!magnitude.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(magnitude.size() >= static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(n_bins > 0, ErrorCode::InvalidParameter, "n_bins must be > 0");
+  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "n_frames must be > 0");
+  SONARE_CHECK_MSG(n_fft > 0, ErrorCode::InvalidParameter, "n_fft must be > 0");
+  SONARE_CHECK_MSG(!magnitude.empty(), ErrorCode::InvalidParameter,
+                   "spec magnitude must not be empty");
+  SONARE_CHECK_MSG(magnitude.size() >= static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames),
+                   ErrorCode::InvalidParameter,
+                   "spec magnitude must hold at least n_bins * n_frames values");
 
   float nyquist = 0.5f * static_cast<float>(sr);
-  // Also the only thing refusing an infinite fmin: `fmin > 0.0f` above admits
-  // one. Keep this two-sided if the band topology is ever reworked.
-  SONARE_CHECK(fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist,
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(
+      fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist, ErrorCode::InvalidParameter,
+      "fmin octave-doubled over n_bands must stay under Nyquist, got fmin " + util::to_text(fmin));
 
   std::vector<float> band_edges(n_bands + 2);
   band_edges[0] = 0.0f;
@@ -308,7 +331,8 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
       }
     }
 
-    SONARE_CHECK(!band_indices.empty(), ErrorCode::InvalidParameter);
+    SONARE_CHECK_MSG(!band_indices.empty(), ErrorCode::InvalidParameter,
+                     "fmin and n_bands leave a contrast band with no FFT bins");
 
     if (b > 0 && band_indices.front() > 0) {
       band_indices.insert(band_indices.begin(), band_indices.front() - 1);
@@ -409,9 +433,9 @@ std::vector<float> poly_features(const Spectrogram& spec, int sr, int order) {
 
 std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frames, int sr,
                                  int n_fft, int order) {
-  SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0 && sr > 0 && n_fft > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(order >= 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
+  check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
+  SONARE_CHECK_MSG(order >= 0, ErrorCode::InvalidParameter, "order must be >= 0");
 
   // librosa.feature.poly_features computes np.polyfit(freqs, S[:, t], order).
   // Output is [order + 1, n_frames] with coefficients ordered highest-degree first.
@@ -494,8 +518,10 @@ std::vector<float> zero_crossing_rate(const Audio& audio, int frame_length, int 
 
 std::vector<float> zero_crossing_rate(const float* samples, size_t n_samples, int frame_length,
                                       int hop_length) {
-  SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_samples == 0 || samples != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(frame_length > 0, ErrorCode::InvalidParameter, "frame_length must be > 0");
+  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
+  SONARE_CHECK_MSG(n_samples == 0 || samples != nullptr, ErrorCode::InvalidParameter,
+                   "samples must not be null when n_samples > 0");
 
   // Empty input: no zero crossings to count. Return a single zero-rate frame so
   // downstream callers always get a defined, non-empty result (and we never
@@ -543,8 +569,10 @@ std::vector<float> rms_energy(const Audio& audio, int frame_length, int hop_leng
 
 std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_length,
                               int hop_length) {
-  SONARE_CHECK(n_samples == 0 || samples != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(n_samples == 0 || samples != nullptr, ErrorCode::InvalidParameter,
+                   "samples must not be null when n_samples > 0");
+  SONARE_CHECK_MSG(frame_length > 0, ErrorCode::InvalidParameter, "frame_length must be > 0");
+  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
 
   if (n_samples == 0) {
     return std::vector<float>(1, 0.0f);
