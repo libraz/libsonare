@@ -1,9 +1,11 @@
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <functional>
 #include <random>
 #include <utility>
 #include <vector>
@@ -585,8 +587,62 @@ TEST_CASE("DenoiseClassical can use IMCRA frame-adaptive noise tracking", "[mast
   REQUIRE(mcra_output.size() == input.size());
 }
 
+TEST_CASE("DenoiseClassical SPP estimator is its own path, not a fallback", "[mastering][repair]") {
+  // The estimator used to be selected by an `if (Mcra)` over an Imcra-initialized
+  // variable, so any other value ran as Imcra under its own name. Checking that
+  // the enum is accepted cannot see that; only the samples can.
+  const Audio input = noisy_tone(48000, 48000, 1000.0f, 0.45f, 0.04f, 45678);
+  DenoiseClassicalConfig config{};
+  config.mode = DenoiseMode::LogMmse;
+
+  auto run = [&](DenoiseNoiseEstimator estimator) {
+    config.noise_estimator = estimator;
+    return denoise_classical(input, config);
+  };
+  auto max_abs_diff = [](const Audio& a, const Audio& b) {
+    REQUIRE(a.size() == b.size());
+    float worst = 0.0f;
+    for (size_t i = 0; i < a.size(); ++i) worst = std::max(worst, std::abs(a[i] - b[i]));
+    return worst;
+  };
+
+  const Audio spp = run(DenoiseNoiseEstimator::Spp);
+  REQUIRE(spp.size() == input.size());
+  for (float sample : spp) REQUIRE(std::isfinite(sample));
+  REQUIRE(high_frequency_residual_rms(spp) < high_frequency_residual_rms(input) * 0.9f);
+
+  // Measured max |difference| on a signal peaking near 0.45: 0.045 against Imcra,
+  // 0.045 against Mcra, 0.059 against Quantile. Restoring the Imcra fallback drops
+  // the first to 0.
+  REQUIRE(max_abs_diff(spp, run(DenoiseNoiseEstimator::Imcra)) > 0.005f);
+  REQUIRE(max_abs_diff(spp, run(DenoiseNoiseEstimator::Mcra)) > 0.005f);
+  REQUIRE(max_abs_diff(spp, run(DenoiseNoiseEstimator::Quantile)) > 0.005f);
+}
+
 TEST_CASE("DenoiseClassical rejects inputs shorter than n_fft", "[mastering][repair]") {
   REQUIRE_THROWS_AS(denoise_classical(make_audio({0.03f, 0.05f})), SonareException);
+}
+
+TEST_CASE("DenoiseClassical rejects an estimator outside the enumeration", "[mastering][repair]") {
+  // validate_config directly, not through denoise_classical: the tracker dispatch
+  // refuses an unnamed value too, so the end-to-end call throws either way and
+  // cannot tell whether the validator still does its half.
+  DenoiseClassicalConfig config{};
+  config.noise_estimator = static_cast<DenoiseNoiseEstimator>(99);
+  REQUIRE_THROWS_AS(validate_config(config), SonareException);
+
+  config.noise_estimator = static_cast<DenoiseNoiseEstimator>(-1);
+  REQUIRE_THROWS_AS(validate_config(config), SonareException);
+
+  config.noise_estimator = DenoiseNoiseEstimator::Spp;
+  REQUIRE_NOTHROW(validate_config(config));
+
+  // Same guard shape on the mode: the switch cannot see a value the enumeration
+  // never names, so the `false` after it is what refuses one.
+  config.mode = static_cast<DenoiseMode>(99);
+  REQUIRE_THROWS_AS(validate_config(config), SonareException);
+  config.mode = static_cast<DenoiseMode>(-1);
+  REQUIRE_THROWS_AS(validate_config(config), SonareException);
 }
 
 TEST_CASE("DereverbClassical zero-pads inputs shorter than n_fft", "[mastering][repair]") {
@@ -986,6 +1042,329 @@ TEST_CASE("DereverbClassical WPE does not depend on where its working buffers li
     }
     REQUIRE(rms(want) > 0.0f);
   }
+}
+
+namespace {
+
+// `detail` alone is ambiguous here: the file opens both sonare and
+// sonare::mastering::repair, and each has one.
+namespace repair_detail = sonare::mastering::repair::detail;
+
+std::vector<float> spin_probe_signal() {
+  std::vector<float> samples(512, 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.1f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * i / 64.0));
+  }
+  for (size_t index : {37u, 101u, 163u, 229u, 331u, 419u}) {
+    samples[index] += (index % 2 == 0) ? 0.3f : -0.3f;
+  }
+  return samples;
+}
+
+/// A step plus an isolated impulse over a small noise floor. The noise floor is
+/// what makes the case non-vacuous: the MAD estimate of a noiseless step is zero,
+/// which drives the BayesShrink threshold to zero and leaves the transform an
+/// exact identity no matter how it is shifted.
+std::vector<float> spin_step_signal() {
+  std::vector<float> samples(512, 0.0f);
+  std::mt19937 rng(20260916u);
+  std::uniform_real_distribution<float> noise(-0.01f, 0.01f);
+  for (size_t i = 0; i < samples.size(); ++i) samples[i] = noise(rng);
+  for (size_t i = 251; i < samples.size(); ++i) samples[i] += 0.4f;
+  samples[123] += 0.3f;
+  return samples;
+}
+
+/// A smooth run from one polarity to the other, so a cyclic shift butts a large
+/// negative sample against a large positive one: the biggest seam the spinning can
+/// build out of a buffer the forward transform never wraps. Both ends carry signal
+/// on purpose -- with a near-silent end, mishandling the wrapped region costs
+/// almost nothing and reads as no defect at all.
+std::vector<float> spin_seam_signal() {
+  std::vector<float> samples(512, 0.0f);
+  std::mt19937 rng(20260917u);
+  std::uniform_real_distribution<float> noise(-0.01f, 0.01f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float ramp = static_cast<float>(i) / static_cast<float>(samples.size() - 1);
+    samples[i] = noise(rng) + 0.45f * std::tanh(8.0f * (ramp - 0.5f)) +
+                 0.05f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * i / 16.0));
+  }
+  return samples;
+}
+
+/// The largest absolute difference over [first, last).
+double max_difference(const std::vector<float>& a, const std::vector<float>& b, size_t first,
+                      size_t last) {
+  double worst = 0.0;
+  for (size_t i = first; i < last && i < a.size(); ++i) {
+    worst = std::max(worst, std::abs(static_cast<double>(a[i]) - static_cast<double>(b[i])));
+  }
+  return worst;
+}
+
+/// The share of the repair's error that is antisymmetric inside a Haar pair.
+/// Shrinking one detail coefficient moves its pair by (-d, +d), so blocking
+/// shows up here and nowhere else; a shift-invariant repair has no reason to
+/// prefer that axis.
+double pair_antisymmetry(const std::vector<float>& input, const std::vector<float>& output,
+                         size_t margin) {
+  double anti = 0.0;
+  double total = 0.0;
+  for (size_t i = margin; i + margin + 1 < input.size(); i += 2) {
+    const double even = static_cast<double>(output[i]) - static_cast<double>(input[i]);
+    const double odd = static_cast<double>(output[i + 1]) - static_cast<double>(input[i + 1]);
+    const double half_difference = 0.5 * (even - odd);
+    anti += half_difference * half_difference;
+    total += 0.5 * (even * even + odd * odd);
+  }
+  return total <= 0.0 ? 0.0 : std::sqrt(anti / total);
+}
+
+std::vector<float> rotate_left(const std::vector<float>& samples, size_t shift) {
+  std::vector<float> out(samples.size(), 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) out[i] = samples[(i + shift) % samples.size()];
+  return out;
+}
+
+std::vector<float> rotate_right(const std::vector<float>& samples, size_t shift) {
+  std::vector<float> out(samples.size(), 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) out[(i + shift) % samples.size()] = samples[i];
+  return out;
+}
+
+double vec_rms(const std::vector<float>& samples, size_t margin) {
+  double sum = 0.0;
+  size_t count = 0;
+  for (size_t i = margin; i + margin < samples.size(); ++i) {
+    sum += static_cast<double>(samples[i]) * static_cast<double>(samples[i]);
+    ++count;
+  }
+  return count == 0 ? 0.0 : std::sqrt(sum / static_cast<double>(count));
+}
+
+using Repair = std::function<std::vector<float>(const std::vector<float>&)>;
+
+Repair spun_repair(const DecrackleConfig& config, int shifts) {
+  return [config, shifts](const std::vector<float>& samples) {
+    return repair_detail::wavelet_shrink_spun(samples, config, shifts);
+  };
+}
+
+Repair public_repair(const DecrackleConfig& config) {
+  return [config](const std::vector<float>& samples) {
+    const auto processed = decrackle(make_audio(samples), config);
+    return std::vector<float>(processed.data(), processed.data() + processed.size());
+  };
+}
+
+/// The spread of a shift-and-unshift family. A shift-invariant operator makes
+/// every member identical, so this is zero; the decimating Haar does not.
+double shift_spread(const std::vector<float>& samples, const Repair& repair, size_t probe_shifts,
+                    size_t margin) {
+  std::vector<std::vector<float>> family;
+  for (size_t shift = 0; shift < probe_shifts; ++shift) {
+    family.push_back(rotate_right(repair(rotate_left(samples, shift)), shift));
+  }
+  std::vector<float> mean(samples.size(), 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    double sum = 0.0;
+    for (const auto& member : family) sum += member[i];
+    mean[i] = static_cast<float>(sum / static_cast<double>(family.size()));
+  }
+  double total = 0.0;
+  for (const auto& member : family) {
+    std::vector<float> deviation(samples.size(), 0.0f);
+    for (size_t i = 0; i < samples.size(); ++i) deviation[i] = member[i] - mean[i];
+    const double value = vec_rms(deviation, margin);
+    total += value * value;
+  }
+  return std::sqrt(total / static_cast<double>(family.size())) / vec_rms(samples, 0);
+}
+
+}  // namespace
+
+TEST_CASE("Decrackle wavelet cycle spinning leaves no artefact at the buffer ends",
+          "[mastering][repair]") {
+  const DecrackleConfig wavelet{0.02f, DecrackleMode::WaveletShrinkage, 4};
+  // haar_forward never wraps the buffer, so a cyclic shift butts the tail against
+  // the head and makes a discontinuity the unspun pass never saw. What the wrap can
+  // reach is one 2^levels block at each end, and nothing else guards that.
+  constexpr size_t kBlock = 16;
+
+  // Swept over the seam itself rather than measured at one amplitude, because a
+  // single amplitude cannot separate a bounded effect from an absent one.
+  for (float scale : {0.01f, 0.1f, 1.0f, 5.0f, 25.0f}) {
+    std::vector<float> input = spin_seam_signal();
+    for (size_t i = 0; i < input.size(); ++i) {
+      const float ramp = static_cast<float>(i) / static_cast<float>(input.size() - 1);
+      input[i] += (scale - 1.0f) * 0.45f * std::tanh(8.0f * (ramp - 0.5f));
+    }
+    const size_t size = input.size();
+    const auto unspun = repair_detail::wavelet_shrink_spun(input, wavelet, 1);
+    const auto spun =
+        repair_detail::wavelet_shrink_spun(input, wavelet, repair_detail::kCycleSpinShifts);
+    INFO("seam " << std::abs(input[size - 1] - input[0]));
+
+    // Non-vacuity: the spinning has to have moved the interior, or the bounds below
+    // are satisfied by an output that never changed.
+    const double moved = max_difference(spun, unspun, 2 * kBlock, size - 2 * kBlock);
+    REQUIRE(moved > 1e-4);
+
+    // No edge-localised excess: the block the wrap reaches is not a special place.
+    REQUIRE(max_difference(spun, unspun, 0, kBlock) < 2.0 * moved);
+    REQUIRE(max_difference(spun, unspun, size - kBlock, size) < 2.0 * moved);
+
+    // And the repair at those ends is no worse than the pass this replaced.
+    REQUIRE(max_difference(spun, input, 0, 2 * kBlock) <
+            max_difference(unspun, input, 0, 2 * kBlock));
+    REQUIRE(max_difference(spun, input, size - 2 * kBlock, size) <
+            max_difference(unspun, input, size - 2 * kBlock, size));
+  }
+}
+
+TEST_CASE("Decrackle wavelet cycle spinning cuts the mode's dependence on the input phase",
+          "[mastering][repair]") {
+  const DecrackleConfig wavelet{0.02f, DecrackleMode::WaveletShrinkage, 4};
+
+  // The instrument's own floor. A noiseless step has a zero MAD estimate, which
+  // drives the BayesShrink threshold to zero and leaves the pass an identity up
+  // to the transform's own round-trip rounding -- so what the measurement reads
+  // here is its reading for an operation that really is shift-invariant, and the
+  // numbers below have to stand clear of it.
+  std::vector<float> noiseless(512, 0.0f);
+  for (size_t i = 251; i < noiseless.size(); ++i) noiseless[i] = 0.4f;
+  DecrackleReport silent;
+  const auto untouched = decrackle(make_audio(noiseless), wavelet, &silent);
+  REQUIRE(silent.detail_coefficients > 0);
+  REQUIRE(silent.noise_sigma == 0.0f);
+  for (size_t i = 0; i < noiseless.size(); ++i) {
+    REQUIRE(std::abs(untouched[i] - noiseless[i]) < 1e-6f);
+  }
+  REQUIRE(shift_spread(noiseless, spun_repair(wavelet, 1), 16, 32) < 1e-6);
+
+  // Both signals: a tone carrying isolated impulses, and a step with an impulse
+  // over a noise floor, which is where blocking and pseudo-Gibbs show.
+  for (const auto& samples : {spin_probe_signal(), spin_step_signal()}) {
+    const double unspun = shift_spread(samples, spun_repair(wavelet, 1), 16, 32);
+    const double spun =
+        shift_spread(samples, spun_repair(wavelet, repair_detail::kCycleSpinShifts), 16, 32);
+
+    // Non-vacuity: the unspun shift dependence is orders above the floor measured
+    // above, so there is something for the spinning to remove.
+    INFO("unspun " << unspun << " spun " << spun);
+    REQUIRE(unspun > 1e-3);
+    REQUIRE(spun < 0.1 * unspun);
+  }
+}
+
+TEST_CASE("Decrackle wavelet shift dependence falls with every doubling of the spin count",
+          "[mastering][repair]") {
+  const DecrackleConfig wavelet{0.02f, DecrackleMode::WaveletShrinkage, 4};
+  const auto probe = spin_probe_signal();
+
+  std::vector<double> spreads;
+  for (int shifts : {1, 2, 4, 8}) {
+    spreads.push_back(shift_spread(probe, spun_repair(wavelet, shifts), 16, 32));
+  }
+  for (size_t i = 1; i < spreads.size(); ++i) {
+    INFO("spin count " << (1u << i));
+    REQUIRE(spreads[i] < spreads[i - 1]);
+  }
+
+  // With three levels the pair grid repeats every eight samples, so eight shifts
+  // cover every phase the transform has and the averaging is exact rather than
+  // partial. Interior only: a cyclic shift wraps the far end of the buffer onto
+  // the near one, and that seam is not a phase artefact.
+  DecrackleConfig three_levels = wavelet;
+  three_levels.levels = 3;
+  const double covered =
+      shift_spread(probe, spun_repair(three_levels, repair_detail::kCycleSpinShifts), 16, 32);
+  REQUIRE(covered < 0.01 * shift_spread(probe, spun_repair(three_levels, 1), 16, 32));
+}
+
+TEST_CASE("Decrackle wavelet cycle spinning evens the repair across the Haar pair grid",
+          "[mastering][repair]") {
+  const DecrackleConfig wavelet{0.02f, DecrackleMode::WaveletShrinkage, 4};
+  const auto probe = spin_probe_signal();
+
+  const double unspun =
+      pair_antisymmetry(probe, repair_detail::wavelet_shrink_spun(probe, wavelet, 1), 32);
+  const double spun = pair_antisymmetry(
+      probe, repair_detail::wavelet_shrink_spun(probe, wavelet, repair_detail::kCycleSpinShifts),
+      32);
+
+  // An error with no pair-phase preference sits at 1/sqrt(2); the unspun transform
+  // is above it because shrinking a detail coefficient moves its pair by (-d, +d).
+  REQUIRE(unspun > sonare::constants::kInvSqrt2);
+  REQUIRE(spun < sonare::constants::kInvSqrt2);
+}
+
+TEST_CASE("Decrackle wavelet mode averages exactly kCycleSpinShifts phases",
+          "[mastering][repair]") {
+  const DecrackleConfig wavelet{0.02f, DecrackleMode::WaveletShrinkage, 4};
+  const auto probe = spin_probe_signal();
+
+  const auto through_facade = public_repair(wavelet)(probe);
+  const auto spun =
+      repair_detail::wavelet_shrink_spun(probe, wavelet, repair_detail::kCycleSpinShifts);
+  for (size_t i = 0; i < probe.size(); ++i) REQUIRE(through_facade[i] == spun[i]);
+
+  // A count below one, and one past the buffer length, both collapse to a single
+  // pass rather than dividing by a weight no phase carried.
+  const auto once = repair_detail::wavelet_shrink_spun(probe, wavelet, 1);
+  for (int shifts : {0, -3}) {
+    const auto clamped = repair_detail::wavelet_shrink_spun(probe, wavelet, shifts);
+    for (size_t i = 0; i < probe.size(); ++i) REQUIRE(clamped[i] == once[i]);
+  }
+  const std::vector<float> tiny = {0.1f, 0.8f, 0.12f};
+  const auto over = repair_detail::wavelet_shrink_spun(tiny, wavelet, 64);
+  const auto exact = repair_detail::wavelet_shrink_spun(tiny, wavelet, 3);
+  for (size_t i = 0; i < tiny.size(); ++i) REQUIRE(over[i] == exact[i]);
+}
+
+TEST_CASE("Decrackle at one spin reproduces the unspun transform", "[mastering][repair]") {
+  const DecrackleConfig wavelet{0.02f, DecrackleMode::WaveletShrinkage, 4};
+  const auto probe = spin_probe_signal();
+
+  // Captured from the decimating implementation before cycle spinning was added.
+  // Eight shifts move these samples by parts in a hundred, so the tolerance is
+  // four orders tighter than the change it has to tell apart.
+  const std::array<float, 8> unspun_golden = {0x1.2b59d4p-4f, 0x1.3becc8p-4f, 0x1.57387ep-4f,
+                                              0x1.61772ep-4f, 0x1.80ee6ep-4f, 0x1.840d8ep-4f,
+                                              0x1.8ee8dep-4f, 0x1.8ee8dep-4f};
+  const auto once = repair_detail::wavelet_shrink_spun(probe, wavelet, 1);
+  for (size_t i = 0; i < unspun_golden.size(); ++i) {
+    INFO("sample " << (200 + i));
+    REQUIRE_THAT(once[200 + i], WithinAbs(unspun_golden[i], 1e-6f));
+  }
+
+  const auto spun = public_repair(wavelet)(probe);
+  bool spinning_moved_the_golden_window = false;
+  for (size_t i = 0; i < unspun_golden.size(); ++i) {
+    if (std::abs(spun[200 + i] - unspun_golden[i]) > 1e-3f) spinning_moved_the_golden_window = true;
+  }
+  REQUIRE(spinning_moved_the_golden_window);
+}
+
+TEST_CASE("Decrackle median mode is untouched by the wavelet cycle spinning",
+          "[mastering][repair]") {
+  // Captured from the same pre-spinning implementation. Median mode never
+  // arithmetically combines samples -- it copies either the input or one of its
+  // neighbours -- so this comparison is exact rather than toleranced.
+  const std::array<float, 8> median_golden = {0x1.21a186p-4f, 0x1.3ca006p-4f, 0x1.5491e8p-4f,
+                                              0x1.693c26p-4f, 0x1.7a6bcap-4f, 0x1.87f678p-4f,
+                                              0x1.91bacap-4f, 0x1.97a0aep-4f};
+  const auto probe = spin_probe_signal();
+  const auto repaired = public_repair({0.02f, DecrackleMode::Median, 4})(probe);
+  for (size_t i = 0; i < median_golden.size(); ++i) {
+    INFO("sample " << (200 + i));
+    REQUIRE(repaired[200 + i] == median_golden[i]);
+  }
+
+  DecrackleReport report;
+  decrackle(make_audio(probe), {0.02f, DecrackleMode::Median, 4}, &report);
+  REQUIRE(report.replaced_samples > 0);
+  REQUIRE(report.detail_coefficients == 0);
 }
 
 TEST_CASE("Repair helpers validate inputs", "[mastering][repair]") {

@@ -390,7 +390,7 @@ export interface DecrackleReport {
   detected: CrackleDetection;
   /** Median mode: samples the filter overwrote. Equal to `detected.sampleCount`. */
   replacedSamples: number;
-  /** Wavelet mode: detail coefficients examined. */
+  /** Wavelet mode: detail coefficients examined by the unshifted pass, not by every pass the mode averages. */
   detailCoefficients: number;
   /** Wavelet mode: of those, driven to zero. */
   shrunkCoefficients: number;

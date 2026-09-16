@@ -1464,7 +1464,8 @@ class DecrackleReport:
     different fields: ``replaced_samples`` is median-mode only,
     ``detail_coefficients`` / ``shrunk_coefficients`` / ``noise_sigma`` are
     wavelet-mode only. A field belonging to the other mode reads zero because
-    that mode did not run, not because it went unmeasured.
+    that mode did not run, not because it went unmeasured. The wavelet fields
+    describe the unshifted pass, not every pass the mode averages.
     """
 
     detected: CrackleDetection

@@ -612,8 +612,11 @@ TEST_CASE("Dehum and decrackle mono digests stay stable", "[.][repair][stereo][h
   const std::vector<float> crackle_right = crackle_fixture(0.35);
   CHECK(digest(decrackle(view(crackle_left), kMedian)) == 0x7262ef87u);
   CHECK(digest(decrackle(view(crackle_right), kMedian)) == 0xd7a14dd5u);
-  CHECK(digest(decrackle(view(crackle_left), kWavelet)) == 0xdc4b2183u);
-  CHECK(digest(decrackle(view(crackle_right), kWavelet)) == 0x33135618u);
+  // One value each: unlike the adaptive dehum pair below, both decrackle modes
+  // hold from -O0 through -O3. The wavelet path's only contraction candidate
+  // accumulates in double before it narrows.
+  CHECK(digest(decrackle(view(crackle_left), kWavelet)) == 0xe1d9e124u);
+  CHECK(digest(decrackle(view(crackle_right), kWavelet)) == 0xb045b240u);
 
   const std::vector<float> hum_left = hum50_fixture(0.0);
   const std::vector<float> hum_right = hum50_fixture(0.35);

@@ -132,6 +132,16 @@ void haar_inverse(std::vector<float>& samples, const HaarAnalysis& analysis) {
   }
 }
 
+std::vector<float> wavelet_shrink_once(const std::vector<float>& samples,
+                                       const DecrackleConfig& config, DecrackleReport* report) {
+  std::vector<float> output = samples;
+  const HaarAnalysis analysis = haar_forward(output, config.levels);
+  haar_shrink_details(output, analysis, config.threshold, report);
+  haar_inverse(output, analysis);
+  if (report != nullptr) report->noise_sigma = analysis.noise_sigma;
+  return output;
+}
+
 /// This module's definition of the defect: a sample deviating from the median of
 /// itself and its two neighbours by more than threshold. The detector and the
 /// median repair both call it, so they cannot disagree about what crackle is.
@@ -181,12 +191,7 @@ std::vector<float> run_decrackle(const std::vector<float>& samples, int sample_r
         to_detection(count_crackle(samples, config.threshold), samples.size(), sample_rate);
   }
   if (config.mode == DecrackleMode::WaveletShrinkage) {
-    std::vector<float> output = samples;
-    const HaarAnalysis analysis = haar_forward(output, config.levels);
-    haar_shrink_details(output, analysis, config.threshold, report);
-    haar_inverse(output, analysis);
-    if (report != nullptr) report->noise_sigma = analysis.noise_sigma;
-    return output;
+    return detail::wavelet_shrink_spun(samples, config, detail::kCycleSpinShifts, report);
   }
 
   std::vector<float> output = samples;
@@ -201,6 +206,33 @@ std::vector<float> run_decrackle(const std::vector<float>& samples, int sample_r
 }
 
 }  // namespace
+
+namespace detail {
+
+std::vector<float> wavelet_shrink_spun(const std::vector<float>& samples,
+                                       const DecrackleConfig& config, int shifts,
+                                       DecrackleReport* report) {
+  const size_t size = samples.size();
+  if (size == 0) return {};
+  const size_t spins = std::min(static_cast<size_t>(std::max(1, shifts)), size);
+
+  std::vector<double> accumulator(size, 0.0);
+  std::vector<float> shifted(size, 0.0f);
+  for (size_t shift = 0; shift < spins; ++shift) {
+    for (size_t i = 0; i < size; ++i) shifted[i] = samples[(i + shift) % size];
+    const std::vector<float> processed =
+        wavelet_shrink_once(shifted, config, shift == 0 ? report : nullptr);
+    for (size_t i = 0; i < size; ++i) accumulator[(i + shift) % size] += processed[i];
+  }
+
+  std::vector<float> output(size, 0.0f);
+  for (size_t i = 0; i < size; ++i) {
+    output[i] = static_cast<float>(accumulator[i] / static_cast<double>(spins));
+  }
+  return output;
+}
+
+}  // namespace detail
 
 void validate_config(const DecrackleConfig& config) {
   if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f)) {

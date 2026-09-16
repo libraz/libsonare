@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <vector>
 
 #include "core/audio.h"
 
@@ -50,7 +51,8 @@ struct DecrackleReport {
   size_t replaced_samples = 0;     ///< Median mode: samples the filter overwrote.
                                    ///  Equal to detected.sample_count, since the
                                    ///  detector and the repair share a criterion.
-  size_t detail_coefficients = 0;  ///< Wavelet mode: detail coefficients examined.
+  size_t detail_coefficients = 0;  ///< Wavelet mode: detail coefficients examined
+                                   ///  by the unshifted cycle-spin pass.
   size_t shrunk_coefficients = 0;  ///< Wavelet mode: of those, driven to zero.
   float noise_sigma = 0.0f;        ///< Wavelet mode: the MAD noise estimate that
                                    ///  set every level's threshold. The configured
@@ -78,5 +80,23 @@ struct DecrackleStereoResult {
 ///   the channel-length contract in one place.
 DecrackleStereoResult decrackle_stereo(const Audio& left, const Audio& right,
                                        const DecrackleConfig& config = {});
+
+namespace detail {
+
+/// How many cyclic shifts the wavelet mode averages over. The Haar pair grid is
+/// anchored to fixed sample indices, so blocking and pseudo-Gibbs artefacts land
+/// on those boundaries; averaging over this many phases spreads them out.
+inline constexpr int kCycleSpinShifts = 8;
+
+/// @brief The wavelet mode with the cycle-spin count made explicit.
+/// @details Exposed so the shift dependence can be measured at each count; 1 is
+///   the unspun decimating transform. @p shifts is clamped to
+///   [1, samples.size()], a shift of the full length being the identity rotation.
+///   @p report describes the unshifted pass only and is added to, not reset.
+std::vector<float> wavelet_shrink_spun(const std::vector<float>& samples,
+                                       const DecrackleConfig& config, int shifts,
+                                       DecrackleReport* report = nullptr);
+
+}  // namespace detail
 
 }  // namespace sonare::mastering::repair
