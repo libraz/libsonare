@@ -1007,7 +1007,9 @@ def test_pcm16_clamps_and_stays_byte_identical() -> None:
 # conventions: each `x` lands on or near a .5 boundary once scaled, where
 # round-half-to-even and round-half-away-from-zero disagree. Recorded from
 # `std::lroundf` on the 32-bit product, which is the contract `float_to_pcm16`
-# and `float_to_pcm24` (src/core/audio_io.cpp) publish.
+# and `float_to_pcm24` (src/core/audio_io.cpp) publish. The non-finite rows
+# never reach the scale at all: they have no PCM image and are written as
+# digital silence.
 _PCM16_NATIVE_CODES = [
     (1.5259254723787308e-05, 1),
     (-1.5259254723787308e-05, -1),
@@ -1032,9 +1034,9 @@ _PCM16_NATIVE_CODES = [
     (1.5, 32767),
     (-1.5, -32767),
     (0.0, 0),
-    (float("nan"), 32767),
-    (float("inf"), 32767),
-    (float("-inf"), -32767),
+    (float("nan"), 0),
+    (float("inf"), 0),
+    (float("-inf"), 0),
 ]
 
 _PCM24_NATIVE_CODES = [
@@ -1051,9 +1053,9 @@ _PCM24_NATIVE_CODES = [
     (1.5, 8388607),
     (-1.5, -8388607),
     (0.0, 0),
-    (float("nan"), 8388607),
-    (float("inf"), 8388607),
-    (float("-inf"), -8388607),
+    (float("nan"), 0),
+    (float("inf"), 0),
+    (float("-inf"), 0),
 ]
 
 
@@ -1076,7 +1078,7 @@ def test_pcm_boundary_vector_separates_the_two_rounding_conventions() -> None:
     """
     disagreeing = 0
     for sample, expected in _PCM16_NATIVE_CODES:
-        if sample != sample:  # NaN reaches the clamp, not the rounding step
+        if not math.isfinite(sample):  # substituted before the rounding step
             continue
         clamped = max(-1.0, min(1.0, sample))
         if int(round(clamped * 32767.0)) != expected:

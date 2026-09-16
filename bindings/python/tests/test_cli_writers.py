@@ -224,27 +224,112 @@ def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
     _assert_only_old_output(tmp_path, output)
 
 
-def test_wav_writer_saturates_non_finite_samples_like_the_core(tmp_path) -> None:
-    """NaN and infinities saturate to full scale instead of raising.
+def _read_codes(path: Path, bits_per_sample: int) -> tuple[int, ...]:
+    """Every PCM code in a WAV, signed, at either sample width."""
+    width = bits_per_sample // 8
+    with wave.open(str(path), "rb") as wav:
+        assert wav.getsampwidth() == width
+        frames = wav.readframes(wav.getnframes())
+    return tuple(
+        int.from_bytes(frames[offset : offset + width], "little", signed=True)
+        for offset in range(0, len(frames), width)
+    )
 
-    The core's WAV writer clamps with ``std::max(-1, std::min(1, x))``, where
-    every comparison against NaN is false, so NaN and +Inf land on +1.0 and
-    -Inf on -1.0. A writer that lets NaN reach ``int(round(...))`` raises
-    instead, turning a hostile sample into a failed export.
+
+@pytest.mark.parametrize(
+    ("bits", "full_scale", "half_code"),
+    [(16, 32767, 16384), (24, 8388607, 4194304)],
+)
+@pytest.mark.parametrize(
+    ("label", "sample"),
+    [
+        ("nan", float("nan")),
+        ("positive-infinity", float("inf")),
+        ("negative-infinity", float("-inf")),
+    ],
+)
+def test_wav_writer_writes_a_non_finite_sample_as_silence_like_the_core(
+    tmp_path, bits, full_scale, half_code, label, sample
+) -> None:
+    """A sample with no PCM image reaches the file as silence, as in the core.
+
+    ``float_to_pcm16`` / ``float_to_pcm24`` (audio_io.cpp) guard on
+    ``std::isfinite`` before the clamp. A clamp alone cannot stand in for that:
+    every comparison against a non-finite value is false, so ``std::min``
+    returns its other argument and NaN and +Inf reach the file at positive full
+    scale, indistinguishable from a peak the encoder meant to produce, -Inf at
+    negative full scale.
     """
-    import struct
-
     from libsonare import cli
 
-    samples = [float("nan"), float("inf"), float("-inf"), 0.5, 0.0]
-    output = tmp_path / "non_finite.wav"
+    output = tmp_path / f"{label}-{bits}.wav"
+    cli._write_wav(str(output), [sample, 0.5], 48000, bits)
+
+    codes = _read_codes(output, bits)
+    assert codes[0] == 0, (
+        f"{label} was written as {codes[0]} rather than silence; "
+        f"an unguarded clamp emits +/-{full_scale}"
+    )
+    # The guard substitutes the one sample, not the block around it.
+    assert codes[1] == half_code
+
+
+def test_wav_export_completes_over_a_sample_no_32_bit_float_can_hold(tmp_path) -> None:
+    """One unrepresentable sample costs one sample, not the file.
+
+    The core's guard runs on the 32-bit sample it was handed, so a Python float
+    the narrowing turns into an infinity has no PCM image either and is
+    substituted like any other. This is the failure with the larger blast
+    radius: a substitution loses one sample, while packing that raises loses
+    every frame the caller asked for. A magnitude that still fits keeps clamping
+    to full scale.
+
+    Helper robustness, and deliberately not a CLI contract case: every sample a
+    command hands these writers is a core ``float`` widened to a Python float,
+    so no argument reaches this branch. Its absence from the cross-surface gate
+    is the measurement, not a gap in it.
+    """
+    from libsonare import cli
+
+    samples = [0.25, 0.5] * 64 + [1e39, -1e39, 3.4e38, 0.5] + [0.25, 0.5] * 64
+    output = tmp_path / "overflow.wav"
     cli._write_wav(str(output), samples, 48000)
 
-    with wave.open(str(output), "rb") as wav:
-        assert wav.getnframes() == len(samples)
-        frames = wav.readframes(wav.getnframes())
-    written = struct.unpack("<" + "h" * len(samples), frames)
-    assert written == (32767, 32767, -32767, 16384, 0)
+    codes = _read_codes(output, 16)
+    assert len(codes) == len(samples)
+    assert codes[128:132] == (0, 0, 32767, 16384)
+    assert set(codes[:128]) == set(codes[132:]) == {8192, 16384}
+
+
+@pytest.mark.parametrize(
+    ("bits", "expected"),
+    [(16, (32767, -32767, 32734, 0)), (24, (8388607, -8388607, 8380219, 0))],
+)
+def test_wav_writer_keeps_finite_codes_at_and_below_full_scale(tmp_path, bits, expected) -> None:
+    """Silencing a non-finite sample must not move any finite one."""
+    from libsonare import cli
+
+    output = tmp_path / f"finite-{bits}.wav"
+    cli._write_wav(str(output), [1.0, -1.0, 0.999, 0.0], 48000, bits)
+
+    assert _read_codes(output, bits) == expected
+
+
+def test_stereo_and_bounce_writers_share_the_non_finite_substitution(tmp_path) -> None:
+    """Both multi-channel writers reach the same quantizer as the mono one."""
+    from libsonare import cli
+    from libsonare._cli_common import _write_project_bounce_wav
+
+    stereo = tmp_path / "stereo.wav"
+    cli._write_wav_stereo(str(stereo), [float("nan"), 0.5], [float("-inf"), -0.5], 48000)
+    assert _read_codes(stereo, 16) == (0, 0, 16384, -16384)
+
+    bounce = tmp_path / "bounce.wav"
+    frames, channels = _write_project_bounce_wav(
+        str(bounce), [[float("inf"), 0.25], [0.5, float("nan")]], 48000
+    )
+    assert (frames, channels) == (2, 2)
+    assert _read_codes(bounce, 16) == (0, 8192, 16384, 0)
 
 
 def test_wav_writer_peak_memory_is_bounded_by_chunk_size(tmp_path) -> None:

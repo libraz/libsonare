@@ -238,37 +238,40 @@ def _to_float32(value: float) -> float:
 
     The native quantizer takes a 32-bit sample and scales it in 32-bit
     arithmetic, so a mirror computing in Python's float64 lands on a different
-    integer for some inputs even though both round the same way.
+    integer for some inputs even though both round the same way. A magnitude no
+    32-bit float can hold becomes an infinity, as the narrowing conversion does,
+    rather than an error.
     """
     import struct
 
     # struct.unpack is typed as tuple[Any, ...], so the element is narrowed here
     # rather than left to leak an untyped value out of a float-returning helper.
-    return float(struct.unpack("<f", struct.pack("<f", value))[0])
-
-
-def _clamp_sample(sample: float) -> float:
-    """Clamp a float sample to ``[-1.0, 1.0]``, including non-finite input.
-
-    Mirrors the C++ writer's ``std::max(-1, std::min(1, x))`` (audio_io.cpp),
-    where every comparison against NaN is false: NaN and +Inf both saturate to
-    +1.0 and -Inf to -1.0. Ordering the clamp as cap-then-floor reproduces that
-    instead of passing NaN through to ``int(round(...))``, which raises.
-    """
-    capped = sample if sample < 1.0 else 1.0
-    return capped if capped > -1.0 else -1.0
+    try:
+        return float(struct.unpack("<f", struct.pack("<f", value))[0])
+    except OverflowError:
+        return math.inf if value > 0.0 else -math.inf
 
 
 def _quantize_sample(sample: float, full_scale: float, minimum: int, maximum: int) -> int:
-    """Scale a clamped float sample to an integer PCM code.
+    """Scale a float sample to an integer PCM code.
 
     Reproduces ``float_to_pcm16`` / ``float_to_pcm24`` (audio_io.cpp) step for
-    step: narrow to 32-bit, clamp, scale in 32-bit, then round half away from
-    zero rather than to even, and clamp the code to the container. Both the
-    narrowing and the rounding rule are load-bearing -- either one alone still
-    disagrees with the native writer on some samples.
+    step: narrow to 32-bit, write a non-finite sample as digital silence, clamp
+    to ``[-1, 1]``, scale in 32-bit, round half away from zero rather than to
+    even, then clamp the code to the container. The guard precedes the clamp
+    because a comparison against a non-finite value is false: a clamp alone lets
+    NaN and +Inf through as positive full scale, a peak the encoder never
+    produced. Narrowing and the rounding rule are both load-bearing -- either
+    one alone still disagrees with the native writer on some samples.
+
+    The core threads a substitution count out of ``save_wav``; neither CLI asks
+    for it, so both substitute without reporting.
     """
-    scaled = _to_float32(_clamp_sample(_to_float32(sample)) * full_scale)
+    narrowed = _to_float32(sample)
+    if not math.isfinite(narrowed):
+        return 0
+    clamped = max(-1.0, min(1.0, narrowed))
+    scaled = _to_float32(clamped * full_scale)
     rounded = math.floor(scaled + 0.5) if scaled >= 0.0 else math.ceil(scaled - 0.5)
     return max(minimum, min(maximum, int(rounded)))
 
@@ -277,6 +280,7 @@ def _pcm16(sample: float) -> bytes:
     """Clamp a float to ``[-1.0, 1.0]`` and pack it as little-endian 16-bit PCM.
 
     Shared by every WAV writer so the clamp-and-scale contract stays identical.
+    A non-finite sample is written as digital silence; see ``_quantize_sample``.
     """
     import struct
 
@@ -385,7 +389,8 @@ def _write_wav(
 ) -> None:
     """Write mono 16- or 24-bit PCM WAV using only the Python standard library.
 
-    Floats are clamped to ``[-1.0, 1.0]`` and scaled to the selected PCM range.
+    Floats are clamped to ``[-1.0, 1.0]`` and scaled to the selected PCM range;
+    a non-finite sample becomes digital silence.
     """
     with _atomic_wav_writer(path, 1, sample_rate, bits_per_sample) as wav:
         for offset in range(0, len(samples), _WAV_CHUNK_FRAMES):
@@ -401,7 +406,8 @@ def _write_wav(
 def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_rate: int) -> None:
     """Write a stereo 16-bit PCM WAV using only the Python standard library.
 
-    Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
+    Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767; a non-finite
+    sample becomes digital silence.
     """
     count = min(len(left), len(right))
     with _atomic_wav_writer(path, 2, sample_rate) as wav:
