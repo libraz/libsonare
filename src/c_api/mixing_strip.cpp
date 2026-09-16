@@ -405,6 +405,18 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       SONARE_C_CATCH
     }
 
+    SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip,
+                                                      uint32_t* out_count) {
+      // A single relaxed atomic load, so it is safe to poll from the audio
+      // thread alongside the meters; it touches no diagnostic string.
+      SONARE_C_RT_API_ENTRY;
+      if (!strip || !out_count) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      *out_count = strip->strip.non_finite_discard_count();
+      return SONARE_OK;
+    }
+
     size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip,
                                                SonareMixGoniometerPoint* out, size_t max_points) {
       if (!strip || !out || max_points == 0) {

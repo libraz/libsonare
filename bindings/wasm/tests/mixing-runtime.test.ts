@@ -293,6 +293,154 @@ describe('Mixer runtime controls (WASM)', () => {
     });
   });
 
+  describe('non-finite discard telemetry', () => {
+    // A +200 dB peaking band whose recursive (biquad) coefficients scale with
+    // the boost. A single-strip scene keeps stripIndex fixed at 0.
+    function highGainEqScene(): string {
+      return JSON.stringify({
+        version: 1,
+        strips: [
+          {
+            id: 'src',
+            inserts: [
+              {
+                slot: 'pre',
+                processor: 'eq.parametric',
+                params: JSON.stringify({
+                  'band0.frequencyHz': 1000,
+                  'band0.gainDb': 200,
+                  'band0.q': 1,
+                  'band0.enabled': true,
+                }),
+              },
+            ],
+          },
+        ],
+        buses: [{ id: 'master', role: 'master' }],
+      });
+    }
+
+    it("reports the EQ discard immediately and the meters' one block later", () => {
+      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      try {
+        mixer.compile();
+
+        const clean = new Float32Array(BLOCK);
+        for (let i = 0; i < BLOCK; i++) {
+          clean[i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / SR);
+        }
+
+        // Clean run: the boosted band actively filters the strip, so the zero
+        // discard count read below is not vacuous -- the non-zero output
+        // energy confirms the EQ's recursive state was actually driven.
+        const cleanOut = mixer.processStereo([clean], [clean]);
+        expect(blockEnergy(cleanOut)).toBeGreaterThan(0);
+        expect(mixer.stripNonFiniteDiscardCount(0)).toBe(0);
+
+        // Poisoned block: 1e35 is finite and float32-representable, so the
+        // mixer's own non-finite INPUT guard (sonare_mixer_process_stereo)
+        // lets it through -- but multiplied by the band's boosted coefficient
+        // it overflows float32 range inside the biquad recursion, corrupting
+        // the filter's own state without the input itself ever being NaN or
+        // infinite. The overflowed (now infinite) samples continue on to the
+        // strip's own pre/post meters downstream in this same block. The EQ
+        // checks its own state at the end of its process call, so its share
+        // of the count rises on this block.
+        const poisoned = clean.slice();
+        poisoned[100] = 1e35;
+        mixer.processStereo([poisoned], [poisoned]);
+        const afterPoisonedBlock = mixer.stripNonFiniteDiscardCount(0);
+        expect(afterPoisonedBlock).toBeGreaterThan(0);
+
+        // A meter checks its own loudness state at the TOP of a block, before
+        // consuming that block's samples -- so the corruption it absorbed
+        // above is only detected (and counted) once the NEXT block runs, even
+        // though that block carries no new poison of its own.
+        mixer.processStereo([clean], [clean]);
+        const afterFollowingBlock = mixer.stripNonFiniteDiscardCount(0);
+        expect(afterFollowingBlock).toBeGreaterThan(afterPoisonedBlock);
+
+        // A further clean block adds nothing more: both the EQ and the
+        // meters have now fully recovered.
+        mixer.processStereo([clean], [clean]);
+        expect(mixer.stripNonFiniteDiscardCount(0)).toBe(afterFollowingBlock);
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('rejects an out-of-range strip index', () => {
+      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      try {
+        expect(() => mixer.stripNonFiniteDiscardCount(mixer.stripCount())).toThrow();
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('reports a bus discard for its own meter one block after an upstream overflow reaches it', () => {
+      // 'src' has no explicit connection but auto-routes to 'master' (see the
+      // asymmetric-strip fixture above); 'master' itself owns no insert, so
+      // only its post-insert meter is in play.
+      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      try {
+        mixer.compile();
+
+        const clean = new Float32Array(BLOCK);
+        for (let i = 0; i < BLOCK; i++) {
+          clean[i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / SR);
+        }
+
+        const cleanOut = mixer.processStereo([clean], [clean]);
+        expect(blockEnergy(cleanOut)).toBeGreaterThan(0);
+        expect(mixer.busNonFiniteDiscardCount('master')).toBe(0);
+
+        // Same poison as the strip case: the strip's boosted EQ band
+        // overflows to infinity and that signal reaches the master bus this
+        // same block. The bus owns no insert of its own, so nothing on it
+        // discards yet -- only its meter absorbed the corruption, and a
+        // meter's own check runs at the top of its NEXT process call.
+        const poisoned = clean.slice();
+        poisoned[100] = 1e35;
+        mixer.processStereo([poisoned], [poisoned]);
+        expect(mixer.busNonFiniteDiscardCount('master')).toBe(0);
+
+        mixer.processStereo([clean], [clean]);
+        const afterFollowingBlock = mixer.busNonFiniteDiscardCount('master');
+        expect(afterFollowingBlock).toBeGreaterThan(0);
+
+        // One more clean block adds nothing further: the meter has recovered.
+        mixer.processStereo([clean], [clean]);
+        expect(mixer.busNonFiniteDiscardCount('master')).toBe(afterFollowingBlock);
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('throws for a bus declared but not yet compiled, rather than reading zero', () => {
+      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      try {
+        mixer.compile();
+        // 'late' is now in the topology, but the graph has not recompiled
+        // since, so it has no DSP record yet. Reading zero here would read
+        // as a clean bus; it must throw instead.
+        mixer.addBus('late', 'aux');
+        expect(() => mixer.busNonFiniteDiscardCount('late')).toThrow();
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('rejects an unknown bus id', () => {
+      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      try {
+        expect(() => mixer.busNonFiniteDiscardCount('does-not-exist')).toThrow();
+      } finally {
+        mixer.delete();
+      }
+    });
+  });
+
   describe('solo and solo-safe', () => {
     // The drum strips all route through a shared bus whose inserts (parallel
     // compressor + tape) carry internal state. To compare energy between two

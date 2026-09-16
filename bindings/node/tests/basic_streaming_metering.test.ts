@@ -209,6 +209,24 @@ describe('StreamingMasteringChain', () => {
     expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
   });
 
+  it('reports the state a discard blocks when a stage produces a non-finite value', () => {
+    // A tilt shelf keeps recursive cells; the default chain has no such
+    // stage, so its count would sit at zero for a reason unrelated to the
+    // method under test. Setting any field under a module enables it.
+    const chain = new StreamingMasteringChain({ 'eq.tilt.tiltDb': 24 });
+    chain.prepare(48000, 128, 1);
+
+    // Control: an ordinary block counts nothing.
+    chain.processMono(new Float32Array(128).fill(0.25));
+    expect(chain.nonFiniteDiscardCount()).toBe(0);
+
+    // The chain refuses non-finite input outright, so the poison has to be
+    // something a stage produces: a finite value large enough that the
+    // tilt shelf's own arithmetic overflows float internally.
+    chain.processMono(new Float32Array(128).fill(3.0e38));
+    expect(chain.nonFiniteDiscardCount()).toBe(1);
+  });
+
   it('accepts a loudness stage when a static gain is supplied', () => {
     const chain = new StreamingMasteringChain({
       'loudness.targetLufs': -14,
@@ -236,6 +254,35 @@ describe('StreamingEqualizer', () => {
     }
     // Positive control: the refusals above are about the index, not the band.
     expect(() => eq.setBand(0, band)).not.toThrow();
+  });
+
+  it('reports the state a discard blocks when a non-finite sample reaches it', () => {
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    // Without an enabled band the EQ holds no recursive state, so its count
+    // would stay at zero for a reason unrelated to the entry under test.
+    eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 9, q: 2, enabled: true });
+    expect(eq.nonFiniteDiscardCount()).toBe(0);
+
+    const block = 64;
+    const left = new Float32Array(block).fill(0.25);
+    const right = new Float32Array(block).fill(0.25);
+
+    // Control: an ordinary block counts nothing, so the increment below is
+    // attributable to the poison rather than to processing at all.
+    eq.processStereo(left, right);
+    expect(eq.nonFiniteDiscardCount()).toBe(0);
+
+    // processStereo scrubs nothing, unlike the mixer's block entry, so the
+    // poison goes in as supplied and the recursive cells behind the band
+    // take it.
+    left[8] = Number.NaN;
+    right[8] = Number.NaN;
+    eq.processStereo(left, right);
+    // Both channels lost their cells and the block still adds one. Moving by
+    // two here would report a stereo stream as twice as degraded as a mono
+    // one for the same defect, over a width the caller passed rather than
+    // asked for.
+    expect(eq.nonFiniteDiscardCount()).toBe(1);
   });
 
   it('processes stereo blocks and exposes a spectrum snapshot', () => {

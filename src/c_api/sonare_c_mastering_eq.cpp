@@ -149,6 +149,15 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
     return eq ? eq->processor.latency_samples() : 0;
   }
 
+  SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count) {
+    // A single relaxed atomic load, so it is safe to poll from the audio thread
+    // alongside process(); it touches no diagnostic string.
+    SONARE_C_RT_API_ENTRY;
+    if (!eq || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+    *out_count = eq->processor.non_finite_discard_count();
+    return SONARE_OK;
+  }
+
   SonareError sonare_eq_set_sidechain(SonareEq * eq, const float* const* channels, int num_channels,
                                       int num_samples) {
     SONARE_C_API_ENTRY;

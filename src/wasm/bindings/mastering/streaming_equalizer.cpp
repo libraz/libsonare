@@ -198,6 +198,10 @@ class EqualizerWrapper {
 
   int latencySamples() const { return processor_.latency_samples(); }
 
+  // Number of blocks in which the EQ discarded recursive state because a
+  // non-finite value had reached it. See sonare_eq_non_finite_discard_count.
+  uint32_t nonFiniteDiscardCount() const { return processor_.non_finite_discard_count(); }
+
   val processMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "mono process block");
     validateBlockLength(length, "process block");
@@ -338,6 +342,7 @@ void registerStreamingEqualizerBindings() {
       .function("clearSidechain", &EqualizerWrapper::clearSidechain)
       .function("lastAutoGainDb", &EqualizerWrapper::lastAutoGainDb)
       .function("latencySamples", &EqualizerWrapper::latencySamples)
+      .function("nonFiniteDiscardCount", &EqualizerWrapper::nonFiniteDiscardCount)
       .function("processMono", &EqualizerWrapper::processMono)
       .function("processStereo", &EqualizerWrapper::processStereo)
       .function("magnitudeResponse", &EqualizerWrapper::magnitudeResponse)

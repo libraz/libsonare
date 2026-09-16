@@ -121,6 +121,14 @@ class StreamingMasteringChainWrapper {
     return static_cast<double>(chain_.non_finite_substitution_count());
   }
 
+  // The companion count: a whole stage returning to its post-reset value,
+  // once per call however many stages did it -- not the same measurement as
+  // nonFiniteSubstitutionCount, which sums replaced samples. See
+  // sonare_streaming_mastering_chain_non_finite_discard_count.
+  double nonFiniteDiscardCount() const {
+    return static_cast<double>(chain_.non_finite_discard_count());
+  }
+
  private:
   void ensurePreparedForFlush() const {
     if (max_block_size_ <= 0) {
@@ -155,7 +163,8 @@ void registerStreamingMasteringChainBindings() {
       .function("latencySamples", &StreamingMasteringChainWrapper::latencySamples)
       .function("stageNames", &StreamingMasteringChainWrapper::stageNames)
       .function("nonFiniteSubstitutionCount",
-                &StreamingMasteringChainWrapper::nonFiniteSubstitutionCount);
+                &StreamingMasteringChainWrapper::nonFiniteSubstitutionCount)
+      .function("nonFiniteDiscardCount", &StreamingMasteringChainWrapper::nonFiniteDiscardCount);
   function("createStreamingMasteringChain", &createStreamingMasteringChain, allow_raw_pointers());
 }
 

@@ -51,6 +51,7 @@ class StreamingMasteringChainWrap : public Napi::ObjectWrap<StreamingMasteringCh
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value StageNames(const Napi::CallbackInfo& info);
   Napi::Value NonFiniteSubstitutionCount(const Napi::CallbackInfo& info);
+  Napi::Value NonFiniteDiscardCount(const Napi::CallbackInfo& info);
   Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain_;
@@ -91,6 +92,7 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   void ClearSidechainStorage();
   Napi::Value LastAutoGainDb(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value NonFiniteDiscardCount(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
   Napi::Value ProcessStereo(const Napi::CallbackInfo& info);
   Napi::Value MagnitudeResponse(const Napi::CallbackInfo& info);

@@ -539,6 +539,59 @@ class Mixer:
         )
         return _mix_meter_from_c(snapshot)
 
+    def strip_non_finite_discard_count(self, strip: StripRef) -> int:
+        """Return the blocks in which the strip discarded recursive state.
+
+        Advisory telemetry, and the only thing that separates a degraded
+        strip from a clean one. A discard returns the affected state to its
+        post-reset value, so the strip recovers in silence and the output
+        stays finite and in range while carrying samples unrelated to the
+        input; nothing else reports that this happened.
+
+        Covers the strip's own state, its EQ, every insert it owns and both
+        of its meters; none of those is separately addressable here, so a
+        discard inside one is observable only through this number -- and a
+        meter that loses its loudness window then reports the floor, which
+        is what a genuinely silent strip reports, so nothing else
+        distinguishes the two. The unit is one processed block, never a
+        channel and never an insert, so a stereo block that discards on both
+        channels adds one. Cumulative since the strip was created and never
+        cleared, so two readings bracket a span of audio.
+        """
+        handle = self._strip_handle(strip)
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_strip_non_finite_discard_count"):
+            raise RuntimeError("libsonare was built without strip discard-count support")
+        out = ctypes.c_uint32()
+        _check(lib.sonare_strip_non_finite_discard_count(handle, ctypes.byref(out)))
+        return int(out.value)
+
+    def bus_non_finite_discard_count(self, bus_id: str) -> int:
+        """Return the blocks in which the bus discarded recursive state.
+
+        Same contract as :meth:`strip_non_finite_discard_count`, for a bus:
+        covers every insert the bus owns and its meter, neither of which is
+        separately addressable here. The count lives with the bus rather
+        than with the compiled node, so it is cumulative across graph
+        recompiles and an unrelated edit elsewhere in the mixer does not
+        reset it.
+
+        A bus's DSP record is created by the first compile, so a bus that
+        has been declared with :meth:`add_bus` but never compiled raises
+        the same way an unknown bus id does, rather than reading as zero.
+        """
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_bus_non_finite_discard_count"):
+            raise RuntimeError("libsonare was built without bus discard-count support")
+        out = ctypes.c_uint32()
+        _check(
+            lib.sonare_mixer_bus_non_finite_discard_count(
+                self._handle, bus_id.encode("utf-8"), ctypes.byref(out)
+            )
+        )
+        return int(out.value)
+
     def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]:
         """Read up to ``max_points`` of the latest goniometer (vectorscope) data.
 

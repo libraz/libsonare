@@ -84,6 +84,23 @@ class BusProcessor : public rt::ProcessorBase {
  private:
   void prepare_insert_alignment_delays(size_t insert_index);
 
+  /// @brief Every owned processor's discard count added together -- the inserts
+  ///        and the meter -- for the block delta in process(). RT-safe: relaxed
+  ///        atomic loads only.
+  /// @details These are owned here and reachable from outside only as a count,
+  ///   so a discard inside one is observable nowhere unless the bus records it.
+  ///   The sum answers "did any of them move", which is the question the bus's
+  ///   own per-block count asks; it is never published as a count of its own,
+  ///   and summing is safe only because of that -- a member may be driven
+  ///   several times per the bus's block. Mirrors ChannelStrip.
+  uint64_t member_discard_sum() const noexcept {
+    uint64_t total = meter_.non_finite_discard_count();
+    for (const auto& insert : inserts_) {
+      if (insert) total += insert->non_finite_discard_count();
+    }
+    return total;
+  }
+
   BusRole role_ = BusRole::Subgroup;
   int max_inputs_ = 0;
   ChannelLayout layout_ = ChannelLayout::Stereo;

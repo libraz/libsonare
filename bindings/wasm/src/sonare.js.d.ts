@@ -3225,6 +3225,8 @@ export interface WasmStreamingMasteringChain {
   stageNames: () => string[];
   /** Cumulative since prepare(), which rebuilds the stages and so clears it. */
   nonFiniteSubstitutionCount: () => number;
+  /** Not the same measurement as nonFiniteSubstitutionCount; see the facade. */
+  nonFiniteDiscardCount: () => number;
   delete: () => void;
 }
 
@@ -3252,6 +3254,7 @@ export interface WasmStreamingEqualizer {
   clearSidechain: () => void;
   lastAutoGainDb: () => number;
   latencySamples: () => number;
+  nonFiniteDiscardCount: () => number;
   processMono: (samples: Float32Array) => Float32Array;
   processStereo: (
     left: Float32Array,
@@ -3379,6 +3382,8 @@ export interface WasmMixer {
   meterTap: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
   stripMeter: (stripIndex: number) => WasmMixMeterSnapshot;
   busMeter: (busId: string) => WasmMixMeterSnapshot;
+  stripNonFiniteDiscardCount: (stripIndex: number) => number;
+  busNonFiniteDiscardCount: (busId: string) => number;
   scheduleFaderAutomation: (
     stripIndex: number,
     samplePos: number,

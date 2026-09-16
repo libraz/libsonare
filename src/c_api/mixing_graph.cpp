@@ -157,6 +157,24 @@ SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
   return SONARE_OK;
 }
 
+SonareError sonare_mixer_bus_non_finite_discard_count(const SonareMixer* mixer, const char* bus_id,
+                                                      uint32_t* out_count) {
+  // A single relaxed atomic load once the bus is found, so it is safe to poll
+  // from the audio thread alongside the meters; it touches no diagnostic string.
+  SONARE_C_RT_API_ENTRY;
+  if (!mixer || !bus_id || bus_id[0] == '\0' || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  // Read from the bus record rather than the compiled node: the record outlives
+  // every graph rebuild, so the count survives a recompile triggered by an
+  // unrelated strip edit, and an uncompiled mixer can still be asked.
+  for (const auto& bus : mixer->bus_dsp) {
+    if (bus && bus->id == bus_id) {
+      *out_count = bus->fx.non_finite_discard_count();
+      return SONARE_OK;
+    }
+  }
+  return SONARE_ERROR_INVALID_PARAMETER;
+}
+
 namespace sonare_c_mixing_detail {
 
 void apply_solo_mutes(SonareMixer* mixer) {

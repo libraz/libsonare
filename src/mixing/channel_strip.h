@@ -376,13 +376,16 @@ class ChannelStrip : public rt::ProcessorBase {
                             const std::vector<uint8_t>& stereo_pair_only, float* const* channels,
                             int num_channels, int num_samples, size_t first_insert_index,
                             int sidechain_offset);
-  /// @brief Every insert's discard count added together, for the block delta in
-  ///        process_at(). RT-safe: relaxed atomic loads only.
-  /// @details An insert is owned here and reachable only as a count, so a
-  ///   discard inside one is observable nowhere unless the strip records it. The
-  ///   sum answers "did any of them move", which is the question the strip's own
-  ///   per-block count asks; it is never published as a count of its own.
-  uint64_t insert_discard_sum() const noexcept {
+  /// @brief Every owned processor's discard count added together -- the inserts
+  ///        and both meters -- for the block delta in process_at(). RT-safe:
+  ///        relaxed atomic loads only.
+  /// @details These are owned here and reachable from outside only as a count,
+  ///   so a discard inside one is observable nowhere unless the strip records
+  ///   it. The sum answers "did any of them move", which is the question the
+  ///   strip's own per-block count asks; it is never published as a count of its
+  ///   own, and summing is safe only because of that -- a member may be driven
+  ///   several times per the strip's block.
+  uint64_t member_discard_sum() const noexcept {
     uint64_t total = 0;
     for (const auto& insert : pre_inserts_) {
       if (insert) total += insert->non_finite_discard_count();
@@ -390,6 +393,13 @@ class ChannelStrip : public rt::ProcessorBase {
     for (const auto& insert : post_inserts_) {
       if (insert) total += insert->non_finite_discard_count();
     }
+    // A meter discard is silent in a way the audio path's is not: losing the
+    // loudness window leaves the snapshot reporting the floor, which is what a
+    // genuinely silent strip reports, so the reading is wrong and in domain.
+    // Folded here because it is the strip that owns the meters and the only
+    // place a caller could learn of it.
+    if (pre_meter_) total += pre_meter_->non_finite_discard_count();
+    if (post_meter_) total += post_meter_->non_finite_discard_count();
     return total;
   }
   // Re-derives both per-insert alignment banks from the current insert list.

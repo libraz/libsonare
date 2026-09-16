@@ -160,6 +160,44 @@ export class StreamingMasteringChain {
   }
 
   /**
+   * Processing calls in which a stage discarded its own recursive state
+   * because a non-finite value had reached it.
+   *
+   * The companion to {@link nonFiniteSubstitutionCount}, and not the same
+   * measurement: that one counts samples a stage replaced and so sums
+   * across stages, while a discard is a whole stage returning to its
+   * post-reset value and is counted once per call however many stages did
+   * it. A stage may run more than once per call, which is why the number is
+   * a delta over the call and never a sum.
+   *
+   * Non-finite input is rejected before any stage runs, so what a stage
+   * discards is always state it produced itself -- a finite sample large
+   * enough to overflow inside a filter, most often. Unlike the substitution
+   * count every stage can contribute, so a zero here means no stage
+   * discarded rather than that none could.
+   *
+   * Both {@link processMono}/{@link processStereo} and
+   * {@link flushMono}/{@link flushStereo} count, since a flush drives the
+   * same stages. Cumulative since the last {@link prepare}, which rebuilds
+   * the stages and so clears it -- the same epoch
+   * {@link nonFiniteSubstitutionCount} shares, so reading both on one handle
+   * gives two numbers measured from the same point. Reports `0` before the
+   * chain has been prepared, and throws after {@link destroy}.
+   *
+   * @example
+   * ```typescript
+   * const out = chain.processMono(block);
+   * if (chain.nonFiniteDiscardCount() > 0) {
+   *   // a stage's own state was reset this call; the substitution count
+   *   // alone would not have shown that
+   * }
+   * ```
+   */
+  nonFiniteDiscardCount(): number {
+    return this.native.nonFiniteDiscardCount();
+  }
+
+  /**
    * Release the native resources now instead of waiting for garbage collection.
    * Idempotent; any other method called afterwards throws. A long-lived process
    * that creates a StreamingMasteringChain per request must call this, or native memory
@@ -485,6 +523,39 @@ export class StreamingEqualizer {
   /** Reported processing latency in samples. */
   latencySamples(): number {
     return this.native.latencySamples();
+  }
+
+  /**
+   * Number of blocks in which the equalizer discarded recursive state
+   * because a non-finite value had reached it.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded EQ
+   * from a clean one. A discard returns the affected filter cells to their
+   * post-reset value, so the EQ recovers in silence and the output stays
+   * finite and in range while carrying samples unrelated to the input;
+   * nothing else reports that this happened.
+   *
+   * The count covers every IIR plane the band layout uses -- stereo, per
+   * channel, and mid/side -- together with the automatic output gain and
+   * the detector state the dynamic bands drive. Linear-phase bands are not
+   * included and have nothing to include: an FIR keeps no recursive state,
+   * so a non-finite sample leaves its history on its own.
+   *
+   * Monotonic for the lifetime of the instance. The unit is one processed
+   * block, never a channel or a plane, so a stereo block that discards on
+   * both channels adds one and the number does not depend on a dimension
+   * you did not choose.
+   *
+   * @example
+   * ```ts
+   * eq.processStereo(left, right);
+   * if (eq.nonFiniteDiscardCount() > 0) {
+   *   // the audio just produced is not a function of `left`/`right`
+   * }
+   * ```
+   */
+  nonFiniteDiscardCount(): number {
+    return this.native.nonFiniteDiscardCount();
   }
 
   /** Process one mono block; returns the processed samples (same length). */

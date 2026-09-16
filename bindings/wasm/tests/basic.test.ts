@@ -2349,6 +2349,51 @@ describe('Sonare WASM Module', () => {
       }
     });
 
+    it('reports exactly one discard for the block that carried a non-finite sample', () => {
+      const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      try {
+        eq.setBand(0, {
+          type: 'Peak',
+          frequencyHz: 1000,
+          gainDb: 6,
+          enabled: true,
+        });
+
+        const length = 512;
+        const left = new Float32Array(length);
+        const right = new Float32Array(length);
+        for (let i = 0; i < length; i += 1) {
+          const value = Math.sin((2 * Math.PI * 1000 * i) / 48000) * 0.5;
+          left[i] = value;
+          right[i] = value;
+        }
+
+        // Clean block: the enabled band is actually filtering, so the zero
+        // discard count read below is not vacuous.
+        const cleanOut = eq.processStereo(left, right);
+        expect(cleanOut.left.some((v, i) => v !== left[i])).toBe(true);
+        expect(eq.nonFiniteDiscardCount()).toBe(0);
+
+        // This EQ does not scrub its input at all (unlike the mixer's
+        // process_stereo boundary), so a NaN sample reaches the band's IIR
+        // state directly and discards within this same block.
+        const poisonedLeft = left.slice();
+        const poisonedRight = right.slice();
+        poisonedLeft[100] = Number.NaN;
+        poisonedRight[100] = Number.NaN;
+        eq.processStereo(poisonedLeft, poisonedRight);
+        // Exactly one: the unit is one processed block, never a channel --
+        // both channels carried the poison in this same block.
+        expect(eq.nonFiniteDiscardCount()).toBe(1);
+
+        // A further clean block adds nothing more: the EQ has recovered.
+        eq.processStereo(left, right);
+        expect(eq.nonFiniteDiscardCount()).toBe(1);
+      } finally {
+        eq.delete();
+      }
+    });
+
     it('should draw the magnitude curve the bands actually apply', () => {
       const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {

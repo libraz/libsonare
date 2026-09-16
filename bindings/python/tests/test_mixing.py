@@ -135,6 +135,122 @@ def test_strip_meter_and_meter_tap_return_snapshots(mixer) -> None:
     assert math.isfinite(master.peak_db[0])
 
 
+def test_strip_non_finite_discard_count_stays_zero_on_clean_audio(mixer) -> None:
+    """A strip processing only ordinary-level audio reports a zero discard count.
+
+    The preset scene's strips carry no insert extreme enough to overflow, so
+    this exercises the accessor's wiring against a clean run; see
+    ``test_strip_non_finite_discard_count_rises_after_an_insert_overflow``
+    below for a case that actually drives the counter.
+    """
+    assert mixer.strip_non_finite_discard_count("vocal") == 0
+    _process_one_block(mixer)
+    assert mixer.strip_non_finite_discard_count("vocal") == 0
+    assert mixer.strip_non_finite_discard_count(0) == 0
+
+
+def test_bus_non_finite_discard_count_rejects_an_uncompiled_bus(mixer) -> None:
+    """A declared-but-uncompiled bus raises rather than reading as a clean zero.
+
+    A bus's DSP record only exists after the graph has been compiled, so
+    reading the count before that would either crash or have to fabricate a
+    zero that reads as "clean" for a bus that was never actually processed.
+    """
+    mixer.add_bus("py-scratch-bus", "aux")
+    with pytest.raises(RuntimeError):
+        mixer.bus_non_finite_discard_count("py-scratch-bus")
+
+    mixer.compile()
+    assert mixer.bus_non_finite_discard_count("py-scratch-bus") == 0
+
+
+def test_bus_non_finite_discard_count_rejects_an_unknown_bus_id(mixer) -> None:
+    with pytest.raises(RuntimeError):
+        mixer.bus_non_finite_discard_count("no-such-bus")
+
+
+def test_bus_non_finite_discard_count_stays_zero_on_clean_audio(mixer) -> None:
+    """The preset scene's master bus is compiled by the first processed block."""
+    _process_one_block(mixer)
+    assert mixer.bus_non_finite_discard_count("master") == 0
+
+
+def _scene_with_pre_eq(gain_db: float, *, on_bus: bool) -> str:
+    """Build a one-strip scene with an eq.parametric pre-insert.
+
+    Placed on the strip by default, or on the master bus when ``on_bus`` is
+    set -- the strip still has to carry audio into it either way.
+    """
+    insert = {
+        "slot": "pre",
+        "processor": "eq.parametric",
+        "params": json.dumps({"band0.frequencyHz": 1000, "band0.gainDb": gain_db, "band0.q": 2}),
+    }
+    bus = {"id": "master", "role": "master"}
+    strip = {"id": "a"}
+    if on_bus:
+        bus["inserts"] = [insert]
+    else:
+        strip["inserts"] = [insert]
+    return json.dumps(
+        {
+            "version": 1,
+            "buses": [bus],
+            "strips": [strip],
+            "connections": [{"source": "a", "destination": "master"}],
+        }
+    )
+
+
+def test_strip_non_finite_discard_count_rises_after_an_insert_overflow() -> None:
+    """A pre-insert whose own coefficients overflow float32 moves the count.
+
+    ``process_stereo`` only rejects a block that already carries a
+    non-finite sample; a constant 1e38 fill is finite and under FLT_MAX
+    (~3.4e38), so it passes. A +200 dB peaking band scales its own
+    feedforward coefficients large enough that multiplying by that sample
+    overflows to infinity inside the insert's own recursive state -- the
+    corruption is produced by the chain, not carried in by the caller,
+    which is exactly the failure mode this counter exists to catch.
+    """
+    from libsonare import Mixer
+
+    mixer = Mixer.from_scene_json(
+        _scene_with_pre_eq(200.0, on_bus=False), sample_rate=48000, block_size=64
+    )
+    try:
+        block = [[0.3 * math.sin(2 * math.pi * 440 * i / 48000) for i in range(64)]]
+        # Control: an ordinary block leaves the count at zero, so the rise
+        # below is attributable to the poison rather than to processing at all.
+        mixer.process_stereo(block, block)
+        assert mixer.strip_non_finite_discard_count("a") == 0
+
+        poison = [[1.0e38] * 64]
+        mixer.process_stereo(poison, poison)
+        assert mixer.strip_non_finite_discard_count("a") > 0
+    finally:
+        mixer.close()
+
+
+def test_bus_non_finite_discard_count_rises_after_an_insert_overflow() -> None:
+    """Same overflow mechanism as the strip case, for a bus's own insert."""
+    from libsonare import Mixer
+
+    mixer = Mixer.from_scene_json(
+        _scene_with_pre_eq(200.0, on_bus=True), sample_rate=48000, block_size=64
+    )
+    try:
+        block = [[0.3 * math.sin(2 * math.pi * 440 * i / 48000) for i in range(64)]]
+        mixer.process_stereo(block, block)
+        assert mixer.bus_non_finite_discard_count("master") == 0
+
+        poison = [[1.0e38] * 64]
+        mixer.process_stereo(poison, poison)
+        assert mixer.bus_non_finite_discard_count("master") > 0
+    finally:
+        mixer.close()
+
+
 def test_strip_meter_rejects_invalid_tap(mixer) -> None:
     """An unknown meter tap name raises ValueError."""
     with pytest.raises(ValueError):
@@ -358,6 +474,10 @@ def test_methods_after_close_raise(mixer) -> None:
         mixer.strip_count()
     with pytest.raises(RuntimeError):
         mixer.set_soloed("vocal", True)
+    with pytest.raises(RuntimeError):
+        mixer.strip_non_finite_discard_count("vocal")
+    with pytest.raises(RuntimeError):
+        mixer.bus_non_finite_discard_count("master")
 
 
 def test_tail_samples_and_drain_tail_stereo(mixer) -> None:

@@ -167,6 +167,22 @@ sonare::mastering::api::MasteringChainConfig chain_config(float makeup_db, int o
   return config;
 }
 
+/// A tilt shelf on its own. The compressor fixture above cannot show a discard:
+/// its overflowing makeup gain sits after the envelope, so the samples go
+/// non-finite while every cell stays finite.
+sonare::mastering::api::MasteringChainConfig tilt_chain_config() {
+  sonare::mastering::api::MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  config.eq.tilt.tilt_db = 24.0f;
+  return config;
+}
+
+/// Finite, so process_block accepts it, and close enough to FLT_MAX that the
+/// shelf gain above takes the product out of range. Measured rather than
+/// assumed: at 1e38 with a 6 dB tilt the product still fits and nothing
+/// discards, which is why both numbers are what they are.
+constexpr float kHugeFiniteSample = 3.0e38f;
+
 /// Stages the chain cases below run, in order. Asserted rather than assumed:
 /// the count has exactly one writer under this config, and a fixture that later
 /// enabled loudness would add a second without any case failing.
@@ -514,6 +530,76 @@ TEST_CASE("StreamingMasteringChain accumulates its substitutions across blocks",
 
     drive_streaming(chain, program);
     REQUIRE(chain.non_finite_substitution_count() > after_one_block);
+  }
+}
+
+TEST_CASE("StreamingMasteringChain counts a call in which a stage discarded its state",
+          "[mastering][chain][non-finite]") {
+  using sonare::mastering::api::StreamingMasteringChain;
+
+  const std::vector<float> program = chain_program();
+
+  SECTION("ordinary audio leaves the count at zero") {
+    StreamingMasteringChain chain(chain_config(0.0f, 4));
+    chain.prepare(kChainSampleRate, kBlockSize, 1);
+    const std::vector<float> out = drive_streaming(chain, program);
+    // Non-vacuity, as above: the limiter is holding the output under a ceiling
+    // the input is over, so the stages ran and had state to lose.
+    REQUIRE(finite_peak(program) > sonare::db_to_linear(kChainCeilingDb));
+    REQUIRE(finite_peak(out) <= sonare::db_to_linear(kChainCeilingDb) * 1.05f);
+    REQUIRE(chain.non_finite_discard_count() == 0u);
+  }
+
+  SECTION("the overflowing compressor substitutes without any stage discarding") {
+    // Measured, not assumed, and it is what separates the two counters: the
+    // makeup gain that overflows sits AFTER the compressor's envelope, so the
+    // samples it emits are non-finite while no cell behind them is. The limiter
+    // replaces those samples and reports it; nothing discarded any state.
+    StreamingMasteringChain chain(chain_config(kOverflowingMakeupDb, 4));
+    chain.prepare(kChainSampleRate, kBlockSize, 1);
+    drive_streaming(chain, program);
+    REQUIRE(chain.non_finite_substitution_count() > 0u);
+    REQUIRE(chain.non_finite_discard_count() == 0u);
+  }
+
+  SECTION("a call counts once however many stages discarded during it") {
+    // A tilt shelf keeps recursive cells, which is what a discard is about. The
+    // input stays finite -- process_block refuses anything else -- and is large
+    // enough that the shelf's own multiply leaves float range.
+    StreamingMasteringChain chain(tilt_chain_config());
+    chain.prepare(kChainSampleRate, kBlockSize, 1);
+    REQUIRE(chain.stage_names() == std::vector<std::string>{"eq.tilt"});
+
+    std::vector<float> ordinary(static_cast<std::size_t>(kBlockSize), 0.25f);
+    float* ordinary_channels[1] = {ordinary.data()};
+    chain.process_block(ordinary_channels, 1, kBlockSize);
+    REQUIRE(chain.non_finite_discard_count() == 0u);
+
+    std::vector<float> huge(static_cast<std::size_t>(kBlockSize), kHugeFiniteSample);
+    float* huge_channels[1] = {huge.data()};
+    chain.process_block(huge_channels, 1, kBlockSize);
+    // Every cell the shelf pair holds was lost in this one call, and the call
+    // still adds one. Summing the stages would report a count that grows with
+    // the chain's length rather than with the damage.
+    REQUIRE(chain.non_finite_discard_count() == 1u);
+  }
+
+  SECTION("prepare clears it, so it shares an epoch with the substitution count") {
+    StreamingMasteringChain chain(tilt_chain_config());
+    chain.prepare(kChainSampleRate, kBlockSize, 1);
+    std::vector<float> huge(static_cast<std::size_t>(kBlockSize), kHugeFiniteSample);
+    float* channels[1] = {huge.data()};
+    chain.process_block(channels, 1, kBlockSize);
+    REQUIRE(chain.non_finite_discard_count() > 0u);
+
+    // reset() is not the epoch boundary and must not be mistaken for one: it
+    // returns the stages' audio state while the count keeps describing what has
+    // already happened. Both surfaces document this, so it is pinned here.
+    chain.reset();
+    REQUIRE(chain.non_finite_discard_count() > 0u);
+
+    chain.prepare(kChainSampleRate, kBlockSize, 1);
+    REQUIRE(chain.non_finite_discard_count() == 0u);
   }
 }
 

@@ -409,6 +409,28 @@ class StreamingMasteringChain {
   ///          stages and so clears it; the stages persist across blocks.
   std::uint32_t non_finite_substitution_count() const noexcept;
 
+  /// @brief Processing calls in which a stage discarded its own recursive state
+  ///        because a non-finite value had reached it.
+  /// @details The companion to @ref non_finite_substitution_count, and not the
+  ///          same measurement: that one counts SAMPLES a stage replaced and so
+  ///          sums across stages, while a discard is a whole stage returning to
+  ///          its post-reset value and is counted once per call however many
+  ///          stages did it. A stage may run more than once per call, which is
+  ///          why the number is a delta over the call and never a sum.
+  ///
+  ///          Non-finite input is rejected before any stage runs, so what a
+  ///          stage discards is always state it produced itself -- a finite
+  ///          sample large enough to overflow inside a filter, most often.
+  ///          Unlike the substitution count every stage can contribute, so a
+  ///          zero here means no stage discarded rather than that none could.
+  ///
+  ///          Both process_block() and flush() count, since a flush drives the
+  ///          same stages. Cumulative since prepare(), which clears it, so the
+  ///          two counters on one handle share an epoch. reset() returns the
+  ///          stages' audio state but neither count: the numbers describe what
+  ///          has happened, which resetting does not undo.
+  std::uint32_t non_finite_discard_count() const noexcept;
+
  private:
   void process_prevalidated(float* const* channels, int num_channels, int num_samples);
   int tail_samples() const noexcept;

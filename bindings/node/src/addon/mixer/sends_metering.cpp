@@ -172,6 +172,24 @@ Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (busId: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string bus_id = info[0].As<Napi::String>().Utf8Value();
+  uint32_t count = 0;
+  const SonareError err = sonare_mixer_bus_non_finite_discard_count(mixer_, bus_id.c_str(), &count);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to read bus non-finite discard count: ");
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, count);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value MixerWrap::MeterTap(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -226,6 +244,27 @@ Napi::Value MixerWrap::ReadGoniometerLatest(const Napi::CallbackInfo& info) {
     out.Set(index, point);
   }
   return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value MixerWrap::StripNonFiniteDiscardCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected (strip)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  uint32_t count = 0;
+  SonareError err = sonare_strip_non_finite_discard_count(strip, &count);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to read strip non-finite discard count: ");
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, count);
   SONARE_NODE_CATCH(env)
 }
 

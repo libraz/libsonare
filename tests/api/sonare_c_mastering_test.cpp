@@ -1586,4 +1586,94 @@ TEST_CASE("sonare_mastering_ab_match_loudness", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_eq_non_finite_discard_count reports the state the EQ discarded",
+          "[c_api][mastering][non_finite]") {
+  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  REQUIRE(eq != nullptr);
+  // Without an enabled band the EQ holds no recursive state, so its count would
+  // stay at zero for a reason unrelated to the entry.
+  REQUIRE(sonare_eq_set_band(eq, 0,
+                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":9,"
+                             "\"q\":2,\"enabled\":true}") == SONARE_OK);
+
+  // Pre-set to a value the entry must overwrite, so a read that never writes
+  // cannot pass as a zero count.
+  uint32_t count = 0xDEADu;
+  REQUIRE(sonare_eq_non_finite_discard_count(eq, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  constexpr int kBlock = 64;
+  std::vector<float> left(kBlock, 0.25f);
+  std::vector<float> right(kBlock, 0.25f);
+  float* channels[] = {left.data(), right.data()};
+
+  // Control: an ordinary block counts nothing, so the increment below is
+  // attributable to the poison rather than to processing at all.
+  REQUIRE(sonare_eq_process(eq, channels, 2, kBlock) == SONARE_OK);
+  REQUIRE(sonare_eq_non_finite_discard_count(eq, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  // This entry scrubs nothing, unlike the mixer's block entry, so the poison
+  // goes in as supplied and the recursive cells behind the band take it.
+  left[8] = std::numeric_limits<float>::quiet_NaN();
+  right[8] = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE(sonare_eq_process(eq, channels, 2, kBlock) == SONARE_OK);
+  REQUIRE(sonare_eq_non_finite_discard_count(eq, &count) == SONARE_OK);
+  // Both channels lost their cells and the block still adds one. Moving by two
+  // here would report a stereo stream as twice as degraded as a mono one for the
+  // same defect, over a width the caller passed rather than asked for.
+  REQUIRE(count == 1u);
+
+  REQUIRE(sonare_eq_non_finite_discard_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 1u);
+  REQUIRE(sonare_eq_non_finite_discard_count(eq, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_eq_destroy(eq);
+}
+
+TEST_CASE("sonare_streaming_mastering_chain_non_finite_discard_count reports a lost stage",
+          "[c_api][mastering][non_finite]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 128;
+  // A tilt shelf keeps recursive cells, which is what a discard is about. The
+  // default chain has no such stage, so its count could stay at zero for a
+  // reason unrelated to the entry.
+  const SonareMasteringParam params[] = {{"eq.tilt.tiltDb", 24.0}};
+  SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create_ex(
+      params, sizeof(params) / sizeof(params[0]), 0.0f, 0.0f);
+  REQUIRE(chain != nullptr);
+  REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kSampleRate, kBlockSize, 1) == SONARE_OK);
+
+  // Pre-set to a value the entry must overwrite, so a read that never writes
+  // cannot pass as a zero count.
+  uint32_t count = 0xDEADu;
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(chain, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  // Control: an ordinary block counts nothing, so the increment below is
+  // attributable to the level rather than to processing at all.
+  std::vector<float> mono(kBlockSize, 0.25f);
+  REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, mono.data(), mono.size()) ==
+          SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(chain, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  // Finite, so the entry accepts it, and large enough that the shelf's own
+  // multiply leaves float range -- the chain refuses a non-finite sample, so
+  // what a stage discards is always something the chain produced.
+  std::fill(mono.begin(), mono.end(), 3.0e38f);
+  REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, mono.data(), mono.size()) ==
+          SONARE_OK);
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(chain, &count) == SONARE_OK);
+  REQUIRE(count == 1u);
+
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(nullptr, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 1u);
+  REQUIRE(sonare_streaming_mastering_chain_non_finite_discard_count(chain, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_streaming_mastering_chain_destroy(chain);
+}
+
 #endif

@@ -168,3 +168,33 @@ def test_auto_gain_smoother_recovers_from_one_non_finite_sample():
     )
     _assert_bounded(control, poisoned, AUTO_GAIN_RECOVERY_BLOCKS)
     assert poisoned_auto_gain_db == control_auto_gain_db
+
+
+def test_non_finite_discard_count_reports_the_state_the_eq_discarded():
+    """`process_stereo` scrubs nothing, so a NaN sample poisons the band's own state.
+
+    Unlike the mixer's block entry, `sonare_eq_process` passes the caller's
+    buffer straight to the core: the poison goes in as supplied and the
+    recursive cells behind the band take it.
+    """
+    with StreamingEqualizer(SR, max_block_size=64) as eq:
+        eq.set_band(0, PEAK)
+        # Without an enabled band the EQ holds no recursive state, so its
+        # count would stay at zero for a reason unrelated to the entry.
+        assert eq.non_finite_discard_count() == 0
+
+        left = [0.25] * 64
+        right = [0.25] * 64
+        # Control: an ordinary block counts nothing, so the rise below is
+        # attributable to the poison rather than to processing at all.
+        eq.process_stereo(left, right)
+        assert eq.non_finite_discard_count() == 0
+
+        left[8] = math.nan
+        right[8] = math.nan
+        eq.process_stereo(left, right)
+        # Both channels lost their cells and the block still adds one: moving
+        # by two would report a stereo stream as twice as degraded as a mono
+        # one for the same defect, over a width the caller passed rather than
+        # asked for.
+        assert eq.non_finite_discard_count() == 1

@@ -43,6 +43,9 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
   // silence, which causes 10-100x CPU spikes on x86 without DAZ/FTZ. Mirror the
   // mastering processors and voice changer guard at the process-block boundary.
   rt::ScopedNoDenormals no_denormals;
+  // Read before the chain runs and compared after, so the block bumps at most
+  // once however many members discarded during it.
+  const uint64_t member_discards_before = member_discard_sum();
   // Single-segment chain: no first-insert offset, no sidechain shift. The bus
   // forwards the full sidechain width (up to kMaxSidechainChannels).
   std::array<const float*, kMaxSidechainChannels> shifted{};
@@ -51,6 +54,7 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
                    kMaxSidechainChannels, lfe_index(layout_), stereo_pair_alignment_delays_.data(),
                    bypass_alignment_delays_.data());
   meter_.process(channels, num_channels, num_samples);
+  if (member_discard_sum() != member_discards_before) note_non_finite_discard();
 }
 
 void BusProcessor::reset() {

@@ -431,6 +431,10 @@ python = [
 # (the handle becomes a numeric `strip_index`) and add a `tap` metering-tap
 # selector, the same extended-facade shape already accepted for strip_meter
 # (python) below. Same op, handle->index + tap-selector — not order drift.
+# strip_non_finite_discard_count (wasm): the same handle->index convention on the
+# same handle, with no extra selector — C takes a `strip` handle, WASM a numeric
+# `strip_index`. Node carries no entry: its facade takes the StripRef the C
+# parameter names, so nothing diverges there.
 # lufs_interleaved / lufs_series_interleaved (python): C is (samples, frames,
 # channels, sample_rate). The facade exposes (samples, channels, sample_rate) and
 # DERIVES frames = len(samples) / channels internally — passing both an
@@ -505,6 +509,7 @@ wasm = [
   "scale_quantize_midi",
   "scale_correction_semitones",
   "strip_meter",
+  "strip_non_finite_discard_count",
   "midi_cc_learn",
 ]
 

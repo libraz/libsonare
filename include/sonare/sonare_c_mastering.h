@@ -696,6 +696,25 @@ SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db);
 SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan);
 /// @brief Returns processing latency in samples, or zero for NULL.
 int sonare_eq_latency_samples(const SonareEq* eq);
+/// @brief Number of blocks in which the equalizer discarded recursive state
+///        because a non-finite value had reached it.
+/// @details Advisory telemetry, and the only thing that separates a degraded
+///   EQ from a clean one. A discard returns the affected filter cells to their
+///   post-reset value, so the EQ recovers in silence and the output stays
+///   finite and in range while carrying samples unrelated to the input;
+///   nothing else reports that this happened.
+///   The count covers every IIR plane the band layout uses -- stereo, per
+///   channel, and mid/side -- together with the automatic output gain and the
+///   detector state the dynamic bands drive. Linear-phase bands are not
+///   included and have nothing to include: an FIR keeps no recursive state, so
+///   a non-finite sample leaves its history on its own.
+///   The unit is one processed block, never a channel and never a plane, so a
+///   stereo block that discards on both adds one and the number does not depend
+///   on a dimension the caller did not choose. Cumulative since the handle was
+///   created and never cleared, so two readings bracket a span of audio.
+///   Returns @c SONARE_ERROR_INVALID_PARAMETER if eq or out_count is NULL.
+///   Realtime-safe.
+SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count);
 /// @brief Sets an external detector sidechain for dynamic bands.
 /// @details The supplied planar block must have the same @p num_samples as the
 /// next @ref sonare_eq_process call. It is used only by bands with
@@ -853,6 +872,32 @@ const char* sonare_streaming_mastering_chain_stage_names(
 ///   stages and so clears it. Realtime-safe.
 /// @param out_count Receives the count; must not be NULL.
 SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
+    const SonareStreamingMasteringChain* handle, uint32_t* out_count);
+/// @brief Processing calls in which a stage discarded its own recursive state
+///        because a non-finite value had reached it.
+/// @details The companion to
+///   @ref sonare_streaming_mastering_chain_non_finite_substitution_count, and
+///   not the same measurement: that one counts SAMPLES a stage replaced and so
+///   sums across stages, while a discard is a whole stage returning to its
+///   post-reset value and is counted once per call however many stages did it.
+///   A stage may run more than once per call, which is why the number is a
+///   delta over the call and never a sum.
+///
+///   Non-finite input is rejected before any stage runs, so what a stage
+///   discards is always state it produced itself -- a finite sample large
+///   enough to overflow inside a filter, most often. Unlike the substitution
+///   count every stage can contribute, so a zero here means no stage discarded
+///   rather than that none could.
+///
+///   Both process and flush entries count, since a flush drives the same
+///   stages. Cumulative since
+///   @ref sonare_streaming_mastering_chain_prepare, which clears it, so the two
+///   counters on one handle share an epoch.
+///   @ref sonare_streaming_mastering_chain_reset returns the stages' audio state
+///   but neither count: the numbers describe what has happened, which resetting
+///   does not undo. Realtime-safe.
+/// @param out_count Receives the count; must not be NULL.
+SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
     const SonareStreamingMasteringChain* handle, uint32_t* out_count);
 
 /// @brief Destroy and free the handle.

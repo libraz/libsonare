@@ -266,6 +266,37 @@ class StreamingMasteringChain:
         _check_realtime(rc)
         return int(out.value)
 
+    def non_finite_discard_count(self) -> int:
+        """Return the process/flush calls in which a stage discarded its state.
+
+        The companion to :meth:`non_finite_substitution_count`, and not the
+        same measurement: that one counts samples a stage replaced and so
+        sums across stages, while a discard is a whole stage returning to its
+        post-reset value and is counted once per call however many stages did
+        it. A stage may run more than once per call, which is why this number
+        is a delta over the call and never a sum.
+
+        Non-finite input is rejected before any stage runs, so what a stage
+        discards is always state it produced itself -- a finite sample large
+        enough to overflow inside a filter, most often. Unlike the
+        substitution count every stage can contribute, so a zero here means
+        no stage discarded rather than that none could.
+
+        Both process and flush calls count, since a flush drives the same
+        stages. Cumulative over every call since the last :meth:`prepare`,
+        which rebuilds the stages and so clears it, so the two counters on
+        one handle share an epoch.
+        """
+        self._ensure_open()
+        if not hasattr(self._lib, "sonare_streaming_mastering_chain_non_finite_discard_count"):
+            raise RuntimeError("libsonare was built without streaming mastering discard telemetry")
+        out = ctypes.c_uint32()
+        rc = self._lib.sonare_streaming_mastering_chain_non_finite_discard_count(
+            self._handle, ctypes.byref(out)
+        )
+        _check_realtime(rc)
+        return int(out.value)
+
     def stage_names(self) -> list[str]:
         """Return the realized stage names in processing order.
 
@@ -609,6 +640,33 @@ class StreamingEqualizer:
     def last_auto_gain_db(self) -> float:
         self._ensure_open()
         return float(self._lib.sonare_eq_last_auto_gain_db(self._handle))
+
+    def non_finite_discard_count(self) -> int:
+        """Return the blocks in which the equalizer discarded recursive state.
+
+        Advisory telemetry, and the only thing that separates a degraded EQ
+        from a clean one. A discard returns the affected filter cells to
+        their post-reset value, so the EQ recovers in silence and the output
+        stays finite and in range while carrying samples unrelated to the
+        input; nothing else reports that this happened.
+
+        Covers every IIR plane the band layout uses -- stereo, per channel,
+        and mid/side -- together with the automatic output gain and the
+        detector state the dynamic bands drive. Linear-phase bands are not
+        included and have nothing to include: an FIR keeps no recursive
+        state, so a non-finite sample leaves its history on its own.
+
+        The unit is one processed block, never a channel and never a plane,
+        so a stereo block that discards on both adds one. Cumulative since
+        the handle was created and never cleared, so two readings bracket a
+        span of audio.
+        """
+        self._ensure_open()
+        if not hasattr(self._lib, "sonare_eq_non_finite_discard_count"):
+            raise RuntimeError("libsonare was built without EQ discard-count support")
+        out = ctypes.c_uint32()
+        _check(self._lib.sonare_eq_non_finite_discard_count(self._handle, ctypes.byref(out)))
+        return int(out.value)
 
     def close(self) -> None:
         """Release the underlying C handle. Safe to call multiple times."""

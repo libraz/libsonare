@@ -294,6 +294,172 @@ TEST_CASE("Mixing C API rejects a non-finite process block without touching the 
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Mixing C API reports the state a strip discarded after a non-finite sample",
+          "[mixing][capi][non_finite]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  REQUIRE(strip != nullptr);
+
+  // Pre-set to a value the entry must overwrite, so a read that never writes
+  // cannot pass as a zero count.
+  uint32_t count = 0xDEADu;
+  REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  // A strip with no enabled band and no insert holds no recursive state at all,
+  // so its count would stay at zero for a reason unrelated to the entry. One
+  // peaking band gives it two cells per channel to lose.
+  strip->strip.set_eq_band(
+      0, sonare::mastering::eq::EqBand(sonare::mastering::eq::EqBandType::Peak, 1000.0f, 6.0f, 2.0f,
+                                       /*is_enabled=*/true));
+
+  constexpr int kBlock = 32;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  const auto fill = [&](float value) {
+    for (int i = 0; i < kBlock; ++i) {
+      left[static_cast<size_t>(i)] = 0.25f;
+      right[static_cast<size_t>(i)] = 0.25f;
+    }
+    left[4] = value;
+    right[4] = value;
+  };
+
+  // Control: an ordinary block leaves the count where it was, so the increment
+  // below is attributable to the poison rather than to processing at all.
+  fill(0.25f);
+  strip->strip.process(channels, 2, kBlock);
+  REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  // The poison is applied through the strip itself rather than through
+  // sonare_mixer_process_stereo, which refuses a non-finite input block
+  // outright (see the rejection case above). What reaches a strip's recursive
+  // state is therefore always something the chain produced, which is exactly
+  // what this count is for.
+  fill(std::numeric_limits<float>::quiet_NaN());
+  strip->strip.process(channels, 2, kBlock);
+  REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+  // Both channels lost their cells and the block still adds one. Moving by two
+  // here would report a stereo strip as twice as degraded as a mono one for the
+  // same defect, over a width the caller passed rather than asked for.
+  REQUIRE(count == 1u);
+  REQUIRE(count == strip->strip.non_finite_discard_count());
+
+  REQUIRE(sonare_strip_non_finite_discard_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count == 1u);
+  REQUIRE(sonare_strip_non_finite_discard_count(strip, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("A strip's discard count reaches a meter that lost its loudness window",
+          "[mixing][capi][non_finite]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  REQUIRE(strip != nullptr);
+
+  // No band is enabled and no insert is added, so the EQ's own discard branch
+  // cannot run and the inserts do not exist. Anything this count records is the
+  // meter's, which is what makes the meter's contribution attributable rather
+  // than merely present.
+  constexpr int kBlock = 32;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = 0.25f;
+    right[static_cast<size_t>(i)] = 0.25f;
+  }
+
+  uint32_t count = 0xDEADu;
+  strip->strip.process(channels, 2, kBlock);
+  REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+  REQUIRE(strip->strip.eq().non_finite_discard_count() == 0u);
+
+  left[4] = std::numeric_limits<float>::quiet_NaN();
+  right[4] = std::numeric_limits<float>::quiet_NaN();
+  strip->strip.process(channels, 2, kBlock);
+
+  // The meter inspects its loudness state at the top of the block, so the block
+  // that poisons it is not the block that returns it; one more is needed before
+  // the count can have moved.
+  left[4] = 0.25f;
+  right[4] = 0.25f;
+  strip->strip.process(channels, 2, kBlock);
+  REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+  REQUIRE(count == 1u);
+  // The EQ stayed out of it, so the strip's count moved for the meter alone. A
+  // meter whose window is gone reports the floor, which is the reading a
+  // genuinely silent strip gives, so without this the loss is unobservable.
+  REQUIRE(strip->strip.eq().non_finite_discard_count() == 0u);
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Mixing C API reports the state a bus discarded after a non-finite sample",
+          "[mixing][capi][non_finite]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  REQUIRE(sonare_mixer_add_bus(mixer, "verb", "aux") == SONARE_OK);
+
+  uint32_t count = 0xDEADu;
+  // A declared bus has no DSP record until a compile builds one, so it is
+  // reported as unknown rather than as a zero that would read as "clean".
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "nosuchbus", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(nullptr, "verb", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare::mixing::FxBus* fx = nullptr;
+  for (const auto& entry : mixer->bus_dsp) {
+    if (entry && entry->id == "verb") fx = &entry->fx;
+  }
+  REQUIRE(fx != nullptr);
+
+  constexpr int kBlock = 32;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = 0.25f;
+    right[static_cast<size_t>(i)] = 0.25f;
+  }
+
+  fx->process(channels, 2, kBlock);
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  left[4] = std::numeric_limits<float>::quiet_NaN();
+  right[4] = std::numeric_limits<float>::quiet_NaN();
+  fx->process(channels, 2, kBlock);
+  // The bus meter inspects its loudness state at the top of the block, so the
+  // block that poisons it is not the block that returns it.
+  left[4] = 0.25f;
+  right[4] = 0.25f;
+  fx->process(channels, 2, kBlock);
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
+  // An aux bus a send destination names carries no inserts, so this count is
+  // the meter's alone -- the reading it would otherwise lose silently, since a
+  // meter without its window reports the floor a silent bus reports.
+  REQUIRE(count == 1u);
+
+  sonare_mixer_destroy(mixer);
+}
+
 // A NULL per-strip channel pointer is the one rejection this entry used to make
 // after zero-filling the caller's output. The other three return before writing,
 // and the non-finite case above asserts that a rejected block leaves the buffers

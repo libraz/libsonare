@@ -66,6 +66,26 @@ val MixerWasm::busMeter(std::string bus_id) {
   return mixMeterSnapshotToVal(snapshot);
 }
 
+// Number of blocks in which the strip discarded recursive state because a
+// non-finite value had reached it. See sonare_strip_non_finite_discard_count.
+uint32_t MixerWasm::stripNonFiniteDiscardCount(const val& strip_index_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  uint32_t count = 0;
+  checkStripError(sonare_strip_non_finite_discard_count(stripAt(strip_index), &count),
+                  "failed to read strip non-finite discard count");
+  return count;
+}
+
+// Number of blocks in which a bus discarded recursive state because a
+// non-finite value had reached it. See
+// sonare_mixer_bus_non_finite_discard_count.
+uint32_t MixerWasm::busNonFiniteDiscardCount(std::string bus_id) {
+  uint32_t count = 0;
+  checkStripError(sonare_mixer_bus_non_finite_discard_count(mixer_, bus_id.c_str(), &count),
+                  "failed to read bus non-finite discard count");
+  return count;
+}
+
 // Schedules sample-accurate fader automation on a strip. sample_pos uses the
 // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential, 2 = Hold,
 // 3 = SCurve.
@@ -150,6 +170,8 @@ void registerMixerAutomationMeters(class_<MixerWasm>& cls) {
       .function("meterTap", &MixerWasm::meterTap)
       .function("stripMeter", &MixerWasm::stripMeter)
       .function("busMeter", &MixerWasm::busMeter)
+      .function("stripNonFiniteDiscardCount", &MixerWasm::stripNonFiniteDiscardCount)
+      .function("busNonFiniteDiscardCount", &MixerWasm::busNonFiniteDiscardCount)
       .function("scheduleFaderAutomation", &MixerWasm::scheduleFaderAutomation)
       .function("schedulePanAutomation", &MixerWasm::schedulePanAutomation)
       .function("scheduleWidthAutomation", &MixerWasm::scheduleWidthAutomation)

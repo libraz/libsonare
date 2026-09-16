@@ -197,6 +197,35 @@ export class StreamingMasteringChain {
     return this.chain.nonFiniteSubstitutionCount();
   }
 
+  /**
+   * Processing calls in which a stage discarded its own recursive state
+   * because a non-finite value had reached it.
+   *
+   * The companion to {@link nonFiniteSubstitutionCount}, and not the same
+   * measurement -- a caller who assumes they are will read one and think
+   * they have the other. That one counts SAMPLES a stage replaced and so
+   * sums across stages; a discard is a whole stage returning to its
+   * post-reset value and is counted once per call however many stages did
+   * it. A stage may run more than once per call, which is why this is a
+   * delta over the call and never a sum.
+   *
+   * Non-finite input is rejected before any stage runs, so what a stage
+   * discards is always state it produced itself -- a finite sample large
+   * enough to overflow inside a filter, most often. Unlike the substitution
+   * count every stage can contribute, so a zero here means no stage
+   * discarded rather than that none could.
+   *
+   * Both {@link processMono}/{@link processStereo} and
+   * {@link flushMono}/{@link flushStereo} count, since a flush drives the
+   * same stages. {@link prepare} rebuilds the stages and so clears it (as it
+   * does {@link nonFiniteSubstitutionCount}, so the two counters on one
+   * handle share an epoch); {@link reset} does not, because it drops
+   * processor state without rebuilding.
+   */
+  nonFiniteDiscardCount(): number {
+    return this.chain.nonFiniteDiscardCount();
+  }
+
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.chain.delete();
@@ -315,6 +344,33 @@ export class StreamingEqualizer {
   /** Reported processing latency in samples (non-zero for linear-phase bands). */
   latencySamples(): number {
     return this.eq.latencySamples();
+  }
+
+  /**
+   * Number of blocks in which the EQ discarded recursive state because a
+   * non-finite value had reached it.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded EQ from
+   * a clean one. A discard returns the affected filter cells to their
+   * post-reset value, so the EQ recovers in silence and the output stays
+   * finite and in range while carrying samples unrelated to the input;
+   * nothing else reports that this happened.
+   *
+   * The count covers every IIR plane the band layout uses -- stereo, per
+   * channel, and mid/side -- together with the automatic output gain and the
+   * detector state the dynamic bands drive. Linear-phase bands are not
+   * included and have nothing to include: an FIR keeps no recursive state,
+   * so a non-finite sample leaves its history on its own.
+   *
+   * Unlike a mixer strip's meters, nothing here lags: this EQ has no meter of
+   * its own, so a discard is always attributed to the block that carried it.
+   *
+   * Cumulative since this handle was created and never cleared, so two
+   * readings bracket a span of audio. The unit is one processed block, never
+   * a channel or a plane.
+   */
+  nonFiniteDiscardCount(): number {
+    return this.eq.nonFiniteDiscardCount();
   }
 
   /**

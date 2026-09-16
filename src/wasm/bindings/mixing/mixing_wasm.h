@@ -139,6 +139,17 @@ class MixerWasm {
   val stripMeter(const val& strip_index_val);
   val busMeter(std::string bus_id);
 
+  // Number of blocks in which the strip discarded recursive state because a
+  // non-finite value had reached it. See
+  // sonare_strip_non_finite_discard_count for the full contract.
+  uint32_t stripNonFiniteDiscardCount(const val& strip_index_val);
+
+  // Number of blocks in which a bus discarded recursive state because a
+  // non-finite value had reached it. See
+  // sonare_mixer_bus_non_finite_discard_count for the full contract,
+  // including why an uncompiled bus throws rather than reading zero.
+  uint32_t busNonFiniteDiscardCount(std::string bus_id);
+
   // Schedules sample-accurate fader automation on a strip. sample_pos uses the
   // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential.
   void scheduleFaderAutomation(const val& strip_index_val, double sample_pos,

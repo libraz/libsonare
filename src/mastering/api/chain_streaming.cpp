@@ -75,6 +75,30 @@ struct StreamingMasteringChain::Impl {
   // ProcessorBase does not carry the count, so the stages that keep one are
   // recorded as prepare() builds them.
   std::vector<const mastering::maximizer::TruePeakLimiter*> substitution_sources;
+  // Blocks in which some stage discarded its own state. Held here rather than on
+  // the chain so the defaulted move stays defaulted: the counter owns an atomic
+  // and is neither copyable nor movable, which would propagate to any owner
+  // holding it by value.
+  rt::OverflowCounter non_finite_discards;
+
+  /// @brief Every stage's discard count added together, for the block delta in
+  ///        process_prevalidated(). RT-safe: relaxed atomic loads only.
+  /// @details A stage is owned here and reachable from outside only as a count,
+  ///   so a discard inside one is observable nowhere unless the chain records
+  ///   it. The sum answers "did any of them move", which is the question the
+  ///   chain's own per-call count asks; it is never published as a count of its
+  ///   own, and summing is safe only because of that -- a stage may be driven
+  ///   several times per the chain's call. This is the opposite of
+  ///   non_finite_substitution_count, which is a count of SAMPLES and therefore
+  ///   sums across stages correctly.
+  uint64_t stage_discard_sum() const noexcept {
+    uint64_t total = 0;
+    for (const auto& proc : processors) {
+      if (proc) total += proc->non_finite_discard_count();
+    }
+    if (loudness_limiter) total += loudness_limiter->non_finite_discard_count();
+    return total;
+  }
 };
 
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
@@ -151,6 +175,10 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   impl_->processors.clear();
   impl_->loudness_limiter.reset();
   impl_->substitution_sources.clear();
+  // Cleared with the stages it describes, so it shares an epoch with
+  // non_finite_substitution_count: a caller reading both on one handle would
+  // otherwise get two numbers measured from different points.
+  impl_->non_finite_discards.reset();
   stage_names_.clear();
 
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
@@ -309,6 +337,10 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
 
 void StreamingMasteringChain::process_prevalidated(float* const* channels, int num_channels,
                                                    int num_samples) {
+  // Read on either side of the whole call so a call bumps at most once, however
+  // many stages discarded during it. Both process_block() and flush() land here,
+  // which is what makes the unit one processing call rather than one block.
+  const uint64_t stage_discards_before = impl_->stage_discard_sum();
   for (auto& proc : impl_->processors) {
     proc->process(channels, num_channels, num_samples);
   }
@@ -325,6 +357,11 @@ void StreamingMasteringChain::process_prevalidated(float* const* channels, int n
     }
     impl_->loudness_limiter->process(channels, num_channels, num_samples);
   }
+  if (impl_->stage_discard_sum() != stage_discards_before) impl_->non_finite_discards.bump();
+}
+
+std::uint32_t StreamingMasteringChain::non_finite_discard_count() const noexcept {
+  return impl_->non_finite_discards.load();
 }
 
 int StreamingMasteringChain::flush(float* const* channels, int num_channels, int max_samples) {

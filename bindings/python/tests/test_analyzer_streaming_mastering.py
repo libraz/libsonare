@@ -368,6 +368,32 @@ def test_streaming_mastering_chain_reports_no_substitution_on_a_clean_stream() -
         assert count == 0
 
 
+def test_streaming_mastering_chain_discard_count_rises_after_a_stage_overflow() -> None:
+    """A stage's own recursive state overflowing moves the discard count.
+
+    Non-finite input is rejected before any stage runs, so the poison here is
+    a finite sample (3e38, under FLT_MAX) large enough that a +24 dB tilt
+    shelf's own coefficients overflow it to infinity internally -- the same
+    failure mode the strip/bus/EQ discard counters exist to catch, not a
+    substitution (nothing here replaces a sample the caller supplied).
+    """
+    from libsonare import StreamingMasteringChain
+
+    with StreamingMasteringChain({"eq.tilt.tiltDb": 24.0}) as chain:
+        chain.prepare(48000, 128, 1)
+        # Without an enabled recursive stage the chain holds no state to lose,
+        # so its count would stay at zero for a reason unrelated to the entry.
+        assert chain.non_finite_discard_count() == 0
+
+        # Control: an ordinary block counts nothing, so the rise below is
+        # attributable to the poison rather than to processing at all.
+        chain.process_mono([0.25] * 128)
+        assert chain.non_finite_discard_count() == 0
+
+        chain.process_mono([3.0e38] * 128)
+        assert chain.non_finite_discard_count() == 1
+
+
 def test_stft_result_types() -> None:
     """StftResult fields have correct types and shapes."""
     from libsonare import stft

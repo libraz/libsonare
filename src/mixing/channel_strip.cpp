@@ -228,14 +228,14 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
-  // The EQ and the inserts each run once per segment below, so the deltas are
-  // read here and checked at whichever exit the block takes; either way the
-  // block bumps at most once.
+  // The EQ, the inserts and the meters each run once per segment below, so the
+  // deltas are read here and checked at whichever exit the block takes; either
+  // way the block bumps at most once.
   const uint32_t eq_discards_before = eq_.non_finite_discard_count();
-  const uint64_t insert_discards_before = insert_discard_sum();
-  const auto note_member_discards = [this, eq_discards_before, insert_discards_before]() noexcept {
+  const uint64_t member_discards_before = member_discard_sum();
+  const auto note_member_discards = [this, eq_discards_before, member_discards_before]() noexcept {
     if (eq_.non_finite_discard_count() != eq_discards_before ||
-        insert_discard_sum() != insert_discards_before) {
+        member_discard_sum() != member_discards_before) {
       note_non_finite_discard();
     }
   };

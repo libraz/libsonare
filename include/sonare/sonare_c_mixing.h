@@ -199,8 +199,42 @@ SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixM
 /// @brief Reads the post-insert meter for a compiled bus (including master).
 SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
                                    SonareMixMeterSnapshot* out);
+/// @brief Number of blocks in which a bus discarded recursive state because a
+///        non-finite value had reached it. Same contract as
+///        @ref sonare_strip_non_finite_discard_count, for a bus.
+/// @details Covers every insert the bus owns and its meter; neither is
+///   separately addressable, so a discard inside one is observable only here.
+///   The unit is one processed block, never a channel and never an insert.
+///   The count lives with the bus rather than with the compiled node, so it is
+///   cumulative across graph recompiles and an unrelated edit elsewhere in the
+///   mixer does not reset it. A bus's DSP record is created by the first
+///   compile, so a bus that has been declared but never compiled is reported as
+///   unknown rather than as zero.
+///   Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer, bus_id or out_count is
+///   NULL, or if no compiled bus has that id. Realtime-safe.
+SonareError sonare_mixer_bus_non_finite_discard_count(const SonareMixer* mixer, const char* bus_id,
+                                                      uint32_t* out_count);
 size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGoniometerPoint* out,
                                            size_t max_points);
+/// @brief Number of blocks in which the strip discarded recursive state because
+///        a non-finite value had reached it.
+/// @details Advisory telemetry, and the only thing that separates a degraded
+///   strip from a clean one. A discard returns the affected state to its
+///   post-reset value, so the strip recovers in silence and the output stays
+///   finite and in range while carrying samples unrelated to the input; nothing
+///   else reports that this happened.
+///   The count covers the strip's own state, its EQ, every insert it owns and
+///   both of its meters. None of those is separately addressable here, so a
+///   discard inside one is observable only through this number -- and a meter
+///   that loses its loudness window then reports the floor, which is what a
+///   genuinely silent strip reports, so nothing else distinguishes the two.
+///   The unit is one processed block, never a channel and never an insert, so a
+///   stereo block that discards on both channels adds one and the number does
+///   not depend on a dimension the caller did not choose. Cumulative since the
+///   strip was created and never cleared, so two readings bracket a span of
+///   audio. Returns @c SONARE_ERROR_INVALID_PARAMETER if strip or out_count is
+///   NULL. Realtime-safe.
+SonareError sonare_strip_non_finite_discard_count(const SonareStrip* strip, uint32_t* out_count);
 
 // Number of strips in the mixer (e.g. strips loaded from a scene). Returns 0 if
 // mixer is NULL.

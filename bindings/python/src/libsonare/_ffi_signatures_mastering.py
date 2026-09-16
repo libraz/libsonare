@@ -293,6 +293,13 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
                     ctypes.c_void_p,
                     ctypes.POINTER(ctypes.c_uint32),
                 ]
+            if hasattr(lib, "sonare_streaming_mastering_chain_non_finite_discard_count"):
+                discard_fn = lib.sonare_streaming_mastering_chain_non_finite_discard_count
+                discard_fn.restype = ctypes.c_int32
+                discard_fn.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.POINTER(ctypes.c_uint32),
+                ]
             if hasattr(lib, "sonare_streaming_mastering_chain_stage_names"):
                 lib.sonare_streaming_mastering_chain_stage_names.restype = ctypes.c_char_p
                 lib.sonare_streaming_mastering_chain_stage_names.argtypes = [ctypes.c_void_p]
@@ -330,6 +337,12 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
             lib.sonare_eq_set_output_pan.argtypes = [ctypes.c_void_p, ctypes.c_float]
             lib.sonare_eq_latency_samples.restype = ctypes.c_int
             lib.sonare_eq_latency_samples.argtypes = [ctypes.c_void_p]
+            if hasattr(lib, "sonare_eq_non_finite_discard_count"):
+                lib.sonare_eq_non_finite_discard_count.restype = ctypes.c_int32
+                lib.sonare_eq_non_finite_discard_count.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.POINTER(ctypes.c_uint32),
+                ]
             lib.sonare_eq_set_sidechain.restype = ctypes.c_int32
             lib.sonare_eq_set_sidechain.argtypes = [
                 ctypes.c_void_p,

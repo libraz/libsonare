@@ -155,6 +155,8 @@ Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object expor
           InstanceMethod<&StreamingMasteringChainWrap::StageNames>("stageNames"),
           InstanceMethod<&StreamingMasteringChainWrap::NonFiniteSubstitutionCount>(
               "nonFiniteSubstitutionCount"),
+          InstanceMethod<&StreamingMasteringChainWrap::NonFiniteDiscardCount>(
+              "nonFiniteDiscardCount"),
           InstanceMethod<&StreamingMasteringChainWrap::Destroy>("destroy"),
       });
 
@@ -388,6 +390,18 @@ Napi::Value StreamingMasteringChainWrap::NonFiniteSubstitutionCount(
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value StreamingMasteringChainWrap::NonFiniteDiscardCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!chain_) {
+    Napi::Error::New(env, "StreamingMasteringChain is not initialized")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, chain_->non_finite_discard_count());
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "StreamingEqualizer",
@@ -404,6 +418,7 @@ Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamingEqualizerWrap::ClearSidechain>("clearSidechain"),
           InstanceMethod<&StreamingEqualizerWrap::LastAutoGainDb>("lastAutoGainDb"),
           InstanceMethod<&StreamingEqualizerWrap::LatencySamples>("latencySamples"),
+          InstanceMethod<&StreamingEqualizerWrap::NonFiniteDiscardCount>("nonFiniteDiscardCount"),
           InstanceMethod<&StreamingEqualizerWrap::ProcessMono>("processMono"),
           InstanceMethod<&StreamingEqualizerWrap::ProcessStereo>("processStereo"),
           InstanceMethod<&StreamingEqualizerWrap::MagnitudeResponse>("magnitudeResponse"),
@@ -679,6 +694,17 @@ Napi::Value StreamingEqualizerWrap::LatencySamples(const Napi::CallbackInfo& inf
     return env.Undefined();
   }
   return Napi::Number::New(env, eq_->latency_samples());
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::NonFiniteDiscardCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, eq_->non_finite_discard_count());
   SONARE_NODE_CATCH(env)
 }
 

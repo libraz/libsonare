@@ -376,6 +376,16 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     return SONARE_OK;
   }
 
+  SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
+      const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+    // A single relaxed atomic load, so it is safe to poll from the audio thread
+    // alongside the process entries; it touches no diagnostic string.
+    SONARE_C_RT_API_ENTRY;
+    if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+    *out_count = handle->chain->non_finite_discard_count();
+    return SONARE_OK;
+  }
+
   void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain * handle) {
     delete handle;
   }

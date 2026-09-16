@@ -525,6 +525,61 @@ export class Mixer {
   }
 
   /**
+   * Number of blocks in which the strip discarded recursive state because a
+   * non-finite value had reached it.
+   *
+   * Advisory telemetry, and the only thing that separates a degraded strip
+   * from a clean one. A discard returns the affected state to its
+   * post-reset value, so the strip recovers in silence and the output stays
+   * finite and in range while carrying samples unrelated to the input;
+   * nothing else reports that this happened.
+   *
+   * The count covers the strip's own state, its EQ, every insert it owns and
+   * both of its meters. None of those is separately addressable here, so a
+   * discard inside one is observable only through this number -- and a
+   * meter that loses its loudness window then reports the floor, which is
+   * exactly what a genuinely silent strip reports, so nothing else
+   * distinguishes the two.
+   *
+   * A meter's own discard lags by one block: it checks its loudness state at
+   * the top of a block, before consuming that block's samples, so the block
+   * that corrupts it is not the block the count moves on -- read this again
+   * after one more block has processed. The EQ and inserts have no such lag;
+   * they discard at the end of their own process, in the same block that
+   * carried the poison.
+   *
+   * Cumulative since the strip was created and never cleared, so two
+   * readings bracket a span of audio. The unit is one processed block, never
+   * a channel, so a stereo block that discards on both channels adds one and
+   * the number does not depend on a dimension the caller did not choose.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   */
+  stripNonFiniteDiscardCount(stripIndex: number): number {
+    return this.mixer.stripNonFiniteDiscardCount(stripIndex);
+  }
+
+  /**
+   * Number of blocks in which a bus discarded recursive state because a
+   * non-finite value had reached it. Same contract as
+   * {@link stripNonFiniteDiscardCount}, for a bus: covers every insert the
+   * bus owns and its meter, neither separately addressable, so a discard
+   * inside one is observable only here. Cumulative across graph recompiles
+   * -- the count lives with the bus, not the compiled node, so an unrelated
+   * edit elsewhere in the mixer does not reset it.
+   *
+   * A bus's DSP record is created by the first {@link compile}. Throws for a
+   * bus that has been declared with {@link addBus} but never compiled --
+   * reading zero there would read as clean, and it is not. Also throws for
+   * an unknown bus id.
+   *
+   * @param busId - Bus id, as passed to {@link addBus} or declared in scene JSON
+   */
+  busNonFiniteDiscardCount(busId: string): number {
+    return this.mixer.busNonFiniteDiscardCount(busId);
+  }
+
+  /**
    * Schedule sample-accurate fader automation on a strip.
    *
    * @param stripIndex - Strip index in `[0, stripCount())`

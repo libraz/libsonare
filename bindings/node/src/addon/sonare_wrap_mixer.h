@@ -75,6 +75,8 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value BusMeter(const Napi::CallbackInfo& info);
   Napi::Value MeterTap(const Napi::CallbackInfo& info);
   Napi::Value ReadGoniometerLatest(const Napi::CallbackInfo& info);
+  Napi::Value StripNonFiniteDiscardCount(const Napi::CallbackInfo& info);
+  Napi::Value BusNonFiniteDiscardCount(const Napi::CallbackInfo& info);
 
   // Strip lookup.
   Napi::Value StripById(const Napi::CallbackInfo& info);
