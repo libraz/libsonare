@@ -580,6 +580,56 @@ export interface MasteringRepairDereverbClassicalStereoResult {
   report: DereverbReport;
 }
 
+/** One half-open sample range, in INPUT-buffer coordinates. */
+export interface TrimRange {
+  /** First kept sample. */
+  first: number;
+  /** One past the last kept sample. An empty range has `first >= lastExclusive`. */
+  lastExclusive: number;
+}
+
+/**
+ * What a trim pass kept and what it dropped.
+ *
+ * A pass that kept nothing reports `range` as `(inputLength, inputLength)`, which counts the
+ * whole buffer as removed head and leaves `removedTailSamples` at 0. The two still sum to the
+ * input length, so a caller reporting how much went reads the right total; only the split
+ * between the ends is arbitrary there.
+ */
+export interface TrimReport {
+  /** The kept range, padding included. */
+  range: TrimRange;
+  /** Samples dropped before `range.first`. */
+  removedHeadSamples: number;
+  /** Samples dropped after `range.lastExclusive`. */
+  removedTailSamples: number;
+}
+
+/**
+ * A trimmed stereo pair, the range both channels were cut to, and the two per-channel scans
+ * that range is the union of.
+ *
+ * The only repair stereo result whose arrays are SHORTER than the input, so `left.length` is
+ * the output length and the input's says nothing about it. Both channels come back the same
+ * length, because one range cuts both.
+ *
+ * A pair in which NEITHER channel carries signal comes back as two empty arrays and a success,
+ * not an error.
+ *
+ * One `report` plus two ranges, which is neither of the earlier repair stereo shapes:
+ * `report.range` is the union that was applied to both channels, while `leftRange` and
+ * `rightRange` are the per-channel scans it was formed from, so a caller can see which channel
+ * decided each edge. A channel carrying nothing reports an empty range and contributes nothing
+ * to the union.
+ */
+export interface MasteringRepairTrimSilenceStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  report: TrimReport;
+  leftRange: TrimRange;
+  rightRange: TrimRange;
+}
+
 export type MasteringProcessorParams = Record<string, number | boolean>;
 
 /**

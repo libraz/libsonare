@@ -1396,6 +1396,78 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
                                                  const SonareTrimSilenceConfig* config, float** out,
                                                  size_t* out_length);
 
+/// @brief One half-open sample range, in input-buffer coordinates.
+typedef struct {
+  size_t first;           // first kept sample
+  size_t last_exclusive;  // one past the last kept sample
+} SonareTrimRange;
+
+/// @brief What a trim pass kept and what it dropped.
+/// @details A pass that kept nothing reports the range (length, length), which
+///   counts the whole buffer as removed head and leaves removed tail at 0. The
+///   two still sum to the input length, so a caller reporting how much went
+///   reads the right total; only the split between the ends is arbitrary there.
+typedef struct {
+  SonareTrimRange range;        // the kept range, padding included
+  size_t removed_head_samples;  // samples dropped before range.first
+  size_t removed_tail_samples;  // samples dropped after range.last_exclusive
+} SonareTrimReport;
+
+/// @brief A trimmed stereo pair, the range both channels were cut to, and the
+///        two per-channel ranges that range is the union of.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats.
+///
+///   @c length is an OUTPUT length here, not an echo of the call's @c length
+///   argument as it is on the other repair stereo entries: trimming shortens the
+///   pair, so this field is the only thing that says how much came back.
+///
+///   When neither channel carries signal both pointers are NULL and @c length is
+///   0 -- no zero-length allocation is made. @ref sonare_free_floats accepts
+///   NULL, so a caller can still free unconditionally.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  SonareTrimReport report;
+  SonareTrimRange left_range;
+  SonareTrimRange right_range;
+} SonareTrimSilenceStereoResult;
+
+/// @brief Trims a stereo pair to one shared range.
+/// @details Each channel is scanned on its own and the two ranges are unioned,
+///   so the pair keeps whatever EITHER channel calls signal and both outputs
+///   come back the same length. The scan never reads a downmix: 0.5 * (left +
+///   right) halves material carried by one channel alone, which can drop it
+///   under the gate, and cancels an antiphase pair to exactly zero, which would
+///   read full-level audio in both channels as silence. Trimming is destructive,
+///   so the rule errs toward keeping.
+///
+///   @c report.range is the union that was applied. @c left_range and
+///   @c right_range are the per-channel scans it was formed from, so a caller
+///   can see which channel decided each edge. A channel carrying nothing reports
+///   an empty range and contributes nothing to the union.
+///
+///   Which config fields are live depends on @c mode: @c threshold is read only
+///   by SONARE_TRIM_SILENCE_MODE_PEAK, and @c gate_lufs and @c window_ms only by
+///   SONARE_TRIM_SILENCE_MODE_LUFS_GATED.
+///
+///   That gated mode compares an UNWEIGHTED RMS over a window centred on each
+///   sample against @c gate_lufs, so the figure it gates on is dBFS rather than
+///   a BS.1770 loudness, and @c window_ms sizes that window and does nothing
+///   else. The window is clipped at the buffer ends, so a sample near either
+///   edge is judged on a shorter one.
+///
+///   @c padding_samples widens the kept range in both directions and is clamped
+///   to the buffer, so it can never reach past either end; a pass that kept
+///   nothing is not padded. A count above SIZE_MAX/2 is rejected, which is where
+///   a negative one that crossed a language boundary lands.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const float* right,
+                                                        size_t length, int sample_rate,
+                                                        const SonareTrimSilenceConfig* config,
+                                                        SonareTrimSilenceStereoResult* out);
+
 // ============================================================================
 // Mastering: offline dynamics processors (compressor, gate, transient_shaper)
 // ----------------------------------------------------------------------------

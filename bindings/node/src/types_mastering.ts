@@ -1186,6 +1186,62 @@ export interface DereverbStereoResult {
   report: DereverbReport;
 }
 
+/**
+ * One half-open sample range, in INPUT-buffer coordinates, from
+ * {@link masteringRepairTrimSilenceStereo}.
+ *
+ * The coordinates are the input's, so `lastExclusive - first` is the number of
+ * samples the range covers and the returned channels are that long -- not the
+ * length they are indexed by.
+ */
+export interface TrimRange {
+  /** First kept sample. */
+  first: number;
+  /** One past the last kept sample. */
+  lastExclusive: number;
+}
+
+/**
+ * What a trim pass kept and what it dropped, from
+ * {@link masteringRepairTrimSilenceStereo}.
+ *
+ * A pass that kept nothing reports the range `(length, length)`, which counts
+ * the whole buffer as removed head and leaves removed tail at 0. The two still
+ * sum to the input length, so a caller reporting how much went reads the right
+ * total; only the split between the ends is arbitrary there.
+ */
+export interface TrimReport {
+  /** The kept range, padding included. */
+  range: TrimRange;
+  /** Samples dropped before `range.first`. */
+  removedHeadSamples: number;
+  /** Samples dropped after `range.lastExclusive`. */
+  removedTailSamples: number;
+}
+
+/**
+ * A trimmed stereo pair, the range both channels were cut to, and the two
+ * per-channel ranges that range is the union of, from
+ * {@link masteringRepairTrimSilenceStereo}.
+ *
+ * Unlike every other repair stereo result, `left` and `right` are SHORTER than
+ * the input -- trimming is the point -- and they are empty when neither channel
+ * carried signal, which is a success rather than an error. There is no separate
+ * length field: `left.length` is the output length.
+ *
+ * `report.range` is the union that was applied to both channels. `leftRange`
+ * and `rightRange` are the per-channel scans it was formed from, so a caller
+ * can see which channel decided each edge; a channel carrying nothing reports
+ * an empty range and contributes nothing to the union.
+ */
+export interface TrimSilenceStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  report: TrimReport;
+  leftRange: TrimRange;
+  rightRange: TrimRange;
+}
+
 /** What gain-matching one take to another's loudness took, and produced. */
 export interface LoudnessMatchResult {
   /** The source, gain-matched to the reference's integrated loudness. */

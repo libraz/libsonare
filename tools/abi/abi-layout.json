@@ -9017,6 +9017,48 @@
     ],
     "size": 112
   },
+  "SonareTrimRange": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "first",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "last_exclusive",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareTrimReport": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "range",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "kind": "unsigned",
+        "name": "removed_head_samples",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "removed_tail_samples",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
   "SonareTrimSilenceConfig": {
     "align": 8,
     "fields": [
@@ -9052,6 +9094,48 @@
       }
     ],
     "size": 32
+  },
+  "SonareTrimSilenceStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 24,
+        "size": 32
+      },
+      {
+        "kind": "aggregate",
+        "name": "left_range",
+        "offset": 56,
+        "size": 16
+      },
+      {
+        "kind": "aggregate",
+        "name": "right_range",
+        "offset": 72,
+        "size": 16
+      }
+    ],
+    "size": 88
   },
   "SonareVectorscopePoint": {
     "align": 4,

@@ -7,6 +7,7 @@ import type {
   DenoiseStereoResult,
   DereverbStereoResult,
   RoomEstimateResult,
+  TrimSilenceStereoResult,
 } from './types.js';
 
 /** Common input fields for offline repair processors. */
@@ -554,4 +555,67 @@ export function masteringRepairTrimSilence(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return addon.masteringRepairTrimSilence(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairTrimSilenceStereo`. */
+export interface MasteringRepairTrimSilenceStereoRequest extends TrimSilenceOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Offline silence trimmer for a stereo pair (peak threshold or LUFS-gated),
+ * cutting both channels to one shared range.
+ *
+ * Each channel is scanned on its own and the two ranges are unioned, so the
+ * pair keeps whatever *either* channel calls signal and both outputs come back
+ * the same length. The scan never reads a downmix: `0.5 * (left + right)`
+ * halves material carried by one channel alone, which can drop it under the
+ * gate, and cancels an antiphase pair to exactly zero, which would read
+ * full-level audio in both channels as silence. Trimming is destructive, so the
+ * rule errs toward keeping.
+ *
+ * The returned channels are SHORTER than the input -- that is the point of the
+ * entry, and it is what separates it from every other repair stereo processor,
+ * which hand back exactly what they were given. When neither channel carries
+ * signal the result is two EMPTY arrays and a success, not an error.
+ *
+ * `report.range` is the union that was applied. `leftRange` and `rightRange`
+ * are the per-channel scans it was formed from, so a caller can see which
+ * channel decided each edge. A channel carrying nothing reports an empty range
+ * -- `(length, length)` rather than `(0, 0)` -- and contributes nothing to the
+ * union.
+ *
+ * Which option is live depends on `mode`: `threshold` is read only by `'peak'`,
+ * and `gateLufs` and `windowMs` only by `'lufsGated'`. That gated mode compares
+ * an UNWEIGHTED RMS over a window centred on each sample against `gateLufs`, so
+ * the figure it gates on is dBFS rather than a BS.1770 loudness, and `windowMs`
+ * sizes that window and does nothing else. The window is clipped at the buffer
+ * ends, so a sample near either edge is judged on a shorter one.
+ *
+ * `paddingSamples` widens the kept range in both directions and is clamped to
+ * the buffer, so it can never reach past either end; a pass that kept nothing
+ * is not padded. A negative count is refused by name rather than folded into 0.
+ *
+ * @example
+ * ```ts
+ * const { left, right, report, leftRange, rightRange } = masteringRepairTrimSilenceStereo({
+ *   left: leftSamples,
+ *   right: rightSamples,
+ *   sampleRate: 48000,
+ *   paddingSamples: 256,
+ * });
+ * console.log(left.length, report.removedHeadSamples, leftRange.first, rightRange.first);
+ * ```
+ */
+export function masteringRepairTrimSilenceStereo(
+  request: MasteringRepairTrimSilenceStereoRequest,
+): TrimSilenceStereoResult {
+  return addon.masteringRepairTrimSilenceStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }

@@ -361,6 +361,9 @@ from .analyzer import (
     mastering_repair_trim_silence as mastering_repair_trim_silence,
 )
 from .analyzer import (
+    mastering_repair_trim_silence_stereo as mastering_repair_trim_silence_stereo,
+)
+from .analyzer import (
     mastering_stereo_analysis_names as mastering_stereo_analysis_names,
 )
 from .analyzer import (
@@ -1015,6 +1018,15 @@ from .types import (
 )
 from .types import (
     TransportState as TransportState,
+)
+from .types import (
+    TrimRange as TrimRange,
+)
+from .types import (
+    TrimReport as TrimReport,
+)
+from .types import (
+    TrimSilenceStereoResult as TrimSilenceStereoResult,
 )
 from .types import (
     VectorscopeReport as VectorscopeReport,

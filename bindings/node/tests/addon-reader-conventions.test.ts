@@ -48,6 +48,7 @@ import {
   masteringRepairDereverbClassicalStereo,
   masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
+  masteringRepairTrimSilenceStereo,
   mergeNotes,
   mixStereo,
   noteSegments,
@@ -438,6 +439,27 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'masteringRepairTrimSilence',
     invoke: (o) => Array.from(masteringRepairTrimSilence(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    // The whole result, not a slice of one channel: this entry's output length
+    // and its three ranges are what an option key moves, and comparing 32
+    // samples of a tone would hold across any trim that kept the onset.
+    jsName: 'masteringRepairTrimSilenceStereo',
+    invoke: (o) => {
+      const result = masteringRepairTrimSilenceStereo({
+        ...o,
+        left: sine(2048),
+        right: sine(2048),
+        sampleRate: SR,
+      });
+      return [
+        Array.from(result.left).slice(0, 32),
+        result.left.length,
+        result.report,
+        result.leftRange,
+        result.rightRange,
+      ];
+    },
   },
   // Both classical restorers are STFT-based and reject a buffer shorter than
   // one analysis window, so these cannot be trimmed below the default nFft.

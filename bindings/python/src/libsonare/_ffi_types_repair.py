@@ -399,6 +399,52 @@ class SonareTrimSilenceConfig(CStruct):
     ]
 
 
+class SonareTrimRange(CStruct):
+    """Maps to SonareTrimRange in sonare_c.h. Half-open, input-buffer coordinates."""
+
+    _fields_ = [
+        ("first", ctypes.c_size_t),
+        ("last_exclusive", ctypes.c_size_t),
+    ]
+
+
+class SonareTrimReport(CStruct):
+    """Maps to SonareTrimReport in sonare_c.h.
+
+    A pass that kept nothing reports the range ``(length, length)``, which puts
+    the whole buffer in ``removed_head_samples`` and leaves the tail at 0.
+    """
+
+    _fields_ = [
+        ("range", SonareTrimRange),
+        ("removed_head_samples", ctypes.c_size_t),
+        ("removed_tail_samples", ctypes.c_size_t),
+    ]
+
+
+class SonareTrimSilenceStereoResult(CStruct):
+    """Maps to SonareTrimSilenceStereoResult in sonare_c.h.
+
+    ``length`` is an OUTPUT length, not an echo of the call's input length as it
+    is on every other repair stereo result: trimming shortens the pair. When
+    neither channel carries signal both pointers are NULL and ``length`` is 0,
+    which is a success rather than a refusal.
+
+    One report plus two ranges: ``report.range`` is the union applied to both
+    channels, and ``left_range`` / ``right_range`` are the per-channel scans it
+    was formed from.
+    """
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareTrimReport),
+        ("left_range", SonareTrimRange),
+        ("right_range", SonareTrimRange),
+    ]
+
+
 # SonareSpectralRegionOp.mode values.
 SONARE_SPECTRAL_EDIT_MODE_GAIN = 0
 SONARE_SPECTRAL_EDIT_MODE_ATTENUATE = 1

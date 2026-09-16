@@ -1652,6 +1652,57 @@ class DereverbStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class TrimRange:
+    """One half-open sample range, in input-buffer coordinates.
+
+    ``first == last_exclusive`` is an empty range, which is what a channel
+    carrying nothing reports.
+    """
+
+    first: int
+    last_exclusive: int
+
+
+@dataclass(frozen=True, slots=True)
+class TrimReport:
+    """What a trim pass kept and what it dropped.
+
+    A pass that kept nothing reports the range ``(length, length)``, which
+    counts the whole buffer as removed head and leaves ``removed_tail_samples``
+    at 0. The two still sum to the input length, so a caller reporting how much
+    went reads the right total; only the split between the ends is arbitrary
+    there.
+    """
+
+    range: TrimRange
+    removed_head_samples: int
+    removed_tail_samples: int
+
+
+@dataclass(frozen=True, slots=True)
+class TrimSilenceStereoResult:
+    """A trimmed stereo pair, the range both channels were cut to, and the two
+    per-channel scans that range is the union of.
+
+    ``length`` is the OUTPUT length, not the input length every other stereo
+    repair result echoes: trimming shortens the pair, so this field is the only
+    thing that says how much came back. When neither channel carries signal both
+    lists are empty and ``length`` is 0 -- a success, not a refusal.
+
+    ``report.range`` is the union that was applied to BOTH channels.
+    ``left_range`` and ``right_range`` are the per-channel scans it was formed
+    from, so a caller can see which channel decided each edge.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    report: TrimReport
+    left_range: TrimRange
+    right_range: TrimRange
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 

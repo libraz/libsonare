@@ -409,6 +409,35 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
                                 "unknown trim silence mode: " + name);
 }
 
+// Read a trim options bag over `config`, leaving absent keys alone. `entry`
+// names the caller in the paddingSamples message -- the one field here that is
+// refused rather than defaulted, because the core field is a size_t and a
+// negative count arrives past the validator's SIZE_MAX/2 bound rather than
+// below zero.
+mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
+    const val& options, mastering::repair::TrimSilenceConfig config, const char* entry) {
+  if (options.isUndefined() || options.isNull()) return config;
+  config.threshold = repairFloatOption(options, "threshold", config.threshold);
+  if (hasProperty(options, "paddingSamples")) {
+    const int v =
+        repairIntOption(options, "paddingSamples", static_cast<int>(config.padding_samples));
+    if (v < 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    std::string(entry) + ": paddingSamples must be non-negative");
+    }
+    config.padding_samples = static_cast<size_t>(v);
+  }
+  if (hasProperty(options, "mode")) {
+    val value = val::undefined();
+    if (repairOptionValue(options, "mode", &value)) {
+      config.mode = parseTrimSilenceMode(value.as<std::string>());
+    }
+  }
+  config.gate_lufs = repairFloatOption(options, "gateLufs", config.gate_lufs);
+  config.window_ms = repairFloatOption(options, "windowMs", config.window_ms);
+  return config;
+}
+
 }  // namespace
 
 val js_mastering_repair_decrackle(val samples, const val& sample_rate, val options) {
@@ -697,31 +726,63 @@ val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
 
 val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::TrimSilenceConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    if (hasProperty(options, "paddingSamples")) {
-      const int v =
-          repairIntOption(options, "paddingSamples", static_cast<int>(cfg.padding_samples));
-      if (v < 0) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
-            "masteringRepairTrimSilence: paddingSamples must be non-negative");
-      }
-      cfg.padding_samples = static_cast<size_t>(v);
-    }
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseTrimSilenceMode(value.as<std::string>());
-      }
-    }
-    cfg.gate_lufs = repairFloatOption(options, "gateLufs", cfg.gate_lufs);
-    cfg.window_ms = repairFloatOption(options, "windowMs", cfg.window_ms);
-  }
+  const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
+      options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilence");
   Audio result = mastering::repair::trim_silence(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out);
+}
+
+namespace {
+
+val trimRangeToVal(const mastering::repair::TrimRange& range) {
+  val out = val::object();
+  out.set("first", range.first);
+  out.set("lastExclusive", range.last_exclusive);
+  return out;
+}
+
+val trimReportToVal(const mastering::repair::TrimReport& report) {
+  val out = val::object();
+  out.set("range", trimRangeToVal(report.range));
+  out.set("removedHeadSamples", report.removed_head_samples);
+  out.set("removedTailSamples", report.removed_tail_samples);
+  return out;
+}
+
+// A trimmed channel can be empty, which no other repair stereo entry produces,
+// and data() on an empty one may be null, so the emptiness is tested rather
+// than the pointer arithmetic being left to define itself.
+val trimmedChannelToVal(const Audio& channel) {
+  if (channel.empty()) return vectorToFloat32Array({});
+  return vectorToFloat32Array(std::vector<float>(channel.data(), channel.data() + channel.size()));
+}
+
+}  // namespace
+
+// Unlike every other repair stereo entry this SHORTENS its input, and a pair in
+// which neither channel carries signal comes back as two empty arrays and a
+// success. Calls the core directly rather than the C ABI, as every wrapper in
+// this file does -- sonare_c_mastering_repair.cpp is not a WASM binding source.
+val js_mastering_repair_trim_silence_stereo(val left_samples, val right_samples,
+                                            const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairTrimSilenceStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
+      options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilenceStereo");
+  mastering::repair::TrimSilenceStereoResult result =
+      mastering::repair::trim_silence_stereo(left, right, cfg);
+
+  val out = val::object();
+  out.set("left", trimmedChannelToVal(result.left));
+  out.set("right", trimmedChannelToVal(result.right));
+  out.set("report", trimReportToVal(result.report));
+  out.set("leftRange", trimRangeToVal(result.left_range));
+  out.set("rightRange", trimRangeToVal(result.right_range));
+  return out;
 }
 
 void registerRepairBindings() {
@@ -741,6 +802,7 @@ void registerRepairBindings() {
            &js_mastering_repair_dereverb_classical_stereo);
   function("masteringRepairDereverbConfigForRoom", &js_mastering_repair_dereverb_config_for_room);
   function("masteringRepairTrimSilence", &js_mastering_repair_trim_silence);
+  function("masteringRepairTrimSilenceStereo", &js_mastering_repair_trim_silence_stereo);
 }
 
 #endif  // __EMSCRIPTEN__

@@ -491,8 +491,8 @@ Napi::Object EmitDenoiseReport(Napi::Env env, const SonareDenoiseReport& report)
 /// @brief Read a SonareDenoiseClassicalConfig options bag, reusing the mono
 ///        facade's own mode and estimator string readers above so the two paths
 ///        cannot recognize different spellings of the same mode.
-SonareDenoiseClassicalConfig read_denoise_config_c(const Napi::Object& options,
-                                                   SonareDenoiseClassicalConfig config) {
+SonareDenoiseClassicalConfig read_denoise_config(const Napi::Object& options,
+                                                 SonareDenoiseClassicalConfig config) {
   config.mode = static_cast<int>(parse_denoise_mode(
       options, static_cast<sonare::mastering::repair::DenoiseMode>(config.mode)));
   config.noise_estimator = static_cast<int>(parse_denoise_noise_estimator(
@@ -565,7 +565,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::Callba
                                       1,
                                       1};
   if (info.Length() >= 4 && info[3].IsObject()) {
-    config = read_denoise_config_c(info[3].As<Napi::Object>(), config);
+    config = read_denoise_config(info[3].As<Napi::Object>(), config);
   }
   SonareDenoiseStereoResult result{};
   SonareError err = sonare_mastering_repair_denoise_classical_stereo(
@@ -1238,6 +1238,127 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
   sonare::Audio result = sonare::mastering::repair::trim_silence(audio, config);
   std::vector<float> out(result.data(), result.data() + result.size());
   return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+namespace {
+
+Napi::Object EmitTrimRange(Napi::Env env, const SonareTrimRange& range) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("first", Napi::Number::New(env, static_cast<double>(range.first)));
+  out.Set("lastExclusive", Napi::Number::New(env, static_cast<double>(range.last_exclusive)));
+  return out;
+}
+
+Napi::Object EmitTrimReport(Napi::Env env, const SonareTrimReport& report) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("range", EmitTrimRange(env, report.range));
+  out.Set("removedHeadSamples",
+          Napi::Number::New(env, static_cast<double>(report.removed_head_samples)));
+  out.Set("removedTailSamples",
+          Napi::Number::New(env, static_cast<double>(report.removed_tail_samples)));
+  return out;
+}
+
+/// @brief Read a SonareTrimSilenceConfig options bag, applying the same field
+///        names as the mono entry above reads onto the C++ config.
+/// @details `paddingSamples` goes through NonNegativeSizeTProperty rather than
+///   an int reader: the field is a size_t, so -1 arrives as SIZE_MAX and lands
+///   above the core's SIZE_MAX/2 bound, where it reads as an out-of-range
+///   padding rather than as the negative the caller wrote. Refusing it by name
+///   here reports what was actually wrong, and the false return is why this
+///   reports success rather than returning the config.
+/// @return false with a JS exception pending; the caller must bail.
+bool ReadTrimSilenceConfig(Napi::Env env, const Napi::Object& options,
+                           SonareTrimSilenceConfig* config) {
+  config->threshold = FloatProperty(options, "threshold", config->threshold);
+  if (!NonNegativeSizeTProperty(env, options, "paddingSamples", config->padding_samples,
+                                &config->padding_samples)) {
+    return false;
+  }
+  const auto mode =
+      parse_trim_silence_mode(options, config->mode == SONARE_TRIM_SILENCE_MODE_LUFS_GATED
+                                           ? sonare::mastering::repair::TrimSilenceMode::LufsGated
+                                           : sonare::mastering::repair::TrimSilenceMode::Peak);
+  config->mode = mode == sonare::mastering::repair::TrimSilenceMode::LufsGated
+                     ? SONARE_TRIM_SILENCE_MODE_LUFS_GATED
+                     : SONARE_TRIM_SILENCE_MODE_PEAK;
+  config->gate_lufs = FloatProperty(options, "gateLufs", config->gate_lufs);
+  config->window_ms = FloatProperty(options, "windowMs", config->window_ms);
+  return true;
+}
+
+/// @brief Frees both heap-owned channels of a SonareTrimSilenceStereoResult on
+///        scope exit -- mirrors DereverbStereoResultGuard above.
+/// @details A pass that kept nothing hands back two NULLs rather than two
+///   zero-length allocations, which no other repair stereo entry can produce;
+///   sonare_free_floats accepts NULL, so that case needs no branch here.
+class TrimSilenceStereoResultGuard {
+ public:
+  explicit TrimSilenceStereoResultGuard(SonareTrimSilenceStereoResult* result) : result_(result) {}
+  TrimSilenceStereoResultGuard(const TrimSilenceStereoResultGuard&) = delete;
+  TrimSilenceStereoResultGuard& operator=(const TrimSilenceStereoResultGuard&) = delete;
+  ~TrimSilenceStereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  SonareTrimSilenceStereoResult* result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(env,
+                     "masteringRepairTrimSilenceStereo: left and right must have the same "
+                     "length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  // Library defaults (sonare_c_mastering.h SonareTrimSilenceConfig), applied
+  // before any options key overrides a field.
+  SonareTrimSilenceConfig config{0.001f, 0, SONARE_TRIM_SILENCE_MODE_PEAK, -60.0f, 400.0f};
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    if (!ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config)) return env.Undefined();
+  }
+  SonareTrimSilenceStereoResult result{};
+  SonareError err = sonare_mastering_repair_trim_silence_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  TrimSilenceStereoResultGuard guard(&result);
+  // result.length is the OUTPUT length, not the input's: trimming shortens the
+  // pair, and an all-silent pair comes back at 0.
+  auto left_out = Napi::Float32Array::New(env, result.length);
+  auto right_out = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("report", EmitTrimReport(env, result.report));
+  out.Set("leftRange", EmitTrimRange(env, result.left_range));
+  out.Set("rightRange", EmitTrimRange(env, result.right_range));
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

@@ -274,6 +274,15 @@ from ._types_analysis import (
     TimeSignature as TimeSignature,
 )
 from ._types_analysis import (
+    TrimRange as TrimRange,
+)
+from ._types_analysis import (
+    TrimReport as TrimReport,
+)
+from ._types_analysis import (
+    TrimSilenceStereoResult as TrimSilenceStereoResult,
+)
+from ._types_analysis import (
     VectorscopeReport as VectorscopeReport,
 )
 from ._types_analysis import (

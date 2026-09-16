@@ -119,6 +119,7 @@ export type {
   MasteringRepairDereverbClassicalStereoRequest,
   MasteringRepairDereverbConfigForRoomRequest,
   MasteringRepairTrimSilenceRequest,
+  MasteringRepairTrimSilenceStereoRequest,
   TrimSilenceMode,
   TrimSilenceOptions,
 } from './mastering_repair';
@@ -137,6 +138,7 @@ export {
   masteringRepairDereverbClassicalStereo,
   masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
+  masteringRepairTrimSilenceStereo,
 } from './mastering_repair';
 export type { MixStereoRequest } from './mixing_oneshot';
 export { mixingScenePresetJson, mixingScenePresetNames, mixStereo } from './mixing_oneshot';

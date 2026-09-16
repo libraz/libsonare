@@ -237,6 +237,21 @@ SonareDereverbReport to_c_dereverb_report(const sonare::mastering::repair::Derev
   return c;
 }
 
+SonareTrimRange to_c_trim_range(const sonare::mastering::repair::TrimRange& cpp) {
+  SonareTrimRange c{};
+  c.first = cpp.first;
+  c.last_exclusive = cpp.last_exclusive;
+  return c;
+}
+
+SonareTrimReport to_c_trim_report(const sonare::mastering::repair::TrimReport& cpp) {
+  SonareTrimReport c{};
+  c.range = to_c_trim_range(cpp.range);
+  c.removed_head_samples = cpp.removed_head_samples;
+  c.removed_tail_samples = cpp.removed_tail_samples;
+  return c;
+}
+
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 void clear_float_output(float** out, size_t* out_length) {
@@ -553,6 +568,43 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
         sonare::mastering::repair::trim_silence(audio, to_cpp_trim_silence_config(config));
     return copy_audio_result(result, out, out_length);
   });
+}
+
+SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const float* right,
+                                                        size_t length, int sample_rate,
+                                                        const SonareTrimSilenceConfig* config,
+                                                        SonareTrimSilenceStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = SonareTrimSilenceStereoResult{};
+
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const auto result = sonare::mastering::repair::trim_silence_stereo(
+      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
+      to_cpp_trim_silence_config(config));
+  out->report = to_c_trim_report(result.report);
+  out->left_range = to_c_trim_range(result.left_range);
+  out->right_range = to_c_trim_range(result.right_range);
+  out->length = result.left.size();
+  // A trimmed pair can come back empty, which no other repair stereo entry can
+  // produce. Hand back (NULL, 0) rather than a zero-length allocation, matching
+  // the empty-result policy the mono entries take through copy_audio_result.
+  if (out->length == 0) return SONARE_OK;
+  std::unique_ptr<float[]> left_out(new float[out->length]);
+  std::unique_ptr<float[]> right_out(new float[out->length]);
+  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+  out->left = release_array(left_out);
+  out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_dereverb_apply_room_estimate(

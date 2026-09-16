@@ -508,6 +508,30 @@ export interface WasmDereverbStereoResult {
   report: WasmDereverbReport;
 }
 
+/** One half-open input-buffer range, as a trim pass reports it. */
+export interface WasmTrimRange {
+  first: number;
+  lastExclusive: number;
+}
+
+/** What a trim pass kept and what it dropped. */
+export interface WasmTrimReport {
+  range: WasmTrimRange;
+  removedHeadSamples: number;
+  removedTailSamples: number;
+}
+
+/** Arrays SHORTER than the input, and empty when neither channel carries signal. `report.range`
+ * is the union applied to both channels; the two per-channel ranges are what it was formed
+ * from. */
+export interface WasmTrimSilenceStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  report: WasmTrimReport;
+  leftRange: WasmTrimRange;
+  rightRange: WasmTrimRange;
+}
+
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
@@ -2315,6 +2339,12 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairTrimSilenceStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmTrimSilenceStereoResult;
   masteringDynamicsCompressor: (
     samples: Float32Array,
     sampleRate: number,

@@ -16,7 +16,7 @@
  *
  * WHAT A GREEN RUN DOES AND DOES NOT MEAN. Green says every cross-surface reader
  * disagreement in the scanned trees is one that was looked at and written down.
- * It does NOT say the surfaces agree -- 169 fields still diverge, in three
+ * It does NOT say the surfaces agree -- 175 fields still diverge, in three
  * classes recorded below -- and it says nothing about fields the scan cannot
  * pair, for the reasons `_reader_family_sources.ts` records.
  *
@@ -52,10 +52,18 @@ import {
  *
  * ASK THIS REGISTER BY READER PAIR, NEVER BY FIELD NAME. A subsystem's fields
  * are not all spelled with its name: the reader pairs ending `repairFloatOption`
- * / `repairIntOption` / `repairBoolOption` hold 27 fields, of which 12 are
- * `dereverbconfig:*` and carry no trace of the subsystem in their id. Counting
- * by name returns 15 and looks like an answer. The pair is what a migration
- * actually moves, so the pair is what says whether it moved.
+ * / `repairIntOption` / `repairBoolOption` hold 33 fields, of which 25 are
+ * `denoiseconfig:*` / `dereverbconfig:*` / `trimsilenceconfig:*` and carry no
+ * trace of the subsystem in their id. Counting by name returns 8 and looks like
+ * an answer. The pair is what a migration actually moves, so the pair is what
+ * says whether it moved.
+ *
+ * AN ID IS THE HELPER'S NAME, SO A RENAME ON ONE SURFACE UNPAIRS THE FIELD. The
+ * two denoise readers were `read_denoise_config_c` and `readDenoiseConfig`, one
+ * suffix apart after normalization, and nine fields left the comparison without
+ * a finding -- only the six that had a line here showed up, and as expiry rather
+ * than as loss. Moving an options read into a helper means giving it the name
+ * the other surface's helper normalizes to.
  */
 const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND COERCES IT — 132 fields.
@@ -241,7 +249,7 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   ['WordProperty>wordProperty', ['setmidievents:data1']],
   ['DoubleProperty>floatProperty', ['tempooptionsfrom:rampThreshold']],
 
-  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND ANSWERS WITH THE DEFAULT — 27 fields.
+  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND ANSWERS WITH THE DEFAULT — 33 fields.
   //
   // The repair readers were written to match the addon's options readers when THOSE substituted a
   // default for a wrong-typed value. The addon moved to refusing and these did not follow, so
@@ -250,6 +258,11 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   [
     'FloatProperty>repairFloatOption',
     [
+      'denoiseconfig:ddAlpha',
+      'denoiseconfig:noiseEstimationQuantile',
+      'denoiseconfig:overSubtraction',
+      'denoiseconfig:reductionDb',
+      'denoiseconfig:spectralFloor',
       'dereverbconfig:attenuation',
       'dereverbconfig:lateDelayMs',
       'dereverbconfig:overSubtraction',
@@ -262,16 +275,16 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'masteringrepairdeclick:threshold',
       'masteringrepairdecrackle:threshold',
       'masteringrepairdehum:q',
-      'masteringrepairdenoiseclassical:ddAlpha',
-      'masteringrepairdenoiseclassical:overSubtraction',
-      'masteringrepairdenoiseclassical:reductionDb',
-      'masteringrepairdenoiseclassical:spectralFloor',
-      'masteringrepairtrimsilence:threshold',
+      'trimsilenceconfig:gateLufs',
+      'trimsilenceconfig:threshold',
+      'trimsilenceconfig:windowMs',
     ],
   ],
   [
     'IntProperty>repairIntOption',
     [
+      'denoiseconfig:hopLength',
+      'denoiseconfig:nFft',
       'dereverbconfig:hopLength',
       'dereverbconfig:nFft',
       'dereverbconfig:wpeIterations',
@@ -279,11 +292,22 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'masteringrepairdeclick:lpcOrder',
       'masteringrepairdeclick:maxClickSamples',
       'masteringrepairdeclip:lpcOrder',
-      'masteringrepairdenoiseclassical:hopLength',
-      'masteringrepairdenoiseclassical:nFft',
     ],
   ],
-  ['BoolProperty>repairBoolOption', ['dereverbconfig:wpeEnabled']],
+  [
+    'BoolProperty>repairBoolOption',
+    [
+      'denoiseconfig:gainSmoothing',
+      'denoiseconfig:speechPresenceGain',
+      'dereverbconfig:wpeEnabled',
+    ],
+  ],
+  // Same class again, and the only field whose addon reader is size_t-wide. Both
+  // surfaces refuse a NEGATIVE count -- the core field is a size_t, so -1 lands
+  // past the validator's SIZE_MAX/2 bound rather than below zero -- and they
+  // part company on a wrong TYPE: the addon refuses `'256'` by name, embind's
+  // int reader substitutes the default for it.
+  ['NonNegativeSizeTProperty>repairIntOption', ['trimsilenceconfig:paddingSamples']],
 
   // THE ADDON ANSWERS WITH THE DEFAULT WHERE EMBIND COERCES — 10 fields.
   //
@@ -473,7 +497,7 @@ describe('the scanner sees what it claims to', () => {
     // lists already catch both, but this states the number a reader of this file
     // is being asked to believe.
     const live = new Set(mismatchedFields().map((field) => field.readerPair));
-    expect(live.size).toBe(19);
+    expect(live.size).toBe(20);
     expect([...live].every((pair) => ACCOUNTED.has(pair))).toBe(true);
   });
 });

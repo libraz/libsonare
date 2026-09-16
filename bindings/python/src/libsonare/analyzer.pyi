@@ -64,6 +64,7 @@ from .types import (
     SpectrumReport,
     StftResult,
     TimbreResult,
+    TrimSilenceStereoResult,
     VectorscopeReport,
     WaveformPeaksReport,
 )
@@ -1873,6 +1874,17 @@ def mastering_repair_trim_silence(
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_trim_silence_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.001,
+    padding_samples: int = 0,
+    mode: int | str = "peak",
+    gate_lufs: float = -60.0,
+    window_ms: float = 400.0,
+) -> TrimSilenceStereoResult: ...
 def lufs(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
 ) -> LufsResult: ...

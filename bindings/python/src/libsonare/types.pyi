@@ -1292,6 +1292,43 @@ class DereverbStereoResult:
         report: DereverbReport,
     ) -> None: ...
 
+class TrimRange:
+    first: int
+    last_exclusive: int
+    def __init__(
+        self,
+        first: int,
+        last_exclusive: int,
+    ) -> None: ...
+
+class TrimReport:
+    range: TrimRange
+    removed_head_samples: int
+    removed_tail_samples: int
+    def __init__(
+        self,
+        range: TrimRange,
+        removed_head_samples: int,
+        removed_tail_samples: int,
+    ) -> None: ...
+
+class TrimSilenceStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    report: TrimReport
+    left_range: TrimRange
+    right_range: TrimRange
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        report: TrimReport,
+        left_range: TrimRange,
+        right_range: TrimRange,
+    ) -> None: ...
+
 class MasteringResult:
     samples: list[float]
     sample_rate: int

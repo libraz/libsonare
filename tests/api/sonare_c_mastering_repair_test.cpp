@@ -1335,6 +1335,357 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
 }
 
 namespace {
+
+// A burst of constant magnitude rather than a sine: the trimmer compares |x|
+// against a threshold, and a sine's zero crossings would place the detected
+// edges a few samples inside the span they are meant to pin.
+void fill_burst(std::vector<float>& channel, size_t first, size_t last_exclusive) {
+  for (size_t i = first; i < last_exclusive; ++i) {
+    channel[i] = (i % 2 == 0) ? 0.5f : -0.5f;
+  }
+}
+
+}  // namespace
+
+TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
+  const int sr = 48000;
+
+  // The two channels carry signal over DIFFERENT spans, so the union is a
+  // genuine union and both per-channel ranges disagree with it and with each
+  // other. A fixture whose channels agreed would pass just as well against an
+  // implementation that cut each channel by its own range, which is the one
+  // thing this entry's contract forbids.
+  constexpr size_t kLength = 24000;  // 0.5 s
+  constexpr size_t kLeftFirst = 4800;
+  constexpr size_t kLeftEnd = 12000;
+  constexpr size_t kRightFirst = 9600;
+  constexpr size_t kRightEnd = 19200;
+
+  // Mirrors mastering::repair::kMaxTrimPaddingSamples. kSizeMax is what a -1
+  // padding count becomes on the way across a language boundary.
+  constexpr size_t kSizeMax = static_cast<size_t>(-1);
+  constexpr size_t kMaxPadding = kSizeMax / 2;
+
+  std::vector<float> left(kLength, 0.0f);
+  std::vector<float> right(kLength, 0.0f);
+  fill_burst(left, kLeftFirst, kLeftEnd);
+  fill_burst(right, kRightFirst, kRightEnd);
+
+  SonareTrimSilenceConfig peak = {};
+  peak.threshold = 0.001f;
+  peak.padding_samples = 0;
+  peak.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
+  peak.gate_lufs = -60.0f;
+  peak.window_ms = 400.0f;
+
+  SECTION("unions the two channels' ranges and cuts both channels to it") {
+    SonareTrimSilenceStereoResult out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &peak, &out) == SONARE_OK);
+
+    REQUIRE(out.left_range.first == kLeftFirst);
+    REQUIRE(out.left_range.last_exclusive == kLeftEnd);
+    REQUIRE(out.right_range.first == kRightFirst);
+    REQUIRE(out.right_range.last_exclusive == kRightEnd);
+    REQUIRE(out.report.range.first == kLeftFirst);
+    REQUIRE(out.report.range.last_exclusive == kRightEnd);
+
+    // length is the OUTPUT length. Every other repair stereo entry hands back
+    // the input length, so a reader carrying that habit over reads this wrong.
+    REQUIRE(out.length == kRightEnd - kLeftFirst);
+    REQUIRE(out.length < kLength);
+    REQUIRE(out.report.removed_head_samples == kLeftFirst);
+    REQUIRE(out.report.removed_tail_samples == kLength - kRightEnd);
+    REQUIRE(out.report.removed_head_samples + out.report.removed_tail_samples ==
+            kLength - out.length);
+
+    // The content is what separates a shared range from two per-channel ones:
+    // each channel keeps a stretch its own scan called silence, because the
+    // other channel called it signal. Cutting per channel would drop both.
+    REQUIRE(out.left != nullptr);
+    REQUIRE(out.right != nullptr);
+    REQUIRE(out.left[0] == 0.5f);                 // left's own first active sample
+    REQUIRE(out.right[0] == 0.0f);                // right is still silent there
+    REQUIRE(out.left[out.length - 1] == 0.0f);    // left has been silent for a while
+    REQUIRE(out.right[out.length - 1] == -0.5f);  // right's own last active sample
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("hands back (NULL, 0) for a pair that carries no signal at all") {
+    const std::vector<float> quiet(kLength, 0.0f);
+    SonareTrimSilenceStereoResult out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(quiet.data(), quiet.data(), kLength, sr,
+                                                        &peak, &out) == SONARE_OK);
+
+    // A success, not an error, and no zero-length allocation is made. No other
+    // repair stereo entry can produce this result.
+    REQUIRE(out.length == 0);
+    REQUIRE(out.left == nullptr);
+    REQUIRE(out.right == nullptr);
+
+    // The empty range is reported at the far end, so the whole buffer counts as
+    // removed head and the tail stays 0. The two still sum to the input length.
+    REQUIRE(out.report.range.first == kLength);
+    REQUIRE(out.report.range.last_exclusive == kLength);
+    REQUIRE(out.report.removed_head_samples == kLength);
+    REQUIRE(out.report.removed_tail_samples == 0);
+
+    // The documented contract that a caller need not branch before freeing.
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("padding widens both edges of each channel's range and clamps at the buffer") {
+    SonareTrimSilenceConfig padded = peak;
+    padded.padding_samples = 1200;
+
+    SonareTrimSilenceStereoResult out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &padded, &out) == SONARE_OK);
+    REQUIRE(out.left_range.first == kLeftFirst - 1200);
+    REQUIRE(out.left_range.last_exclusive == kLeftEnd + 1200);
+    REQUIRE(out.right_range.first == kRightFirst - 1200);
+    REQUIRE(out.right_range.last_exclusive == kRightEnd + 1200);
+    REQUIRE(out.report.range.first == kLeftFirst - 1200);
+    REQUIRE(out.report.range.last_exclusive == kRightEnd + 1200);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+
+    // Enough padding to run off both ends: the left channel's head clamps at 0
+    // and the right channel's tail at the input length, so the pair comes back
+    // whole rather than with a range reaching outside the buffer.
+    padded.padding_samples = 6000;
+    SonareTrimSilenceStereoResult wide{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &padded, &wide) == SONARE_OK);
+    REQUIRE(wide.left_range.first == 0);
+    REQUIRE(wide.right_range.last_exclusive == kLength);
+    REQUIRE(wide.length == kLength);
+    REQUIRE(wide.report.removed_head_samples == 0);
+    REQUIRE(wide.report.removed_tail_samples == 0);
+    sonare_free_floats(wide.left);
+    sonare_free_floats(wide.right);
+  }
+
+  SECTION("does not pad a pass that kept nothing") {
+    const std::vector<float> quiet(kLength, 0.0f);
+    SonareTrimSilenceConfig padded = peak;
+    padded.padding_samples = 6000;
+
+    SonareTrimSilenceStereoResult out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(quiet.data(), quiet.data(), kLength, sr,
+                                                        &padded, &out) == SONARE_OK);
+    // Padding is applied to a range the scan found, and an empty pass found
+    // none, so the result stays empty rather than widening out of nothing.
+    REQUIRE(out.length == 0);
+    REQUIRE(out.report.range.first == kLength);
+    REQUIRE(out.report.range.last_exclusive == kLength);
+  }
+
+  SECTION("accepts a padding count of SIZE_MAX/2 and refuses the next one up") {
+    // The bound is CLOSED, so the largest legal count is the endpoint itself --
+    // asserting only that a huge value is refused would leave the interval's
+    // last step untested and could not tell `>` from `>=`.
+    SonareTrimSilenceConfig at_bound = peak;
+    at_bound.padding_samples = kMaxPadding;
+    SonareTrimSilenceStereoResult out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &at_bound, &out) == SONARE_OK);
+    REQUIRE(out.length == kLength);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+
+    SonareTrimSilenceConfig over = peak;
+    over.padding_samples = kMaxPadding + 1;
+    SonareTrimSilenceStereoResult refused{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &over, &refused) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+
+    // The value a -1 becomes on the way across a language boundary lands well
+    // inside the refused half rather than reading as a small positive count.
+    SonareTrimSilenceConfig negative = peak;
+    negative.padding_samples = kSizeMax;
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &negative, &refused) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("reads threshold only in peak mode and gate_lufs only in the gated one") {
+    // Nothing in the fixture reaches 0.9, so in peak mode this empties the pair.
+    SonareTrimSilenceConfig deaf_peak = peak;
+    deaf_peak.threshold = 0.9f;
+    SonareTrimSilenceStereoResult out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &deaf_peak, &out) == SONARE_OK);
+    REQUIRE(out.length == 0);
+
+    // The same threshold in gated mode: the gate decides instead, so the pair
+    // survives. Zero here would read the same whether threshold was ignored or
+    // the call had failed, which is why the peak half above is the control.
+    SonareTrimSilenceConfig gated = deaf_peak;
+    gated.mode = SONARE_TRIM_SILENCE_MODE_LUFS_GATED;
+    gated.window_ms = 10.0f;
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &gated, &out) == SONARE_OK);
+    REQUIRE(out.length > 0);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+
+    // The mirror image: a gate the material cannot clear empties the pair in
+    // gated mode and does nothing at all in peak mode. The burst is +-0.5, so
+    // its windowed RMS sits near -6 dBFS and a gate at 0 is out of reach.
+    SonareTrimSilenceConfig shut = gated;
+    shut.threshold = 0.001f;
+    shut.gate_lufs = 0.0f;
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &shut, &out) == SONARE_OK);
+    REQUIRE(out.length == 0);
+
+    SonareTrimSilenceConfig shut_but_peak = shut;
+    shut_but_peak.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &shut_but_peak, &out) == SONARE_OK);
+    REQUIRE(out.length == kRightEnd - kLeftFirst);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("sizes the gated window from window_ms, which peak mode ignores") {
+    SonareTrimSilenceConfig narrow = peak;
+    narrow.mode = SONARE_TRIM_SILENCE_MODE_LUFS_GATED;
+    narrow.window_ms = 10.0f;
+    SonareTrimSilenceStereoResult narrow_out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &narrow, &narrow_out) == SONARE_OK);
+
+    SonareTrimSilenceConfig wide = narrow;
+    wide.window_ms = 100.0f;
+    SonareTrimSilenceStereoResult wide_out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &wide, &wide_out) == SONARE_OK);
+
+    // The window is centred on the sample under test, so the gate opens half a
+    // window before the burst itself and a wider window opens earlier still.
+    // Both therefore start ahead of the peak-mode edge rather than on it, and
+    // the lead is exactly the radius: one burst sample anywhere in the window
+    // already clears -60 dBFS. Measured 4560 and 2400 against the peak edge at
+    // 4800, for radii of 240 and 2400 samples.
+    REQUIRE(narrow_out.report.range.first < kLeftFirst);
+    REQUIRE(wide_out.report.range.first < narrow_out.report.range.first);
+    sonare_free_floats(narrow_out.left);
+    sonare_free_floats(narrow_out.right);
+    sonare_free_floats(wide_out.left);
+    sonare_free_floats(wide_out.right);
+
+    // In peak mode the same two values change nothing, which is what makes the
+    // comparison above an observation of window_ms rather than of the buffer.
+    SonareTrimSilenceConfig peak_narrow = peak;
+    peak_narrow.window_ms = 10.0f;
+    SonareTrimSilenceConfig peak_wide = peak;
+    peak_wide.window_ms = 100.0f;
+    SonareTrimSilenceStereoResult a{};
+    SonareTrimSilenceStereoResult b{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &peak_narrow, &a) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &peak_wide, &b) == SONARE_OK);
+    REQUIRE(a.report.range.first == kLeftFirst);
+    REQUIRE(b.report.range.first == kLeftFirst);
+    sonare_free_floats(a.left);
+    sonare_free_floats(a.right);
+    sonare_free_floats(b.left);
+    sonare_free_floats(b.right);
+  }
+
+  SECTION("rejects bad inputs and clears the result it was handed") {
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &peak,
+                                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+    // Pre-filled with values a caller's stack slot could plausibly hold, so a
+    // rejected call that forgot to clear would leave them visible.
+    SonareTrimSilenceStereoResult out{};
+    auto dirty = [&out]() {
+      out.left = non_null_sentinel_float_ptr();
+      out.right = non_null_sentinel_float_ptr();
+      out.length = 123;
+      out.report.range.first = 7;
+      out.left_range.last_exclusive = 9;
+    };
+    auto require_cleared = [&out]() {
+      REQUIRE(out.left == nullptr);
+      REQUIRE(out.right == nullptr);
+      REQUIRE(out.length == 0);
+      REQUIRE(out.report.range.first == 0);
+      REQUIRE(out.left_range.last_exclusive == 0);
+    };
+
+    dirty();
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(nullptr, right.data(), kLength, sr, &peak,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+    require_cleared();
+
+    dirty();
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), nullptr, kLength, sr, &peak,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+    require_cleared();
+
+    dirty();
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), 0, sr, &peak,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+    require_cleared();
+
+    std::vector<float> nan_left = left;
+    nan_left[10] = std::numeric_limits<float>::quiet_NaN();
+    dirty();
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(nan_left.data(), right.data(), kLength, sr,
+                                                        &peak,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+    require_cleared();
+
+    SonareTrimSilenceConfig bad_mode = peak;
+    bad_mode.mode = 999;
+    dirty();
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &bad_mode,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+    require_cleared();
+
+    SonareTrimSilenceConfig bad_threshold = peak;
+    bad_threshold.threshold = -1.0f;
+    dirty();
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &bad_threshold,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+    require_cleared();
+
+    SonareTrimSilenceConfig bad_window = peak;
+    bad_window.window_ms = 0.0f;
+    dirty();
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        &bad_window,
+                                                        &out) == SONARE_ERROR_INVALID_PARAMETER);
+    require_cleared();
+  }
+
+  SECTION("uses library defaults for a NULL config") {
+    SonareTrimSilenceStereoResult out{};
+    REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
+                                                        nullptr, &out) == SONARE_OK);
+    // The defaults are peak mode at 0.001 with no padding, so a NULL config has
+    // to land on exactly the explicit peak result above.
+    REQUIRE(out.report.range.first == kLeftFirst);
+    REQUIRE(out.report.range.last_exclusive == kRightEnd);
+    REQUIRE(out.length == kRightEnd - kLeftFirst);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+}
+
+namespace {
 float max_abs_sample(const float* buf, size_t length) {
   float peak = 0.0f;
   for (size_t i = 0; i < length; ++i) {
