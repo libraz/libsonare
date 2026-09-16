@@ -910,6 +910,43 @@ TEST_CASE("MultibandSaturation disabled bands preserve tone amplitudes", "[maste
   require_four_tone_amplitudes_near(signal, 0.015f);
 }
 
+TEST_CASE("MultibandSaturation counts a block its crossover or a band discarded",
+          "[mastering][multiband][non_finite]") {
+  MultibandSaturationConfig config;
+  config.crossover = {{1000.0f}, CrossoverSlope::LR2, CrossoverMode::LinkwitzRiley};
+  config.bands = {
+      {0.0f, 0.0f, 0.0f, true},
+      {12.0f, 1.0f, -12.0f, true},
+  };
+  MultibandSaturation saturation(config);
+  constexpr int kBlock = 256;
+  saturation.prepare(48000.0, kBlock);
+
+  std::vector<float> left(kBlock, 0.25f);
+  std::vector<float> right(kBlock, 0.25f);
+  float* channels[] = {left.data(), right.data()};
+
+  // Control: an ordinary block counts nothing, so the increment below is
+  // attributable to the poison rather than to processing at all.
+  saturation.process(channels, 2, kBlock);
+  REQUIRE(saturation.non_finite_discard_count() == 0u);
+
+  left[8] = std::numeric_limits<float>::quiet_NaN();
+  right[8] = std::numeric_limits<float>::quiet_NaN();
+  saturation.process(channels, 2, kBlock);
+  std::fill(left.begin(), left.end(), 0.25f);
+  std::fill(right.begin(), right.end(), 0.25f);
+  saturation.process(channels, 2, kBlock);
+
+  // Both the crossover and the band processors are owned here and reachable
+  // from outside only as a count, so a discard inside one is observable nowhere
+  // unless this processor records it. Both channels and several members carried
+  // it and the count still moves by blocks, never by member or by channel.
+  const uint32_t discards = saturation.non_finite_discard_count();
+  REQUIRE(discards > 0u);
+  REQUIRE(discards <= 2u);
+}
+
 TEST_CASE("MultibandSaturation validates configuration", "[mastering][multiband]") {
   MultibandSaturationConfig config;
   config.crossover = {{1000.0f, 4000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
